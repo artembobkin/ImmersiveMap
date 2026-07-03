@@ -69,8 +69,15 @@ final class TileRenderStore {
     func getMetalTile(tile: Tile) -> MetalTile? {
         return memoryMetalTile.getTile(forKey: tile)
     }
-    
+
+    // Версия содержимого кэша тайлов: меняется при материализации/вытеснении.
+    // Вместе с coverageVersion образует ключ dirty-гейта demand-конвейера.
+    var cacheContentVersion: UInt64 {
+        memoryMetalTile.contentVersion
+    }
+
     func requestTiles(_ tiles: [Tile], frameIndex: UInt64? = nil) -> TileRequestResult {
+        memoryMetalTile.updateProtectedTiles(Set(tiles))
         var readyTilesBySource: [Tile: MetalTile?] = [:]
         readyTilesBySource.reserveCapacity(tiles.count)
         var request: [Tile] = []
@@ -143,7 +150,9 @@ final class TileRenderStore {
 
     func handleMemoryWarning() {
         mapNeedsTile?.cancelAll()
-        memoryMetalTile.removeAll()
+        // Trim вместо полной очистки: видимые (защищённые) тайлы остаются в кэше,
+        // карта не пустеет и не перекачивает весь экран заново.
+        memoryMetalTile.trim(toFractionOfLimit: 0.25)
     }
 
     func evict() {

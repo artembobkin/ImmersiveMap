@@ -8,13 +8,52 @@ class MemoryMetalTileCache {
     private let costLimit: Int
     private let stateLock = NSLock()
     private let tileTraceRecorder: TileTraceRecorder
-    
+    // Тайлы текущего demanded-набора: не вытесняются ни при вставке, ни при trim,
+    // иначе при рабочем наборе больше лимита кэш пинг-понгует видимыми тайлами.
+    private var protectedTiles: Set<Tile> = []
+    private var mutationVersion: UInt64 = 0
+
     init(maxCacheSizeInBytes: Int, tileTraceRecorder: TileTraceRecorder) {
         self.costLimit = maxCacheSizeInBytes
         self.tileTraceRecorder = tileTraceRecorder
         self.cache = LRUMemoryCache(costLimit: maxCacheSizeInBytes)
     }
-    
+
+    // Меняется при каждой мутации содержимого (вставка/вытеснение/очистка) —
+    // ключ для dirty-гейтов, зависящих от готовности тайлов.
+    var contentVersion: UInt64 {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return mutationVersion
+    }
+
+    func updateProtectedTiles(_ tiles: Set<Tile>) {
+        let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
+        stateLock.lock()
+        protectedTiles = tiles
+        // Overshoot от защиты demanded-тайлов ликвидируется, как только набор
+        // сжался: иначе кэш держал бы превышение лимита до следующей вставки
+        // или memory warning. В обычном случае (totalCost <= limit) — no-op.
+        if cache.totalCost > costLimit {
+            let evicted = cache.trim(toCost: costLimit, protectedKeys: protectedTiles)
+            if evicted.isEmpty == false {
+                mutationVersion &+= 1
+            }
+            result = (evicted, cache.totalCost, cache.count)
+        } else {
+            result = ([], cache.totalCost, cache.count)
+        }
+        stateLock.unlock()
+
+        for evictedEntry in result.evicted {
+            tileTraceRecorder.record(.tileMemoryCacheEvict(evictedEntry.key,
+                                                           cost: evictedEntry.cost,
+                                                           trackedCost: result.totalCost,
+                                                           trackedCount: result.count,
+                                                           costLimit: costLimit))
+        }
+    }
+
     func setTileData(tile: MetalTile, forKey key: Tile) {
         let estimatedCost = estimateTileByteSize(tile)
         let mutation = setTile(tile, forKey: key, cost: estimatedCost)
@@ -54,6 +93,28 @@ class MemoryMetalTileCache {
                                         ]))
     }
 
+    // Сбрасывает кэш до доли лимита, сохраняя защищённые (видимые) тайлы —
+    // мягкая реакция на memory warning вместо полной очистки и пустой карты.
+    func trim(toFractionOfLimit fraction: Double) {
+        let targetCost = Int(Double(costLimit) * max(0.0, min(1.0, fraction)))
+        let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
+        stateLock.lock()
+        let evicted = cache.trim(toCost: targetCost, protectedKeys: protectedTiles)
+        if evicted.isEmpty == false {
+            mutationVersion &+= 1
+        }
+        result = (evicted, cache.totalCost, cache.count)
+        stateLock.unlock()
+
+        for evictedEntry in result.evicted {
+            tileTraceRecorder.record(.tileMemoryCacheEvict(evictedEntry.key,
+                                                           cost: evictedEntry.cost,
+                                                           trackedCost: result.totalCost,
+                                                           trackedCount: result.count,
+                                                           costLimit: costLimit))
+        }
+    }
+
     private func setTile(_ tile: MetalTile,
                          forKey key: Tile,
                          cost: Int) -> (replacedCost: Int?,
@@ -64,7 +125,8 @@ class MemoryMetalTileCache {
         defer { stateLock.unlock() }
 
         let replacedCost = cache.cost(forKey: key)
-        let evictedEntries = cache.setValue(tile, forKey: key, cost: cost) ?? []
+        let evictedEntries = cache.setValue(tile, forKey: key, cost: cost, protectedKeys: protectedTiles) ?? []
+        mutationVersion &+= 1
         return (replacedCost, evictedEntries, cache.totalCost, cache.count)
     }
 
@@ -85,6 +147,7 @@ class MemoryMetalTileCache {
 
         let snapshot = (cache.totalCost, cache.count)
         _ = cache.removeAll()
+        mutationVersion &+= 1
         return snapshot
     }
     
@@ -103,6 +166,15 @@ class MemoryMetalTileCache {
         let extrudedSize = tileBuffers.extruded.verticesBuffer.allocatedSize
             + tileBuffers.extruded.indicesBuffer.allocatedSize
             + tileBuffers.extruded.stylesBuffer.allocatedSize
-        return geometrySize + extrudedSize
+        let textLabelSets = [tileBuffers.textLabels.full,
+                             tileBuffers.textLabels.reduced,
+                             tileBuffers.textLabels.minimal]
+        let textLabelsSize = textLabelSets.reduce(0) { partial, labelSet in
+            partial
+                + labelSet.labelsByStyleRuns.reduce(0) { $0 + ($1.localGlyphVerticesBuffer?.allocatedSize ?? 0) }
+                + labelSet.poiIconRuns.reduce(0) { $0 + ($1.localVerticesBuffer?.allocatedSize ?? 0) }
+        }
+        let roadLabelsSize = tileBuffers.roadLabels.localGlyphVerticesBuffer?.allocatedSize ?? 0
+        return geometrySize + extrudedSize + textLabelsSize + roadLabelsSize
     }
 }

@@ -22,6 +22,9 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var placeTilesContext: PlaceTilesContext = .empty
     private var globeTexturePlaceTilesContext: GlobeTexturePlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
+    private var demandGateFingerprint: Int?
+    private var latestRequestedTilesCount: Int = 0
+    private var latestCounts = (visible: 0, preprocessed: 0, demanded: 0, ready: 0)
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
@@ -40,7 +43,25 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let center = visibleContent.center
         let visibleTiles = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
-        
+
+        // Dirty-gate: preprocess/demand/request зависят только от покрытия
+        // (coverageVersion меняется при смене камеры/режима) и содержимого кэша
+        // тайлов (contentVersion меняется при материализации/вытеснении).
+        // Пропуск допустим только когда нет запрошенных-но-не-готовых тайлов:
+        // retry-логика загрузчика опирается на пер-кадровый request().
+        var gateHasher = Hasher()
+        gateHasher.combine(visibleContent.coverageVersion)
+        gateHasher.combine(tileRenderStore.cacheContentVersion)
+        let gateFingerprint = gateHasher.finalize()
+        if gateFingerprint == demandGateFingerprint,
+           latestRequestedTilesCount == 0 {
+            publishState(frameContext: frameContext,
+                         visibleTilesCount: latestCounts.visible,
+                         readyTilesCount: latestCounts.ready,
+                         requestedTilesCount: 0)
+            return
+        }
+
         // Visible-tiles post-processing:
         // shortens the raw visible list and substitutes distant tiles
         // with coarser parents to reduce load/placement pressure.
@@ -103,6 +124,24 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                    lodCoarse: lodSummary.coarse,
                                                    lodRetained: lodSummary.retained))
 
+        demandGateFingerprint = gateFingerprint
+        latestRequestedTilesCount = requestedTilesCount
+        latestCounts = (visible: visibleTilesCount,
+                        preprocessed: preprocessedVisibleTiles.count,
+                        demanded: demandedSourceTiles.count,
+                        ready: readyTilesCount)
+
+        publishState(frameContext: frameContext,
+                     visibleTilesCount: visibleTilesCount,
+                     readyTilesCount: readyTilesCount,
+                     requestedTilesCount: requestedTilesCount)
+    }
+
+    private func publishState(frameContext: FrameContext,
+                              visibleTilesCount: Int,
+                              readyTilesCount: Int,
+                              requestedTilesCount: Int) {
+        let renderedTilesCount = placeTilesContext.tilePlacements.count
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
             globeTexturePlaceTilesContext: globeTexturePlaceTilesContext,
@@ -126,9 +165,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
-        placeTilesContext = .empty
-        globeTexturePlaceTilesContext = .empty
+        // Контексты размещения сохраняются: trim в store защищает видимые тайлы,
+        // поэтому карта не пустеет; следующий кадр пересоберёт размещения заново.
         preprocessedVisibleTilesHashTracker.invalidate()
+        demandGateFingerprint = nil
         placementVersion &+= 1
     }
 
@@ -137,6 +177,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         placeTilesContext = .empty
         globeTexturePlaceTilesContext = .empty
         preprocessedVisibleTilesHashTracker.invalidate()
+        demandGateFingerprint = nil
         placementVersion &+= 1
     }
 
