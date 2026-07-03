@@ -7,6 +7,7 @@ class GlobeTilesTexture {
     private struct TileOverviewFadeUniform {
         var overviewAlpha: Float
         var roadAlpha: Float
+        var landuseAlpha: Float
     }
 
     struct TileData {
@@ -106,10 +107,11 @@ class GlobeTilesTexture {
         activePageIndex = nil
     }
 
-    func setOverviewFadeAlphas(overviewAlpha: Float, roadAlpha: Float) {
+    func setOverviewFadeAlphas(overviewAlpha: Float, roadAlpha: Float, landuseAlpha: Float) {
         guard let renderEncoder else { return }
         var uniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
-                                              roadAlpha: roadAlpha)
+                                              roadAlpha: roadAlpha,
+                                              landuseAlpha: landuseAlpha)
         renderEncoder.setFragmentBytes(&uniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)

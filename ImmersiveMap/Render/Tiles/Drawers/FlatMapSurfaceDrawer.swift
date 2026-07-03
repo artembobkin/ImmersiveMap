@@ -8,6 +8,7 @@ enum FlatMapSurfaceDrawer {
     private struct TileOverviewFadeUniform {
         var overviewAlpha: Float
         var roadAlpha: Float
+        var landuseAlpha: Float
     }
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -25,7 +26,8 @@ enum FlatMapSurfaceDrawer {
         var cameraUniformValue = cameraUniform
         var overviewFadeUniform = TileOverviewFadeUniform(
             overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
-            roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads)
+            roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
+            landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse)
         )
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&overviewFadeUniform,

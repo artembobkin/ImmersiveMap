@@ -25,6 +25,7 @@ struct Style {
 struct OverviewFadeUniform {
     float overviewAlpha;
     float roadAlpha;
+    float landuseAlpha;
 };
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
@@ -51,7 +52,9 @@ fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
                                    constant OverviewFadeUniform& overviewFade [[buffer(0)]]) {
     float4 color = in.color;
     float fade = 1.0;
-    if (in.lowZoomFadeMask >= 1.5) {
+    if (in.lowZoomFadeMask >= 2.5) {
+        fade = overviewFade.landuseAlpha;
+    } else if (in.lowZoomFadeMask >= 1.5) {
         fade = overviewFade.roadAlpha;
     } else if (in.lowZoomFadeMask >= 0.5) {
         fade = overviewFade.overviewAlpha;

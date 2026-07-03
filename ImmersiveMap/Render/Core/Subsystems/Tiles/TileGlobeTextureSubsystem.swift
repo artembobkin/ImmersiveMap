@@ -22,6 +22,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
     private var atlasPlan: GlobeAtlasPlan = .empty
     private var overviewFadeAlpha: Float = 1.0
     private var roadFadeAlpha: Float = 0.0
+    private var landuseFadeAlpha: Float = 0.0
     private var globeAtlasDebugSummary: GlobeAtlasDebugSummary?
 
     init(tilesTexture: GlobeTilesTexture,
@@ -35,6 +36,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         placeTilesContext = tilePlacementState.globeTexturePlaceTilesContext
         overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .overviewFeatures)
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
+        landuseFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .landuse)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
         refreshDebugSummaryIfNeeded(frameContext: frameContext)
@@ -44,6 +46,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         hasher.combine(Int(truncatingIfNeeded: tilePlacementState.placementVersion))
         hasher.combine(overviewFadeAlpha.bitPattern)
         hasher.combine(roadFadeAlpha.bitPattern)
+        hasher.combine(landuseFadeAlpha.bitPattern)
         combineAtlasPlanHash(atlasPlan, into: &hasher)
         let textureChanged = globeTextureVersionTracker.stage(hasher.finalize())
         tileTraceRecorder.record(.atlasTextureStage(frameIndex: frameContext.frameIndex,
@@ -109,7 +112,8 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
             }
 
             tilesTexture.setOverviewFadeAlphas(overviewAlpha: overviewFadeAlpha,
-                                               roadAlpha: roadFadeAlpha)
+                                               roadAlpha: roadFadeAlpha,
+                                               landuseAlpha: landuseFadeAlpha)
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {

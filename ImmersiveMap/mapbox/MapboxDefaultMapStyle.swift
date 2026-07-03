@@ -8,6 +8,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
     private let fallbackKey: UInt8 = 0
     private let labelKey: UInt8 = 2
     private let roadLowZoomFadeMask: Float = 2.0
+    private let landuseLowZoomFadeMask: Float = 3.0
     private let zebraCrossingMinimumZoom: Int = 15
     private let onewayArrowKey: UInt8 = 209
     private let fallbackStyle: FeatureStyle
@@ -1725,7 +1726,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             }
             switch classValue {
             case "park", "cemetery", "pitch":
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1735,10 +1736,11 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 30,
                     color: colors["park"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             case "residential", "suburb", "neighbourhood":
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1748,10 +1750,11 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 31,
                     color: colors["residential"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             case "industrial", "commercial":
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1761,10 +1764,11 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 32,
                     color: colors["industrial"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             case "farmland", "farm", "orchard":
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1774,10 +1778,11 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 33,
                     color: colors["farmland"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             case "grass":
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1787,6 +1792,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 34,
                     color: colors["landcover_grass"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             case "wood", "scrub":
@@ -1796,7 +1802,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             default:
-                if tile.z <= 13 {
+                if tile.z < 13 {
                     return FeatureStyle(
                         key: fallbackKey,
                         color: colors["fallback"]!,
@@ -1806,6 +1812,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 return FeatureStyle(
                     key: 30,
                     color: colors["landcover_grass"]!,
+                    lowZoomFadeMask: tile.z == 13 ? landuseLowZoomFadeMask : 0.0,
                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
                 )
             }

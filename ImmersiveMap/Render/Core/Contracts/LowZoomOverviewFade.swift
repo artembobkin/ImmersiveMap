@@ -12,12 +12,15 @@ enum LowZoomOverviewFade {
     enum Kind {
         case overviewFeatures
         case roads
+        case landuse
     }
 
     static let overviewStartZoom: Double = 0.0
     static let overviewEndZoom: Double = 1.0
     static let roadStartZoom: Double = 3.0
     static let roadEndZoom: Double = 4.0
+    static let landuseStartZoom: Double = 13.0
+    static let landuseEndZoom: Double = 14.0
 
     static func alpha(for zoom: Double, kind: Kind = .overviewFeatures) -> Float {
         let range: (start: Double, end: Double)
@@ -26,6 +29,8 @@ enum LowZoomOverviewFade {
             range = (overviewStartZoom, overviewEndZoom)
         case .roads:
             range = (roadStartZoom, roadEndZoom)
+        case .landuse:
+            range = (landuseStartZoom, landuseEndZoom)
         }
 
         guard range.end > range.start else {
