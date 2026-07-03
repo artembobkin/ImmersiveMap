@@ -15,9 +15,7 @@ vertex VertexOut labelTextVertex(LabelVertexIn in [[stage_in]],
                                  constant float4x4& matrix [[buffer(1)]],
                                  const device ScreenPointOutput* screenPositions [[buffer(2)]],
                                  constant int& globalTextShift [[buffer(3)]],
-                                 const device uint* collisionFlags [[buffer(5)]],
                                  const device LabelRuntimeMeta* labelMeta [[buffer(6)]]) {
-    (void)collisionFlags;
     VertexOut out;
     int screenIndex = in.labelIndex + globalTextShift;
     ScreenPointOutput screenPoint = screenPositions[screenIndex];

@@ -21,7 +21,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let baseScreenCompute: TilePointScreenCompute
     private let roadPathScreenCompute: TilePointScreenCompute
     private let roadPlacementCalculator: RoadLabelPlacementCalculator
-    private let collisionFlagsBufferStore: FrameSlottedDynamicMetalBuffer<UInt32>
     private let presentationStateStore = BaseLabelPresentationStateStore()
     private let roadPresentationStateStore = BaseLabelPresentationStateStore()
     private let roadRuntimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
@@ -66,9 +65,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, library: library)
         self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: RoadLabelPlacementPipeline(metalDevice: metalDevice,
                                                                                                          library: library))
-        self.collisionFlagsBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
-                                                                        slotsCount: InFlightFramePool.inFlightFramesCount,
-                                                                        options: [.storageModeShared])
         self.roadRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                          slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                          options: [.storageModeShared])
@@ -219,10 +215,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             publishedHorizonReservationSignature = horizonReservationSignature
         }
 
-        let collisionFlagsBuffer = makeCollisionFlagsBuffer(frameContext: frameContext,
-                                                            collisionFlags: collisionFlags(from: publishedBaseCollisionVisibility),
-                                                            expectedCount: baseLabelCache.activeLabelSpanCount)
-
         let overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom)
         let targetVisibility = BaseLabelVisibilityResolver.targetVisibility(
             inputs: baseLabelCache.presentationInputs,
@@ -256,7 +248,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                               hasActiveFadeAnimations: fadeResolution.hasActiveAnimations,
                               hasActiveVisibilityCycle: hasPendingVisibilityRefresh)
         frameContext.sharedState.baseLabelState.screenPositionsBuffer = nil
-        frameContext.sharedState.baseLabelState.collisionFlagsBuffer = collisionFlagsBuffer
 
         let roadState = buildRoadLabelState(frameContext: frameContext,
                                             roadVisibility: publishedRoadInstanceVisibility)
@@ -418,15 +409,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return tilePointScreenProjector.projectWithHorizonVisibility(snapshot: tilePointSnapshot,
                                                                      frameContext: frameContext,
                                                                      tileOriginData: projectionIndexState.tileOriginData)
-    }
-
-    private func makeCollisionFlagsBuffer(frameContext: FrameContext,
-                                          collisionFlags: [UInt32],
-                                          expectedCount: Int) -> MTLBuffer {
-        let buffer = collisionFlagsBufferStore.ensureCapacity(slot: frameContext.frameSlotIndex,
-                                                              count: max(1, expectedCount))
-        upload(collisionFlags: collisionFlags, into: buffer, expectedCount: expectedCount)
-        return buffer
     }
 
     private func refreshGpuTopology(trackedTilesChanged: Bool,
@@ -753,10 +735,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             return .unknown
         }
         return .hidden
-    }
-
-    private func collisionFlags(from collisionVisibility: [BaseLabelCollisionVisibility]) -> [UInt32] {
-        collisionVisibility.map(\.collisionFlag)
     }
 
     static func mergedBaseCollisionVisibility(current: [BaseLabelCollisionVisibility],
@@ -1475,28 +1453,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             buffer.contents().advanced(by: byteOffset).initializeMemory(as: UInt8.self,
                                                                         repeating: 0,
                                                                         count: missingCount * MemoryLayout<ScreenPointOutput>.stride)
-        }
-    }
-
-    private func upload(collisionFlags: [UInt32],
-                        into buffer: MTLBuffer,
-                        expectedCount: Int) {
-        if collisionFlags.isEmpty {
-            buffer.contents().storeBytes(of: UInt32(0), as: UInt32.self)
-            return
-        }
-
-        collisionFlags.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: collisionFlags.count * MemoryLayout<UInt32>.stride)
-        }
-
-        let missingCount = max(0, expectedCount - collisionFlags.count)
-        if missingCount > 0 {
-            let byteOffset = collisionFlags.count * MemoryLayout<UInt32>.stride
-            buffer.contents().advanced(by: byteOffset).initializeMemory(as: UInt8.self,
-                                                                        repeating: 0,
-                                                                        count: missingCount * MemoryLayout<UInt32>.stride)
         }
     }
 

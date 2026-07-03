@@ -119,7 +119,9 @@ class ImmersiveMapNeedsTile {
     private func createLoadTileTaskLocked(tile: Tile) {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         tileLoadingStatusReporter?.recordLoadScheduled(tile: tile)
-        let task = Task {
+        // .utility: без явного приоритета задача унаследовала бы user-interactive QoS
+        // рендер-потока, и CPU-bound парсинг конкурировал бы с рендером за P-ядра.
+        let task = Task(priority: .utility) {
             await loadTile(tile: tile)
         }
         ongoingTasks[tile] = task

@@ -37,6 +37,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
+        refreshDebugSummaryIfNeeded(frameContext: frameContext)
         frameContext.sharedState.globeAtlasDebugSummary = frameContext.renderSurfaceMode == .spherical ? globeAtlasDebugSummary : nil
 
         var hasher = Hasher()
@@ -73,6 +74,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         atlasPlanCacheKey = nil
         globeAtlasDebugSummary = nil
         globeTextureVersionTracker.invalidate()
+        tilesTexture.releasePages()
     }
 
     func evict() {
@@ -81,6 +83,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         atlasPlanCacheKey = nil
         globeAtlasDebugSummary = nil
         globeTextureVersionTracker.invalidate()
+        tilesTexture.releasePages()
     }
 
     private func renderGlobeTilesTextureIfNeeded(commandBuffer: MTLCommandBuffer,
@@ -93,9 +96,6 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
     private func drawGlobeTexture(commandBuffer: MTLCommandBuffer,
                                   frameContext: FrameContext) {
         tilesTexture.resetFrame()
-        let atlasDebugSummary = GlobeAtlasDebugSummary(plan: atlasPlan)
-        globeAtlasDebugSummary = atlasDebugSummary
-        frameContext.sharedState.globeAtlasDebugSummary = atlasDebugSummary
 
         let allocationsByPage = Dictionary(grouping: atlasPlan.allocations, by: \.pageIndex)
         tileTraceRecorder.record(.atlasTextureRedraw(frameIndex: frameContext.frameIndex,
@@ -113,7 +113,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {
-                let placed = tilesTexture.draw(allocation: allocation, maxDepth: 4)
+                let placed = tilesTexture.draw(allocation: allocation)
                 if placed == false {
                     #if DEBUG
                     print("[ERROR] No place for tile in globe atlas texture!")
@@ -155,11 +155,23 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
 
         atlasPlan = makeAtlasPlan(frameContext: frameContext)
         atlasPlanCacheKey = cacheKey
-        globeAtlasDebugSummary = GlobeAtlasDebugSummary(plan: atlasPlan)
+        globeAtlasDebugSummary = nil
         tileTraceRecorder.record(.atlasPlanRebuilt(frameIndex: frameContext.frameIndex,
                                                    placementVersion: placementVersion,
                                                    plan: atlasPlan,
                                                    surface: frameContext.renderSurfaceMode == .spherical ? "globe" : "flat"))
+    }
+
+    // Summary нужен только HUD-панели: строим лениво при включённой панели,
+    // а не на каждый rebuild плана (rebuild происходит каждый кадр движения камеры).
+    private func refreshDebugSummaryIfNeeded(frameContext: FrameContext) {
+        guard frameContext.services.settings.debug.enableDebugPanel else {
+            globeAtlasDebugSummary = nil
+            return
+        }
+        if globeAtlasDebugSummary == nil {
+            globeAtlasDebugSummary = GlobeAtlasDebugSummary(plan: atlasPlan)
+        }
     }
 
     private func combineAtlasPlanHash(_ atlasPlan: GlobeAtlasPlan,

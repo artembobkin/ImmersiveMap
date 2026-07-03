@@ -54,8 +54,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        guard let screenPositionsBuffer = baseLabelState.screenPositionsBuffer,
-              let collisionFlagsBuffer = baseLabelState.collisionFlagsBuffer else {
+        guard let screenPositionsBuffer = baseLabelState.screenPositionsBuffer else {
             return
         }
 
@@ -64,7 +63,6 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
                                            textRenderer: textRenderer,
                                            poiSpriteAtlas: poiSpriteAtlas,
                                            screenPositionsBuffer: screenPositionsBuffer,
-                                           collisionFlagsBuffer: collisionFlagsBuffer,
                                            labelRuntimeMetaBuffer: labelRuntimeMetaBuffer,
                                            baseLabelsDrawBatches: baseLabelState.baseLabelsDrawBatches)
     }

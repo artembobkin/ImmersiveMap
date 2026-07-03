@@ -16,6 +16,7 @@ import UIKit
 final class AvatarClusterIconAtlas {
     private let atlas: AvatarTextureAtlas
     private let cellSize: Int
+    private var renderedPreviewImagesByID: [UInt64: [CGImage]] = [:]
 
     var textureArray: MTLTexture {
         atlas.textureArray
@@ -33,16 +34,38 @@ final class AvatarClusterIconAtlas {
     }
 
     func update(cluster: AvatarClusterRenderable) -> AvatarAtlasSlot? {
-        guard let image = Self.makeIcon(previewImages: cluster.previewMarkers.map(\.image),
+        let previewImages = cluster.previewMarkers.map(\.image)
+        // cluster.id — content-hash по memberIDs, поэтому бейдж с количеством у
+        // закэшированной иконки всегда актуален; перерисовка нужна только если
+        // сменились сами картинки превью.
+        if let existingSlot = atlas.slot(for: cluster.id),
+           isRenderedIconCurrent(id: cluster.id, previewImages: previewImages) {
+            return existingSlot
+        }
+
+        guard let image = Self.makeIcon(previewImages: previewImages,
                                         count: cluster.memberIDs.count,
                                         size: cellSize) else {
             return nil
         }
-        return atlas.updateImage(id: cluster.id, image: image)
+        let slot = atlas.updateImage(id: cluster.id, image: image)
+        if slot != nil {
+            renderedPreviewImagesByID[cluster.id] = previewImages
+        }
+        return slot
     }
 
     func freeSlot(for id: UInt64) {
+        renderedPreviewImagesByID.removeValue(forKey: id)
         atlas.freeSlot(for: id)
+    }
+
+    private func isRenderedIconCurrent(id: UInt64, previewImages: [CGImage]) -> Bool {
+        guard let renderedImages = renderedPreviewImagesByID[id],
+              renderedImages.count == previewImages.count else {
+            return false
+        }
+        return zip(renderedImages, previewImages).allSatisfy { $0 === $1 }
     }
 
     private static func makeIcon(previewImages: [CGImage],

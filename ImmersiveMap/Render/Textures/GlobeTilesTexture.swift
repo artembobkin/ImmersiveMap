@@ -19,24 +19,24 @@ class GlobeTilesTexture {
 
     struct Page {
         let texture: MTLTexture
-        let depthTexture: MTLTexture
         var tileData: [TileData]
     }
-    
-    let textSize: Float = 40
+
     let size: Int = 4096
     private(set) var pages: [Page] = []
     var projection: matrix_float4x4
     var previousProjectionCount: Int = 0
-    
+
     private let metalDevice: MTLDevice
     private let tilePipeline: TilePipeline
     private let depthStencilState: MTLDepthStencilState
     private var renderEncoder: MTLRenderCommandEncoder?
     private var activePageIndex: Int?
-    var texts: [TextEntry] = []
-    var textsMatrices: [matrix_float4x4] = []
-    
+    // Depth в атласе не участвует в отрисовке (compare .always, запись выключена),
+    // но нужен как атачмент, потому что TilePipeline объявляет depth32Float.
+    // Одна общая транзиентная текстура на все страницы вместо 64 МБ на страницу.
+    private var sharedDepthTexture: MTLTexture?
+
     private var previousShiftX: Float? = nil
     private var previousShiftY: Float? = nil
     private var previousScale: Float? = nil
@@ -57,8 +57,12 @@ class GlobeTilesTexture {
         for index in pages.indices {
             pages[index].tileData = []
         }
-        texts = []
-        textsMatrices = []
+    }
+
+    func releasePages() {
+        guard renderEncoder == nil else { return }
+        pages = []
+        sharedDepthTexture = nil
     }
 
     func beginPageEncoding(commandBuffer: MTLCommandBuffer, pageIndex: Int) -> Bool {
@@ -72,12 +76,13 @@ class GlobeTilesTexture {
         previousScale = nil
 
         let page = pages[pageIndex]
+        guard let depthTexture = ensureSharedDepthTexture() else { return false }
         let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = page.texture
         renderPassDescriptor.colorAttachments[0].loadAction = .clear
         renderPassDescriptor.colorAttachments[0].storeAction = .store
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
-        renderPassDescriptor.depthAttachment.texture = page.depthTexture
+        renderPassDescriptor.depthAttachment.texture = depthTexture
         renderPassDescriptor.depthAttachment.loadAction = .clear
         renderPassDescriptor.depthAttachment.storeAction = .dontCare
         renderPassDescriptor.depthAttachment.clearDepth = 1.0
@@ -110,7 +115,7 @@ class GlobeTilesTexture {
                                        index: 0)
     }
     
-    func draw(allocation: GlobeAtlasAllocation, maxDepth: UInt8) -> Bool {
+    func draw(allocation: GlobeAtlasAllocation) -> Bool {
         let placeTile = allocation.placeTile
         let placedPos = allocation.placedPosition
         let atlasDepth = allocation.atlasDepth.rawValue
@@ -140,21 +145,13 @@ class GlobeTilesTexture {
                                                                                    Int32(metalTile.tile.z))))
         
         
-        // Add text metadata for drawing coordinate text on the map texture
         let x = Int(placedPos.x)
         let y = Int(placedPos.y)
         let shiftMatrix = Matrix.translationMatrix(x: Float(x) * 4096, y: Float(y) * 4096, z: 0)
         var cameraUniform = CameraUniform(matrix: projection * shiftMatrix,
                                           eye: SIMD3<Float>(0, 0, 1),
                                           padding: 0)
-        let scaleParam = Float( 1 << (UInt8(maxDepth) - atlasDepth))
-        let shift = scaleParam * 10
-        texts.append(TextEntry(
-            text: "x: \(placeIn.x) y: \(placeIn.y) z: \(placeIn.z)",
-            position: SIMD2<Float>(Float(x) * 4096 / Float(count) + shift, Float(y) * 4096 / Float(count) + shift),
-            scale: textSize * scaleParam
-        ))
-        
+
         // Place the tile to cover the required area
         // To do that, scale and translate the tile
         let placeInCount = 1 << placeIn.z
@@ -217,15 +214,29 @@ class GlobeTilesTexture {
         descriptor.usage = [.shaderRead, .renderTarget]
         descriptor.storageMode = .private
 
+        return Page(texture: metalDevice.makeTexture(descriptor: descriptor)!,
+                    tileData: [])
+    }
+
+    private func ensureSharedDepthTexture() -> MTLTexture? {
+        if let sharedDepthTexture {
+            return sharedDepthTexture
+        }
+
         let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
                                                                        width: size,
                                                                        height: size,
                                                                        mipmapped: false)
         depthDescriptor.usage = [.renderTarget]
+        // Симулятор по документации Metal требует .private для depth-атачментов.
+        #if targetEnvironment(simulator)
         depthDescriptor.storageMode = .private
-
-        return Page(texture: metalDevice.makeTexture(descriptor: descriptor)!,
-                    depthTexture: metalDevice.makeTexture(descriptor: depthDescriptor)!,
-                    tileData: [])
+        #else
+        depthDescriptor.storageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
+        #endif
+        let texture = metalDevice.makeTexture(descriptor: depthDescriptor)
+        texture?.label = "GlobeTilesTextureSharedDepth"
+        sharedDepthTexture = texture
+        return texture
     }
 }

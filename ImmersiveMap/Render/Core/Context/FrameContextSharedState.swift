@@ -93,7 +93,6 @@ struct BaseLabelState {
                                       activeLabelSpanCount: 0,
                                       labelRuntimeMetaBuffer: nil,
                                       screenPositionsBuffer: nil,
-                                      collisionFlagsBuffer: nil,
                                       baseLabelsDrawBatches: [],
                                       hasActiveFadeAnimations: false,
                                       hasActiveVisibilityCycle: false)
@@ -102,7 +101,6 @@ struct BaseLabelState {
     var activeLabelSpanCount: Int
     var labelRuntimeMetaBuffer: MTLBuffer?
     var screenPositionsBuffer: MTLBuffer?
-    var collisionFlagsBuffer: MTLBuffer?
     var baseLabelsDrawBatches: [BaseLabelDrawBatch]
     var hasActiveFadeAnimations: Bool
     var hasActiveVisibilityCycle: Bool
