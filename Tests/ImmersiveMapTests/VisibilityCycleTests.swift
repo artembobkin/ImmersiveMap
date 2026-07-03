@@ -6,7 +6,7 @@ import XCTest
 
 final class VisibilityCycleTests: XCTestCase {
     func testProcessNextGroupsPublishesPartialBaseCollisionVisibility() {
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -36,8 +36,52 @@ final class VisibilityCycleTests: XCTestCase {
         XCTAssertFalse(cycle.isComplete)
     }
 
+    func testResolvedHiddenBaseIndicesAreAppliedOnlyOnCompletion() {
+        let cycle = VisibilityCycle(topologyGeneration: 0,
+                                    cameraFingerprint: 10,
+                                    horizonReservationSignature: [],
+                                    viewportSize: SIMD2<Float>(200, 200),
+                                    baseCount: 3,
+                                    roadCount: 0,
+                                    groups: [
+                                        makeBaseGroup(index: 0,
+                                                      position: SIMD2<Float>(50, 50),
+                                                      priority: 0),
+                                        makeBaseGroup(index: 1,
+                                                      position: SIMD2<Float>(120, 50),
+                                                      priority: 1)
+                                    ],
+                                    resolvedHiddenBaseIndices: [2],
+                                    cellSizePx: 32)
+
+        cycle.processNextGroups(maxGroupCount: 1)
+
+        XCTAssertEqual(cycle.baseCollisionVisibility, [.visible, .unknown, .unknown])
+        XCTAssertFalse(cycle.isComplete)
+
+        cycle.processNextGroups(maxGroupCount: 1)
+
+        XCTAssertEqual(cycle.baseCollisionVisibility, [.visible, .visible, .hidden])
+        XCTAssertTrue(cycle.isComplete)
+    }
+
+    func testResolvedHiddenBaseIndicesAreAppliedOnInitForEmptyGroups() {
+        let cycle = VisibilityCycle(topologyGeneration: 0,
+                                    cameraFingerprint: 10,
+                                    horizonReservationSignature: [],
+                                    viewportSize: SIMD2<Float>(200, 200),
+                                    baseCount: 2,
+                                    roadCount: 0,
+                                    groups: [],
+                                    resolvedHiddenBaseIndices: [0, 1],
+                                    cellSizePx: 32)
+
+        XCTAssertTrue(cycle.isComplete)
+        XCTAssertEqual(cycle.baseCollisionVisibility, [.hidden, .hidden])
+    }
+
     func testProcessNextGroupsTracksPartialRoadVisibilityResolution() {
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -210,7 +254,7 @@ final class VisibilityCycleTests: XCTestCase {
                                      sortPriority: 10,
                                      stableOrderKey: 200,
                                      groupId: 200)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -238,7 +282,7 @@ final class VisibilityCycleTests: XCTestCase {
                                      sortPriority: 10,
                                      stableOrderKey: 200,
                                      groupId: 200)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -257,7 +301,7 @@ final class VisibilityCycleTests: XCTestCase {
         let offscreen = makeBaseGroup(index: 0,
                                       position: SIMD2<Float>(-40, 50),
                                       priority: 0)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -275,7 +319,7 @@ final class VisibilityCycleTests: XCTestCase {
         let offscreen = makeBaseGroup(index: 0,
                                       position: SIMD2<Float>(-40, 50),
                                       priority: 0)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -299,7 +343,7 @@ final class VisibilityCycleTests: XCTestCase {
                                      position: SIMD2<Float>(50, 50),
                                      priority: 0,
                                      groupId: 200)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),
@@ -327,7 +371,7 @@ final class VisibilityCycleTests: XCTestCase {
                                    sortPriority: 10,
                                    stableOrderKey: 200,
                                    groupId: 200)
-        var cycle = VisibilityCycle(topologyGeneration: 0,
+        let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
                                     viewportSize: SIMD2<Float>(200, 200),

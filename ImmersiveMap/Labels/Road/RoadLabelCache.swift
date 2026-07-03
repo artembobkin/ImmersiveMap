@@ -37,6 +37,9 @@ final class RoadLabelTileRecord {
     let labelStyle: LabelTextStyle
     private(set) var entries: [RoadLabelEntry]
     let instanceKeys: [UInt64]
+    // При совпадении хеш-ключей сохраняется первый индекс — та же семантика,
+    // что у firstIndex(of:) по instanceKeys.
+    let instanceLocalIndexByKey: [UInt64: Int]
     private(set) var instanceRetainedFlags: [UInt8]
     let instanceLabelSizes: [SIMD2<Float>]
 
@@ -85,6 +88,8 @@ final class RoadLabelTileRecord {
         self.labelStyle = labelStyle
         self.entries = entries
         self.instanceKeys = instanceKeys
+        self.instanceLocalIndexByKey = Dictionary(instanceKeys.enumerated().map { ($1, $0) },
+                                                  uniquingKeysWith: { first, _ in first })
         self.instanceRetainedFlags = instanceRetainedFlags
         self.instanceLabelSizes = instanceLabelSizes
         self.pathPointCount = pathInputs.count
