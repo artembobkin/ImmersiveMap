@@ -56,7 +56,6 @@ final class RenderFrameEngine {
 
         let renderGraph = RenderGraphFactory.makeDefaultGraph(context: persistentContext,
                                                               settings: settings,
-                                                              initialZoom: Int(renderCamera.currentCameraState().zoom),
                                                               debugOverlayControls: debugOverlayControls,
                                                               postProcessingInputTextureProvider: { [attachments] in
                                                                   attachments.currentPostProcessingInputTexture
@@ -264,6 +263,7 @@ final class RenderFrameEngine {
         }
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        renderGraph.frameCommitted()
         return true
     }
 

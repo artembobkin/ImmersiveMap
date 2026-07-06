@@ -277,6 +277,130 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
 
         pipeline.completeDownload(secondTile, result: .failure(.network))
     }
+
+    func testFailedDownloadArmsRetryWakeThatFiresCallback() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           retryWakeScheduler: wakeScheduler.schedule)
+        let wakeExpectation = expectation(description: "retry wake callback fired")
+        wakeExpectation.assertForOverFulfill = false
+        loader.onRetryWindowExpired = { wakeExpectation.fulfill() }
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        let didStart = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(didStart)
+
+        pipeline.completeDownload(tile, result: .failure(.network))
+        let didSchedule = await wakeScheduler.waitUntilScheduledCount(1)
+        XCTAssertTrue(didSchedule)
+        guard let armedWake = wakeScheduler.scheduledWakes.first else {
+            return
+        }
+        XCTAssertGreaterThan(armedWake.delay, 0)
+        XCTAssertLessThanOrEqual(armedWake.delay, TileRetryController.Policy.default.baseBackoff)
+
+        armedWake.workItem.perform()
+        await fulfillment(of: [wakeExpectation], timeout: 2)
+    }
+
+    func testCancelAllCancelsArmedRetryWake() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           retryWakeScheduler: wakeScheduler.schedule)
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        let didStart = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(didStart)
+
+        pipeline.completeDownload(tile, result: .failure(.network))
+        let didSchedule = await wakeScheduler.waitUntilScheduledCount(1)
+        XCTAssertTrue(didSchedule)
+
+        loader.cancelAll()
+
+        XCTAssertTrue(wakeScheduler.scheduledWakes[0].workItem.isCancelled)
+    }
+
+    func testExpiredRetryWindowDoesNotMaskFutureWindowsOnRearm() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 2
+        var now = Date(timeIntervalSince1970: 1000)
+        let pipeline = ControlledTileLoadPipeline()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           now: { now },
+                                           retryWakeScheduler: wakeScheduler.schedule)
+        let firstTile = Tile(x: 1, y: 1, z: 4)
+        let secondTile = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [firstTile, secondTile])
+        let firstStarted = await pipeline.waitUntilStarted(firstTile)
+        let secondStarted = await pipeline.waitUntilStarted(secondTile)
+        XCTAssertTrue(firstStarted)
+        XCTAssertTrue(secondStarted)
+
+        // Первый тайл падает в T+0: окно T+0.5, будильник взведён на него.
+        pipeline.completeDownload(firstTile, result: .failure(.network))
+        let didScheduleFirst = await wakeScheduler.waitUntilScheduledCount(1)
+        XCTAssertTrue(didScheduleFirst)
+
+        // Второй падает в T+0.4: его окно T+0.9 поглощено более ранним deadline.
+        now = Date(timeIntervalSince1970: 1000.4)
+        pipeline.completeDownload(secondTile, result: .failure(.network))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Будильник срабатывает в T+0.6: окно первого тайла уже истекло и не
+        // должно маскировать будущее окно второго — перевзвод на T+0.9.
+        now = Date(timeIntervalSince1970: 1000.6)
+        wakeScheduler.scheduledWakes[0].workItem.perform()
+
+        let didRearm = await wakeScheduler.waitUntilScheduledCount(2)
+        XCTAssertTrue(didRearm)
+        XCTAssertEqual(wakeScheduler.scheduledWakes[1].delay, 0.3, accuracy: 0.001)
+    }
+}
+
+private final class RecordingRetryWakeScheduler {
+    struct ScheduledWake {
+        let delay: TimeInterval
+        let workItem: DispatchWorkItem
+    }
+
+    private let lock = NSLock()
+    private var wakes: [ScheduledWake] = []
+
+    var scheduledWakes: [ScheduledWake] {
+        lock.lock()
+        defer { lock.unlock() }
+        return wakes
+    }
+
+    func schedule(delay: TimeInterval, workItem: DispatchWorkItem) {
+        lock.lock()
+        wakes.append(ScheduledWake(delay: delay, workItem: workItem))
+        lock.unlock()
+    }
+
+    func waitUntilScheduledCount(_ count: Int) async -> Bool {
+        for _ in 0..<100 {
+            if scheduledWakes.count >= count {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
 }
 
 private final class ControlledTileLoadPipeline: TileLoadPipeline {

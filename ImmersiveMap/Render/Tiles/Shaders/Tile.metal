@@ -13,6 +13,7 @@ struct VertexIn {
 
 struct VertexOut {
     float4 position [[position]];
+    float2 localPosition;
     float4 color;
     float lowZoomFadeMask;
     float pointSize [[point_size]];
@@ -42,14 +43,23 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     
     VertexOut out;
     out.position = clipPosition;
+    out.localPosition = float2(vertexIn.position.xy);
     out.pointSize = 5.0;
     out.color = style.color;
     out.lowZoomFadeMask = lowZoomFadeMasks[vertexIn.styleIndex];
     return out;
 }
 
+// localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
+// Retained-подмена рисуется полным квадом source — фрагменты вне слота placeIn
+// отбрасываются, чтобы не перекрывать соседние точные тайлы.
 fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
-                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]]) {
+                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                   constant float4& localClipBounds [[buffer(1)]]) {
+    if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
+        in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
+        discard_fragment();
+    }
     float4 color = in.color;
     float fade = 1.0;
     if (in.lowZoomFadeMask >= 2.5) {

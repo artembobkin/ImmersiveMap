@@ -37,6 +37,12 @@ final class RenderSubsystemRegistry {
         }
     }
 
+    func frameCommitted() {
+        for subsystem in subsystems {
+            subsystem.frameCommitted()
+        }
+    }
+
     func handleMemoryWarning() {
         for subsystem in subsystems {
             subsystem.handleMemoryWarning()

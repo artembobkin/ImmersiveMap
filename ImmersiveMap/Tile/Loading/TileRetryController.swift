@@ -100,6 +100,24 @@ final class TileRetryController {
         }
     }
 
+    // Ближайший БУДУЩИЙ момент, когда хотя бы один заблокированный тайл снова
+    // станет доступен для запроса. Нужен планировщику, чтобы разбудить on-demand
+    // рендер-цикл к истечению backoff-окна: сам контроллер пассивен и таймеров
+    // не держит. Уже истёкшие окна не учитываются: их тайлы разблокированы и
+    // будут ретраены ближайшим кадром, а истёкшая запись (она живёт до
+    // registerSuccess/retainOnly) не должна маскировать будущие окна других
+    // тайлов. При активном глобальном cooldown возвращает его границу —
+    // раньше неё не разблокируется ни один тайл.
+    func earliestNextRetryDate() -> Date? {
+        let now = nowProvider()
+        clearExpiredGlobalBlockIfNeeded(now: now)
+
+        if let globalRetryBlockedUntil {
+            return globalRetryBlockedUntil
+        }
+        return retryStateByTile.values.map(\.nextRetryAt).filter { $0 > now }.min()
+    }
+
     // Оставляет retry-state только для актуального набора тайлов, чтобы
     // не держать устаревшее состояние для тайлов вне текущего интереса.
     func retainOnly(tiles: Set<Tile>) {

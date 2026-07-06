@@ -16,6 +16,7 @@ struct VertexOut {
     float4 position [[position]];
     float3 worldPosition;
     float3 worldNormal;
+    float2 localPosition;
     float4 color;
     uint surfaceID [[flat]];
     float pointSize [[point_size]];
@@ -54,11 +55,25 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.color = style.color;
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = worldNormal;
+    out.localPosition = vertexIn.position.xy;
     out.surfaceID = vertexIn.surfaceID;
     return out;
 }
 
-fragment uint tileExtrudedWinnerFragmentShader(VertexOut in [[stage_in]]) {
+// localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
+// Retained-подмена рисует здания source целиком — фрагменты вне слота placeIn
+// отбрасываются и в winner-препассе, и в цветовом пассе, иначе здания родителя
+// перекрывали бы соседние точные тайлы (и их winner ID).
+static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBounds) {
+    return localPosition.x < localClipBounds.x || localPosition.y < localClipBounds.y ||
+           localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
+}
+
+fragment uint tileExtrudedWinnerFragmentShader(VertexOut in [[stage_in]],
+                                               constant float4& localClipBounds [[buffer(4)]]) {
+    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
+        discard_fragment();
+    }
     return in.surfaceID;
 }
 
@@ -66,7 +81,11 @@ fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                            texture2d<uint, access::read> winnerTexture [[texture(0)]],
                                            constant Camera& camera [[buffer(1)]],
                                            constant ExtrudedLight& light [[buffer(2)]],
-                                           constant ExtrudedMaterial& material [[buffer(3)]]) {
+                                           constant ExtrudedMaterial& material [[buffer(3)]],
+                                           constant float4& localClipBounds [[buffer(4)]]) {
+    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
+        discard_fragment();
+    }
     uint storedWinnerID = winnerTexture.read(uint2(in.position.xy)).r;
     if (storedWinnerID == 0 || storedWinnerID != in.surfaceID) {
         discard_fragment();

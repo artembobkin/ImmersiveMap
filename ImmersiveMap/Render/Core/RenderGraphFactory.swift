@@ -6,13 +6,11 @@ import Metal
 enum RenderGraphFactory {
     static func makeDefaultGraph(context: RenderPersistentContext,
                                  settings: ImmersiveMapSettings,
-                                 initialZoom: Int,
                                  debugOverlayControls: DebugOverlayControlState,
                                  postProcessingInputTextureProvider: @escaping () -> MTLTexture?,
                                  buildingWinnerIDTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
-                                                                        tileTraceRecorder: context.tileTraceRecorder,
-                                                                        initialZoom: initialZoom)
+                                                                        tileTraceRecorder: context.tileTraceRecorder)
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
         let tileGlobeTextureSubsystem = TileGlobeTextureSubsystem(tilesTexture: context.tilesTexture,
                                                                   tileTraceRecorder: context.tileTraceRecorder)

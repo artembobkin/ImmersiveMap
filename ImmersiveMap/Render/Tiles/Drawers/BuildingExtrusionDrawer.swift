@@ -72,6 +72,7 @@ enum BuildingExtrusionDrawer {
     private static func drawExtrudedGeometry(renderEncoder: MTLRenderCommandEncoder,
                                              placeTilesContext: PlaceTilesContext,
                                              flatRenderState: FlatRenderState) {
+        var isBackCullingEnabled = true
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -90,6 +91,23 @@ enum BuildingExtrusionDrawer {
 
             renderEncoder.setVertexBuffer(buffers.extruded.verticesBuffer, offset: 0, index: 0)
             renderEncoder.setVertexBuffer(buffers.extruded.stylesBuffer, offset: 0, index: 2)
+
+            // Клип фрагментов к слоту placeIn — и в winner-препассе, и в цветовом
+            // пассе: здания retained-родителя не должны перекрывать соседние тайлы.
+            var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
+            renderEncoder.setFragmentBytes(&localClipBounds,
+                                           length: MemoryLayout<SIMD4<Float>>.stride,
+                                           index: 4)
+
+            // Клип режет здание вертикальной плоскостью без закрывающей грани:
+            // при отсечении back-faces срез выглядит «полым» насквозь. Для
+            // клипнутых размещений рисуем и внутренние стены — тёмный срез
+            // вместо дыры.
+            let isClipped = localClipBounds != TileLocalClipMath.disabledBounds
+            if isClipped == isBackCullingEnabled {
+                isBackCullingEnabled = !isClipped
+                renderEncoder.setCullMode(isBackCullingEnabled ? .back : .none)
+            }
 
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,

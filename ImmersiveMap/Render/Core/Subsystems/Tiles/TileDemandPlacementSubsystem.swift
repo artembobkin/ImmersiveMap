@@ -17,7 +17,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private let tileTraceRecorder: TileTraceRecorder
     private let visibleTilesPreprocessor: VisibleTilesPreprocessor
 
-    private var previousZoom: Int
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
     private var globeTexturePlaceTilesContext: GlobeTexturePlaceTilesContext = .empty
@@ -28,12 +27,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
-         visibleTilesPreprocessor: VisibleTilesPreprocessor = VisibleTilesPreprocessor(),
-         initialZoom: Int) {
+         visibleTilesPreprocessor: VisibleTilesPreprocessor = VisibleTilesPreprocessor()) {
         self.tileRenderStore = tileRenderStore
         self.tileTraceRecorder = tileTraceRecorder
         self.visibleTilesPreprocessor = visibleTilesPreprocessor
-        self.previousZoom = initialZoom
     }
 
     func update(frameContext: FrameContext) {
@@ -93,14 +90,11 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: preprocessedVisibleTiles,
                                                                      readyTilesBySource: readyTilesBySource,
                                                                      zoom: tileZoomLevel,
-                                                                     previousZoom: previousZoom,
                                                                      previousContext: placeTilesContext)
             globeTexturePlaceTilesContext = GlobeTexturePlacementPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
                                                                                          readyTilesBySource: readyTilesBySource,
                                                                                          baseZoom: tileZoomLevel,
-                                                                                         previousBaseZoom: previousZoom,
                                                                                          previousContext: globeTexturePlaceTilesContext)
-            previousZoom = tileZoomLevel
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
         }

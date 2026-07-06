@@ -45,6 +45,10 @@ final class RenderGraph {
                         frameContext: frameContext)
     }
 
+    func frameCommitted() {
+        registry.frameCommitted()
+    }
+
     func handleMemoryWarning() {
         registry.handleMemoryWarning()
     }

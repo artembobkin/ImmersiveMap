@@ -99,6 +99,12 @@ class GlobeTilesTexture {
     
     func selectTilePipeline() {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder!)
+        // Клип по placeIn нужен только flat-пути: в атласе область ячейки
+        // уже ограничена scissor-ом, шейдеру передаётся отключённый клип.
+        var localClipBounds = TileLocalClipMath.disabledBounds
+        renderEncoder!.setFragmentBytes(&localClipBounds,
+                                        length: MemoryLayout<SIMD4<Float>>.stride,
+                                        index: 1)
     }
     
     func endEncoding() {

@@ -66,10 +66,17 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         }
 
         renderGlobeTilesTextureIfNeeded(commandBuffer: commandBuffer, frameContext: frameContext)
-        globeTextureVersionTracker.commitPending()
     }
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
+
+    // Хеш атласа фиксируется только после commit() command buffer: если кадр
+    // отброшен (нет drawable), закодированная перерисовка страниц не выполнится,
+    // и pending-хеш должен пережить кадр, чтобы следующий кадр перекодировал
+    // атлас заново — иначе шейдер сэмплит старую GPU-текстуру по новому маппингу.
+    func frameCommitted() {
+        globeTextureVersionTracker.commitPending()
+    }
 
     func handleMemoryWarning() {
         placeTilesContext = .empty

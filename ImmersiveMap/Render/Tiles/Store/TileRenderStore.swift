@@ -64,6 +64,12 @@ final class TileRenderStore {
                                              preparedTileCacheIdentity: preparedTileCacheIdentity,
                                              tileTraceRecorder: tileTraceRecorder,
                                              tileLoadingStatusReporter: tileLoadingStatusReporter)
+        // Истечение backoff-окна будит on-demand рендер: кадр заново выполнит
+        // requestTiles и ретраит провалившиеся тайлы. Без этого дыра после
+        // ошибки загрузки висит до следующего жеста камеры.
+        mapNeedsTile!.onRetryWindowExpired = { [weak self] in
+            self?.eventSink?.invalidate(.tileRetryDue)
+        }
     }
     
     func getMetalTile(tile: Tile) -> MetalTile? {

@@ -5,7 +5,6 @@ struct TilePlacementPlanner {
     static func buildPlacements(targets: [VisibleTile],
                                 readyTilesBySource: [Tile: MetalTile?],
                                 zoom: Int,
-                                previousZoom: Int,
                                 previousContext: PlaceTilesContext) -> PlaceTilesContext {
         var placeTiles: [PlaceTile] = []
         let readyReplacementCandidates = readyTilesBySource.values.compactMap { $0 }.sorted { lhs, rhs in
@@ -23,83 +22,105 @@ struct TilePlacementPlanner {
             let lodKind: TileLodKind = sourceTile.z < zoom ? .coarseSubstitute : .exact
             let metalTile = readyTilesBySource[sourceTile] ?? nil
 
-            func findFullReplacement() -> Bool {
-                var bestReplacement: PlaceTile?
+            func bestFullReplacement() -> MetalTile? {
+                var bestReplacement: MetalTile?
                 for prev in previousContext.tilePlacements {
                     let prevSourceTile = prev.metalTile.tile
 
                     // Previous tile fully covers the required tile
                     // (including exact same tile identity).
                     if prevSourceTile == target.tile || prevSourceTile.covers(target.tile) {
-                        if let currentBest = bestReplacement {
-                            let currentBestTile = currentBest.metalTile.tile
-                            // Keep the most detailed fallback source among
-                            // all covering tiles from the previous frame.
-                            if prevSourceTile.z > currentBestTile.z {
-                                bestReplacement = prev
-                            }
-                        } else {
-                            bestReplacement = prev
+                        // Keep the most detailed fallback source among
+                        // all covering tiles from the previous frame.
+                        if prevSourceTile.z > (bestReplacement?.tile.z ?? Int.min) {
+                            bestReplacement = prev.metalTile
                         }
                     }
                 }
-
-                guard let bestReplacement else {
-                    return false
-                }
-
-                placeTiles.append(PlaceTile(metalTile: bestReplacement.metalTile,
-                                            placeIn: target,
-                                            lodKind: .retainedReplacement))
-                return true
+                return bestReplacement
             }
 
-            func findPartialReplacement() -> Bool {
-                var foundSome = false
+            func collectPartialReplacements() -> (placements: [PlaceTile], coversTarget: Bool) {
+                var partialPlacements: [PlaceTile] = []
+                var uniquePlaceInTiles: Set<Tile> = []
                 for prev in previousContext.tilePlacements {
                     let prevMetalTile = prev.metalTile
                     let prevSourceTile = prev.metalTile.tile
 
                     // Previous tile is inside the required tile
                     // (including exact same tile identity).
-                    if prevSourceTile == target.tile || target.tile.covers(prevSourceTile) {
-                        placeTiles.append(PlaceTile(metalTile: prevMetalTile,
-                                                    placeIn: prev.placeIn,
-                                                    lodKind: .retainedReplacement))
-                        foundSome = true
+                    // Сравнение по placeIn.loop: контент общий между wrapped-копиями,
+                    // но рисуется placement строго в мировой копии своего placeIn —
+                    // копию таргета в другом loop он не закрашивает.
+                    if prev.placeIn.loop == target.loop,
+                       prevSourceTile == target.tile || target.tile.covers(prevSourceTile) {
+                        partialPlacements.append(PlaceTile(metalTile: prevMetalTile,
+                                                           placeIn: prev.placeIn,
+                                                           lodKind: .retainedReplacement))
+                        uniquePlaceInTiles.insert(prev.placeIn.tile)
                     }
                 }
-                return foundSome
+
+                // Покрытие — площадь ОБЪЕДИНЕНИЯ слотов placeIn (слот глубины d
+                // занимает 1/4^d площади таргета): рисуется ровно область placeIn
+                // (фрагментный клип), а не весь source. Слоты разных поколений
+                // могут быть вложены — вложенные в уже учтённый более грубый слот
+                // площади не добавляют.
+                var coveredFraction = 0.0
+                var countedPlaceInTiles: [Tile] = []
+                for placeInTile in uniquePlaceInTiles.sorted(by: { ($0.z, $0.x, $0.y) < ($1.z, $1.x, $1.y) }) {
+                    if countedPlaceInTiles.contains(where: { $0.covers(placeInTile) }) {
+                        continue
+                    }
+                    countedPlaceInTiles.append(placeInTile)
+                    let depth = placeInTile.z - target.tile.z
+                    coveredFraction += depth >= 30 ? 0 : 1.0 / Double(1 << (2 * depth))
+                }
+                return (partialPlacements, coveredFraction >= 0.999_999)
             }
 
-            func findCurrentReadyParentReplacement() -> Bool {
+            func bestReadyParent() -> MetalTile? {
                 for candidate in readyReplacementCandidates {
                     let candidateTile = candidate.tile
                     guard candidateTile != target.tile,
                           candidateTile.covers(target.tile) else {
                         continue
                     }
-                    placeTiles.append(PlaceTile(metalTile: candidate,
-                                                placeIn: target,
-                                                lodKind: .retainedReplacement))
-                    return true
+                    return candidate
                 }
 
-                return false
+                return nil
             }
 
-            // Replace missing tile with temporary tiles from the previous frame.
+            // Каскад подмен отсутствующего таргета — по максимуму детальности:
+            // 1) прежние тайлы ВНУТРИ таргета (всегда детальнее любого
+            //    покрывающего source), но только если закрывают его целиком —
+            //    детальный контент с дырами хуже полного грубого;
+            // 2) более детальный из: покрывающего source прошлого кадра
+            //    (retention, включая сам таргет по strong-ссылке) и готового
+            //    родителя из кэша; при равенстве — родитель из кэша (свежее);
+            // 3) неполные прежние тайлы — лучше, чем пустой регион.
+            // Два source в одном слоте не смешиваются: наложение даёт двойной
+            // blend полупрозрачных слоёв (дороги).
             if metalTile == nil {
-                let zDiff = zoom - previousZoom
-
-                if findCurrentReadyParentReplacement() {
+                let partial = collectPartialReplacements()
+                if partial.coversTarget {
+                    placeTiles.append(contentsOf: partial.placements)
                     continue
-                } else if zDiff >= 0 {
-                    if findFullReplacement() == false {
-                        _ = findPartialReplacement()
-                    }
+                }
+
+                let readyParent = bestReadyParent()
+                let fullReplacement = bestFullReplacement()
+                if let fullReplacement, fullReplacement.tile.z > (readyParent?.tile.z ?? Int.min) {
+                    placeTiles.append(PlaceTile(metalTile: fullReplacement,
+                                                placeIn: target,
+                                                lodKind: .retainedReplacement))
+                } else if let readyParent {
+                    placeTiles.append(PlaceTile(metalTile: readyParent,
+                                                placeIn: target,
+                                                lodKind: .retainedReplacement))
                 } else {
-                    _ = findPartialReplacement()
+                    placeTiles.append(contentsOf: partial.placements)
                 }
 
                 continue

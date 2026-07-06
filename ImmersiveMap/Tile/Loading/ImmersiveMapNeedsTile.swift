@@ -23,6 +23,17 @@ class ImmersiveMapNeedsTile {
     private let tileTraceRecorder: TileTraceRecorder
     private let tileLoadingStatusReporter: TileLoadingStatusReporter?
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.ImmersiveMapNeedsTile.state")
+
+    /// Вызывается на main queue, когда истекает ближайшее retry-окно.
+    /// Рендер on-demand: после провала загрузки кадры кончаются, пер-кадровый
+    /// `request()` больше не выполняется, и без внешнего пинка backoff истекает
+    /// «в тишине» — дыра на месте тайла висит до следующего жеста. Владелец
+    /// обязан по этому колбэку запросить кадр.
+    var onRetryWindowExpired: (() -> Void)?
+    private var retryWakeWorkItem: DispatchWorkItem?
+    private var retryWakeDeadline: Date?
+    private let now: () -> Date
+    private let retryWakeScheduler: (TimeInterval, DispatchWorkItem) -> Void
     
     // Production-конструктор: собирает стандартный pipeline (диск + сеть + парс в TileRenderStore).
     convenience init(tileRenderStore: TileRenderStore,
@@ -43,12 +54,17 @@ class ImmersiveMapNeedsTile {
          loadPipeline: TileLoadPipeline,
          retryPolicy: RetryPolicy = .default,
          now: @escaping () -> Date = Date.init,
+         retryWakeScheduler: @escaping (TimeInterval, DispatchWorkItem) -> Void = { delay, workItem in
+             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+         },
          tileTraceRecorder: TileTraceRecorder = TileTraceRecorder(),
          tileLoadingStatusReporter: TileLoadingStatusReporter? = nil) {
         self.maxConcurrentFetches = config.tiles.network.maxConcurrentFetches
         self.pendingTilesQueue = DeduplicatedTilesFIFO(capacity: config.tiles.network.pendingRequestQueueCapacity)
         self.loadPipeline = loadPipeline
         self.retryController = TileRetryController(policy: retryPolicy, now: now)
+        self.now = now
+        self.retryWakeScheduler = retryWakeScheduler
         self.tileTraceRecorder = tileTraceRecorder
         self.tileLoadingStatusReporter = tileLoadingStatusReporter
     }
@@ -294,6 +310,9 @@ class ImmersiveMapNeedsTile {
             wantedTiles.removeAll()
             pendingTilesQueue.clear()
             retryController.reset()
+            retryWakeWorkItem?.cancel()
+            retryWakeWorkItem = nil
+            retryWakeDeadline = nil
             for task in ongoingTasks.values {
                 task.cancel()
             }
@@ -308,15 +327,55 @@ class ImmersiveMapNeedsTile {
         }
     }
 
-    // Фиксирует неуспешную загрузку тайла: обновляет backoff/cooldown через retry-контроллер.
+    // Фиксирует неуспешную загрузку тайла: обновляет backoff/cooldown через retry-контроллер
+    // и взводит будильник к истечению ближайшего retry-окна.
     private func markLoadFailed(tile: Tile, reason: TileRetryFailureReason) {
         stateQueue.sync {
             retryController.registerFailure(for: tile, reason: reason)
+            if let wakeAt = retryController.earliestNextRetryDate() {
+                scheduleRetryWakeLocked(at: wakeAt)
+            }
         }
         tileLoadingStatusReporter?.recordLoadFailed(tile: tile,
                                                     reason: Self.retryFailureDescription(reason))
         tileTraceRecorder.record(.tileLoadFailed(tile,
                                                  reason: Self.retryFailureDescription(reason)))
+    }
+
+    // Взводит одноразовый будильник к `wakeAt`; более ранний уже взведённый
+    // будильник поглощает поздние (после срабатывания он перевзводится на
+    // следующее оставшееся окно).
+    private func scheduleRetryWakeLocked(at wakeAt: Date) {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        if let retryWakeDeadline, retryWakeDeadline <= wakeAt {
+            return
+        }
+
+        retryWakeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.retryWakeDidFire()
+        }
+        retryWakeWorkItem = workItem
+        retryWakeDeadline = wakeAt
+        retryWakeScheduler(max(0, wakeAt.timeIntervalSince(now())), workItem)
+    }
+
+    private func retryWakeDidFire() {
+        var shouldNotify = false
+        stateQueue.sync {
+            retryWakeWorkItem = nil
+            retryWakeDeadline = nil
+            shouldNotify = wantedTiles.isEmpty == false
+            // Окна позже сработавшего могли быть поглощены его deadline —
+            // перевзводимся на ближайшее оставшееся. Уже истекшие окна ретраит
+            // кадр, который запросит владелец по колбэку.
+            if let nextWakeAt = retryController.earliestNextRetryDate(), nextWakeAt > now() {
+                scheduleRetryWakeLocked(at: nextWakeAt)
+            }
+        }
+        if shouldNotify {
+            onRetryWindowExpired?()
+        }
     }
 
     #if DEBUG

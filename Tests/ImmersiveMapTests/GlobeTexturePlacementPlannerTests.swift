@@ -16,7 +16,6 @@ final class GlobeTexturePlacementPlannerTests: XCTestCase {
                 baseTile: baseMetalTile
             ],
             baseZoom: 1,
-            previousBaseZoom: 1,
             previousContext: .empty
         )
 
@@ -33,7 +32,6 @@ final class GlobeTexturePlacementPlannerTests: XCTestCase {
                 baseTile: baseMetalTile
             ],
             baseZoom: 1,
-            previousBaseZoom: 1,
             previousContext: .empty
         )
 

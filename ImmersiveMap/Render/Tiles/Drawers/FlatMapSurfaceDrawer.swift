@@ -107,6 +107,14 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(buffers.stylesBuffer, offset: 0, index: 2)
         renderEncoder.setVertexBuffer(buffers.overviewStyleMaskBuffer, offset: 0, index: 4)
 
+        // Retained-подмена рисует source-тайл целиком по его origin: фрагменты
+        // вне слота placeIn отбрасываются в шейдере, иначе контент родителя
+        // перекрывал бы соседние точные тайлы во всех слоях (дороги, фоны).
+        var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
+        renderEncoder.setFragmentBytes(&localClipBounds,
+                                       length: MemoryLayout<SIMD4<Float>>.stride,
+                                       index: 1)
+
         var modelMatrix = Matrix.translationMatrix(
             x: originAndSize.x,
             y: originAndSize.y,

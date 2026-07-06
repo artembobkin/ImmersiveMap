@@ -102,6 +102,8 @@ private extension RenderInvalidationReason {
         switch self {
         case .tileAvailable:
             return "tile available"
+        case .tileRetryDue:
+            return "tile retry due"
         case .externalStateChanged:
             return "external state changed"
         }

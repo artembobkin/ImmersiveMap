@@ -3,6 +3,7 @@
 
 enum RenderInvalidationReason {
     case tileAvailable
+    case tileRetryDue
     case externalStateChanged
 }
 
