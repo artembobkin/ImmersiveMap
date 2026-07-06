@@ -1,0 +1,25 @@
+name: Question
+description: Ask how to do something with ImmersiveMap
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before asking, please skim the [README](../../README.md) and the [documentation](../../Documentation/docs). Documentation is still incomplete, so questions are welcome.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Code snippets, settings, or approaches you've already attempted.
+  - type: input
+    id: version
+    attributes:
+      label: ImmersiveMap version / commit
+      placeholder: "0.1.0-alpha.1 or commit SHA"

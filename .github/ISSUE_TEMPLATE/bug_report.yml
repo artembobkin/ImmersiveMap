@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a problem with ImmersiveMap
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. ImmersiveMap is an early alpha, so please include enough detail to reproduce.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps (and code, if possible) to reproduce the behavior.
+      placeholder: |
+        1. Create an `ImmersiveMapView` with …
+        2. Set camera to …
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ImmersiveMap version / commit
+      placeholder: "0.1.0-alpha.1 or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - iOS device
+        - iOS simulator
+        - Mac Catalyst
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS / Xcode / Swift versions
+      placeholder: "iOS 18.2, Xcode 16.2, Swift 6.0"
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Tile provider
+      placeholder: "Mapbox / OpenStreetMap / custom"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or video
+      description: For rendering bugs, screenshots or a short recording help a lot.

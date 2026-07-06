@@ -1,0 +1,59 @@
+# Contributing to ImmersiveMap
+
+Thanks for your interest in contributing.
+
+ImmersiveMap is an early-stage, experimental Swift + Metal map rendering engine, currently maintained as a single-maintainer project. Contributions are welcome — especially around documentation, examples, tests, bug reports, and small focused improvements.
+
+## Good first contributions
+
+- Documentation fixes
+- Example improvements
+- Bug reports with reproduction steps
+- Tests for existing behavior
+- Small, focused bug fixes
+
+## Development setup
+
+1. Clone the repository.
+2. Build and test the package with Swift Package Manager:
+   ```bash
+   swift build
+   swift test
+   ```
+3. To run the map in a host app, open `ImmersiveMap.xcworkspace` and select the `ImmersiveMapIOS` or `ImmersiveMapMac` scheme. Both host apps reference the package locally, so unpublished changes run immediately.
+
+Mac Catalyst build from the CLI:
+
+```bash
+xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapMac \
+  -destination 'platform=macOS,variant=Mac Catalyst' build
+```
+
+## Project conventions
+
+- Every hand-written `.swift`, `.metal`, `.h`, `.proto` file starts with the license header:
+  ```text
+  // Copyright (c) 2025-2026 Artem Bobkin.
+  // SPDX-License-Identifier: MIT
+  ```
+  Do not add the header to generated files.
+- Dependencies point inward: `UI` → `Render` → domain folders → `Utils`. Domain folders must not depend on `UI`/`Render` and must not contain Metal code.
+- Most top-level folders contain a `README.md` with boundary rules — read it before adding files there.
+- Naming: `...State`, `...Controller`, `...Resolver`, `...Runtime`, `...Math`. Avoid `Manager`/`Helper`/`Service`.
+- Every new `.metal` file or resource directory must be registered under `resources:` in `Package.swift`.
+- Because the repository is public: never commit tokens, credentials, or build artifacts.
+
+## Pull requests
+
+Please include:
+
+- What changed and why.
+- Screenshots or a short screen recording for rendering changes (before/after).
+- Tests, where applicable.
+- Any known limitations.
+
+CI runs `swift build` and `swift test` on every pull request. Please make sure both pass locally first.
+
+## Reporting bugs and asking questions
+
+Use the GitHub issue templates for bug reports, feature requests, and questions. For security issues, see [SECURITY.md](SECURITY.md).
