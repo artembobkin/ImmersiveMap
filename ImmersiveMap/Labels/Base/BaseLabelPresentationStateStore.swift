@@ -62,6 +62,7 @@ final class BaseLabelPresentationStateStore {
                        fadeOutSeconds: TimeInterval) -> BaseLabelPresentationResolution {
         var resolved = Array(repeating: Float(0), count: inputs.count)
         var hasActiveAnimations = false
+        var seenEntryCount = 0
 
         for index in inputs.indices {
             let input = inputs[index]
@@ -84,12 +85,19 @@ final class BaseLabelPresentationStateStore {
                                                fadeOutSeconds: fadeOutSeconds)
             resolved[index] = alphaResolution.alpha
             hasActiveAnimations = hasActiveAnimations || alphaResolution.isActive
+            if alphaResolution.firstTouchThisFrame {
+                seenEntryCount += 1
+            }
         }
 
-        hasActiveAnimations = fadeOutMissingEntries(currentTime: time,
-                                                    frameIndex: frameIndex,
-                                                    fadeInSeconds: fadeInSeconds,
-                                                    fadeOutSeconds: fadeOutSeconds) || hasActiveAnimations
+        // Скан устаревших записей нужен только когда этим кадром увидены не все:
+        // при стабильной топологии (обычный кадр) он пропускается целиком.
+        if seenEntryCount < entries.count {
+            hasActiveAnimations = fadeOutMissingEntries(currentTime: time,
+                                                        frameIndex: frameIndex,
+                                                        fadeInSeconds: fadeInSeconds,
+                                                        fadeOutSeconds: fadeOutSeconds) || hasActiveAnimations
+        }
         return BaseLabelPresentationResolution(fadeAlphas: resolved,
                                                hasActiveAnimations: hasActiveAnimations)
     }
@@ -106,11 +114,11 @@ final class BaseLabelPresentationStateStore {
             }
 
             var advanced = entry
-            advance(&advanced,
-                    to: advanced.targetAlpha,
-                    currentTime: time,
-                    fadeInSeconds: fadeInSeconds,
-                    fadeOutSeconds: fadeOutSeconds)
+            Self.advance(&advanced,
+                         to: advanced.targetAlpha,
+                         currentTime: time,
+                         fadeInSeconds: fadeInSeconds,
+                         fadeOutSeconds: fadeOutSeconds)
             return advanced.currentAlpha
         }
     }
@@ -124,11 +132,28 @@ final class BaseLabelPresentationStateStore {
                               time: TimeInterval,
                               frameIndex: UInt64,
                               fadeInSeconds: TimeInterval,
-                              fadeOutSeconds: TimeInterval) -> (alpha: Float, isActive: Bool) {
-        var entry = entries[labelKey] ?? Entry(currentAlpha: 0,
-                                               targetAlpha: 0,
-                                               lastUpdateTime: time,
-                                               lastSeenFrameIndex: frameIndex)
+                              fadeOutSeconds: TimeInterval) -> (alpha: Float, isActive: Bool, firstTouchThisFrame: Bool) {
+        // Один modify-доступ к словарю вместо get+put (два хеш-лукапа на
+        // инстанс на кадр). lastSeenFrameIndex дефолта смещён на -1, чтобы
+        // свежесозданная запись считалась первым касанием кадра.
+        Self.resolveEntry(&entries[labelKey, default: Entry(currentAlpha: 0,
+                                                            targetAlpha: 0,
+                                                            lastUpdateTime: time,
+                                                            lastSeenFrameIndex: frameIndex &- 1)],
+                          targetAlpha: targetAlpha,
+                          time: time,
+                          frameIndex: frameIndex,
+                          fadeInSeconds: fadeInSeconds,
+                          fadeOutSeconds: fadeOutSeconds)
+    }
+
+    private static func resolveEntry(_ entry: inout Entry,
+                                     targetAlpha: Float,
+                                     time: TimeInterval,
+                                     frameIndex: UInt64,
+                                     fadeInSeconds: TimeInterval,
+                                     fadeOutSeconds: TimeInterval) -> (alpha: Float, isActive: Bool, firstTouchThisFrame: Bool) {
+        let firstTouchThisFrame = entry.lastSeenFrameIndex != frameIndex
         advance(&entry,
                 to: entry.targetAlpha,
                 currentTime: time,
@@ -137,8 +162,7 @@ final class BaseLabelPresentationStateStore {
         entry.targetAlpha = targetAlpha
         entry.lastSeenFrameIndex = frameIndex
         entry.lastUpdateTime = time
-        entries[labelKey] = entry
-        return (entry.currentAlpha, isActive: isActive(entry))
+        return (entry.currentAlpha, isActive: isActive(entry), firstTouchThisFrame: firstTouchThisFrame)
     }
 
     private func fadeOutMissingEntries(currentTime: TimeInterval,
@@ -159,14 +183,14 @@ final class BaseLabelPresentationStateStore {
                 continue
             }
 
-            advance(&entry,
-                    to: entry.targetAlpha,
-                    currentTime: currentTime,
-                    fadeInSeconds: fadeInSeconds,
-                    fadeOutSeconds: fadeOutSeconds)
+            Self.advance(&entry,
+                         to: entry.targetAlpha,
+                         currentTime: currentTime,
+                         fadeInSeconds: fadeInSeconds,
+                         fadeOutSeconds: fadeOutSeconds)
             entry.targetAlpha = 0
             entry.lastUpdateTime = currentTime
-            hasActiveAnimations = hasActiveAnimations || isActive(entry)
+            hasActiveAnimations = hasActiveAnimations || Self.isActive(entry)
 
             if entry.currentAlpha <= 0.0001 {
                 entries.removeValue(forKey: key)
@@ -178,11 +202,11 @@ final class BaseLabelPresentationStateStore {
         return hasActiveAnimations
     }
 
-    private func advance(_ entry: inout Entry,
-                         to targetAlpha: Float,
-                         currentTime: TimeInterval,
-                         fadeInSeconds: TimeInterval,
-                         fadeOutSeconds: TimeInterval) {
+    private static func advance(_ entry: inout Entry,
+                                to targetAlpha: Float,
+                                currentTime: TimeInterval,
+                                fadeInSeconds: TimeInterval,
+                                fadeOutSeconds: TimeInterval) {
         let elapsed = max(0, currentTime - entry.lastUpdateTime)
         guard elapsed > 0 else {
             return
@@ -207,7 +231,7 @@ final class BaseLabelPresentationStateStore {
         }
     }
 
-    private func isActive(_ entry: Entry) -> Bool {
+    private static func isActive(_ entry: Entry) -> Bool {
         abs(entry.currentAlpha - entry.targetAlpha) > 0.001
     }
 }

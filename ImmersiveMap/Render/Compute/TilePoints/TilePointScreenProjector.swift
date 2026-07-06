@@ -12,10 +12,21 @@ struct TilePointScreenProjector {
     func project(snapshot: TilePointToScreenPointSnapshot,
                  frameContext: FrameContext,
                  tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {
-        let result = projectWithHorizonVisibility(snapshot: snapshot,
-                                                 frameContext: frameContext,
-                                                 tileOriginData: tileOriginData)
-        return screenPointsWithHorizonMask(result)
+        guard snapshot.pointsCount > 0 else {
+            return []
+        }
+
+        switch frameContext.screenSpaceProjectionMode {
+        case .flat:
+            // Во flat-режиме horizon-маска тождественна флагу visible:
+            // ни массив horizonVisibility, ни маскирующая копия не нужны.
+            return projectFlatScreenPoints(snapshot: snapshot,
+                                           frameContext: frameContext,
+                                           tileOriginData: tileOriginData)
+        case .globe:
+            return screenPointsWithHorizonMask(projectGlobe(snapshot: snapshot,
+                                                            frameContext: frameContext))
+        }
     }
 
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
@@ -27,18 +38,20 @@ struct TilePointScreenProjector {
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
-            return projectFlat(snapshot: snapshot,
-                               frameContext: frameContext,
-                               tileOriginData: tileOriginData)
+            let outputs = projectFlatScreenPoints(snapshot: snapshot,
+                                                  frameContext: frameContext,
+                                                  tileOriginData: tileOriginData)
+            return TilePointScreenProjectionResult(screenPoints: outputs,
+                                                   horizonVisibility: outputs.map { $0.visible != 0 })
         case .globe:
             return projectGlobe(snapshot: snapshot,
                                 frameContext: frameContext)
         }
     }
 
-    private func projectFlat(snapshot: TilePointToScreenPointSnapshot,
-                             frameContext: FrameContext,
-                             tileOriginData: [FlatTileOriginData]) -> TilePointScreenProjectionResult {
+    private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
+                                         frameContext: FrameContext,
+                                         tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraMatrix = frameContext.cameraMatrices.projectionView
         var outputs = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0),
@@ -67,8 +80,7 @@ struct TilePointScreenProjector {
             outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
         }
 
-        return TilePointScreenProjectionResult(screenPoints: outputs,
-                                               horizonVisibility: outputs.map { $0.visible != 0 })
+        return outputs
     }
 
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,

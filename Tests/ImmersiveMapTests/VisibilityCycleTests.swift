@@ -119,22 +119,73 @@ final class VisibilityCycleTests: XCTestCase {
         XCTAssertEqual(cycle.roadInstanceVisibilityResolved, [false, true, false])
     }
 
-    func testMergingPartialBaseCollisionVisibilityKeepsPreviousForUnknown() {
-        let result = BaseLabelPrepareSubsystem.mergedBaseCollisionVisibility(
-            current: [.visible, .hidden, .visible],
-            cycleVisibility: [.unknown, .unknown, .hidden]
+    func testIncrementalPublicationKeepsPreviousForUndecidedLabels() {
+        // Цикл с двумя группами: одна публикуется, вторая ещё не обработана —
+        // published-состояние нерешённого индекса не затирается.
+        let cycle = VisibilityCycle(topologyGeneration: 0,
+                                    cameraFingerprint: 10,
+                                    horizonReservationSignature: [],
+                                    viewportSize: SIMD2<Float>(200, 200),
+                                    baseCount: 3,
+                                    roadCount: 0,
+                                    groups: [
+                                        makeBaseGroup(index: 2,
+                                                      position: SIMD2<Float>(50, 50),
+                                                      priority: 0),
+                                        makeBaseGroup(index: 1,
+                                                      position: SIMD2<Float>(50, 50),
+                                                      priority: 1)
+                                    ],
+                                    cellSizePx: 32)
+        var published: [BaseLabelCollisionVisibility] = [.visible, .hidden, .hidden]
+
+        cycle.processNextGroups(maxGroupCount: 1)
+        cycle.drainPendingPublications(
+            base: { index, visibility in
+                guard index < published.count else { return }
+                published[index] = visibility
+            },
+            road: { _, _ in }
         )
 
-        XCTAssertEqual(result, [.visible, .hidden, .hidden])
+        XCTAssertEqual(published, [.visible, .hidden, .visible])
+        XCTAssertFalse(cycle.isComplete)
     }
 
-    func testMergingPartialBaseCollisionVisibilityHidesNewUnknownLabels() {
-        let result = BaseLabelPrepareSubsystem.mergedBaseCollisionVisibility(
-            current: [.visible],
-            cycleVisibility: [.unknown, .visible, .unknown]
-        )
+    func testIncrementalPublicationDrainsSeededRejectionsAndClearsQueue() {
+        // Заблокированный сид публикует .hidden сразу; повторный drain пуст.
+        let blockingSeed = makeBaseGroup(index: 0,
+                                         position: SIMD2<Float>(50, 50),
+                                         priority: 0)
+        let blockedSeed = makeBaseGroup(index: 1,
+                                        position: SIMD2<Float>(50, 50),
+                                        priority: 1)
+        let cycle = VisibilityCycle(topologyGeneration: 0,
+                                    cameraFingerprint: 10,
+                                    horizonReservationSignature: [],
+                                    viewportSize: SIMD2<Float>(200, 200),
+                                    baseCount: 2,
+                                    roadCount: 0,
+                                    groups: [],
+                                    seededGroups: [blockingSeed, blockedSeed],
+                                    cellSizePx: 32)
+        var published: [BaseLabelCollisionVisibility] = [.visible, .visible]
 
-        XCTAssertEqual(result, [.visible, .visible, .hidden])
+        cycle.drainPendingPublications(
+            base: { index, visibility in
+                guard index < published.count else { return }
+                published[index] = visibility
+            },
+            road: { _, _ in }
+        )
+        // Успешный сид не публикует решения (published уже хранит .visible),
+        // заблокированный — публикует .hidden.
+        XCTAssertEqual(published, [.visible, .hidden])
+
+        var drainedAgain = false
+        cycle.drainPendingPublications(base: { _, _ in drainedAgain = true },
+                                       road: { _, _ in drainedAgain = true })
+        XCTAssertFalse(drainedAgain)
     }
 
     func testActiveCycleIsNotReplacedWhenOnlyCameraFingerprintChanges() {

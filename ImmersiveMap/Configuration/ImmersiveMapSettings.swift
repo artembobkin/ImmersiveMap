@@ -344,14 +344,11 @@ public struct ImmersiveMapSettings: Equatable {
 
         public struct RoadSettings: Equatable {
             public var gridCellSizePx: Float
-            public var orientationScoreEpsilon: Float
             public var maxGlyphTurnRadians: Float
 
             public init(gridCellSizePx: Float,
-                        orientationScoreEpsilon: Float,
                         maxGlyphTurnRadians: Float) {
                 self.gridCellSizePx = gridCellSizePx
-                self.orientationScoreEpsilon = orientationScoreEpsilon
                 self.maxGlyphTurnRadians = maxGlyphTurnRadians
             }
         }
@@ -797,7 +794,6 @@ public struct ImmersiveMapSettings: Equatable {
                                                                fadeInSeconds: 0.15,
                                                                fadeOutSeconds: 0.25),
                               road: LabelSettings.RoadSettings(gridCellSizePx: 32.0,
-                                                               orientationScoreEpsilon: 0.12,
                                                                maxGlyphTurnRadians: .pi / 6.0)),
         scene: SceneSettings(mapClearColor: SIMD4<Double>(1.0, 1.0, 1.0, 1.0),
                              space: SpaceSettings(clearColor: SIMD4<Double>(0.008, 0.012, 0.032, 1.0)),

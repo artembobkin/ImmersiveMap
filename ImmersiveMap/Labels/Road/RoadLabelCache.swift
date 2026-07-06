@@ -37,11 +37,14 @@ final class RoadLabelTileRecord {
     let labelStyle: LabelTextStyle
     private(set) var entries: [RoadLabelEntry]
     let instanceKeys: [UInt64]
-    // При совпадении хеш-ключей сохраняется первый индекс — та же семантика,
-    // что у firstIndex(of:) по instanceKeys.
-    let instanceLocalIndexByKey: [UInt64: Int]
     private(set) var instanceRetainedFlags: [UInt8]
     let instanceLabelSizes: [SIMD2<Float>]
+    // Глифы инстанса лежат в glyphInputs непрерывно (порядок построения
+    // makeTileRecord) — диапазоны позволяют читать коллизионные AABB инстанса
+    // из GPU-буферов без CPU-репроекции.
+    let instanceGlyphRanges: [Range<Int>]
+    let instanceAnchorOrdinals: [UInt32]
+    private(set) var instanceSourcePriorities: [Int]
 
     let pathPointCount: Int
     let glyphCount: Int
@@ -53,6 +56,12 @@ final class RoadLabelTileRecord {
     let anchorsBuffer: MTLBuffer?
     let glyphInputsBuffer: MTLBuffer?
     let collisionInputsBuffer: MTLBuffer?
+
+    // Слоты, в которые хотя бы раз кодировался placement-компьют этого рекорда:
+    // до первого прохода GPU slot-буферы содержат мусор и читать их нельзя.
+    // Переиспользование слота кадром N означает завершение кадра N-slots —
+    // прочитанные данные всегда с завершённого кадра той же раскладки глифов.
+    private var placementEncodedSlots: [Bool]
 
     private let visibleTileIndexBufferStore: DynamicMetalBuffer<UInt32>
     private(set) var visibleTileIndexBuffer: MTLBuffer
@@ -73,6 +82,9 @@ final class RoadLabelTileRecord {
          instanceKeys: [UInt64],
          instanceRetainedFlags: [UInt8],
          instanceLabelSizes: [SIMD2<Float>],
+         instanceGlyphRanges: [Range<Int>],
+         instanceAnchorOrdinals: [UInt32],
+         instanceSourcePriorities: [Int],
          pathInputs: [TilePointInput],
          pathRanges: [RoadPathRangeGpu],
          anchors: [RoadLabelAnchor],
@@ -88,10 +100,12 @@ final class RoadLabelTileRecord {
         self.labelStyle = labelStyle
         self.entries = entries
         self.instanceKeys = instanceKeys
-        self.instanceLocalIndexByKey = Dictionary(instanceKeys.enumerated().map { ($1, $0) },
-                                                  uniquingKeysWith: { first, _ in first })
         self.instanceRetainedFlags = instanceRetainedFlags
         self.instanceLabelSizes = instanceLabelSizes
+        self.instanceGlyphRanges = instanceGlyphRanges
+        self.instanceAnchorOrdinals = instanceAnchorOrdinals
+        self.instanceSourcePriorities = instanceSourcePriorities
+        self.placementEncodedSlots = Array(repeating: false, count: InFlightFramePool.inFlightFramesCount)
         self.pathPointCount = pathInputs.count
         self.glyphCount = glyphInputs.count
         self.localGlyphVertexCount = localGlyphVertexCount
@@ -159,6 +173,40 @@ final class RoadLabelTileRecord {
         if instanceRetainedFlags.isEmpty == false {
             instanceRetainedFlags = Array(repeating: isRetained, count: instanceRetainedFlags.count)
         }
+        if instanceSourcePriorities.isEmpty == false {
+            instanceSourcePriorities = Array(repeating: sourcePriority, count: instanceSourcePriorities.count)
+        }
+    }
+
+    func markPlacementEncoded(slot: Int) {
+        guard placementEncodedSlots.indices.contains(slot) else {
+            return
+        }
+        placementEncodedSlots[slot] = true
+    }
+
+    // Рекорд выпал из активных (near-camera кулл): prepareGPU перестаёт
+    // кодировать его компьют, slot-буферы замораживаются. Сброс стампов не даёт
+    // первому циклу после возврата читать позиции произвольной давности —
+    // решения откладываются до свежих данных (механика pending-ретриггера).
+    func invalidatePlacementData() {
+        for index in placementEncodedSlots.indices {
+            placementEncodedSlots[index] = false
+        }
+    }
+
+    func hasPlacementData(slot: Int) -> Bool {
+        placementEncodedSlots.indices.contains(slot) && placementEncodedSlots[slot]
+    }
+
+    // Рекорд пригоден для placement-компьюта (зеркалит guard prepareGPU):
+    // ожидать данных от рекорда, который никогда не будет закодирован
+    // (отказ аллокации MTLBuffer), нельзя — pending завис бы навсегда.
+    var canEncodePlacements: Bool {
+        pathPointCount > 0 && glyphCount > 0
+            && pathInputsBuffer != nil && pathRangesBuffer != nil
+            && anchorsBuffer != nil && glyphInputsBuffer != nil
+            && collisionInputsBuffer != nil
     }
 
     func placementBuffer(slot: Int) -> MTLBuffer {
@@ -216,9 +264,10 @@ final class RoadLabelCache {
         orderedTileRecords.flatMap(\.entries)
     }
 
-    var orderedTileRecords: [RoadLabelTileRecord] {
-        ownerOrder.compactMap { tileRecordsByOwnerKey[$0] }
-    }
+    // Материализовано: состав меняется только в synchronize/evict, а читается
+    // это свойство в нескольких горячих точках каждого кадра — computed-версия
+    // делала dictionary-lookup на тайл и аллоцировала массив на каждое обращение.
+    private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 
     init(metalDevice: MTLDevice,
          textRenderer _: TextRenderer) {
@@ -254,6 +303,7 @@ final class RoadLabelCache {
         if trackedTilesChanged {
             synchronizeTrackedTiles(sourceEntries: sourceEntries,
                                     tileIndexAllocator: tileIndexAllocator)
+            orderedTileRecords = ownerOrder.compactMap { tileRecordsByOwnerKey[$0] }
             rebuildAggregatedState()
         } else if projectionChanged {
             updateVisibleTileIndices(sourceEntries: sourceEntries,
@@ -266,6 +316,7 @@ final class RoadLabelCache {
     func evict() {
         tileRecordsByOwnerKey.removeAll(keepingCapacity: false)
         ownerOrder.removeAll(keepingCapacity: false)
+        orderedTileRecords.removeAll(keepingCapacity: false)
         roadLabelStyle = nil
         instanceKeys.removeAll(keepingCapacity: false)
         instanceRetainedFlags.removeAll(keepingCapacity: false)
@@ -351,6 +402,9 @@ final class RoadLabelCache {
         var instanceKeys: [UInt64] = []
         var instanceRetainedFlags: [UInt8] = []
         var instanceLabelSizes: [SIMD2<Float>] = []
+        var instanceGlyphRanges: [Range<Int>] = []
+        var instanceAnchorOrdinals: [UInt32] = []
+        var instanceSourcePriorities: [Int] = []
         var pathInputs: [TilePointInput] = []
         var pathRanges: [RoadPathRangeGpu] = []
         var anchors: [RoadLabelAnchor] = []
@@ -446,6 +500,9 @@ final class RoadLabelCache {
                 let labelMinY = glyphBounds.reduce(Float.greatestFiniteMagnitude) { min($0, $1.z) }
                 let labelMaxY = glyphBounds.reduce(-Float.greatestFiniteMagnitude) { max($0, $1.w) }
                 let labelCenterY = (labelMinY + labelMaxY) * 0.5
+                let instanceGlyphStart = glyphInputs.count
+                instanceAnchorOrdinals.append(anchor.anchorOrdinal)
+                instanceSourcePriorities.append(sourcePriority)
 
                 for glyphBounds in glyphBounds {
                     let glyphCenter = (glyphBounds.x + glyphBounds.y) * 0.5
@@ -462,6 +519,7 @@ final class RoadLabelCache {
                                                                radius: 0,
                                                                shapeType: .rect))
                 }
+                instanceGlyphRanges.append(instanceGlyphStart..<glyphInputs.count)
             }
         }
 
@@ -476,6 +534,9 @@ final class RoadLabelCache {
                                    instanceKeys: instanceKeys,
                                    instanceRetainedFlags: instanceRetainedFlags,
                                    instanceLabelSizes: instanceLabelSizes,
+                                   instanceGlyphRanges: instanceGlyphRanges,
+                                   instanceAnchorOrdinals: instanceAnchorOrdinals,
+                                   instanceSourcePriorities: instanceSourcePriorities,
                                    pathInputs: pathInputs,
                                    pathRanges: pathRanges,
                                    anchors: anchors,

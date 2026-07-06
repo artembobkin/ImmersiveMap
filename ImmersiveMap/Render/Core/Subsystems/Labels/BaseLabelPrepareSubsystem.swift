@@ -27,7 +27,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let fallbackTileOriginDataBufferStore: FrameSlottedDynamicMetalBuffer<FlatTileOriginData>
     private let fadeInSeconds: TimeInterval
     private let fadeOutSeconds: TimeInterval
-    private let orientationScoreEpsilon: Float
     private let maxGlyphTurnRadians: Float
     private let collisionGridCellSizePx: Float
     private let collisionsEnabled: Bool = true
@@ -37,21 +36,34 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var baseSourceEntriesVersionTracker = StagedHashChangeTracker()
     private var roadSourceEntriesVersionTracker = StagedHashChangeTracker()
     private var projectionVersionTracker = StagedHashChangeTracker()
-    private var roadOrientationByInstanceKey: [UInt64: Bool] = [:]
     private var roadDrawLabels: [DrawRoadLabels] = []
     private var visibilityTopologyGeneration: UInt64 = 0
     private var latestCameraFingerprint: Int = 0
     private var publishedVisibilityCameraFingerprint: Int = 0
-    private var lastVisibilityCycleStartTime: TimeInterval = -.greatestFiniteMagnitude
+    private var lastVisibilityCycleEndTime: TimeInterval = -.greatestFiniteMagnitude
     private var publishedHorizonReservationSignature: [Int] = []
     private var publishedBaseCollisionVisibility: [BaseLabelCollisionVisibility] = []
     private var publishedRoadInstanceVisibility: [Bool] = []
     private var visibilityCycle: VisibilityCycle?
     private var latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
     private var latestActiveRoadRecordIndices: Set<Int>?
+    // У части активных рекордов ещё нет GPU placement-данных (свежий тайл,
+    // возврат из кулла): флаг держит кадры и рестарты цикла живыми, пока данные
+    // не появятся — иначе при неподвижной камере подписи таких тайлов не
+    // появились бы никогда.
+    private var roadPlacementDataPending = false
+    // Пары (рекорд, слот), чей placement-компьют закодирован в command buffer
+    // текущего кадра; фиксируются в стампы только после commit().
+    private var pendingPlacementStamps: [(record: RoadLabelTileRecord, slot: Int)] = []
     private var cachedBaseProjection: TilePointScreenProjectionResult = .empty
     private var cachedBaseProjectionFingerprint: Int?
     private var cachedBaseProjectionTopologyGeneration: UInt64 = 0
+    // presentationInputs дорог — чистая функция instanceKeys/instanceRetainedFlags,
+    // которые меняются только вместе с топологией: пересборка 3610 структур
+    // каждый кадр не нужна.
+    private var cachedRoadPresentationInputs: [BaseLabelPresentationInput] = []
+    private var cachedRoadPresentationInputsGeneration: UInt64?
+    private var roadTargetVisibilityScratch: [Bool] = []
 
     private let roadPriorityBase: Int = 1_000_000_000
 
@@ -76,7 +88,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                                                 options: [.storageModeShared])
         self.fadeInSeconds = settings.base.fadeInSeconds
         self.fadeOutSeconds = settings.base.fadeOutSeconds
-        self.orientationScoreEpsilon = settings.road.orientationScoreEpsilon
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
         self.collisionGridCellSizePx = max(8.0, settings.base.gridCellSizePx)
     }
@@ -102,14 +113,12 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                      fadeInSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeInSeconds,
                      fadeOutSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeOutSeconds,
                      roadGridCellSizePx: Float = ImmersiveMapSettings.default.labels.road.gridCellSizePx,
-                     orientationScoreEpsilon: Float = ImmersiveMapSettings.default.labels.road.orientationScoreEpsilon,
                      maxGlyphTurnRadians: Float = ImmersiveMapSettings.default.labels.road.maxGlyphTurnRadians) {
         var settings = ImmersiveMapSettings.default.labels
         settings.base.gridCellSizePx = gridCellSizePx
         settings.base.fadeInSeconds = fadeInSeconds
         settings.base.fadeOutSeconds = fadeOutSeconds
         settings.road.gridCellSizePx = roadGridCellSizePx
-        settings.road.orientationScoreEpsilon = orientationScoreEpsilon
         settings.road.maxGlyphTurnRadians = maxGlyphTurnRadians
         self.init(baseLabelCache: baseLabelCache,
                   roadLabelCache: roadLabelCache,
@@ -125,7 +134,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                      fadeInSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeInSeconds,
                      fadeOutSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeOutSeconds,
                      roadGridCellSizePx: Float = ImmersiveMapSettings.default.labels.road.gridCellSizePx,
-                     orientationScoreEpsilon: Float = ImmersiveMapSettings.default.labels.road.orientationScoreEpsilon,
                      maxGlyphTurnRadians: Float = ImmersiveMapSettings.default.labels.road.maxGlyphTurnRadians) {
         let bundle = Bundle.module
         let library = RendererSetup.makeLibrary(metalDevice: metalDevice, bundle: bundle)
@@ -137,7 +145,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                   fadeInSeconds: fadeInSeconds,
                   fadeOutSeconds: fadeOutSeconds,
                   roadGridCellSizePx: roadGridCellSizePx,
-                  orientationScoreEpsilon: orientationScoreEpsilon,
                   maxGlyphTurnRadians: maxGlyphTurnRadians)
     }
 
@@ -244,9 +251,15 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
         baseLabelCache.updateFadeAlphas(fadeResolution.fadeAlphas,
                                         multiplier: overviewFadeAlpha)
+        // visibilityCycle != nil: незавершённый цикл обязан удерживать кадры,
+        // иначе при статичной камере (fingerprint публикуется первым же
+        // advance) display link заснёт на середине цикла, не дойдя до
+        // road-групп.
         let hasPendingVisibilityRefresh = collisionsEnabled &&
             (latestCameraFingerprint != publishedVisibilityCameraFingerprint ||
-                horizonReservationSignature != publishedHorizonReservationSignature)
+                horizonReservationSignature != publishedHorizonReservationSignature ||
+                roadPlacementDataPending ||
+                visibilityCycle != nil)
         publishBaseLabelState(frameContext: frameContext,
                               hasActiveFadeAnimations: fadeResolution.hasActiveAnimations,
                               hasActiveVisibilityCycle: hasPendingVisibilityRefresh)
@@ -285,6 +298,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+        // Стампы прошлого кадра, не дошедшие до frameCommitted (кадр отброшен
+        // без commit) — компьют не исполнился, фиксировать их нельзя.
+        pendingPlacementStamps.removeAll(keepingCapacity: true)
         let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
         let basePointCount = baseLabelCache.activeLabelSpanCount
         if basePointCount > 0 {
@@ -347,6 +363,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                         collisionInputsBuffer: collisionInputsBuffer,
                                         collisionAabbBuffer: collisionAabbBuffer,
                                         glyphCount: record.glyphCount)
+            // Стамп фиксируется только в frameCommitted(): кадр может быть
+            // отброшен после prepareGPU (нет drawable), и закодированный
+            // компьют никогда не исполнится.
+            pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
 
             if index < staticBatches.count {
                 let existingBatch = staticBatches[index]
@@ -370,6 +390,15 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
 
+    // Command buffer кадра закоммичен — закодированный placement-компьют
+    // гарантированно исполнится, стампы данных можно фиксировать.
+    func frameCommitted() {
+        for pending in pendingPlacementStamps {
+            pending.record.markPlacementEncoded(slot: pending.slot)
+        }
+        pendingPlacementStamps.removeAll(keepingCapacity: true)
+    }
+
     func handleMemoryWarning() {
         reset()
     }
@@ -383,16 +412,21 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         roadLabelCache?.evict()
         presentationStateStore.reset()
         roadPresentationStateStore.reset()
-        roadOrientationByInstanceKey.removeAll(keepingCapacity: false)
         roadDrawLabels.removeAll(keepingCapacity: false)
         latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
         latestActiveRoadRecordIndices = nil
+        roadPlacementDataPending = false
+        pendingPlacementStamps.removeAll(keepingCapacity: false)
         baseSourceEntriesVersionTracker.invalidate()
         roadSourceEntriesVersionTracker.invalidate()
         projectionVersionTracker.invalidate()
         cachedBaseProjection = .empty
         cachedBaseProjectionFingerprint = nil
         cachedBaseProjectionTopologyGeneration = 0
+        cachedRoadPresentationInputs.removeAll(keepingCapacity: false)
+        cachedRoadPresentationInputsGeneration = nil
+        roadTargetVisibilityScratch.removeAll(keepingCapacity: false)
+        lastVisibilityCycleEndTime = -.greatestFiniteMagnitude
     }
 
     private func publishBaseLabelState(frameContext: FrameContext,
@@ -755,51 +789,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return .hidden
     }
 
-    static func mergedBaseCollisionVisibility(current: [BaseLabelCollisionVisibility],
-                                               cycleVisibility: [BaseLabelCollisionVisibility]) -> [BaseLabelCollisionVisibility] {
-        let count = max(current.count, cycleVisibility.count)
-        guard count > 0 else {
-            return []
-        }
-
-        var merged = Array(repeating: BaseLabelCollisionVisibility.hidden, count: count)
-        for index in 0..<count {
-            guard index < cycleVisibility.count else {
-                merged[index] = index < current.count ? current[index] : .hidden
-                continue
-            }
-
-            switch cycleVisibility[index] {
-            case .unknown:
-                merged[index] = index < current.count ? current[index] : .hidden
-            case .visible, .hidden:
-                merged[index] = cycleVisibility[index]
-            }
-        }
-        return merged
-    }
-
-    private func mergedRoadVisibility(current: [Bool],
-                                      cycleVisibility: [Bool],
-                                      resolved: [Bool]) -> [Bool] {
-        let count = max(current.count, cycleVisibility.count)
-        guard count > 0 else {
-            return []
-        }
-
-        var merged = Array(repeating: false, count: count)
-        for index in 0..<count {
-            if index < resolved.count,
-               resolved[index],
-               index < cycleVisibility.count {
-                merged[index] = cycleVisibility[index]
-            } else if index < current.count {
-                merged[index] = current[index]
-            }
-        }
-        return merged
-    }
-
     static func shouldReplaceActiveVisibilityCycle(_ cycle: VisibilityCycle,
                                                     latestCameraFingerprint: Int,
                                                     forceRestart: Bool) -> Bool {
@@ -821,7 +810,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                   baseProjection: baseProjection,
                                                   currentBaseAlphas: currentBaseAlphas,
                                                   horizonReservationSignature: horizonReservationSignature)
-            lastVisibilityCycleStartTime = frameContext.time
             return
         }
 
@@ -835,14 +823,20 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                        baseProjection: baseProjection,
                                                        currentBaseAlphas: currentBaseAlphas,
                                                        horizonReservationSignature: horizonReservationSignature)
-            lastVisibilityCycleStartTime = frameContext.time
             return
         }
 
+        // Каденс отсчитывается от ЗАВЕРШЕНИЯ прошлого цикла и гейтит в том числе
+        // камерные рестарты: во время непрерывного жеста fingerprint (точные
+        // bitPattern) расходится с published каждый кадр, и без паузы циклы шли
+        // back-to-back — полная пересборка road-инстансов каждые ~15 кадров.
+        // Экранные позиции лейблов считает GPU покадрово; каденс задерживает
+        // только решения показать/скрыть. forceRestart (смена тайлов/проекции)
+        // остаётся немедленным — на нём держится reseed видимости.
         let cameraChanged = latestCameraFingerprint != publishedVisibilityCameraFingerprint
         let horizonReservationChanged = horizonReservationSignature != publishedHorizonReservationSignature
-        let cadenceElapsed = frameContext.time - lastVisibilityCycleStartTime >= visibilityRefreshInterval
-        guard cameraChanged || (horizonReservationChanged && cadenceElapsed) else {
+        let cadenceElapsed = frameContext.time - lastVisibilityCycleEndTime >= visibilityRefreshInterval
+        guard (cameraChanged || horizonReservationChanged || roadPlacementDataPending) && cadenceElapsed else {
             return
         }
 
@@ -850,7 +844,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                               baseProjection: baseProjection,
                                               currentBaseAlphas: currentBaseAlphas,
                                               horizonReservationSignature: horizonReservationSignature)
-        lastVisibilityCycleStartTime = frameContext.time
     }
 
     private func advanceVisibilityCycleIfNeeded(frameContext: FrameContext) {
@@ -861,17 +854,28 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         cycle.processNextGroups(maxGroupCount: collisionGroupBudgetPerFrame)
         if Self.shouldPublishVisibilityCycle(cycle,
                                              topologyGeneration: visibilityTopologyGeneration) {
-            publishedBaseCollisionVisibility = Self.mergedBaseCollisionVisibility(current: publishedBaseCollisionVisibility,
-                                                                                  cycleVisibility: cycle.baseCollisionVisibility)
-            publishedRoadInstanceVisibility = mergedRoadVisibility(current: publishedRoadInstanceVisibility,
-                                                                   cycleVisibility: cycle.roadInstanceVisibility,
-                                                                   resolved: cycle.roadInstanceVisibilityResolved)
+            // Инкрементальная публикация: за кадр решения получают максимум
+            // budget групп — переносим только их, вместо аллокации и слияния
+            // полных массивов (published реseed-ится на топологию цикла ДО его
+            // создания, поэтому индексы совместимы; bounds-guard на случай
+            // рассинхронизации сохраняется).
+            cycle.drainPendingPublications(
+                base: { index, visibility in
+                    guard index < publishedBaseCollisionVisibility.count else { return }
+                    publishedBaseCollisionVisibility[index] = visibility
+                },
+                road: { index, isVisible in
+                    guard index < publishedRoadInstanceVisibility.count else { return }
+                    publishedRoadInstanceVisibility[index] = isVisible
+                }
+            )
             publishedVisibilityCameraFingerprint = cycle.cameraFingerprint
             publishedHorizonReservationSignature = cycle.horizonReservationSignature
         }
 
         if cycle.isComplete {
             visibilityCycle = nil
+            lastVisibilityCycleEndTime = frameContext.time
         }
     }
 
@@ -1019,6 +1023,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return hasher.finalize()
     }
 
+    // Коллизионные кандидаты дорог читаются из GPU-буферов placement-компьюта:
+    // GPU уже проецирует пути, выбирает ориентацию и пишет повёрнутые AABB
+    // глифов для отрисовки — CPU-репроекция дублировала бы ту же работу и
+    // могла расходиться с реально нарисованными глифами. Слот текущего кадра
+    // читается ДО prepareGPU и содержит данные завершённого кадра N-slots:
+    // решения видимости и так принимаются по позе старта цикла (0.2-0.45 с),
+    // лаг readback на их фоне пренебрежим.
     private func prepareRoadInstances(frameContext: FrameContext,
                                       projectionIndexState: TileProjectionIndexState) -> RoadPreparation {
         guard let roadLabelCache,
@@ -1026,6 +1037,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
               roadLabelCache.orderedTileRecords.isEmpty == false else {
             latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
             latestActiveRoadRecordIndices = nil
+            roadPlacementDataPending = false
             return RoadPreparation(instances: [],
                                    hiddenInstanceIndices: [])
         }
@@ -1034,14 +1046,15 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         var instances: [RoadPreparedInstance] = []
         var hiddenInstanceIndices: [Int] = []
         var activeRecordIndices: Set<Int> = []
+        var hasRecordsAwaitingPlacementData = false
         instances.reserveCapacity(roadLabelCache.instanceKeys.count)
         hiddenInstanceIndices.reserveCapacity(roadLabelCache.instanceKeys.count)
 
         let viewportWidth = Float(frameContext.drawSize.width)
         let viewportHeight = Float(frameContext.drawSize.height)
+        let slot = frameContext.frameSlotIndex
 
         for (recordIndex, record) in roadLabelCache.orderedTileRecords.enumerated() {
-            let localVisibleTileIndices = [record.visibleTileIndex]
             let tileCornerPoints = projectRoadRecordTileCorners(record: record,
                                                                 frameContext: frameContext,
                                                                 projectionIndexState: projectionIndexState)
@@ -1051,100 +1064,125 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 nearCameraCulledPathCount += record.entries.count
                 appendRoadRecordInstanceIndices(record: record,
                                                 into: &hiddenInstanceIndices)
+                // prepareGPU перестанет кодировать компьют рекорда, буферы
+                // заморозятся — сбрасываем стампы, чтобы после возврата не
+                // читать позиции произвольной давности.
+                record.invalidatePlacementData()
                 continue
             }
 
-            var recordHasActiveInstance = false
-            for entry in record.entries {
-                guard entry.anchors.isEmpty == false else {
-                    continue
-                }
+            // Активность рекорда управляет GPU-компьютом в prepareGPU и не
+            // зависит от readback — иначе новый рекорд никогда не получил бы
+            // данных.
+            activeRecordIndices.insert(recordIndex)
 
-                let snapshot = TilePointToScreenPointSnapshot(pointInputs: entry.pointInputs,
-                                                              tileSlotVisibleTileIndices: localVisibleTileIndices)
-                let screenPoints = tilePointScreenProjector.project(snapshot: snapshot,
-                                                                    frameContext: frameContext,
-                                                                    tileOriginData: projectionIndexState.tileOriginData)
-                guard let screenPath = makeScreenPath(points: screenPoints) else {
-                    continue
-                }
-
-                guard screenPath.totalLength >= entry.labelSize.x else {
-                    continue
-                }
-
-                for anchor in entry.anchors {
-                    guard let identity = makeRoadInstanceIdentity(record: record,
-                                                                  entry: entry,
-                                                                  anchor: anchor) else {
-                        continue
-                    }
-                    guard let centerDistance = makeAnchorCenterDistance(anchor: anchor,
-                                                                        screenPath: screenPath) else {
-                        continue
-                    }
-
-                    guard let instance = makeRoadPreparedInstance(entry: entry,
-                                                                  anchor: anchor,
-                                                                  instanceKey: identity.instanceKey,
-                                                                  targetIndex: identity.targetIndex,
-                                                                  screenPath: screenPath,
-                                                                  centerDistance: centerDistance) else {
-                        continue
-                    }
-                    instances.append(instance)
-                    recordHasActiveInstance = true
-                }
+            guard record.canEncodePlacements else {
+                continue
             }
-            if recordHasActiveInstance {
-                activeRecordIndices.insert(recordIndex)
+
+            // Нет данных завершённого кадра (свежий рекорд, возврат из кулла) —
+            // решения по инстансам не принимаются, published-видимость
+            // сохраняется, а pending-флаг держит кадры и рестарты цикла живыми,
+            // пока данные не появятся.
+            guard record.hasPlacementData(slot: slot) else {
+                hasRecordsAwaitingPlacementData = true
+                continue
+            }
+
+            let placementsBuffer = record.placementBuffer(slot: slot)
+            let collisionAabbBuffer = record.collisionAabbBuffer(slot: slot)
+            let placements = UnsafeBufferPointer(start: placementsBuffer.contents()
+                                                     .assumingMemoryBound(to: RoadGlyphPlacementOutput.self),
+                                                 count: record.glyphCount)
+            let collisionAabbs = UnsafeBufferPointer(start: collisionAabbBuffer.contents()
+                                                         .assumingMemoryBound(to: RoadGlyphCollisionOutput.self),
+                                                     count: record.glyphCount)
+
+            for localIndex in record.instanceKeys.indices {
+                let instanceKey = record.instanceKeys[localIndex]
+                let secondaryPriority = record.instanceSourcePriorities[localIndex] * 1024
+                    + Int(record.instanceAnchorOrdinals[localIndex])
+                guard let collisionCandidates = Self.makeRoadInstanceCandidates(
+                    instanceKey: instanceKey,
+                    secondaryPriority: secondaryPriority,
+                    anchorOrdinal: record.instanceAnchorOrdinals[localIndex],
+                    glyphRange: record.instanceGlyphRanges[localIndex],
+                    placements: placements,
+                    collisionAabbs: collisionAabbs,
+                    roadPriorityBase: roadPriorityBase,
+                    maxGlyphTurnRadians: maxGlyphTurnRadians
+                ) else {
+                    continue
+                }
+                instances.append(RoadPreparedInstance(instanceKey: instanceKey,
+                                                      targetIndex: record.instanceStart + localIndex,
+                                                      collisionCandidates: collisionCandidates))
             }
         }
 
         latestRoadLabelNearCameraCullCounts = (path: nearCameraCulledPathCount,
                                                anchor: 0)
         latestActiveRoadRecordIndices = activeRecordIndices
+        roadPlacementDataPending = hasRecordsAwaitingPlacementData
         return RoadPreparation(instances: instances,
                                hiddenInstanceIndices: hiddenInstanceIndices)
     }
 
-    private func makeRoadPreparedInstance(entry: RoadLabelEntry,
-                                          anchor: RoadLabelAnchor,
-                                          instanceKey: UInt64,
-                                          targetIndex: Int,
-                                          screenPath: RoadScreenPath,
-                                          centerDistance: Float) -> RoadPreparedInstance? {
-        let orientation = chooseOrientation(entry: entry,
-                                            centerDistance: centerDistance,
-                                            screenPath: screenPath,
-                                            previousReverse: roadOrientationByInstanceKey[instanceKey])
-        guard let orientation,
-              orientation.samples.count == entry.glyphBounds.count else {
+    // Кандидаты инстанса из per-glyph выходов GPU. nil — решение по инстансу не
+    // принимается: невидимый глиф (путь за камерой/короче лейбла), глиф,
+    // экстраполированный за концы пути, или превышение поворота между соседними
+    // глифами (maxGlyphTurnRadians) — те же правила, что у прежнего CPU-пути,
+    // но по углам реально нарисованных глифов.
+    static func makeRoadInstanceCandidates(instanceKey: UInt64,
+                                           secondaryPriority: Int,
+                                           anchorOrdinal: UInt32,
+                                           glyphRange: Range<Int>,
+                                           placements: UnsafeBufferPointer<RoadGlyphPlacementOutput>,
+                                           collisionAabbs: UnsafeBufferPointer<RoadGlyphCollisionOutput>,
+                                           roadPriorityBase: Int,
+                                           maxGlyphTurnRadians: Float) -> [ScreenCollisionCandidate]? {
+        guard glyphRange.isEmpty == false,
+              glyphRange.lowerBound >= 0,
+              glyphRange.upperBound <= placements.count,
+              glyphRange.upperBound <= collisionAabbs.count else {
             return nil
         }
-        roadOrientationByInstanceKey[instanceKey] = orientation.reverse
 
         var collisionCandidates: [ScreenCollisionCandidate] = []
-        collisionCandidates.reserveCapacity(entry.glyphBounds.count)
-        let secondaryPriority = entry.sourcePriority * 1024 + Int(anchor.anchorOrdinal)
-
-        for (index, glyphBounds) in entry.glyphBounds.enumerated() {
-            let sample = orientation.samples[index]
-            let glyphHalfSize = SIMD2<Float>((glyphBounds.y - glyphBounds.x) * 0.5,
-                                             (glyphBounds.w - glyphBounds.z) * 0.5)
-            collisionCandidates.append(ScreenCollisionCandidate(position: sample.position,
-                                                                halfSize: glyphHalfSize,
+        collisionCandidates.reserveCapacity(glyphRange.count)
+        var previousAngle: Float?
+        for glyphIndex in glyphRange {
+            let placement = placements[glyphIndex]
+            guard placement.visible != 0,
+                  placement.extrapolated == 0 else {
+                return nil
+            }
+            if let previousAngle,
+               abs(Self.normalizedAngleDelta(lhs: previousAngle, rhs: placement.angle)) > maxGlyphTurnRadians {
+                return nil
+            }
+            previousAngle = placement.angle
+            collisionCandidates.append(ScreenCollisionCandidate(position: placement.position,
+                                                                halfSize: collisionAabbs[glyphIndex].halfSizeAABB,
                                                                 priority: roadPriorityBase,
                                                                 secondaryPriority: secondaryPriority,
-                                                                sortPriority: Int(anchor.anchorOrdinal),
+                                                                sortPriority: Int(anchorOrdinal),
                                                                 stableOrderKey: instanceKey,
                                                                 groupId: instanceKey,
                                                                 isEnabled: true))
         }
+        return collisionCandidates
+    }
 
-        return RoadPreparedInstance(instanceKey: instanceKey,
-                                    targetIndex: targetIndex,
-                                    collisionCandidates: collisionCandidates)
+    private static func normalizedAngleDelta(lhs: Float, rhs: Float) -> Float {
+        var delta = rhs - lhs
+        while delta > .pi {
+            delta -= 2 * .pi
+        }
+        while delta < -.pi {
+            delta += 2 * .pi
+        }
+        return delta
     }
 
     private func appendRoadRecordInstanceIndices(record: RoadLabelTileRecord,
@@ -1166,85 +1204,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                 tileOriginData: projectionIndexState.tileOriginData)
     }
 
-    private func makeRoadInstanceIdentity(record: RoadLabelTileRecord,
-                                          entry: RoadLabelEntry,
-                                          anchor: RoadLabelAnchor) -> (instanceKey: UInt64, targetIndex: Int)? {
-        let instanceKey = makeRoadInstanceKey(entryKey: entry.entryKey,
-                                              anchorOrdinal: anchor.anchorOrdinal)
-        guard let localIndex = record.instanceLocalIndexByKey[instanceKey] else {
-            return nil
-        }
-        return (instanceKey: instanceKey,
-                targetIndex: record.instanceStart + localIndex)
-    }
-
-    private func chooseOrientation(entry: RoadLabelEntry,
-                                   centerDistance: Float,
-                                   screenPath: RoadScreenPath,
-                                   previousReverse: Bool?) -> RoadOrientationChoice? {
-        let forward = evaluateOrientation(reverse: false,
-                                          entry: entry,
-                                          centerDistance: centerDistance,
-                                          screenPath: screenPath)
-        let reverse = evaluateOrientation(reverse: true,
-                                          entry: entry,
-                                          centerDistance: centerDistance,
-                                          screenPath: screenPath)
-
-        switch (forward, reverse) {
-        case let (.some(lhs), .some(rhs)):
-            let difference = abs(lhs.score - rhs.score)
-            if difference < orientationScoreEpsilon,
-               let previousReverse {
-                return previousReverse ? rhs : lhs
-            }
-            return lhs.score >= rhs.score ? lhs : rhs
-        case let (.some(lhs), .none):
-            return lhs
-        case let (.none, .some(rhs)):
-            return rhs
-        case (.none, .none):
-            return nil
-        }
-    }
-
-    private func evaluateOrientation(reverse: Bool,
-                                     entry: RoadLabelEntry,
-                                     centerDistance: Float,
-                                     screenPath: RoadScreenPath) -> RoadOrientationChoice? {
-        guard entry.glyphBounds.isEmpty == false else {
-            return nil
-        }
-
-        var samples: [RoadPathSample] = []
-        samples.reserveCapacity(entry.glyphBounds.count)
-        var tangentXSum: Float = 0
-
-        for glyphBounds in entry.glyphBounds {
-            let glyphCenter = (glyphBounds.x + glyphBounds.y) * 0.5
-            let localOffset = glyphCenter - entry.labelSize.x * 0.5
-            let targetDistance = reverse ? (centerDistance - localOffset) : (centerDistance + localOffset)
-            guard let sample = sampleScreenPath(screenPath, distance: targetDistance, reverse: reverse) else {
-                return nil
-            }
-            samples.append(sample)
-            tangentXSum += sample.tangent.x
-        }
-
-        if samples.count > 1 {
-            for index in 1..<samples.count {
-                let delta = normalizedAngleDelta(lhs: samples[index - 1].angle, rhs: samples[index].angle)
-                if abs(delta) > maxGlyphTurnRadians {
-                    return nil
-                }
-            }
-        }
-
-        return RoadOrientationChoice(reverse: reverse,
-                                     score: tangentXSum / Float(max(1, samples.count)),
-                                     samples: samples)
-    }
-
     private func buildRoadLabelState(frameContext: FrameContext,
                                      roadVisibility: [Bool]) -> RoadLabelState {
         guard let roadLabelCache,
@@ -1253,20 +1212,25 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             return .empty
         }
 
-        var presentationInputs: [BaseLabelPresentationInput] = []
-        presentationInputs.reserveCapacity(roadLabelCache.instanceKeys.count)
-        var targetVisibility: [Bool] = []
-        targetVisibility.reserveCapacity(roadLabelCache.instanceKeys.count)
-
-        for index in roadLabelCache.instanceKeys.indices {
-            let instanceKey = roadLabelCache.instanceKeys[index]
-            let isRetained = roadLabelCache.instanceRetainedFlags[index]
-            presentationInputs.append(BaseLabelPresentationInput(labelKey: instanceKey,
-                                                                 duplicate: 0,
-                                                                 isRetained: isRetained,
-                                                                 isValid: true))
-            targetVisibility.append(index < roadVisibility.count ? roadVisibility[index] : false)
+        if cachedRoadPresentationInputsGeneration != visibilityTopologyGeneration {
+            cachedRoadPresentationInputs.removeAll(keepingCapacity: true)
+            cachedRoadPresentationInputs.reserveCapacity(roadLabelCache.instanceKeys.count)
+            for index in roadLabelCache.instanceKeys.indices {
+                cachedRoadPresentationInputs.append(BaseLabelPresentationInput(labelKey: roadLabelCache.instanceKeys[index],
+                                                                               duplicate: 0,
+                                                                               isRetained: roadLabelCache.instanceRetainedFlags[index],
+                                                                               isValid: true))
+            }
+            cachedRoadPresentationInputsGeneration = visibilityTopologyGeneration
         }
+        let presentationInputs = cachedRoadPresentationInputs
+
+        roadTargetVisibilityScratch.removeAll(keepingCapacity: true)
+        roadTargetVisibilityScratch.reserveCapacity(roadLabelCache.instanceKeys.count)
+        for index in roadLabelCache.instanceKeys.indices {
+            roadTargetVisibilityScratch.append(index < roadVisibility.count ? roadVisibility[index] : false)
+        }
+        let targetVisibility = roadTargetVisibilityScratch
 
         let fadeResolution = roadPresentationStateStore.resolveAlphas(inputs: presentationInputs,
                                                                       targetVisibility: targetVisibility,
@@ -1364,104 +1328,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
     }
 
-    private func makeAnchorCenterDistance(anchor: RoadLabelAnchor,
-                                          screenPath: RoadScreenPath) -> Float? {
-        guard screenPath.totalLength > 0,
-              screenPath.points.count > 1 else {
-            return nil
-        }
-        let segmentIndex = min(Int(anchor.segmentIndex), screenPath.points.count - 2)
-        let startDistance = screenPath.cumulativeLengths[segmentIndex]
-        let endDistance = screenPath.cumulativeLengths[segmentIndex + 1]
-        let t = simd_clamp(anchor.t, 0.0, 1.0)
-        return startDistance + (endDistance - startDistance) * t
-    }
-
-    private func makeScreenPath(points: [ScreenPointOutput]) -> RoadScreenPath? {
-        guard points.count > 1 else {
-            return nil
-        }
-
-        var pathPoints: [SIMD2<Float>] = []
-        pathPoints.reserveCapacity(points.count)
-        for point in points {
-            guard point.visible != 0 else {
-                return nil
-            }
-            pathPoints.append(point.position)
-        }
-
-        guard pathPoints.count > 1 else {
-            return nil
-        }
-
-        var cumulativeLengths: [Float] = [0]
-        cumulativeLengths.reserveCapacity(pathPoints.count)
-        var total: Float = 0
-        for index in 1..<pathPoints.count {
-            total += simd_length(pathPoints[index] - pathPoints[index - 1])
-            cumulativeLengths.append(total)
-        }
-        guard total > 0 else {
-            return nil
-        }
-
-        return RoadScreenPath(points: pathPoints,
-                              cumulativeLengths: cumulativeLengths,
-                              totalLength: total)
-    }
-
-    private func sampleScreenPath(_ screenPath: RoadScreenPath,
-                                  distance: Float,
-                                  reverse: Bool) -> RoadPathSample? {
-        guard distance >= 0,
-              distance <= screenPath.totalLength else {
-            return nil
-        }
-
-        // Первый сегмент, у которого cumulativeLengths[i + 1] >= distance;
-        // cumulativeLengths отсортирован, поэтому lower bound бинарным поиском.
-        var low = 0
-        var high = screenPath.cumulativeLengths.count - 2
-        while low < high {
-            let mid = (low + high) >> 1
-            if screenPath.cumulativeLengths[mid + 1] < distance {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        let segmentIndex = low
-
-        let startDistance = screenPath.cumulativeLengths[segmentIndex]
-        let endDistance = screenPath.cumulativeLengths[segmentIndex + 1]
-        let startPoint = screenPath.points[segmentIndex]
-        let endPoint = screenPath.points[segmentIndex + 1]
-        let segmentVector = endPoint - startPoint
-        let segmentLength = max(endDistance - startDistance, 1e-6)
-        let t = simd_clamp((distance - startDistance) / segmentLength, 0, 1)
-        let position = simd_mix(startPoint, endPoint, SIMD2<Float>(repeating: t))
-        var tangent = simd_normalize(segmentVector)
-        if reverse {
-            tangent *= -1
-        }
-        let angle = atan2(tangent.y, tangent.x)
-        return RoadPathSample(position: position,
-                              tangent: tangent,
-                              angle: angle)
-    }
-
-    private func normalizedAngleDelta(lhs: Float, rhs: Float) -> Float {
-        var delta = rhs - lhs
-        while delta > .pi {
-            delta -= 2 * .pi
-        }
-        while delta < -.pi {
-            delta += 2 * .pi
-        }
-        return delta
-    }
-
     private func upload(screenPoints: [ScreenPointOutput],
                         into buffer: MTLBuffer,
                         expectedCount: Int) {
@@ -1492,12 +1358,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
     }
 
-    private func makeRoadInstanceKey(entryKey: UInt64,
-                                     anchorOrdinal: UInt32) -> UInt64 {
-        var hash = entryKey
-        hash ^= UInt64(anchorOrdinal) &* 1469598103934665603
-        return hash
-    }
 }
 
 private struct RoadPreparation {
@@ -1596,6 +1456,14 @@ final class VisibilityCycle {
     // как это делал бюджетный обход по группам.
     private let resolvedHiddenBaseIndices: [Int]
     private var didApplyResolvedHiddenBaseIndices = false
+    // Индексы, чьи решения ещё не перенесены в published-состояние: за кадр
+    // решается максимум budget групп, полное слияние массивов не нужно.
+    private var pendingPublishedBaseIndices: [Int] = []
+    private var pendingPublishedRoadIndices: [Int] = []
+    // Переиспользуемые буферы processGroup/seedGroupIfUnblocked: аллокация на
+    // каждую из ~3.7k групп цикла — заметная доля malloc/free в профиле.
+    private var scratchCovered: [(candidate: VisibilityPlacedCandidate, cells: CoveredCellRange)] = []
+    private var scratchTargetsToEvict: [VisibilityCollisionTarget] = []
 
     init(topologyGeneration: UInt64,
          cameraFingerprint: Int,
@@ -1622,9 +1490,25 @@ final class VisibilityCycle {
         self.resolvedHiddenBaseIndices = resolvedHiddenBaseIndices
         for index in resolvedHiddenRoadIndices where index >= 0 && index < roadInstanceVisibilityResolved.count {
             self.roadInstanceVisibilityResolved[index] = true
+            self.pendingPublishedRoadIndices.append(index)
         }
         seedGroups(seededGroups)
         applyResolvedHiddenBaseIndicesIfComplete()
+    }
+
+    /// Переносит накопленные решения цикла в published-состояние подписчика
+    /// и очищает очередь. Порядок применения повторяет порядок решений —
+    /// последняя запись по индексу побеждает, как и при полном слиянии.
+    func drainPendingPublications(base: (Int, BaseLabelCollisionVisibility) -> Void,
+                                  road: (Int, Bool) -> Void) {
+        for index in pendingPublishedBaseIndices {
+            base(index, baseCollisionVisibility[index])
+        }
+        for index in pendingPublishedRoadIndices {
+            road(index, roadInstanceVisibility[index])
+        }
+        pendingPublishedBaseIndices.removeAll(keepingCapacity: true)
+        pendingPublishedRoadIndices.removeAll(keepingCapacity: true)
     }
 
     var isComplete: Bool {
@@ -1656,14 +1540,14 @@ final class VisibilityCycle {
         for index in resolvedHiddenBaseIndices where index >= 0 && index < baseCollisionVisibility.count {
             if baseCollisionVisibility[index] == .unknown {
                 baseCollisionVisibility[index] = .hidden
+                pendingPublishedBaseIndices.append(index)
             }
         }
     }
 
     private func processGroup(_ group: VisibilityCollisionGroup) {
-        var covered: [(candidate: VisibilityPlacedCandidate, cells: CoveredCellRange)] = []
-        covered.reserveCapacity(group.members.count)
-        var targetsToEvict: Set<VisibilityCollisionTarget> = []
+        scratchCovered.removeAll(keepingCapacity: true)
+        scratchTargetsToEvict.removeAll(keepingCapacity: true)
 
         for member in group.members {
             guard member.isEnabled,
@@ -1678,22 +1562,29 @@ final class VisibilityCycle {
             guard collectEvictableCollisions(for: placed,
                                              cells: cells,
                                              rank: group.rank,
-                                             targetsToEvict: &targetsToEvict) else {
+                                             targetsToEvict: &scratchTargetsToEvict) else {
                 applyRejected(group.target)
                 return
             }
-            covered.append((placed, cells))
+            scratchCovered.append((placed, cells))
         }
 
-        guard covered.isEmpty == false else {
+        guard scratchCovered.isEmpty == false else {
             applyRejected(group.target)
             return
         }
-        remove(targets: targetsToEvict)
-        for target in targetsToEvict {
+        for target in scratchTargetsToEvict {
+            removePlacement(of: target)
             applyRejected(target)
         }
-        for item in covered {
+        // Посеянная в init цель при повторном accept уже размещена в сетке —
+        // без удаления прежнего размещения её члены дублировались бы в бакетах,
+        // удлиняя все последующие AABB-сканы (решения не меняются: дубликаты
+        // геометрически идентичны и скрыты от само-коллизий groupId).
+        if coveredCellsByTarget[group.target] != nil {
+            removePlacement(of: group.target)
+        }
+        for item in scratchCovered {
             insert(item.candidate, cells: item.cells)
         }
         applyAccepted(group.target)
@@ -1706,8 +1597,7 @@ final class VisibilityCycle {
     }
 
     private func seedGroupIfUnblocked(_ group: VisibilityCollisionGroup) {
-        var covered: [(candidate: VisibilityPlacedCandidate, cells: CoveredCellRange)] = []
-        covered.reserveCapacity(group.members.count)
+        scratchCovered.removeAll(keepingCapacity: true)
 
         for member in group.members {
             guard member.isEnabled,
@@ -1723,14 +1613,14 @@ final class VisibilityCycle {
                 applyRejected(group.target)
                 return
             }
-            covered.append((placed, cells))
+            scratchCovered.append((placed, cells))
         }
 
-        guard covered.isEmpty == false else {
+        guard scratchCovered.isEmpty == false else {
             applyRejected(group.target)
             return
         }
-        for item in covered {
+        for item in scratchCovered {
             insert(item.candidate, cells: item.cells)
         }
     }
@@ -1740,10 +1630,12 @@ final class VisibilityCycle {
         case let .base(index):
             guard index < baseCollisionVisibility.count else { return }
             baseCollisionVisibility[index] = .visible
+            pendingPublishedBaseIndices.append(index)
         case let .road(index):
             guard index < roadInstanceVisibility.count else { return }
             roadInstanceVisibility[index] = true
             roadInstanceVisibilityResolved[index] = true
+            pendingPublishedRoadIndices.append(index)
         }
     }
 
@@ -1752,19 +1644,23 @@ final class VisibilityCycle {
         case let .base(index):
             guard index < baseCollisionVisibility.count else { return }
             baseCollisionVisibility[index] = .hidden
+            pendingPublishedBaseIndices.append(index)
         case let .road(index):
             guard index < roadInstanceVisibility.count else { return }
             roadInstanceVisibility[index] = false
             roadInstanceVisibilityResolved[index] = true
+            pendingPublishedRoadIndices.append(index)
         }
     }
 
     // Возвращает false, если найдена коллизия, которую rank не перевешивает
     // (группа должна быть отклонена); иначе накапливает цели на эвикцию.
+    // targetsToEvict — массив с линейной дедупликацией: эвиктится обычно 0-2
+    // цели, Set на каждую группу дороже (hash + аллокация).
     private func collectEvictableCollisions(for candidate: VisibilityPlacedCandidate,
                                             cells: CoveredCellRange,
                                             rank: VisibilityCollisionRank,
-                                            targetsToEvict: inout Set<VisibilityCollisionTarget>) -> Bool {
+                                            targetsToEvict: inout [VisibilityCollisionTarget]) -> Bool {
         for cellY in cells.minY...cells.maxY {
             for cellX in cells.minX...cells.maxX {
                 let bucketIndex = cellY * gridWidth + cellX
@@ -1779,7 +1675,9 @@ final class VisibilityCycle {
                         guard rank.strictlyOutranks(other.rank) else {
                             return false
                         }
-                        targetsToEvict.insert(other.target)
+                        if targetsToEvict.contains(other.target) == false {
+                            targetsToEvict.append(other.target)
+                        }
                     }
                 }
             }
@@ -1808,21 +1706,15 @@ final class VisibilityCycle {
         return false
     }
 
-    private func remove(targets: Set<VisibilityCollisionTarget>) {
-        guard targets.isEmpty == false else {
+    private func removePlacement(of target: VisibilityCollisionTarget) {
+        guard let cellRanges = coveredCellsByTarget.removeValue(forKey: target) else {
             return
         }
-
-        for target in targets {
-            guard let cellRanges = coveredCellsByTarget.removeValue(forKey: target) else {
-                continue
-            }
-            for cells in cellRanges {
-                for cellY in cells.minY...cells.maxY {
-                    for cellX in cells.minX...cells.maxX {
-                        let bucketIndex = cellY * gridWidth + cellX
-                        gridBuckets[bucketIndex].removeAll { $0.target == target }
-                    }
+        for cells in cellRanges {
+            for cellY in cells.minY...cells.maxY {
+                for cellX in cells.minX...cells.maxX {
+                    let bucketIndex = cellY * gridWidth + cellX
+                    gridBuckets[bucketIndex].removeAll { $0.target == target }
                 }
             }
         }
@@ -1897,22 +1789,4 @@ private struct BaseLabelTraceBucket {
 private struct BaseLabelTraceHotBucketSummary {
     let description: String
     let maxBucketCount: Int
-}
-
-private struct RoadScreenPath {
-    let points: [SIMD2<Float>]
-    let cumulativeLengths: [Float]
-    let totalLength: Float
-}
-
-private struct RoadPathSample {
-    let position: SIMD2<Float>
-    let tangent: SIMD2<Float>
-    let angle: Float
-}
-
-private struct RoadOrientationChoice {
-    let reverse: Bool
-    let score: Float
-    let samples: [RoadPathSample]
 }

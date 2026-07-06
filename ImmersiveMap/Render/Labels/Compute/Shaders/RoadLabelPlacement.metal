@@ -27,6 +27,7 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
 
     // Keep placement state across frames; fallback placement still stays anchored to the path.
     RoadGlyphPlacementOutput placement = placements[gid];
+    placement.extrapolated = 0;
 
     ScreenPointOutput screenPoint;
     screenPoint.position = float2(0.0);
@@ -114,6 +115,7 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
             position = p0 + dir * targetDistance;
             angle = atan2(dir.y, dir.x);
             placed = true;
+            placement.extrapolated = 1;
         }
     } else if (targetDistance >= totalLength) {
         float2 p0 = pathPoints[end - 2].position;
@@ -125,6 +127,7 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
             position = p1 + dir * (targetDistance - totalLength);
             angle = atan2(dir.y, dir.x);
             placed = true;
+            placement.extrapolated = 1;
         }
     } else {
         float accumulated = 0.0;

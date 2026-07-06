@@ -37,10 +37,12 @@ struct RoadGlyphInput {
 }
 
 struct RoadGlyphPlacementOutput {
-    let position: SIMD2<Float>
-    let angle: Float
-    let visible: UInt32
-    let _padding: UInt32 = 0
+    var position: SIMD2<Float>
+    var angle: Float
+    var visible: UInt32
+    // Глиф размещён экстраполяцией за концы пути — рисуется, но в коллизионные
+    // кандидаты не попадает (см. roadLabelPlacementKernel).
+    var extrapolated: UInt32
 }
 
 struct RoadGlyphCollisionOutput {

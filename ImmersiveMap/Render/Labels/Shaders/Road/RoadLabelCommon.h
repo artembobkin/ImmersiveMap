@@ -30,7 +30,10 @@ struct RoadGlyphPlacementOutput {
     float2 position;
     float angle;
     uint visible;
-    uint _padding;
+    // Глиф размещён экстраполяцией за концы пути: рисуется как раньше, но
+    // CPU-readback не строит по нему коллизионных кандидатов (прежний CPU-путь
+    // такие инстансы не показывал вовсе).
+    uint extrapolated;
 };
 
 struct RoadGlyphCollisionOutput {
