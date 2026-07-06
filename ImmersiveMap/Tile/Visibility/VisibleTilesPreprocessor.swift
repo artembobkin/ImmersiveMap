@@ -18,11 +18,16 @@ import Foundation
 /// - The preprocessor never creates tiles outside source ancestry:
 ///   each selected tile is the input tile itself or one of its parents.
 final class VisibleTilesPreprocessor {
+    /// Радиус дистанционного фильтра (Чебышёв, в тайлах целевого зума).
+    /// На него же опирается кламп кандидатов в `FlatVisibleTileResolver`:
+    /// перечислять тайлы дальше этого радиуса бессмысленно — фильтр их выбросит.
+    static let defaultMaxVisibleRelativeDistance = 15
+
     private let maxVisibleRelativeDistance: Int
     private let coarseRelativeDistanceThreshold: Int
     private let deepCoarseRelativeDistanceThreshold: Int
 
-    init(maxVisibleRelativeDistance: Int = 15,
+    init(maxVisibleRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance,
          coarseRelativeDistanceThreshold: Int = 2,
          deepCoarseRelativeDistanceThreshold: Int = 10) {
         self.maxVisibleRelativeDistance = maxVisibleRelativeDistance

@@ -13,8 +13,10 @@ enum FlatVisibleTileResolver {
     static let planeIntersectionTolerance: Float = 1e-5
 
     static func resolveVisibleTiles(targetZoom: Int,
+                                    center: Center,
                                     flatRenderState: FlatRenderState,
-                                    cameraMatrix: matrix_float4x4?) -> Set<VisibleTile> {
+                                    cameraMatrix: matrix_float4x4?,
+                                    maxRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance) -> Set<VisibleTile> {
         guard targetZoom >= 0,
               let coveragePolygon = makeCoveragePolygon(cameraMatrix: cameraMatrix) else {
             return []
@@ -34,28 +36,68 @@ enum FlatVisibleTileResolver {
             guard let candidateRange = makeCandidateRange(targetZoom: targetZoom,
                                                           coverageBounds: coveragePolygon.bounds,
                                                           flatRenderState: flatRenderState,
-                                                          loop: loop) else {
+                                                          loop: loop,
+                                                          center: center,
+                                                          maxRelativeDistance: maxRelativeDistance) else {
                 continue
             }
 
-            for y in candidateRange.minY...candidateRange.maxY {
-                for x in candidateRange.minX...candidateRange.maxX {
-                    let tileRect = makeTileRect(x: x,
-                                                y: y,
-                                                z: targetZoom,
-                                                loop: loop,
-                                                flatRenderState: flatRenderState)
-                    if coveragePolygon.intersects(rect: tileRect) {
-                        visibleTiles.insert(VisibleTile(x: x, y: y, z: targetZoom, loop: loop))
-                    }
-                }
-            }
+            insertRowTiles(into: &visibleTiles,
+                           coveragePolygon: coveragePolygon,
+                           candidateRange: candidateRange,
+                           targetZoom: targetZoom,
+                           loop: loop,
+                           flatRenderState: flatRenderState)
         }
 
         return visibleTiles
     }
 
-    private static func makeCoveragePolygon(cameraMatrix: matrix_float4x4?) -> CoveragePolygon? {
+    // Сканлайн по строкам кандидатов: полигон покрытия выпуклый, поэтому его
+    // пересечение с горизонтальной полосой строки — один интервал по x, и все
+    // тайлы строки в этом интервале пересекают полигон, остальные — нет.
+    // Заменяет пер-тайловые полигон-тесты (O(кандидаты × рёбра) с аллокациями
+    // на каждый тест) на O(строки × рёбра) без аллокаций.
+    private static func insertRowTiles(into visibleTiles: inout Set<VisibleTile>,
+                                       coveragePolygon: CoveragePolygon,
+                                       candidateRange: TileCandidateRange,
+                                       targetZoom: Int,
+                                       loop: Int8,
+                                       flatRenderState: FlatRenderState) {
+        let tilesCount = 1 << targetZoom
+        let mapSize = flatRenderState.renderMapSize
+        let tileSize = mapSize / Double(tilesCount)
+        let halfMapSize = mapSize * 0.5
+        let xOffset = -halfMapSize + flatRenderState.pan.x * halfMapSize + Double(loop) * mapSize
+        let yOffset = -halfMapSize - flatRenderState.pan.y * halfMapSize
+        let tolerance = Double(planeIntersectionTolerance)
+
+        for y in candidateRange.minY...candidateRange.maxY {
+            let rowFromBottom = Double((tilesCount - 1) - y)
+            let slabMinY = Float(yOffset + rowFromBottom * tileSize - tolerance)
+            let slabMaxY = Float(yOffset + (rowFromBottom + 1) * tileSize + tolerance)
+            guard let xRange = coveragePolygon.horizontalSlabXRange(slabMinY: slabMinY,
+                                                                    slabMaxY: slabMaxY) else {
+                continue
+            }
+
+            let minColumn = Int(floor((Double(xRange.lowerBound) - xOffset - tolerance) / tileSize))
+            let maxColumn = Int(floor((Double(xRange.upperBound) - xOffset + tolerance) / tileSize))
+            let firstX = max(minColumn, candidateRange.minX)
+            let lastX = min(maxColumn, candidateRange.maxX)
+            guard firstX <= lastX else {
+                continue
+            }
+
+            for x in firstX...lastX {
+                visibleTiles.insert(VisibleTile(x: x, y: y, z: targetZoom, loop: loop))
+            }
+        }
+    }
+
+    // Internal для тестов: property-тесты сверяют сканлайн с эталонной
+    // пер-тайловой проверкой на том же полигоне.
+    static func makeCoveragePolygon(cameraMatrix: matrix_float4x4?) -> CoveragePolygon? {
         guard let cameraMatrix else {
             return nil
         }
@@ -180,7 +222,9 @@ enum FlatVisibleTileResolver {
     private static func makeCandidateRange(targetZoom: Int,
                                            coverageBounds: CoverageBounds,
                                            flatRenderState: FlatRenderState,
-                                           loop: Int8) -> TileCandidateRange? {
+                                           loop: Int8,
+                                           center: Center,
+                                           maxRelativeDistance: Int) -> TileCandidateRange? {
         let tilesCount = 1 << targetZoom
         guard tilesCount > 0 else {
             return nil
@@ -200,32 +244,24 @@ enum FlatVisibleTileResolver {
         let minRowFromBottom = Int(floor((Double(coverageBounds.minY) - yOffset - padding) / tileSize))
         let maxRowFromBottom = Int(floor((Double(coverageBounds.maxY) - yOffset + padding) / tileSize))
 
-        let minY = (tilesCount - 1) - maxRowFromBottom
-        let maxY = (tilesCount - 1) - minRowFromBottom
+        // Кламп радиусом дистанционного фильтра препроцессора: всё дальше
+        // maxRelativeDistance от центра он выбрасывает, а bbox полигона,
+        // вытянутого к горизонту при большом наклоне камеры, накрывает
+        // миллионы тайлов-кандидатов. Центр переводится в систему текущей
+        // мировой копии (`loop`), как в VisibleTileRelativeDistance.
+        let centerTileX = Int(center.tileX) - Int(loop) * tilesCount
+        let centerTileY = Int(center.tileY)
 
-        return TileCandidateRange(minX: clamp(minColumn, lowerBound: 0, upperBound: tilesCount - 1),
-                                  maxX: clamp(maxColumn, lowerBound: 0, upperBound: tilesCount - 1),
+        let minX = max(minColumn, centerTileX - maxRelativeDistance)
+        let maxX = min(maxColumn, centerTileX + maxRelativeDistance)
+        let minY = max((tilesCount - 1) - maxRowFromBottom, centerTileY - maxRelativeDistance)
+        let maxY = min((tilesCount - 1) - minRowFromBottom, centerTileY + maxRelativeDistance)
+
+        return TileCandidateRange(minX: clamp(minX, lowerBound: 0, upperBound: tilesCount - 1),
+                                  maxX: clamp(maxX, lowerBound: 0, upperBound: tilesCount - 1),
                                   minY: clamp(minY, lowerBound: 0, upperBound: tilesCount - 1),
                                   maxY: clamp(maxY, lowerBound: 0, upperBound: tilesCount - 1))
             .normalized
-    }
-
-    private static func makeTileRect(x: Int,
-                                     y: Int,
-                                     z: Int,
-                                     loop: Int8,
-                                     flatRenderState: FlatRenderState) -> AxisAlignedRect {
-        let tileOriginAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: x,
-                                                                    y: y,
-                                                                    z: z,
-                                                                    loop: loop,
-                                                                    flatRenderPan: flatRenderState.pan,
-                                                                    renderMapSize: flatRenderState.renderMapSize)
-        let minX = tileOriginAndSize.x
-        let minY = tileOriginAndSize.y
-        let maxX = tileOriginAndSize.x + tileOriginAndSize.z
-        let maxY = tileOriginAndSize.y + tileOriginAndSize.z
-        return AxisAlignedRect(minX: minX, maxX: maxX, minY: minY, maxY: maxY)
     }
 
     private static func clamp(_ value: Int,
@@ -252,7 +288,7 @@ enum FlatVisibleTileResolver {
     ]
 }
 
-private struct CoveragePolygon {
+struct CoveragePolygon {
     let vertices: [SIMD2<Float>]
     let bounds: CoverageBounds
 
@@ -274,55 +310,53 @@ private struct CoveragePolygon {
         bounds = CoverageBounds(minX: minX, maxX: maxX, minY: minY, maxY: maxY)
     }
 
-    func intersects(rect: AxisAlignedRect) -> Bool {
-        if rect.maxX < bounds.minX || rect.minX > bounds.maxX || rect.maxY < bounds.minY || rect.minY > bounds.maxY {
-            return false
-        }
-
-        if vertices.contains(where: rect.contains(point:)) {
-            return true
-        }
-
-        if rect.corners.contains(where: contains(point:)) {
-            return true
-        }
+    // Интервал x пересечения выпуклого полигона с горизонтальной полосой.
+    // Полигон ∩ полоса — выпуклая область; экстремумы её x достигаются в
+    // вершинах полигона внутри полосы либо в точках пересечения рёбер с
+    // границами полосы — перебора внутренних точек не требуется.
+    func horizontalSlabXRange(slabMinY: Float, slabMaxY: Float) -> ClosedRange<Float>? {
+        var lowestX = Float.greatestFiniteMagnitude
+        var highestX = -Float.greatestFiniteMagnitude
+        var hasIntersection = false
 
         for index in vertices.indices {
-            let nextIndex = (index + 1) % vertices.count
-            if rect.intersectsSegment(from: vertices[index], to: vertices[nextIndex]) {
-                return true
+            let start = vertices[index]
+            let end = vertices[(index + 1) % vertices.count]
+
+            if start.y >= slabMinY, start.y <= slabMaxY {
+                lowestX = min(lowestX, start.x)
+                highestX = max(highestX, start.x)
+                hasIntersection = true
+            }
+
+            let deltaY = end.y - start.y
+            guard abs(deltaY) > .ulpOfOne else {
+                continue
+            }
+            let deltaX = end.x - start.x
+
+            let tAtMinY = (slabMinY - start.y) / deltaY
+            if tAtMinY >= 0, tAtMinY <= 1 {
+                let x = start.x + deltaX * tAtMinY
+                lowestX = min(lowestX, x)
+                highestX = max(highestX, x)
+                hasIntersection = true
+            }
+
+            let tAtMaxY = (slabMaxY - start.y) / deltaY
+            if tAtMaxY >= 0, tAtMaxY <= 1 {
+                let x = start.x + deltaX * tAtMaxY
+                lowestX = min(lowestX, x)
+                highestX = max(highestX, x)
+                hasIntersection = true
             }
         }
 
-        return false
-    }
-
-    private func contains(point: SIMD2<Float>) -> Bool {
-        var hasPositiveCross = false
-        var hasNegativeCross = false
-
-        for index in vertices.indices {
-            let nextIndex = (index + 1) % vertices.count
-            let edge = vertices[nextIndex] - vertices[index]
-            let relativePoint = point - vertices[index]
-            let cross = edge.x * relativePoint.y - edge.y * relativePoint.x
-
-            if cross > FlatVisibleTileResolver.planeIntersectionTolerance {
-                hasPositiveCross = true
-            } else if cross < -FlatVisibleTileResolver.planeIntersectionTolerance {
-                hasNegativeCross = true
-            }
-
-            if hasPositiveCross && hasNegativeCross {
-                return false
-            }
-        }
-
-        return true
+        return hasIntersection ? lowestX...highestX : nil
     }
 }
 
-private struct CoverageBounds {
+struct CoverageBounds {
     let minX: Float
     let maxX: Float
     let minY: Float
@@ -340,98 +374,5 @@ private struct TileCandidateRange {
             return nil
         }
         return self
-    }
-}
-
-private struct AxisAlignedRect {
-    let minX: Float
-    let maxX: Float
-    let minY: Float
-    let maxY: Float
-
-    var corners: [SIMD2<Float>] {
-        [
-            SIMD2<Float>(minX, minY),
-            SIMD2<Float>(maxX, minY),
-            SIMD2<Float>(maxX, maxY),
-            SIMD2<Float>(minX, maxY)
-        ]
-    }
-
-    func contains(point: SIMD2<Float>) -> Bool {
-        point.x >= minX - FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.x <= maxX + FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.y >= minY - FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.y <= maxY + FlatVisibleTileResolver.planeIntersectionTolerance
-    }
-
-    func intersectsSegment(from start: SIMD2<Float>, to end: SIMD2<Float>) -> Bool {
-        if contains(point: start) || contains(point: end) {
-            return true
-        }
-
-        let rectEdges = [
-            (corners[0], corners[1]),
-            (corners[1], corners[2]),
-            (corners[2], corners[3]),
-            (corners[3], corners[0])
-        ]
-
-        for edge in rectEdges {
-            if segmentsIntersect(start, end, edge.0, edge.1) {
-                return true
-            }
-        }
-
-        return false
-    }
-
-    private func segmentsIntersect(_ a1: SIMD2<Float>,
-                                   _ a2: SIMD2<Float>,
-                                   _ b1: SIMD2<Float>,
-                                   _ b2: SIMD2<Float>) -> Bool {
-        let orientation1 = orientation(a1, a2, b1)
-        let orientation2 = orientation(a1, a2, b2)
-        let orientation3 = orientation(b1, b2, a1)
-        let orientation4 = orientation(b1, b2, a2)
-
-        if orientation1 * orientation2 < 0 && orientation3 * orientation4 < 0 {
-            return true
-        }
-
-        if abs(orientation1) <= FlatVisibleTileResolver.planeIntersectionTolerance && onSegment(a1, a2, b1) {
-            return true
-        }
-
-        if abs(orientation2) <= FlatVisibleTileResolver.planeIntersectionTolerance && onSegment(a1, a2, b2) {
-            return true
-        }
-
-        if abs(orientation3) <= FlatVisibleTileResolver.planeIntersectionTolerance && onSegment(b1, b2, a1) {
-            return true
-        }
-
-        if abs(orientation4) <= FlatVisibleTileResolver.planeIntersectionTolerance && onSegment(b1, b2, a2) {
-            return true
-        }
-
-        return false
-    }
-
-    private func orientation(_ a: SIMD2<Float>,
-                             _ b: SIMD2<Float>,
-                             _ c: SIMD2<Float>) -> Float {
-        let ab = b - a
-        let ac = c - a
-        return ab.x * ac.y - ab.y * ac.x
-    }
-
-    private func onSegment(_ start: SIMD2<Float>,
-                           _ end: SIMD2<Float>,
-                           _ point: SIMD2<Float>) -> Bool {
-        point.x >= min(start.x, end.x) - FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.x <= max(start.x, end.x) + FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.y >= min(start.y, end.y) - FlatVisibleTileResolver.planeIntersectionTolerance &&
-            point.y <= max(start.y, end.y) + FlatVisibleTileResolver.planeIntersectionTolerance
     }
 }

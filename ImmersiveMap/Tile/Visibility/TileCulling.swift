@@ -63,6 +63,7 @@ class TileCulling {
                        flatRenderState: FlatRenderState,
                        cameraMatrix: matrix_float4x4?) -> Set<VisibleTile> {
         return FlatVisibleTileResolver.resolveVisibleTiles(targetZoom: targetZoom,
+                                                           center: center,
                                                            flatRenderState: flatRenderState,
                                                            cameraMatrix: cameraMatrix)
     }
