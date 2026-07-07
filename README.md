@@ -1,6 +1,8 @@
 # ImmersiveMap
 
-![ImmersiveMap hero](Documentation/Assets/immersive-map-hero.png)
+![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
+
+_[Watch the full-quality demo (MP4)](Documentation/Assets/immersive-map-demo.mp4)_
 
 Native Swift + Metal map rendering engine for SwiftUI apps.
 
