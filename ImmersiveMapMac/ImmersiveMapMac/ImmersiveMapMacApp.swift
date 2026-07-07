@@ -30,17 +30,9 @@ private struct MapScreen: View {
                     pitch: .pi / 5
                 )
             )
-            .tileSettings(clearDiskCachesOnLaunch: true)
             .tileProvider(tileProvider)
             .mapStyle(mapStyle)
             .enableCameraUIControls()
-            .debugPanel()
-            .earthScene(isEnabled: true)
-            .nightLightsTileManifestURL(Self.localNightLightsTileManifestURL)
             .ignoresSafeArea()
     }
-
-    private static let localNightLightsTileManifestURL = URL(
-        string: "http://localhost:9000/night-lights/v1/night_lights_manifest.json"
-    )!
 }
