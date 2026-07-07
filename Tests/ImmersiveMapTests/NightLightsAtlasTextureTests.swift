@@ -123,12 +123,13 @@ final class NightLightsAtlasTextureTests: XCTestCase {
                                                  pageIndex: NightLightsAtlasSurfaceBinding.maxPageCount + 1,
                                                  uvOrigin: SIMD2<Float>(0, 0),
                                                  uvScale: SIMD2<Float>(0.25, 0.25))
-        let entries = [invalidEntry] + (0..<(NightLightsAtlasSurfaceBinding.maxEntryCount + 2)).map { index in
+        let generatedEntries: [NightLightsAtlasEntry] = (0..<(NightLightsAtlasSurfaceBinding.maxEntryCount + 2)).map { index in
             NightLightsAtlasEntry(tile: Tile(x: index, y: index + 1, z: 6),
                                   pageIndex: index % NightLightsAtlasSurfaceBinding.maxPageCount,
                                   uvOrigin: SIMD2<Float>(Float(index), Float(index + 1)),
                                   uvScale: SIMD2<Float>(0.25, 0.25))
         }
+        let entries: [NightLightsAtlasEntry] = [invalidEntry] + generatedEntries
 
         let binding = NightLightsAtlasSurfaceBinding(state: NightLightsAtlasState(pages: pages,
                                                                                   entries: entries))
