@@ -1,10 +1,6 @@
 # ImmersiveMap
 
-[![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml)
-[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
-![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20Mac%20Catalyst-lightgrey.svg)
-[![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver)](https://github.com/artembobkin/ImmersiveMap/tags)
-[![License: MIT](https://img.shields.io/github/license/artembobkin/ImmersiveMap.svg)](LICENSE)
+[![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?style=flat-square)](https://swift.org) [![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20Mac%20Catalyst-lightgrey?style=flat-square)](#requirements) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
 ![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
 
