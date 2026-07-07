@@ -342,13 +342,19 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
     float zPow = exp2(float(tileZ));
     float normalizedWorldX = globeCapWrapUnit(longitude / (2.0 * M_PI_F));
     float mercatorY = getYMercNorm(latitude);
-    float normalizedWorldY = (1.0 - mercatorY) * 0.5;
 
+    // Only the longitude (X) axis decides which edge-row tile owns this cap wedge.
+    // The draw loop already guarantees this tile is the matching pole row
+    // (tile.y == 0 for the north cap, lastTileY for the south cap), and every
+    // fragment samples the fixed boundary latitude +-maxLatitude, so the vertical
+    // atlas coordinate sits exactly on the tile knife-edge (localY == 0 or 1).
+    // Testing that against a tight epsilon spuriously fails under GPU float /
+    // fast-math rounding and leaves the static fallback color showing at the pole.
+    // The returned V is clamped to this tile's edge texel below, so no Y test is
+    // needed here.
     float localX = normalizedWorldX * zPow - float(tileX);
-    float localY = normalizedWorldY * zPow - float(tileY);
     float epsilon = 0.00001;
-    if (localX < -epsilon || localX > 1.0 + epsilon ||
-        localY < -epsilon || localY > 1.0 + epsilon) {
+    if (localX < -epsilon || localX > 1.0 + epsilon) {
         return GlobeCapAtlasSample{float2(0.0), false};
     }
 

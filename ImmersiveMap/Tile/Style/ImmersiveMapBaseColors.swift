@@ -39,6 +39,9 @@ class ImmersiveMapBaseColors {
         self.waterColor = settings.water
         self.landCoverColor = settings.landCover
         self.northPoleColor = self.waterColor
-        self.southPoleColor = self.landCoverColor
+        // Antarctica renders as ice over the white tile background at the southern
+        // Mercator edge, so the polar-cap fallback should degrade to that background
+        // rather than land-cover green when no edge tile has been sampled yet.
+        self.southPoleColor = self.tileBgColor
     }
 }

@@ -24,15 +24,16 @@ enum GlobeCapEdgeSampler {
         let zPow = Float(1 << Int(tile.z))
         let normalizedWorldX = wrapUnit(longitude / (2.0 * Float.pi))
         let mercatorY = yMercatorNormalized(latitude: latitude)
-        let normalizedWorldY = (1.0 - mercatorY) * 0.5
 
+        // Mirror of globeCapAtlasSampleUV in Globe.metal: only the longitude (X)
+        // axis selects the owning edge-row tile. The fixed boundary-latitude sample
+        // sits on the tile vertical knife-edge, so a Y containment test is both
+        // redundant (the draw loop already gates the row) and fragile under float
+        // rounding; the returned V is clamped to the edge texel below.
         let localX = normalizedWorldX * zPow - Float(tile.x)
-        let localY = normalizedWorldY * zPow - Float(tile.y)
         let epsilon: Float = 0.00001
         guard localX >= -epsilon,
-              localX <= 1.0 + epsilon,
-              localY >= -epsilon,
-              localY <= 1.0 + epsilon else {
+              localX <= 1.0 + epsilon else {
             return nil
         }
 
