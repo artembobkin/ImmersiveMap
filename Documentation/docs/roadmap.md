@@ -2,32 +2,32 @@
 
 This roadmap is aspirational and will change. ImmersiveMap is an early-alpha,
 single-maintainer project; nothing here is a commitment or a dated release plan.
+It is organized by intent - **Now** / **Next** / **Later** - rather than by dated
+milestones.
 
-## 0.1.x
+## Recently shipped
 
-- Stabilize the basic SwiftUI API surface.
-- Improve README, docs, and examples.
 - Continuous integration (build + test on macOS).
-- Fill in the documentation gaps.
+- README, documentation, and examples.
 
-## 0.2.x
+## Now
 
+- Stabilize the public SwiftUI API surface.
 - Improve labels (placement, collision, styling).
-- Improve terrain.
-- Firm up the provider abstraction.
+- Improve terrain rendering.
+- Improve avatar / live markers (customization and styling).
+
+## Next
+
+- Offline maps (tile download and offline cache).
+- Broader map style customization.
 - Expand test coverage.
-
-## 0.3.x
-
-- Offline cache experiments.
-- Better style customization.
 - Published performance benchmarks.
 
-## Future
+## Later
 
 - Native 3D Tiles renderer.
 - More data providers.
-- Public DocC documentation.
 
 ## Feedback
 
