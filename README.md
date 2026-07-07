@@ -1,5 +1,11 @@
 # ImmersiveMap
 
+[![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml)
+[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
+![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20Mac%20Catalyst-lightgrey.svg)
+[![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver)](https://github.com/artembobkin/ImmersiveMap/tags)
+[![License: MIT](https://img.shields.io/github/license/artembobkin/ImmersiveMap.svg)](LICENSE)
+
 ![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
 
 _[Watch the full-quality demo (MP4)](Documentation/Assets/immersive-map-demo.mp4)_
