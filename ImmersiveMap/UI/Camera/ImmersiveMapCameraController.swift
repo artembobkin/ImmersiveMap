@@ -7,6 +7,7 @@ enum ImmersiveMapCameraCommand {
     case jump(ImmersiveMapCameraPosition)
     case fly(ImmersiveMapCameraPosition, CameraFlightOptions, ((Bool) -> Void)?)
     case cancelFlight
+    case setAngleTarget(bearing: Float, pitch: Float)
 }
 
 /// Public command/callback surface для app-driven camera control.
@@ -38,6 +39,12 @@ public final class ImmersiveMapCameraController {
 
     public func cancelFlight() {
         enqueue(.cancelFlight)
+    }
+
+    /// Плавно ведет углы камеры (bearing/pitch, в радианах) к цели — для интерактивных контролов.
+    /// В отличие от `jump`, фактические углы подводятся к цели покадрово (сглаживание).
+    func setCameraAngleTarget(bearingRadians: Float, pitchRadians: Float) {
+        enqueue(.setAngleTarget(bearing: bearingRadians, pitch: pitchRadians))
     }
 
     public func currentCameraPosition() -> ImmersiveMapCameraPosition? {

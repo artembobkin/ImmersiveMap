@@ -114,8 +114,8 @@ final class PitchControlZone {
             return
         }
 
-        mapView.cameraRuntime.setCameraPitch(PitchControlMath.actualPitch(forControlValue: clampedValue,
-                                                                          maximumPitch: maximumPitch))
+        mapView.cameraAnimationRuntime.setPitchTarget(PitchControlMath.actualPitch(forControlValue: clampedValue,
+                                                                                   maximumPitch: maximumPitch))
     }
 
     private func currentMaximumPitch() -> Float {

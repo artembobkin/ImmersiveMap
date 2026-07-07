@@ -29,6 +29,8 @@ final class ImmersiveMapCameraCommandHandler {
                                                      currentTime: CACurrentMediaTime())
         case .cancelFlight:
             cameraAnimationRuntime.cancelCameraFlight()
+        case .setAngleTarget(let bearing, let pitch):
+            cameraAnimationRuntime.setCameraAngleTarget(bearing: bearing, pitch: pitch)
         }
     }
 

@@ -124,6 +124,10 @@ class CameraStateController {
         cameraState.bearing += delta
     }
 
+    func setBearing(_ bearing: Float) {
+        cameraState.bearing = bearing
+    }
+
     func clampBearing(to constraint: CameraBearingConstraint) {
         let constrainedBearing = constraint.apply(to: cameraState.bearing)
         guard constrainedBearing != cameraState.bearing else {

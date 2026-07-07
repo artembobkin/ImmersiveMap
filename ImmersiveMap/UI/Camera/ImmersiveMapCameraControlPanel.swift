@@ -40,7 +40,8 @@ private struct ImmersiveMapCameraControlsModifier: ViewModifier {
                 let cameraSnapshot = liveCameraSnapshot ?? fallbackCameraSnapshot
                 let constrainedPosition = cameraSnapshot.clampedPosition(nextPosition)
                 liveCameraPosition = constrainedPosition
-                camera.jump(to: constrainedPosition)
+                camera.setCameraAngleTarget(bearingRadians: constrainedPosition.bearing,
+                                            pitchRadians: constrainedPosition.pitch)
             }
             .padding(.trailing, 18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -77,6 +78,7 @@ public struct ImmersiveMapCameraControlPanel: View {
     private let onChange: (ImmersiveMapCameraPosition) -> Void
     @State private var draftBearingDegrees: Double?
     @State private var draftPitchDegrees: Double?
+    @State private var isScrubbing = false
 
     public init(cameraSnapshot: ImmersiveMapCameraSnapshot,
                 onChange: @escaping (ImmersiveMapCameraPosition) -> Void) {
@@ -114,7 +116,8 @@ public struct ImmersiveMapCameraControlPanel: View {
 
                 CameraScrubSlider(value: bearingBinding,
                                   range: bearingRangeDegrees,
-                                  step: 1)
+                                  step: 0,
+                                  onEditingChanged: { isScrubbing = $0 })
             }
 
             Divider()
@@ -140,7 +143,8 @@ public struct ImmersiveMapCameraControlPanel: View {
 
                 CameraScrubSlider(value: pitchBinding,
                                   range: pitchRangeDegrees,
-                                  step: 1)
+                                  step: 0,
+                                  onEditingChanged: { isScrubbing = $0 })
             }
         }
         .foregroundStyle(.white)
@@ -153,6 +157,12 @@ public struct ImmersiveMapCameraControlPanel: View {
         )
         .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 8)
         .onChange(of: cameraPosition) { _ in
+            // Во время скраба камера сглаженно догоняет цель — ползунок держим на цели (draft),
+            // иначе follow-лаг камеры дёргал бы thumb назад на каждый кадр. Синк с фактическим
+            // углом возобновляем после отпускания.
+            guard isScrubbing == false else {
+                return
+            }
             draftBearingDegrees = nil
             draftPitchDegrees = nil
         }
@@ -299,6 +309,7 @@ private struct CameraScrubSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double
+    var onEditingChanged: (Bool) -> Void = { _ in }
 
     private let thumbSize: CGFloat = 22
     private let trackHeight: CGFloat = 8
@@ -329,12 +340,14 @@ private struct CameraScrubSlider: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
+                        onEditingChanged(true)
                         value = steppedValue(for: gesture.location.x,
                                              trackWidth: trackWidth)
                     }
                     .onEnded { gesture in
                         value = steppedValue(for: gesture.location.x,
                                              trackWidth: trackWidth)
+                        onEditingChanged(false)
                     }
             )
         }

@@ -97,6 +97,11 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
+    func setCameraBearing(_ bearing: Float) {
+        cameraStateController.setBearing(bearing)
+        requestRenderCameraUpdate()
+    }
+
     func setCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition) {
         cameraStateController.setCameraPosition(cameraPosition)
         requestRenderCameraUpdate()

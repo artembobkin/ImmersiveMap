@@ -107,6 +107,22 @@ final class ImmersiveMapCameraRuntime {
         renderCamera?.currentCameraState()
     }
 
+    var currentPitch: Float? {
+        renderCamera?.currentCameraState().pitch
+    }
+
+    var currentBearing: Float? {
+        renderCamera?.currentCameraState().bearing
+    }
+
+    func currentMaximumAbsoluteBearing() -> Float {
+        guard let cameraState = renderCamera?.currentCameraState() else {
+            return .pi
+        }
+
+        return currentCameraConstraints(cameraState: cameraState).bearing.maximumAbsoluteBearing ?? .pi
+    }
+
     func currentCameraSnapshot(position overridePosition: ImmersiveMapCameraPosition? = nil) -> ImmersiveMapCameraSnapshot? {
         guard let renderCamera else {
             return nil
@@ -226,6 +242,13 @@ final class ImmersiveMapCameraRuntime {
 
     func setCameraPitch(_ pitch: Float) {
         renderCamera?.setCameraPitch(pitch)
+        applyCurrentCameraConstraints()
+        notifyCameraPositionChanged()
+        renderRuntime.requestFrame()
+    }
+
+    func setCameraBearing(_ bearing: Float) {
+        renderCamera?.setCameraBearing(bearing)
         applyCurrentCameraConstraints()
         notifyCameraPositionChanged()
         renderRuntime.requestFrame()

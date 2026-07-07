@@ -88,6 +88,10 @@ public struct ImmersiveMapSettings: Equatable {
         public var globePanInertiaActivationVelocity: Double
         public var globePanInertiaStopVelocity: Double
         public var globePanInertiaMaxInitialVelocity: Double
+        public var pitchFollowEnabled: Bool
+        public var pitchFollowHalfLife: Double
+        public var bearingFollowEnabled: Bool
+        public var bearingFollowHalfLife: Double
 
         public init(maximumPitch: Float,
                     maximumZoom: Double,
@@ -115,7 +119,11 @@ public struct ImmersiveMapSettings: Equatable {
                     globePanInertiaHalfLife: Double = 0.28,
                     globePanInertiaActivationVelocity: Double = 450.0,
                     globePanInertiaStopVelocity: Double = 60.0,
-                    globePanInertiaMaxInitialVelocity: Double = 7000.0) {
+                    globePanInertiaMaxInitialVelocity: Double = 7000.0,
+                    pitchFollowEnabled: Bool = true,
+                    pitchFollowHalfLife: Double = 0.06,
+                    bearingFollowEnabled: Bool = true,
+                    bearingFollowHalfLife: Double = 0.06) {
             self.maximumPitch = maximumPitch
             self.maximumZoom = maximumZoom
             self.focusedMarkerZoom = focusedMarkerZoom
@@ -143,6 +151,10 @@ public struct ImmersiveMapSettings: Equatable {
             self.globePanInertiaActivationVelocity = globePanInertiaActivationVelocity
             self.globePanInertiaStopVelocity = globePanInertiaStopVelocity
             self.globePanInertiaMaxInitialVelocity = globePanInertiaMaxInitialVelocity
+            self.pitchFollowEnabled = pitchFollowEnabled
+            self.pitchFollowHalfLife = pitchFollowHalfLife
+            self.bearingFollowEnabled = bearingFollowEnabled
+            self.bearingFollowHalfLife = bearingFollowHalfLife
         }
 
         func pitchExtension(at zoom: Double) -> Float {
