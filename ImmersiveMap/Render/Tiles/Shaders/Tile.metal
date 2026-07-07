@@ -51,7 +51,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 }
 
 // localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
-// Retained-подмена рисуется полным квадом source — фрагменты вне слота placeIn
+// Retained-подмена рисуется полным квадом source - фрагменты вне слота placeIn
 // отбрасываются, чтобы не перекрывать соседние точные тайлы.
 fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
                                    constant OverviewFadeUniform& overviewFade [[buffer(0)]],

@@ -17,7 +17,7 @@ Please include:
 - Steps to reproduce, if possible.
 - The affected version or commit.
 
-You can expect an initial acknowledgement as time permits — this is a
+You can expect an initial acknowledgement as time permits - this is a
 single-maintainer project, so response times may vary.
 
 ## Scope

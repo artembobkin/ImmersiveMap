@@ -27,7 +27,7 @@ class ImmersiveMapNeedsTile {
     /// Вызывается на main queue, когда истекает ближайшее retry-окно.
     /// Рендер on-demand: после провала загрузки кадры кончаются, пер-кадровый
     /// `request()` больше не выполняется, и без внешнего пинка backoff истекает
-    /// «в тишине» — дыра на месте тайла висит до следующего жеста. Владелец
+    /// «в тишине» - дыра на месте тайла висит до следующего жеста. Владелец
     /// обязан по этому колбэку запросить кадр.
     var onRetryWindowExpired: (() -> Void)?
     private var retryWakeWorkItem: DispatchWorkItem?
@@ -366,7 +366,7 @@ class ImmersiveMapNeedsTile {
             retryWakeWorkItem = nil
             retryWakeDeadline = nil
             shouldNotify = wantedTiles.isEmpty == false
-            // Окна позже сработавшего могли быть поглощены его deadline —
+            // Окна позже сработавшего могли быть поглощены его deadline -
             // перевзводимся на ближайшее оставшееся. Уже истекшие окна ретраит
             // кадр, который запросит владелец по колбэку.
             if let nextWakeAt = retryController.earliestNextRetryDate(), nextWakeAt > now() {

@@ -73,7 +73,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
     // Хеш атласа фиксируется только после commit() command buffer: если кадр
     // отброшен (нет drawable), закодированная перерисовка страниц не выполнится,
     // и pending-хеш должен пережить кадр, чтобы следующий кадр перекодировал
-    // атлас заново — иначе шейдер сэмплит старую GPU-текстуру по новому маппингу.
+    // атлас заново - иначе шейдер сэмплит старую GPU-текстуру по новому маппингу.
     func frameCommitted() {
         globeTextureVersionTracker.commitPending()
     }

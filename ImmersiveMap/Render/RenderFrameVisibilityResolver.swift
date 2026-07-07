@@ -18,7 +18,7 @@ final class RenderFrameVisibilityResolver {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
-        // Culling — чистая функция позы камеры, drawSize и presentation-состояния:
+        // Culling - чистая функция позы камеры, drawSize и presentation-состояния:
         // при неизменном fingerprint переиспользуется прошлый результат (и его
         // coverageVersion, на который опирается dirty-gate demand-конвейера).
         let fingerprint = Self.makeFingerprint(cameraFrameState: cameraFrameState,

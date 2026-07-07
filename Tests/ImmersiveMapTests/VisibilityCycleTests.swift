@@ -120,7 +120,7 @@ final class VisibilityCycleTests: XCTestCase {
     }
 
     func testIncrementalPublicationKeepsPreviousForUndecidedLabels() {
-        // Цикл с двумя группами: одна публикуется, вторая ещё не обработана —
+        // Цикл с двумя группами: одна публикуется, вторая ещё не обработана -
         // published-состояние нерешённого индекса не затирается.
         let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
@@ -179,7 +179,7 @@ final class VisibilityCycleTests: XCTestCase {
             road: { _, _ in }
         )
         // Успешный сид не публикует решения (published уже хранит .visible),
-        // заблокированный — публикует .hidden.
+        // заблокированный - публикует .hidden.
         XCTAssertEqual(published, [.visible, .hidden])
 
         var drainedAgain = false

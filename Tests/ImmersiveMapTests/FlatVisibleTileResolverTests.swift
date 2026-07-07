@@ -94,7 +94,7 @@ final class FlatVisibleTileResolverTests: XCTestCase {
 
     /// Поза со скриншота бага: z14, pitch 75°, широкий вьюпорт. Раньше bbox
     /// полигона давал миллионы кандидатов и кадр на секунды; теперь выход
-    /// ограничен радиусом клампа, а перечисление — сканлайн.
+    /// ограничен радиусом клампа, а перечисление - сканлайн.
     func testHighPitchPoseStaysBoundedAndFast() {
         let targetZoom = 14
         let flatRenderState = FlatRenderState(pan: SIMD2<Double>(0.083, -0.42),
@@ -284,7 +284,7 @@ final class FlatVisibleTileResolverTests: XCTestCase {
     }
 
     /// Тайловый индекс центра: камера в тестах смотрит на начало
-    /// render-пространства, обратное преобразование — как в candidateRange.
+    /// render-пространства, обратное преобразование - как в candidateRange.
     private static func makeCenter(targetZoom: Int, flatRenderState: FlatRenderState) -> Center {
         let tilesCount = 1 << targetZoom
         let mapSize = flatRenderState.renderMapSize

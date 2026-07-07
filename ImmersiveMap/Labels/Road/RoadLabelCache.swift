@@ -40,7 +40,7 @@ final class RoadLabelTileRecord {
     private(set) var instanceRetainedFlags: [UInt8]
     let instanceLabelSizes: [SIMD2<Float>]
     // Глифы инстанса лежат в glyphInputs непрерывно (порядок построения
-    // makeTileRecord) — диапазоны позволяют читать коллизионные AABB инстанса
+    // makeTileRecord) - диапазоны позволяют читать коллизионные AABB инстанса
     // из GPU-буферов без CPU-репроекции.
     let instanceGlyphRanges: [Range<Int>]
     let instanceAnchorOrdinals: [UInt32]
@@ -59,7 +59,7 @@ final class RoadLabelTileRecord {
 
     // Слоты, в которые хотя бы раз кодировался placement-компьют этого рекорда:
     // до первого прохода GPU slot-буферы содержат мусор и читать их нельзя.
-    // Переиспользование слота кадром N означает завершение кадра N-slots —
+    // Переиспользование слота кадром N означает завершение кадра N-slots -
     // прочитанные данные всегда с завершённого кадра той же раскладки глифов.
     private var placementEncodedSlots: [Bool]
 
@@ -187,7 +187,7 @@ final class RoadLabelTileRecord {
 
     // Рекорд выпал из активных (near-camera кулл): prepareGPU перестаёт
     // кодировать его компьют, slot-буферы замораживаются. Сброс стампов не даёт
-    // первому циклу после возврата читать позиции произвольной давности —
+    // первому циклу после возврата читать позиции произвольной давности -
     // решения откладываются до свежих данных (механика pending-ретриггера).
     func invalidatePlacementData() {
         for index in placementEncodedSlots.indices {
@@ -201,7 +201,7 @@ final class RoadLabelTileRecord {
 
     // Рекорд пригоден для placement-компьюта (зеркалит guard prepareGPU):
     // ожидать данных от рекорда, который никогда не будет закодирован
-    // (отказ аллокации MTLBuffer), нельзя — pending завис бы навсегда.
+    // (отказ аллокации MTLBuffer), нельзя - pending завис бы навсегда.
     var canEncodePlacements: Bool {
         pathPointCount > 0 && glyphCount > 0
             && pathInputsBuffer != nil && pathRangesBuffer != nil
@@ -265,7 +265,7 @@ final class RoadLabelCache {
     }
 
     // Материализовано: состав меняется только в synchronize/evict, а читается
-    // это свойство в нескольких горячих точках каждого кадра — computed-версия
+    // это свойство в нескольких горячих точках каждого кадра - computed-версия
     // делала dictionary-lookup на тайл и аллоцировала массив на каждое обращение.
     private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 

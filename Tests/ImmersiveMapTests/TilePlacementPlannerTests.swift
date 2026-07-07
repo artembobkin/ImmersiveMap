@@ -140,7 +140,7 @@ final class TilePlacementPlannerTests: XCTestCase {
             previousContext: previousContext
         )
 
-        // Один прежний ребёнок закрывает четверть таргета — целиком регион
+        // Один прежний ребёнок закрывает четверть таргета - целиком регион
         // может показать только удерживаемый предок.
         XCTAssertEqual(context.tilePlacements.count, 1)
         guard let placement = context.tilePlacements.first else {
@@ -154,7 +154,7 @@ final class TilePlacementPlannerTests: XCTestCase {
     func testBuildPlacementsCoverageIgnoresNestedSourcesOnZoomOut() throws {
         // 3 ребёнка z6 (75% площади) + 4 тайла z7, вложенных в первого ребёнка:
         // сумма долей без учёта вложенности дала бы ровно 1.0, но реальное
-        // объединение — 75%, и целиком регион закрывает только предок.
+        // объединение - 75%, и целиком регион закрывает только предок.
         let ancestorTile = Tile(x: 2, y: 1, z: 2)
         let targetTile = Tile(x: 17, y: 11, z: 5)
         let childTiles = [
@@ -196,7 +196,7 @@ final class TilePlacementPlannerTests: XCTestCase {
 
     func testBuildPlacementsPrefersUnclippedRetainedSourceOverClippedPartialCarries() throws {
         // Source == таргет удержан из прошлого контекста, но размещён в двух
-        // клипнутых дочерних слотах — реально закрашена лишь половина таргета.
+        // клипнутых дочерних слотах - реально закрашена лишь половина таргета.
         // Полное покрытие даёт bestFullReplacement тем же тайлом без клипа.
         let targetTile = Tile(x: 17, y: 11, z: 5)
         let childA = Tile(x: 34, y: 22, z: 6)

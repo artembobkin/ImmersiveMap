@@ -6,7 +6,7 @@ import XCTest
 
 final class TileLocalClipMathTests: XCTestCase {
     func testClipBoundsMirrorsYForNorthWestChild() {
-        // Парсер флипует Y: локальный y=0 — южная кромка source-тайла,
+        // Парсер флипует Y: локальный y=0 - южная кромка source-тайла,
         // поэтому северо-западный ребёнок занимает y ∈ [2048, 4096].
         let bounds = TileLocalClipMath.clipBounds(source: Tile(x: 0, y: 0, z: 0),
                                                   placeIn: Tile(x: 0, y: 0, z: 1))

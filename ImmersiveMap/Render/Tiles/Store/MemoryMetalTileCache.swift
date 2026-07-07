@@ -19,7 +19,7 @@ class MemoryMetalTileCache {
         self.cache = LRUMemoryCache(costLimit: maxCacheSizeInBytes)
     }
 
-    // Меняется при каждой мутации содержимого (вставка/вытеснение/очистка) —
+    // Меняется при каждой мутации содержимого (вставка/вытеснение/очистка) -
     // ключ для dirty-гейтов, зависящих от готовности тайлов.
     var contentVersion: UInt64 {
         stateLock.lock()
@@ -33,7 +33,7 @@ class MemoryMetalTileCache {
         protectedTiles = tiles
         // Overshoot от защиты demanded-тайлов ликвидируется, как только набор
         // сжался: иначе кэш держал бы превышение лимита до следующей вставки
-        // или memory warning. В обычном случае (totalCost <= limit) — no-op.
+        // или memory warning. В обычном случае (totalCost <= limit) - no-op.
         if cache.totalCost > costLimit {
             let evicted = cache.trim(toCost: costLimit, protectedKeys: protectedTiles)
             if evicted.isEmpty == false {
@@ -93,7 +93,7 @@ class MemoryMetalTileCache {
                                         ]))
     }
 
-    // Сбрасывает кэш до доли лимита, сохраняя защищённые (видимые) тайлы —
+    // Сбрасывает кэш до доли лимита, сохраняя защищённые (видимые) тайлы -
     // мягкая реакция на memory warning вместо полной очистки и пустой карты.
     func trim(toFractionOfLimit fraction: Double) {
         let targetCost = Int(Double(costLimit) * max(0.0, min(1.0, fraction)))

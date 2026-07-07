@@ -61,7 +61,7 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
 }
 
 // localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
-// Retained-подмена рисует здания source целиком — фрагменты вне слота placeIn
+// Retained-подмена рисует здания source целиком - фрагменты вне слота placeIn
 // отбрасываются и в winner-препассе, и в цветовом пассе, иначе здания родителя
 // перекрывали бы соседние точные тайлы (и их winner ID).
 static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBounds) {

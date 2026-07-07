@@ -53,7 +53,7 @@ final class RoadLabelReadbackTests: XCTestCase {
 
     func testMakeRoadInstanceCandidatesRejectsExtrapolatedGlyph() {
         // Глиф, экстраполированный за конец пути, рисуется шейдером, но
-        // прежний CPU-путь такие инстансы не показывал — решение не принимается.
+        // прежний CPU-путь такие инстансы не показывал - решение не принимается.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: 0),
             Self.makePlacement(position: SIMD2<Float>(30, 40), angle: 0, extrapolated: 1)
@@ -91,7 +91,7 @@ final class RoadLabelReadbackTests: XCTestCase {
     }
 
     func testMakeRoadInstanceCandidatesNormalizesAngleWrapAroundPi() {
-        // Углы ±π — это один и тот же разворот (reverse добавляет π):
+        // Углы ±π - это один и тот же разворот (reverse добавляет π):
         // дельта через нормализацию мала, инстанс не должен отбрасываться.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: .pi - 0.05),

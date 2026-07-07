@@ -35,7 +35,7 @@ final class AvatarClusterIconAtlas {
 
     func update(cluster: AvatarClusterRenderable) -> AvatarAtlasSlot? {
         let previewImages = cluster.previewMarkers.map(\.image)
-        // cluster.id — content-hash по memberIDs, поэтому бейдж с количеством у
+        // cluster.id - content-hash по memberIDs, поэтому бейдж с количеством у
         // закэшированной иконки всегда актуален; перерисовка нужна только если
         // сменились сами картинки превью.
         if let existingSlot = atlas.slot(for: cluster.id),

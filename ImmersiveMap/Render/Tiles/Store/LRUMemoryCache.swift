@@ -102,7 +102,7 @@ struct LRUMemoryCache<Key: Hashable, Value> {
                 }
             }
 
-            // Все оставшиеся записи защищены — допускаем перерасход лимита.
+            // Все оставшиеся записи защищены - допускаем перерасход лимита.
             guard let victimKey,
                   let victimSlot = slotsByKey.removeValue(forKey: victimKey) else {
                 break

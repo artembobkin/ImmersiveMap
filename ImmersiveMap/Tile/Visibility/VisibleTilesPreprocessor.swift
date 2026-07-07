@@ -20,7 +20,7 @@ import Foundation
 final class VisibleTilesPreprocessor {
     /// Радиус дистанционного фильтра (Чебышёв, в тайлах целевого зума).
     /// На него же опирается кламп кандидатов в `FlatVisibleTileResolver`:
-    /// перечислять тайлы дальше этого радиуса бессмысленно — фильтр их выбросит.
+    /// перечислять тайлы дальше этого радиуса бессмысленно - фильтр их выбросит.
     static let defaultMaxVisibleRelativeDistance = 15
 
     private let maxVisibleRelativeDistance: Int

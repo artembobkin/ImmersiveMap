@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing.
 
-ImmersiveMap is an early-stage, experimental Swift + Metal map rendering engine, currently maintained as a single-maintainer project. Contributions are welcome — especially around documentation, examples, tests, bug reports, and small focused improvements.
+ImmersiveMap is an early-stage, experimental Swift + Metal map rendering engine, currently maintained as a single-maintainer project. Contributions are welcome - especially around documentation, examples, tests, bug reports, and small focused improvements.
 
 ## Good first contributions
 
@@ -38,7 +38,7 @@ xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapMac \
   ```
   Do not add the header to generated files.
 - Dependencies point inward: `UI` → `Render` → domain folders → `Utils`. Domain folders must not depend on `UI`/`Render` and must not contain Metal code.
-- Most top-level folders contain a `README.md` with boundary rules — read it before adding files there.
+- Most top-level folders contain a `README.md` with boundary rules - read it before adding files there.
 - Naming: `...State`, `...Controller`, `...Resolver`, `...Runtime`, `...Math`. Avoid `Manager`/`Helper`/`Service`.
 - Every new `.metal` file or resource directory must be registered under `resources:` in `Package.swift`.
 - Because the repository is public: never commit tokens, credentials, or build artifacts.

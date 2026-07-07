@@ -92,7 +92,7 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(buffers.extruded.verticesBuffer, offset: 0, index: 0)
             renderEncoder.setVertexBuffer(buffers.extruded.stylesBuffer, offset: 0, index: 2)
 
-            // Клип фрагментов к слоту placeIn — и в winner-препассе, и в цветовом
+            // Клип фрагментов к слоту placeIn - и в winner-препассе, и в цветовом
             // пассе: здания retained-родителя не должны перекрывать соседние тайлы.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
             renderEncoder.setFragmentBytes(&localClipBounds,
@@ -101,7 +101,7 @@ enum BuildingExtrusionDrawer {
 
             // Клип режет здание вертикальной плоскостью без закрывающей грани:
             // при отсечении back-faces срез выглядит «полым» насквозь. Для
-            // клипнутых размещений рисуем и внутренние стены — тёмный срез
+            // клипнутых размещений рисуем и внутренние стены - тёмный срез
             // вместо дыры.
             let isClipped = localClipBounds != TileLocalClipMath.disabledBounds
             if isClipped == isBackCullingEnabled {

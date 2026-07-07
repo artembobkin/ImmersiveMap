@@ -361,7 +361,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Будильник срабатывает в T+0.6: окно первого тайла уже истекло и не
-        // должно маскировать будущее окно второго — перевзвод на T+0.9.
+        // должно маскировать будущее окно второго - перевзвод на T+0.9.
         now = Date(timeIntervalSince1970: 1000.6)
         wakeScheduler.scheduledWakes[0].workItem.perform()
 

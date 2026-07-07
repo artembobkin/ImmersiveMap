@@ -35,11 +35,11 @@ public protocol ImmersiveMapTileProvider {
 }
 ```
 
-- `id` — stable identifier for the provider.
-- `cacheNamespace` — namespace used for on-disk cache identity.
-- `configurationFingerprint` — an FNV-1a fingerprint of the provider configuration. **This is important:** the fingerprint drives disk-cache identity, so any change to provider config that changes the produced tiles must change the fingerprint. Otherwise stale tiles are served from disk.
-- `tileSource` — describes the tile URLs / scheme.
-- `maximumTileZoomLevel` — optional cap on requested zoom.
+- `id` - stable identifier for the provider.
+- `cacheNamespace` - namespace used for on-disk cache identity.
+- `configurationFingerprint` - an FNV-1a fingerprint of the provider configuration. **This is important:** the fingerprint drives disk-cache identity, so any change to provider config that changes the produced tiles must change the fingerprint. Otherwise stale tiles are served from disk.
+- `tileSource` - describes the tile URLs / scheme.
+- `maximumTileZoomLevel` - optional cap on requested zoom.
 
 The built-in `MapboxTileProvider` and `OpenStreetMapTileProvider` are concrete examples worth reading.
 
@@ -49,7 +49,7 @@ Providers pair with an `ImmersiveMapMapStyle` (see `Provider/ImmersiveMapMapStyl
 
 ## Provider-specific schema logic
 
-MVT layers differ between providers (Mapbox streets vs OpenStreetMap / Shortbread). Provider-specific schema normalization is confined to `VectorTileAdaptation/`, `mapbox/`, and `openstreetmap/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data — keep provider quirks inside the adaptation layer.
+MVT layers differ between providers (Mapbox streets vs OpenStreetMap / Shortbread). Provider-specific schema normalization is confined to `VectorTileAdaptation/`, `mapbox/`, and `openstreetmap/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data - keep provider quirks inside the adaptation layer.
 
 ## Attribution
 

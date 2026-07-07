@@ -90,7 +90,7 @@ public class ImmersiveMapUIView: UIView {
             self?.renderer?.handleMemoryWarning()
             // Warning отменяет in-flight загрузки и сбрасывает demand-гейт;
             // on-demand цикл при этом спит, и без явного кадра отменённые тайлы
-            // остаются дырами до следующего жеста — кадр перезапускает demand.
+            // остаются дырами до следующего жеста - кадр перезапускает demand.
             self?.requestFrame()
         }
 
