@@ -10,7 +10,10 @@ import Foundation
 
 struct PoiSpriteResolver {
     func resolve(attributes: [String: VectorTile_Tile.Value], layerName: String) -> PoiSpriteIcon? {
-        guard layerName.lowercased() == "poi_label" else {
+        // `poi_label` is the Mapbox POI layer; `poi` is the OpenMapTiles one. Both
+        // carry class/subclass fields the mapping below understands.
+        let normalizedLayer = layerName.lowercased()
+        guard normalizedLayer == "poi_label" || normalizedLayer == "poi" else {
             return nil
         }
 

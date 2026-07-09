@@ -6,7 +6,7 @@ import XCTest
 
 final class PreparedTileDiskCodecTests: XCTestCase {
     func testPreparedTileCacheFormatVersionIncludesLabelVisibilityPolicyRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 18)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 21)
     }
 
     func testPreparedTileCodecRoundTripsArbitraryLabelLanguageMetadata() throws {
@@ -57,6 +57,40 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
+    }
+
+    func testPreparedTileCodecKeysOnSourceETag() throws {
+        let tile = Tile(x: 1, y: 2, z: 3)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .portuguese)
+        let data = try PreparedTileDiskCodec.encode(
+            preparedTile: makePreparedTile(tile: tile),
+            cacheIdentity: cacheIdentity,
+            sourceETag: "etag-A"
+        )
+
+        // Matching ETag -> reused without re-parsing.
+        let matched = try PreparedTileDiskCodec.decode(data: data,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       expectedSourceETag: "etag-A")
+        XCTAssertEqual(matched.tile, tile)
+
+        // Different ETag (server content changed at the same URL) -> rejected.
+        XCTAssertThrowsError(
+            try PreparedTileDiskCodec.decode(data: data,
+                                             expectedTile: tile,
+                                             cacheIdentity: cacheIdentity,
+                                             expectedSourceETag: "etag-B")
+        ) { error in
+            XCTAssertTrue(error is PreparedTileDiskCodecError)
+        }
+
+        // nil expected ETag (offline fallback) -> accepted regardless of stored ETag.
+        let anyETag = try PreparedTileDiskCodec.decode(data: data,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       expectedSourceETag: nil)
+        XCTAssertEqual(anyETag.tile, tile)
     }
 
     func testPreparedTileCodecRejectsMismatchedTextRevisionMetadata() throws {

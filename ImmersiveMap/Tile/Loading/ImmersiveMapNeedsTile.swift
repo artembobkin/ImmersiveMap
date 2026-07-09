@@ -144,7 +144,10 @@ class ImmersiveMapNeedsTile {
         tileTraceRecorder.record(.tileLoadScheduled(tile, inFlight: ongoingTasks.count))
     }
     
-    // Полный цикл загрузки тайла: prepared disk -> raw disk -> сеть -> подготовка -> materialize -> сохранение в кэш.
+    // Полный цикл загрузки тайла: сеть (URLCache) -> prepared-кэш по ETag -> парс ->
+    // materialize -> сохранение. prepared-кэш ключуется по ETag сырого тайла, поэтому
+    // текущий ETag узнаём из загрузки (URLCache делает её дешёвой) и только затем
+    // решаем - переиспользовать распарсенный тайл или парсить заново.
     // На любом этапе учитывает отмену задачи и обновляет retry-state по результату.
     private func loadTile(tile: Tile) async {
         if Task.isCancelled {
@@ -156,52 +159,6 @@ class ImmersiveMapNeedsTile {
             Task { @MainActor in
                 finishLoading(tile: tile)
             }
-        }
-        if let preparedTile = await loadPipeline.requestPreparedDiskCached(tile: tile) {
-            if Task.isCancelled {
-                return
-            }
-            let materializedPreparedTile = await materializePreparedTile(preparedTile, expectedTile: tile)
-            if Task.isCancelled {
-                return
-            }
-            if materializedPreparedTile {
-                markLoadSucceeded(tile: tile)
-                tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
-                tileTraceRecorder.record(.tileLoadSuccess(tile, source: "prepared_disk"))
-                return
-            }
-            loadPipeline.removePreparedFromDisk(tile: tile)
-        }
-
-        if let diskCachedData = await loadPipeline.requestDiskCached(tile: tile) {
-            if Task.isCancelled {
-                return
-            }
-            let preparedFromDisk = await prepareTile(data: diskCachedData, tile: tile)
-            if Task.isCancelled {
-                return
-            }
-            guard let preparedFromDisk else {
-                loadPipeline.removeFromDisk(tile: tile)
-                loadPipeline.removePreparedFromDisk(tile: tile)
-                await proceedToNetwork(tile: tile)
-                return
-            }
-
-            let materializedFromDisk = await materializePreparedTile(preparedFromDisk.preparedTile, expectedTile: tile)
-            if Task.isCancelled {
-                return
-            }
-            if materializedFromDisk {
-                loadPipeline.savePreparedOnDisk(tile: tile, preparedTile: preparedFromDisk.preparedTile)
-                markLoadSucceeded(tile: tile)
-                tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
-                tileTraceRecorder.record(.tileLoadSuccess(tile, source: "raw_disk"))
-                return
-            }
-            loadPipeline.removeFromDisk(tile: tile)
-            loadPipeline.removePreparedFromDisk(tile: tile)
         }
 
         await proceedToNetwork(tile: tile)
@@ -219,10 +176,37 @@ class ImmersiveMapNeedsTile {
         }
 
         switch downloadResult {
-        case let .success(data):
+        case let .success(data, etag):
             tileLoadingStatusReporter?.recordNetworkSucceeded(tile: tile,
                                                               bytes: data.count)
             tileTraceRecorder.record(.tileDownloadSuccess(tile, bytes: data.count))
+
+            // Reuse the prepared (parsed) tile only when the server provided an ETag
+            // and it matches the one this prepared tile was derived from. Without an
+            // ETag we cannot prove freshness, so we parse the bytes we just downloaded
+            // rather than risk serving a stale prepared tile.
+            if let etag,
+               let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: etag) {
+                if Task.isCancelled {
+                    return
+                }
+                if await materializePreparedTile(cached, expectedTile: tile) {
+                    markLoadSucceeded(tile: tile)
+                    tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
+                    tileTraceRecorder.record(.tileLoadSuccess(tile, source: "prepared_disk"))
+                    return
+                }
+                // Keep a valid entry if we were merely cancelled; only a genuine
+                // materialize failure invalidates it.
+                if Task.isCancelled {
+                    return
+                }
+                loadPipeline.removePreparedFromDisk(tile: tile)
+            }
+            if Task.isCancelled {
+                return
+            }
+
             guard let preparedFromNetwork = await prepareTile(data: data, tile: tile) else {
                 loadPipeline.removePreparedFromDisk(tile: tile)
                 markLoadFailed(tile: tile, reason: .parseFailed)
@@ -236,8 +220,9 @@ class ImmersiveMapNeedsTile {
                 return
             }
             if materializedFromNetwork {
-                loadPipeline.saveOnDisk(tile: tile, data: data)
-                loadPipeline.savePreparedOnDisk(tile: tile, preparedTile: preparedFromNetwork.preparedTile)
+                loadPipeline.savePreparedOnDisk(tile: tile,
+                                                preparedTile: preparedFromNetwork.preparedTile,
+                                                sourceETag: etag)
                 markLoadSucceeded(tile: tile)
                 tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
                 tileTraceRecorder.record(.tileLoadSuccess(tile, source: "network"))
@@ -251,6 +236,19 @@ class ImmersiveMapNeedsTile {
                                                            reason: failureDescription)
             tileTraceRecorder.record(.tileDownloadFailed(tile,
                                                          reason: failureDescription))
+
+            // Offline / server error: render any cached prepared tile for this
+            // coordinate, regardless of ETag, so a warm cache still shows content
+            // without the network. materializePreparedTile returns false on
+            // cancellation, so a cancelled load falls through to markLoadFailed and
+            // never leaves the load without a terminal state.
+            if let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil),
+               await materializePreparedTile(cached, expectedTile: tile) {
+                markLoadSucceeded(tile: tile)
+                tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
+                tileTraceRecorder.record(.tileLoadSuccess(tile, source: "prepared_disk_offline"))
+                return
+            }
             markLoadFailed(tile: tile, reason: .download(downloadFailure))
         }
     }

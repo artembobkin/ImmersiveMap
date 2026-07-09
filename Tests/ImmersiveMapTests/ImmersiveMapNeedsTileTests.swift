@@ -19,7 +19,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let didStart = await pipeline.waitUntilStarted(tile)
         XCTAssertTrue(didStart)
 
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3])))
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
         let didPrepare = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(didPrepare)
         pipeline.completePrepare(tile)
@@ -53,7 +53,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertEqual(loadingTile.progress, 0.35, accuracy: 0.001)
         XCTAssertEqual(reporter.snapshot().network.inFlight, 1)
 
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3])))
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
         let didPrepare = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(didPrepare)
         XCTAssertEqual(reporter.snapshot().network.completed, 1)
@@ -98,7 +98,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         loader.request(tiles: [tile])
         let didStart = await pipeline.waitUntilStarted(tile)
         XCTAssertTrue(didStart)
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3])))
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
         let didPrepare = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(didPrepare)
         pipeline.completePrepare(tile, timings: [
@@ -133,7 +133,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(didStart)
 
         now = 1.100
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3])))
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
         let didPrepare = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(didPrepare)
 
@@ -207,7 +207,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         loader.request(tiles: [staleReadyTile])
         let staleReadyStarted = await pipeline.waitUntilStarted(staleReadyTile)
         XCTAssertTrue(staleReadyStarted)
-        pipeline.completeDownload(staleReadyTile, result: .success(Data([1, 2, 3])))
+        pipeline.completeDownload(staleReadyTile, result: .success(Data([1, 2, 3]), etag: nil))
         let staleReadyPrepared = await pipeline.waitUntilPrepared(staleReadyTile)
         XCTAssertTrue(staleReadyPrepared)
         pipeline.completePrepare(staleReadyTile)
@@ -413,11 +413,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
     private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
     private var materializeContinuations: [Tile: CheckedContinuation<Bool, Never>] = [:]
 
-    func requestPreparedDiskCached(tile _: Tile) async -> PreparedTileCPU? {
-        nil
-    }
-
-    func requestDiskCached(tile _: Tile) async -> Data? {
+    func requestPreparedDiskCached(tile _: Tile, matchingETag _: String?) async -> PreparedTileCPU? {
         nil
     }
 
@@ -431,13 +427,9 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
         })
     }
 
-    func savePreparedOnDisk(tile _: Tile, preparedTile _: PreparedTileCPU) {}
-
-    func saveOnDisk(tile _: Tile, data _: Data) {}
+    func savePreparedOnDisk(tile _: Tile, preparedTile _: PreparedTileCPU, sourceETag _: String?) {}
 
     func removePreparedFromDisk(tile _: Tile) {}
-
-    func removeFromDisk(tile _: Tile) {}
 
     func prepare(tile: Tile, data _: Data) async -> PreparedTileLoadResult? {
         await withCheckedContinuation { continuation in

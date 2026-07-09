@@ -25,6 +25,13 @@ class TileMvtParser {
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
     let tileExtent = Double(4096)
 
+    /// The MVT layer that carries roads: `road` in the Mapbox schema, `transportation`
+    /// in OpenMapTiles. Only this layer flows through the seamless, casing-under-fill
+    /// separate-road rendering path.
+    private static func isSeparateRoadLayer(_ layerName: String) -> Bool {
+        layerName == "road" || layerName == "transportation"
+    }
+
     
     init(determineFeatureStyle: DetermineFeatureStyle,
          labelProviderProfile: any VectorTileLabelProviderProfile,
@@ -52,7 +59,7 @@ class TileMvtParser {
         let vectorTile = try VectorTile_Tile(serializedBytes: mvtData)
         let readingStageResult = readingStage(vectorTile: vectorTile, tile: tile)
         let unificationResult = unificationStage(readingStageResult: readingStageResult)
-        
+
         return ParsedTile(
             drawingPolygon: unificationResult.drawingPolygon,
             drawingRoadPhases: unificationResult.drawingRoadPhases,
@@ -646,7 +653,7 @@ class TileMvtParser {
             let buildingPartFootprintSignatures = layerName == "building"
                 ? collectBuildingPartFootprintSignatures(layer: layer)
                 : []
-            let highZoomRoadSharedPointCounts = layerName == "road"
+            let highZoomRoadSharedPointCounts = Self.isSeparateRoadLayer(layerName)
                 && tile.z >= config.style.flatSeparateRoadRenderingMinimumZoom
                 ? buildHighZoomRoadSharedPointCounts(layer: layer, tile: tile)
                 : [:]
@@ -658,7 +665,7 @@ class TileMvtParser {
                     properties: attributes,
                     tile: tile
                 )
-                let usesSeparateRoadRendering = layerName == "road"
+                let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
                     && tile.z >= config.style.flatSeparateRoadRenderingMinimumZoom
 
                 let style = determineFeatureStyle.makeStyle(data: detStyleData)
@@ -690,7 +697,13 @@ class TileMvtParser {
                     let isBuildingPart = isTruthy(attributes["building:part"])
                     let buildingId = buildingIdentifier(attributes: attributes, featureId: feature.id)
                     let hasParts = buildingPartIds.contains(buildingId)
+                    // buildingFootprintSignature -> canonicalRotation is O(n^2) in ring
+                    // vertices; only building-part dedup needs it. Skip it entirely when
+                    // there are no part signatures to match (always the case for
+                    // non-building layers), so large landcover/water polygons don't pay
+                    // the quadratic cost. Result is unchanged: an empty set never matches.
                     let matchesPartFootprint = isBuildingPart == false
+                        && buildingPartFootprintSignatures.isEmpty == false
                         && polygons.contains { polygon in
                             guard let signature = buildingFootprintSignature(for: polygon) else {
                                 return false
@@ -703,8 +716,14 @@ class TileMvtParser {
                         || locationValue.contains("subterranean")
                         || locationValue.contains("tunnel")
                         || locationValue.contains("underwater")
+                    // `extrude` is the Mapbox convention (present, "true"); the
+                    // OpenMapTiles building layer has no such field (it drives height
+                    // from render_height and hides 3D via hide_3d). Extrude when the
+                    // flag is true OR absent, and suppress only when explicitly false
+                    // or hide_3d is set - preserving Mapbox behaviour, enabling OMT.
                     let shouldExtrude = style.usesExtrusion
-                        && (extrudeFlag == true)
+                        && (extrudeFlag != false)
+                        && !isTruthy(attributes["hide_3d"])
                         && !isUnderground
                         && !matchesPartFootprint
                         && !(hasParts && !isBuildingPart)

@@ -19,7 +19,7 @@ class TileDownloader {
     }
 
     enum DownloadResult: Equatable {
-        case success(Data)
+        case success(Data, etag: String?)
         case failure(DownloadFailure)
     }
 
@@ -29,7 +29,10 @@ class TileDownloader {
     private let session: URLSession
 
     init(config: ImmersiveMapSettings) {
-        let configuration = Self.makeSessionConfiguration()
+        let configuration = Self.makeSessionConfiguration(urlCacheEnabled: config.tiles.cache.urlCacheEnabled)
+        if config.tiles.cache.clearDiskCachesOnLaunch {
+            configuration.urlCache?.removeAllCachedResponses()
+        }
         let network = config.tiles.network
         authorizationToken = network.authorizationToken
         authorizationMode = network.authorizationMode
@@ -48,8 +51,23 @@ class TileDownloader {
         self.authorizationMode = .bearerHeader
     }
 
-    static func makeSessionConfiguration() -> URLSessionConfiguration {
-        URLSessionConfiguration.default
+    static func makeSessionConfiguration(urlCacheEnabled: Bool = true) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        if urlCacheEnabled {
+            // Raw tiles are cached by URLSession's HTTP cache (URLCache): the single
+            // raw-tile cache layer. It revalidates against the tile server's ETag /
+            // Cache-Control, so a tile whose server content changed is refreshed
+            // instead of served stale. The parsed/tessellated result is cached
+            // separately by PreparedTileDiskCaching. Sized generously for map tiles.
+            configuration.urlCache = URLCache(memoryCapacity: 32 * 1024 * 1024,
+                                              diskCapacity: 1024 * 1024 * 1024)
+            configuration.requestCachePolicy = .useProtocolCachePolicy
+        } else {
+            // Raw HTTP tile caching disabled: every download hits the network.
+            configuration.urlCache = nil
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        }
+        return configuration
     }
 
     private static func queryItemsProvider(token: String?,
@@ -70,7 +88,7 @@ class TileDownloader {
     
     func download(tile: Tile) async -> Data? {
         let result = await downloadResult(tile: tile)
-        if case let .success(data) = result {
+        if case let .success(data, _) = result {
             return data
         }
         return nil
@@ -125,7 +143,11 @@ class TileDownloader {
                 return .failure(.emptyBody)
             }
 
-            return .success(data)
+            // Normalize a missing or empty ETag to nil so it is never confused with a
+            // real value; the prepared cache treats nil as "cannot prove freshness".
+            let rawETag = httpResponse.value(forHTTPHeaderField: "Etag")
+            let etag = (rawETag?.isEmpty == false) ? rawETag : nil
+            return .success(data, etag: etag)
         } catch {
             #if DEBUG
             print("Downloading tile failed \(tile): \(error)")

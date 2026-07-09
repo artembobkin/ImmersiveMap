@@ -415,8 +415,12 @@ extension TileMvtParser {
     }
 
     func extrusionHeights(attributes: [String: VectorTile_Tile.Value], tileZoom: Int, style: FeatureStyle) -> ExtrusionHeights? {
+        // `height`/`min_height` are the Mapbox convention; `render_height`/
+        // `render_min_height` are the OpenMapTiles convention. Accept either.
         let rawHeight = attributes["height"].flatMap(parseNumericValue)
+            ?? attributes["render_height"].flatMap(parseNumericValue)
         let rawMinHeight = attributes["min_height"].flatMap(parseNumericValue)
+            ?? attributes["render_min_height"].flatMap(parseNumericValue)
         let levelHeight: Float = 3.2
         let rawLevels = attributes["building:levels"].flatMap(parseNumericValue)
             ?? attributes["levels"].flatMap(parseNumericValue)
@@ -694,7 +698,57 @@ extension TileMvtParser {
             filtered.append(contentsOf: suppressNestedBuildingExtrusionCandidates(uniqueCandidates))
         }
 
-        return filtered
+        return clampEnvelopeBuildingExtrusions(filtered)
+    }
+
+    /// Some sources (e.g. OpenMapTiles for St. Basil's Cathedral) emit a tall
+    /// ground-level OUTER OUTLINE of a parts-modeled building without the usual
+    /// `hide_3d` flag. Extruded as-is it becomes one solid box that engulfs the
+    /// individually-heighted towers/domes inside it. Detect such an envelope - a
+    /// base-0 candidate whose footprint encloses many stacked (base>0) parts from
+    /// OTHER buildings - and clamp its top down to the lowest enclosed part's base,
+    /// leaving a solid pedestal while the parts articulate everything above.
+    private func clampEnvelopeBuildingExtrusions(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
+        let minEnclosedParts = 4
+        guard candidates.count > minEnclosedParts else { return candidates }
+
+        let baseEpsilon: Float = 0.5
+        let bounds = candidates.map { footprintBounds($0.clippedExterior) }
+
+        return candidates.enumerated().map { index, candidate in
+            guard candidate.baseHeight <= baseEpsilon else { return candidate }
+            let envelopeBounds = bounds[index]
+
+            var minStackedBase = Float.greatestFiniteMagnitude
+            var enclosedCount = 0
+            for other in candidates.indices where other != index {
+                let part = candidates[other]
+                guard part.buildingId != candidate.buildingId,
+                      part.baseHeight > baseEpsilon,
+                      bounds[other].isInsideOrEqual(to: envelopeBounds),
+                      isRingContained(part.clippedExterior, in: candidate.clippedExterior) else {
+                    continue
+                }
+                enclosedCount += 1
+                minStackedBase = min(minStackedBase, part.baseHeight)
+            }
+
+            guard enclosedCount >= minEnclosedParts else { return candidate }
+            let clampedTop = max(candidate.baseHeight, minStackedBase)
+            guard clampedTop < candidate.topHeight else { return candidate }
+
+            return BuildingExtrusionCandidate(
+                styleKey: candidate.styleKey,
+                buildingId: candidate.buildingId,
+                footprintSignature: candidate.footprintSignature,
+                clippedExterior: candidate.clippedExterior,
+                clippedInteriors: candidate.clippedInteriors,
+                roof: candidate.roof,
+                roofInfo: nil,
+                baseHeight: candidate.baseHeight,
+                topHeight: clampedTop
+            )
+        }
     }
 
     private func deduplicateBuildingExtrusionCandidates(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {

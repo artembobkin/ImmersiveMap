@@ -175,13 +175,15 @@ public extension ImmersiveMapView {
     }
 
     public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
-                             rawDiskTimeToLive: TimeInterval? = nil,
+                             urlCacheEnabled: Bool? = nil,
+                             preparedTileCacheEnabled: Bool? = nil,
                              preparedDiskTimeToLive: TimeInterval? = nil,
                              memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileSettings(
             clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
-            rawDiskTimeToLive: rawDiskTimeToLive,
+            urlCacheEnabled: urlCacheEnabled,
+            preparedTileCacheEnabled: preparedTileCacheEnabled,
             preparedDiskTimeToLive: preparedDiskTimeToLive,
             memoryCacheSizeInBytes: memoryCacheSizeInBytes
         )

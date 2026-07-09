@@ -1,0 +1,524 @@
+// Copyright (c) 2025-2026 Artem Bobkin.
+// SPDX-License-Identifier: MIT
+
+import simd
+
+/// Default style for the OpenMapTiles-schema first-party provider. Visually in
+/// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
+/// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
+final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
+    private static let implementationRevision: UInt32 = 17
+
+    private let fallbackKey: UInt8 = 0
+    private let landuseMinimumZoom = 6
+    private let configuration: OpenMapTilesDefaultMapStyleConfiguration
+    private let settings: ImmersiveMapSettings.StyleSettings
+    private let mapBaseColors: ImmersiveMapBaseColors
+    private let fallbackStyle: FeatureStyle
+
+    init(configuration: OpenMapTilesDefaultMapStyleConfiguration = .openMapTilesDefault,
+         settings: ImmersiveMapSettings.StyleSettings = ImmersiveMapSettings.default.style) {
+        self.configuration = configuration
+        self.settings = settings
+        self.mapBaseColors = ImmersiveMapBaseColors(settings: settings.baseColors)
+        self.fallbackStyle = FeatureStyle(
+            key: fallbackKey,
+            color: settings.fallbackFeatureColor,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+        )
+    }
+
+    var preparedTileStyleRevision: UInt32 {
+        settings.preparedTileStyleRevision &+ configuration.cacheFingerprint &+ Self.implementationRevision
+    }
+
+    func getMapBaseColors() -> ImmersiveMapBaseColors {
+        mapBaseColors
+    }
+
+    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
+        let layer = data.layerName.lowercased()
+        let props = data.properties
+        let z = data.tile.z
+        let cls = props["class"]?.stringValue.lowercased()
+        let subclass = props["subclass"]?.stringValue.lowercased()
+
+        switch layer {
+        case "background":
+            // Synthetic full-tile base quad the engine emits per tile. OpenMapTiles
+            // has no land polygon, so this is what paints the land; without it the
+            // base falls through to the red debug fallback.
+            return polygon(key: 1, color: configuration.layers.land)
+        case "water":
+            return polygon(key: 20, color: configuration.layers.water)
+        case "waterway":
+            return waterwayStyle(cls: cls)
+        case "landcover":
+            return landcoverStyle(cls: cls, subclass: subclass, tileZoom: z)
+        case "globallandcover":
+            return globalLandcoverStyle(cls: cls)
+        case "landuse":
+            return landuseStyle(cls: cls, tileZoom: z)
+        case "park":
+            return parkLayerStyle(cls: cls)
+        case "building":
+            return buildingStyle(tileZoom: z)
+        case "aeroway":
+            return line(key: 28, color: configuration.layers.aeroway, width: 4)
+        case "transportation":
+            return transportationStyle(cls: cls, props: props, tileZoom: z)
+        case "boundary":
+            return boundaryStyle(props: props)
+        case "transportation_name":
+            return roadLabelStyle(cls: cls)
+        case "place":
+            return placeLabelStyle(props: props)
+        case "water_name":
+            return waterLabelStyle(props: props)
+        case "poi":
+            return pointLabel(key: 72, appearance: configuration.labels.poi)
+        case "mountain_peak":
+            return pointLabel(key: 74, appearance: configuration.labels.poi)
+        case "aerodrome_label":
+            return pointLabel(key: 75, appearance: configuration.labels.poi)
+        case "housenumber":
+            return pointLabel(key: 76, appearance: houseNumberAppearance())
+        default:
+            return fallbackStyle
+        }
+    }
+
+    // MARK: - Polygons
+
+    private func landcoverStyle(cls: String?, subclass: String?, tileZoom: Int) -> FeatureStyle {
+        // The continuous ESA `globallandcover` overlay covers z<=9 (the tile service's
+        // overlay-maxzoom). Use it there and suppress the sparser OSM `landcover`,
+        // which generalises into tile-filling polygons clipped at tile edges (abrupt
+        // per-tile colour jumps). OSM landcover takes over from z10 (street detail).
+        guard tileZoom >= 10 else {
+            return hiddenStyle
+        }
+        switch cls {
+        case "wood", "forest":
+            return polygon(key: 11, color: configuration.layers.wood)
+        case "grass":
+            // OSM tags countless small courtyards/verges as generic grass; at city
+            // zooms suppress those (keep only real green-space subclasses) so they
+            // don't tint the whole city.
+            if tileZoom >= 13, isGenericGrassSubclass(subclass) {
+                return hiddenStyle
+            }
+            return polygon(key: 11, color: configuration.layers.grass)
+        case "farmland":
+            return polygon(key: 11, color: configuration.layers.farmland)
+        case "ice":
+            return polygon(key: 11, color: configuration.layers.ice)
+        case "sand":
+            return polygon(key: 11, color: configuration.layers.sand)
+        case "wetland":
+            return polygon(key: 11, color: configuration.layers.wetland)
+        case "rock":
+            return polygon(key: 11, color: configuration.layers.land)
+        default:
+            // Unknown landcover: blend into the land base rather than paint it green.
+            return hiddenStyle
+        }
+    }
+
+    /// True for generic "grass" that is just urban verge/courtyard clutter (as
+    /// opposed to a real park/garden/recreation area worth keeping green).
+    private func isGenericGrassSubclass(_ subclass: String?) -> Bool {
+        switch subclass {
+        case "park", "garden", "recreation_ground", "golf_course", "cemetery",
+             "meadow", "grassland", "nature_reserve", "dog_park", "pitch", "playground":
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// ESA WorldCover-derived low-zoom landcover (layer `globallandcover`, merged
+    /// into low-zoom tiles by the tile service). Per-class hole-free polygons drawn
+    /// in a fixed paint order: base land -> vegetation -> ice on top. Keys stay
+    /// below `water` (20) so oceans/lakes always cover landcover.
+    private func globalLandcoverStyle(cls: String?) -> FeatureStyle {
+        switch cls {
+        case "barren":
+            // Mapbox tints arid/scrub land green rather than desert-yellow; match it.
+            return polygon(key: 3, color: configuration.layers.grass)
+        case "grass", "shrub", "moss":
+            return polygon(key: 4, color: configuration.layers.grass)
+        case "crop":
+            return polygon(key: 5, color: configuration.layers.farmland)
+        case "forest":
+            return polygon(key: 6, color: configuration.layers.wood)
+        case "wetland", "mangroves":
+            return polygon(key: 7, color: configuration.layers.wetland)
+        case "snow":
+            return polygon(key: 8, color: configuration.layers.ice)
+        default:
+            // land / urban / water: leave to the background and water layers.
+            return hiddenStyle
+        }
+    }
+
+    private func landuseStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
+        guard tileZoom >= landuseMinimumZoom else {
+            return hiddenStyle
+        }
+        switch cls {
+        case "residential", "suburb", "neighbourhood", "quarter", "allotments":
+            return polygon(key: 14, color: configuration.layers.residential)
+        case "industrial", "commercial", "retail", "railway", "quarry":
+            return polygon(key: 14, color: configuration.layers.industrial)
+        case "cemetery", "grass", "park", "recreation_ground", "garden":
+            return polygon(key: 15, color: configuration.layers.park)
+        default:
+            // Unknown landuse: blend into the land base instead of the red fallback.
+            return hiddenStyle
+        }
+    }
+
+    // MARK: - Lines
+
+    private func waterwayStyle(cls: String?) -> FeatureStyle {
+        let width: Double
+        switch cls {
+        case "river", "canal":
+            width = 2.5
+        case "stream":
+            width = 1.4
+        default:
+            width = 1.0
+        }
+        return line(key: 22, color: configuration.layers.water, width: width)
+    }
+
+    private func transportationStyle(cls: String?,
+                                     props: [String: VectorTile_Tile.Value],
+                                     tileZoom: Int) -> FeatureStyle {
+        let brunnel = props["brunnel"]?.stringValue.lowercased()
+        let isTunnel = brunnel == "tunnel"
+        let roads = configuration.layers.roads
+        // Road widths grow with zoom: hairlines at country/regional zooms, full
+        // width at street level. Base widths below are the z14+ (full) values.
+        let s = roadWidthScale(tileZoom: tileZoom)
+
+        switch cls {
+        case "motorway":
+            return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: true, tunnel: isTunnel)
+        case "trunk":
+            return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: true, tunnel: isTunnel)
+        case "primary":
+            return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: true, tunnel: isTunnel)
+        case "secondary":
+            return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: true, tunnel: isTunnel)
+        case "tertiary":
+            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8 * s, priority: 74, casing: true, tunnel: isTunnel)
+        case "minor":
+            return roadStyle(fillKey: 44, color: roads.minor, width: 7.6 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
+        case "service":
+            return roadStyle(fillKey: 42, color: roads.service, width: 5.6 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
+        case "path", "track":
+            // Footways/tracks add dashed clutter (and read as stray white dashes over
+            // water/parks) without carrying basemap-level information. Suppress them.
+            return hiddenStyle
+        case "rail":
+            return railStyle(tileZoom: tileZoom)
+        case "ferry":
+            return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
+        default:
+            return roadStyle(fillKey: 43, color: roads.minor, width: 6.0 * s, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel)
+        }
+    }
+
+    private func roadStyle(fillKey: UInt8,
+                           color: SIMD4<Float>,
+                           width: Double,
+                           priority: Int,
+                           casing: Bool,
+                           tunnel: Bool) -> FeatureStyle {
+        let fillGeometry = tunnel
+            ? makeDashedRoadGeometry(width: width, dashLength: width * 2.0, dashGap: width * 1.2)
+            : makeRoadGeometry(width: width)
+
+        var passes: [LineRenderPass] = []
+        if casing, tunnel == false {
+            passes.append(
+                LineRenderPass(key: fillKey &+ 80,
+                               color: roadCasingColor(from: color),
+                               parseGeometryStyleData: makeRoadGeometry(width: width * 1.5),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .casing)
+            )
+        }
+        passes.append(
+            LineRenderPass(key: fillKey,
+                           color: color,
+                           parseGeometryStyleData: fillGeometry,
+                           includeRoadLabelPath: false,
+                           roadPassRole: .fill)
+        )
+
+        return FeatureStyle(
+            key: fillKey,
+            color: color,
+            parseGeometryStyleData: fillGeometry,
+            lineRenderPasses: passes,
+            roadClassPriority: priority
+        )
+    }
+
+    private func buildingStyle(tileZoom: Int) -> FeatureStyle {
+        guard tileZoom >= 13 else {
+            return fallbackStyle
+        }
+        // 3D extruded buildings driven by OpenMapTiles render_height / render_min_height.
+        return FeatureStyle(
+            key: 30,
+            color: configuration.features.buildingFillColor,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
+            usesExtrusion: true,
+            extrusionHeightScale: 8.0,
+            extrusionAnchorZoom: 16
+        )
+    }
+
+    private func railStyle(tileZoom: Int) -> FeatureStyle {
+        let s = roadWidthScale(tileZoom: tileZoom)
+        return FeatureStyle(
+            key: 46,
+            color: configuration.layers.roads.rail,
+            parseGeometryStyleData: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
+            roadClassPriority: 30
+        )
+    }
+
+    /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
+    /// at country/regional zooms and reach full width at street level.
+    private func roadWidthScale(tileZoom: Int) -> Double {
+        switch tileZoom {
+        case ...7: return 0.15
+        case 8: return 0.22
+        case 9: return 0.30
+        case 10: return 0.40
+        case 11: return 0.52
+        case 12: return 0.68
+        case 13: return 0.84
+        default: return 1.0
+        }
+    }
+
+    private func boundaryStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        let adminLevel = parseIntValue(props["admin_level"]) ?? 4
+        guard adminLevel <= 4 else {
+            return hiddenStyle
+        }
+        let width: Double = adminLevel <= 2 ? 2.6 : 1.7
+        let key: UInt8 = adminLevel <= 2 ? 102 : 100
+        return FeatureStyle(
+            key: key,
+            color: configuration.layers.boundary,
+            lowZoomFadeMask: 1.0,
+            parseGeometryStyleData: makeDashedRoadGeometry(width: width, dashLength: 8, dashGap: 6)
+        )
+    }
+
+    // MARK: - Labels
+
+    private func placeLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        let cls = props["class"]?.stringValue.lowercased()
+        var appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance
+        switch cls {
+        case "continent", "country":
+            appearance = configuration.labels.country
+        case "state", "province":
+            var a = configuration.labels.country
+            a.sizePx -= 4
+            appearance = a
+        case "city":
+            appearance = configuration.labels.city
+        case "town":
+            appearance = configuration.labels.town
+        default: // village, hamlet, suburb, quarter, neighbourhood, ...
+            var a = configuration.labels.town
+            a.sizePx -= 3
+            a.weight = .thin
+            appearance = a
+        }
+        if isCapital(props) {
+            appearance.sizePx += 3
+            appearance.weight = .bold
+        }
+        return pointLabel(key: 70, appearance: appearance)
+    }
+
+    private func waterLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        var appearance = configuration.labels.water
+        switch props["class"]?.stringValue.lowercased() {
+        case "ocean":
+            appearance.sizePx += 6
+        case "sea":
+            appearance.sizePx += 3
+        default:
+            break
+        }
+        return pointLabel(key: 73, appearance: appearance)
+    }
+
+    private func roadLabelStyle(cls: String?) -> FeatureStyle {
+        FeatureStyle(
+            key: 90,
+            color: SIMD4<Float>(0, 0, 0, 0),
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 1),
+            includeRoadLabelPath: true,
+            roadClassPriority: roadLabelPriority(cls: cls),
+            roadLabelTextStyle: labelTextStyle(key: 90, appearance: configuration.labels.road)
+        )
+    }
+
+    private func houseNumberAppearance() -> OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance {
+        var appearance = configuration.labels.poi
+        appearance.sizePx = 12
+        appearance.fillColor = SIMD3<Float>(0.55, 0.53, 0.50)
+        return appearance
+    }
+
+    // MARK: - Builders
+
+    /// Transparent no-op fill for known-but-unstyled area features (keeps them off
+    /// the red debug fallback while still consuming the feature).
+    private var hiddenStyle: FeatureStyle {
+        FeatureStyle(
+            key: fallbackKey,
+            color: SIMD4<Float>(0, 0, 0, 0),
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+        )
+    }
+
+    /// The OpenMapTiles `park` layer. `national_park`/`nature_reserve` are real green
+    /// space; `protected_area` is a broad heritage/administrative designation that
+    /// often blankets whole city centres (e.g. Moscow's historic core) - painting it
+    /// green makes the entire city read as a park, so it is not drawn as green.
+    private func parkLayerStyle(cls: String?) -> FeatureStyle {
+        switch cls {
+        case "national_park", "nature_reserve":
+            return polygon(key: 16, color: configuration.layers.park)
+        default:
+            return hiddenStyle
+        }
+    }
+
+    private func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {
+        FeatureStyle(
+            key: key,
+            color: color,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+        )
+    }
+
+    private func line(key: UInt8,
+                      color: SIMD4<Float>,
+                      width: Double,
+                      dashLength: Double = 0,
+                      dashGap: Double = 0) -> FeatureStyle {
+        FeatureStyle(
+            key: key,
+            color: color,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width,
+                                                                         lineCapRound: true,
+                                                                         lineJoinRound: true,
+                                                                         dashLength: dashLength,
+                                                                         dashGap: dashGap)
+        )
+    }
+
+    private func pointLabel(key: UInt8,
+                            appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> FeatureStyle {
+        FeatureStyle(
+            key: key,
+            color: SIMD4<Float>(0, 0, 0, 0),
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
+            labelTextStyle: labelTextStyle(key: Int(key), appearance: appearance)
+        )
+    }
+
+    /// Road border = the fill colour darkened and made fully opaque - a border of
+    /// the same hue but darker, never see-through, drawn under the lighter fill.
+    private func roadCasingColor(from fill: SIMD4<Float>) -> SIMD4<Float> {
+        SIMD4<Float>(max(fill.x - 0.20, 0.0),
+                     max(fill.y - 0.20, 0.0),
+                     max(fill.z - 0.20, 0.0),
+                     1.0)
+    }
+
+    private func makeRoadGeometry(width: Double) -> TileMvtParser.ParseGeometryStyleData {
+        TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: true, lineJoinRound: true)
+    }
+
+    private func makeDashedRoadGeometry(width: Double,
+                                        dashLength: Double,
+                                        dashGap: Double) -> TileMvtParser.ParseGeometryStyleData {
+        TileMvtParser.ParseGeometryStyleData(lineWidth: width,
+                                             lineCapRound: true,
+                                             lineJoinRound: false,
+                                             dashLength: dashLength,
+                                             dashGap: dashGap)
+    }
+
+    private func labelTextStyle(key: Int,
+                                appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> LabelTextStyle {
+        LabelTextStyle(key: key,
+                       fillColor: appearance.fillColor,
+                       strokeColor: appearance.strokeColor,
+                       strokeWidthPx: appearance.strokeWidthPx,
+                       sizePx: appearance.sizePx,
+                       weight: appearance.weight)
+    }
+
+    private func roadLabelPriority(cls: String?) -> Int {
+        switch cls {
+        case "motorway": return 95
+        case "trunk": return 90
+        case "primary": return 80
+        case "secondary": return 78
+        case "tertiary": return 74
+        case "minor": return 50
+        default: return 30
+        }
+    }
+
+    // MARK: - Property helpers
+
+    private func isCapital(_ props: [String: VectorTile_Tile.Value]) -> Bool {
+        if let capital = parseIntValue(props["capital"]), capital > 0 {
+            return true
+        }
+        return false
+    }
+
+    private func parseIntValue(_ value: VectorTile_Tile.Value?) -> Int? {
+        guard let value else {
+            return nil
+        }
+        if value.hasIntValue {
+            return Int(value.intValue)
+        }
+        if value.hasUintValue {
+            return Int(value.uintValue)
+        }
+        if value.hasSintValue {
+            return Int(value.sintValue)
+        }
+        if value.hasDoubleValue {
+            return Int(value.doubleValue)
+        }
+        if value.hasFloatValue {
+            return Int(value.floatValue)
+        }
+        if value.hasStringValue {
+            return Int(value.stringValue.trimmingCharacters(in: .whitespaces))
+        }
+        return nil
+    }
+}

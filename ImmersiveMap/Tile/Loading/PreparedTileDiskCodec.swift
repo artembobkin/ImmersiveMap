@@ -25,6 +25,9 @@ enum PreparedTileDiskCodec {
         let houseNumbersEnabled: Bool
         let houseNumbersMinimumZoom: UInt32
         let addTestBorders: Bool
+        // ETag of the raw tile this prepared tile was derived from; lets the cache
+        // self-invalidate when the server content at the same URL changes.
+        let sourceETag: String
         let groundVertices: Data
         let groundVertexCount: UInt32
         let groundIndices: Data
@@ -419,7 +422,8 @@ enum PreparedTileDiskCodec {
     }
 
     static func encode(preparedTile: PreparedTileCPU,
-                       cacheIdentity: PreparedTileCacheIdentity) throws -> Data {
+                       cacheIdentity: PreparedTileCacheIdentity,
+                       sourceETag: String = "") throws -> Data {
         let entry = try Entry(
             preparedFormatVersion: cacheIdentity.preparedFormatVersion,
             styleRevision: cacheIdentity.styleRevision,
@@ -434,6 +438,7 @@ enum PreparedTileDiskCodec {
             houseNumbersEnabled: cacheIdentity.houseNumbersEnabled,
             houseNumbersMinimumZoom: cacheIdentity.houseNumbersMinimumZoom,
             addTestBorders: cacheIdentity.addTestBorders,
+            sourceETag: sourceETag,
             groundVertices: encodePODArray(preparedTile.ground.vertices),
             groundVertexCount: encodeUInt32(preparedTile.ground.vertices.count, field: "Ground.vertices.count"),
             groundIndices: encodePODArray(preparedTile.ground.indices),
@@ -485,7 +490,8 @@ enum PreparedTileDiskCodec {
 
     static func decode(data: Data,
                        expectedTile: Tile,
-                       cacheIdentity: PreparedTileCacheIdentity) throws -> PreparedTileCPU {
+                       cacheIdentity: PreparedTileCacheIdentity,
+                       expectedSourceETag: String? = nil) throws -> PreparedTileCPU {
         let decoder = PropertyListDecoder()
         let entry = try decoder.decode(Entry.self, from: data)
 
@@ -501,7 +507,8 @@ enum PreparedTileDiskCodec {
               entry.labelFallbackPolicy == cacheIdentity.labelFallbackPolicy,
               entry.houseNumbersEnabled == cacheIdentity.houseNumbersEnabled,
               entry.houseNumbersMinimumZoom == cacheIdentity.houseNumbersMinimumZoom,
-              entry.addTestBorders == cacheIdentity.addTestBorders else {
+              entry.addTestBorders == cacheIdentity.addTestBorders,
+              expectedSourceETag.map({ entry.sourceETag == $0 }) ?? true else {
             throw PreparedTileDiskCodecError.invalidMetadata
         }
 

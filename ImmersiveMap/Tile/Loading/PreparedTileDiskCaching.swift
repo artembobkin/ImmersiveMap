@@ -26,6 +26,7 @@ struct PreparedTileCacheIdentity {
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
         var hasher = StableFNV1aHasher()
         hasher.combine(network.tileBaseURL.absoluteString)
+        hasher.combine(String(network.cacheIdentity))
         switch network.authorizationMode {
         case .bearerHeader:
             hasher.combine("bearerHeader")
@@ -37,7 +38,7 @@ struct PreparedTileCacheIdentity {
 }
 
 final class PreparedTileDiskCaching {
-    static let preparedFormatVersion: UInt32 = 18
+    static let preparedFormatVersion: UInt32 = 21
 
     private let cacheRootDirectory: URL
     private let cacheDirectory: URL
@@ -79,7 +80,10 @@ final class PreparedTileDiskCaching {
         }
     }
 
-    func requestPreparedDiskCached(tile: Tile) async -> PreparedTileCPU? {
+    /// Loads the cached prepared tile. When `matchingETag` is non-nil the entry is
+    /// returned only if it was derived from that exact raw-tile ETag (content-fresh
+    /// reuse); nil accepts any cached entry regardless of ETag (offline fallback).
+    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileCPU? {
         let cachePath = cachePathFor(tile: tile)
         guard let data = loadCachedFile(at: cachePath) else {
             return nil
@@ -88,21 +92,30 @@ final class PreparedTileDiskCaching {
         do {
             return try PreparedTileDiskCodec.decode(data: data,
                                                     expectedTile: tile,
-                                                    cacheIdentity: cacheIdentity)
+                                                    cacheIdentity: cacheIdentity,
+                                                    expectedSourceETag: matchingETag)
+        } catch PreparedTileDiskCodecError.invalidMetadata {
+            // Benign identity/ETag mismatch (e.g. the raw tile's ETag changed): keep
+            // the file. A fresh parse overwrites it atomically, and meanwhile it stays
+            // available for the offline fallback. Deleting here would risk a rendering
+            // hole if the load is cancelled before the re-save.
+            return nil
         } catch {
+            // Genuine corruption / unreadable payload: evict it.
             removeFromDisk(tile: tile)
             return nil
         }
     }
 
-    func saveOnDisk(tile: Tile, preparedTile: PreparedTileCPU) {
+    func saveOnDisk(tile: Tile, preparedTile: PreparedTileCPU, sourceETag: String?) {
         guard preparedTile.tile == tile else {
             return
         }
         let cachePath = cachePathFor(tile: tile)
         do {
             let data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                        cacheIdentity: cacheIdentity)
+                                                        cacheIdentity: cacheIdentity,
+                                                        sourceETag: sourceETag ?? "")
             try saveToCache(data: data, for: cachePath)
         } catch {
             #if DEBUG

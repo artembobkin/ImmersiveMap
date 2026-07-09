@@ -30,7 +30,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         let output = await captureStandardOutput {
             let result = await downloader.downloadResult(tile: Tile(x: 586, y: 786, z: 11))
-            XCTAssertEqual(result, .success(responseData))
+            XCTAssertEqual(result, .success(responseData, etag: nil))
         }
 
         XCTAssertEqual(output, "")

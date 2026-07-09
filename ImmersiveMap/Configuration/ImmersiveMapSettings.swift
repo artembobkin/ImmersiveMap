@@ -225,32 +225,46 @@ public struct ImmersiveMapSettings: Equatable {
             public var tileBaseURL: URL
             public var authorizationToken: String?
             public var authorizationMode: AuthorizationMode
+            /// Provider `configurationFingerprint`, folded into the raw and prepared
+            /// disk-cache namespaces so a provider/content change invalidates the
+            /// caches even when the base URL is unchanged (e.g. a server-side layer
+            /// was added). 0 means "not provider-derived".
+            public var cacheIdentity: UInt64
 
             public init(maxConcurrentFetches: Int,
                         pendingRequestQueueCapacity: Int,
                         tileBaseURL: URL = URL(string: "https://example.com/api/v1/map/tiles")!,
                         authorizationToken: String? = nil,
-                        authorizationMode: AuthorizationMode = .bearerHeader) {
+                        authorizationMode: AuthorizationMode = .bearerHeader,
+                        cacheIdentity: UInt64 = 0) {
                 self.maxConcurrentFetches = maxConcurrentFetches
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
                 self.tileBaseURL = tileBaseURL
                 self.authorizationToken = authorizationToken
                 self.authorizationMode = authorizationMode
+                self.cacheIdentity = cacheIdentity
             }
         }
 
         public struct CacheSettings: Equatable {
             public var clearDiskCachesOnLaunch: Bool
-            public var rawDiskTimeToLive: TimeInterval
+            /// Raw HTTP tile cache (URLSession's URLCache). When false, every tile
+            /// download goes to the network (still revalidated by the server ETag).
+            public var urlCacheEnabled: Bool
+            /// On-disk cache of parsed/tessellated tiles. When false, tiles are
+            /// re-parsed from the raw bytes on every load.
+            public var preparedTileCacheEnabled: Bool
             public var preparedDiskTimeToLive: TimeInterval
             public var memoryCacheSizeInBytes: Int
 
             public init(clearDiskCachesOnLaunch: Bool,
-                        rawDiskTimeToLive: TimeInterval,
+                        urlCacheEnabled: Bool = true,
+                        preparedTileCacheEnabled: Bool = true,
                         preparedDiskTimeToLive: TimeInterval,
                         memoryCacheSizeInBytes: Int) {
                 self.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
-                self.rawDiskTimeToLive = rawDiskTimeToLive
+                self.urlCacheEnabled = urlCacheEnabled
+                self.preparedTileCacheEnabled = preparedTileCacheEnabled
                 self.preparedDiskTimeToLive = preparedDiskTimeToLive
                 self.memoryCacheSizeInBytes = memoryCacheSizeInBytes
             }
@@ -789,7 +803,6 @@ public struct ImmersiveMapSettings: Equatable {
                                                                   tileBaseURL: MapboxTileProvider(accessToken: nil).tileSource.tileBaseURL,
                                                                   authorizationMode: .accessTokenQuery(parameterName: "access_token")),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
-                                                              rawDiskTimeToLive: 7 * 24 * 60 * 60,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
                                                               memoryCacheSizeInBytes: 512 * 1024 * 1024),
                             parsing: TileSettings.ParsingSettings(addTestBorders: false)),
@@ -818,7 +831,7 @@ public struct ImmersiveMapSettings: Equatable {
                                                           far: 6000.0,
                                                           radiusScale: 10.5)),
         style: StyleSettings(preparedTileStyleRevision: 85,
-                             flatSeparateRoadRenderingMinimumZoom: 12,
+                             flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
                              fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
                              baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
@@ -884,6 +897,7 @@ public extension ImmersiveMapSettings {
         settings.tiles.network.tileBaseURL = tileProvider.tileSource.tileBaseURL
         settings.tiles.network.authorizationToken = tileProvider.tileSource.accessToken
         settings.tiles.network.authorizationMode = tileProvider.tileSource.authorization
+        settings.tiles.network.cacheIdentity = tileProvider.configurationFingerprint
         if let maximumTileZoomLevel = tileProvider.maximumTileZoomLevel {
             settings.tiles.coverage.maximumZoomLevel = maximumTileZoomLevel
         }
@@ -907,15 +921,19 @@ public extension ImmersiveMapSettings {
     }
 
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
-                      rawDiskTimeToLive: TimeInterval? = nil,
+                      urlCacheEnabled: Bool? = nil,
+                      preparedTileCacheEnabled: Bool? = nil,
                       preparedDiskTimeToLive: TimeInterval? = nil,
                       memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
         var settings = self
         if let clearDiskCachesOnLaunch {
             settings.tiles.cache.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
         }
-        if let rawDiskTimeToLive {
-            settings.tiles.cache.rawDiskTimeToLive = rawDiskTimeToLive
+        if let urlCacheEnabled {
+            settings.tiles.cache.urlCacheEnabled = urlCacheEnabled
+        }
+        if let preparedTileCacheEnabled {
+            settings.tiles.cache.preparedTileCacheEnabled = preparedTileCacheEnabled
         }
         if let preparedDiskTimeToLive {
             settings.tiles.cache.preparedDiskTimeToLive = preparedDiskTimeToLive

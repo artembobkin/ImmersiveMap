@@ -4,47 +4,36 @@
 import Foundation
 
 final class DefaultTileLoadPipeline: TileLoadPipeline {
-    private let preparedTileDiskCaching: PreparedTileDiskCaching
-    private let tileDiskCaching: TileDiskCaching
+    // nil when the prepared-tile cache is disabled; the pipeline then always parses
+    // from raw bytes and never persists the parsed result.
+    private let preparedTileDiskCaching: PreparedTileDiskCaching?
     private let tileDownloader: TileDownloader
     private weak var tileRenderStore: TileRenderStore?
 
     init(tileRenderStore: TileRenderStore,
          config: ImmersiveMapSettings,
          preparedTileCacheIdentity: PreparedTileCacheIdentity) {
-        self.preparedTileDiskCaching = PreparedTileDiskCaching(config: config,
-                                                               cacheIdentity: preparedTileCacheIdentity)
-        self.tileDiskCaching = TileDiskCaching(config: config)
+        self.preparedTileDiskCaching = config.tiles.cache.preparedTileCacheEnabled
+            ? PreparedTileDiskCaching(config: config, cacheIdentity: preparedTileCacheIdentity)
+            : nil
         self.tileDownloader = TileDownloader(config: config)
         self.tileRenderStore = tileRenderStore
     }
 
-    func requestPreparedDiskCached(tile: Tile) async -> PreparedTileCPU? {
-        await preparedTileDiskCaching.requestPreparedDiskCached(tile: tile)
-    }
-
-    func requestDiskCached(tile: Tile) async -> Data? {
-        await tileDiskCaching.requestDiskCached(tile: tile)
+    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileCPU? {
+        await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: matchingETag)
     }
 
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
         await tileDownloader.downloadResult(tile: tile)
     }
 
-    func savePreparedOnDisk(tile: Tile, preparedTile: PreparedTileCPU) {
-        preparedTileDiskCaching.saveOnDisk(tile: tile, preparedTile: preparedTile)
-    }
-
-    func saveOnDisk(tile: Tile, data: Data) {
-        tileDiskCaching.saveOnDisk(tile: tile, data: data)
+    func savePreparedOnDisk(tile: Tile, preparedTile: PreparedTileCPU, sourceETag: String?) {
+        preparedTileDiskCaching?.saveOnDisk(tile: tile, preparedTile: preparedTile, sourceETag: sourceETag)
     }
 
     func removePreparedFromDisk(tile: Tile) {
-        preparedTileDiskCaching.removeFromDisk(tile: tile)
-    }
-
-    func removeFromDisk(tile: Tile) {
-        tileDiskCaching.removeFromDisk(tile: tile)
+        preparedTileDiskCaching?.removeFromDisk(tile: tile)
     }
 
     func prepare(tile: Tile, data: Data) async -> PreparedTileLoadResult? {
