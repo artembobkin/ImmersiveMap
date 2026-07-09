@@ -94,34 +94,35 @@ final class TileTextLabelsBuilder {
         let retainedCount = BaseLabelDetailTier.retainedLabelCount(labelCount: builtLabels.count, tier: tier)
         let retainedLabels = builtLabels.prefix(retainedCount)
 
-        var verticesByStyleKey: [Int: [LabelVertex]] = [:]
-        var iconVerticesByStyleKey: [Int: [LabelVertex]] = [:]
-        var styleByKey: [Int: LabelTextStyle] = [:]
+        var verticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
+        var iconVerticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
+        var styleByIdentity: [LabelRunStyleIdentity: LabelTextStyle] = [:]
         var placementInputs: [TextLabelPlacementInput] = []
         placementInputs.reserveCapacity(retainedCount)
 
         for (compactIndex, builtLabel) in retainedLabels.enumerated() {
             let labelIndex = simd_int1(compactIndex)
-            styleByKey[builtLabel.style.key] = builtLabel.style
+            let identity = LabelRunStyleIdentity(builtLabel.style)
+            styleByIdentity[identity] = builtLabel.style
             placementInputs.append(builtLabel.placementInput)
-            verticesByStyleKey[builtLabel.style.key, default: []].append(contentsOf: remappedVertices(builtLabel.textVertices,
-                                                                                                       labelIndex: labelIndex))
+            verticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.textVertices,
+                                                                                        labelIndex: labelIndex))
             if builtLabel.iconVertices.isEmpty == false {
-                iconVerticesByStyleKey[builtLabel.style.key, default: []].append(contentsOf: remappedVertices(builtLabel.iconVertices,
-                                                                                                               labelIndex: labelIndex))
+                iconVerticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.iconVertices,
+                                                                                                labelIndex: labelIndex))
             }
         }
 
         var glyphRuns: [PreparedTileCPU.TextGlyphRun] = []
         var poiIconRuns: [PreparedTileCPU.PoiIconRun] = []
-        let sortedStyleKeys = styleByKey.keys.sorted()
-        for styleKey in sortedStyleKeys {
-            guard let style = styleByKey[styleKey] else { continue }
-            if let vertices = verticesByStyleKey[styleKey], vertices.isEmpty == false {
+        let sortedIdentities = styleByIdentity.keys.sorted(by: LabelRunStyleIdentity.orderedBefore)
+        for identity in sortedIdentities {
+            guard let style = styleByIdentity[identity] else { continue }
+            if let vertices = verticesByStyle[identity], vertices.isEmpty == false {
                 glyphRuns.append(PreparedTileCPU.TextGlyphRun(style: style,
                                                               localGlyphVertices: vertices))
             }
-            if let iconVertices = iconVerticesByStyleKey[styleKey], iconVertices.isEmpty == false {
+            if let iconVertices = iconVerticesByStyle[identity], iconVertices.isEmpty == false {
                 poiIconRuns.append(PreparedTileCPU.PoiIconRun(style: style,
                                                               localIconVertices: iconVertices))
             }
@@ -130,6 +131,49 @@ final class TileTextLabelsBuilder {
         return PreparedTileCPU.TextLabelSet(placementInputs: placementInputs,
                                             glyphRuns: glyphRuns,
                                             poiIconRuns: poiIconRuns)
+    }
+
+    /// Идентичность гомогенного glyph/icon-run: всё, что применяет код отрисовки лейблов
+    /// на этапе энкодинга - атлас-текстура (через `weight`) и uniform-цвета fill/stroke.
+    /// `sizePx` намеренно исключён: он уже запечён в геометрию вершин и на отрисовке
+    /// повторно не применяется, поэтому лейблы, отличающиеся только размером, остаются
+    /// в одном run.
+    ///
+    /// Группировка по этой идентичности (а не только по `style.key`) держит каждый run
+    /// самосогласованным, даже когда провайдер переиспользует один `key` для нескольких
+    /// оформлений - например, OpenMapTiles/OSM кладут bold-города и thin-посёлки под
+    /// `key = 70`. Смешивание весов в run с одной привязанной текстурой заставляло глифы,
+    /// построенные по другому атласу, сэмплиться из неверной области = мусор вместо букв.
+    private struct LabelRunStyleIdentity: Hashable {
+        let key: Int
+        let weight: LabelFontWeight
+        let fillColor: SIMD3<Float>
+        let strokeColor: SIMD3<Float>
+        let strokeWidthPx: Float
+
+        init(_ style: LabelTextStyle) {
+            self.key = style.key
+            self.weight = style.weight
+            self.fillColor = style.fillColor
+            self.strokeColor = style.strokeColor
+            self.strokeWidthPx = style.strokeWidthPx
+        }
+
+        /// Детерминированный порядок отрисовки: сначала по `key` (совпадает с прежним
+        /// `styleByKey.keys.sorted()`, когда ключи уникальны), затем по остальным полям,
+        /// чтобы совпавшие ключи разбивались в стабильную последовательность.
+        static func orderedBefore(_ lhs: LabelRunStyleIdentity, _ rhs: LabelRunStyleIdentity) -> Bool {
+            if lhs.key != rhs.key { return lhs.key < rhs.key }
+            if lhs.weight.rawValue != rhs.weight.rawValue { return lhs.weight.rawValue < rhs.weight.rawValue }
+            if lhs.strokeWidthPx != rhs.strokeWidthPx { return lhs.strokeWidthPx < rhs.strokeWidthPx }
+            for index in 0..<3 where lhs.fillColor[index] != rhs.fillColor[index] {
+                return lhs.fillColor[index] < rhs.fillColor[index]
+            }
+            for index in 0..<3 where lhs.strokeColor[index] != rhs.strokeColor[index] {
+                return lhs.strokeColor[index] < rhs.strokeColor[index]
+            }
+            return false
+        }
     }
 
     private static func remappedVertices(_ vertices: [LabelVertex], labelIndex: simd_int1) -> [LabelVertex] {
