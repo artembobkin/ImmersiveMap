@@ -277,6 +277,6 @@ public extension OpenMapTilesDefaultMapStyleConfiguration.LabelStyles {
             strokeWidthPx: 3.2, sizePx: 19, weight: .thin),
         road: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 3.6, sizePx: 17, weight: .bold)
+            strokeWidthPx: 3.6, sizePx: 34, weight: .bold)
     )
 }

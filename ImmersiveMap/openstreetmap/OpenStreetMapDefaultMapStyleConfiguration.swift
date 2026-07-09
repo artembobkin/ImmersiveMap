@@ -211,7 +211,7 @@ public extension OpenStreetMapDefaultMapStyleConfiguration.LabelStyles {
         road: OpenStreetMapDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.42, 0.41, 0.39),
                                                                        strokeColor: SIMD3<Float>(1, 1, 1),
                                                                        strokeWidthPx: 3.0,
-                                                                       sizePx: 15,
+                                                                       sizePx: 30,
                                                                        weight: .thin),
         boundary: OpenStreetMapDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.42, 0.42, 0.44),
                                                                            strokeColor: SIMD3<Float>(1, 1, 1),

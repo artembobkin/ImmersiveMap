@@ -114,7 +114,7 @@ final class OpenStreetMapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(labels.poi.strokeWidthPx, 3.6, accuracy: 0.0001)
         XCTAssertEqual(labels.water.sizePx, 18, accuracy: 0.0001)
         XCTAssertEqual(labels.water.strokeWidthPx, 3.1, accuracy: 0.0001)
-        XCTAssertEqual(labels.road.sizePx, 15, accuracy: 0.0001)
+        XCTAssertEqual(labels.road.sizePx, 30, accuracy: 0.0001)
         XCTAssertEqual(labels.road.strokeWidthPx, 3.0, accuracy: 0.0001)
         XCTAssertEqual(labels.boundary.sizePx, 14, accuracy: 0.0001)
         XCTAssertEqual(labels.boundary.strokeWidthPx, 2.6, accuracy: 0.0001)
