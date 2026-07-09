@@ -1,14 +1,21 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import Foundation
 
 /// Third first-party provider: self-hosted OpenMapTiles-schema vector tiles
 /// (the ImmersiveMap Tiles service backed by an OpenFreeMap planet). Rendered by
-/// `OpenMapTilesDefaultMapStyle`, styled in the spirit of the Mapbox default but
+/// `ImmersiveMapTilesDefaultMapStyle`, styled in the spirit of the Mapbox default but
 /// reading the OpenMapTiles layer/field contract.
-public struct OpenMapTilesTileProvider: ImmersiveMapTileProvider {
+public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     public static let defaultMaximumTileZoomLevel = 14
+
+    /// Base URL of the hosted ImmersiveMap Tiles service. Used as the out-of-the-box
+    /// default so a bare `ImmersiveMapView()` renders without any provider wiring.
+    public static let defaultTileBaseURL = URL(string: "https://46.17.97.158.sslip.io/tiles")!
+
+    /// Manifest URL of the hosted night-lights tile set served alongside the tiles.
+    public static let defaultNightLightsManifestURL = URL(string: "https://46.17.97.158.sslip.io/night-lights/v1/night_lights_manifest.json")!
 
     /// Manual "invalidate every cached tile" lever: bump to force all clients to
     /// re-fetch and re-parse. Routine content updates at a stable URL no longer need
@@ -19,9 +26,9 @@ public struct OpenMapTilesTileProvider: ImmersiveMapTileProvider {
     public let tileBaseURL: URL
     public let apiKey: String?
 
-    public var id: String { "openmaptiles" }
+    public var id: String { "immersivemaptiles" }
 
-    public var cacheNamespace: String { "openmaptiles" }
+    public var cacheNamespace: String { "immersivemaptiles" }
 
     public var configurationFingerprint: UInt64 {
         var hasher = StableFNV1aHasher()
@@ -35,7 +42,7 @@ public struct OpenMapTilesTileProvider: ImmersiveMapTileProvider {
     }
 
     public var tileSource: ImmersiveMapTileSource {
-        .openMapTiles(tileBaseURL: tileBaseURL, apiKey: apiKey)
+        .immersiveMapTiles(tileBaseURL: tileBaseURL, apiKey: apiKey)
     }
 
     public var maximumTileZoomLevel: Int? {
@@ -44,45 +51,45 @@ public struct OpenMapTilesTileProvider: ImmersiveMapTileProvider {
 
     /// - Parameters:
     ///   - tileBaseURL: base of the tile endpoint, e.g. `http://host:8080/tiles`.
-    ///     The loader appends `/{z}/{x}/{y}.mvt`.
+    ///     The loader appends `/{z}/{x}/{y}.mvt`. Defaults to the hosted service.
     ///   - apiKey: optional API key, sent as `?key=`.
-    public init(tileBaseURL: URL, apiKey: String? = nil) {
+    public init(tileBaseURL: URL = ImmersiveMapTilesProvider.defaultTileBaseURL, apiKey: String? = nil) {
         self.tileBaseURL = tileBaseURL
         self.apiKey = apiKey
     }
 }
 
-extension OpenMapTilesTileProvider: ImmersiveMapTileProviderRuntime {
+extension ImmersiveMapTilesProvider: ImmersiveMapTileProviderRuntime {
     func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        OpenMapTilesVectorTileLabelProviderProfile(settings: settings)
+        ImmersiveMapTilesVectorTileLabelProviderProfile(settings: settings)
     }
 }
 
-public struct OpenMapTilesMapStyle: ImmersiveMapMapStyle {
-    public let configuration: OpenMapTilesDefaultMapStyleConfiguration
+public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
+    public let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
 
     public var configurationFingerprint: UInt64 {
         UInt64(configuration.cacheFingerprint)
     }
 
     public var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        OpenMapTilesProviderVectorTileStyle(configuration: configuration)
+        ImmersiveMapTilesProviderVectorTileStyle(configuration: configuration)
     }
 
-    public init(configuration: OpenMapTilesDefaultMapStyleConfiguration = .openMapTilesDefault) {
+    public init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault) {
         self.configuration = configuration
     }
 }
 
-extension OpenMapTilesMapStyle: ImmersiveMapMapStyleRuntime {
+extension ImmersiveMapTilesMapStyle: ImmersiveMapMapStyleRuntime {
     func makeRuntimeMapStyle(providerID: String,
                              settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        OpenMapTilesDefaultMapStyle(configuration: configuration, settings: settings)
+        ImmersiveMapTilesDefaultMapStyle(configuration: configuration, settings: settings)
     }
 }
 
-private struct OpenMapTilesProviderVectorTileStyle: ImmersiveMapVectorTileStyle {
-    let configuration: OpenMapTilesDefaultMapStyleConfiguration
+private struct ImmersiveMapTilesProviderVectorTileStyle: ImmersiveMapVectorTileStyle {
+    let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
 
     var cacheFingerprint: UInt32 {
         configuration.cacheFingerprint

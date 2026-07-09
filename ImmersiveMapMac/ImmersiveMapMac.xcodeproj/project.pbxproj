@@ -8,15 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		B10000000000000000000001 /* ImmersiveMapMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* ImmersiveMapMacApp.swift */; };
-		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
-		B10000000000000000000016 /* ExampleMapProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* ExampleMapProvider.swift */; };
-/* End PBXBuildFile section */
+		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B10000000000000000000002 /* ImmersiveMapMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapMacApp.swift; sourceTree = "<group>"; };
-		B10000000000000000000005 /* ImmersiveMapMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B10000000000000000000015 /* ExampleMapProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleMapProvider.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		B10000000000000000000005 /* ImmersiveMapMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapMac.app; sourceTree = BUILT_PRODUCTS_DIR; };/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B10000000000000000000006 /* Frameworks */ = {
@@ -41,9 +37,7 @@
 		B10000000000000000000008 /* ImmersiveMapMac */ = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000002 /* ImmersiveMapMacApp.swift */,
-				B10000000000000000000015 /* ExampleMapProvider.swift */,
-			);
+				B10000000000000000000002 /* ImmersiveMapMacApp.swift */,			);
 			path = ImmersiveMapMac;
 			sourceTree = "<group>";
 		};
@@ -129,9 +123,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000000000000000000001 /* ImmersiveMapMacApp.swift in Sources */,
-				B10000000000000000000016 /* ExampleMapProvider.swift in Sources */,
-			);
+				B10000000000000000000001 /* ImmersiveMapMacApp.swift in Sources */,			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import Foundation
@@ -639,7 +639,7 @@ public struct ImmersiveMapSettings: Equatable {
 
         public init(isVisible: Bool = true,
                     title: String = "Immersive map",
-                    copyright: String = "© 2025-2026 Artem Bobkin",
+                    copyright: String = "© 2025-2026 ImmersiveMap contributors",
                     linkURL: URL? = URL(string: "https://x.com/BobkinArtem")) {
             self.isVisible = isVisible
             self.title = title
@@ -734,8 +734,8 @@ public struct ImmersiveMapSettings: Equatable {
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
                 presentation: PresentationSettings,
-                tileProvider: AnyImmersiveMapTileProvider = AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)),
-                mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(MapboxMapStyle()),
+                tileProvider: AnyImmersiveMapTileProvider = AnyImmersiveMapTileProvider(ImmersiveMapTilesProvider()),
+                mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
                 tiles: TileSettings,
                 terrain: TerrainSettings = TerrainSettings(),
                 labels: LabelSettings,
@@ -795,13 +795,14 @@ public struct ImmersiveMapSettings: Equatable {
         presentation: PresentationSettings(automaticTransitionStartZoom: 6.0,
                                            automaticTransitionSpan: 1.0,
                                            globeRadiusScale: 0.14),
-        tileProvider: AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)),
-        mapStyle: AnyImmersiveMapMapStyle(MapboxMapStyle()),
-        tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: 20),
+        tileProvider: AnyImmersiveMapTileProvider(ImmersiveMapTilesProvider()),
+        mapStyle: AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
+        tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel),
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
-                                                                  tileBaseURL: MapboxTileProvider(accessToken: nil).tileSource.tileBaseURL,
-                                                                  authorizationMode: .accessTokenQuery(parameterName: "access_token")),
+                                                                  tileBaseURL: ImmersiveMapTilesProvider.defaultTileBaseURL,
+                                                                  authorizationMode: .bearerHeader,
+                                                                  cacheIdentity: ImmersiveMapTilesProvider().configurationFingerprint),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
                                                               memoryCacheSizeInBytes: 512 * 1024 * 1024),
@@ -829,7 +830,9 @@ public struct ImmersiveMapSettings: Equatable {
                                                           brightnessMax: 1.05,
                                                           near: 0.1,
                                                           far: 6000.0,
-                                                          radiusScale: 10.5)),
+                                                          radiusScale: 10.5),
+                             earth: EarthSceneSettings(nightLights: EarthSceneSettings.NightLightsSettings(isEnabled: false,
+                                                                                                          tileManifestURL: ImmersiveMapTilesProvider.defaultNightLightsManifestURL))),
         style: StyleSettings(preparedTileStyleRevision: 85,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,

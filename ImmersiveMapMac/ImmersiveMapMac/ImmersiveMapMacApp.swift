@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import SwiftUI
@@ -15,8 +15,6 @@ struct ImmersiveMapMacApp: App {
 
 private struct MapScreen: View {
     @State private var camera = ImmersiveMapCameraController()
-    private let tileProvider = MapboxTileProvider(accessToken: ProcessInfo.processInfo.environment["IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN"])
-    private let mapStyle = MapboxMapStyle()
 
     var body: some View {
         ImmersiveMapView()
@@ -30,8 +28,6 @@ private struct MapScreen: View {
                     pitch: .pi / 5
                 )
             )
-            .tileProvider(tileProvider)
-            .mapStyle(mapStyle)
             .enableCameraUIControls()
             .ignoresSafeArea()
     }

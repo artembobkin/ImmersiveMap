@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import SwiftUI
@@ -28,8 +28,7 @@ private struct MapScreen: View {
                     pitch: .pi / 5
                 )
             )
-            .tileProvider(MapboxTileProvider(accessToken: ProcessInfo.processInfo.environment["IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN"]))
-            .mapStyle(MapboxMapStyle())
+            .enableCameraUIControls()
             .ignoresSafeArea()
     }
 }

@@ -1,12 +1,12 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import simd
 
-/// Tunable palette for `OpenMapTilesDefaultMapStyle`. Mirrors the shape of the
+/// Tunable palette for `ImmersiveMapTilesDefaultMapStyle`. Mirrors the shape of the
 /// Mapbox/OpenStreetMap configurations so hosts can recolor the first-party
 /// OpenMapTiles basemap without touching the layer logic.
-public struct OpenMapTilesDefaultMapStyleConfiguration: Equatable {
+public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
     public struct LabelAppearance: Equatable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
@@ -145,29 +145,29 @@ public struct OpenMapTilesDefaultMapStyleConfiguration: Equatable {
     public var layers: LayerStyles
     public var features: FeatureStyles
 
-    public init(labels: LabelStyles = .openMapTilesDefault,
-                layers: LayerStyles = .openMapTilesDefault,
-                features: FeatureStyles = .openMapTilesDefault) {
+    public init(labels: LabelStyles = .immersiveMapTilesDefault,
+                layers: LayerStyles = .immersiveMapTilesDefault,
+                features: FeatureStyles = .immersiveMapTilesDefault) {
         self.labels = labels
         self.layers = layers
         self.features = features
     }
 
-    public static let openMapTilesDefault = OpenMapTilesDefaultMapStyleConfiguration()
+    public static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration()
 
-    public func labels(_ update: (inout LabelStyles) -> Void) -> OpenMapTilesDefaultMapStyleConfiguration {
+    public func labels(_ update: (inout LabelStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
         var copy = self
         update(&copy.labels)
         return copy
     }
 
-    public func layers(_ update: (inout LayerStyles) -> Void) -> OpenMapTilesDefaultMapStyleConfiguration {
+    public func layers(_ update: (inout LayerStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
         var copy = self
         update(&copy.layers)
         return copy
     }
 
-    public func features(_ update: (inout FeatureStyles) -> Void) -> OpenMapTilesDefaultMapStyleConfiguration {
+    public func features(_ update: (inout FeatureStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
         var copy = self
         update(&copy.features)
         return copy
@@ -212,8 +212,8 @@ public struct OpenMapTilesDefaultMapStyleConfiguration: Equatable {
     }
 }
 
-public extension OpenMapTilesDefaultMapStyleConfiguration.LayerStyles {
-    static let openMapTilesDefault = OpenMapTilesDefaultMapStyleConfiguration.LayerStyles(
+public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
+    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles(
         land: SIMD4<Float>(0.941, 0.937, 0.910, 1.0),
         water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
         // Landcover greens are opaque: they cover whole tiles (a tile can be entirely
@@ -233,12 +233,12 @@ public extension OpenMapTilesDefaultMapStyleConfiguration.LayerStyles {
         industrial: SIMD4<Float>(0.906, 0.894, 0.878, 1.0),
         boundary: SIMD4<Float>(0.52, 0.15, 0.72, 0.9),
         aeroway: SIMD4<Float>(0.886, 0.882, 0.902, 1.0),
-        roads: .openMapTilesDefault
+        roads: .immersiveMapTilesDefault
     )
 }
 
-public extension OpenMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
-    static let openMapTilesDefault = OpenMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
+public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
+    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
         motorway: SIMD4<Float>(0.984, 0.792, 0.549, 1.0),
         trunk: SIMD4<Float>(0.984, 0.843, 0.604, 1.0),
         primary: SIMD4<Float>(0.992, 0.898, 0.663, 1.0),
@@ -252,30 +252,30 @@ public extension OpenMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
     )
 }
 
-public extension OpenMapTilesDefaultMapStyleConfiguration.FeatureStyles {
-    static let openMapTilesDefault = OpenMapTilesDefaultMapStyleConfiguration.FeatureStyles(
+public extension ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles {
+    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles(
         buildingFillColor: SIMD4<Float>(0.859, 0.835, 0.796, 1.0)
     )
 }
 
-public extension OpenMapTilesDefaultMapStyleConfiguration.LabelStyles {
-    static let openMapTilesDefault = OpenMapTilesDefaultMapStyleConfiguration.LabelStyles(
-        city: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles {
+    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles(
+        city: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.20, 0.20, 0.22), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 4.6, sizePx: 30, weight: .bold),
-        town: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        town: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 3.8, sizePx: 22, weight: .thin),
-        country: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        country: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 4.2, sizePx: 26, weight: .bold),
-        poi: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        poi: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 3.6, sizePx: 16, weight: .thin),
-        water: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        water: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.24, 0.44, 0.68), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 3.2, sizePx: 19, weight: .thin),
-        road: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        road: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
             strokeWidthPx: 3.6, sizePx: 34, weight: .bold)
     )

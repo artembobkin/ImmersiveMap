@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
@@ -44,7 +44,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     func testExistingProviderWaterAliasSuppressesLocalizedFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .russian,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: try makeProviderAtlanticOceanTile().serializedData())
+                                                  mvtData: try makeProviderAtlanticOceanTile().serializedData(),
+                                                  tileProvider: AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)))
 
         XCTAssertEqual(labels.filter { $0 == "Atlantic Ocean" }.count, 1)
         XCTAssertFalse(labels.contains("Атлантический океан"))
@@ -95,7 +96,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                                   mvtData: try makeProviderAtlanticOceanTile(name: "Oceano Atlântico",
                                                                                             englishName: "Atlantic Ocean").serializedData(),
                                                   glyphCoverage: Self.bundledGlyphCoverage(),
-                                                  fallbackPolicy: .localFirst)
+                                                  fallbackPolicy: .localFirst,
+                                                  tileProvider: AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)))
 
         XCTAssertEqual(labels.filter { $0 == "Oceano Atlântico" }.count, 1)
         XCTAssertFalse(labels.contains("Atlantic Ocean"))
@@ -255,9 +257,13 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         tile: Tile = Tile(x: 0, y: 0, z: 0),
         mvtData: Data? = nil,
         glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests,
-        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
+        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international,
+        tileProvider: AnyImmersiveMapTileProvider? = nil
     ) throws -> [String] {
         var config = ImmersiveMapSettings.default
+        if let tileProvider {
+            config = config.tileProvider(tileProvider)
+        }
         config.labels.language = language
         config.labels.fallbackPolicy = fallbackPolicy
 

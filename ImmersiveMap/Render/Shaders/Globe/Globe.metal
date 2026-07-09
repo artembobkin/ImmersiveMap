@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 #include <metal_stdlib>
@@ -165,7 +165,17 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     out.position = clip;
     out.pointSize = 5.0;
     out.texCoord = float2(t_u, t_v);
-    out.tileLocalUV = tileLocalUV;
+    // Night-lights source tiles are Web Mercator (like the day tiles), so the
+    // per-tile lookup UV must be Mercator-linear in Y. `vertexIn.uv.y` is linear in
+    // the equirect mesh parameter; within a low-zoom tile that spans a large latitude
+    // range it diverges from Mercator and drags the lights off the coastlines (worst
+    // at z0-3). Rebuild the local V from the vertex's true Mercator position, matching
+    // how the day texture derives `t_v`. `sphereV` runs 1 at the north pole to 0 at the
+    // south, so `(1 - sphereV)` is the standard north-top global Mercator V; scaling by
+    // `zPow` and subtracting `tileY` gives the tile-local [0,1] V. Local U is already
+    // Mercator-linear.
+    float tileLocalMercatorV = (1.0 - sphereV) * zPow - float(tileY);
+    out.tileLocalUV = float2(tileLocalUV.x, tileLocalMercatorV);
     out.uvSize = 1.0 / count;
     out.posU = posU;
     out.posV = posV;
@@ -179,25 +189,34 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     return out;
 }
 
-static float3 cinematicNightLightsColor(float2 lights) {
-    float core = saturate(lights.x);
-    float halo = saturate(lights.y);
+static float3 cinematicNightLightsColor(float core, float halo, float glow) {
+    core = saturate(core);
+    halo = saturate(halo);
+    glow = saturate(glow);
 
-    float shapedHalo = pow(halo, 1.25) * (1.0 - core * 0.35);
-    float shapedCore = pow(core, 1.55);
-    float coolHighlight = pow(core, 5.0);
+    // Real city light from orbit reads as warm white, not saturated orange: a gentle
+    // amber-white in faint areas warming toward near-white at the brightest cores. Kept
+    // deliberately pale so dense regions glow rather than turning into a lava sheet.
+    float3 dimColor    = float3(1.00, 0.83, 0.60);
+    float3 cityColor   = float3(1.00, 0.90, 0.74);
+    float3 hotColor    = float3(1.00, 0.97, 0.90);
 
-    float3 haloColor = float3(1.0, 0.54, 0.16);
-    float3 coreColor = float3(1.0, 0.72, 0.40);
-    float3 highlightColor = float3(0.72, 0.86, 1.0);
+    float3 tint = mix(dimColor, cityColor, smoothstep(0.15, 0.55, core));
+    tint = mix(tint, hotColor, smoothstep(0.6, 0.95, core));
 
-    return haloColor * shapedHalo * 0.34
-        + coreColor * shapedCore * 0.62
-        + highlightColor * coolHighlight * 0.16;
+    // Emissive dominated by the actual light (core); the halo and gathered glow only add
+    // a gentle same-hue bleed. Modest gain keeps lit regions as punchy points on dark
+    // ground instead of a filled, blown-out wash.
+    float intensity = pow(core, 1.2) * 1.05
+                    + halo * 0.12
+                    + glow * 0.22;
+
+    return tint * intensity;
 }
 
 struct NightLightsAtlasSample {
-    float2 lights;
+    float2 lights;   // x: sharp core, y: sharp halo at the sample point
+    float glow;      // wide gathered halo bleed used for the emissive glow
     bool isValid;
 };
 
@@ -276,6 +295,15 @@ static NightLightsAtlasSample nightLightsAtlasLights(int3 drawnTile,
     int selectedZoom = -1;
     bool hasSample = false;
 
+    // Selected entry parameters, kept so we can gather a wide halo after the best
+    // covering tile has been chosen.
+    uint selectedPage = 0;
+    float2 selectedCenterUV = float2(0.0);
+    float2 selectedUVOrigin = float2(0.0);
+    float2 selectedUVScale = float2(0.0);
+
+    float2 atlasHalfTexel = 0.5 / float2(page0.get_width(), page0.get_height());
+
     for (uint index = 0; index < entryCount; ++index) {
         NightLightsAtlasEntry entry = atlasEntries[index];
         int pageIndex = entry.tileAndPage.w;
@@ -292,7 +320,6 @@ static NightLightsAtlasSample nightLightsAtlasLights(int3 drawnTile,
         float2 uvOrigin = entry.uvOriginAndScale.xy;
         float2 uvScale = entry.uvOriginAndScale.zw;
         float2 atlasUV = uvOrigin + clamp(sourceTileUV, float2(0.0), float2(1.0)) * uvScale;
-        float2 atlasHalfTexel = 0.5 / float2(page0.get_width(), page0.get_height());
         atlasUV = clamp(atlasUV,
                         uvOrigin + atlasHalfTexel,
                         uvOrigin + uvScale - atlasHalfTexel);
@@ -307,10 +334,48 @@ static NightLightsAtlasSample nightLightsAtlasLights(int3 drawnTile,
                                                     page6,
                                                     page7);
         selectedZoom = sourceTile.z;
+        selectedPage = uint(pageIndex);
+        selectedCenterUV = atlasUV;
+        selectedUVOrigin = uvOrigin;
+        selectedUVScale = uvScale;
         hasSample = true;
     }
 
-    return NightLightsAtlasSample{selectedLights, hasSample};
+    // Spread a soft emissive bleed by gathering the pre-blurred halo channel in two
+    // rings around the sample - a cheap, tile-local approximation of a bloom that lets
+    // city light leak beyond its source texels. Gated on there being light at all so
+    // the dark ocean/countryside pays nothing.
+    float glow = 0.0;
+    if (hasSample && (selectedLights.x + selectedLights.y) > 0.004) {
+        float2 minUV = selectedUVOrigin + atlasHalfTexel;
+        float2 maxUV = selectedUVOrigin + selectedUVScale - atlasHalfTexel;
+        float glowAccum = selectedLights.y;
+        float glowWeight = 1.0;
+        for (int ring = 0; ring < 2; ++ring) {
+            float radius = selectedUVScale.x * (ring == 0 ? 0.012 : 0.028);
+            float ringWeight = (ring == 0 ? 0.7 : 0.35);
+            for (int tap = 0; tap < 8; ++tap) {
+                float angle = (float(tap) / 8.0) * 6.28318530718;
+                float2 offset = float2(cos(angle), sin(angle)) * radius;
+                float2 tapUV = clamp(selectedCenterUV + offset, minUV, maxUV);
+                float tapHalo = nightLightsAtlasPageLights(selectedPage,
+                                                           tapUV,
+                                                           page0,
+                                                           page1,
+                                                           page2,
+                                                           page3,
+                                                           page4,
+                                                           page5,
+                                                           page6,
+                                                           page7).y;
+                glowAccum += tapHalo * ringWeight;
+                glowWeight += ringWeight;
+            }
+        }
+        glow = glowAccum / glowWeight;
+    }
+
+    return NightLightsAtlasSample{selectedLights, glow, hasSample};
 }
 
 struct GlobeCapAtlasSample {
@@ -452,11 +517,22 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
                                                                         nightLightsAtlasPage5,
                                                                         nightLightsAtlasPage6,
                                                                         nightLightsAtlasPage7);
-            float2 lights = atlasSample.isValid
-                ? atlasSample.lights
-                : float2(0.0);
-            float3 lightColor = cinematicNightLightsColor(lights);
-            color.rgb += lightColor * nightFactor * earthScene.nightLightsIntensity * (1.0 - in.transition);
+            float2 lights = atlasSample.isValid ? atlasSample.lights : float2(0.0);
+            float glow = atlasSample.isValid ? atlasSample.glow : 0.0;
+            float nightLightsGain = nightFactor * earthScene.nightLightsIntensity * (1.0 - in.transition);
+
+            float3 lightColor = cinematicNightLightsColor(lights.x, lights.y, glow);
+            color.rgb += lightColor * nightLightsGain;
+
+            // Atmospheric scatter: at grazing view angles the lit ground is seen through
+            // far more air, so cities near the limb bleed a warm haze into the atmosphere.
+            // This is view-dependent, so it reacts to the camera the way real orbital
+            // imagery does - the key cue that separates "light" from "pasted texture".
+            float3 nightViewDir = normalize(camera.eye - in.worldPos);
+            float grazing = pow(1.0 - saturate(dot(normalize(in.normal), nightViewDir)), 3.5);
+            float lightPresence = saturate(lights.x * 1.5 + lights.y + glow);
+            float3 scatterColor = float3(1.0, 0.78, 0.52);
+            color.rgb += scatterColor * grazing * lightPresence * 0.22 * nightLightsGain;
         }
     }
 

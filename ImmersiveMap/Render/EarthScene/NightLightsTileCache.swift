@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import CoreGraphics
@@ -20,6 +20,7 @@ final class NightLightsTileCache {
 
     private let capacity: Int
     private let loader: (Tile) -> URL?
+    private let urlSession: URLSession
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.NightLightsTileCache.state")
     private let decodeQueue = DispatchQueue(label: "ImmersiveMap.NightLightsTileCache.decode", qos: .utility)
 
@@ -29,9 +30,29 @@ final class NightLightsTileCache {
     private var unavailableTiles: Set<Tile> = []
     private var generation: UInt64 = 0
 
-    init(capacity: Int = 128, loader: @escaping (Tile) -> URL?) {
+    init(capacity: Int = 128,
+         urlSession: URLSession = NightLightsTileCache.makeCachingSession(),
+         loader: @escaping (Tile) -> URL?) {
         self.capacity = max(1, capacity)
+        self.urlSession = urlSession
         self.loader = loader
+    }
+
+    /// Dedicated session whose `URLCache` persists night-lights tiles on disk. The tile
+    /// server marks tiles `immutable` with a one-year `max-age`, so the default protocol
+    /// cache policy serves warm launches straight from disk without a network round-trip.
+    /// Isolated to its own on-disk directory so it never mixes with the vector-tile caches.
+    static func makeCachingSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .useProtocolCachePolicy
+        let cacheDirectory = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("ImmersiveMapNightLightsTiles", isDirectory: true)
+        configuration.urlCache = URLCache(memoryCapacity: 16 * 1024 * 1024,
+                                          diskCapacity: 256 * 1024 * 1024,
+                                          directory: cacheDirectory)
+        return URLSession(configuration: configuration)
     }
 
     func tileData(for tile: Tile) -> NightLightsTileData? {
@@ -78,7 +99,7 @@ final class NightLightsTileCache {
 
     private func decodeAndStore(_ tile: Tile, generation scheduledGeneration: UInt64) {
         guard let url = loader(tile),
-              let decodedTile = Self.decodeTile(tile, from: url) else {
+              let decodedTile = Self.decodeTile(tile, from: url, session: urlSession) else {
             stateQueue.sync {
                 guard generation == scheduledGeneration else {
                     return
@@ -114,8 +135,8 @@ final class NightLightsTileCache {
         tileOrder.append(tile)
     }
 
-    private static func decodeTile(_ tile: Tile, from url: URL) -> NightLightsTileData? {
-        guard let source = imageSource(from: url),
+    private static func decodeTile(_ tile: Tile, from url: URL, session: URLSession) -> NightLightsTileData? {
+        guard let source = imageSource(from: url, session: session),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             return nil
         }
@@ -165,14 +186,33 @@ final class NightLightsTileCache {
         return NightLightsTileData(tile: tile, width: width, height: height, bytes: bytes)
     }
 
-    private static func imageSource(from url: URL) -> CGImageSource? {
+    private static func imageSource(from url: URL, session: URLSession) -> CGImageSource? {
         if url.isFileURL {
             return CGImageSourceCreateWithURL(url as CFURL, nil)
         }
 
-        guard let data = try? Data(contentsOf: url) else {
+        guard let data = cachedData(from: url, session: session) else {
             return nil
         }
         return CGImageSourceCreateWithData(data as CFData, nil)
+    }
+
+    /// Synchronously fetches the tile bytes through the caching session. Runs on the
+    /// serial decode queue, so blocking here mirrors the previous `Data(contentsOf:)`
+    /// behavior while now going through the disk-backed `URLCache`.
+    private static func cachedData(from url: URL, session: URLSession) -> Data? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var resultData: Data?
+        let task = session.dataTask(with: URLRequest(url: url)) { data, response, _ in
+            defer { semaphore.signal() }
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200...299).contains(httpResponse.statusCode) {
+                return
+            }
+            resultData = data
+        }
+        task.resume()
+        semaphore.wait()
+        return resultData
     }
 }

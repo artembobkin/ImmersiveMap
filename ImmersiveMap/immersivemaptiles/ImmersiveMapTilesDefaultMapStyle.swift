@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import simd
@@ -6,17 +6,17 @@ import simd
 /// Default style for the OpenMapTiles-schema first-party provider. Visually in
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
-final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 26
+final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
+    private static let implementationRevision: UInt32 = 27
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
-    private let configuration: OpenMapTilesDefaultMapStyleConfiguration
+    private let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
     private let settings: ImmersiveMapSettings.StyleSettings
     private let mapBaseColors: ImmersiveMapBaseColors
     private let fallbackStyle: FeatureStyle
 
-    init(configuration: OpenMapTilesDefaultMapStyleConfiguration = .openMapTilesDefault,
+    init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault,
          settings: ImmersiveMapSettings.StyleSettings = ImmersiveMapSettings.default.style) {
         self.configuration = configuration
         self.settings = settings
@@ -76,7 +76,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "water_name":
             return waterLabelStyle(props: props)
         case "poi":
-            return pointLabel(key: 72, appearance: configuration.labels.poi)
+            return poiLabelStyle(props: props)
         case "mountain_peak":
             return pointLabel(key: 74, appearance: configuration.labels.poi)
         case "aerodrome_label":
@@ -376,7 +376,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func placeLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
         let cls = props["class"]?.stringValue.lowercased()
-        var appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance
+        var appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance
         switch cls {
         case "continent", "country":
             appearance = configuration.labels.country
@@ -414,6 +414,48 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return pointLabel(key: 73, appearance: appearance)
     }
 
+    // POI: и кружок-иконка, и подпись красятся в цвет категории заведения.
+    // Цвет идёт через LabelTextStyle.fillColor - его использует и фон иконки
+    // (PoiIconStyleUniform.backgroundColor), и заливка текста; глиф иконки белый.
+    // Ключ у всех POI один (72): runs группируются по полной идентичности стиля
+    // (вес + цвета), поэтому разные категории раскладываются в отдельные draw-runs.
+    private func poiLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        var appearance = configuration.labels.poi
+        appearance.fillColor = poiCategoryColor(cls: props["class"]?.stringValue.lowercased(),
+                                                subclass: props["subclass"]?.stringValue.lowercased())
+        return pointLabel(key: 72, appearance: appearance)
+    }
+
+    private func poiCategoryColor(cls: String?, subclass: String?) -> SIMD3<Float> {
+        switch cls ?? subclass {
+        case "restaurant", "fast_food", "food_court", "ice_cream":
+            return SIMD3<Float>(0.85, 0.40, 0.12)   // еда - оранжевый
+        case "cafe", "bakery":
+            return SIMD3<Float>(0.58, 0.37, 0.18)   // кофе/выпечка - коричневый
+        case "bar", "pub", "beer", "alcohol_shop", "nightclub", "wine":
+            return SIMD3<Float>(0.62, 0.16, 0.34)   // бар - винный
+        case "shop", "grocery", "supermarket", "mall", "clothing_store", "convenience",
+             "gift", "hairdresser", "hardware", "laundry", "car", "florist", "jewelry", "shoe":
+            return SIMD3<Float>(0.16, 0.44, 0.78)   // магазины - синий
+        case "lodging":
+            return SIMD3<Float>(0.66, 0.26, 0.60)   // отели - пурпурный
+        case "hospital", "pharmacy", "doctors", "dentist", "clinic":
+            return SIMD3<Float>(0.82, 0.22, 0.26)   // здоровье - красный
+        case "school", "college", "university", "kindergarten", "library":
+            return SIMD3<Float>(0.22, 0.46, 0.52)   // образование - бирюзовый
+        case "museum", "art_gallery", "gallery", "attraction", "artwork", "theatre", "music", "cinema":
+            return SIMD3<Float>(0.46, 0.30, 0.66)   // культура - фиолетовый
+        case "park", "garden", "stadium", "pitch", "sport", "swimming", "golf", "playground", "picnic_site":
+            return SIMD3<Float>(0.22, 0.54, 0.30)   // отдых/природа - зелёный
+        case "bus", "railway", "airport", "aerialway", "fuel", "car_rental", "parking", "harbor", "ferry_terminal":
+            return SIMD3<Float>(0.32, 0.42, 0.55)   // транспорт - сине-серый
+        case "bank", "post", "office", "town_hall", "police", "fire_station", "government", "atm":
+            return SIMD3<Float>(0.40, 0.44, 0.52)   // офисы/госуслуги - серо-синий
+        default:
+            return configuration.labels.poi.fillColor  // прочее - тёмный по умолчанию
+        }
+    }
+
     private func roadLabelStyle(cls: String?) -> FeatureStyle {
         FeatureStyle(
             key: 90,
@@ -425,7 +467,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         )
     }
 
-    private func houseNumberAppearance() -> OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance {
+    private func houseNumberAppearance() -> ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance {
         var appearance = configuration.labels.poi
         appearance.sizePx = 12
         appearance.fillColor = SIMD3<Float>(0.55, 0.53, 0.50)
@@ -487,7 +529,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func pointLabel(key: UInt8,
-                            appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> FeatureStyle {
+                            appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> FeatureStyle {
         FeatureStyle(
             key: key,
             color: SIMD4<Float>(0, 0, 0, 0),
@@ -520,7 +562,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func labelTextStyle(key: Int,
-                                appearance: OpenMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> LabelTextStyle {
+                                appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> LabelTextStyle {
         LabelTextStyle(key: key,
                        fillColor: appearance.fillColor,
                        strokeColor: appearance.strokeColor,

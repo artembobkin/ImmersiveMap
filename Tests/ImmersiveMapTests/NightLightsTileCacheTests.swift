@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
@@ -182,6 +182,68 @@ final class NightLightsTileCacheTests: XCTestCase {
         XCTAssertNotNil(try waitForReadyTile(tile, in: cache))
 
         XCTAssertEqual(loadCount, 2)
+    }
+
+    func testRemoteTileIsServedFromURLCacheWithoutNetwork() throws {
+        let tile = Tile(x: 3, y: 5, z: 6)
+        // A host that does not resolve: if the load path touched the network instead of
+        // the cache the tile would never decode and `waitForReadyTile` would fail.
+        let remoteURL = try XCTUnwrap(URL(string: "https://night-lights.invalid/tiles/6_3_5.jpg"))
+        let jpegData = try makeJPEGData(width: 2, height: 2, bytes: [0, 80, 160, 255])
+
+        let cacheDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.timeoutIntervalForRequest = 2
+        let urlCache = URLCache(memoryCapacity: 8 * 1024 * 1024,
+                                diskCapacity: 8 * 1024 * 1024,
+                                directory: cacheDirectory)
+        configuration.urlCache = urlCache
+        let session = URLSession(configuration: configuration)
+        defer { try? FileManager.default.removeItem(at: cacheDirectory) }
+
+        // Pre-populate the disk-backed URLCache exactly as a prior warm launch would have.
+        let cachedHTTPResponse = try XCTUnwrap(HTTPURLResponse(url: remoteURL,
+                                                               statusCode: 200,
+                                                               httpVersion: "HTTP/1.1",
+                                                               headerFields: ["Content-Type": "image/jpeg"]))
+        urlCache.storeCachedResponse(CachedURLResponse(response: cachedHTTPResponse, data: jpegData),
+                                     for: URLRequest(url: remoteURL))
+
+        let cache = NightLightsTileCache(urlSession: session) { $0 == tile ? remoteURL : nil }
+        cache.prefetchTiles([tile])
+        let data = try waitForReadyTile(tile, in: cache)
+
+        XCTAssertEqual(data.tile, tile)
+        XCTAssertEqual(data.width, 2)
+        XCTAssertEqual(data.height, 2)
+    }
+
+    private func makeJPEGData(width: Int, height: Int, bytes: [UInt8]) throws -> Data {
+        XCTAssertEqual(bytes.count, width * height)
+
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        var mutableBytes = bytes
+        let mutableData = NSMutableData()
+        guard let context = CGContext(data: &mutableBytes,
+                                      width: width,
+                                      height: height,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: width,
+                                      space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithData(mutableData as CFMutableData,
+                                                                 UTType.jpeg.identifier as CFString,
+                                                                 1,
+                                                                 nil) else {
+            throw XCTSkip("Could not create test JPEG data")
+        }
+
+        CGImageDestinationAddImage(destination, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return mutableData as Data
     }
 
     private func makeJPEG(width: Int, height: Int, bytes: [UInt8]) throws -> URL {

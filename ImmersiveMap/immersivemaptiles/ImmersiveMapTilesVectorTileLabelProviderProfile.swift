@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Artem Bobkin.
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
 import Foundation
@@ -7,11 +7,11 @@ import Foundation
 /// are `place`, `water_name`, `poi`, `mountain_peak`, `aerodrome_label` and
 /// `housenumber`; road labels ride the `transportation_name` geometry and are
 /// handled by the style, not here.
-struct OpenMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
+struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
     private let lowZoomOverviewMaximumTileZoom = 4
     private let poiMinimumZoom = 13
 
-    let providerID = "openmaptiles"
+    let providerID = "immersivemaptiles"
     let languagePreferences: VectorTileLabelLanguagePreferences
 
     init(settings: ImmersiveMapSettings) {
