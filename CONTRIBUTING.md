@@ -33,7 +33,7 @@ xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapMac \
 
 - Every hand-written `.swift`, `.metal`, `.h`, `.proto` file starts with the license header:
   ```text
-  // Copyright (c) 2025-2026 Artem Bobkin.
+  // Copyright (c) 2025-2026 ImmersiveMap contributors.
   // SPDX-License-Identifier: MIT
   ```
   Do not add the header to generated files.

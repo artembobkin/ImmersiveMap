@@ -81,16 +81,19 @@ struct ContentView: View {
 
     var body: some View {
         ImmersiveMapView()
-            .camera(
+            .cameraController(
                 camera,
                 position: ImmersiveMapCameraPosition(
                     latitudeDegrees: 55.7558,
                     longitudeDegrees: 37.6173,
-                    zoom: 0
+                    zoom: 0,
+                    bearing: .pi / 10,
+                    pitch: .pi / 5
                 )
             )
             .tileProvider(tileProvider)
             .mapStyle(mapStyle)
+            .enableCameraUIControls()
             .ignoresSafeArea()
     }
 }
