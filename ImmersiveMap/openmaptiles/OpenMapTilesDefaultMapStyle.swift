@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 17
+    private static let implementationRevision: UInt32 = 26
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
@@ -52,7 +52,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "water":
             return polygon(key: 20, color: configuration.layers.water)
         case "waterway":
-            return waterwayStyle(cls: cls)
+            return waterwayStyle(cls: cls, props: props)
         case "landcover":
             return landcoverStyle(cls: cls, subclass: subclass, tileZoom: z)
         case "globallandcover":
@@ -60,7 +60,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "landuse":
             return landuseStyle(cls: cls, tileZoom: z)
         case "park":
-            return parkLayerStyle(cls: cls)
+            return parkLayerStyle(cls: cls, subclass: subclass)
         case "building":
             return buildingStyle(tileZoom: z)
         case "aeroway":
@@ -68,7 +68,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "transportation":
             return transportationStyle(cls: cls, props: props, tileZoom: z)
         case "boundary":
-            return boundaryStyle(props: props)
+            return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":
             return roadLabelStyle(cls: cls)
         case "place":
@@ -95,9 +95,18 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // overlay-maxzoom). Use it there and suppress the sparser OSM `landcover`,
         // which generalises into tile-filling polygons clipped at tile edges (abrupt
         // per-tile colour jumps). OSM landcover takes over from z10 (street detail).
+        //
+        // Порядок отрисовки полигонов - по возрастанию key. Бежевый landuse
+        // (residential/industrial) опущен на key 9, а вся зелень идёт выше (11-18),
+        // иначе парк, лежащий внутри жилого/квартального полигона (leisure=park
+        // приходит как landcover grass/park), перекрывался бы бежевым и выглядел
+        // как земля. Зелень ниже воды (key 20) и дорог.
         guard tileZoom >= 10 else {
             return hiddenStyle
         }
+        // Каждый цвет landcover - на своём key (иначе `styles[key]` first-wins
+        // схлопывает весь landcover тайла в цвет первого полигона, давая швы на
+        // границах тайлов). Все они выше бежевого landuse (key 9) и ниже воды (20).
         switch cls {
         case "wood", "forest":
             return polygon(key: 11, color: configuration.layers.wood)
@@ -108,17 +117,18 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
             if tileZoom >= 13, isGenericGrassSubclass(subclass) {
                 return hiddenStyle
             }
-            return polygon(key: 11, color: configuration.layers.grass)
+            return polygon(key: 12, color: configuration.layers.grass)
         case "farmland":
-            return polygon(key: 11, color: configuration.layers.farmland)
-        case "ice":
-            return polygon(key: 11, color: configuration.layers.ice)
-        case "sand":
-            return polygon(key: 11, color: configuration.layers.sand)
+            return polygon(key: 13, color: configuration.layers.farmland)
         case "wetland":
-            return polygon(key: 11, color: configuration.layers.wetland)
+            return polygon(key: 14, color: configuration.layers.wetland)
+        case "ice":
+            return polygon(key: 17, color: configuration.layers.ice)
+        case "sand":
+            return polygon(key: 18, color: configuration.layers.sand)
         case "rock":
-            return polygon(key: 11, color: configuration.layers.land)
+            // Голая порода = цвет земли; отдельный полигон поверх базы не нужен.
+            return hiddenStyle
         default:
             // Unknown landcover: blend into the land base rather than paint it green.
             return hiddenStyle
@@ -168,11 +178,15 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
         switch cls {
         case "residential", "suburb", "neighbourhood", "quarter", "allotments":
-            return polygon(key: 14, color: configuration.layers.residential)
+            // Бежевые жилые/квартальные заливки - в самый низ (key 9), под зелень,
+            // иначе они перекрывают парки (landcover) внутри жилых полигонов.
+            return polygon(key: 9, color: configuration.layers.residential)
         case "industrial", "commercial", "retail", "railway", "quarry":
-            return polygon(key: 14, color: configuration.layers.industrial)
+            return polygon(key: 9, color: configuration.layers.industrial)
         case "cemetery", "grass", "park", "recreation_ground", "garden":
-            return polygon(key: 15, color: configuration.layers.park)
+            // Один зелёный цвет для всей городской зелени (совпадает с landcover
+            // grass), чтобы не было двухтонности на стыке слоёв.
+            return polygon(key: 15, color: configuration.layers.grass)
         default:
             // Unknown landuse: blend into the land base instead of the red fallback.
             return hiddenStyle
@@ -181,7 +195,12 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     // MARK: - Lines
 
-    private func waterwayStyle(cls: String?) -> FeatureStyle {
+    private func waterwayStyle(cls: String?, props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        // Подземные/коллекторные водотоки (brunnel=tunnel, напр. Неглинная под
+        // Александровским садом) в реальности не видны - не показываем.
+        if props["brunnel"]?.stringValue.lowercased() == "tunnel" {
+            return hiddenStyle
+        }
         let width: Double
         switch cls {
         case "river", "canal":
@@ -199,6 +218,7 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                      tileZoom: Int) -> FeatureStyle {
         let brunnel = props["brunnel"]?.stringValue.lowercased()
         let isTunnel = brunnel == "tunnel"
+        let subclass = props["subclass"]?.stringValue.lowercased()
         let roads = configuration.layers.roads
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
@@ -220,11 +240,15 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "service":
             return roadStyle(fillKey: 42, color: roads.service, width: 5.6 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
         case "path", "track":
-            // Footways/tracks add dashed clutter (and read as stray white dashes over
-            // water/parks) without carrying basemap-level information. Suppress them.
-            return hiddenStyle
-        case "rail":
-            return railStyle(tileZoom: tileZoom)
+            // Аллеи и дорожки парков (footway/path/track). Показываем только на
+            // уличном зуме и тонкой сплошной линией - без пунктира, который раньше
+            // читался как мусор над водой/парками.
+            guard tileZoom >= 14 else {
+                return hiddenStyle
+            }
+            return roadStyle(fillKey: 40, color: roads.path, width: 3.2 * s, priority: 35, casing: false, tunnel: isTunnel)
+        case "rail", "transit":
+            return railStyle(subclass: subclass, tileZoom: tileZoom)
         case "ferry":
             return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
@@ -284,7 +308,13 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         )
     }
 
-    private func railStyle(tileZoom: Int) -> FeatureStyle {
+    private func railStyle(subclass: String?, tileZoom: Int) -> FeatureStyle {
+        // Метро (railway=subway) идёт тоннелями под зданиями/парками и читается как
+        // непонятная штриховая линия - не показываем. Наземные ж/д (rail, tram,
+        // light_rail, monorail) оставляем пунктиром.
+        if subclass == "subway" {
+            return hiddenStyle
+        }
         let s = roadWidthScale(tileZoom: tileZoom)
         return FeatureStyle(
             key: 46,
@@ -292,6 +322,18 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
             parseGeometryStyleData: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
             roadClassPriority: 30
         )
+    }
+
+    /// Multiplier applied to the boundary widths so admin borders read thin on the
+    /// globe (low-zoom tiles are magnified) and reach full width at regional zoom.
+    private func boundaryWidthScale(tileZoom: Int) -> Double {
+        switch tileZoom {
+        case ...3: return 0.35
+        case 4: return 0.5
+        case 5: return 0.7
+        case 6: return 0.85
+        default: return 1.0
+        }
     }
 
     /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
@@ -309,12 +351,18 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
     }
 
-    private func boundaryStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+    private func boundaryStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
         let adminLevel = parseIntValue(props["admin_level"]) ?? 4
         guard adminLevel <= 4 else {
             return hiddenStyle
         }
-        let width: Double = adminLevel <= 2 ? 2.6 : 1.7
+        // Ширина линии печётся в тайловых координатах, поэтому на глобусе
+        // (низкозумные тайлы сильно растянуты) фиксированная ширина выглядит
+        // непропорционально жирной. Тоньшим границы на малых зумах и выходим на
+        // полную толщину к региональному зуму - как roadWidthScale для дорог, но
+        // с более высоким полом: границы должны оставаться заметнее дорог.
+        let scale = boundaryWidthScale(tileZoom: tileZoom)
+        let width: Double = (adminLevel <= 2 ? 7.8 : 3.4) * scale
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
         return FeatureStyle(
             key: key,
@@ -400,13 +448,18 @@ final class OpenMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// space; `protected_area` is a broad heritage/administrative designation that
     /// often blankets whole city centres (e.g. Moscow's historic core) - painting it
     /// green makes the entire city read as a park, so it is not drawn as green.
-    private func parkLayerStyle(cls: String?) -> FeatureStyle {
-        switch cls {
-        case "national_park", "nature_reserve":
-            return polygon(key: 16, color: configuration.layers.park)
-        default:
-            return hiddenStyle
+    private func parkLayerStyle(cls: String?, subclass: String?) -> FeatureStyle {
+        // Слой park - зелёные зоны. Красим зелёным явные парки/сады/заповедники
+        // (класс может быть кириллическим: национальный_парк, природно-исторический_парк,
+        // ...). Крупные охранные зоны без паркового признака (protected_area,
+        // "особо охраняемая ...", памятник природы) не показываем, чтобы не
+        // заливать карту зелёным.
+        let kind = "\(cls ?? "") \(subclass ?? "")"
+        let greenKeywords = ["park", "парк", "garden", "сад", "reserve", "заповедник", "nature"]
+        if greenKeywords.contains(where: { kind.contains($0) }) {
+            return polygon(key: 16, color: configuration.layers.grass)
         }
+        return hiddenStyle
     }
 
     private func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {

@@ -231,7 +231,7 @@ public extension OpenMapTilesDefaultMapStyleConfiguration.LayerStyles {
         park: SIMD4<Float>(0.804, 0.890, 0.761, 1.0),
         residential: SIMD4<Float>(0.929, 0.922, 0.906, 1.0),
         industrial: SIMD4<Float>(0.906, 0.894, 0.878, 1.0),
-        boundary: SIMD4<Float>(0.596, 0.561, 0.624, 0.9),
+        boundary: SIMD4<Float>(0.52, 0.15, 0.72, 0.9),
         aeroway: SIMD4<Float>(0.886, 0.882, 0.902, 1.0),
         roads: .openMapTilesDefault
     )
