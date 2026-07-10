@@ -162,7 +162,9 @@ final class NightLightsTileCache {
 
         var rgbaBytes = [UInt8](repeating: 0, count: rgbaByteCount.partialValue)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.noneSkipLast.rawValue
+        // R,G,B,X в памяти. Явный byteOrder32Big в этой комбинации не входит в список
+        // поддерживаемых CGBitmapContext на iOS и роняет создание контекста.
+        let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue
         guard let context = CGContext(data: &rgbaBytes,
                                       width: width,
                                       height: height,
