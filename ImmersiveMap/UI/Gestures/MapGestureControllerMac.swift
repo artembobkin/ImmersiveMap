@@ -62,6 +62,20 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         return false
     }
 
+    /// Жесты карты распознаём только над «голой» поверхностью карты. Если событие
+    /// попало в интерактивный оверлей-сабвью (debug HUD, attribution badge), уступаем
+    /// его этому `NSControl` - иначе gesture recognizer перехватывает `mouseDown` и
+    /// кнопки/переключатели панели не нажимаются.
+    func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
+                           shouldAttemptToRecognizeWith event: NSEvent) -> Bool {
+        guard let mapView, let superview = mapView.superview else {
+            return true
+        }
+
+        let pointInSuperview = superview.convert(event.locationInWindow, from: nil)
+        return mapView.hitTest(pointInSuperview) === mapView
+    }
+
     private func configureGestures(in mapView: ImmersiveMapNSView) {
         panGesture.target = self
         panGesture.action = #selector(handlePan(_:))
@@ -78,6 +92,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         clickGesture.target = self
         clickGesture.action = #selector(handleClick(_:))
         clickGesture.buttonMask = 0x1
+        clickGesture.delegate = self
         mapView.addGestureRecognizer(clickGesture)
 
         rotationGesture.target = self
