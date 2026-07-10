@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -100,7 +100,7 @@
 			);
 			mainGroup = B10000000000000000000007;
 			packageReferences = (
-				B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */,
+				B10000000000000000000010 /* XCLocalSwiftPackageReference ".." */,
 			);
 			productRefGroup = B10000000000000000000009 /* Products */;
 			projectDirPath = "";
@@ -188,6 +188,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -215,6 +216,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -240,15 +242,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapIOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B10000000000000000000011 /* Debug */,
-				B10000000000000000000012 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapIOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -258,10 +251,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000011 /* Debug */,
+				B10000000000000000000012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */ = {
+		B10000000000000000000010 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ..;
 		};
@@ -270,7 +272,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		B10000000000000000000004 /* ImmersiveMap */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
+			package = B10000000000000000000010 /* XCLocalSwiftPackageReference ".." */;
 			productName = ImmersiveMap;
 		};
 /* End XCSwiftPackageProductDependency section */

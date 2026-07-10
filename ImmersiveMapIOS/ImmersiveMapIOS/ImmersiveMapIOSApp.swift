@@ -18,17 +18,6 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
-            .cameraController(
-                camera,
-                position: ImmersiveMapCameraPosition(
-                    latitudeDegrees: 55.7558,
-                    longitudeDegrees: 37.6173,
-                    zoom: 0,
-                    bearing: .pi / 10,
-                    pitch: .pi / 5
-                )
-            )
-            .enableCameraUIControls()
             .ignoresSafeArea()
     }
 }
