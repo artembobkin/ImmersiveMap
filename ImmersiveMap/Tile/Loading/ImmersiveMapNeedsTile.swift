@@ -14,7 +14,13 @@ import MetalKit
 class ImmersiveMapNeedsTile {
     typealias RetryPolicy = TileRetryController.Policy
 
-    private var ongoingTasks: [Tile: Task<Void, Never>] = [:]
+    private struct OngoingTask {
+        let generation: UInt64
+        let task: Task<Void, Never>
+    }
+
+    private var ongoingTasks: [Tile: OngoingTask] = [:]
+    private var nextTaskGeneration: UInt64 = 1
     private let maxConcurrentFetches: Int
     private let pendingTilesQueue: DeduplicatedTilesFIFO
     private var wantedTiles: Set<Tile> = []
@@ -86,13 +92,13 @@ class ImmersiveMapNeedsTile {
             }
         }
         let wanted = Set(deduplicatedTiles)
-        tileLoadingStatusReporter?.recordDemand(input: tiles.count,
-                                                deduplicated: deduplicatedTiles.count,
-                                                tiles: deduplicatedTiles)
-        tileTraceRecorder.record(.tileSchedulerRequest(input: tiles.count,
-                                                       deduplicated: deduplicatedTiles.count))
 
         stateQueue.sync {
+            tileLoadingStatusReporter?.recordDemand(input: tiles.count,
+                                                    deduplicated: deduplicatedTiles.count,
+                                                    tiles: deduplicatedTiles)
+            tileTraceRecorder.record(.tileSchedulerRequest(input: tiles.count,
+                                                           deduplicated: deduplicatedTiles.count))
             wantedTiles = wanted
 
             pendingTilesQueue.clear()
@@ -135,12 +141,14 @@ class ImmersiveMapNeedsTile {
     private func createLoadTileTaskLocked(tile: Tile) {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         tileLoadingStatusReporter?.recordLoadScheduled(tile: tile)
+        let generation = nextTaskGeneration
+        nextTaskGeneration &+= 1
         // .utility: без явного приоритета задача унаследовала бы user-interactive QoS
         // рендер-потока, и CPU-bound парсинг конкурировал бы с рендером за P-ядра.
         let task = Task(priority: .utility) {
-            await loadTile(tile: tile)
+            await loadTile(tile: tile, generation: generation)
         }
-        ongoingTasks[tile] = task
+        ongoingTasks[tile] = OngoingTask(generation: generation, task: task)
         tileTraceRecorder.record(.tileLoadScheduled(tile, inFlight: ongoingTasks.count))
     }
     
@@ -149,27 +157,35 @@ class ImmersiveMapNeedsTile {
     // текущий ETag узнаём из загрузки (URLCache делает её дешёвой) и только затем
     // решаем - переиспользовать распарсенный тайл или парсить заново.
     // На любом этапе учитывает отмену задачи и обновляет retry-state по результату.
-    private func loadTile(tile: Tile) async {
+    private func loadTile(tile: Tile, generation: UInt64) async {
         if Task.isCancelled {
             return
         }
-        tileLoadingStatusReporter?.recordLoadStarted(tile: tile)
-        tileTraceRecorder.record(.tileLoadStart(tile))
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordLoadStarted(tile: tile)
+            tileTraceRecorder.record(.tileLoadStart(tile))
+        }) else {
+            return
+        }
         defer {
             Task { @MainActor in
-                finishLoading(tile: tile)
+                finishLoading(tile: tile, generation: generation)
             }
         }
 
-        await proceedToNetwork(tile: tile)
+        await proceedToNetwork(tile: tile, generation: generation)
     }
 
-    private func proceedToNetwork(tile: Tile) async {
+    private func proceedToNetwork(tile: Tile, generation: UInt64) async {
         if Task.isCancelled {
             return
         }
 
-        tileLoadingStatusReporter?.recordNetworkStarted(tile: tile)
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordNetworkStarted(tile: tile)
+        }) else {
+            return
+        }
         let downloadResult = await loadPipeline.download(tile: tile)
         if Task.isCancelled {
             return
@@ -177,9 +193,13 @@ class ImmersiveMapNeedsTile {
 
         switch downloadResult {
         case let .success(data, etag):
-            tileLoadingStatusReporter?.recordNetworkSucceeded(tile: tile,
-                                                              bytes: data.count)
-            tileTraceRecorder.record(.tileDownloadSuccess(tile, bytes: data.count))
+            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+                tileLoadingStatusReporter?.recordNetworkSucceeded(tile: tile,
+                                                                  bytes: data.count)
+                tileTraceRecorder.record(.tileDownloadSuccess(tile, bytes: data.count))
+            }) else {
+                return
+            }
 
             // Reuse the prepared (parsed) tile only when the server provided an ETag
             // and it matches the one this prepared tile was derived from. Without an
@@ -190,10 +210,14 @@ class ImmersiveMapNeedsTile {
                 if Task.isCancelled {
                     return
                 }
-                if await materializePreparedTile(cached, expectedTile: tile) {
-                    markLoadSucceeded(tile: tile)
-                    tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
-                    tileTraceRecorder.record(.tileLoadSuccess(tile, source: "prepared_disk"))
+                if await materializePreparedTile(cached,
+                                                 expectedTile: tile,
+                                                 generation: generation) {
+                    guard markLoadSucceeded(tile: tile,
+                                            generation: generation,
+                                            source: "prepared_disk") else {
+                        return
+                    }
                     return
                 }
                 // Keep a valid entry if we were merely cancelled; only a genuine
@@ -207,90 +231,166 @@ class ImmersiveMapNeedsTile {
                 return
             }
 
-            guard let preparedFromNetwork = await prepareTile(data: data, tile: tile) else {
+            guard let preparedFromNetwork = await prepareTile(data: data,
+                                                              tile: tile,
+                                                              generation: generation) else {
+                if Task.isCancelled {
+                    return
+                }
                 loadPipeline.removePreparedFromDisk(tile: tile)
-                markLoadFailed(tile: tile, reason: .parseFailed)
+                markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
                 return
             }
             if Task.isCancelled {
                 return
             }
-            let materializedFromNetwork = await materializePreparedTile(preparedFromNetwork.preparedTile, expectedTile: tile)
+            let materializedFromNetwork = await materializePreparedTile(
+                preparedFromNetwork.preparedTile,
+                expectedTile: tile,
+                generation: generation
+            )
             if Task.isCancelled {
                 return
             }
             if materializedFromNetwork {
-                loadPipeline.savePreparedOnDisk(tile: tile,
-                                                preparedTile: preparedFromNetwork.preparedTile,
-                                                sourceETag: etag)
-                markLoadSucceeded(tile: tile)
-                tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
-                tileTraceRecorder.record(.tileLoadSuccess(tile, source: "network"))
+                await loadPipeline.savePreparedOnDisk(tile: tile,
+                                                      preparedTile: preparedFromNetwork.preparedTile,
+                                                      sourceETag: etag)
+                if Task.isCancelled {
+                    return
+                }
+                guard markLoadSucceeded(tile: tile,
+                                        generation: generation,
+                                        source: "network") else {
+                    return
+                }
             } else {
                 loadPipeline.removePreparedFromDisk(tile: tile)
-                markLoadFailed(tile: tile, reason: .parseFailed)
+                markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
             }
         case let .failure(downloadFailure):
             let failureDescription = Self.downloadFailureDescription(downloadFailure)
-            tileLoadingStatusReporter?.recordNetworkFailed(tile: tile,
-                                                           reason: failureDescription)
-            tileTraceRecorder.record(.tileDownloadFailed(tile,
-                                                         reason: failureDescription))
+            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+                tileLoadingStatusReporter?.recordNetworkFailed(tile: tile,
+                                                               reason: failureDescription)
+                tileTraceRecorder.record(.tileDownloadFailed(tile,
+                                                             reason: failureDescription))
+            }) else {
+                return
+            }
 
             // Offline / server error: render any cached prepared tile for this
             // coordinate, regardless of ETag, so a warm cache still shows content
             // without the network. materializePreparedTile returns false on
-            // cancellation, so a cancelled load falls through to markLoadFailed and
-            // never leaves the load without a terminal state.
+            // cancellation; a cancelled or superseded load must not mutate the
+            // replacement task's retry state.
             if let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil),
-               await materializePreparedTile(cached, expectedTile: tile) {
-                markLoadSucceeded(tile: tile)
-                tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
-                tileTraceRecorder.record(.tileLoadSuccess(tile, source: "prepared_disk_offline"))
+               await materializePreparedTile(cached,
+                                             expectedTile: tile,
+                                             generation: generation) {
+                guard markLoadSucceeded(tile: tile,
+                                        generation: generation,
+                                        source: "prepared_disk_offline") else {
+                    return
+                }
                 return
             }
-            markLoadFailed(tile: tile, reason: .download(downloadFailure))
+            if Task.isCancelled {
+                return
+            }
+            markLoadFailed(tile: tile,
+                           generation: generation,
+                           reason: .download(downloadFailure))
         }
     }
 
-    private func prepareTile(data: Data, tile: Tile) async -> PreparedTileLoadResult? {
+    private func prepareTile(data: Data,
+                             tile: Tile,
+                             generation: UInt64) async -> PreparedTileLoadResult? {
         if Task.isCancelled {
             return nil
         }
-        tileLoadingStatusReporter?.recordParsingStarted(tile: tile)
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordParsingStarted(tile: tile)
+        }) else {
+            return nil
+        }
         let result = await loadPipeline.prepare(tile: tile, data: data)
-        if result == nil {
-            tileLoadingStatusReporter?.recordParsingFailed(tile: tile,
-                                                           reason: "parse_failed")
-        } else {
-            tileLoadingStatusReporter?.recordParsingSucceeded(tile: tile,
-                                                              layerTimings: result?.parseLayerTimings ?? [])
+        if Task.isCancelled {
+            return nil
+        }
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+            if result == nil {
+                tileLoadingStatusReporter?.recordParsingFailed(tile: tile,
+                                                               reason: "parse_failed")
+            } else {
+                tileLoadingStatusReporter?.recordParsingSucceeded(
+                    tile: tile,
+                    layerTimings: result?.parseLayerTimings ?? []
+                )
+            }
+        }) else {
+            return nil
         }
         return result
     }
 
-    private func materializePreparedTile(_ preparedTile: PreparedTileCPU, expectedTile: Tile) async -> Bool {
+    private func materializePreparedTile(_ preparedTile: PreparedTileCPU,
+                                         expectedTile: Tile,
+                                         generation: UInt64) async -> Bool {
         if Task.isCancelled {
             return false
         }
         guard preparedTile.tile == expectedTile else {
             return false
         }
-        tileLoadingStatusReporter?.recordMaterializationStarted(tile: expectedTile)
+        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordMaterializationStarted(tile: expectedTile)
+        }) else {
+            return false
+        }
         let isMaterialized = await loadPipeline.materialize(preparedTile: preparedTile)
-        if isMaterialized {
-            tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: expectedTile)
-        } else {
-            tileLoadingStatusReporter?.recordMaterializationFailed(tile: expectedTile,
-                                                                  reason: "materialize_failed")
+        if Task.isCancelled {
+            return false
+        }
+        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
+            if isMaterialized {
+                tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: expectedTile)
+            } else {
+                tileLoadingStatusReporter?.recordMaterializationFailed(tile: expectedTile,
+                                                                      reason: "materialize_failed")
+            }
+        }) else {
+            return false
         }
         return isMaterialized
     }
 
+    @discardableResult
+    private func recordCurrentTaskEvent(tile: Tile,
+                                        generation: UInt64,
+                                        event: () -> Void) -> Bool {
+        stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation else {
+                return false
+            }
+            event()
+            return true
+        }
+    }
+
     // Завершает in-flight загрузку тайла и пытается запустить следующий подходящий тайл из pending-очереди.
     @MainActor
-    private func finishLoading(tile: Tile) {
+    private func finishLoading(tile: Tile, generation: UInt64) {
+        #if DEBUG
+        defer {
+            onFinishLoadingAttemptForTesting?(tile)
+        }
+        #endif
         stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation else {
+                return
+            }
             ongoingTasks.removeValue(forKey: tile)
 
             while let popped = pendingTilesQueue.dequeue() {
@@ -311,33 +411,52 @@ class ImmersiveMapNeedsTile {
             retryWakeWorkItem?.cancel()
             retryWakeWorkItem = nil
             retryWakeDeadline = nil
-            for task in ongoingTasks.values {
-                task.cancel()
+            let cancelledTiles = Array(ongoingTasks.keys)
+            for ongoingTask in ongoingTasks.values {
+                ongoingTask.task.cancel()
             }
+            tileLoadingStatusReporter?.recordLoadsCancelled(tiles: cancelledTiles)
             ongoingTasks.removeAll()
         }
     }
 
     // Фиксирует успешную загрузку тайла: сбрасывает retry-state для этого тайла.
-    private func markLoadSucceeded(tile: Tile) {
+    private func markLoadSucceeded(tile: Tile,
+                                   generation: UInt64,
+                                   source: String) -> Bool {
         stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation else {
+                return false
+            }
             retryController.registerSuccess(for: tile)
+            tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
+            tileTraceRecorder.record(.tileLoadSuccess(tile, source: source))
+            return true
         }
     }
 
     // Фиксирует неуспешную загрузку тайла: обновляет backoff/cooldown через retry-контроллер
     // и взводит будильник к истечению ближайшего retry-окна.
-    private func markLoadFailed(tile: Tile, reason: TileRetryFailureReason) {
+    private func markLoadFailed(tile: Tile,
+                                generation: UInt64,
+                                reason: TileRetryFailureReason) {
         stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation else {
+                return
+            }
             retryController.registerFailure(for: tile, reason: reason)
             if let wakeAt = retryController.earliestNextRetryDate() {
                 scheduleRetryWakeLocked(at: wakeAt)
             }
+            tileLoadingStatusReporter?.recordLoadFailed(
+                tile: tile,
+                reason: Self.retryFailureDescription(reason)
+            )
+            tileTraceRecorder.record(.tileLoadFailed(
+                tile,
+                reason: Self.retryFailureDescription(reason)
+            ))
         }
-        tileLoadingStatusReporter?.recordLoadFailed(tile: tile,
-                                                    reason: Self.retryFailureDescription(reason))
-        tileTraceRecorder.record(.tileLoadFailed(tile,
-                                                 reason: Self.retryFailureDescription(reason)))
     }
 
     // Взводит одноразовый будильник к `wakeAt`; более ранний уже взведённый
@@ -377,6 +496,8 @@ class ImmersiveMapNeedsTile {
     }
 
     #if DEBUG
+    var onFinishLoadingAttemptForTesting: ((Tile) -> Void)?
+
     var tileLoadingStatusSnapshotForTesting: TileLoadingStatusSnapshot? {
         tileLoadingStatusReporter?.snapshot()
     }

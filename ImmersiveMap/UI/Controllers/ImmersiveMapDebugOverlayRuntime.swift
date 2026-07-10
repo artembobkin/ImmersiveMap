@@ -42,10 +42,6 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setWireframeEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
-        hudView.onTerrainEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
-            controls?.setTerrainEnabled(isEnabled)
-            renderRuntime?.requestFrame(reason: .externalStateChanged)
-        }
         hudView.onRoadLabelTilesEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
             controls?.setRoadLabelTilesEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)

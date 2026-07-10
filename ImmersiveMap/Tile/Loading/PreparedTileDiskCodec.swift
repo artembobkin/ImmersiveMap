@@ -3,11 +3,253 @@
 
 import Foundation
 import simd
+#if canImport(Compression)
+import Compression
+#endif
 
 enum PreparedTileDiskCodecError: Error {
     case invalidField(String)
     case invalidMetadata
     case corruptedPayload(String)
+}
+
+/// A small, independently versioned wrapper around the prepared-tile property
+/// list. Keeping this version separate from `preparedFormatVersion` lets newer
+/// builds read the unwrapped binary plists written by older builds while still
+/// allowing the on-disk transport to evolve.
+enum PreparedTileDiskEnvelope {
+    private enum Algorithm: UInt8 {
+        case uncompressed = 0
+        case lzfse = 1
+    }
+
+    private static let magic = Data([0x49, 0x4d, 0x50, 0x54, 0x49, 0x4c, 0x45, 0x00]) // "IMPTILE\0"
+    private static let currentVersion: UInt16 = 1
+    private static let headerSize = 28
+    // A prepared tile is a cache artifact for one source tile. 64 MiB leaves
+    // ample room for dense geometry while bounding any single decode allocation.
+    private static let maximumDecodedPayloadSize = 64 * 1_024 * 1_024
+    // Real prepared plists compress far below this ratio. The generous ceiling
+    // still prevents a tiny corrupt input from claiming a large output buffer.
+    private static let maximumCompressionExpansionRatio = 512
+    private static let minimumCompressedPayloadSize = 16
+
+    static func encode(payload: Data) throws -> Data {
+        guard payload.count <= maximumDecodedPayloadSize else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile payload is too large.")
+        }
+        let storedPayload: Data
+        let algorithm: Algorithm
+#if canImport(Compression)
+        if let compressed = try? compressLZFSE(payload),
+           compressed.count < payload.count,
+           hasPlausibleCompressionSizes(storedByteCount: compressed.count,
+                                        decodedByteCount: payload.count) {
+            storedPayload = compressed
+            algorithm = .lzfse
+        } else {
+            storedPayload = payload
+            algorithm = .uncompressed
+        }
+#else
+        // ImmersiveMap's supported platforms provide Compression/LZFSE. The
+        // identity codec keeps the format usable by tooling on other hosts.
+        storedPayload = payload
+        algorithm = .uncompressed
+#endif
+
+        var encoded = Data()
+        encoded.reserveCapacity(headerSize + storedPayload.count)
+        encoded.append(magic)
+        appendLittleEndian(currentVersion, to: &encoded)
+        encoded.append(algorithm.rawValue)
+        encoded.append(0) // flags, reserved for future envelope revisions
+        appendLittleEndian(UInt64(payload.count), to: &encoded)
+        appendLittleEndian(checksum(payload), to: &encoded)
+        encoded.append(storedPayload)
+        return encoded
+    }
+
+    /// Returns legacy data unchanged. Callers can therefore decode both the
+    /// old raw binary plist and the new compressed envelope through one path.
+    static func decode(data: Data) throws -> Data {
+        guard isEnvelope(data) else {
+            return data
+        }
+        guard data.count >= headerSize else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Truncated prepared-tile envelope.")
+        }
+
+        let version: UInt16 = try readLittleEndian(from: data, offset: 8)
+        guard version == currentVersion else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Unsupported prepared-tile envelope version.")
+        }
+        guard let algorithm = Algorithm(rawValue: data[10]), data[11] == 0 else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Invalid prepared-tile envelope codec or flags.")
+        }
+
+        let decodedByteCount: UInt64 = try readLittleEndian(from: data, offset: 12)
+        guard decodedByteCount <= UInt64(maximumDecodedPayloadSize),
+              decodedByteCount <= UInt64(Int.max) else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile envelope is too large.")
+        }
+        let expectedChecksum: UInt64 = try readLittleEndian(from: data, offset: 20)
+        let storedByteCount = data.count - headerSize
+
+        let payload: Data
+        switch algorithm {
+        case .uncompressed:
+            guard storedByteCount == Int(decodedByteCount) else {
+                throw PreparedTileDiskCodecError.corruptedPayload(
+                    "Prepared-tile uncompressed payload size does not match its header."
+                )
+            }
+            payload = data.subdata(in: headerSize..<data.count)
+        case .lzfse:
+            guard hasPlausibleCompressionSizes(storedByteCount: storedByteCount,
+                                                decodedByteCount: Int(decodedByteCount)) else {
+                throw PreparedTileDiskCodecError.corruptedPayload(
+                    "Prepared-tile envelope has an implausible compression ratio."
+                )
+            }
+#if canImport(Compression)
+            payload = try decompressLZFSE(data,
+                                          sourceOffset: headerSize,
+                                          sourceByteCount: storedByteCount,
+                                          decodedByteCount: Int(decodedByteCount))
+#else
+            throw PreparedTileDiskCodecError.corruptedPayload("LZFSE is unavailable on this platform.")
+#endif
+        }
+
+        guard payload.count == Int(decodedByteCount), checksum(payload) == expectedChecksum else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile envelope checksum mismatch.")
+        }
+        return payload
+    }
+
+    static func isEnvelope(_ data: Data) -> Bool {
+        data.starts(with: magic)
+    }
+
+    static func isCompressedEnvelope(_ data: Data) -> Bool {
+        isEnvelope(data) && data.count >= headerSize && data[10] == Algorithm.lzfse.rawValue
+    }
+
+    private static func hasPlausibleCompressionSizes(storedByteCount: Int,
+                                                      decodedByteCount: Int) -> Bool {
+        guard decodedByteCount > 0 else {
+            return false
+        }
+        let minimumStoredByteCount = max(
+            minimumCompressedPayloadSize,
+            (decodedByteCount - 1) / maximumCompressionExpansionRatio + 1
+        )
+        return storedByteCount >= minimumStoredByteCount
+    }
+
+    private static func appendLittleEndian<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+    }
+
+    private static func readLittleEndian<T: FixedWidthInteger>(from data: Data, offset: Int) throws -> T {
+        let endOffset = offset + MemoryLayout<T>.size
+        guard offset >= 0, endOffset <= data.count else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Truncated prepared-tile envelope header.")
+        }
+
+        var value: T = 0
+        for byteOffset in 0..<MemoryLayout<T>.size {
+            value |= T(data[offset + byteOffset]) << (byteOffset * 8)
+        }
+        return value
+    }
+
+    /// FNV-1a is used as a fast corruption check, not as a security primitive.
+    private static func checksum(_ data: Data) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in data {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
+
+#if canImport(Compression)
+    private static func compressLZFSE(_ source: Data) throws -> Data {
+        guard source.isEmpty == false else {
+            return Data()
+        }
+
+        let scratchByteCount = max(1, compression_encode_scratch_buffer_size(COMPRESSION_LZFSE))
+        let scratch = UnsafeMutableRawPointer.allocate(byteCount: scratchByteCount,
+                                                       alignment: MemoryLayout<UInt64>.alignment)
+        defer { scratch.deallocate() }
+
+        var capacity = max(256, source.count + max(64 * 1_024, source.count / 8))
+        for _ in 0..<4 {
+            var destination = Data(count: capacity)
+            let encodedByteCount = destination.withUnsafeMutableBytes { destinationBytes in
+                source.withUnsafeBytes { sourceBytes in
+                    compression_encode_buffer(
+                        destinationBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        destinationBytes.count,
+                        sourceBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        sourceBytes.count,
+                        scratch,
+                        COMPRESSION_LZFSE
+                    )
+                }
+            }
+            if encodedByteCount > 0 {
+                destination.removeSubrange(encodedByteCount..<destination.count)
+                return destination
+            }
+            guard capacity <= Int.max / 2 else {
+                break
+            }
+            capacity *= 2
+        }
+        throw PreparedTileDiskCodecError.corruptedPayload("Could not compress prepared-tile payload.")
+    }
+
+    private static func decompressLZFSE(_ source: Data,
+                                        sourceOffset: Int,
+                                        sourceByteCount: Int,
+                                        decodedByteCount: Int) throws -> Data {
+        guard sourceOffset >= 0,
+              sourceByteCount > 0,
+              sourceOffset <= source.count,
+              sourceByteCount <= source.count - sourceOffset,
+              decodedByteCount > 0 else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Invalid empty LZFSE prepared-tile payload.")
+        }
+
+        let scratchByteCount = max(1, compression_decode_scratch_buffer_size(COMPRESSION_LZFSE))
+        let scratch = UnsafeMutableRawPointer.allocate(byteCount: scratchByteCount,
+                                                       alignment: MemoryLayout<UInt64>.alignment)
+        defer { scratch.deallocate() }
+
+        var destination = Data(count: decodedByteCount)
+        let actualByteCount = destination.withUnsafeMutableBytes { destinationBytes in
+            source.withUnsafeBytes { sourceBytes in
+                compression_decode_buffer(
+                    destinationBytes.bindMemory(to: UInt8.self).baseAddress!,
+                    destinationBytes.count,
+                    sourceBytes.bindMemory(to: UInt8.self).baseAddress!.advanced(by: sourceOffset),
+                    sourceByteCount,
+                    scratch,
+                    COMPRESSION_LZFSE
+                )
+            }
+        }
+        guard actualByteCount == decodedByteCount else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Could not decompress prepared-tile payload.")
+        }
+        return destination
+    }
+#endif
 }
 
 enum PreparedTileDiskCodec {
@@ -424,6 +666,17 @@ enum PreparedTileDiskCodec {
     static func encode(preparedTile: PreparedTileCPU,
                        cacheIdentity: PreparedTileCacheIdentity,
                        sourceETag: String = "") throws -> Data {
+        let payload = try encodeLegacyPropertyList(preparedTile: preparedTile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   sourceETag: sourceETag)
+        return try PreparedTileDiskEnvelope.encode(payload: payload)
+    }
+
+    /// The pre-envelope representation. Kept internal so compatibility can be
+    /// regression-tested and old cache files remain a first-class decode path.
+    static func encodeLegacyPropertyList(preparedTile: PreparedTileCPU,
+                                         cacheIdentity: PreparedTileCacheIdentity,
+                                         sourceETag: String = "") throws -> Data {
         let entry = try Entry(
             preparedFormatVersion: cacheIdentity.preparedFormatVersion,
             styleRevision: cacheIdentity.styleRevision,
@@ -492,8 +745,16 @@ enum PreparedTileDiskCodec {
                        expectedTile: Tile,
                        cacheIdentity: PreparedTileCacheIdentity,
                        expectedSourceETag: String? = nil) throws -> PreparedTileCPU {
+        let payload = try PreparedTileDiskEnvelope.decode(data: data)
         let decoder = PropertyListDecoder()
-        let entry = try decoder.decode(Entry.self, from: data)
+        let entry: Entry
+        do {
+            entry = try decoder.decode(Entry.self, from: payload)
+        } catch let error as PreparedTileDiskCodecError {
+            throw error
+        } catch {
+            throw PreparedTileDiskCodecError.corruptedPayload("Invalid prepared-tile property list.")
+        }
 
         guard entry.preparedFormatVersion == cacheIdentity.preparedFormatVersion,
               entry.styleRevision == cacheIdentity.styleRevision,

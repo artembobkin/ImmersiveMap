@@ -28,8 +28,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         await tileDownloader.downloadResult(tile: tile)
     }
 
-    func savePreparedOnDisk(tile: Tile, preparedTile: PreparedTileCPU, sourceETag: String?) {
-        preparedTileDiskCaching?.saveOnDisk(tile: tile, preparedTile: preparedTile, sourceETag: sourceETag)
+    func savePreparedOnDisk(tile: Tile, preparedTile: PreparedTileCPU, sourceETag: String?) async {
+        await preparedTileDiskCaching?.saveOnDisk(tile: tile,
+                                                  preparedTile: preparedTile,
+                                                  sourceETag: sourceETag)
     }
 
     func removePreparedFromDisk(tile: Tile) {

@@ -14,7 +14,6 @@ milestones.
 
 - Stabilize the public SwiftUI API surface.
 - Improve labels (placement, collision, styling).
-- Improve terrain rendering.
 - Improve avatar / live markers (customization and styling).
 
 ## Next

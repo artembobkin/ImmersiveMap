@@ -7,7 +7,7 @@ import QuartzCore
 final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
-        case .starfield, .globeSurface, .terrain, .globeCap, .flatMapSurface, .buildingExtrusion:
+        case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion:
             return true
         case .buildingWinner, .postProcessing, .labels, .avatars, .debugOverlay:
             return false
@@ -18,7 +18,7 @@ final class RenderPassGraph {
         switch layer {
         case .labels, .avatars, .debugOverlay:
             return true
-        case .buildingWinner, .starfield, .globeSurface, .terrain, .globeCap, .flatMapSurface, .buildingExtrusion,
+        case .buildingWinner, .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
              .postProcessing:
             return false
         }
@@ -50,32 +50,48 @@ final class RenderPassGraph {
     private final class WorldDescriptorProvider: RenderPassDescriptorProvider {
         private let clearColor: MTLClearColor
         private let depthTexture: MTLTexture?
+        private let outputPlan: RenderFrameOutputPlan
 
         init(clearColor: MTLClearColor,
-             depthTexture: MTLTexture?) {
+             depthTexture: MTLTexture?,
+             outputPlan: RenderFrameOutputPlan) {
             self.clearColor = clearColor
             self.depthTexture = depthTexture
+            self.outputPlan = outputPlan
         }
 
         func makeRenderPassDescriptor(frameContext: FrameContext,
                                       attachments: FrameAttachmentStore,
                                       drawable: CAMetalDrawable?) -> MTLRenderPassDescriptor? {
-            guard let drawable,
-                  let postProcessingInputTexture = attachments.ensurePostProcessingInputTexture(
-                    drawSize: frameContext.drawSize,
-                    pixelFormat: drawable.texture.pixelFormat
-                  ) else {
+            guard let drawable else {
                 return nil
             }
 
+            let outputTexture: MTLTexture?
+            switch outputPlan.worldColorDestination {
+            case .drawable:
+                outputTexture = drawable.texture
+            case .postProcessingInput:
+                outputTexture = attachments.ensurePostProcessingInputTexture(
+                    drawSize: frameContext.drawSize,
+                    pixelFormat: drawable.texture.pixelFormat
+                )
+            }
+            guard let outputTexture else { return nil }
+
             let descriptor = MTLRenderPassDescriptor()
-            if let colorTexture = attachments.ensureColorTexture(drawSize: frameContext.drawSize,
-                                                                 pixelFormat: drawable.texture.pixelFormat) {
+            if outputPlan.usesMultisampleResolve {
+                guard let colorTexture = attachments.ensureColorTexture(
+                    drawSize: frameContext.drawSize,
+                    pixelFormat: drawable.texture.pixelFormat
+                ) else {
+                    return nil
+                }
                 descriptor.colorAttachments[0].texture = colorTexture
-                descriptor.colorAttachments[0].resolveTexture = postProcessingInputTexture
+                descriptor.colorAttachments[0].resolveTexture = outputTexture
                 descriptor.colorAttachments[0].storeAction = .multisampleResolve
             } else {
-                descriptor.colorAttachments[0].texture = postProcessingInputTexture
+                descriptor.colorAttachments[0].texture = outputTexture
                 descriptor.colorAttachments[0].storeAction = .store
             }
             descriptor.colorAttachments[0].loadAction = .clear
@@ -158,14 +174,21 @@ final class RenderPassGraph {
         }
         let worldLayers = layerPlan.filter(Self.isWorldLayer)
         let overlayLayers = layerPlan.filter(Self.isOverlayLayer)
+        let outputPlan = RenderFrameOutputPlanner.plan(
+            fxaaEnabled: settings.postProcessing.fxaaEnabled,
+            renderSampleCount: attachments.sampleCount
+        )
 
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
-                                                                                depthTexture: depthTexture),
+                                                                                depthTexture: depthTexture,
+                                                                                outputPlan: outputPlan),
                                     layers: worldLayers))
-        nodes.append(RenderPassNode(name: .postProcessing,
-                                    descriptorProvider: PostProcessingDescriptorProvider(),
-                                    layers: [.postProcessing]))
+        if outputPlan.includesPostProcessingPass {
+            nodes.append(RenderPassNode(name: .postProcessing,
+                                        descriptorProvider: PostProcessingDescriptorProvider(),
+                                        layers: [.postProcessing]))
+        }
         if overlayLayers.isEmpty == false {
             nodes.append(RenderPassNode(name: .overlay,
                                         descriptorProvider: OverlayDescriptorProvider(),

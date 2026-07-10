@@ -179,38 +179,29 @@ public extension ImmersiveMapView {
                              preparedTileCacheEnabled: Bool? = nil,
                              preparedDiskTimeToLive: TimeInterval? = nil,
                              memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapView {
+        tileSettings(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
+                     urlCacheEnabled: urlCacheEnabled,
+                     preparedTileCacheEnabled: preparedTileCacheEnabled,
+                     preparedDiskTimeToLive: preparedDiskTimeToLive,
+                     preparedDiskCacheSizeInBytes: nil,
+                     memoryCacheSizeInBytes: memoryCacheSizeInBytes)
+    }
+
+    public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
+                             urlCacheEnabled: Bool? = nil,
+                             preparedTileCacheEnabled: Bool? = nil,
+                             preparedDiskTimeToLive: TimeInterval? = nil,
+                             preparedDiskCacheSizeInBytes: Int?,
+                             memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileSettings(
             clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
             urlCacheEnabled: urlCacheEnabled,
             preparedTileCacheEnabled: preparedTileCacheEnabled,
             preparedDiskTimeToLive: preparedDiskTimeToLive,
+            preparedDiskCacheSizeInBytes: preparedDiskCacheSizeInBytes,
             memoryCacheSizeInBytes: memoryCacheSizeInBytes
         )
-        return view
-    }
-
-    public func terrainSettings(_ terrain: ImmersiveMapSettings.TerrainSettings) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.terrainSettings(terrain)
-        return view
-    }
-
-    public func terrainSource(_ source: ImmersiveMapTerrainSource?) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.terrainSource(source)
-        return view
-    }
-
-    public func terrainRendering(isEnabled: Bool = true,
-                                 exaggeration: Float? = nil,
-                                 maximumZoomLevel: Int? = nil,
-                                 meshResolution: Int? = nil) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.terrainRendering(isEnabled: isEnabled,
-                                                       exaggeration: exaggeration,
-                                                       maximumZoomLevel: maximumZoomLevel,
-                                                       meshResolution: meshResolution)
         return view
     }
 

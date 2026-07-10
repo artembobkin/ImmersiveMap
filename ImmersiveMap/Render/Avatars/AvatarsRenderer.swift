@@ -21,10 +21,10 @@ final class AvatarsRenderer {
     private let avatarPipeline: AvatarPipeline
     private let batteryBadgePipeline: AvatarBatteryBadgePipeline
     private let speedBadgePipeline: AvatarSpeedBadgePipeline
-    private let atlas: AvatarTextureAtlas
-    private let clusterIconAtlas: AvatarClusterIconAtlas
-    private let batteryBadgeAtlas: AvatarBatteryBadgeAtlas
-    private let speedBadgeAtlas: AvatarSpeedBadgeAtlas
+    private let avatarAtlasResource: LazyAvatarRenderResource<AvatarTextureAtlas>
+    private let clusterIconAtlasResource: LazyAvatarRenderResource<AvatarClusterIconAtlas>
+    private let batteryBadgeAtlasResource: LazyAvatarRenderResource<AvatarBatteryBadgeAtlas>
+    private let speedBadgeAtlasResource: LazyAvatarRenderResource<AvatarSpeedBadgeAtlas>
     private let markerSDF: AvatarMarkerSDFResource
     private let markerStyle: AvatarMarkerStyle
     private let batteryBadgeStyle: AvatarBatteryBadgeStyle
@@ -97,33 +97,45 @@ final class AvatarsRenderer {
                                                                             slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                             options: [.storageModeShared])
         self.presentationStateStore = AvatarPresentationStateStore()
-        self.atlas = AvatarTextureAtlas(device: metalDevice,
-                                        atlasSize: config.atlasSizePx,
-                                        cellSize: config.size.rawValue,
-                                        pagesMax: config.atlasPagesMax)
-        self.clusterIconAtlas = AvatarClusterIconAtlas(device: metalDevice,
-                                                       atlasSize: config.atlasSizePx,
-                                                       cellSize: config.size.rawValue,
-                                                       pagesMax: config.atlasPagesMax)
-        self.markerSDF = try! AvatarMarkerSDFResource(device: metalDevice)
+        self.avatarAtlasResource = LazyAvatarRenderResource {
+            AvatarTextureAtlas(device: metalDevice,
+                               atlasSize: config.atlasSizePx,
+                               cellSize: config.size.rawValue,
+                               pagesMax: config.atlasPagesMax)
+        }
+        self.clusterIconAtlasResource = LazyAvatarRenderResource {
+            AvatarClusterIconAtlas(device: metalDevice,
+                                   atlasSize: config.atlasSizePx,
+                                   cellSize: config.size.rawValue,
+                                   pagesMax: config.atlasPagesMax)
+        }
+        let markerSDF = try! AvatarMarkerSDFResource(device: metalDevice)
+        self.markerSDF = markerSDF
         let markerSizePx = Float(config.size.rawValue) * config.sizeScale
-        self.markerStyle = AvatarMarkerStyle(sizePx: markerSizePx,
-                                             outlineWidthPx: config.borderWidthPx,
-                                             pointerHeightRatio: markerSDF.shapeMetrics.pointerHeightRatio)
-        self.batteryBadgeStyle = AvatarBatteryBadgeStyle(sizePx: markerSizePx)
-        self.speedBadgeStyle = AvatarSpeedBadgeStyle(sizePx: markerSizePx,
-                                                     markerStyle: self.markerStyle)
-        self.batteryBadgeAtlas = AvatarBatteryBadgeAtlas(
-            device: metalDevice,
-            badgePixelSize: SIMD2<Int>(max(1, Int(self.batteryBadgeStyle.sizePx.x.rounded())),
-                                       max(1, Int(self.batteryBadgeStyle.sizePx.y.rounded())))
-        )
-        self.speedBadgeAtlas = AvatarSpeedBadgeAtlas(
-            device: metalDevice,
-            badgePixelSize: SIMD2<Int>(max(1, Int(self.speedBadgeStyle.sizePx.x.rounded())),
-                                       max(1, Int(self.speedBadgeStyle.sizePx.y.rounded()))),
-            cornerRadiusPx: self.speedBadgeStyle.cornerRadiusPx
-        )
+        let markerStyle = AvatarMarkerStyle(sizePx: markerSizePx,
+                                            outlineWidthPx: config.borderWidthPx,
+                                            pointerHeightRatio: markerSDF.shapeMetrics.pointerHeightRatio)
+        self.markerStyle = markerStyle
+        let batteryBadgeStyle = AvatarBatteryBadgeStyle(sizePx: markerSizePx)
+        self.batteryBadgeStyle = batteryBadgeStyle
+        let speedBadgeStyle = AvatarSpeedBadgeStyle(sizePx: markerSizePx,
+                                                    markerStyle: markerStyle)
+        self.speedBadgeStyle = speedBadgeStyle
+        self.batteryBadgeAtlasResource = LazyAvatarRenderResource {
+            AvatarBatteryBadgeAtlas(
+                device: metalDevice,
+                badgePixelSize: SIMD2<Int>(max(1, Int(batteryBadgeStyle.sizePx.x.rounded())),
+                                           max(1, Int(batteryBadgeStyle.sizePx.y.rounded())))
+            )
+        }
+        self.speedBadgeAtlasResource = LazyAvatarRenderResource {
+            AvatarSpeedBadgeAtlas(
+                device: metalDevice,
+                badgePixelSize: SIMD2<Int>(max(1, Int(speedBadgeStyle.sizePx.x.rounded())),
+                                           max(1, Int(speedBadgeStyle.sizePx.y.rounded()))),
+                cornerRadiusPx: speedBadgeStyle.cornerRadiusPx
+            )
+        }
     }
 
     func update(controller: ImmersiveMapAvatarsController?, time: TimeInterval) {
@@ -141,7 +153,7 @@ final class AvatarsRenderer {
 
     private func apply(snapshot: AvatarsSnapshot, time: TimeInterval) {
         for id in snapshot.removedIds {
-            atlas.freeSlot(for: id)
+            avatarAtlasResource.existingValue?.freeSlot(for: id)
             markersById.removeValue(forKey: id)
         }
 
@@ -151,7 +163,7 @@ final class AvatarsRenderer {
         if snapshot.imageUpdateIds.isEmpty == false {
             for id in snapshot.imageUpdateIds {
                 if let marker = markersById[id] {
-                    _ = atlas.updateImage(id: id, image: marker.image)
+                    _ = avatarAtlasResource.value.updateImage(id: id, image: marker.image)
                 }
             }
         }
@@ -196,8 +208,13 @@ final class AvatarsRenderer {
     }
 
     private func makeBatteryBadgeInstance(marker: AvatarMarker) -> AvatarBatteryBadgeInstanceGPU {
-        guard let badge = marker.batteryBadge,
-              let slot = batteryBadgeAtlas.slot(for: badge) else {
+        guard let badge = marker.batteryBadge else {
+            return AvatarBatteryBadgeInstanceGPU(uvRect: .zero,
+                                                 flags: 0,
+                                                 screenSizeScale: marker.screenSizeScale,
+                                                 _padding: .zero)
+        }
+        guard let slot = batteryBadgeAtlasResource.value.slot(for: badge) else {
             return AvatarBatteryBadgeInstanceGPU(uvRect: .zero,
                                                  flags: 0,
                                                  screenSizeScale: marker.screenSizeScale,
@@ -210,8 +227,13 @@ final class AvatarsRenderer {
     }
 
     private func makeSpeedBadgeInstance(marker: AvatarMarker) -> AvatarSpeedBadgeInstanceGPU {
-        guard let badge = marker.speedBadge,
-              let slot = speedBadgeAtlas.slot(for: badge) else {
+        guard let badge = marker.speedBadge else {
+            return AvatarSpeedBadgeInstanceGPU(uvRect: .zero,
+                                               flags: 0,
+                                               screenSizeScale: marker.screenSizeScale,
+                                               _padding: .zero)
+        }
+        guard let slot = speedBadgeAtlasResource.value.slot(for: badge) else {
             return AvatarSpeedBadgeInstanceGPU(uvRect: .zero,
                                                flags: 0,
                                                screenSizeScale: marker.screenSizeScale,
@@ -244,8 +266,9 @@ final class AvatarsRenderer {
         hasVisibleSpeedBadges = false
 
         for item in layout.markerItems {
-            guard let slot = atlas.slot(for: item.marker.id) ?? atlas.updateImage(id: item.marker.id,
-                                                                                  image: item.marker.image) else {
+            let avatarAtlas = avatarAtlasResource.value
+            guard let slot = avatarAtlas.slot(for: item.marker.id)
+                    ?? avatarAtlas.updateImage(id: item.marker.id, image: item.marker.image) else {
                 continue
             }
             instances.append(makeInstance(marker: item.marker,
@@ -262,7 +285,7 @@ final class AvatarsRenderer {
         }
 
         for cluster in layout.clusterItems {
-            guard let slot = clusterIconAtlas.update(cluster: cluster) else {
+            guard let slot = clusterIconAtlasResource.value.update(cluster: cluster) else {
                 continue
             }
             clusterInstances.append(makeClusterInstance(slot: slot))
@@ -334,8 +357,10 @@ final class AvatarsRenderer {
                                                markerSizePx: markerSizePx,
                                                collisionPaddingPx: config.collisionPaddingPx)
 
-        for staleClusterID in activeClusterIDs.subtracting(layout.activeClusterIDs) {
-            clusterIconAtlas.freeSlot(for: staleClusterID)
+        if let clusterIconAtlas = clusterIconAtlasResource.existingValue {
+            for staleClusterID in activeClusterIDs.subtracting(layout.activeClusterIDs) {
+                clusterIconAtlas.freeSlot(for: staleClusterID)
+            }
         }
         rebuildFrameBuffers(layout: layout,
                             frameSlotIndex: frameSlotIndex)
@@ -372,7 +397,7 @@ final class AvatarsRenderer {
             renderEncoder.setVertexBytes(&style, length: MemoryLayout<AvatarMarkerStyleGPU>.stride, index: 3)
             renderEncoder.setFragmentBytes(&style, length: MemoryLayout<AvatarMarkerStyleGPU>.stride, index: 0)
             renderEncoder.setFragmentBytes(&sdfParams, length: MemoryLayout<AvatarMarkerSDFParams>.stride, index: 1)
-            renderEncoder.setFragmentTexture(clusterIconAtlas.textureArray, index: 0)
+            renderEncoder.setFragmentTexture(clusterIconAtlasResource.value.textureArray, index: 0)
             renderEncoder.setFragmentTexture(markerSDF.texture, index: 1)
             renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: clusterCount)
         }
@@ -389,7 +414,7 @@ final class AvatarsRenderer {
                 renderEncoder.setVertexBytes(&style, length: MemoryLayout<AvatarMarkerStyleGPU>.stride, index: 3)
                 renderEncoder.setFragmentBytes(&style, length: MemoryLayout<AvatarMarkerStyleGPU>.stride, index: 0)
                 renderEncoder.setFragmentBytes(&sdfParams, length: MemoryLayout<AvatarMarkerSDFParams>.stride, index: 1)
-                renderEncoder.setFragmentTexture(atlas.textureArray, index: 0)
+                renderEncoder.setFragmentTexture(avatarAtlasResource.value.textureArray, index: 0)
                 renderEncoder.setFragmentTexture(markerSDF.texture, index: 1)
                 renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: avatarCount)
             case .batteryBadge:
@@ -400,7 +425,7 @@ final class AvatarsRenderer {
                 renderEncoder.setVertexBuffer(batteryBadgeInstanceBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 2)
                 renderEncoder.setVertexBytes(&badgeStyle, length: MemoryLayout<AvatarBatteryBadgeStyleGPU>.stride, index: 3)
                 renderEncoder.setFragmentBytes(&badgeStyle, length: MemoryLayout<AvatarBatteryBadgeStyleGPU>.stride, index: 0)
-                renderEncoder.setFragmentTexture(batteryBadgeAtlas.texture, index: 0)
+                renderEncoder.setFragmentTexture(batteryBadgeAtlasResource.value.texture, index: 0)
                 renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: avatarCount)
             case .speedBadge:
                 speedBadgePipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -409,7 +434,7 @@ final class AvatarsRenderer {
                 renderEncoder.setVertexBuffer(screenPointBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 1)
                 renderEncoder.setVertexBuffer(speedBadgeInstanceBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 2)
                 renderEncoder.setVertexBytes(&speedStyle, length: MemoryLayout<AvatarSpeedBadgeStyleGPU>.stride, index: 3)
-                renderEncoder.setFragmentTexture(speedBadgeAtlas.texture, index: 0)
+                renderEncoder.setFragmentTexture(speedBadgeAtlasResource.value.texture, index: 0)
                 renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: avatarCount)
             }
         }

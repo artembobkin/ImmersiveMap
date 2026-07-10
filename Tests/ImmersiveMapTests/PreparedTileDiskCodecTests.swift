@@ -9,6 +9,227 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 21)
     }
 
+    func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
+        let tile = Tile(x: 1, y: 2, z: 3)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let preparedTile = makePreparedTile(
+            tile: tile,
+            textLabels: PreparedTileCPU.TextLabels(full: makeTextLabelSet(seed: 1),
+                                                    reduced: makeTextLabelSet(seed: 2),
+                                                    minimal: makeTextLabelSet(seed: 3))
+        )
+
+        let legacyData = try PreparedTileDiskCodec.encodeLegacyPropertyList(
+            preparedTile: preparedTile,
+            cacheIdentity: cacheIdentity
+        )
+        let encodedData = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                           cacheIdentity: cacheIdentity)
+
+        XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encodedData))
+#if canImport(Compression)
+        XCTAssertTrue(PreparedTileDiskEnvelope.isCompressedEnvelope(encodedData))
+        XCTAssertLessThan(encodedData.count, legacyData.count)
+#endif
+        let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity)
+        XCTAssertEqual(decoded.tile, tile)
+        assertTextLabelSet(decoded.textLabels.full, equals: preparedTile.textLabels.full)
+    }
+
+    func testPreparedTileCodecReadsLegacyUncompressedPropertyList() throws {
+        let tile = Tile(x: 4, y: 5, z: 6)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let legacyData = try PreparedTileDiskCodec.encodeLegacyPropertyList(
+            preparedTile: makePreparedTile(tile: tile),
+            cacheIdentity: cacheIdentity,
+            sourceETag: "legacy-etag"
+        )
+
+        XCTAssertFalse(PreparedTileDiskEnvelope.isEnvelope(legacyData))
+        let decoded = try PreparedTileDiskCodec.decode(data: legacyData,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       expectedSourceETag: "legacy-etag")
+        XCTAssertEqual(decoded.tile, tile)
+    }
+
+    func testPreparedTileCodecRejectsCorruptedCompressedEnvelope() throws {
+        let tile = Tile(x: 7, y: 8, z: 9)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        var data = try PreparedTileDiskCodec.encode(preparedTile: makePreparedTile(tile: tile),
+                                                    cacheIdentity: cacheIdentity)
+        let lastIndex = data.index(before: data.endIndex)
+        data[lastIndex] ^= 0xff
+
+        XCTAssertThrowsError(
+            try PreparedTileDiskCodec.decode(data: data,
+                                             expectedTile: tile,
+                                             cacheIdentity: cacheIdentity)
+        ) { error in
+            XCTAssertTrue(error is PreparedTileDiskCodecError)
+        }
+    }
+
+    func testPreparedTileEnvelopeRejectsDecodedPayloadAbovePerTileLimit() {
+        let data = makeCompressedEnvelope(
+            decodedByteCount: UInt64(64 * 1_024 * 1_024 + 1),
+            storedPayload: Data([0])
+        )
+
+        XCTAssertThrowsError(try PreparedTileDiskEnvelope.decode(data: data)) { error in
+            guard let codecError = error as? PreparedTileDiskCodecError,
+                  case let .corruptedPayload(message) = codecError else {
+                return XCTFail("Expected a corrupted-payload error, got \(error).")
+            }
+            XCTAssertEqual(message, "Prepared-tile envelope is too large.")
+        }
+    }
+
+    func testPreparedTileEnvelopeRejectsImplausibleCompressionExpansion() {
+        let data = makeCompressedEnvelope(
+            decodedByteCount: UInt64(1 * 1_024 * 1_024),
+            storedPayload: Data(repeating: 0, count: 16)
+        )
+
+        XCTAssertThrowsError(try PreparedTileDiskEnvelope.decode(data: data)) { error in
+            guard let codecError = error as? PreparedTileDiskCodecError,
+                  case let .corruptedPayload(message) = codecError else {
+                return XCTFail("Expected a corrupted-payload error, got \(error).")
+            }
+            XCTAssertEqual(message, "Prepared-tile envelope has an implausible compression ratio.")
+        }
+    }
+
+    func testPreparedTileEnvelopeRejectsCompressedPayloadBelowMinimumStoredSize() {
+        let data = makeCompressedEnvelope(
+            decodedByteCount: UInt64(1),
+            storedPayload: Data([0])
+        )
+
+        XCTAssertThrowsError(try PreparedTileDiskEnvelope.decode(data: data)) { error in
+            guard let codecError = error as? PreparedTileDiskCodecError,
+                  case let .corruptedPayload(message) = codecError else {
+                return XCTFail("Expected a corrupted-payload error, got \(error).")
+            }
+            XCTAssertEqual(message, "Prepared-tile envelope has an implausible compression ratio.")
+        }
+    }
+
+    func testPreparedTileEnvelopeRoundTripsHighlyCompressiblePayload() throws {
+        let payload = Data(repeating: 0, count: 1 * 1_024 * 1_024)
+
+        let encoded = try PreparedTileDiskEnvelope.encode(payload: payload)
+
+        XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: encoded), payload)
+    }
+
+    func testPreparedTileEnvelopeFallsBackToRawPayloadWhenCompressionWouldGrowIt() throws {
+        let payload = Data([0x7f])
+        let encoded = try PreparedTileDiskEnvelope.encode(payload: payload)
+
+        XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encoded))
+        XCTAssertFalse(PreparedTileDiskEnvelope.isCompressedEnvelope(encoded))
+        XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: encoded), payload)
+    }
+
+    func testPreparedTileDiskCacheSerializesSaveBeforeFollowingRead() async throws {
+        let baseDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PreparedTileDiskCache-ordering-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: baseDirectory) }
+
+        let tile = Tile(x: 11, y: 12, z: 13)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let config = ImmersiveMapSettings.default
+            .tileSettings(preparedDiskCacheSizeInBytes: 4 * 1_024 * 1_024)
+        let cache = PreparedTileDiskCaching(config: config,
+                                            cacheIdentity: cacheIdentity,
+                                            baseCachesDirectory: baseDirectory)
+
+        await cache.saveOnDisk(tile: tile,
+                               preparedTile: makePreparedTile(tile: tile),
+                               sourceETag: "ordered-etag")
+        let loaded = await cache.requestPreparedDiskCached(tile: tile, matchingETag: "ordered-etag")
+
+        XCTAssertEqual(loaded?.tile, tile)
+        let storedData = try Data(contentsOf: cache.cachePathFor(tile: tile))
+        XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(storedData))
+    }
+
+    func testPreparedTileDiskCachePrunesOldestFilesAcrossAllNamespaces() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("PreparedTileDiskCache-quota-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: baseDirectory) }
+
+        let root = baseDirectory.appendingPathComponent("MapPreparedTiles")
+        let oldest = root.appendingPathComponent("v18/old-style/old.ptile")
+        let middle = root.appendingPathComponent("v19/other-style/middle.ptile")
+        let newest = root.appendingPathComponent("v20/latest-style/new.ptile")
+        let files = [oldest, middle, newest]
+        for file in files {
+            try fileManager.createDirectory(at: file.deletingLastPathComponent(),
+                                            withIntermediateDirectories: true)
+            try Data(repeating: 0xab, count: 10).write(to: file)
+        }
+        let now = Date()
+        try fileManager.setAttributes([.modificationDate: now.addingTimeInterval(-300)],
+                                      ofItemAtPath: oldest.path)
+        try fileManager.setAttributes([.modificationDate: now.addingTimeInterval(-200)],
+                                      ofItemAtPath: middle.path)
+        try fileManager.setAttributes([.modificationDate: now.addingTimeInterval(-100)],
+                                      ofItemAtPath: newest.path)
+
+        let config = ImmersiveMapSettings.default
+            .tileSettings(preparedDiskCacheSizeInBytes: 15)
+        let cache = PreparedTileDiskCaching(config: config,
+                                            cacheIdentity: makeCacheIdentity(labelLanguage: .english),
+                                            baseCachesDirectory: baseDirectory)
+
+        // A read submitted after init is a deterministic barrier for the async
+        // root scan/prune; no sleeps or main-thread blocking are needed.
+        _ = await cache.requestPreparedDiskCached(tile: Tile(x: 100, y: 100, z: 10),
+                                                  matchingETag: nil)
+
+        XCTAssertFalse(fileManager.fileExists(atPath: oldest.path))
+        XCTAssertFalse(fileManager.fileExists(atPath: middle.path))
+        XCTAssertTrue(fileManager.fileExists(atPath: newest.path))
+    }
+
+    func testPreparedTileDiskCacheExpiresFilesAcrossOldNamespaces() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("PreparedTileDiskCache-ttl-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: baseDirectory) }
+
+        let root = baseDirectory.appendingPathComponent("MapPreparedTiles")
+        let expired = root.appendingPathComponent("v17/obsolete-style/expired.ptile")
+        let current = root.appendingPathComponent("v20/recent-style/current.ptile")
+        for file in [expired, current] {
+            try fileManager.createDirectory(at: file.deletingLastPathComponent(),
+                                            withIntermediateDirectories: true)
+            try Data(repeating: 0xcd, count: 10).write(to: file)
+        }
+        let now = Date()
+        try fileManager.setAttributes([.modificationDate: now.addingTimeInterval(-120)],
+                                      ofItemAtPath: expired.path)
+        try fileManager.setAttributes([.modificationDate: now.addingTimeInterval(-10)],
+                                      ofItemAtPath: current.path)
+
+        let config = ImmersiveMapSettings.default
+            .tileSettings(preparedDiskTimeToLive: 60,
+                          preparedDiskCacheSizeInBytes: 1_024)
+        let cache = PreparedTileDiskCaching(config: config,
+                                            cacheIdentity: makeCacheIdentity(labelLanguage: .english),
+                                            baseCachesDirectory: baseDirectory)
+        _ = await cache.requestPreparedDiskCached(tile: Tile(x: 101, y: 101, z: 10),
+                                                  matchingETag: nil)
+
+        XCTAssertFalse(fileManager.fileExists(atPath: expired.path))
+        XCTAssertTrue(fileManager.fileExists(atPath: current.path))
+    }
+
     func testPreparedTileCodecRoundTripsArbitraryLabelLanguageMetadata() throws {
         let tile = Tile(x: 1, y: 2, z: 3)
         let labelLanguage = ImmersiveMapSettings.LabelLanguage("pt-BR")
@@ -125,6 +346,23 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
+    }
+
+    private func makeCompressedEnvelope(decodedByteCount: UInt64,
+                                        storedPayload: Data) -> Data {
+        var data = Data([0x49, 0x4d, 0x50, 0x54, 0x49, 0x4c, 0x45, 0x00])
+        data.append(contentsOf: [0x01, 0x00]) // envelope version 1
+        data.append(0x01) // LZFSE
+        data.append(0x00) // reserved flags
+        appendLittleEndian(decodedByteCount, to: &data)
+        appendLittleEndian(UInt64(0), to: &data) // checksum is not reached by these validations
+        data.append(storedPayload)
+        return data
+    }
+
+    private func appendLittleEndian(_ value: UInt64, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
     }
 
     private func makeCacheIdentity(labelLanguage: ImmersiveMapSettings.LabelLanguage,

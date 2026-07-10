@@ -45,8 +45,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
 
@@ -82,8 +81,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
 
@@ -101,8 +99,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: true,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: true),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
 
@@ -122,8 +119,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.simulateBaseLabelsTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -141,8 +137,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -186,8 +181,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
 
@@ -208,8 +202,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -259,8 +252,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -330,8 +322,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false,
-                                                         terrainEnabled: true),
+                                                         wireframeEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -367,8 +358,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false,
-                                                         terrainEnabled: true),
+                                                         wireframeEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -411,8 +401,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false,
-                                                         terrainEnabled: true),
+                                                         wireframeEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
 
@@ -443,8 +432,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false,
-                                                         terrainEnabled: true),
+                                                         wireframeEnabled: false),
                    earthSceneEnabled: true)
 
         view.apply(snapshot: makeTileStatusSnapshot(settings: settings,
@@ -470,8 +458,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false,
-                                                         terrainEnabled: true),
+                                                         wireframeEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
@@ -514,33 +501,12 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: false)
         view.simulateEarthSceneSwitchForTesting(true)
 
         XCTAssertEqual(receivedValue, true)
         XCTAssertTrue(view.isEarthSceneSwitchOnForTesting)
-    }
-
-    func testTerrainControlInvokesCallbackAndReflectsState() {
-        let view = DebugOverlayHUDView()
-        var didChange: Bool?
-        view.onTerrainEnabledChanged = { didChange = $0 }
-
-        view.apply(isDebugPanelEnabled: true,
-                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
-                                                         tileLayersEnabled: false,
-                                                         wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
-                   earthSceneEnabled: true)
-        view.simulateControlsTabSelectionForTesting()
-        view.layoutIfNeeded()
-        view.simulateTerrainSwitchChangeForTesting(false)
-
-        XCTAssertEqual(didChange, false)
-        XCTAssertFalse(view.isTerrainSwitchOnForTesting)
     }
 
     func testAtlasTabCapsPanelHeightWhenManyAtlasPagesAreVisible() {
@@ -551,8 +517,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings,
                                           atlasPages: (0..<12).map(makeAtlasPage)))
@@ -572,8 +537,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false,
-                                                         terrainEnabled: true),
+                                                         roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings,
                                           atlasPages: [

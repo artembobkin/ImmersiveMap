@@ -153,6 +153,7 @@ final class TileLoadingStatusReporter {
     private var requested = 0
     private var deduplicated = 0
     private var activeLoads = 0
+    private var activeLoadTiles: Set<Tile> = []
     private var scheduled = 0
     private var network = PhaseCounters()
     private var parsing = PhaseCounters()
@@ -214,7 +215,8 @@ final class TileLoadingStatusReporter {
 
     func recordLoadStarted(tile: Tile) {
         queue.sync {
-            activeLoads += 1
+            activeLoadTiles.insert(tile)
+            activeLoads = activeLoadTiles.count
             updateTile(tile,
                        status: .loading,
                        progress: 0.35,
@@ -224,7 +226,8 @@ final class TileLoadingStatusReporter {
 
     func recordLoadCompleted(tile: Tile) {
         queue.sync {
-            activeLoads = max(0, activeLoads - 1)
+            activeLoadTiles.remove(tile)
+            activeLoads = activeLoadTiles.count
             totalCompleted += 1
             appendInstantStage("ready", for: tile)
             storeRecentPreparationStages(for: tile)
@@ -238,13 +241,43 @@ final class TileLoadingStatusReporter {
 
     func recordLoadFailed(tile: Tile, reason: String) {
         queue.sync {
-            activeLoads = max(0, activeLoads - 1)
+            activeLoadTiles.remove(tile)
+            activeLoads = activeLoadTiles.count
             totalFailed += 1
             latestFailure = reason
             updateTile(tile,
                        status: .failed,
                        progress: 1,
                        detail: reason)
+            pruneInactiveStaleTiles()
+        }
+    }
+
+    func recordLoadsCancelled(tiles: [Tile]) {
+        let cancelledTiles = Set(tiles)
+        queue.sync {
+            requested = 0
+            deduplicated = 0
+            currentDemand.removeAll()
+
+            activeLoadTiles.subtract(cancelledTiles)
+            activeLoads = activeLoadTiles.count
+            activeNetworkTiles.subtract(cancelledTiles)
+            network.inFlight = activeNetworkTiles.count
+            activeParsingTiles.subtract(cancelledTiles)
+            parsing.inFlight = activeParsingTiles.count
+
+            for tile in cancelledTiles {
+                tileRecords.removeValue(forKey: tile)
+                if displayedTiles.contains(tile) {
+                    updateTile(tile,
+                               status: .ready,
+                               progress: 1,
+                               detail: "displayed")
+                }
+            }
+            refreshLatestNetworkTile()
+            refreshLatestParsingTile()
             pruneInactiveStaleTiles()
         }
     }

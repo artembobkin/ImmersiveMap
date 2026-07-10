@@ -331,6 +331,110 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(wakeScheduler.scheduledWakes[0].workItem.isCancelled)
     }
 
+    func testCancelAllClearsReporterStateAndIgnoresLatePreparationCompletion() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let reporter = TileLoadingStatusReporter()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           tileLoadingStatusReporter: reporter)
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        let didStart = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(didStart)
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
+        let didPrepare = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(didPrepare)
+        XCTAssertEqual(reporter.snapshot().activeLoads, 1)
+        XCTAssertEqual(reporter.snapshot().parsing.inFlight, 1)
+
+        loader.cancelAll()
+
+        var snapshot = reporter.snapshot()
+        XCTAssertEqual(snapshot.requested, 0)
+        XCTAssertEqual(snapshot.activeLoads, 0)
+        XCTAssertEqual(snapshot.network.inFlight, 0)
+        XCTAssertEqual(snapshot.parsing.inFlight, 0)
+        XCTAssertNil(snapshot.latestNetworkTile)
+        XCTAssertNil(snapshot.latestParsingTile)
+        XCTAssertFalse(snapshot.tiles.contains { $0.tile == tile })
+
+        pipeline.completePrepare(tile)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        snapshot = reporter.snapshot()
+        XCTAssertEqual(snapshot.activeLoads, 0)
+        XCTAssertEqual(snapshot.parsing.inFlight, 0)
+        XCTAssertEqual(snapshot.totalCompleted, 0)
+        XCTAssertEqual(snapshot.totalFailed, 0)
+        XCTAssertFalse(pipeline.hasMaterialized(tile))
+    }
+
+    func testReporterCancellationClearsDemandWithoutActiveLoads() {
+        let reporter = TileLoadingStatusReporter()
+        let tile = Tile(x: 1, y: 1, z: 4)
+        reporter.recordDemand(input: 1, deduplicated: 1, tiles: [tile])
+
+        reporter.recordLoadsCancelled(tiles: [])
+
+        let snapshot = reporter.snapshot()
+        XCTAssertEqual(snapshot.requested, 0)
+        XCTAssertEqual(snapshot.deduplicated, 0)
+        XCTAssertTrue(snapshot.tiles.isEmpty)
+    }
+
+    func testCanceledSaveCompletionDoesNotFinishReplacementTaskForSameTile() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline(suspendsSaves: true)
+        let reporter = TileLoadingStatusReporter()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           tileLoadingStatusReporter: reporter)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        let queuedTile = Tile(x: 2, y: 1, z: 4)
+        let canceledFinishAttempted = expectation(description: "canceled load attempted deferred finish")
+        canceledFinishAttempted.assertForOverFulfill = false
+        loader.onFinishLoadingAttemptForTesting = { finishedTile in
+            if finishedTile == tile {
+                canceledFinishAttempted.fulfill()
+            }
+        }
+
+        loader.request(tiles: [tile])
+        let firstStarted = await pipeline.waitUntilStartCount(1, for: tile)
+        XCTAssertTrue(firstStarted)
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
+        let firstPrepared = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(firstPrepared)
+        pipeline.completePrepare(tile)
+        let firstMaterialized = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(firstMaterialized)
+        pipeline.completeMaterialize(tile, result: true)
+        let firstSaveStarted = await pipeline.waitUntilSaveStarted(tile)
+        XCTAssertTrue(firstSaveStarted)
+
+        loader.cancelAll()
+        XCTAssertEqual(reporter.snapshot().activeLoads, 0)
+        loader.request(tiles: [tile, queuedTile])
+        let replacementStarted = await pipeline.waitUntilStartCount(2, for: tile)
+        XCTAssertTrue(replacementStarted)
+
+        // The canceled first task resumes after a replacement for the same tile
+        // has been installed. Its deferred finish must not remove that replacement.
+        pipeline.completeSave(tile)
+        await fulfillment(of: [canceledFinishAttempted], timeout: 2)
+        XCTAssertFalse(pipeline.hasStarted(queuedTile))
+        XCTAssertEqual(reporter.snapshot().activeLoads, 1)
+
+        pipeline.completeDownload(tile, result: .failure(.network))
+        let queuedStarted = await pipeline.waitUntilStarted(queuedTile)
+        XCTAssertTrue(queuedStarted)
+        pipeline.completeDownload(queuedTile, result: .failure(.network))
+    }
+
     func testExpiredRetryWindowDoesNotMaskFutureWindowsOnRearm() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 2
@@ -404,14 +508,22 @@ private final class RecordingRetryWakeScheduler {
 }
 
 private final class ControlledTileLoadPipeline: TileLoadPipeline {
+    private let suspendsSaves: Bool
     private let lock = NSLock()
     private var startedTiles: Set<Tile> = []
+    private var startCounts: [Tile: Int] = [:]
     private var canceledTiles: Set<Tile> = []
     private var preparedTiles: Set<Tile> = []
     private var materializedTiles: Set<Tile> = []
+    private var saveStartedTiles: Set<Tile> = []
     private var downloadContinuations: [Tile: CheckedContinuation<TileDownloader.DownloadResult, Never>] = [:]
     private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
     private var materializeContinuations: [Tile: CheckedContinuation<Bool, Never>] = [:]
+    private var saveContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
+
+    init(suspendsSaves: Bool = false) {
+        self.suspendsSaves = suspendsSaves
+    }
 
     func requestPreparedDiskCached(tile _: Tile, matchingETag _: String?) async -> PreparedTileCPU? {
         nil
@@ -427,7 +539,17 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
         })
     }
 
-    func savePreparedOnDisk(tile _: Tile, preparedTile _: PreparedTileCPU, sourceETag _: String?) {}
+    func savePreparedOnDisk(tile: Tile,
+                            preparedTile _: PreparedTileCPU,
+                            sourceETag _: String?) async {
+        guard suspendsSaves else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            saveStartedTiles.insert(tile)
+            saveContinuations[tile] = continuation
+            lock.unlock()
+        }
+    }
 
     func removePreparedFromDisk(tile _: Tile) {}
 
@@ -451,6 +573,18 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
         lock.lock()
         defer { lock.unlock() }
         return startedTiles.contains(tile)
+    }
+
+    func startCount(for tile: Tile) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return startCounts[tile, default: 0]
+    }
+
+    func hasSaveStarted(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return saveStartedTiles.contains(tile)
     }
 
     func wasCanceled(_ tile: Tile) -> Bool {
@@ -496,9 +630,37 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
         continuation?.resume(returning: result)
     }
 
-    func waitUntilStarted(_ tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+    func completeSave(_ tile: Tile) {
+        let continuation: CheckedContinuation<Void, Never>?
+        lock.lock()
+        continuation = saveContinuations.removeValue(forKey: tile)
+        lock.unlock()
+        continuation?.resume()
+    }
+
+    func waitUntilStarted(_ tile: Tile, attempts: Int = 100) async -> Bool {
+        for _ in 0..<attempts {
             if hasStarted(tile) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
+
+    func waitUntilStartCount(_ count: Int, for tile: Tile) async -> Bool {
+        for _ in 0..<100 {
+            if startCount(for: tile) >= count {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
+
+    func waitUntilSaveStarted(_ tile: Tile) async -> Bool {
+        for _ in 0..<100 {
+            if hasSaveStarted(tile) {
                 return true
             }
             try? await Task.sleep(nanoseconds: 10_000_000)
@@ -532,6 +694,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline {
     ) {
         lock.lock()
         startedTiles.insert(tile)
+        startCounts[tile, default: 0] += 1
         downloadContinuations[tile] = continuation
         lock.unlock()
     }

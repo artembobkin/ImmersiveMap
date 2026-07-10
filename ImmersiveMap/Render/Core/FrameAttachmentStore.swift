@@ -39,6 +39,10 @@ final class FrameAttachmentStore {
         postProcessingInputTexture
     }
 
+    var sampleCount: Int {
+        renderSampleCount
+    }
+
     func ensureColorTexture(drawSize: CGSize,
                             pixelFormat: MTLPixelFormat) -> MTLTexture? {
         guard renderSampleCount > 1 else { return nil }

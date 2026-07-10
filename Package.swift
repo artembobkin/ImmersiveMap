@@ -57,7 +57,6 @@ let package = Package(
                 .process("Render/PostProcessing/Shaders"),
                 .process("Render/Shaders/Globe"),
                 .process("Render/Shaders/Starfield"),
-                .process("Render/Terrain/Shaders"),
                 .process("Render/Compute/TilePoints/Shaders/TilePointToScreen.metal"),
                 .process("Render/Debug/Shaders"),
                 .process("Render/Shaders/Shared/GeoMath.metal"),

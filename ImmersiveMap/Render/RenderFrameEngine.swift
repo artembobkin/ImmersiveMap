@@ -200,7 +200,6 @@ final class RenderFrameEngine {
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.pipelineState, named: .extrudedTilePipeline)
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.winnerPipelineState, named: .extrudedTileWinnerPipeline)
         resourceRegistry.setPipeline(persistentContext.globePipeline.pipelineState, named: .globePipeline)
-        resourceRegistry.setPipeline(persistentContext.terrainPipeline.pipelineState, named: .terrainPipeline)
         resourceRegistry.setTexture(persistentContext.textRenderer.texture, named: .labelGlyphAtlas)
         resourceRegistry.setTexture(persistentContext.poiSpriteAtlas.texture, named: .poiSpriteAtlas)
     }

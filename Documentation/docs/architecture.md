@@ -12,7 +12,7 @@ UI → Render → domain folders → Utils
 
 - **UI** - SwiftUI/UIKit host, `CAMetalLayer`, render driver.
 - **Render** - Metal render pipeline, subsystems, shaders.
-- **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `Terrain`, `EarthScene`, `Avatars`, `Starfield`, `Geo`.
+- **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `EarthScene`, `Avatars`, `Starfield`, `Geo`.
 - **Utils** - shared stateless helpers.
 
 Domain folders must not depend on `UI`/`Render` and must not contain Metal code. `Render` must not contain networking or platform UI. Provider-specific MVT schema logic is confined to `VectorTileAdaptation/`, `mapbox/`, and `openstreetmap/`; `Render`, `Labels`, and `Tile` consume only provider-neutral, normalized data.

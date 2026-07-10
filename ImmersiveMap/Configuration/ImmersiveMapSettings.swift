@@ -247,6 +247,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
 
         public struct CacheSettings: Equatable {
+            public static let defaultPreparedDiskCacheSizeInBytes: Int = 256 * 1_024 * 1_024
+
             public var clearDiskCachesOnLaunch: Bool
             /// Raw HTTP tile cache (URLSession's URLCache). When false, every tile
             /// download goes to the network (still revalidated by the server ETag).
@@ -255,6 +257,10 @@ public struct ImmersiveMapSettings: Equatable {
             /// re-parsed from the raw bytes on every load.
             public var preparedTileCacheEnabled: Bool
             public var preparedDiskTimeToLive: TimeInterval
+            /// Root-wide byte quota for all prepared-tile format/style namespaces.
+            /// The most recently initialized map/cache instance makes its quota
+            /// the active root-wide policy.
+            public var preparedDiskCacheSizeInBytes: Int
             public var memoryCacheSizeInBytes: Int
 
             public init(clearDiskCachesOnLaunch: Bool,
@@ -262,10 +268,25 @@ public struct ImmersiveMapSettings: Equatable {
                         preparedTileCacheEnabled: Bool = true,
                         preparedDiskTimeToLive: TimeInterval,
                         memoryCacheSizeInBytes: Int) {
+                self.init(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
+                          urlCacheEnabled: urlCacheEnabled,
+                          preparedTileCacheEnabled: preparedTileCacheEnabled,
+                          preparedDiskTimeToLive: preparedDiskTimeToLive,
+                          preparedDiskCacheSizeInBytes: Self.defaultPreparedDiskCacheSizeInBytes,
+                          memoryCacheSizeInBytes: memoryCacheSizeInBytes)
+            }
+
+            public init(clearDiskCachesOnLaunch: Bool,
+                        urlCacheEnabled: Bool = true,
+                        preparedTileCacheEnabled: Bool = true,
+                        preparedDiskTimeToLive: TimeInterval,
+                        preparedDiskCacheSizeInBytes: Int,
+                        memoryCacheSizeInBytes: Int) {
                 self.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
                 self.urlCacheEnabled = urlCacheEnabled
                 self.preparedTileCacheEnabled = preparedTileCacheEnabled
                 self.preparedDiskTimeToLive = preparedDiskTimeToLive
+                self.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
                 self.memoryCacheSizeInBytes = memoryCacheSizeInBytes
             }
         }
@@ -297,26 +318,6 @@ public struct ImmersiveMapSettings: Equatable {
             TileCoverageZoomPolicy.resolve(cameraZoom: cameraZoom,
                                            renderSurfaceMode: .flat,
                                            maximumZoomLevel: coverage.maximumZoomLevel).baseZoom
-        }
-    }
-
-    public struct TerrainSettings: Equatable {
-        public var isEnabled: Bool
-        public var source: ImmersiveMapTerrainSource?
-        public var exaggeration: Float
-        public var maximumZoomLevel: Int
-        public var meshResolution: Int
-
-        public init(isEnabled: Bool = false,
-                    source: ImmersiveMapTerrainSource? = nil,
-                    exaggeration: Float = 1.0,
-                    maximumZoomLevel: Int = 14,
-                    meshResolution: Int = 65) {
-            self.isEnabled = isEnabled
-            self.source = source
-            self.exaggeration = exaggeration
-            self.maximumZoomLevel = maximumZoomLevel
-            self.meshResolution = meshResolution
         }
     }
 
@@ -722,7 +723,6 @@ public struct ImmersiveMapSettings: Equatable {
     public var tileProvider: AnyImmersiveMapTileProvider
     public var mapStyle: AnyImmersiveMapMapStyle
     public var tiles: TileSettings
-    public var terrain: TerrainSettings
     public var labels: LabelSettings
     public var scene: SceneSettings
     public var style: StyleSettings
@@ -737,7 +737,6 @@ public struct ImmersiveMapSettings: Equatable {
                 tileProvider: AnyImmersiveMapTileProvider = AnyImmersiveMapTileProvider(ImmersiveMapTilesProvider()),
                 mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
                 tiles: TileSettings,
-                terrain: TerrainSettings = TerrainSettings(),
                 labels: LabelSettings,
                 scene: SceneSettings,
                 style: StyleSettings,
@@ -751,7 +750,6 @@ public struct ImmersiveMapSettings: Equatable {
         self.tileProvider = tileProvider
         self.mapStyle = mapStyle
         self.tiles = tiles
-        self.terrain = terrain
         self.labels = labels
         self.scene = scene
         self.style = style
@@ -807,7 +805,6 @@ public struct ImmersiveMapSettings: Equatable {
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
                                                               memoryCacheSizeInBytes: 512 * 1024 * 1024),
                             parsing: TileSettings.ParsingSettings(addTestBorders: false)),
-        terrain: TerrainSettings(),
         labels: LabelSettings(language: .english,
                               fallbackPolicy: .international,
                               houseNumbers: LabelSettings.HouseNumberSettings(enabled: true,
@@ -928,6 +925,20 @@ public extension ImmersiveMapSettings {
                       preparedTileCacheEnabled: Bool? = nil,
                       preparedDiskTimeToLive: TimeInterval? = nil,
                       memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
+        tileSettings(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
+                     urlCacheEnabled: urlCacheEnabled,
+                     preparedTileCacheEnabled: preparedTileCacheEnabled,
+                     preparedDiskTimeToLive: preparedDiskTimeToLive,
+                     preparedDiskCacheSizeInBytes: nil,
+                     memoryCacheSizeInBytes: memoryCacheSizeInBytes)
+    }
+
+    func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
+                      urlCacheEnabled: Bool? = nil,
+                      preparedTileCacheEnabled: Bool? = nil,
+                      preparedDiskTimeToLive: TimeInterval? = nil,
+                      preparedDiskCacheSizeInBytes: Int?,
+                      memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
         var settings = self
         if let clearDiskCachesOnLaunch {
             settings.tiles.cache.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
@@ -941,43 +952,13 @@ public extension ImmersiveMapSettings {
         if let preparedDiskTimeToLive {
             settings.tiles.cache.preparedDiskTimeToLive = preparedDiskTimeToLive
         }
+        if let preparedDiskCacheSizeInBytes {
+            settings.tiles.cache.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
+        }
         if let memoryCacheSizeInBytes {
             settings.tiles.cache.memoryCacheSizeInBytes = memoryCacheSizeInBytes
         }
         return settings
-    }
-
-    func terrainSettings(_ terrain: TerrainSettings) -> ImmersiveMapSettings {
-        var settings = self
-        settings.terrain = terrain
-        return settings
-    }
-
-    func terrainSource(_ source: ImmersiveMapTerrainSource?) -> ImmersiveMapSettings {
-        var terrain = self.terrain
-        terrain.source = source
-        if let source {
-            terrain.maximumZoomLevel = source.maximumZoomLevel
-        }
-        return terrainSettings(terrain)
-    }
-
-    func terrainRendering(isEnabled: Bool = true,
-                          exaggeration: Float? = nil,
-                          maximumZoomLevel: Int? = nil,
-                          meshResolution: Int? = nil) -> ImmersiveMapSettings {
-        var terrain = self.terrain
-        terrain.isEnabled = isEnabled
-        if let exaggeration {
-            terrain.exaggeration = exaggeration
-        }
-        if let maximumZoomLevel {
-            terrain.maximumZoomLevel = maximumZoomLevel
-        }
-        if let meshResolution {
-            terrain.meshResolution = meshResolution
-        }
-        return terrainSettings(terrain)
     }
 
     func labelSettings(_ labels: LabelSettings) -> ImmersiveMapSettings {

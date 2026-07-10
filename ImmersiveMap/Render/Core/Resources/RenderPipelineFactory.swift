@@ -15,7 +15,6 @@ struct RenderPipelineBundle {
     let globeTileTexturePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let globePipeline: GlobePipeline
-    let terrainPipeline: TerrainPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldRenderer: StarfieldRenderer
 }
@@ -55,10 +54,6 @@ final class RenderPipelineFactory {
                                           layer: layer,
                                           library: library,
                                           sampleCount: sampleCount)
-        let terrainPipeline = TerrainPipeline(metalDevice: metalDevice,
-                                              layer: layer,
-                                              library: library,
-                                              sampleCount: sampleCount)
         let fxaaPipeline = FXAAPipeline(metalDevice: metalDevice,
                                         layer: layer,
                                         library: library)
@@ -75,7 +70,6 @@ final class RenderPipelineFactory {
                                     globeTileTexturePipeline: globeTileTexturePipeline,
                                     extrudedTilePipeline: extrudedTilePipeline,
                                     globePipeline: globePipeline,
-                                    terrainPipeline: terrainPipeline,
                                     fxaaPipeline: fxaaPipeline,
                                     starfieldRenderer: starfieldRenderer)
     }
