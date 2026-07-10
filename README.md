@@ -4,27 +4,11 @@
 
 ![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
 
-_[Watch the full-quality demo (MP4)](Documentation/Assets/immersive-map-demo.mp4)_
-
 Native Swift + Metal map rendering engine for SwiftUI apps.
 
 > **Status: early alpha.** The public API is not stable yet. Not production-ready. Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-ImmersiveMap is an experimental native Swift + Metal map rendering engine for SwiftUI apps on Apple platforms. It is built for developers who need direct control over map rendering, custom vector tile providers, globe rendering, and native SwiftUI integration - without a WebView or a JavaScript bridge.
-
-## Why ImmersiveMap?
-
-Use ImmersiveMap when you need:
-
-- Native SwiftUI integration
-- Direct control over the rendering pipeline
-- Metal-based rendering instead of a WebView
-- Custom vector tile providers
-- Custom map styles
-- Globe rendering
-- Apple-first map experiences for iOS and Mac Catalyst
-
-ImmersiveMap is not a full GIS workbench. It is a rendering engine / SDK for Apple apps.
+ImmersiveMap is an experimental **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms. It is built for developers who need direct control over map rendering, custom vector tile providers, globe rendering, and native SwiftUI integration - without a WebView or a JavaScript bridge.
 
 ## Features
 
@@ -80,16 +64,7 @@ struct ContentView: View {
 
     var body: some View {
         ImmersiveMapView()
-            .cameraController(
-                camera,
-                position: ImmersiveMapCameraPosition(
-                    latitudeDegrees: 55.7558,
-                    longitudeDegrees: 37.6173,
-                    zoom: 0,
-                    bearing: .pi / 10,
-                    pitch: .pi / 5
-                )
-            )
+            .cameraController(camera)
             .enableCameraUIControls()
             .ignoresSafeArea()
     }
@@ -106,8 +81,6 @@ ImmersiveMapView()
     .mapStyle(MapboxMapStyle())
     // camera and other modifiers...
 ```
-
-See [Tile Providers](#tile-providers) for details.
 
 ## Example Apps
 
@@ -126,49 +99,9 @@ To run:
 
 The host apps read optional launch environment variables: `IMMERSIVE_MAP_TILE_BASE_URL`, `IMMERSIVE_MAP_AUTH_TOKEN`, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN`, `IMMERSIVE_MAP_MAPBOX_TILESET_ID`. If the Mapbox token is present, the host apps use the Mapbox Vector Tiles API; otherwise they fall back to the OpenStreetMap / Shortbread provider.
 
-## Tile Providers
-
-ImmersiveMap is designed around pluggable tile providers.
-
-### Mapbox
-
-```swift
-ImmersiveMapView()
-    .tileProvider(MapboxTileProvider(accessToken: "your-mapbox-public-token"))
-    .mapStyle(MapboxMapStyle())
-```
-
-### OpenStreetMap / Shortbread
-
-```swift
-ImmersiveMapView()
-    .tileProvider(OpenStreetMapTileProvider())
-    .mapStyle(OpenStreetMapMapStyle())
-```
-
-### Custom Providers
-
-Custom providers conform to `ImmersiveMapTileProvider` (see `ImmersiveMap/Provider/`). For a quick start, `VectorTileProvider` lets you point at any MVT tile source without writing a new type. See [Documentation/docs/custom-tile-provider.md](Documentation/docs/custom-tile-provider.md).
-
 ## Architecture
 
-High-level rendering flow:
-
-```text
-SwiftUI App
-   ↓
-ImmersiveMapView
-   ↓
-Camera / Tile / Style / Scene controllers
-   ↓
-Tile providers + cache
-   ↓
-Metal render pipeline
-   ↓
-Screen
-```
-
-More detail in [Documentation/docs/architecture.md](Documentation/docs/architecture.md).
+See [Documentation/docs/architecture.md](Documentation/docs/architecture.md).
 
 ## Screenshots
 
