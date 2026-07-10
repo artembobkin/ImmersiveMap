@@ -22,9 +22,10 @@ final class FrameAttachmentStore {
          renderSampleCount: Int) {
         self.metalDevice = metalDevice
         self.renderSampleCount = max(1, renderSampleCount)
-        // Симулятор по документации Metal требует .private для depth/MSAA-атачментов,
-        // даже если фактически memoryless там работает.
-        #if targetEnvironment(simulator)
+        // Memoryless - это оптимизация tile memory для iOS TBDR GPU. Симулятор её не
+        // поддерживает; на нативном macOS (в т.ч. Apple Silicon) memoryless-аттачменты
+        // для этого пайплайна дают пустой рендер, поэтому там используем .private.
+        #if targetEnvironment(simulator) || os(macOS)
         self.transientStorageMode = .private
         #else
         self.transientStorageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private

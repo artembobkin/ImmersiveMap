@@ -236,8 +236,9 @@ class GlobeTilesTexture {
                                                                        height: size,
                                                                        mipmapped: false)
         depthDescriptor.usage = [.renderTarget]
-        // Симулятор по документации Metal требует .private для depth-атачментов.
-        #if targetEnvironment(simulator)
+        // Симулятор и нативный macOS не работают с memoryless depth для этого рендера
+        // в атлас (memoryless - оптимизация tile memory для iOS TBDR GPU).
+        #if targetEnvironment(simulator) || os(macOS)
         depthDescriptor.storageMode = .private
         #else
         depthDescriptor.storageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
