@@ -80,7 +80,8 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudSnapshotTimer?.invalidate()
     }
 
-    func layout(in bounds: CGRect) {
+    func layout(in bounds: CGRect, safeAreaTopInset: CGFloat) {
+        hudView.safeAreaTopInset = safeAreaTopInset
         hudView.frame = bounds
     }
 

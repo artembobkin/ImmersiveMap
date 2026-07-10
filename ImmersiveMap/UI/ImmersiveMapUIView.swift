@@ -119,7 +119,8 @@ public class ImmersiveMapUIView: UIView {
 
         controlsRuntime.layout(in: bounds,
                                safeAreaInsets: safeAreaInsets)
-        debugOverlayRuntime.layout(in: bounds)
+        debugOverlayRuntime.layout(in: bounds,
+                                   safeAreaTopInset: safeAreaInsets.top)
     }
 
     // MARK: - Updates

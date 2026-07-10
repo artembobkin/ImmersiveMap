@@ -67,6 +67,13 @@ final class DebugOverlayHUDView: NSView {
     private var isPanelEnabled = false
     private var isCollapsed = false
     private var selectedTab: SelectedTab = .stats
+    /// Верхний safe-area inset host view; на macOS с обычным заголовком окна это 0.
+    var safeAreaTopInset: CGFloat = 0 {
+        didSet {
+            guard safeAreaTopInset != oldValue else { return }
+            needsLayout = true
+        }
+    }
     private var tileTraceSnapshot = TileTraceRecorderSnapshot(isRecording: false, fileURL: nil)
     private var baseLabelTraceSnapshot = BaseLabelTraceRecorderSnapshot(isRecording: false, fileURL: nil)
 
@@ -242,10 +249,11 @@ final class DebugOverlayHUDView: NSView {
         let maxPanelWidth = min(Layout.maximumWidth, max(bounds.width - left - Layout.contentInset, Layout.collapsedWidth))
 
         if isCollapsed {
-            containerView.frame = CGRect(x: left - Layout.contentInset,
-                                         y: top - Layout.headerHeight - Layout.contentInset,
-                                         width: Layout.collapsedWidth,
-                                         height: Layout.headerHeight)
+            containerView.frame = containerFrameClampedToSafeArea(
+                CGRect(x: left - Layout.contentInset,
+                       y: top - Layout.headerHeight - Layout.contentInset,
+                       width: Layout.collapsedWidth,
+                       height: Layout.headerHeight))
             layoutHeader(width: Layout.collapsedWidth)
             return
         }
@@ -322,10 +330,11 @@ final class DebugOverlayHUDView: NSView {
         let containerSize = CGSize(width: contentWidth + Layout.contentInset * 2,
                                    height: contentHeight)
 
-        containerView.frame = CGRect(x: left - Layout.contentInset,
-                                     y: panelY,
-                                     width: containerSize.width,
-                                     height: containerSize.height)
+        containerView.frame = containerFrameClampedToSafeArea(
+            CGRect(x: left - Layout.contentInset,
+                   y: panelY,
+                   width: containerSize.width,
+                   height: containerSize.height))
         layoutHeader(width: containerSize.width)
 
         let switchSize = axesSwitch.intrinsicContentSize
@@ -448,6 +457,17 @@ final class DebugOverlayHUDView: NSView {
                                          width: contentWidth,
                                          height: atlasPreviewHeight + sectionSpacing + atlasDetailsSize.height)
         updateContentVisibility()
+    }
+
+    /// Прижимает верх панели к safe area. Внутренние элементы позиционируются
+    /// относительно контейнера, поэтому сдвиг origin переносит их целиком.
+    private func containerFrameClampedToSafeArea(_ frame: CGRect) -> CGRect {
+        var clamped = frame
+        let minimumY = safeAreaTopInset + Layout.contentInset
+        if clamped.origin.y < minimumY {
+            clamped.origin.y = minimumY
+        }
+        return clamped
     }
 
     private func layoutHeader(width: CGFloat) {

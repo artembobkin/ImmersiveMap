@@ -143,7 +143,8 @@ public class ImmersiveMapNSView: NSView {
 
         controlsRuntime.layout(in: bounds,
                                safeAreaInsets: safeAreaInsets)
-        debugOverlayRuntime.layout(in: bounds)
+        debugOverlayRuntime.layout(in: bounds,
+                                   safeAreaTopInset: safeAreaInsets.top)
     }
 
     public override func setFrameSize(_ newSize: NSSize) {
