@@ -11,6 +11,8 @@ import Metal
 import CoreGraphics
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 import simd
 
@@ -70,18 +72,14 @@ struct PoiSpriteAtlasDescriptor {
     let minimumColumns: Int
     #if canImport(UIKit)
     let symbolWeight: UIImage.SymbolWeight
+    #elseif canImport(AppKit)
+    let symbolWeight: NSFont.Weight
     #endif
 
-    #if canImport(UIKit)
     static let `default` = PoiSpriteAtlasDescriptor(cellSize: 64,
                                                     cellPadding: 8,
                                                     minimumColumns: 4,
                                                     symbolWeight: .semibold)
-    #else
-    static let `default` = PoiSpriteAtlasDescriptor(cellSize: 64,
-                                                    cellPadding: 8,
-                                                    minimumColumns: 4)
-    #endif
 }
 
 struct PoiSpriteAtlasRegion {
@@ -164,17 +162,10 @@ final class PoiSpriteAtlas {
     static func makeBitmapImage(layout: PoiSpriteAtlasLayout,
                                 descriptor: PoiSpriteAtlasDescriptor = .default) -> CGImage {
         let size = CGSize(width: layout.pixelSize, height: layout.pixelSize)
-        #if canImport(UIKit)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
-
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { context in
-            let cgContext = context.cgContext
+        let image = PlatformGraphicsImageRenderer.makeCGImage(size: size) { cgContext in
             cgContext.clear(CGRect(origin: .zero, size: size))
             cgContext.interpolationQuality = .high
-            UIColor.white.setFill()
+            PlatformColor.white.setFill()
 
             for icon in layout.icons {
                 guard let region = layout.region(for: icon) else { continue }
@@ -186,53 +177,8 @@ final class PoiSpriteAtlas {
             }
         }
 
-        guard let cgImage = image.cgImage else {
-            fatalError("Failed to rasterize POI sprite atlas image.")
-        }
-        return cgImage
-        #else
-        return makeFallbackBitmapImage(size: size,
-                                       layout: layout,
-                                       descriptor: descriptor)
-        #endif
-    }
-
-    private static func makeFallbackBitmapImage(size: CGSize,
-                                                layout: PoiSpriteAtlasLayout,
-                                                descriptor: PoiSpriteAtlasDescriptor) -> CGImage {
-        let width = Int(size.width)
-        let height = Int(size.height)
-        let bytesPerRow = width * 4
-        var data = Data(count: bytesPerRow * height)
-
-        let image = data.withUnsafeMutableBytes { bytes -> CGImage? in
-            guard let baseAddress = bytes.baseAddress,
-                  let context = CGContext(data: baseAddress,
-                                          width: width,
-                                          height: height,
-                                          bitsPerComponent: 8,
-                                          bytesPerRow: bytesPerRow,
-                                          space: CGColorSpaceCreateDeviceRGB(),
-                                          bitmapInfo: CGBitmapInfo.byteOrder32Little
-                                            .union(CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue))
-                                            .rawValue) else {
-                return nil
-            }
-
-            context.clear(CGRect(origin: .zero, size: size))
-            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-            for icon in layout.icons {
-                guard let region = layout.region(for: icon) else { continue }
-                let rect = region.pixelRect.insetBy(dx: CGFloat(descriptor.cellPadding),
-                                                    dy: CGFloat(descriptor.cellPadding))
-                context.fillEllipse(in: rect.insetBy(dx: rect.width * 0.18,
-                                                     dy: rect.height * 0.18))
-            }
-            return context.makeImage()
-        }
-
         guard let image else {
-            fatalError("Failed to rasterize fallback POI sprite atlas image.")
+            fatalError("Failed to rasterize POI sprite atlas image.")
         }
         return image
     }
@@ -289,7 +235,6 @@ final class PoiSpriteAtlas {
                                  in rect: CGRect,
                                  descriptor: PoiSpriteAtlasDescriptor,
                                  context: CGContext) {
-        #if canImport(UIKit)
         let iconRect = rect.insetBy(dx: rect.width * 0.16, dy: rect.height * 0.16)
         let pointSize = min(iconRect.width, iconRect.height)
         guard let symbolImage = makeSymbolImage(for: icon,
@@ -300,19 +245,34 @@ final class PoiSpriteAtlas {
 
         let targetRect = aspectFitRect(contentSize: symbolImage.size, in: iconRect)
         symbolImage.draw(in: targetRect)
-        #endif
     }
 
     #if canImport(UIKit)
     private static func makeSymbolImage(for icon: PoiSpriteIcon,
                                         pointSize: CGFloat,
-                                        weight: UIImage.SymbolWeight) -> UIImage? {
+                                        weight: UIImage.SymbolWeight) -> PlatformImage? {
         let configuration = UIImage.SymbolConfiguration(pointSize: pointSize,
                                                         weight: weight,
                                                         scale: .large)
         for symbolName in icon.symbolNames {
             if let image = UIImage(systemName: symbolName, withConfiguration: configuration) {
                 return image.withTintColor(.white, renderingMode: .alwaysOriginal)
+            }
+        }
+        return nil
+    }
+    #elseif canImport(AppKit)
+    private static func makeSymbolImage(for icon: PoiSpriteIcon,
+                                        pointSize: CGFloat,
+                                        weight: NSFont.Weight) -> PlatformImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: pointSize,
+                                                        weight: weight,
+                                                        scale: .large)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
+        for symbolName in icon.symbolNames {
+            if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration) {
+                return image
             }
         }
         return nil

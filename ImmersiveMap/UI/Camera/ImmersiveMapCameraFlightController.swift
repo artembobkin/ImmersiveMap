@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import Foundation
 import QuartzCore
 
@@ -155,5 +153,3 @@ final class ImmersiveMapCameraFlightController {
         cameraAnimationRuntime?.refreshRenderingState()
     }
 }
-
-#endif

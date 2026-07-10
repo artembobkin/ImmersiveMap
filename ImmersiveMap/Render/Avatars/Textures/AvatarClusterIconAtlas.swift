@@ -11,6 +11,8 @@ import Foundation
 import Metal
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 final class AvatarClusterIconAtlas {
@@ -163,7 +165,6 @@ final class AvatarClusterIconAtlas {
     private static func drawCountBadge(count: Int,
                                        in bounds: CGRect,
                                        context: CGContext) {
-        #if canImport(UIKit)
         let label = count > 99 ? "99+" : "\(max(2, count))"
         let badgeHeight = max(24.0, bounds.height * 0.30)
         let badgeWidth = max(badgeHeight, bounds.width * (label.count > 2 ? 0.44 : 0.34))
@@ -171,25 +172,21 @@ final class AvatarClusterIconAtlas {
                                y: bounds.minY + bounds.height * 0.05,
                                width: badgeWidth,
                                height: badgeHeight)
-        let scale = max(UIScreen.main.scale, 1.0)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: badgeRect.size, format: format)
-        let badgeImage = renderer.image { _ in
+        let badgeImage = PlatformGraphicsImageRenderer.makeCGImage(size: badgeRect.size,
+                                                                   scale: PlatformDisplayScale.main) { _ in
             let localBounds = CGRect(origin: .zero, size: badgeRect.size)
-            let path = UIBezierPath(roundedRect: localBounds,
-                                    cornerRadius: badgeHeight * 0.5)
-            UIColor(red: 0.05, green: 0.07, blue: 0.10, alpha: 0.92).setFill()
+            let path = PlatformBezierPath(roundedRect: localBounds,
+                                          cornerRadius: badgeHeight * 0.5)
+            PlatformColor(red: 0.05, green: 0.07, blue: 0.10, alpha: 0.92).setFill()
             path.fill()
-            UIColor.white.setStroke()
+            PlatformColor.white.setStroke()
             path.lineWidth = max(1.5, bounds.width * 0.018)
             path.stroke()
 
-            let font = UIFont.systemFont(ofSize: badgeHeight * 0.50, weight: .bold)
+            let font = PlatformFont.systemFont(ofSize: badgeHeight * 0.50, weight: .bold)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
-                .foregroundColor: UIColor.white
+                .foregroundColor: PlatformColor.white
             ]
             let textSize = label.size(withAttributes: attributes)
             let textRect = CGRect(x: localBounds.midX - textSize.width * 0.5,
@@ -198,9 +195,8 @@ final class AvatarClusterIconAtlas {
                                   height: textSize.height)
             label.draw(in: textRect, withAttributes: attributes)
         }
-        if let cgImage = badgeImage.cgImage {
-            context.draw(cgImage, in: badgeRect)
+        if let badgeImage {
+            context.draw(badgeImage, in: badgeRect)
         }
-        #endif
     }
 }

@@ -6,8 +6,7 @@ let package = Package(
     name: "ImmersiveMap",
     platforms: [
         .iOS(.v18),
-        .macCatalyst(.v18),
-        .macOS(.v12)
+        .macOS(.v15)
     ],
     products: [
         .library(

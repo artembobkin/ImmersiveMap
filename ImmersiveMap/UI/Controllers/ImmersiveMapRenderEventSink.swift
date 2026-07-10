@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import Foundation
 
 /// Принимает события renderer-пайплайна и передает их владельцам runtime-состояния карты.
@@ -39,5 +37,3 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink {
         debugOverlayHUDSnapshotStore.publish(snapshot)
     }
 }
-
-#endif

@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import CoreGraphics
 import Foundation
 
@@ -194,5 +192,3 @@ final class ImmersiveMapSelectionHandler {
         }
     }
 }
-
-#endif

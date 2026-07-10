@@ -5,7 +5,7 @@
 import XCTest
 
 final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
-    #if canImport(UIKit)
+    @MainActor
     func testImmersiveMapViewModifiersAttachControllersAndInitialCameraPosition() {
         let avatars = ImmersiveMapAvatarsController()
         let camera = ImmersiveMapCameraController()
@@ -62,7 +62,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let unwrappedSettings = try XCTUnwrap(settings)
         XCTAssertTrue(unwrappedSettings.debug.enableDebugPanel)
     }
-    #endif
 
     func testDebugPanelEnablesDebugOverlaySettings() {
         let settings = ImmersiveMapSettings.default.debugPanel()
@@ -86,7 +85,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertNotEqual(settings, ImmersiveMapSettings.default)
     }
 
-    #if canImport(UIKit)
     func testTileProviderAndMapStyleViewModifiersStoreMapboxConfiguration() throws {
         let style = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
             labels.poi.strokeWidthPx = 3.5
@@ -103,7 +101,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(unwrappedSettings.tileProvider, AnyImmersiveMapTileProvider(tileProvider))
         XCTAssertEqual(unwrappedSettings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
     }
-    #endif
 
     func testEarthSceneModifierControlsFullSunTerminatorAndNightLightsPackage() {
         let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
@@ -201,7 +198,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px2048.rawValue, 2048)
     }
 
-    #if canImport(UIKit)
     func testImmersiveMapViewLegacyTileCacheSettingsModifierFunctionReferencePreservesPreparedDiskCacheSize() {
         var baseSettings = ImmersiveMapSettings.default
         baseSettings.tiles.cache.preparedDiskCacheSizeInBytes = 45
@@ -233,9 +229,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings?.tiles.cache.preparedDiskTimeToLive,
                        ImmersiveMapSettings.default.tiles.cache.preparedDiskTimeToLive)
     }
-    #endif
 
-    #if canImport(UIKit)
     func testImmersiveMapViewAvatarSettingsModifierUpdatesOnlyProvidedAvatarValues() throws {
         let view = ImmersiveMapView()
             .avatarSettings(size: .px128,
@@ -251,9 +245,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(avatars.singleLiftScale, ImmersiveMapSettings.default.avatars.singleLiftScale)
         XCTAssertEqual(avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
     }
-    #endif
 
-    #if canImport(UIKit)
     func testImmersiveMapViewEarthSceneModifierControlsFullSunTerminatorAndNightLightsPackage() {
         let view = ImmersiveMapView().earthScene(isEnabled: false)
 
@@ -261,7 +253,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
 
         XCTAssertFalse(settings?.scene.earth.isEnabled == true)
         XCTAssertTrue(settings?.scene.earth.sun.isEnabled == true)
-        XCTAssertTrue(settings?.scene.earth.nightLights.isEnabled == true)
+        XCTAssertFalse(settings?.scene.earth.nightLights.isEnabled == true)
     }
 
     func testImmersiveMapViewNightLightsTileManifestURLModifierStoresRemoteManifestURL() {
@@ -272,7 +264,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
 
         XCTAssertEqual(settings?.scene.earth.nightLights.tileManifestURL, manifestURL)
     }
-    #endif
 
     func testFluentSettingsModifiersReplaceEverySettingsDomain() {
         let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: true,

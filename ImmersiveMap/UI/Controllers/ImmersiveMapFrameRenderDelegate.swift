@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import QuartzCore
 
 /// Display-link delegate, который готовит и рендерит один frame.
@@ -42,5 +40,3 @@ final class ImmersiveMapFrameRenderDelegate: ImmersiveMapRenderDriverFrameDelega
         cameraAnimationRuntime.advanceAnimationsIfNeeded(currentTime: currentTime)
     }
 }
-
-#endif

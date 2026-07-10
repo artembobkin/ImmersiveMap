@@ -6,6 +6,8 @@ import CoreGraphics
 import simd
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 public struct AvatarsSnapshot {
@@ -128,6 +130,19 @@ public final class ImmersiveMapAvatarsController {
                        isSelected: Bool? = nil) {
         guard let cgImage = image.cgImage else {
             preconditionFailure("UIImage must have CGImage backing.")
+        }
+        update(id: id,
+               image: cgImage,
+               borderColor: borderColor,
+               isSelected: isSelected)
+    }
+#elseif canImport(AppKit)
+    public func update(id: UInt64,
+                       image: NSImage,
+                       borderColor: SIMD4<Float>? = nil,
+                       isSelected: Bool? = nil) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            preconditionFailure("NSImage must be convertible to CGImage.")
         }
         update(id: id,
                image: cgImage,

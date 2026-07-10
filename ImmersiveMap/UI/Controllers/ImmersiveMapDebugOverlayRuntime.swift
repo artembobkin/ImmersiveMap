@@ -1,10 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
+import CoreGraphics
 import Foundation
-import UIKit
 
 @MainActor
 final class ImmersiveMapDebugOverlayRuntime {
@@ -17,7 +15,7 @@ final class ImmersiveMapDebugOverlayRuntime {
     private var hudSnapshotTimer: Timer?
     private var consumedHUDSnapshotVersion: UInt64 = 0
 
-    init(mapView: ImmersiveMapUIView,
+    init(mapView: ImmersiveMapHostView,
          controls: DebugOverlayControlState,
          hudSnapshotStore: DebugOverlayHUDSnapshotStore,
          tileTraceRecorder: TileTraceRecorder,
@@ -136,5 +134,3 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudView.apply(snapshot: value.snapshot)
     }
 }
-
-#endif

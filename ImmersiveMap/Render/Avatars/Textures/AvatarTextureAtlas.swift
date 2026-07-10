@@ -8,6 +8,8 @@ import os
 import simd
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 enum AvatarTextureRasterizer {
@@ -295,19 +297,14 @@ final class AvatarBatteryBadgeAtlas {
         return slot
     }
 
-#if canImport(UIKit)
     private func makeBadgeImage(for key: AvatarBatteryBadgeAtlasKey) -> CGImage? {
         let size = CGSize(width: cellWidth, height: cellHeight)
         let layout = AvatarBatteryBadgeImageLayout(size: size)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { _ in
-            let shellPath = UIBezierPath(roundedRect: layout.shellRect, cornerRadius: layout.shellCornerRadius)
-            UIColor.white.setFill()
+        return PlatformGraphicsImageRenderer.makeCGImage(size: size) { _ in
+            let shellPath = PlatformBezierPath(roundedRect: layout.shellRect, cornerRadius: layout.shellCornerRadius)
+            PlatformColor.white.setFill()
             shellPath.fill()
-            UIColor(white: 0.0, alpha: 0.06).setStroke()
+            PlatformColor(white: 0.0, alpha: 0.06).setStroke()
             shellPath.lineWidth = 1.0
             shellPath.stroke()
 
@@ -322,10 +319,10 @@ final class AvatarBatteryBadgeAtlas {
                 textValue = "--"
             }
 
-            let font = UIFont.monospacedDigitSystemFont(ofSize: layout.fontSize, weight: .semibold)
+            let font = PlatformFont.monospacedDigitSystemFont(ofSize: layout.fontSize, weight: .semibold)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
-                .foregroundColor: UIColor(white: 0.08, alpha: 1.0)
+                .foregroundColor: PlatformColor(white: 0.08, alpha: 1.0)
             ]
             let text = textValue as NSString
             let textSize = text.size(withAttributes: attributes)
@@ -351,7 +348,6 @@ final class AvatarBatteryBadgeAtlas {
             iconImage?.draw(in: iconRect)
             text.draw(in: textRect, withAttributes: attributes)
         }
-        return image.cgImage
     }
 
     private func iconAsset(for levelPct: Int) -> AvatarBatteryIconAsset {
@@ -365,17 +361,13 @@ final class AvatarBatteryBadgeAtlas {
         }
     }
 
-    private func loadIcon(asset: AvatarBatteryIconAsset) -> UIImage? {
-        UIImage(named: asset.rawValue)
+    private func loadIcon(asset: AvatarBatteryIconAsset) -> PlatformImage? {
+        PlatformImage(named: asset.rawValue)
     }
 
-    private func makeFallbackIcon(asset: AvatarBatteryIconAsset, size: CGSize) -> UIImage? {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { _ in
-            let strokeColor = UIColor(white: 0.08, alpha: 1.0)
+    private func makeFallbackIcon(asset: AvatarBatteryIconAsset, size: CGSize) -> PlatformImage? {
+        PlatformGraphicsImageRenderer.makePlatformImage(size: size) { _ in
+            let strokeColor = PlatformColor(white: 0.08, alpha: 1.0)
             strokeColor.setStroke()
             strokeColor.setFill()
 
@@ -388,11 +380,11 @@ final class AvatarBatteryBadgeAtlas {
                                  width: size.width * 0.10,
                                  height: size.height * 0.28)
 
-            let bodyPath = UIBezierPath(roundedRect: bodyRect, cornerRadius: size.height * 0.16)
+            let bodyPath = PlatformBezierPath(roundedRect: bodyRect, cornerRadius: size.height * 0.16)
             bodyPath.lineWidth = max(1.4, size.width * 0.08)
             bodyPath.stroke()
 
-            let tipPath = UIBezierPath(roundedRect: tipRect, cornerRadius: size.width * 0.04)
+            let tipPath = PlatformBezierPath(roundedRect: tipRect, cornerRadius: size.width * 0.04)
             tipPath.lineWidth = max(1.2, size.width * 0.06)
             tipPath.stroke()
 
@@ -415,17 +407,11 @@ final class AvatarBatteryBadgeAtlas {
                                      y: barArea.minY,
                                      width: barWidth,
                                      height: barArea.height)
-                let barPath = UIBezierPath(roundedRect: barRect, cornerRadius: min(barRect.width, barRect.height) * 0.18)
+                let barPath = PlatformBezierPath(roundedRect: barRect, cornerRadius: min(barRect.width, barRect.height) * 0.18)
                 barPath.fill()
             }
         }
-        return image
     }
-#else
-    private func makeBadgeImage(for _: AvatarBatteryBadgeAtlasKey) -> CGImage? {
-        nil
-    }
-#endif
 }
 
 struct AvatarSpeedBadgeAtlasSlot {
@@ -543,20 +529,15 @@ final class AvatarSpeedBadgeAtlas {
         return slot
     }
 
-#if canImport(UIKit)
     private func makeBadgeImage(for key: AvatarSpeedBadgeAtlasKey) -> CGImage? {
         let size = CGSize(width: cellWidth, height: cellHeight)
         let layout = AvatarSpeedBadgeImageLayout(size: size, cornerRadius: cornerRadiusPx)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { _ in
-            let shellPath = UIBezierPath(roundedRect: layout.shellRect,
-                                         cornerRadius: layout.shellCornerRadius)
-            UIColor.white.setFill()
+        return PlatformGraphicsImageRenderer.makeCGImage(size: size) { _ in
+            let shellPath = PlatformBezierPath(roundedRect: layout.shellRect,
+                                               cornerRadius: layout.shellCornerRadius)
+            PlatformColor.white.setFill()
             shellPath.fill()
-            UIColor(white: 0.0, alpha: 0.08).setStroke()
+            PlatformColor(white: 0.0, alpha: 0.08).setStroke()
             shellPath.lineWidth = 1.0
             shellPath.stroke()
 
@@ -569,13 +550,13 @@ final class AvatarSpeedBadgeAtlas {
             }
             let text = textValue as NSString
             let valueAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedDigitSystemFont(ofSize: layout.valueFontSize, weight: .bold),
-                .foregroundColor: UIColor(white: 0.08, alpha: 1.0)
+                .font: PlatformFont.monospacedDigitSystemFont(ofSize: layout.valueFontSize, weight: .bold),
+                .foregroundColor: PlatformColor(white: 0.08, alpha: 1.0)
             ]
             let unitText = Self.unitText as NSString
             let unitAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: layout.unitFontSize, weight: .bold),
-                .foregroundColor: UIColor(white: 0.08, alpha: 1.0)
+                .font: PlatformFont.systemFont(ofSize: layout.unitFontSize, weight: .bold),
+                .foregroundColor: PlatformColor(white: 0.08, alpha: 1.0)
             ]
             let valueSize = text.size(withAttributes: valueAttributes)
             let unitSize = unitText.size(withAttributes: unitAttributes)
@@ -592,11 +573,5 @@ final class AvatarSpeedBadgeAtlas {
             text.draw(in: valueRect, withAttributes: valueAttributes)
             unitText.draw(in: unitRect, withAttributes: unitAttributes)
         }
-        return image.cgImage
     }
-#else
-    private func makeBadgeImage(for _: AvatarSpeedBadgeAtlasKey) -> CGImage? {
-        nil
-    }
-#endif
 }

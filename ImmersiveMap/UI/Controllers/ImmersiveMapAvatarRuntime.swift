@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import Foundation
 
 /// Владеет avatar controller, подключенным к одному map view runtime.
@@ -56,5 +54,3 @@ final class ImmersiveMapAvatarRuntime: AvatarRenderSource {
                            isSelected: isSelected)
     }
 }
-
-#endif

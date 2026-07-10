@@ -5,7 +5,11 @@ import XCTest
 
 final class AvatarRendererFrameBufferIsolationTests: XCTestCase {
     func testAvatarPerFrameRenderBuffersUseFrameSlots() throws {
-        let sourceURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        // cwd на iOS-симуляторе указывает в песочницу; корень пакета выводим из пути этого файла.
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .appendingPathComponent("ImmersiveMap/Render/Avatars/AvatarsRenderer.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 

@@ -1,10 +1,12 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import Foundation
 import QuartzCore
+
+/// Создает `CADisplayLink` для драйвера: на iOS линк общесистемный,
+/// на macOS его выдает `NSView` и он привязан к дисплею окна host view.
+typealias DisplayLinkFactory = (_ target: Any, _ selector: Selector) -> CADisplayLink
 
 /// Управляет циклом отрисовки карты на уровне view: держит `CADisplayLink`,
 /// включает или приостанавливает его по состоянию `RenderLoopPacing`,
@@ -27,14 +29,15 @@ final class ImmersiveMapRenderDriver: NSObject {
         pacing.isCameraAnimationRenderingActive
     }
 
-    func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate) {
+    func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate,
+               displayLinkFactory: DisplayLinkFactory) {
         guard displayLink == nil else { return }
 
         let target = WeakDisplayLinkTarget(driver: self,
                                            frameDelegate: frameDelegate)
         displayLinkTarget = target
-        displayLink = CADisplayLink(target: target,
-                                    selector: #selector(WeakDisplayLinkTarget.displayLinkDidFire(_:)))
+        displayLink = displayLinkFactory(target,
+                                         #selector(WeakDisplayLinkTarget.displayLinkDidFire(_:)))
         displayLink?.add(to: .main, forMode: .common)
         applyDisplayLinkState()
     }
@@ -115,7 +118,19 @@ final class ImmersiveMapRenderDriver: NSObject {
     }
 
     private func applyDisplayLinkState() {
+        #if canImport(UIKit)
         displayLink?.preferredFramesPerSecond = pacing.targetFramesPerSecond
+        #else
+        // На macOS у CADisplayLink нет preferredFramesPerSecond - только range API.
+        let targetFramesPerSecond = pacing.targetFramesPerSecond
+        if targetFramesPerSecond > 0 {
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFramesPerSecond),
+                                                                    maximum: Float(targetFramesPerSecond),
+                                                                    preferred: Float(targetFramesPerSecond))
+        } else {
+            displayLink?.preferredFrameRateRange = .default
+        }
+        #endif
         displayLink?.isPaused = pacing.shouldPauseDisplayLink
     }
 
@@ -153,5 +168,3 @@ private final class WeakDisplayLinkTarget: NSObject {
                                            currentTime: CACurrentMediaTime())
     }
 }
-
-#endif

@@ -1,10 +1,12 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import SwiftUI
-import UIKit // For UIView
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public struct ImmersiveMapView: View {
     var settings: ImmersiveMapSettings
@@ -45,6 +47,7 @@ public struct ImmersiveMapView: View {
     }
 }
 
+#if canImport(UIKit)
 private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
@@ -74,6 +77,37 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
         uiView.dismantle()
     }
 }
+#elseif canImport(AppKit)
+private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
+    let settings: ImmersiveMapSettings
+    let avatarsController: ImmersiveMapAvatarsController?
+    let cameraPosition: ImmersiveMapCameraPosition?
+    let cameraController: ImmersiveMapCameraController?
+    let selectionController: ImmersiveMapSelectionController?
+
+    public func makeNSView(context: Context) -> ImmersiveMapNSView {
+        let nsView = ImmersiveMapNSView(frame: .zero,
+                                        settings: settings,
+                                        avatarsController: avatarsController,
+                                        cameraPosition: cameraPosition,
+                                        cameraController: cameraController,
+                                        selectionController: selectionController)
+        return nsView
+    }
+
+    public func updateNSView(_ nsView: ImmersiveMapNSView, context: Context) {
+        nsView.update(settings: settings,
+                      avatarsController: avatarsController,
+                      cameraController: cameraController,
+                      selectionController: selectionController,
+                      cameraPosition: cameraPosition)
+    }
+
+    public static func dismantleNSView(_ nsView: ImmersiveMapNSView, coordinator: ()) {
+        nsView.dismantle()
+    }
+}
+#endif
 
 public extension ImmersiveMapView {
 
@@ -319,5 +353,3 @@ private extension ImmersiveMapView {
                                    zoom: 0)
     }
 }
-
-#endif

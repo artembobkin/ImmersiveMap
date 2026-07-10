@@ -1,27 +1,29 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
+#if os(macOS)
 
+import AppKit
 import Metal
 import QuartzCore
-import UIKit
 
-/// UIKit/Metal host view для ImmersiveMap.
-/// Владеет `CAMetalLayer`, UIKit lifecycle, layout и мостом обновлений из SwiftUI;
-/// состояние и поведение отдельных функций живут в `ImmersiveMapHostRuntime`
+/// AppKit/Metal host view для ImmersiveMap.
+/// Владеет `CAMetalLayer` (backing layer), AppKit lifecycle, layout и мостом обновлений
+/// из SwiftUI; состояние и поведение отдельных функций живут в `ImmersiveMapHostRuntime`
 /// и его `ImmersiveMapRuntimeGraph`.
-public class ImmersiveMapUIView: UIView {
-    public override class var layerClass: AnyClass { return CAMetalLayer.self }
-
+public class ImmersiveMapNSView: NSView {
     // MARK: - Rendering
 
     private var hostRuntime: ImmersiveMapHostRuntime!
-    private var memoryWarningObserver: NSObjectProtocol?
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     var metalLayer: CAMetalLayer {
         return layer as! CAMetalLayer
     }
+
+    /// Top-left origin, как в UIKit: общие layout-расчеты контролов, HUD
+    /// и координаты жестов совпадают между платформами.
+    public override var isFlipped: Bool { true }
 
     // MARK: - Controllers
 
@@ -42,8 +44,8 @@ public class ImmersiveMapUIView: UIView {
 
     // MARK: - Initialization
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
         setup(settings: .default,
               initialCameraPosition: nil)
     }
@@ -54,7 +56,7 @@ public class ImmersiveMapUIView: UIView {
               initialCameraPosition: nil)
     }
 
-    public convenience init(frame: CGRect,
+    public convenience init(frame: NSRect,
                             settings: ImmersiveMapSettings,
                             avatarsController: ImmersiveMapAvatarsController? = nil,
                             cameraPosition: ImmersiveMapCameraPosition? = nil) {
@@ -66,7 +68,7 @@ public class ImmersiveMapUIView: UIView {
                   selectionController: nil)
     }
 
-    init(frame: CGRect,
+    init(frame: NSRect,
          settings: ImmersiveMapSettings,
          avatarsController: ImmersiveMapAvatarsController?,
          cameraPosition: ImmersiveMapCameraPosition?,
@@ -80,35 +82,57 @@ public class ImmersiveMapUIView: UIView {
                                     selectionController: selectionController)
     }
 
+    public override func makeBackingLayer() -> CALayer {
+        CAMetalLayer()
+    }
+
     private func setup(settings: ImmersiveMapSettings,
                        initialCameraPosition: ImmersiveMapCameraPosition?) {
-        metalLayer.contentsScale = UIScreen.main.scale
-        memoryWarningObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.hostRuntime?.handleMemoryPressure()
-            }
-        }
+        wantsLayer = true
+        // Содержимое слоя целиком рисует Metal - AppKit не должен просить redraw.
+        layerContentsRedrawPolicy = .never
+        metalLayer.contentsScale = currentBackingScaleFactor()
 
         hostRuntime = ImmersiveMapHostRuntime(mapView: self,
                                               layer: metalLayer,
                                               settings: settings,
                                               initialCameraPosition: initialCameraPosition,
                                               requestsLayout: { [weak self] in
-                                                  self?.setNeedsLayout()
+                                                  self?.needsLayout = true
                                               })
-        hostRuntime.start(displayLinkFactory: { target, selector in
-            CADisplayLink(target: target, selector: selector)
+        // CADisplayLink от NSView привязан к дисплею окна и сам следует
+        // за перемещением окна между мониторами.
+        hostRuntime.start(displayLinkFactory: { [unowned self] target, selector in
+            self.displayLink(target: target, selector: selector)
         })
+
+        startMemoryPressureMonitoring()
+        needsLayout = true
+    }
+
+    private func startMemoryPressureMonitoring() {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical],
+                                                             queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                self?.hostRuntime?.handleMemoryPressure()
+            }
+        }
+        source.activate()
+        memoryPressureSource = source
+    }
+
+    private func currentBackingScaleFactor() -> CGFloat {
+        let scale = window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2.0
+        return max(scale, 1.0)
     }
 
     // MARK: - Layout
 
-    public override func layoutSubviews() {
-        super.layoutSubviews()
+    public override func layout() {
+        super.layout()
 
         let didChangeDrawableSize = viewportRuntime.layout(layer: metalLayer,
                                                            bounds: bounds,
@@ -122,9 +146,46 @@ public class ImmersiveMapUIView: UIView {
         debugOverlayRuntime.layout(in: bounds)
     }
 
+    public override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsLayout = true
+    }
+
+    public override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        applyBackingScaleIfNeeded()
+    }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else {
+            return
+        }
+
+        applyBackingScaleIfNeeded()
+        requestFrame()
+    }
+
+    private func applyBackingScaleIfNeeded() {
+        let scale = currentBackingScaleFactor()
+        guard metalLayer.contentsScale != scale else {
+            return
+        }
+
+        metalLayer.contentsScale = scale
+        needsLayout = true
+        requestFrame()
+    }
+
+    // MARK: - Input
+
+    public override func scrollWheel(with event: NSEvent) {
+        gestureController.handleScrollWheel(event)
+    }
+
     // MARK: - Updates
 
-    /// Синхронизирует новые параметры из SwiftUI `updateUIView` с уже созданным UIKit/Metal view.
+    /// Синхронизирует новые параметры из SwiftUI `updateNSView` с уже созданным AppKit/Metal view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
@@ -152,9 +213,7 @@ public class ImmersiveMapUIView: UIView {
     // MARK: - Cleanup
 
     deinit {
-        if let memoryWarningObserver {
-            NotificationCenter.default.removeObserver(memoryWarningObserver)
-        }
+        memoryPressureSource?.cancel()
     }
 }
 

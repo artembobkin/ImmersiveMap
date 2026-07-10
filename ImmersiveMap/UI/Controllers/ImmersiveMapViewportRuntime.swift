@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import CoreGraphics
 import QuartzCore
 
@@ -23,7 +21,11 @@ final class ImmersiveMapViewportRuntime {
                 contentsScale: CGFloat) -> Bool {
         self.bounds = bounds
         self.contentsScale = contentsScale
+        #if canImport(UIKit)
         layer.frame = bounds
+        #else
+        // На macOS metal layer является backing layer NSView - его frame ведет AppKit.
+        #endif
 
         let nextDrawableSize = CGSize(width: bounds.width * contentsScale,
                                       height: bounds.height * contentsScale)
@@ -37,5 +39,3 @@ final class ImmersiveMapViewportRuntime {
         return true
     }
 }
-
-#endif

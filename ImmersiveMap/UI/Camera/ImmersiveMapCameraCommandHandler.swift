@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import QuartzCore
 
 /// Применяет команды `ImmersiveMapCameraController` к camera runtime.
@@ -43,5 +41,3 @@ final class ImmersiveMapCameraCommandHandler {
         cameraRuntime.applyCameraPosition(cameraPosition)
     }
 }
-
-#endif

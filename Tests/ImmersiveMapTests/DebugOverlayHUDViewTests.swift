@@ -295,23 +295,23 @@ final class DebugOverlayHUDViewTests: XCTestCase {
 
         XCTAssertEqual(view.tilesStatusVisibleRowTextsForTesting, [
             "▾ z7/78/39 ready",
-            "  network 100ms",
+            "    network 100ms",
             "  ▸ parse 250ms",
-            "  materialize 30ms",
-            "  ready"
+            "    materialize 30ms",
+            "    ready"
         ])
 
         view.simulateTilesStatusParseStageTapForTesting(tile: tile)
 
         XCTAssertEqual(view.tilesStatusVisibleRowTextsForTesting, [
             "▾ z7/78/39 ready",
-            "  network 100ms",
+            "    network 100ms",
             "  ▾ parse 250ms",
             "    land 127ms",
             "    water_polygons 41ms",
             "    streets 3ms",
-            "  materialize 30ms",
-            "  ready"
+            "    materialize 30ms",
+            "    ready"
         ])
     }
 

@@ -97,7 +97,11 @@ final class RoadLabelNearCameraFilterTests: XCTestCase {
     }
 
     private func productionSource(_ relativePath: String) throws -> String {
-        let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        // cwd на iOS-симуляторе указывает в песочницу; корень пакета выводим из пути этого файла.
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let sourceURL = packageRoot.appendingPathComponent(relativePath)
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }

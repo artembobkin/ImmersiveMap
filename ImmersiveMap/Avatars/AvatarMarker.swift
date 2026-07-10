@@ -6,6 +6,8 @@ import CoreGraphics
 import simd
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 public struct GeoCoordinate: Hashable {
@@ -133,6 +135,31 @@ public struct AvatarMarker {
                 clusterPolicy: AvatarClusterPolicy = .none) {
         guard let cgImage = image.cgImage else {
             preconditionFailure("UIImage must have CGImage backing.")
+        }
+        self.init(id: id,
+                  coordinate: coordinate,
+                  image: cgImage,
+                  batteryBadge: batteryBadge,
+                  speedBadge: speedBadge,
+                  borderColor: borderColor,
+                  screenSizeScale: screenSizeScale,
+                  isSelected: isSelected,
+                  drawPriority: drawPriority,
+                  clusterPolicy: clusterPolicy)
+    }
+#elseif canImport(AppKit)
+    public init(id: UInt64,
+                coordinate: GeoCoordinate,
+                image: NSImage,
+                batteryBadge: AvatarBatteryBadge? = nil,
+                speedBadge: AvatarSpeedBadge? = nil,
+                borderColor: SIMD4<Float>? = nil,
+                screenSizeScale: Float = 1.0,
+                isSelected: Bool = false,
+                drawPriority: Int = 0,
+                clusterPolicy: AvatarClusterPolicy = .none) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            preconditionFailure("NSImage must be convertible to CGImage.")
         }
         self.init(id: id,
                   coordinate: coordinate,

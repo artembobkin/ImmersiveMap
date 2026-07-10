@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import QuartzCore
 
 /// Собирает `RenderFrameEngine` из текущего runtime graph.
@@ -56,5 +54,3 @@ final class ImmersiveMapRendererBuilder {
                                  baseLabelTraceRecorder: baseLabelTraceRecorder)
     }
 }
-
-#endif

@@ -1,11 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import QuartzCore
 
-/// Composition root для runtime collaborators `ImmersiveMapUIView`.
+/// Composition root для runtime collaborators платформенного host view.
 /// Создает и владеет feature runtimes/controllers, затем отдает view прямые зависимости.
 @MainActor
 final class ImmersiveMapRuntimeGraph {
@@ -24,7 +22,7 @@ final class ImmersiveMapRuntimeGraph {
     let rendererBuilder: ImmersiveMapRendererBuilder
     let frameRenderDelegate: ImmersiveMapFrameRenderDelegate
 
-    init(mapView: ImmersiveMapUIView,
+    init(mapView: ImmersiveMapHostView,
          layer: CAMetalLayer,
          settings: ImmersiveMapSettings,
          initialCameraPosition: ImmersiveMapCameraPosition?) {
@@ -32,9 +30,14 @@ final class ImmersiveMapRuntimeGraph {
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: settings.renderLoop)
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let avatarRuntime = ImmersiveMapAvatarRuntime()
+        #if canImport(UIKit)
         let controlsRuntime = ImmersiveMapControlsRuntime(mapView: mapView,
                                                           mapPanGesture: gestureController.panGesture,
                                                           settings: settings)
+        #else
+        let controlsRuntime = ImmersiveMapControlsRuntime(mapView: mapView,
+                                                          settings: settings)
+        #endif
         let cameraRuntime = ImmersiveMapCameraRuntime(settings: settings,
                                                       initialCameraPosition: initialCameraPosition,
                                                       renderRuntime: renderRuntime,
@@ -93,5 +96,3 @@ final class ImmersiveMapRuntimeGraph {
         self.frameRenderDelegate = frameRenderDelegate
     }
 }
-
-#endif

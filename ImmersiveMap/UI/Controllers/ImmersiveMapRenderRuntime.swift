@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import QuartzCore
 
 /// Владеет render-loop runtime state одного map view.
@@ -18,8 +16,10 @@ final class ImmersiveMapRenderRuntime {
         driver.cameraAnimationRenderingActive
     }
 
-    func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate) {
-        driver.start(frameDelegate: frameDelegate)
+    func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate,
+               displayLinkFactory: DisplayLinkFactory) {
+        driver.start(frameDelegate: frameDelegate,
+                     displayLinkFactory: displayLinkFactory)
     }
 
     func stop() {
@@ -88,5 +88,3 @@ final class ImmersiveMapRenderRuntime {
                            isRenderable: viewportRuntime.isRenderable)
     }
 }
-
-#endif

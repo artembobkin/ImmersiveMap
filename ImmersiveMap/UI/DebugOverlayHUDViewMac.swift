@@ -1,11 +1,13 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
+#if os(macOS)
 
-import UIKit
+import AppKit
 
-final class DebugOverlayHUDView: UIView {
+/// AppKit-порт debug HUD. Геометрия и тексты совпадают с UIKit-версией:
+/// view flipped, layout ручной, контент собирает `DebugOverlayHUDTextComposer`.
+final class DebugOverlayHUDView: NSView {
     private enum SelectedTab: Int {
         case stats = 0
         case atlas = 1
@@ -29,43 +31,44 @@ final class DebugOverlayHUDView: UIView {
         static let maximumWidth: CGFloat = 720.0
     }
 
-    private let containerView = UIView()
-    private let titleLabel = UILabel()
-    private let collapseButton = UIButton(type: .system)
-    private let axesLabel = UILabel()
-    private let axesSwitch = UISwitch()
-    private let tileLayersLabel = UILabel()
-    private let tileLayersSwitch = UISwitch()
-    private let wireframeLabel = UILabel()
-    private let wireframeSwitch = UISwitch()
-    private let earthSceneLabel = UILabel()
-    private let earthSceneSwitch = UISwitch()
-    private let surfaceModeButton = UIButton(type: .system)
-    private let tabControl = UISegmentedControl(items: ["Stats", "Atlas", "Tiles", "Base labels", "Controls"])
-    private let tileTraceButton = UIButton(type: .system)
-    private let tileTraceStatusLabel = UILabel()
-    private let baseLabelTraceButton = UIButton(type: .system)
-    private let baseLabelTraceStatusLabel = UILabel()
-    private let roadLabelTilesLabel = UILabel()
-    private let roadLabelTilesSwitch = UISwitch()
-    private let zoomLabel = UILabel()
-    private let latLonLabel = UILabel()
-    private let diagnosticsLabel = UILabel()
-    private let tilesStatusLabel = UILabel()
-    private let tilesScrollView = UIScrollView()
+    private let containerView = DebugOverlayFlippedView()
+    private let titleLabel = NSTextField(labelWithString: "Debug")
+    private let collapseButton = NSButton()
+    private let axesLabel = NSTextField(labelWithString: "")
+    private let axesSwitch = NSSwitch()
+    private let tileLayersLabel = NSTextField(labelWithString: "")
+    private let tileLayersSwitch = NSSwitch()
+    private let wireframeLabel = NSTextField(labelWithString: "")
+    private let wireframeSwitch = NSSwitch()
+    private let earthSceneLabel = NSTextField(labelWithString: "")
+    private let earthSceneSwitch = NSSwitch()
+    private let surfaceModeButton = NSButton()
+    private let tabControl = NSSegmentedControl(labels: ["Stats", "Atlas", "Tiles", "Base labels", "Controls"],
+                                                trackingMode: .selectOne,
+                                                target: nil,
+                                                action: nil)
+    private let tileTraceButton = NSButton()
+    private let tileTraceStatusLabel = NSTextField(labelWithString: "")
+    private let baseLabelTraceButton = NSButton()
+    private let baseLabelTraceStatusLabel = NSTextField(labelWithString: "")
+    private let roadLabelTilesLabel = NSTextField(labelWithString: "")
+    private let roadLabelTilesSwitch = NSSwitch()
+    private let zoomLabel = NSTextField(wrappingLabelWithString: "")
+    private let latLonLabel = NSTextField(wrappingLabelWithString: "")
+    private let diagnosticsLabel = NSTextField(wrappingLabelWithString: "")
+    private let tilesStatusLabel = NSTextField(wrappingLabelWithString: "")
+    private let tilesScrollView = NSScrollView()
     private let tilesStatusListView = DebugOverlayTilesStatusListView()
-    private let atlasScrollView = UIScrollView()
+    private let atlasScrollView = NSScrollView()
+    private let atlasDocumentView = DebugOverlayFlippedView()
     private let atlasLayoutView = DebugOverlayAtlasLayoutView()
-    private let atlasDetailsLabel = UILabel()
+    private let atlasDetailsLabel = NSTextField(wrappingLabelWithString: "")
     private var snapshot: DebugOverlayHUDSnapshot?
     private var isPanelEnabled = false
     private var isCollapsed = false
     private var selectedTab: SelectedTab = .stats
     private var tileTraceSnapshot = TileTraceRecorderSnapshot(isRecording: false, fileURL: nil)
     private var baseLabelTraceSnapshot = BaseLabelTraceRecorderSnapshot(isRecording: false, fileURL: nil)
-    #if DEBUG
-    private var textUpdateCountForTestingStorage = 0
-    #endif
 
     var onAxesEnabledChanged: ((Bool) -> Void)?
     var onTileLayersEnabledChanged: ((Bool) -> Void)?
@@ -76,26 +79,26 @@ final class DebugOverlayHUDView: UIView {
     var onTileTraceRecordingToggle: (() -> Void)?
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isHidden = true
-        isOpaque = false
-        isUserInteractionEnabled = true
+    override var isFlipped: Bool { true }
 
-        containerView.isOpaque = false
-        containerView.isUserInteractionEnabled = true
-        containerView.backgroundColor = UIColor.black.withAlphaComponent(Layout.backgroundAlpha)
-        containerView.layer.cornerRadius = Layout.cornerRadius
-        containerView.layer.masksToBounds = true
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        isHidden = true
+
+        containerView.wantsLayer = true
+        containerView.layer?.backgroundColor = NSColor.black.withAlphaComponent(Layout.backgroundAlpha).cgColor
+        containerView.layer?.cornerRadius = Layout.cornerRadius
+        containerView.layer?.masksToBounds = true
         addSubview(containerView)
 
-        titleLabel.text = "Debug"
         titleLabel.textColor = .white
-        titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        titleLabel.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         containerView.addSubview(titleLabel)
 
-        collapseButton.tintColor = .white
-        collapseButton.addTarget(self, action: #selector(toggleCollapsed), for: .touchUpInside)
+        configureBorderlessButton(collapseButton)
+        collapseButton.contentTintColor = .white
+        collapseButton.target = self
+        collapseButton.action = #selector(toggleCollapsed)
         containerView.addSubview(collapseButton)
 
         configureControlLabel(axesLabel, text: "Axes")
@@ -103,11 +106,11 @@ final class DebugOverlayHUDView: UIView {
         configureControlLabel(wireframeLabel, text: "Wireframe")
         configureControlLabel(earthSceneLabel, text: "Earth scene")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
-        axesSwitch.addTarget(self, action: #selector(axesSwitchChanged), for: .valueChanged)
-        tileLayersSwitch.addTarget(self, action: #selector(tileLayersSwitchChanged), for: .valueChanged)
-        wireframeSwitch.addTarget(self, action: #selector(wireframeSwitchChanged), for: .valueChanged)
-        earthSceneSwitch.addTarget(self, action: #selector(earthSceneSwitchChanged), for: .valueChanged)
-        roadLabelTilesSwitch.addTarget(self, action: #selector(roadLabelTilesSwitchChanged), for: .valueChanged)
+        configureSwitch(axesSwitch, action: #selector(axesSwitchChanged))
+        configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
+        configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
+        configureSwitch(earthSceneSwitch, action: #selector(earthSceneSwitchChanged))
+        configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         containerView.addSubview(axesLabel)
         containerView.addSubview(axesSwitch)
         containerView.addSubview(tileLayersLabel)
@@ -118,51 +121,52 @@ final class DebugOverlayHUDView: UIView {
         containerView.addSubview(earthSceneSwitch)
         containerView.addSubview(roadLabelTilesLabel)
         containerView.addSubview(roadLabelTilesSwitch)
-        configureSurfaceModeButton()
+
+        configureActionButton(surfaceModeButton,
+                              title: "Switch globe / flat",
+                              symbolName: "arrow.triangle.2.circlepath",
+                              action: #selector(surfaceModeButtonTapped))
         containerView.addSubview(surfaceModeButton)
-        tabControl.selectedSegmentIndex = SelectedTab.stats.rawValue
-        tabControl.addTarget(self, action: #selector(tabControlChanged), for: .valueChanged)
+
+        tabControl.target = self
+        tabControl.action = #selector(tabControlChanged)
+        tabControl.selectedSegment = SelectedTab.stats.rawValue
         containerView.addSubview(tabControl)
-        configureTileTraceButton()
+
+        configureActionButton(tileTraceButton,
+                              title: "",
+                              symbolName: nil,
+                              action: #selector(tileTraceButtonTapped))
         containerView.addSubview(tileTraceButton)
-        tileTraceStatusLabel.textColor = .white
-        tileTraceStatusLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        tileTraceStatusLabel.lineBreakMode = .byTruncatingMiddle
+        configureStatusLabel(tileTraceStatusLabel)
         containerView.addSubview(tileTraceStatusLabel)
 
-        configureBaseLabelTraceButton()
+        configureActionButton(baseLabelTraceButton,
+                              title: "",
+                              symbolName: nil,
+                              action: #selector(baseLabelTraceButtonTapped))
         containerView.addSubview(baseLabelTraceButton)
-        baseLabelTraceStatusLabel.textColor = .white
-        baseLabelTraceStatusLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        baseLabelTraceStatusLabel.lineBreakMode = .byTruncatingMiddle
+        configureStatusLabel(baseLabelTraceStatusLabel)
         containerView.addSubview(baseLabelTraceStatusLabel)
 
         [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel].forEach { label in
-            label.numberOfLines = 0
-            label.lineBreakMode = .byCharWrapping
-            label.adjustsFontSizeToFitWidth = false
+            label.textColor = .white
             containerView.addSubview(label)
         }
-        tilesScrollView.backgroundColor = .clear
-        tilesScrollView.alwaysBounceVertical = false
-        tilesScrollView.delaysContentTouches = false
-        tilesScrollView.showsHorizontalScrollIndicator = false
-        tilesScrollView.showsVerticalScrollIndicator = true
+
+        configureScrollView(tilesScrollView,
+                            documentView: tilesStatusListView)
         containerView.addSubview(tilesScrollView)
-        tilesScrollView.addSubview(tilesStatusListView)
         tilesStatusListView.onExpansionChanged = { [weak self] in
-            self?.setNeedsLayout()
+            self?.needsLayout = true
         }
-        atlasDetailsLabel.numberOfLines = 0
-        atlasDetailsLabel.lineBreakMode = .byWordWrapping
-        atlasDetailsLabel.adjustsFontSizeToFitWidth = false
-        atlasScrollView.backgroundColor = .clear
-        atlasScrollView.alwaysBounceVertical = false
-        atlasScrollView.showsHorizontalScrollIndicator = false
-        atlasScrollView.showsVerticalScrollIndicator = true
+
+        atlasDocumentView.addSubview(atlasLayoutView)
+        atlasDocumentView.addSubview(atlasDetailsLabel)
+        configureScrollView(atlasScrollView,
+                            documentView: atlasDocumentView)
         containerView.addSubview(atlasScrollView)
-        atlasScrollView.addSubview(atlasLayoutView)
-        atlasScrollView.addSubview(atlasDetailsLabel)
+
         updateCollapseButtonImage()
         updateTileTraceControl()
         updateBaseLabelTraceControl()
@@ -173,6 +177,8 @@ final class DebugOverlayHUDView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // MARK: - Public API (совпадает с UIKit-версией)
+
     func apply(snapshot: DebugOverlayHUDSnapshot?) {
         guard self.snapshot != snapshot else {
             return
@@ -181,44 +187,55 @@ final class DebugOverlayHUDView: UIView {
         self.snapshot = snapshot
         updateText()
         updateVisibility()
-        setNeedsLayout()
+        needsLayout = true
     }
 
     func apply(isDebugPanelEnabled: Bool,
                controls: DebugOverlayControlSnapshot,
                earthSceneEnabled: Bool) {
         isPanelEnabled = isDebugPanelEnabled
-        axesSwitch.setOn(controls.axesEnabled, animated: false)
-        tileLayersSwitch.setOn(controls.tileLayersEnabled, animated: false)
-        wireframeSwitch.setOn(controls.wireframeEnabled, animated: false)
-        roadLabelTilesSwitch.setOn(controls.roadLabelTilesEnabled, animated: false)
-        earthSceneSwitch.setOn(earthSceneEnabled, animated: false)
+        axesSwitch.state = controls.axesEnabled ? .on : .off
+        tileLayersSwitch.state = controls.tileLayersEnabled ? .on : .off
+        wireframeSwitch.state = controls.wireframeEnabled ? .on : .off
+        roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
+        earthSceneSwitch.state = earthSceneEnabled ? .on : .off
         updateVisibility()
-        setNeedsLayout()
+        needsLayout = true
     }
 
     func apply(tileTraceSnapshot: TileTraceRecorderSnapshot) {
         self.tileTraceSnapshot = tileTraceSnapshot
         updateTileTraceControl()
-        setNeedsLayout()
+        needsLayout = true
     }
 
     func apply(baseLabelTraceSnapshot: BaseLabelTraceRecorderSnapshot) {
         self.baseLabelTraceSnapshot = baseLabelTraceSnapshot
         updateBaseLabelTraceControl()
-        setNeedsLayout()
+        needsLayout = true
     }
 
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard isHidden == false else { return false }
-        return containerView.frame.contains(point)
+    /// Клики вне панели уходят карте.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isHidden == false, let superview else {
+            return nil
+        }
+
+        let localPoint = convert(point, from: superview)
+        guard containerView.frame.contains(localPoint) else {
+            return nil
+        }
+
+        return super.hitTest(point)
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
+    // MARK: - Layout
+
+    override func layout() {
+        super.layout()
         guard let snapshot else { return }
 
-        let scale = max(window?.screen.scale ?? UIScreen.main.scale, 1.0)
+        let scale = max(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
         let left = CGFloat(snapshot.leftPadding) / scale
         let top = CGFloat(snapshot.topPadding) / scale
         let sectionSpacing = CGFloat(snapshot.sectionSpacing) / scale
@@ -311,7 +328,7 @@ final class DebugOverlayHUDView: UIView {
                                      height: containerSize.height)
         layoutHeader(width: containerSize.width)
 
-        let switchSize = axesSwitch.sizeThatFits(.zero)
+        let switchSize = axesSwitch.intrinsicContentSize
         let labelWidth = contentWidth - switchSize.width - Layout.controlSpacing
         let tabTop = Layout.headerHeight + Layout.contentInset
         tabControl.frame = CGRect(x: Layout.contentInset,
@@ -371,23 +388,6 @@ final class DebugOverlayHUDView: UIView {
                                         y: latLonLabel.frame.maxY + sectionSpacing,
                                         width: contentWidth,
                                         height: diagnosticsSize.height)
-        tilesStatusLabel.frame = CGRect(x: Layout.contentInset,
-                                        y: textTop,
-                                        width: contentWidth,
-                                        height: tilesStatusSize.height)
-        let tilesScrollTop = tilesStatusLabel.frame.maxY + tilesListSpacing
-        let tilesScrollHeight = max(0, visibleTilesBodyHeight - tilesStatusSize.height - tilesListSpacing)
-        tilesScrollView.frame = CGRect(x: Layout.contentInset,
-                                       y: tilesScrollTop,
-                                       width: contentWidth,
-                                       height: tilesScrollHeight)
-        tilesStatusListView.frame = CGRect(x: 0,
-                                           y: 0,
-                                           width: contentWidth,
-                                           height: tilesListHeight)
-        tilesScrollView.contentSize = CGSize(width: contentWidth,
-                                             height: tilesListHeight)
-        tilesScrollView.isScrollEnabled = tilesScrollView.contentSize.height > tilesScrollHeight + 0.5
         tileTraceButton.frame = CGRect(x: Layout.contentInset,
                                        y: textTop,
                                        width: contentWidth,
@@ -419,13 +419,16 @@ final class DebugOverlayHUDView: UIView {
                                         y: tilesStatusTop,
                                         width: contentWidth,
                                         height: tilesStatusSize.height)
-        let updatedTilesScrollTop = tilesStatusLabel.frame.maxY + tilesListSpacing
-        let updatedTilesScrollHeight = max(0, visibleTilesBodyHeight - traceBlockHeight - tilesStatusSize.height - tilesListSpacing)
+        let tilesScrollTop = tilesStatusLabel.frame.maxY + tilesListSpacing
+        let tilesScrollHeight = max(0, visibleTilesBodyHeight - traceBlockHeight - tilesStatusSize.height - tilesListSpacing)
         tilesScrollView.frame = CGRect(x: Layout.contentInset,
-                                       y: updatedTilesScrollTop,
+                                       y: tilesScrollTop,
                                        width: contentWidth,
-                                       height: updatedTilesScrollHeight)
-        tilesScrollView.isScrollEnabled = tilesScrollView.contentSize.height > updatedTilesScrollHeight + 0.5
+                                       height: tilesScrollHeight)
+        tilesStatusListView.frame = CGRect(x: 0,
+                                           y: 0,
+                                           width: contentWidth,
+                                           height: tilesListHeight)
         let atlasScrollTop = textTop
         let atlasScrollHeight = max(0, visibleAtlasBodyHeight)
         atlasScrollView.frame = CGRect(x: Layout.contentInset,
@@ -440,18 +443,19 @@ final class DebugOverlayHUDView: UIView {
                                          y: atlasLayoutView.frame.maxY + sectionSpacing,
                                          width: contentWidth,
                                          height: atlasDetailsSize.height)
-        atlasScrollView.contentSize = CGSize(width: contentWidth,
-                                             height: atlasPreviewHeight + sectionSpacing + atlasDetailsSize.height)
-        atlasScrollView.isScrollEnabled = atlasScrollView.contentSize.height > atlasScrollHeight + 0.5
+        atlasDocumentView.frame = CGRect(x: 0,
+                                         y: 0,
+                                         width: contentWidth,
+                                         height: atlasPreviewHeight + sectionSpacing + atlasDetailsSize.height)
         updateContentVisibility()
     }
 
     private func layoutHeader(width: CGFloat) {
         let buttonSide = Layout.headerHeight
         titleLabel.frame = CGRect(x: Layout.contentInset,
-                                  y: 0,
+                                  y: (Layout.headerHeight - titleLabel.intrinsicContentSize.height) / 2,
                                   width: width - Layout.contentInset * 2 - buttonSide,
-                                  height: Layout.headerHeight)
+                                  height: titleLabel.intrinsicContentSize.height)
         collapseButton.frame = CGRect(x: width - Layout.contentInset - buttonSide,
                                       y: 0,
                                       width: buttonSide,
@@ -459,175 +463,147 @@ final class DebugOverlayHUDView: UIView {
         updateContentVisibility()
     }
 
-    private func updateText() {
-        #if DEBUG
-        textUpdateCountForTestingStorage += 1
-        #endif
+    // MARK: - Content
 
+    private func updateText() {
         guard let snapshot else {
-            zoomLabel.attributedText = nil
-            latLonLabel.attributedText = nil
-            diagnosticsLabel.attributedText = nil
-            tilesStatusLabel.attributedText = nil
+            zoomLabel.attributedStringValue = NSAttributedString(string: "")
+            latLonLabel.attributedStringValue = NSAttributedString(string: "")
+            diagnosticsLabel.attributedStringValue = NSAttributedString(string: "")
+            tilesStatusLabel.attributedStringValue = NSAttributedString(string: "")
             tilesStatusListView.apply(tiles: [])
-            atlasDetailsLabel.attributedText = nil
+            atlasDetailsLabel.attributedStringValue = NSAttributedString(string: "")
             atlasLayoutView.apply(pages: [])
             return
         }
 
-        let scale = max(window?.screen.scale ?? UIScreen.main.scale, 1.0)
+        let scale = max(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
         let coordinateFontSize = max(1, CGFloat(snapshot.coordinateScale) * Layout.coordinateFontScale / scale)
         let diagnosticsFontSize = max(1, CGFloat(snapshot.diagnosticsScale) * Layout.diagnosticsFontScale / scale)
-        let color = UIColor.white
+        let color = NSColor.white
 
-        zoomLabel.attributedText = attributedText(snapshot.coordinateLines.zoom,
-                                                 fontSize: coordinateFontSize,
-                                                 color: color)
-        latLonLabel.attributedText = attributedText(snapshot.coordinateLines.latLon,
-                                                   fontSize: coordinateFontSize,
-                                                   color: color)
-        diagnosticsLabel.attributedText = diagnosticsAttributedText(snapshot.diagnosticsLines.joined(separator: "\n"),
-                                                                    fontSize: diagnosticsFontSize,
-                                                                    color: color)
-        tilesStatusLabel.attributedText = attributedText(DebugOverlayHUDTextComposer.tilesStatusText(lines: snapshot.tileLoadingStatusLines),
-                                                        fontSize: diagnosticsFontSize,
-                                                        color: color)
+        zoomLabel.attributedStringValue = attributedText(snapshot.coordinateLines.zoom,
+                                                         fontSize: coordinateFontSize,
+                                                         color: color)
+        latLonLabel.attributedStringValue = attributedText(snapshot.coordinateLines.latLon,
+                                                           fontSize: coordinateFontSize,
+                                                           color: color)
+        diagnosticsLabel.attributedStringValue = diagnosticsAttributedText(snapshot.diagnosticsLines.joined(separator: "\n"),
+                                                                           fontSize: diagnosticsFontSize,
+                                                                           color: color)
+        tilesStatusLabel.attributedStringValue = attributedText(DebugOverlayHUDTextComposer.tilesStatusText(lines: snapshot.tileLoadingStatusLines),
+                                                                fontSize: diagnosticsFontSize,
+                                                                color: color)
         tilesStatusListView.apply(tiles: snapshot.tileLoadingStatusTiles)
         atlasLayoutView.apply(pages: snapshot.atlasPages)
-        atlasDetailsLabel.attributedText = attributedText(DebugOverlayHUDTextComposer.atlasDetailsText(pages: snapshot.atlasPages),
-                                                         fontSize: diagnosticsFontSize,
-                                                         color: color)
+        atlasDetailsLabel.attributedStringValue = attributedText(DebugOverlayHUDTextComposer.atlasDetailsText(pages: snapshot.atlasPages),
+                                                                 fontSize: diagnosticsFontSize,
+                                                                 color: color)
     }
 
     private func updateVisibility() {
         isHidden = isPanelEnabled == false || snapshot == nil
     }
 
-    private func configureControlLabel(_ label: UILabel, text: String) {
-        label.text = text
+    // MARK: - Configuration
+
+    private func configureControlLabel(_ label: NSTextField, text: String) {
+        label.stringValue = text
         label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
     }
 
-    private func configureSurfaceModeButton() {
-        surfaceModeButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        surfaceModeButton.layer.cornerRadius = 6
-        surfaceModeButton.layer.masksToBounds = true
-        surfaceModeButton.addTarget(self, action: #selector(surfaceModeButtonTapped), for: .touchUpInside)
-        if #available(iOS 15.0, *) {
-            var configuration = UIButton.Configuration.plain()
-            configuration.title = "Switch globe / flat"
-            configuration.image = UIImage(systemName: "arrow.triangle.2.circlepath")
-            configuration.imagePadding = 6
-            configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
-            configuration.baseForegroundColor = .white
-            configuration.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            configuration.cornerStyle = .fixed
-            surfaceModeButton.configuration = configuration
+    private func configureStatusLabel(_ label: NSTextField) {
+        label.textColor = .white
+        label.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        label.lineBreakMode = .byTruncatingMiddle
+        label.maximumNumberOfLines = 1
+    }
+
+    private func configureSwitch(_ switchControl: NSSwitch, action: Selector) {
+        switchControl.target = self
+        switchControl.action = action
+        switchControl.controlSize = .small
+    }
+
+    private func configureBorderlessButton(_ button: NSButton) {
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.imagePosition = .imageOnly
+        button.title = ""
+    }
+
+    private func configureActionButton(_ button: NSButton,
+                                       title: String,
+                                       symbolName: String?,
+                                       action: Selector) {
+        button.isBordered = false
+        button.wantsLayer = true
+        button.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        button.layer?.cornerRadius = 6
+        button.layer?.masksToBounds = true
+        button.contentTintColor = .white
+        button.imagePosition = .imageLeading
+        button.target = self
+        button.action = action
+        applyActionButtonTitle(button,
+                               title: title,
+                               symbolName: symbolName)
+    }
+
+    private func applyActionButtonTitle(_ button: NSButton,
+                                        title: String,
+                                        symbolName: String?) {
+        button.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: NSColor.white
+            ]
+        )
+        if let symbolName {
+            button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)
         } else {
-            surfaceModeButton.setTitle("Switch globe / flat", for: .normal)
-            surfaceModeButton.setImage(UIImage(systemName: "arrow.triangle.2.circlepath"), for: .normal)
-            surfaceModeButton.tintColor = .white
-            surfaceModeButton.setTitleColor(.white, for: .normal)
-            surfaceModeButton.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            surfaceModeButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
+            button.image = nil
         }
     }
 
-    private func configureTileTraceButton() {
-        tileTraceButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        tileTraceButton.layer.cornerRadius = 6
-        tileTraceButton.layer.masksToBounds = true
-        tileTraceButton.addTarget(self, action: #selector(tileTraceButtonTapped), for: .touchUpInside)
-        if #available(iOS 15.0, *) {
-            var configuration = UIButton.Configuration.plain()
-            configuration.imagePadding = 6
-            configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
-            configuration.baseForegroundColor = .white
-            configuration.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            configuration.cornerStyle = .fixed
-            tileTraceButton.configuration = configuration
-        } else {
-            tileTraceButton.tintColor = .white
-            tileTraceButton.setTitleColor(.white, for: .normal)
-            tileTraceButton.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            tileTraceButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
-        }
-    }
-
-    private func configureBaseLabelTraceButton() {
-        baseLabelTraceButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        baseLabelTraceButton.layer.cornerRadius = 6
-        baseLabelTraceButton.layer.masksToBounds = true
-        baseLabelTraceButton.addTarget(self, action: #selector(baseLabelTraceButtonTapped), for: .touchUpInside)
-        if #available(iOS 15.0, *) {
-            var configuration = UIButton.Configuration.plain()
-            configuration.imagePadding = 6
-            configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
-            configuration.baseForegroundColor = .white
-            configuration.background.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            configuration.cornerStyle = .fixed
-            baseLabelTraceButton.configuration = configuration
-        } else {
-            baseLabelTraceButton.tintColor = .white
-            baseLabelTraceButton.setTitleColor(.white, for: .normal)
-            baseLabelTraceButton.backgroundColor = UIColor.white.withAlphaComponent(0.12)
-            baseLabelTraceButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
-        }
+    private func configureScrollView(_ scrollView: NSScrollView,
+                                     documentView: NSView) {
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.scrollerStyle = .overlay
+        scrollView.verticalScrollElasticity = .none
+        scrollView.documentView = documentView
     }
 
     private func updateTileTraceControl() {
         let title = DebugOverlayHUDTextComposer.traceButtonTitle(isRecording: tileTraceSnapshot.isRecording)
-        let imageName = DebugOverlayHUDTextComposer.traceButtonImageName(isRecording: tileTraceSnapshot.isRecording)
-        if #available(iOS 15.0, *) {
-            var configuration = tileTraceButton.configuration ?? UIButton.Configuration.plain()
-            configuration.title = title
-            configuration.image = UIImage(systemName: imageName)
-            configuration.baseForegroundColor = .white
-            configuration.background.backgroundColor = tileTraceSnapshot.isRecording
-                ? UIColor.systemRed.withAlphaComponent(0.35)
-                : UIColor.white.withAlphaComponent(0.12)
-            tileTraceButton.configuration = configuration
-        } else {
-            tileTraceButton.setTitle(title, for: .normal)
-            tileTraceButton.setImage(UIImage(systemName: imageName), for: .normal)
-            tileTraceButton.backgroundColor = tileTraceSnapshot.isRecording
-                ? UIColor.systemRed.withAlphaComponent(0.35)
-                : UIColor.white.withAlphaComponent(0.12)
-        }
-        tileTraceButton.accessibilityLabel = title
-
-        tileTraceStatusLabel.text = DebugOverlayHUDTextComposer.tileTraceStatusText(tileTraceSnapshot)
+        applyActionButtonTitle(tileTraceButton,
+                               title: title,
+                               symbolName: DebugOverlayHUDTextComposer.traceButtonImageName(isRecording: tileTraceSnapshot.isRecording))
+        tileTraceButton.layer?.backgroundColor = tileTraceSnapshot.isRecording
+            ? NSColor.systemRed.withAlphaComponent(0.35).cgColor
+            : NSColor.white.withAlphaComponent(0.12).cgColor
+        tileTraceStatusLabel.stringValue = DebugOverlayHUDTextComposer.tileTraceStatusText(tileTraceSnapshot)
     }
 
     private func updateBaseLabelTraceControl() {
         let title = DebugOverlayHUDTextComposer.traceButtonTitle(isRecording: baseLabelTraceSnapshot.isRecording)
-        let imageName = DebugOverlayHUDTextComposer.traceButtonImageName(isRecording: baseLabelTraceSnapshot.isRecording)
-        if #available(iOS 15.0, *) {
-            var configuration = baseLabelTraceButton.configuration ?? UIButton.Configuration.plain()
-            configuration.title = title
-            configuration.image = UIImage(systemName: imageName)
-            configuration.baseForegroundColor = .white
-            configuration.background.backgroundColor = baseLabelTraceSnapshot.isRecording
-                ? UIColor.systemRed.withAlphaComponent(0.35)
-                : UIColor.white.withAlphaComponent(0.12)
-            baseLabelTraceButton.configuration = configuration
-        } else {
-            baseLabelTraceButton.setTitle(title, for: .normal)
-            baseLabelTraceButton.setImage(UIImage(systemName: imageName), for: .normal)
-            baseLabelTraceButton.backgroundColor = baseLabelTraceSnapshot.isRecording
-                ? UIColor.systemRed.withAlphaComponent(0.35)
-                : UIColor.white.withAlphaComponent(0.12)
-        }
-        baseLabelTraceButton.accessibilityLabel = title
-
-        baseLabelTraceStatusLabel.text = DebugOverlayHUDTextComposer.baseLabelTraceStatusText(baseLabelTraceSnapshot)
+        applyActionButtonTitle(baseLabelTraceButton,
+                               title: title,
+                               symbolName: DebugOverlayHUDTextComposer.traceButtonImageName(isRecording: baseLabelTraceSnapshot.isRecording))
+        baseLabelTraceButton.layer?.backgroundColor = baseLabelTraceSnapshot.isRecording
+            ? NSColor.systemRed.withAlphaComponent(0.35).cgColor
+            : NSColor.white.withAlphaComponent(0.12).cgColor
+        baseLabelTraceStatusLabel.stringValue = DebugOverlayHUDTextComposer.baseLabelTraceStatusText(baseLabelTraceSnapshot)
     }
 
     private func updateCollapseButtonImage() {
         let imageName = isCollapsed ? "chevron.down" : "chevron.up"
-        collapseButton.setImage(UIImage(systemName: imageName), for: .normal)
-        collapseButton.accessibilityLabel = isCollapsed ? "Expand debug panel" : "Collapse debug panel"
+        collapseButton.image = NSImage(systemSymbolName: imageName,
+                                       accessibilityDescription: isCollapsed ? "Expand debug panel" : "Collapse debug panel")
     }
 
     private func updateContentVisibility() {
@@ -637,9 +613,7 @@ final class DebugOverlayHUDView: UIView {
         let isTilesVisible = selectedTab == .tiles && isContentHidden == false
         let isBaseLabelsVisible = selectedTab == .baseLabels && isContentHidden == false
         let isControlsVisible = selectedTab == .controls && isContentHidden == false
-        [tabControl].forEach {
-            $0.isHidden = isContentHidden
-        }
+        tabControl.isHidden = isContentHidden
         [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch, wireframeLabel, wireframeSwitch,
          earthSceneLabel, earthSceneSwitch, surfaceModeButton].forEach {
             $0.isHidden = isControlsVisible == false
@@ -658,30 +632,32 @@ final class DebugOverlayHUDView: UIView {
         atlasScrollView.isHidden = isAtlasVisible == false
     }
 
+    // MARK: - Actions
+
     @objc private func toggleCollapsed() {
         isCollapsed.toggle()
         updateCollapseButtonImage()
-        setNeedsLayout()
+        needsLayout = true
     }
 
     @objc private func axesSwitchChanged() {
-        onAxesEnabledChanged?(axesSwitch.isOn)
+        onAxesEnabledChanged?(axesSwitch.state == .on)
     }
 
     @objc private func tileLayersSwitchChanged() {
-        onTileLayersEnabledChanged?(tileLayersSwitch.isOn)
+        onTileLayersEnabledChanged?(tileLayersSwitch.state == .on)
     }
 
     @objc private func wireframeSwitchChanged() {
-        onWireframeEnabledChanged?(wireframeSwitch.isOn)
+        onWireframeEnabledChanged?(wireframeSwitch.state == .on)
     }
 
     @objc private func roadLabelTilesSwitchChanged() {
-        onRoadLabelTilesEnabledChanged?(roadLabelTilesSwitch.isOn)
+        onRoadLabelTilesEnabledChanged?(roadLabelTilesSwitch.state == .on)
     }
 
     @objc private func earthSceneSwitchChanged() {
-        onEarthSceneEnabledChanged?(earthSceneSwitch.isOn)
+        onEarthSceneEnabledChanged?(earthSceneSwitch.state == .on)
     }
 
     @objc private func surfaceModeButtonTapped() {
@@ -697,18 +673,20 @@ final class DebugOverlayHUDView: UIView {
     }
 
     @objc private func tabControlChanged() {
-        selectedTab = SelectedTab(rawValue: tabControl.selectedSegmentIndex) ?? .stats
+        selectedTab = SelectedTab(rawValue: tabControl.selectedSegment) ?? .stats
         updateContentVisibility()
-        setNeedsLayout()
+        needsLayout = true
     }
+
+    // MARK: - Text styling
 
     private func attributedText(_ text: String,
                                 fontSize: CGFloat,
-                                color: UIColor) -> NSAttributedString {
+                                color: NSColor) -> NSAttributedString {
         NSAttributedString(
             string: text,
             attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .bold),
+                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold),
                 .foregroundColor: color
             ]
         )
@@ -716,10 +694,10 @@ final class DebugOverlayHUDView: UIView {
 
     private func diagnosticsAttributedText(_ text: String,
                                            fontSize: CGFloat,
-                                           color: UIColor) -> NSAttributedString {
+                                           color: NSColor) -> NSAttributedString {
         let attributedText = NSMutableAttributedString(attributedString: attributedText(text,
-                                                                                       fontSize: fontSize,
-                                                                                       color: color))
+                                                                                        fontSize: fontSize,
+                                                                                        color: color))
         for run in DebugOverlayDiagnosticsTextStylePlanner.makeRuns(for: text) {
             attributedText.addAttribute(.foregroundColor,
                                         value: diagnosticsColor(for: run.style),
@@ -728,40 +706,45 @@ final class DebugOverlayHUDView: UIView {
         return attributedText
     }
 
-    private func diagnosticsColor(for style: DebugOverlayDiagnosticsTextStyle) -> UIColor {
+    private func diagnosticsColor(for style: DebugOverlayDiagnosticsTextStyle) -> NSColor {
         switch style {
         case let .section(title):
             return diagnosticsSectionColor(title: title)
         case .key:
-            return UIColor.white.withAlphaComponent(0.58)
+            return NSColor.white.withAlphaComponent(0.58)
         case .warningValue:
-            return UIColor.systemOrange
+            return NSColor.systemOrange
         }
     }
 
-    private func diagnosticsSectionColor(title: String) -> UIColor {
+    private func diagnosticsSectionColor(title: String) -> NSColor {
         switch title {
         case "Camera":
-            return UIColor.systemCyan
+            return NSColor.systemCyan
         case "Frame":
-            return UIColor.systemGreen
+            return NSColor.systemGreen
         case "Tiles":
-            return UIColor.systemYellow
+            return NSColor.systemYellow
         case "Labels":
-            return UIColor.systemPurple
+            return NSColor.systemPurple
         case "Resources":
-            return UIColor.systemBlue
+            return NSColor.systemBlue
         case "Globe culling":
-            return UIColor.systemOrange
+            return NSColor.systemOrange
         case "Skip":
-            return UIColor.systemRed
+            return NSColor.systemRed
         default:
-            return UIColor.white.withAlphaComponent(0.82)
+            return NSColor.white.withAlphaComponent(0.82)
         }
     }
 }
 
-private final class DebugOverlayAtlasLayoutView: UIView {
+/// Пустой flipped-контейнер: subview-раскладка сверху вниз, как в UIKit.
+private final class DebugOverlayFlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+private final class DebugOverlayAtlasLayoutView: NSView {
     private enum Layout {
         static let pageLabelHeight: CGFloat = 16
         static let pageSpacing: CGFloat = 10
@@ -772,15 +755,7 @@ private final class DebugOverlayAtlasLayoutView: UIView {
 
     private var pages: [GlobeAtlasDebugPage] = []
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isOpaque = false
-        backgroundColor = .clear
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    override var isFlipped: Bool { true }
 
     var pageCount: Int {
         pages.count
@@ -788,7 +763,7 @@ private final class DebugOverlayAtlasLayoutView: UIView {
 
     func apply(pages: [GlobeAtlasDebugPage]) {
         self.pages = pages
-        setNeedsDisplay()
+        needsDisplay = true
     }
 
     func preferredHeight(forWidth width: CGFloat) -> CGFloat {
@@ -800,7 +775,7 @@ private final class DebugOverlayAtlasLayoutView: UIView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
         guard pages.isEmpty == false else {
             drawEmptyState(in: rect)
             return
@@ -826,8 +801,8 @@ private final class DebugOverlayAtlasLayoutView: UIView {
     private func drawEmptyState(in rect: CGRect) {
         let text = "No globe atlas pages"
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.72)
+            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.72)
         ]
         text.draw(in: rect.insetBy(dx: 2, dy: 14), withAttributes: attributes)
     }
@@ -835,8 +810,8 @@ private final class DebugOverlayAtlasLayoutView: UIView {
     private func drawPageLabel(page: GlobeAtlasDebugPage, in rect: CGRect) {
         let text = "page \(page.pageIndex) slots \(page.allocations.count)"
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.9)
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.9)
         ]
         text.draw(in: rect, withAttributes: attributes)
     }
@@ -844,9 +819,9 @@ private final class DebugOverlayAtlasLayoutView: UIView {
     private func drawPage(_ page: GlobeAtlasDebugPage,
                           in pageRect: CGRect,
                           context: CGContext) {
-        context.setFillColor(UIColor.white.withAlphaComponent(0.06).cgColor)
+        context.setFillColor(NSColor.white.withAlphaComponent(0.06).cgColor)
         context.fill(pageRect)
-        context.setStrokeColor(UIColor.white.withAlphaComponent(0.28).cgColor)
+        context.setStrokeColor(NSColor.white.withAlphaComponent(0.28).cgColor)
         context.setLineWidth(Layout.borderWidth)
         context.stroke(pageRect)
 
@@ -882,46 +857,38 @@ private final class DebugOverlayAtlasLayoutView: UIView {
 
         let fontSize = min(10, max(6, labelRect.height * 0.28))
         let shadow = NSShadow()
-        shadow.shadowColor = UIColor.black.withAlphaComponent(0.82)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.82)
         shadow.shadowBlurRadius = 1.5
         shadow.shadowOffset = CGSize(width: 0, height: 1)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .bold),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.95),
+            .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.95),
             .shadow: shadow
         ]
         allocation.atlasPreviewLabel.draw(in: labelRect, withAttributes: attributes)
     }
 
-    private func color(for allocation: GlobeAtlasDebugAllocation) -> UIColor {
+    private func color(for allocation: GlobeAtlasDebugAllocation) -> NSColor {
         if allocation.isFallback {
-            return UIColor.systemOrange
+            return NSColor.systemOrange
         }
 
         switch allocation.atlasDepth {
         case .depth0:
-            return UIColor.systemRed
+            return NSColor.systemRed
         case .depth1:
-            return UIColor.systemYellow
+            return NSColor.systemYellow
         case .depth2:
-            return UIColor.systemGreen
+            return NSColor.systemGreen
         case .depth3:
-            return UIColor.systemTeal
+            return NSColor.systemTeal
         case .depth4:
-            return UIColor.systemBlue
+            return NSColor.systemBlue
         }
     }
 }
 
-#if DEBUG
-struct DebugOverlayTilesPrimaryRowMetrics {
-    let progressBackgroundRect: CGRect
-    let textRect: CGRect
-    let fontSize: CGFloat
-}
-#endif
-
-private final class DebugOverlayTilesStatusListView: UIView {
+private final class DebugOverlayTilesStatusListView: NSView {
     private enum Layout {
         static let rowHeight: CGFloat = 28
         static let childRowHeight: CGFloat = 22
@@ -935,29 +902,18 @@ private final class DebugOverlayTilesStatusListView: UIView {
 
     private typealias Row = DebugOverlayTilesStatusRow
 
-    private static func height(of row: Row) -> CGFloat {
-        switch row {
-        case .tile:
-            return Layout.rowHeight
-        case .stage, .layer:
-            return Layout.childRowHeight
-        }
-    }
-
     private var tiles: [TileLoadingStatusTileSnapshot] = []
     private var expandedTiles: Set<Tile> = []
     private var expandedParseStageTiles: Set<Tile> = []
 
     var onExpansionChanged: (() -> Void)?
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isOpaque = false
-        backgroundColor = .clear
-        isUserInteractionEnabled = true
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTapGesture(_:)))
-        tapGesture.cancelsTouchesInView = true
-        addGestureRecognizer(tapGesture)
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClickGesture(_:)))
+        addGestureRecognizer(clickGesture)
     }
 
     required init?(coder: NSCoder) {
@@ -973,7 +929,16 @@ private final class DebugOverlayTilesStatusListView: UIView {
         let tileSet = Set(tiles.map(\.tile))
         expandedTiles = expandedTiles.intersection(tileSet)
         expandedParseStageTiles = expandedParseStageTiles.intersection(tileSet)
-        setNeedsDisplay()
+        needsDisplay = true
+    }
+
+    private static func height(of row: Row) -> CGFloat {
+        switch row {
+        case .tile:
+            return Layout.rowHeight
+        case .stage, .layer:
+            return Layout.childRowHeight
+        }
     }
 
     func preferredHeight(forWidth _: CGFloat) -> CGFloat {
@@ -986,7 +951,7 @@ private final class DebugOverlayTilesStatusListView: UIView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext(), tiles.isEmpty == false else {
+        guard let context = NSGraphicsContext.current?.cgContext, tiles.isEmpty == false else {
             return
         }
 
@@ -1002,14 +967,13 @@ private final class DebugOverlayTilesStatusListView: UIView {
         }
     }
 
-    @objc private func handleTapGesture(_ gesture: UITapGestureRecognizer) {
+    @objc private func handleClickGesture(_ gesture: NSClickGestureRecognizer) {
         guard gesture.state == .ended else {
             return
         }
 
         let point = gesture.location(in: self)
-        guard
-              let row = row(atY: point.y) else {
+        guard let row = row(atY: point.y) else {
             return
         }
 
@@ -1039,9 +1003,9 @@ private final class DebugOverlayTilesStatusListView: UIView {
     private func drawTile(_ tile: TileLoadingStatusTileSnapshot,
                           rowRect: CGRect) {
         let color = statusColor(tile.status)
-        let backgroundRect = Self.progressBackgroundRect(for: rowRect)
-        UIColor.black.withAlphaComponent(0.16).setFill()
-        UIBezierPath(roundedRect: backgroundRect, cornerRadius: Layout.cornerRadius).fill()
+        let backgroundRect = rowRect.insetBy(dx: 0, dy: Layout.progressVerticalInset)
+        NSColor.black.withAlphaComponent(0.16).setFill()
+        NSBezierPath(roundedRect: backgroundRect, cornerRadius: Layout.cornerRadius).fill()
 
         let progressWidth = max(Layout.cornerRadius * 2, backgroundRect.width * CGFloat(tile.progress))
         let progressRect = CGRect(x: backgroundRect.minX,
@@ -1050,16 +1014,18 @@ private final class DebugOverlayTilesStatusListView: UIView {
                                   height: backgroundRect.height)
             .intersection(backgroundRect)
         color.withAlphaComponent(0.82).setFill()
-        UIBezierPath(roundedRect: progressRect, cornerRadius: Layout.cornerRadius).fill()
+        NSBezierPath(roundedRect: progressRect, cornerRadius: Layout.cornerRadius).fill()
 
-        let font = UIFont.monospacedSystemFont(ofSize: Layout.primaryFontSize, weight: .heavy)
+        let font = NSFont.monospacedSystemFont(ofSize: Layout.primaryFontSize, weight: .heavy)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: UIColor.white.withAlphaComponent(0.98)
+            .foregroundColor: NSColor.white.withAlphaComponent(0.98)
         ]
-        let textRect = Self.centeredTextRect(rowRect: rowRect,
-                                             backgroundRect: backgroundRect,
-                                             font: font)
+        let lineHeight = font.ascender - font.descender + font.leading
+        let textRect = CGRect(x: rowRect.minX + Layout.textInset,
+                              y: backgroundRect.midY - lineHeight * 0.5,
+                              width: max(0, rowRect.width - Layout.textInset * 2),
+                              height: lineHeight)
         let isExpanded = expandedTiles.contains(tile.tile)
         Row.tile(tile, isExpanded: isExpanded, canExpand: tile.preparationStages.isEmpty == false)
             .text
@@ -1067,14 +1033,15 @@ private final class DebugOverlayTilesStatusListView: UIView {
     }
 
     private func drawChildText(_ text: String, rowRect: CGRect) {
-        let font = UIFont.monospacedSystemFont(ofSize: Layout.childFontSize, weight: .bold)
+        let font = NSFont.monospacedSystemFont(ofSize: Layout.childFontSize, weight: .bold)
+        let lineHeight = font.ascender - font.descender + font.leading
         let textRect = CGRect(x: Layout.textInset,
-                              y: rowRect.midY - font.lineHeight * 0.5,
+                              y: rowRect.midY - lineHeight * 0.5,
                               width: max(0, rowRect.width - Layout.textInset * 2),
-                              height: font.lineHeight)
+                              height: lineHeight)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: UIColor.white.withAlphaComponent(0.94)
+            .foregroundColor: NSColor.white.withAlphaComponent(0.94)
         ]
         text.draw(in: textRect, withAttributes: attributes)
     }
@@ -1098,7 +1065,7 @@ private final class DebugOverlayTilesStatusListView: UIView {
         } else {
             expandedTiles.insert(tile)
         }
-        setNeedsDisplay()
+        needsDisplay = true
         onExpansionChanged?()
     }
 
@@ -1108,7 +1075,7 @@ private final class DebugOverlayTilesStatusListView: UIView {
         } else {
             expandedParseStageTiles.insert(tile)
         }
-        setNeedsDisplay()
+        needsDisplay = true
         onExpansionChanged?()
     }
 
@@ -1118,246 +1085,16 @@ private final class DebugOverlayTilesStatusListView: UIView {
                                                expandedParseStageTiles: expandedParseStageTiles)
     }
 
-    private func statusColor(_ status: TileLoadingTileStatus) -> UIColor {
+    private func statusColor(_ status: TileLoadingTileStatus) -> NSColor {
         switch status {
         case .ready:
-            return UIColor.systemGreen
+            return NSColor.systemGreen
         case .failed:
-            return UIColor.systemRed
+            return NSColor.systemRed
         case .queued, .loading, .parsing:
-            return UIColor.systemYellow
+            return NSColor.systemYellow
         }
-    }
-
-    private static func progressBackgroundRect(for rowRect: CGRect) -> CGRect {
-        rowRect.insetBy(dx: 0, dy: Layout.progressVerticalInset)
-    }
-
-    private static func centeredTextRect(rowRect: CGRect,
-                                         backgroundRect: CGRect,
-                                         font: UIFont) -> CGRect {
-        CGRect(x: rowRect.minX + Layout.textInset,
-               y: backgroundRect.midY - font.lineHeight * 0.5,
-               width: max(0, rowRect.width - Layout.textInset * 2),
-               height: font.lineHeight)
-    }
-
-    #if DEBUG
-    var visibleRowTextsForTesting: [String] {
-        visibleRows().map(\.text)
-    }
-
-    var primaryRowMetricsForTesting: DebugOverlayTilesPrimaryRowMetrics? {
-        guard visibleRows().contains(where: {
-            if case .tile = $0 {
-                return true
-            }
-            return false
-        }) else {
-            return nil
-        }
-
-        let rowRect = CGRect(x: 0, y: 0, width: bounds.width, height: Layout.rowHeight)
-        let backgroundRect = Self.progressBackgroundRect(for: rowRect)
-        let font = UIFont.monospacedSystemFont(ofSize: Layout.primaryFontSize, weight: .heavy)
-        return DebugOverlayTilesPrimaryRowMetrics(
-            progressBackgroundRect: backgroundRect,
-            textRect: Self.centeredTextRect(rowRect: rowRect,
-                                            backgroundRect: backgroundRect,
-                                            font: font),
-            fontSize: Layout.primaryFontSize)
-    }
-
-    func simulateTileRowTapForTesting(at index: Int) {
-        guard tiles.indices.contains(index) else { return }
-        toggleTileExpansion(tiles[index].tile)
-    }
-
-    func simulateParseStageTapForTesting(tile: Tile) {
-        toggleParseExpansion(tile)
-    }
-    #endif
-}
-
-#if DEBUG
-extension DebugOverlayHUDView {
-    func simulateSurfaceModeSwitchForTesting() {
-        surfaceModeButtonTapped()
-    }
-
-    func simulateTileTraceRecordingToggleForTesting() {
-        tileTraceButtonTapped()
-    }
-
-    func simulateBaseLabelsTraceRecordingToggleForTesting() {
-        baseLabelTraceButtonTapped()
-    }
-
-    func simulateAtlasTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.atlas.rawValue
-        tabControlChanged()
-    }
-
-    func simulateControlsTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.controls.rawValue
-        tabControlChanged()
-    }
-
-    func simulateTilesTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.tiles.rawValue
-        tabControlChanged()
-    }
-
-    func simulateBaseLabelsTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.baseLabels.rawValue
-        tabControlChanged()
-    }
-
-    func simulateEarthSceneSwitchForTesting(_ isEnabled: Bool) {
-        earthSceneSwitch.setOn(isEnabled, animated: false)
-        earthSceneSwitchChanged()
-    }
-
-    func simulateRoadLabelTilesSwitchChangeForTesting(_ isOn: Bool) {
-        roadLabelTilesSwitch.setOn(isOn, animated: false)
-        roadLabelTilesSwitchChanged()
-    }
-
-    var isAtlasTabSelectedForTesting: Bool {
-        selectedTab == .atlas
-    }
-
-    var isControlsTabSelectedForTesting: Bool {
-        selectedTab == .controls
-    }
-
-    var isTilesTabSelectedForTesting: Bool {
-        selectedTab == .tiles
-    }
-
-    var isBaseLabelsTabSelectedForTesting: Bool {
-        selectedTab == .baseLabels
-    }
-
-    var areDebugControlsVisibleForTesting: Bool {
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch, wireframeLabel, wireframeSwitch,
-         earthSceneLabel, earthSceneSwitch, surfaceModeButton]
-            .allSatisfy { $0.isHidden == false }
-    }
-
-    var isEarthSceneSwitchOnForTesting: Bool {
-        earthSceneSwitch.isOn
-    }
-
-    var isRoadLabelTilesSwitchOnForTesting: Bool {
-        roadLabelTilesSwitch.isOn
-    }
-
-    var isStatsContentVisibleForTesting: Bool {
-        [zoomLabel, latLonLabel, diagnosticsLabel].allSatisfy { $0.isHidden == false }
-    }
-
-    var isAtlasContentVisibleForTesting: Bool {
-        atlasScrollView.isHidden == false
-    }
-
-    var isTilesContentVisibleForTesting: Bool {
-        tilesStatusLabel.isHidden == false
-    }
-
-    var isTileTraceControlVisibleForTesting: Bool {
-        tileTraceButton.isHidden == false
-            && tileTraceStatusLabel.isHidden == false
-    }
-
-    var isBaseLabelTraceControlVisibleForTesting: Bool {
-        baseLabelTraceButton.isHidden == false
-            && baseLabelTraceStatusLabel.isHidden == false
-    }
-
-    var isRoadLabelTilesControlVisibleForTesting: Bool {
-        roadLabelTilesLabel.isHidden == false
-            && roadLabelTilesSwitch.isHidden == false
-    }
-
-    var baseLabelTraceButtonTitleForTesting: String? {
-        if #available(iOS 15.0, *) {
-            return baseLabelTraceButton.configuration?.title
-        }
-        return baseLabelTraceButton.title(for: .normal)
-    }
-
-    var baseLabelTraceStatusTextForTesting: String? {
-        baseLabelTraceStatusLabel.text
-    }
-
-    var baseLabelTraceStatusTextColorForTesting: UIColor? {
-        baseLabelTraceStatusLabel.textColor
-    }
-
-    var baseLabelTraceStatusFontPointSizeForTesting: CGFloat {
-        baseLabelTraceStatusLabel.font.pointSize
-    }
-
-    var tilesStatusTextForTesting: String? {
-        tilesStatusLabel.text
-    }
-
-    var tilesStatusRowCountForTesting: Int {
-        tilesStatusListView.rowCount
-    }
-
-    var tilesStatusVisibleRowTextsForTesting: [String] {
-        tilesStatusListView.visibleRowTextsForTesting
-    }
-
-    var tilesStatusPrimaryRowMetricsForTesting: DebugOverlayTilesPrimaryRowMetrics? {
-        tilesStatusListView.primaryRowMetricsForTesting
-    }
-
-    func simulateTilesStatusRowTapForTesting(at index: Int) {
-        tilesStatusListView.simulateTileRowTapForTesting(at: index)
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-
-    func simulateTilesStatusParseStageTapForTesting(tile: Tile) {
-        tilesStatusListView.simulateParseStageTapForTesting(tile: tile)
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-
-    var isTilesScrollEnabledForTesting: Bool {
-        tilesScrollView.isScrollEnabled
-    }
-
-    var atlasPreviewPageCountForTesting: Int {
-        atlasLayoutView.pageCount
-    }
-
-    var debugPanelFrameForTesting: CGRect {
-        containerView.frame
-    }
-
-    var isAtlasScrollEnabledForTesting: Bool {
-        atlasScrollView.isScrollEnabled
-    }
-
-    var tileTraceButtonTitleForTesting: String? {
-        if #available(iOS 15.0, *) {
-            return tileTraceButton.configuration?.title
-        }
-        return tileTraceButton.title(for: .normal)
-    }
-
-    var tileTraceStatusTextForTesting: String? {
-        tileTraceStatusLabel.text
-    }
-
-    var textUpdateCountForTesting: Int {
-        textUpdateCountForTestingStorage
     }
 }
-#endif
 
 #endif

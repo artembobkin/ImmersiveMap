@@ -1,8 +1,6 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
 import Foundation
 
 /// Отслеживает active user-interaction sources одного map view.
@@ -54,5 +52,3 @@ final class ImmersiveMapInteractionRuntime {
         }
     }
 }
-
-#endif

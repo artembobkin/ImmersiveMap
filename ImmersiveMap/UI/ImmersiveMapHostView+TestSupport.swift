@@ -1,13 +1,11 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if canImport(UIKit)
-
+import CoreGraphics
 import QuartzCore
-import UIKit
 
 #if DEBUG
-extension ImmersiveMapUIView {
+extension ImmersiveMapHostView {
     func flyForTesting(to cameraPosition: ImmersiveMapCameraPosition,
                        options: CameraFlightOptions = .default,
                        completion: ((Bool) -> Void)? = nil,
@@ -46,6 +44,4 @@ extension ImmersiveMapUIView {
         selectionHandler.updateAvatarSelectionSnapshot(snapshot)
     }
 }
-#endif
-
 #endif
