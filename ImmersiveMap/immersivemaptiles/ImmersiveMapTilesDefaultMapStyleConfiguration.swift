@@ -133,6 +133,38 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
         }
     }
 
+    /// Palette used only by the continuous ESA WorldCover overlay at overview
+    /// zooms. Keeping it separate prevents globe-scale color choices from tinting
+    /// the detailed OSM street map that takes over above z9.
+    public struct GlobalLandcoverStyles: Equatable {
+        public var land: SIMD4<Float>
+        public var water: SIMD4<Float>
+        public var forest: SIMD4<Float>
+        public var grass: SIMD4<Float>
+        public var crop: SIMD4<Float>
+        public var barren: SIMD4<Float>
+        public var wetland: SIMD4<Float>
+        public var snow: SIMD4<Float>
+
+        public init(land: SIMD4<Float>,
+                    water: SIMD4<Float>,
+                    forest: SIMD4<Float>,
+                    grass: SIMD4<Float>,
+                    crop: SIMD4<Float>,
+                    barren: SIMD4<Float>,
+                    wetland: SIMD4<Float>,
+                    snow: SIMD4<Float>) {
+            self.land = land
+            self.water = water
+            self.forest = forest
+            self.grass = grass
+            self.crop = crop
+            self.barren = barren
+            self.wetland = wetland
+            self.snow = snow
+        }
+    }
+
     public struct FeatureStyles: Equatable {
         public var buildingFillColor: SIMD4<Float>
 
@@ -144,13 +176,16 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
     public var labels: LabelStyles
     public var layers: LayerStyles
     public var features: FeatureStyles
+    public var globalLandcover: GlobalLandcoverStyles
 
     public init(labels: LabelStyles = .immersiveMapTilesDefault,
                 layers: LayerStyles = .immersiveMapTilesDefault,
-                features: FeatureStyles = .immersiveMapTilesDefault) {
+                features: FeatureStyles = .immersiveMapTilesDefault,
+                globalLandcover: GlobalLandcoverStyles = .softBiomes) {
         self.labels = labels
         self.layers = layers
         self.features = features
+        self.globalLandcover = globalLandcover
     }
 
     public static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration()
@@ -170,6 +205,13 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
     public func features(_ update: (inout FeatureStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
         var copy = self
         update(&copy.features)
+        return copy
+    }
+
+    public func globalLandcover(_ update: (inout GlobalLandcoverStyles) -> Void)
+        -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+        var copy = self
+        update(&copy.globalLandcover)
         return copy
     }
 
@@ -205,11 +247,30 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
         add(layers.roads.secondary); add(layers.roads.tertiary); add(layers.roads.minor)
         add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
         add(layers.roads.casing)
+        add(globalLandcover.land); add(globalLandcover.water); add(globalLandcover.forest)
+        add(globalLandcover.grass); add(globalLandcover.crop); add(globalLandcover.barren)
+        add(globalLandcover.wetland); add(globalLandcover.snow)
         add(features.buildingFillColor)
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
         return out
     }
+}
+
+public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles {
+    /// Low-contrast overview palette: a continuous sage land base hides sparse
+    /// source-data gaps, while broad biome classes remain distinguishable without
+    /// turning the globe into a high-contrast categorical mosaic.
+    static let softBiomes = ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles(
+        land: SIMD4<Float>(0.722, 0.784, 0.596, 1.0),
+        water: SIMD4<Float>(0.302, 0.600, 0.902, 1.0),
+        forest: SIMD4<Float>(0.502, 0.627, 0.408, 1.0),
+        grass: SIMD4<Float>(0.627, 0.722, 0.502, 1.0),
+        crop: SIMD4<Float>(0.722, 0.753, 0.565, 1.0),
+        barren: SIMD4<Float>(0.941, 0.878, 0.753, 1.0),
+        wetland: SIMD4<Float>(0.533, 0.659, 0.439, 1.0),
+        snow: SIMD4<Float>(0.949, 0.953, 0.937, 1.0)
+    )
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {

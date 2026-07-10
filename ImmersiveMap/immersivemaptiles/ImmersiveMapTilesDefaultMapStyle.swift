@@ -7,10 +7,12 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 27
+    private static let implementationRevision: UInt32 = 29
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
+    private let massiveOverviewMaximumZoom = 2
+    private let globalLandcoverMaximumZoom = 9
     private let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
     private let settings: ImmersiveMapSettings.StyleSettings
     private let mapBaseColors: ImmersiveMapBaseColors
@@ -48,15 +50,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // Synthetic full-tile base quad the engine emits per tile. OpenMapTiles
             // has no land polygon, so this is what paints the land; without it the
             // base falls through to the red debug fallback.
-            return polygon(key: 1, color: configuration.layers.land)
+            let color: SIMD4<Float>
+            if z <= massiveOverviewMaximumZoom {
+                color = configuration.globalLandcover.grass
+            } else if z <= globalLandcoverMaximumZoom {
+                color = configuration.globalLandcover.land
+            } else {
+                color = configuration.layers.land
+            }
+            return polygon(key: 1, color: color)
         case "water":
-            return polygon(key: 20, color: configuration.layers.water)
+            let color = z <= globalLandcoverMaximumZoom
+                ? configuration.globalLandcover.water
+                : configuration.layers.water
+            return polygon(key: 20, color: color)
         case "waterway":
             return waterwayStyle(cls: cls, props: props)
         case "landcover":
             return landcoverStyle(cls: cls, subclass: subclass, tileZoom: z)
         case "globallandcover":
-            return globalLandcoverStyle(cls: cls)
+            return globalLandcoverStyle(cls: cls, tileZoom: z)
         case "landuse":
             return landuseStyle(cls: cls, tileZoom: z)
         case "park":
@@ -148,28 +161,43 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     /// ESA WorldCover-derived low-zoom landcover (layer `globallandcover`, merged
-    /// into low-zoom tiles by the tile service). Per-class hole-free polygons drawn
-    /// in a fixed paint order: base land -> vegetation -> ice on top. Keys stay
-    /// below `water` (20) so oceans/lakes always cover landcover.
-    private func globalLandcoverStyle(cls: String?) -> FeatureStyle {
+    /// into low-zoom tiles by the tile service). The dedicated soft-biome palette
+    /// compresses contrast between neighbouring classes while keeping broad forests,
+    /// grasslands, crops, wetlands and deserts legible at globe scale. At z0...2 the
+    /// vegetation classes collapse into one large mass, with forests only subtly
+    /// darker, so source polygon spikes do not dominate the globe. Per-class hole-free
+    /// polygons are drawn in a fixed paint order: base land -> biomes -> snow on top.
+    /// Keys stay below `water` (20) so oceans/lakes cover landcover.
+    private func globalLandcoverStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
+        let colors = configuration.globalLandcover
+        let usesMassiveOverview = tileZoom <= massiveOverviewMaximumZoom
+        let overviewVegetation = colors.grass
+        let overviewForest = blend(overviewVegetation, toward: colors.forest, amount: 0.25)
         switch cls {
+        case "land":
+            return polygon(key: 2, color: usesMassiveOverview ? overviewVegetation : colors.land)
         case "barren":
-            // Mapbox tints arid/scrub land green rather than desert-yellow; match it.
-            return polygon(key: 3, color: configuration.layers.grass)
+            return polygon(key: 3, color: colors.barren)
         case "grass", "shrub", "moss":
-            return polygon(key: 4, color: configuration.layers.grass)
+            return polygon(key: 4, color: colors.grass)
         case "crop":
-            return polygon(key: 5, color: configuration.layers.farmland)
+            return polygon(key: 5, color: usesMassiveOverview ? overviewVegetation : colors.crop)
         case "forest":
-            return polygon(key: 6, color: configuration.layers.wood)
+            return polygon(key: 6, color: usesMassiveOverview ? overviewForest : colors.forest)
         case "wetland", "mangroves":
-            return polygon(key: 7, color: configuration.layers.wetland)
+            return polygon(key: 7, color: usesMassiveOverview ? overviewVegetation : colors.wetland)
         case "snow":
-            return polygon(key: 8, color: configuration.layers.ice)
+            return polygon(key: 8, color: colors.snow)
         default:
-            // land / urban / water: leave to the background and water layers.
+            // urban / water: leave to the background and water layers.
             return hiddenStyle
         }
+    }
+
+    private func blend(_ base: SIMD4<Float>,
+                       toward target: SIMD4<Float>,
+                       amount: Float) -> SIMD4<Float> {
+        base + (target - base) * amount
     }
 
     private func landuseStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
