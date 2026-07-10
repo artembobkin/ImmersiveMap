@@ -22,4 +22,4 @@ body:
     id: version
     attributes:
       label: ImmersiveMap version / commit
-      placeholder: "0.1.0-alpha.1 or commit SHA"
+      placeholder: "0.1.1 or commit SHA"

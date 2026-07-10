@@ -9,6 +9,10 @@ milestones.
 
 - Continuous integration (build + test on macOS).
 - README, documentation, and examples.
+- Tiled night-lights imagery on the globe.
+- Day/night terminator with a smooth fade when zooming into the globe.
+- Three-tier base label detail (full / reduced / minimal).
+- MTSDF text rendering with halos.
 
 ## Now
 

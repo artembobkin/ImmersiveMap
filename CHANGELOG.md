@@ -8,7 +8,7 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
-## [0.1.0-alpha.1]
+## [0.1.1] - 2026-07-11
 
 Initial public alpha.
 
@@ -16,11 +16,11 @@ Initial public alpha.
 
 - SwiftUI `ImmersiveMapView` with builder-style modifiers (`.camera`, `.tileProvider`, `.mapStyle`, `.labelSettings`, …).
 - Native Metal rendering pipeline (on-demand frame loop, multi-pass render graph).
+- Built-in ImmersiveMap tile provider that renders out of the box, no token required.
 - Mapbox vector tile provider (`MapboxTileProvider` / `MapboxMapStyle`).
 - OpenStreetMap / Shortbread provider (`OpenStreetMapTileProvider` / `OpenStreetMapMapStyle`).
 - Custom tile providers via `ImmersiveMapTileProvider` / `VectorTileProvider`.
 - Globe and flat presentation with continuous morphing between sphere and plane.
-- Terrain rendering.
 - Labels, starfield, and avatar / live markers.
 - Disk (raw + prepared) and in-memory tile caches.
 
@@ -31,5 +31,5 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-[Unreleased]: https://github.com/artembobkin/ImmersiveMap/compare/0.1.0-alpha.1...HEAD
-[0.1.0-alpha.1]: https://github.com/artembobkin/ImmersiveMap/releases/tag/0.1.0-alpha.1
+[Unreleased]: https://github.com/artembobkin/ImmersiveMap/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/artembobkin/ImmersiveMap/releases/tag/0.1.1

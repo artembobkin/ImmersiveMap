@@ -26,7 +26,10 @@ parsed, styled, normalized, and prepared for rendering.
 
 ## Must Not Contain
 
-- Network tile fetching, URL construction, authorization, or disk cache policy.
+- Network tile fetching, URL construction, authorization, or disk cache policy,
+  except the self-contained night-lights texture-source loader under `EarthScene/`
+  (`NightLightsTileSet` / `NightLightsTileCache`), which fetches and disk-caches its
+  own raster tiles.
 - Raw vector tile provider adaptation and label decision policy.
 - UIKit/AppKit/SwiftUI views, gesture recognizers, public UI controllers, or
   host-app lifecycle code.

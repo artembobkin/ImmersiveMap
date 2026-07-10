@@ -29,7 +29,9 @@ code consumes it.
 - Metal pipelines, shaders, GPU buffers, render passes, or frame graph code.
 - Tile loading, vector tile parsing, map styling, or label placement logic.
 - UIKit/AppKit/SwiftUI views, gesture recognizers, or host-app controllers.
-- Network clients, authorization logic, bearer tokens, or local secrets.
+- Authorization logic, bearer tokens, or local secrets. (Avatar marker images are
+  fetched from plain URLs by `AvatarMarkerImageLoader` via `URLSession`; no auth,
+  tokens, or secrets belong here.)
 - Non-avatar selection state or general camera/navigation behavior.
 
 ## Intended Flow

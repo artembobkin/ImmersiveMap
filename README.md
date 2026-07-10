@@ -95,10 +95,9 @@ To run:
 1. Clone the repository.
 2. Open `ImmersiveMap.xcworkspace`.
 3. Select the `ImmersiveMapIOS` or `ImmersiveMapMac` scheme.
-4. Add your Mapbox public token if you use the Mapbox provider (see the launch environment variables below).
-5. Build and run.
+4. Build and run.
 
-The host apps read optional launch environment variables: `IMMERSIVE_MAP_TILE_BASE_URL`, `IMMERSIVE_MAP_AUTH_TOKEN`, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN`, `IMMERSIVE_MAP_MAPBOX_TILESET_ID`. If the Mapbox token is present, the host apps use the Mapbox Vector Tiles API; otherwise they fall back to the OpenStreetMap / Shortbread provider.
+Both demo apps render the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox or OpenStreetMap provider instead, attach one to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
 
 ## Architecture
 
