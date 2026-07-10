@@ -28,7 +28,7 @@ parsed, styled, normalized, and prepared for rendering.
 
 - Network tile fetching, URL construction, authorization, or disk cache policy.
 - Raw vector tile provider adaptation and label decision policy.
-- UIKit or SwiftUI views, gesture recognizers, public UI controllers, or
+- UIKit/AppKit/SwiftUI views, gesture recognizers, public UI controllers, or
   host-app lifecycle code.
 - Public configuration API unrelated to rendering.
 - Secrets, tokens, private endpoints, or local machine paths.

@@ -1,7 +1,7 @@
 # Camera
 
 `Camera` owns the engine-side camera state and view-mode math that is independent
-of UIKit gestures, SwiftUI bindings, and Metal frame encoding.
+of UIKit/AppKit gestures, SwiftUI bindings, and Metal frame encoding.
 
 This folder keeps camera constraints and transformations reusable by UI,
 presentation, tile visibility, and render code without making those layers own
@@ -23,7 +23,7 @@ camera policy.
 
 ## Must Not Contain
 
-- UIKit or SwiftUI gesture recognizers, controls, or view lifecycle code.
+- UIKit/AppKit/SwiftUI gesture recognizers, controls, or view lifecycle code.
 - Metal resources, render passes, frame state, or shader-facing structs that are
   owned by `Render`.
 - Tile fetching, vector tile parsing, cache policy, or provider configuration.

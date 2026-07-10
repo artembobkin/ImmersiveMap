@@ -1,15 +1,19 @@
 # UI
 
-`UI` owns the public UIKit and SwiftUI surfaces plus runtime controllers that
-connect user interaction, camera commands, selection, settings, tiles, and
-rendering.
+`UI` owns the public SwiftUI surface, the platform host views (UIKit on iOS,
+AppKit on macOS), and runtime controllers that connect user interaction, camera
+commands, selection, settings, tiles, and rendering.
 
 This folder is the integration layer for app-facing usage. It should coordinate
-engine subsystems without taking over their internal responsibilities.
+engine subsystems without taking over their internal responsibilities. The
+public SwiftUI API (`ImmersiveMapView` and its modifiers) is identical on both
+platforms; only the host view, gestures, and overlay controls are
+platform-specific.
 
 ## Responsibilities
 
-- Expose public UIKit and SwiftUI map views.
+- Expose the public SwiftUI map view and the platform host views
+  (`ImmersiveMapUIView` on iOS, `ImmersiveMapNSView` on macOS).
 - Own runtime graph construction for the interactive map surface.
 - Handle gestures, controls, camera commands, selection events, and viewport
   updates.
@@ -18,10 +22,15 @@ engine subsystems without taking over their internal responsibilities.
 
 ## May Contain
 
-- Public `UIView` and `UIViewRepresentable` entry points.
-- UIKit controls, gesture controllers, and interaction runtimes.
-- Camera, selection, avatar, viewport, controls, and render runtime controllers.
-- Render loop pacing and render driver delegates.
+- Public `UIView`/`NSView` host views and their `UIViewRepresentable`/
+  `NSViewRepresentable` bridges.
+- UIKit and AppKit controls, gesture controllers, and interaction runtimes in
+  per-platform files (`#if canImport(UIKit)` / `#if os(macOS)`).
+- Platform-neutral shared logic: `ImmersiveMapHostRuntime`, the runtime graph,
+  camera/selection/avatar/viewport/controls/render runtime controllers, and the
+  `ImmersiveMapHostView` typealias that shared files reference.
+- Render loop pacing, the platform `DisplayLinkFactory`, and render driver
+  delegates.
 - Public UI-facing controller types.
 
 ## Must Not Contain
@@ -30,6 +39,8 @@ engine subsystems without taking over their internal responsibilities.
   lifetime that belongs in `Render`.
 - Raw tile parsing, feature styling, disk caching internals, or MVT decode code.
 - Provider-specific label adaptation or language fallback policy.
+- `targetEnvironment(macCatalyst)` checks - the package targets iOS (UIKit) and
+  native macOS (AppKit) only.
 - Host-app-only app delegates, scene setup, launch environment parsing, or demo
   mode code.
 - Bearer tokens, Mapbox tokens, private endpoints, or local secret files.
@@ -37,7 +48,8 @@ engine subsystems without taking over their internal responsibilities.
 ## Intended Flow
 
 ```text
-App-facing map view
+App-facing map view (SwiftUI -> platform host view)
+  -> shared host runtime
   -> UI runtime graph
   -> interaction, camera, tile, avatar, and selection controllers
   -> render driver

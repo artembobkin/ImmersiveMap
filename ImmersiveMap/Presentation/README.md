@@ -22,7 +22,7 @@ surface that receives gestures or the renderer that draws frames.
 
 ## Must Not Contain
 
-- UIKit or SwiftUI views, controls, and gesture recognizers.
+- UIKit/AppKit/SwiftUI views, controls, and gesture recognizers.
 - Metal render graph, render passes, shaders, or GPU resource ownership.
 - Tile network loading, vector tile parsing, or disk cache policy.
 - Provider-specific label adaptation or feature styling rules.

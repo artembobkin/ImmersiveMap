@@ -16,6 +16,8 @@ owns the behavior whenever there is a clear owner.
 
 - Small deterministic math helpers used by multiple subsystems.
 - Main-thread assertion or dispatch helpers.
+- Platform graphics shims shared by UIKit and AppKit code paths
+  (`PlatformGraphics`: color/font/bezier typealiases and CGImage rasterization).
 - Tiny stateless helpers with no better domain-specific owner.
 
 ## Must Not Contain

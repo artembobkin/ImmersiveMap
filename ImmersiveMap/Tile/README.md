@@ -26,8 +26,8 @@ payloads into structured map content.
 ## Must Not Contain
 
 - Metal render graph, render passes, shader files, or GPU resource ownership.
-- UIKit/SwiftUI views, gesture recognizers, host-app controllers, or display
-  link lifecycle code.
+- UIKit/AppKit/SwiftUI views, gesture recognizers, host-app controllers, or
+  display link lifecycle code.
 - Provider-specific label decision policy that belongs in
   `VectorTileAdaptation`.
 - Runtime label cache/fade state that belongs in `Labels`.

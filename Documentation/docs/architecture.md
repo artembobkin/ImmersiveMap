@@ -10,7 +10,7 @@ Dependencies point inward:
 UI → Render → domain folders → Utils
 ```
 
-- **UI** - SwiftUI/UIKit host, `CAMetalLayer`, render driver.
+- **UI** - SwiftUI surface, platform hosts (UIKit on iOS, AppKit on macOS), `CAMetalLayer`, render driver.
 - **Render** - Metal render pipeline, subsystems, shaders.
 - **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `EarthScene`, `Avatars`, `Starfield`, `Geo`.
 - **Utils** - shared stateless helpers.
@@ -20,14 +20,18 @@ Domain folders must not depend on `UI`/`Render` and must not contain Metal code.
 ## Public API and wiring
 
 ```text
-ImmersiveMapView (SwiftUI)
+ImmersiveMapView (SwiftUI, identical API on iOS and macOS)
    ↓  accumulates modifiers into ImmersiveMapSettings
-ImmersiveMapUIView (UIKit host + CAMetalLayer)
+ImmersiveMapUIView (UIKit, iOS) / ImmersiveMapNSView (AppKit, macOS) + CAMetalLayer
+   ↓
+ImmersiveMapHostRuntime (shared settings/renderer lifecycle)
    ↓
 ImmersiveMapRuntimeGraph (composition root, @MainActor)
    ↓  controllers/runtimes + ImmersiveMapRendererBuilder
 RenderFrameEngine
 ```
+
+The package targets iOS 18 (UIKit) and native macOS 15 (AppKit); Mac Catalyst is not supported. Platform-specific UI (gestures, attribution badge, debug HUD, touch control zones) lives in per-platform files; shared runtime logic is platform-neutral and references the host view through the `ImmersiveMapHostView` typealias.
 
 Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsController`, `ImmersiveMapSelectionController`. Provider protocols live in `Provider/`; concrete implementations are `MapboxTileProvider`/`MapboxMapStyle` and `OpenStreetMapTileProvider`/`OpenStreetMapMapStyle`.
 

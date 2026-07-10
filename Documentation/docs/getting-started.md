@@ -15,7 +15,7 @@ In Xcode: **File → Add Package Dependencies…**, paste the URL, and add the `
 ## Requirements
 
 - Swift 6.0+, Xcode 16+
-- iOS 18+, Mac Catalyst 18+, or macOS 12+
+- iOS 18+ or macOS 15+ (native AppKit, not Mac Catalyst)
 - A Metal-capable device or simulator
 
 ## Your first map

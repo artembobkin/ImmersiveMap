@@ -24,7 +24,7 @@ encoding or tile loading.
 
 - Metal pipeline creation, render passes, GPU texture trees, or shader files.
 - Tile network loading, disk caching, or vector tile parsing.
-- UIKit/SwiftUI controls, gesture recognizers, or host-app code.
+- UIKit/AppKit/SwiftUI controls, gesture recognizers, or host-app code.
 - Provider-specific label or feature schema adaptation.
 - Flat-map-only visibility behavior that belongs in `Tile` or `Presentation`.
 

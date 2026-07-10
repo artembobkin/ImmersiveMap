@@ -34,7 +34,7 @@ or draw subsystems.
 - Runtime label caches, fade animation, or per-frame collision resolution.
 - Tile fetching, URL construction, disk caching, or network authorization.
 - Public API until the internal adaptation model is stable.
-- UIKit/SwiftUI views, host-app code, demo modes, tokens, or local secrets.
+- UIKit/AppKit/SwiftUI views, host-app code, demo modes, tokens, or local secrets.
 
 ## Intended Flow
 

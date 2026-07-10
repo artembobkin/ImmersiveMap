@@ -15,6 +15,8 @@ ImmersiveMap is an experimental **native Swift + Metal map rendering engine for 
 | Feature | Status |
 |---|---|
 | SwiftUI integration | Alpha |
+| Native iOS (UIKit host) | Alpha |
+| Native macOS (AppKit host, no Catalyst) | Alpha |
 | Native Metal renderer | Alpha |
 | Mapbox vector tiles | Alpha |
 | OpenStreetMap / Shortbread provider | Alpha |
@@ -32,8 +34,7 @@ ImmersiveMap is an experimental **native Swift + Metal map rendering engine for 
 - Swift 6.0+
 - Xcode 16+
 - iOS 18+
-- Mac Catalyst 18+
-- macOS 12+
+- macOS 15+ (native AppKit, not Mac Catalyst)
 - Metal-capable device or simulator
 
 ## Installation
@@ -71,7 +72,7 @@ struct ContentView: View {
 }
 ```
 
-ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required.
+ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required. The same SwiftUI code runs natively on iOS (UIKit host) and macOS (AppKit host): `ImmersiveMapView` bridges to the platform view internally.
 
 To use Mapbox vector tiles instead, attach a provider and style:
 
@@ -87,7 +88,7 @@ ImmersiveMapView()
 The repository includes two host apps that reference the package locally:
 
 - `ImmersiveMapIOS` - iOS demo app
-- `ImmersiveMapMac` - Mac Catalyst demo app
+- `ImmersiveMapMac` - native macOS demo app (AppKit, not Catalyst)
 
 To run:
 

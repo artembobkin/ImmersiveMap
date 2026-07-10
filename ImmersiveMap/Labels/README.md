@@ -28,7 +28,7 @@ runtime metadata. It should not know the raw provider schema.
   identity decisions that belong in `VectorTileAdaptation`.
 - Metal pipelines, shaders, GPU buffer allocation, or render pass encoding.
 - Tile downloading, disk caching, or raw MVT parsing.
-- UIKit/SwiftUI views, gesture handlers, or host-app controllers.
+- UIKit/AppKit/SwiftUI views, gesture handlers, or host-app controllers.
 - Network authorization, tokens, or local secret configuration.
 
 ## Intended Flow

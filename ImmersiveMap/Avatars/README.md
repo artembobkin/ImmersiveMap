@@ -28,7 +28,7 @@ code consumes it.
 
 - Metal pipelines, shaders, GPU buffers, render passes, or frame graph code.
 - Tile loading, vector tile parsing, map styling, or label placement logic.
-- UIKit or SwiftUI views, gesture recognizers, or host-app controllers.
+- UIKit/AppKit/SwiftUI views, gesture recognizers, or host-app controllers.
 - Network clients, authorization logic, bearer tokens, or local secrets.
 - Non-avatar selection state or general camera/navigation behavior.
 
