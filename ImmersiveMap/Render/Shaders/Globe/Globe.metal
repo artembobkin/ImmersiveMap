@@ -499,6 +499,7 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
         float dayBrightness = mix(earthScene.daySideMinimumBrightness, 1.0, dayFactor);
         float surfaceBrightness = mix(earthScene.nightSideBrightness, dayBrightness, dayFactor);
         surfaceBrightness = mix(surfaceBrightness, 1.0, in.transition);
+        surfaceBrightness = mix(surfaceBrightness, 1.0, earthScene.sunShadowFade);
         color.rgb *= surfaceBrightness;
 
         if (earthScene.nightLightsEnabled != 0) {
@@ -519,7 +520,7 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
                                                                         nightLightsAtlasPage7);
             float2 lights = atlasSample.isValid ? atlasSample.lights : float2(0.0);
             float glow = atlasSample.isValid ? atlasSample.glow : 0.0;
-            float nightLightsGain = nightFactor * earthScene.nightLightsIntensity * (1.0 - in.transition);
+            float nightLightsGain = nightFactor * earthScene.nightLightsIntensity * (1.0 - in.transition) * (1.0 - earthScene.sunShadowFade);
 
             float3 lightColor = cinematicNightLightsColor(lights.x, lights.y, glow);
             color.rgb += lightColor * nightLightsGain;
@@ -633,6 +634,7 @@ fragment float4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
         float dayBrightness = mix(earthScene.daySideMinimumBrightness, 1.0, dayFactor);
         float surfaceBrightness = mix(earthScene.nightSideBrightness, dayBrightness, dayFactor);
         surfaceBrightness = mix(surfaceBrightness, 1.0, clamp(1.0 - in.capAlpha, 0.0, 1.0));
+        surfaceBrightness = mix(surfaceBrightness, 1.0, earthScene.sunShadowFade);
         color.rgb *= surfaceBrightness;
 
     }

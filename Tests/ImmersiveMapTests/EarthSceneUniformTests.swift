@@ -140,6 +140,24 @@ final class EarthSceneUniformTests: XCTestCase {
         XCTAssertEqual(uniform.sunDirection.z, expectedDirection.z, accuracy: 0.0001)
     }
 
+    func testSunShadowFadeProgressesFromZoomOneToTwo() {
+        let settings = ImmersiveMapSettings.EarthSceneSettings()
+
+        let below = EarthSceneUniform(settings: settings, now: .distantPast, zoom: 0.5)
+        let start = EarthSceneUniform(settings: settings, now: .distantPast, zoom: 1.0)
+        let middle = EarthSceneUniform(settings: settings, now: .distantPast, zoom: 1.5)
+        let end = EarthSceneUniform(settings: settings, now: .distantPast, zoom: 2.0)
+        let above = EarthSceneUniform(settings: settings, now: .distantPast, zoom: 3.0)
+
+        XCTAssertEqual(below.sunShadowFade, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(start.sunShadowFade, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(middle.sunShadowFade, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(end.sunShadowFade, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(above.sunShadowFade, 1.0, accuracy: 0.0001)
+        XCTAssertGreaterThan(middle.sunShadowFade, start.sunShadowFade)
+        XCTAssertGreaterThan(end.sunShadowFade, middle.sunShadowFade)
+    }
+
     func testUniformMatchesShaderABIRelatedLayout() {
         XCTAssertEqual(MemoryLayout<EarthSceneUniform>.stride, 80)
         XCTAssertEqual(MemoryLayout<EarthSceneUniform>.alignment, 16)
@@ -158,7 +176,8 @@ final class EarthSceneUniformTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \.sunEdgeGlareIntensity), 60)
         XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \.sunLimbHaloIntensity), 64)
         XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \.sunLimbHaloWidth), 68)
-        XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \._padding0), 72)
+        XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \.sunShadowFade), 72)
+        XCTAssertEqual(MemoryLayout<EarthSceneUniform>.offset(of: \._padding0), 76)
     }
 }
 

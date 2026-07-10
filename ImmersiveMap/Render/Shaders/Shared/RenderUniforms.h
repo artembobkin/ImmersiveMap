@@ -41,7 +41,8 @@ struct EarthScene {
     float sunEdgeGlareIntensity;
     float sunLimbHaloIntensity;
     float sunLimbHaloWidth;
-    uint2 _padding0;
+    float sunShadowFade;
+    uint _padding0;
 };
 
 struct SunVisualState {

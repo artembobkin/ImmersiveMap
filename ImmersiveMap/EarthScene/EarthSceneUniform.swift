@@ -20,9 +20,16 @@ struct EarthSceneUniform {
     var sunEdgeGlareIntensity: Float
     var sunLimbHaloIntensity: Float
     var sunLimbHaloWidth: Float
-    var _padding0: SIMD2<UInt32>
+    var sunShadowFade: Float
+    var _padding0: UInt32
 
     static let minimumFadeWidth: Float = 0.001
+
+    /// Зум, на котором тень от солнца (терминатор день/ночь) ещё полностью видна.
+    static let sunShadowFadeStartZoom: Double = 1.0
+
+    /// Зум, на котором тень от солнца полностью исчезает.
+    static let sunShadowFadeEndZoom: Double = 2.0
 
     static let disabled = EarthSceneUniform(
         sunDirection: SIMD3<Float>(0, 0, 1),
@@ -40,10 +47,13 @@ struct EarthSceneUniform {
         sunEdgeGlareIntensity: 0,
         sunLimbHaloIntensity: 0,
         sunLimbHaloWidth: minimumFadeWidth,
-        _padding0: SIMD2<UInt32>(repeating: 0)
+        sunShadowFade: 0,
+        _padding0: 0
     )
 
-    init(settings: ImmersiveMapSettings.EarthSceneSettings, now: Date = Date()) {
+    init(settings: ImmersiveMapSettings.EarthSceneSettings,
+         now: Date = Date(),
+         zoom: Double = sunShadowFadeStartZoom) {
         guard settings.isEnabled else {
             self = Self.disabled
             return
@@ -70,7 +80,8 @@ struct EarthSceneUniform {
             sunEdgeGlareIntensity: sun.isEnabled ? Self.clampedUnit(sun.edgeGlareIntensity) : 0,
             sunLimbHaloIntensity: sun.isEnabled ? Self.clampedUnit(sun.limbHaloIntensity) : 0,
             sunLimbHaloWidth: Self.resolvedFadeWidth(sun.limbHaloWidth),
-            _padding0: SIMD2<UInt32>(repeating: 0)
+            sunShadowFade: Self.sunShadowFade(zoom: zoom),
+            _padding0: 0
         )
     }
 
@@ -89,7 +100,8 @@ struct EarthSceneUniform {
                  sunEdgeGlareIntensity: Float,
                  sunLimbHaloIntensity: Float,
                  sunLimbHaloWidth: Float,
-                 _padding0: SIMD2<UInt32>) {
+                 sunShadowFade: Float,
+                 _padding0: UInt32) {
         self.sunDirection = sunDirection
         self.isEnabled = isEnabled
         self.daySideMinimumBrightness = daySideMinimumBrightness
@@ -105,7 +117,21 @@ struct EarthSceneUniform {
         self.sunEdgeGlareIntensity = sunEdgeGlareIntensity
         self.sunLimbHaloIntensity = sunLimbHaloIntensity
         self.sunLimbHaloWidth = sunLimbHaloWidth
+        self.sunShadowFade = sunShadowFade
         self._padding0 = _padding0
+    }
+
+    /// Доля исчезновения тени от солнца по зуму: 0 - тень видна полностью,
+    /// 1 - тени нет. Плавно нарастает по smoothstep между стартовым и конечным зумом.
+    private static func sunShadowFade(zoom: Double) -> Float {
+        let start = sunShadowFadeStartZoom
+        let end = sunShadowFadeEndZoom
+        guard zoom.isFinite, end > start else {
+            return zoom >= end ? 1 : 0
+        }
+
+        let t = min(max((zoom - start) / (end - start), 0), 1)
+        return Float(t * t * (3 - 2 * t))
     }
 
     private static func clampedUnit(_ value: Float) -> Float {
