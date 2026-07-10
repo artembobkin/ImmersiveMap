@@ -5,7 +5,7 @@
 import XCTest
 
 final class EarthSceneSettingsTests: XCTestCase {
-    func testDefaultEarthSceneIsEnabledWithRealtimeSunAndNightLights() {
+    func testDefaultEarthSceneIsEnabledWithRealtimeSunAndNightLightsOff() {
         let earth = ImmersiveMapSettings.default.scene.earth
 
         XCTAssertTrue(earth.isEnabled)
@@ -13,7 +13,7 @@ final class EarthSceneSettingsTests: XCTestCase {
         XCTAssertEqual(earth.daySideMinimumBrightness, 0.82, accuracy: 0.0001)
         XCTAssertEqual(earth.nightSideBrightness, 0.18, accuracy: 0.0001)
         XCTAssertEqual(earth.terminatorFadeWidth, 0.12, accuracy: 0.0001)
-        XCTAssertTrue(earth.nightLights.isEnabled)
+        XCTAssertFalse(earth.nightLights.isEnabled)
         XCTAssertEqual(earth.nightLights.intensity, 1.0, accuracy: 0.0001)
         XCTAssertEqual(earth.nightLights.terminatorFadeWidth, 0.18, accuracy: 0.0001)
         XCTAssertTrue(earth.sun.isEnabled)

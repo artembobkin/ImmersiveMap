@@ -110,7 +110,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
 
         XCTAssertFalse(settings.scene.earth.isEnabled)
         XCTAssertTrue(settings.scene.earth.sun.isEnabled)
-        XCTAssertTrue(settings.scene.earth.nightLights.isEnabled)
+        XCTAssertFalse(settings.scene.earth.nightLights.isEnabled)
     }
 
     func testNightLightsTileManifestURLModifierStoresRemoteManifestURL() {
