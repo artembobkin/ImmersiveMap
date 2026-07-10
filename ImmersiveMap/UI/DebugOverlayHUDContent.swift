@@ -35,7 +35,7 @@ enum DebugOverlayHUDTextComposer {
     }
 
     static func traceButtonTitle(isRecording: Bool) -> String {
-        isRecording ? "Остановить запись" : "Начать запись"
+        isRecording ? "Stop recording" : "Start recording"
     }
 
     static func traceButtonImageName(isRecording: Bool) -> String {

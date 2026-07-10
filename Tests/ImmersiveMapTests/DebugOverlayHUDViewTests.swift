@@ -33,7 +33,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.simulateTileTraceRecordingToggleForTesting()
 
         XCTAssertTrue(didToggleRecording)
-        XCTAssertEqual(view.tileTraceButtonTitleForTesting, "Остановить запись")
+        XCTAssertEqual(view.tileTraceButtonTitleForTesting, "Stop recording")
         XCTAssertEqual(view.tileTraceStatusTextForTesting, "Recording: /tmp/immersive-map-tile-trace.jsonl")
     }
 
@@ -67,7 +67,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.simulateBaseLabelsTraceRecordingToggleForTesting()
 
         XCTAssertTrue(didToggleRecording)
-        XCTAssertEqual(view.baseLabelTraceButtonTitleForTesting, "Остановить запись")
+        XCTAssertEqual(view.baseLabelTraceButtonTitleForTesting, "Stop recording")
         XCTAssertEqual(view.baseLabelTraceStatusTextForTesting, "Recording: /tmp/immersive-map-base-label-trace.jsonl")
         XCTAssertEqual(view.baseLabelTraceStatusTextColorForTesting, .white)
         XCTAssertEqual(view.baseLabelTraceStatusFontPointSizeForTesting, 15)
