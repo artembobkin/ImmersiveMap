@@ -3,6 +3,7 @@
 
 import CoreGraphics
 import Foundation
+import simd
 
 /// Владеет mutable camera state одного map view.
 /// Оборачивает `FrameCameraStateResolver`, применяет camera changes, хранит settings и запрашивает frames.
@@ -11,6 +12,7 @@ final class ImmersiveMapCameraRuntime {
     let presentationStateResolver: MapPresentationStateController
     private let renderRuntime: ImmersiveMapRenderRuntime
     private let controlsRuntime: ImmersiveMapControlsRuntime
+    private let viewportRuntime: ImmersiveMapViewportRuntime
     private weak var controller: ImmersiveMapCameraController?
     private(set) var renderCamera: FrameCameraStateResolver?
     private var settings: ImmersiveMapSettings
@@ -20,12 +22,14 @@ final class ImmersiveMapCameraRuntime {
     init(settings: ImmersiveMapSettings,
          initialCameraPosition: ImmersiveMapCameraPosition?,
          renderRuntime: ImmersiveMapRenderRuntime,
-         controlsRuntime: ImmersiveMapControlsRuntime) {
+         controlsRuntime: ImmersiveMapControlsRuntime,
+         viewportRuntime: ImmersiveMapViewportRuntime) {
         self.settings = settings
         self.initialCameraPosition = initialCameraPosition
         self.presentationStateResolver = MapPresentationStateController(settings: settings)
         self.renderRuntime = renderRuntime
         self.controlsRuntime = controlsRuntime
+        self.viewportRuntime = viewportRuntime
     }
 
     var currentSettings: ImmersiveMapSettings {
@@ -221,21 +225,87 @@ final class ImmersiveMapCameraRuntime {
     }
 
     func zoomCamera(scale: CGFloat,
-                    velocity: CGFloat) {
+                    velocity: CGFloat,
+                    anchorPoint: CGPoint? = nil) {
+        let stateBefore = renderCamera?.currentCameraState()
         renderCamera?.zoomCamera(scale: scale,
                                  velocity: velocity)
         applyCurrentCameraConstraints()
+        applyZoomAnchorCompensation(stateBefore: stateBefore,
+                                    anchorPoint: anchorPoint)
         notifyCameraPositionChanged()
         syncPitchControlValue()
         renderRuntime.requestFrame()
     }
 
-    func zoomCamera(delta: Double) {
+    func zoomCamera(delta: Double,
+                    anchorPoint: CGPoint? = nil) {
+        let stateBefore = renderCamera?.currentCameraState()
         renderCamera?.zoomCamera(delta: delta)
         applyCurrentCameraConstraints()
+        applyZoomAnchorCompensation(stateBefore: stateBefore,
+                                    anchorPoint: anchorPoint)
         notifyCameraPositionChanged()
         syncPitchControlValue()
         renderRuntime.requestFrame()
+    }
+
+    /// Целевая позиция для анимированного anchored-зума (двойной tap/click):
+    /// зум меняется на `zoomDelta`, центр смещается так, чтобы точка мира под
+    /// `anchorPoint` осталась на месте (с учётом `zoomAnchorFactor`).
+    func anchoredZoomTargetPosition(zoomDelta: Double,
+                                    anchorPoint: CGPoint) -> ImmersiveMapCameraPosition? {
+        guard let stateBefore = renderCamera?.currentCameraState() else {
+            return nil
+        }
+
+        var stateAfter = stateBefore
+        stateAfter.zoom = min(max(0, stateBefore.zoom + zoomDelta), settings.camera.maximumZoom)
+        stateAfter.centerWorldMercator = anchorCompensatedCenter(stateBefore: stateBefore,
+                                                                 stateAfter: stateAfter,
+                                                                 anchorPoint: anchorPoint)
+        return stateAfter.cameraPosition()
+    }
+
+    /// Сдвигает центр карты после уже применённого зума так, чтобы точка мира под
+    /// `anchorPoint` осталась под ним (доля `zoomAnchorFactor`).
+    private func applyZoomAnchorCompensation(stateBefore: ImmersiveMapCameraState?,
+                                             anchorPoint: CGPoint?) {
+        guard let stateBefore,
+              let anchorPoint,
+              let renderCamera else {
+            return
+        }
+
+        let stateAfter = renderCamera.currentCameraState()
+        let center = anchorCompensatedCenter(stateBefore: stateBefore,
+                                             stateAfter: stateAfter,
+                                             anchorPoint: anchorPoint)
+        guard center != stateAfter.centerWorldMercator else {
+            return
+        }
+
+        var compensatedState = stateAfter
+        compensatedState.centerWorldMercator = center
+        renderCamera.setCameraState(compensatedState)
+    }
+
+    private func anchorCompensatedCenter(stateBefore: ImmersiveMapCameraState,
+                                         stateAfter: ImmersiveMapCameraState,
+                                         anchorPoint: CGPoint) -> SIMD2<Double> {
+        let input = ZoomAnchorMath.Input(
+            anchorPoint: anchorPoint,
+            viewportSize: viewportRuntime.bounds.size,
+            centerWorldMercator: stateBefore.centerWorldMercator,
+            zoomBefore: stateBefore.zoom,
+            zoomAfter: stateAfter.zoom,
+            bearing: stateBefore.bearing,
+            transitionBefore: presentationStateResolver.resolve(cameraState: stateBefore).presentationState.transition,
+            transitionAfter: presentationStateResolver.resolve(cameraState: stateAfter).presentationState.transition,
+            globeRadiusScale: settings.presentation.globeRadiusScale,
+            anchorFactor: settings.camera.zoomAnchorFactor
+        )
+        return ZoomAnchorMath.compensatedCenterWorldMercator(input)
     }
 
     func setCameraPitch(_ pitch: Float) {

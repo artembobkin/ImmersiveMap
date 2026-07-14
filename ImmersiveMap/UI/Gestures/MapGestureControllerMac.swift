@@ -32,6 +32,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
     let panGesture: NSPanGestureRecognizer
     private let tiltPanGesture: NSPanGestureRecognizer
     private let clickGesture: NSClickGestureRecognizer
+    private let doubleClickGesture: NSClickGestureRecognizer
     private let rotationGesture: NSRotationGestureRecognizer
     private let magnificationGesture: NSMagnificationGestureRecognizer
     private var panMode: PanMode = .pan
@@ -41,6 +42,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         self.panGesture = NSPanGestureRecognizer()
         self.tiltPanGesture = NSPanGestureRecognizer()
         self.clickGesture = NSClickGestureRecognizer()
+        self.doubleClickGesture = NSClickGestureRecognizer()
         self.rotationGesture = NSRotationGestureRecognizer()
         self.magnificationGesture = NSMagnificationGestureRecognizer()
         super.init()
@@ -60,6 +62,13 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
             return true
         }
         return false
+    }
+
+    /// Одиночный клик (selection) ждёт провала двойного клика (anchored zoom) —
+    /// AppKit-аналог UIKit `require(toFail:)`.
+    func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
+                           shouldRequireFailureOf otherGestureRecognizer: NSGestureRecognizer) -> Bool {
+        gestureRecognizer === clickGesture && otherGestureRecognizer === doubleClickGesture
     }
 
     /// Жесты карты распознаём только над «голой» поверхностью карты. Если событие
@@ -89,6 +98,13 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         tiltPanGesture.delegate = self
         mapView.addGestureRecognizer(tiltPanGesture)
 
+        doubleClickGesture.target = self
+        doubleClickGesture.action = #selector(handleDoubleClick(_:))
+        doubleClickGesture.buttonMask = 0x1
+        doubleClickGesture.numberOfClicksRequired = 2
+        doubleClickGesture.delegate = self
+        mapView.addGestureRecognizer(doubleClickGesture)
+
         clickGesture.target = self
         clickGesture.action = #selector(handleClick(_:))
         clickGesture.buttonMask = 0x1
@@ -112,6 +128,27 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         guard let mapView else { return }
 
         mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
+    }
+
+    /// Двойной клик приближает карту на один уровень зума к точке клика:
+    /// точка мира под курсором остаётся на месте (см. `zoomAnchorFactor`).
+    @objc private func handleDoubleClick(_ gesture: NSClickGestureRecognizer) {
+        guard let mapView,
+              mapView.cameraRuntime.currentCameraState() != nil else {
+            return
+        }
+
+        let anchorPoint = gesture.location(in: mapView)
+        guard let targetPosition = mapView.cameraRuntime.anchoredZoomTargetPosition(zoomDelta: 1.0,
+                                                                                    anchorPoint: anchorPoint) else {
+            return
+        }
+
+        mapView.cameraRuntime.notifyUserInteractionBegan()
+        mapView.cameraAnimationRuntime.startCameraFlight(to: targetPosition,
+                                                         options: CameraFlightOptions(duration: 0.35),
+                                                         completion: nil,
+                                                         currentTime: CACurrentMediaTime())
     }
 
     // MARK: - Pan / tilt
@@ -228,7 +265,8 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         }
 
         mapView.cameraRuntime.zoomCamera(scale: scale,
-                                         velocity: 0)
+                                         velocity: 0,
+                                         anchorPoint: gesture.location(in: mapView))
         gesture.magnification = 0
     }
 
@@ -240,6 +278,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
             return
         }
 
+        let anchorPoint = mapView.convert(event.locationInWindow, from: nil)
         let isTrackpadGesture = event.phase != [] || event.momentumPhase != []
         if isTrackpadGesture {
             if event.phase.contains(.began) {
@@ -248,6 +287,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
             }
             applyScrollZoom(deltaY: event.scrollingDeltaY,
                             divisor: ScrollZoom.preciseDivisor,
+                            anchorPoint: anchorPoint,
                             in: mapView)
             if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
                 setInteractionActive(false,
@@ -261,18 +301,21 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         let divisor = event.hasPreciseScrollingDeltas ? ScrollZoom.preciseDivisor : ScrollZoom.lineDivisor
         applyScrollZoom(deltaY: event.scrollingDeltaY,
                         divisor: divisor,
+                        anchorPoint: anchorPoint,
                         in: mapView)
     }
 
     private func applyScrollZoom(deltaY: CGFloat,
                                  divisor: CGFloat,
+                                 anchorPoint: CGPoint,
                                  in mapView: ImmersiveMapNSView) {
         guard deltaY != 0 else {
             return
         }
 
         // Колесо/скролл «вверх» приближает карту.
-        mapView.cameraRuntime.zoomCamera(delta: Double(deltaY / divisor))
+        mapView.cameraRuntime.zoomCamera(delta: Double(deltaY / divisor),
+                                         anchorPoint: anchorPoint)
     }
 
     // MARK: - Interaction state

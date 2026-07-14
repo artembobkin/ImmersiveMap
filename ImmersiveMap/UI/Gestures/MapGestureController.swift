@@ -30,6 +30,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
     private weak var mapView: ImmersiveMapUIView?
     let panGesture: UIPanGestureRecognizer
     private let tapGesture: UITapGestureRecognizer
+    private let doubleTapGesture: UITapGestureRecognizer
     private let rotationGesture: UIRotationGestureRecognizer
     private let pinchGesture: UIPinchGestureRecognizer
 
@@ -37,6 +38,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         self.mapView = mapView
         self.panGesture = UIPanGestureRecognizer()
         self.tapGesture = UITapGestureRecognizer()
+        self.doubleTapGesture = UITapGestureRecognizer()
         self.rotationGesture = UIRotationGestureRecognizer()
         self.pinchGesture = UIPinchGestureRecognizer()
         super.init()
@@ -64,8 +66,13 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         panGesture.maximumNumberOfTouches = 1
         mapView.addGestureRecognizer(panGesture)
 
+        doubleTapGesture.addTarget(self, action: #selector(handleDoubleTap(_:)))
+        doubleTapGesture.numberOfTapsRequired = 2
+        mapView.addGestureRecognizer(doubleTapGesture)
+
         tapGesture.addTarget(self, action: #selector(handleTap(_:)))
         tapGesture.numberOfTapsRequired = 1
+        tapGesture.require(toFail: doubleTapGesture)
         mapView.addGestureRecognizer(tapGesture)
 
         rotationGesture.addTarget(self, action: #selector(handleRotation(_:)))
@@ -81,6 +88,27 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         guard let mapView else { return }
 
         mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
+    }
+
+    /// Двойной tap приближает карту на один уровень зума к точке tap:
+    /// точка мира под пальцем остаётся на месте (см. `zoomAnchorFactor`).
+    @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        guard let mapView,
+              mapView.cameraRuntime.currentCameraState() != nil else {
+            return
+        }
+
+        let anchorPoint = gesture.location(in: mapView)
+        guard let targetPosition = mapView.cameraRuntime.anchoredZoomTargetPosition(zoomDelta: 1.0,
+                                                                                    anchorPoint: anchorPoint) else {
+            return
+        }
+
+        mapView.cameraRuntime.notifyUserInteractionBegan()
+        mapView.cameraAnimationRuntime.startCameraFlight(to: targetPosition,
+                                                         options: CameraFlightOptions(duration: 0.35),
+                                                         completion: nil,
+                                                         currentTime: CACurrentMediaTime())
     }
 
     @objc private func handleRotation(_ gesture: UIRotationGestureRecognizer) {
@@ -133,7 +161,8 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         updateInteractionState(for: gesture.state,
                                gestureKind: .pinch)
         mapView.cameraRuntime.zoomCamera(scale: gesture.scale,
-                                         velocity: gesture.velocity)
+                                         velocity: gesture.velocity,
+                                         anchorPoint: gesture.location(in: mapView))
         gesture.scale = 1.0
     }
 

@@ -41,7 +41,8 @@ final class ImmersiveMapRuntimeGraph {
         let cameraRuntime = ImmersiveMapCameraRuntime(settings: settings,
                                                       initialCameraPosition: initialCameraPosition,
                                                       renderRuntime: renderRuntime,
-                                                      controlsRuntime: controlsRuntime)
+                                                      controlsRuntime: controlsRuntime,
+                                                      viewportRuntime: viewportRuntime)
         let interactionRuntime = ImmersiveMapInteractionRuntime(cameraRuntime: cameraRuntime,
                                                                 renderRuntime: renderRuntime)
         let cameraAnimationRuntime = ImmersiveMapCameraAnimationRuntime(cameraRuntime: cameraRuntime,

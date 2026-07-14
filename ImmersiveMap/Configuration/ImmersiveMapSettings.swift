@@ -79,6 +79,9 @@ public struct ImmersiveMapSettings: Equatable {
         public var pinchZoomFactor: Double
         public var pinchZoomVelocityFactor: Double
         public var pinchZoomVelocityLimit: Double
+        /// Доля притяжения зума к точке жеста (курсор, центр pinch, двойной tap):
+        /// 1 — точка мира под курсором остаётся на месте, 0 — зум в центр экрана.
+        public var zoomAnchorFactor: Double
         public var dragZoomFactor: Double
         public var dragZoomVelocityFactor: Double
         public var dragZoomVelocityLimit: Double
@@ -111,6 +114,7 @@ public struct ImmersiveMapSettings: Equatable {
                     pinchZoomFactor: Double,
                     pinchZoomVelocityFactor: Double,
                     pinchZoomVelocityLimit: Double,
+                    zoomAnchorFactor: Double = 1.0,
                     dragZoomFactor: Double,
                     dragZoomVelocityFactor: Double,
                     dragZoomVelocityLimit: Double,
@@ -142,6 +146,7 @@ public struct ImmersiveMapSettings: Equatable {
             self.pinchZoomFactor = pinchZoomFactor
             self.pinchZoomVelocityFactor = pinchZoomVelocityFactor
             self.pinchZoomVelocityLimit = pinchZoomVelocityLimit
+            self.zoomAnchorFactor = zoomAnchorFactor
             self.dragZoomFactor = dragZoomFactor
             self.dragZoomVelocityFactor = dragZoomVelocityFactor
             self.dragZoomVelocityLimit = dragZoomVelocityLimit
