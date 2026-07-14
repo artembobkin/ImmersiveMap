@@ -63,6 +63,17 @@ public enum AvatarClusterPolicy: Equatable, Hashable {
     case event
 }
 
+/// Bubble-счётчик у маркера: показывает число объединённых аватаров.
+/// Ставится автоматически на merged-маркеры (`ImmersiveMapAvatarsController.merge`),
+/// но может задаваться и вручную. Значения выше 999 рисуются как «999+».
+public struct AvatarCountBadge: Equatable, Hashable {
+    public let count: Int
+
+    public init(count: Int) {
+        self.count = max(1, count)
+    }
+}
+
 public struct AvatarMarker {
     public let id: UInt64
     public var coordinate: GeoCoordinate
@@ -70,6 +81,7 @@ public struct AvatarMarker {
     public var imageSource: AvatarMarkerImageSource
     public var batteryBadge: AvatarBatteryBadge?
     public var speedBadge: AvatarSpeedBadge?
+    public var countBadge: AvatarCountBadge?
     public var borderColor: SIMD4<Float>?
     public var screenSizeScale: Float
     public var isSelected: Bool
@@ -81,6 +93,7 @@ public struct AvatarMarker {
                 image: CGImage,
                 batteryBadge: AvatarBatteryBadge? = nil,
                 speedBadge: AvatarSpeedBadge? = nil,
+                countBadge: AvatarCountBadge? = nil,
                 borderColor: SIMD4<Float>? = nil,
                 screenSizeScale: Float = 1.0,
                 isSelected: Bool = false,
@@ -92,6 +105,7 @@ public struct AvatarMarker {
         self.imageSource = .cgImage(image)
         self.batteryBadge = batteryBadge
         self.speedBadge = speedBadge
+        self.countBadge = countBadge
         self.borderColor = borderColor
         self.screenSizeScale = screenSizeScale
         self.isSelected = isSelected
@@ -104,6 +118,7 @@ public struct AvatarMarker {
                 image: AvatarMarkerImageSource,
                 batteryBadge: AvatarBatteryBadge? = nil,
                 speedBadge: AvatarSpeedBadge? = nil,
+                countBadge: AvatarCountBadge? = nil,
                 borderColor: SIMD4<Float>? = nil,
                 screenSizeScale: Float = 1.0,
                 isSelected: Bool = false,
@@ -115,6 +130,7 @@ public struct AvatarMarker {
         self.imageSource = image
         self.batteryBadge = batteryBadge
         self.speedBadge = speedBadge
+        self.countBadge = countBadge
         self.borderColor = borderColor
         self.screenSizeScale = screenSizeScale
         self.isSelected = isSelected

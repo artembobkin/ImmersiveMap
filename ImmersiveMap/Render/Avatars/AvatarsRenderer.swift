@@ -10,6 +10,7 @@ enum AvatarDrawPass: Equatable {
     case avatarBody
     case batteryBadge
     case speedBadge
+    case countBadge
 }
 
 private enum AvatarInstanceFlags {
@@ -22,13 +23,16 @@ final class AvatarsRenderer {
     private let beamPipeline: AvatarBeamPipeline
     private let batteryBadgePipeline: AvatarBatteryBadgePipeline
     private let speedBadgePipeline: AvatarSpeedBadgePipeline
+    private let countBadgePipeline: AvatarCountBadgePipeline
     private let avatarAtlasResource: LazyAvatarRenderResource<AvatarTextureAtlas>
     private let batteryBadgeAtlasResource: LazyAvatarRenderResource<AvatarBatteryBadgeAtlas>
     private let speedBadgeAtlasResource: LazyAvatarRenderResource<AvatarSpeedBadgeAtlas>
+    private let countBadgeAtlasResource: LazyAvatarRenderResource<AvatarCountBadgeAtlas>
     private let markerSDF: AvatarMarkerSDFResource
     private let markerStyle: AvatarMarkerStyle
     private let batteryBadgeStyle: AvatarBatteryBadgeStyle
     private let speedBadgeStyle: AvatarSpeedBadgeStyle
+    private let countBadgeStyle: AvatarCountBadgeStyle
     private let beamStyle: AvatarBeamStyleGPU
     private let collisionGeometry: AvatarCollisionGeometry
     private let selectionProjector = AvatarSelectionProjector()
@@ -39,18 +43,21 @@ final class AvatarsRenderer {
     private let screenPointBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
     private let batteryBadgeInstanceBufferStore: FrameSlottedDynamicMetalBuffer<AvatarBatteryBadgeInstanceGPU>
     private let speedBadgeInstanceBufferStore: FrameSlottedDynamicMetalBuffer<AvatarSpeedBadgeInstanceGPU>
+    private let countBadgeInstanceBufferStore: FrameSlottedDynamicMetalBuffer<AvatarCountBadgeInstanceGPU>
     private let beamAnchorBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
     private let beamOffsetBufferStore: FrameSlottedDynamicMetalBuffer<AvatarOffset>
     private let presentationStateStore: AvatarPresentationStateStore
     private var instances: [AvatarInstanceGPU] = []
     private var batteryBadgeInstances: [AvatarBatteryBadgeInstanceGPU] = []
     private var speedBadgeInstances: [AvatarSpeedBadgeInstanceGPU] = []
+    private var countBadgeInstances: [AvatarCountBadgeInstanceGPU] = []
     private var screenPoints: [ScreenPointOutput] = []
     private var beamAnchors: [ScreenPointOutput] = []
     private var beamOffsets: [AvatarOffset] = []
     private var avatarCount: Int = 0
     private var hasVisibleBatteryBadges: Bool = false
     private var hasVisibleSpeedBadges: Bool = false
+    private var hasVisibleCountBadges: Bool = false
     private var hasVisibleBeams: Bool = false
     private var hasAppliedMarkers: Bool = false
     private var frameCounter: UInt64 = 0
@@ -87,6 +94,10 @@ final class AvatarsRenderer {
                                                            layer: layer,
                                                            library: library,
                                                            sampleCount: sampleCount)
+        self.countBadgePipeline = AvatarCountBadgePipeline(metalDevice: metalDevice,
+                                                           layer: layer,
+                                                           library: library,
+                                                           sampleCount: sampleCount)
         self.instanceBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                   slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                   options: [.storageModeShared])
@@ -97,6 +108,9 @@ final class AvatarsRenderer {
                                                                               slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                               options: [.storageModeShared])
         self.speedBadgeInstanceBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
+                                                                            slotsCount: InFlightFramePool.inFlightFramesCount,
+                                                                            options: [.storageModeShared])
+        self.countBadgeInstanceBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                             slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                             options: [.storageModeShared])
         self.beamAnchorBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
@@ -124,6 +138,9 @@ final class AvatarsRenderer {
         let speedBadgeStyle = AvatarSpeedBadgeStyle(sizePx: markerSizePx,
                                                     markerStyle: markerStyle)
         self.speedBadgeStyle = speedBadgeStyle
+        let countBadgeStyle = AvatarCountBadgeStyle(sizePx: markerSizePx,
+                                                    markerStyle: markerStyle)
+        self.countBadgeStyle = countBadgeStyle
         self.beamStyle = AvatarBeamStyleGPU(markerCenterOffsetPx: markerStyle.pointerHeightPx + markerStyle.bodySizePx.y * 0.5,
                                             markerBodyHalfMinPx: min(markerStyle.bodySizePx.x, markerStyle.bodySizePx.y) * 0.5)
         self.collisionGeometry = AvatarCollisionGeometry(markerSizePx: markerSizePx,
@@ -143,6 +160,12 @@ final class AvatarsRenderer {
                 badgePixelSize: SIMD2<Int>(max(1, Int(speedBadgeStyle.sizePx.x.rounded())),
                                            max(1, Int(speedBadgeStyle.sizePx.y.rounded()))),
                 cornerRadiusPx: speedBadgeStyle.cornerRadiusPx
+            )
+        }
+        self.countBadgeAtlasResource = LazyAvatarRenderResource {
+            AvatarCountBadgeAtlas(
+                device: metalDevice,
+                badgePixelSize: max(1, Int(countBadgeStyle.sizePx.x.rounded()))
             )
         }
     }
@@ -195,13 +218,17 @@ final class AvatarsRenderer {
     }
 
     static func drawPassSequence(hasVisibleBatteryBadges: Bool,
-                                 hasVisibleSpeedBadges: Bool) -> [AvatarDrawPass] {
+                                 hasVisibleSpeedBadges: Bool,
+                                 hasVisibleCountBadges: Bool) -> [AvatarDrawPass] {
         var passes: [AvatarDrawPass] = [.avatarBody]
         if hasVisibleBatteryBadges {
             passes.append(.batteryBadge)
         }
         if hasVisibleSpeedBadges {
             passes.append(.speedBadge)
+        }
+        if hasVisibleCountBadges {
+            passes.append(.countBadge)
         }
         return passes
     }
@@ -238,11 +265,28 @@ final class AvatarsRenderer {
                                            contentAlpha: contentAlpha)
     }
 
+    private func makeCountBadgeInstance(marker: AvatarMarker,
+                                        contentAlpha: Float) -> AvatarCountBadgeInstanceGPU {
+        guard contentAlpha > 0.0,
+              let badge = marker.countBadge,
+              let slot = countBadgeAtlasResource.value.slot(for: badge) else {
+            return AvatarCountBadgeInstanceGPU(uvRect: .zero,
+                                               flags: 0,
+                                               screenSizeScale: marker.screenSizeScale,
+                                               contentAlpha: 0.0)
+        }
+        return AvatarCountBadgeInstanceGPU(uvRect: slot.uvRect,
+                                           flags: 1,
+                                           screenSizeScale: marker.screenSizeScale,
+                                           contentAlpha: contentAlpha)
+    }
+
     private func rebuildFrameBuffers(layout: AvatarCollisionLayout,
                                      frameSlotIndex: Int) {
         instances.removeAll(keepingCapacity: true)
         batteryBadgeInstances.removeAll(keepingCapacity: true)
         speedBadgeInstances.removeAll(keepingCapacity: true)
+        countBadgeInstances.removeAll(keepingCapacity: true)
         screenPoints.removeAll(keepingCapacity: true)
         beamAnchors.removeAll(keepingCapacity: true)
         beamOffsets.removeAll(keepingCapacity: true)
@@ -251,12 +295,14 @@ final class AvatarsRenderer {
         instances.reserveCapacity(estimatedCount)
         batteryBadgeInstances.reserveCapacity(estimatedCount)
         speedBadgeInstances.reserveCapacity(estimatedCount)
+        countBadgeInstances.reserveCapacity(estimatedCount)
         screenPoints.reserveCapacity(estimatedCount)
         beamAnchors.reserveCapacity(estimatedCount)
         beamOffsets.reserveCapacity(estimatedCount)
 
         hasVisibleBatteryBadges = false
         hasVisibleSpeedBadges = false
+        hasVisibleCountBadges = false
         hasVisibleBeams = false
         hasPendingAtlasUploads = false
 
@@ -308,6 +354,10 @@ final class AvatarsRenderer {
                                                             contentAlpha: badgeContentAlpha)
             speedBadgeInstances.append(speedBadgeInstance)
             hasVisibleSpeedBadges = hasVisibleSpeedBadges || (speedBadgeInstance.flags & 1) != 0
+            let countBadgeInstance = makeCountBadgeInstance(marker: item.marker,
+                                                            contentAlpha: badgeContentAlpha)
+            countBadgeInstances.append(countBadgeInstance)
+            hasVisibleCountBadges = hasVisibleCountBadges || (countBadgeInstance.flags & 1) != 0
             screenPoints.append(item.screenPoint)
 
             // Конус рисуется от истинной геоточки к сдвинутому кружку; альфа
@@ -335,6 +385,7 @@ final class AvatarsRenderer {
         _ = instanceBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
         _ = batteryBadgeInstanceBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
         _ = speedBadgeInstanceBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
+        _ = countBadgeInstanceBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
         _ = screenPointBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
         _ = beamAnchorBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
         _ = beamOffsetBufferStore.ensureCapacity(slot: frameSlotIndex, count: max(1, instanceCount))
@@ -344,6 +395,7 @@ final class AvatarsRenderer {
         upload(values: instances, to: instanceBufferStore.buffer(for: frameSlotIndex))
         upload(values: batteryBadgeInstances, to: batteryBadgeInstanceBufferStore.buffer(for: frameSlotIndex))
         upload(values: speedBadgeInstances, to: speedBadgeInstanceBufferStore.buffer(for: frameSlotIndex))
+        upload(values: countBadgeInstances, to: countBadgeInstanceBufferStore.buffer(for: frameSlotIndex))
         upload(values: screenPoints, to: screenPointBufferStore.buffer(for: frameSlotIndex))
         upload(values: beamAnchors, to: beamAnchorBufferStore.buffer(for: frameSlotIndex))
         upload(values: beamOffsets, to: beamOffsetBufferStore.buffer(for: frameSlotIndex))
@@ -411,7 +463,8 @@ final class AvatarsRenderer {
         var style = markerStyle.gpu
         var sdfParams = markerSDF.params
         let passes = Self.drawPassSequence(hasVisibleBatteryBadges: hasVisibleBatteryBadges,
-                                           hasVisibleSpeedBadges: hasVisibleSpeedBadges)
+                                           hasVisibleSpeedBadges: hasVisibleSpeedBadges,
+                                           hasVisibleCountBadges: hasVisibleCountBadges)
 
         if hasVisibleBeams {
             drawBeams(renderEncoder: renderEncoder,
@@ -450,6 +503,15 @@ final class AvatarsRenderer {
                 renderEncoder.setVertexBuffer(speedBadgeInstanceBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 2)
                 renderEncoder.setVertexBytes(&speedStyle, length: MemoryLayout<AvatarSpeedBadgeStyleGPU>.stride, index: 3)
                 renderEncoder.setFragmentTexture(speedBadgeAtlasResource.value.texture, index: 0)
+                renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: avatarCount)
+            case .countBadge:
+                countBadgePipeline.selectPipeline(renderEncoder: renderEncoder)
+                var countStyle = countBadgeStyle.gpu
+                renderEncoder.setVertexBytes(&matrix, length: MemoryLayout<matrix_float4x4>.stride, index: 0)
+                renderEncoder.setVertexBuffer(screenPointBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 1)
+                renderEncoder.setVertexBuffer(countBadgeInstanceBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 2)
+                renderEncoder.setVertexBytes(&countStyle, length: MemoryLayout<AvatarCountBadgeStyleGPU>.stride, index: 3)
+                renderEncoder.setFragmentTexture(countBadgeAtlasResource.value.texture, index: 0)
                 renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: avatarCount)
             }
         }

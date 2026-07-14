@@ -34,6 +34,14 @@ struct AvatarSpeedBadgeInstanceGPU {
     float _padding;
 };
 
+struct AvatarCountBadgeInstanceGPU {
+    float4 uvRect;
+    uint flags;
+    float screenSizeScale;
+    float contentAlpha;
+    float _padding;
+};
+
 struct AvatarOffset {
     float2 value;
     float scale;
@@ -63,6 +71,12 @@ struct AvatarBatteryBadgeStyleGPU {
 };
 
 struct AvatarSpeedBadgeStyleGPU {
+    float2 sizePx;
+    float originXPx;
+    float originYPx;
+};
+
+struct AvatarCountBadgeStyleGPU {
     float2 sizePx;
     float originXPx;
     float originYPx;

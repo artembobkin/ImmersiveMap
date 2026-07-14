@@ -232,3 +232,59 @@ fragment float4 avatarSpeedBadgeFragment(AvatarSpeedBadgeVertexOut in [[stage_in
     color.a *= in.visibilityAlpha * in.contentAlpha;
     return color;
 }
+
+struct AvatarCountBadgeVertexOut {
+    float4 position [[position]];
+    float2 uv;
+    float4 uvRect;
+    float visibilityAlpha;
+    float contentAlpha;
+};
+
+vertex AvatarCountBadgeVertexOut avatarCountBadgeVertex(
+    uint vid [[vertex_id]],
+    uint iid [[instance_id]],
+    constant float4x4& screenMatrix [[buffer(0)]],
+    const device ScreenPointOutput* points [[buffer(1)]],
+    const device AvatarCountBadgeInstanceGPU* instances [[buffer(2)]],
+    constant AvatarCountBadgeStyleGPU& style [[buffer(3)]]
+) {
+    const float2 quad[6] = {
+        float2(0.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0),
+        float2(0.0, 1.0), float2(1.0, 0.0), float2(1.0, 1.0)
+    };
+
+    AvatarCountBadgeVertexOut out;
+    AvatarCountBadgeInstanceGPU instance = instances[iid];
+    ScreenPointOutput point = points[iid];
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
+        out.position = float4(-2.0, -2.0, 0.0, 1.0);
+        out.uv = float2(0.0);
+        out.uvRect = float4(0.0);
+        out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
+        return out;
+    }
+
+    float2 uv = quad[vid];
+    float screenSizeScale = max(instance.screenSizeScale, 0.0);
+    float2 local = float2(style.originXPx * screenSizeScale + uv.x * style.sizePx.x * screenSizeScale,
+                          style.originYPx * screenSizeScale + uv.y * style.sizePx.y * screenSizeScale);
+    float2 pixelPosition = point.position + local;
+
+    out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
+    out.uv = uv;
+    out.uvRect = instance.uvRect;
+    out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
+    return out;
+}
+
+fragment float4 avatarCountBadgeFragment(AvatarCountBadgeVertexOut in [[stage_in]],
+                                         texture2d<float> badgeAtlas [[texture(0)]]) {
+    constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
+    float4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= in.visibilityAlpha * in.contentAlpha;
+    return color;
+}

@@ -451,6 +451,139 @@ final class AvatarBatteryBadgeAtlas {
     }
 }
 
+struct AvatarCountBadgeAtlasSlot {
+    let uvRect: SIMD4<Float>
+}
+
+private enum AvatarCountBadgeAtlasKey: Hashable {
+    case count(Int)
+    case overflow
+}
+
+/// Атлас круглых bubble-счётчиков merged-маркеров: белый круг с числом
+/// объединённых аватаров, значения выше 999 рисуются как «999+».
+final class AvatarCountBadgeAtlas {
+    static let maximumCount = 999
+
+    private let cellSize: Int
+    private let columns: Int
+    private let rows: Int
+
+    private(set) var texture: MTLTexture
+    private var slotsByKey: [AvatarCountBadgeAtlasKey: AvatarCountBadgeAtlasSlot] = [:]
+
+    init(device: MTLDevice,
+         badgePixelSize: Int,
+         columns: Int = 20) {
+        self.cellSize = max(1, badgePixelSize)
+        self.columns = max(1, columns)
+        self.rows = Int(ceil(Double(Self.maximumCount + 1) / Double(self.columns)))
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
+                                                                  width: self.cellSize * self.columns,
+                                                                  height: self.cellSize * self.rows,
+                                                                  mipmapped: false)
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            fatalError("Failed to create avatar count badge atlas texture.")
+        }
+        texture.label = "AvatarCountBadgeAtlas"
+        self.texture = texture
+    }
+
+    func slot(for badge: AvatarCountBadge) -> AvatarCountBadgeAtlasSlot? {
+        let key: AvatarCountBadgeAtlasKey = badge.count > Self.maximumCount
+            ? .overflow
+            : .count(max(1, badge.count))
+        if let existing = slotsByKey[key] {
+            return existing
+        }
+
+        guard let image = makeBadgeImage(for: key) else {
+            return nil
+        }
+
+        let atlasIndex: Int
+        switch key {
+        case .count(let count):
+            atlasIndex = count - 1
+        case .overflow:
+            atlasIndex = Self.maximumCount
+        }
+        let column = atlasIndex % columns
+        let row = atlasIndex / columns
+        let minX = column * cellSize
+        let minY = row * cellSize
+        let bytesPerRow = cellSize * 4
+        guard let data = AvatarTextureRasterizer.makeBGRAData(for: image,
+                                                              width: cellSize,
+                                                              height: cellSize)
+        else {
+            return nil
+        }
+
+        data.withUnsafeBytes { bytes in
+            guard let baseAddress = bytes.baseAddress else { return }
+            texture.replace(region: MTLRegionMake2D(minX, minY, cellSize, cellSize),
+                            mipmapLevel: 0,
+                            withBytes: baseAddress,
+                            bytesPerRow: bytesPerRow)
+        }
+
+        let invWidth = 1.0 / Float(texture.width)
+        let invHeight = 1.0 / Float(texture.height)
+        let slot = AvatarCountBadgeAtlasSlot(
+            uvRect: SIMD4<Float>(Float(minX) * invWidth,
+                                 Float(minY) * invHeight,
+                                 Float(minX + cellSize) * invWidth,
+                                 Float(minY + cellSize) * invHeight)
+        )
+        slotsByKey[key] = slot
+        return slot
+    }
+
+    private func makeBadgeImage(for key: AvatarCountBadgeAtlasKey) -> CGImage? {
+        let size = CGSize(width: cellSize, height: cellSize)
+        return PlatformGraphicsImageRenderer.makeCGImage(size: size) { _ in
+            let bounds = CGRect(origin: .zero, size: size)
+            let inset = max(size.width * 0.05, 1.5)
+            let circleRect = bounds.insetBy(dx: inset, dy: inset)
+            let circlePath = PlatformBezierPath(ovalIn: circleRect)
+            PlatformColor.white.setFill()
+            circlePath.fill()
+            PlatformColor(white: 0.0, alpha: 0.10).setStroke()
+            circlePath.lineWidth = max(size.width * 0.03, 1.0)
+            circlePath.stroke()
+
+            let textValue: String
+            switch key {
+            case .count(let count):
+                textValue = "\(count)"
+            case .overflow:
+                textValue = "\(Self.maximumCount)+"
+            }
+
+            // Трёхзначные значения ужимаются, чтобы не вылезать из круга.
+            let baseFontSize = size.height * 0.44
+            let fontScale: CGFloat = textValue.count <= 2 ? 1.0 : (textValue.count == 3 ? 0.82 : 0.66)
+            let font = PlatformFont.monospacedDigitSystemFont(ofSize: baseFontSize * fontScale,
+                                                              weight: .bold)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: PlatformColor(white: 0.08, alpha: 1.0)
+            ]
+            let text = textValue as NSString
+            let textSize = text.size(withAttributes: attributes)
+            let textRect = CGRect(x: circleRect.midX - textSize.width * 0.5,
+                                  y: circleRect.midY - textSize.height * 0.5,
+                                  width: ceil(textSize.width),
+                                  height: ceil(textSize.height))
+            text.draw(in: textRect, withAttributes: attributes)
+        }
+    }
+}
+
 struct AvatarSpeedBadgeAtlasSlot {
     let uvRect: SIMD4<Float>
 }

@@ -30,6 +30,14 @@ struct AvatarSpeedBadgeInstanceGPU {
     var _padding: Float = 0.0
 }
 
+struct AvatarCountBadgeInstanceGPU {
+    var uvRect: SIMD4<Float>
+    var flags: UInt32
+    var screenSizeScale: Float
+    var contentAlpha: Float
+    var _padding: Float = 0.0
+}
+
 struct AvatarOffset {
     var value: SIMD2<Float>
     var scale: Float
@@ -59,6 +67,12 @@ struct AvatarBatteryBadgeStyleGPU {
 }
 
 struct AvatarSpeedBadgeStyleGPU {
+    var sizePx: SIMD2<Float>
+    var originXPx: Float
+    var originYPx: Float
+}
+
+struct AvatarCountBadgeStyleGPU {
     var sizePx: SIMD2<Float>
     var originXPx: Float
     var originYPx: Float
@@ -162,6 +176,33 @@ struct AvatarBatteryBadgeStyle {
 
     var bottomExtensionPx: Float {
         gpu.sizePx.y + gpu.gapPx
+    }
+}
+
+/// Круглый bubble-счётчик merged-маркера: сидит на правом верхнем крае тела
+/// и выступает над ним.
+struct AvatarCountBadgeStyle {
+    static let sizeRatio: Float = 0.40
+    static let minimumSizePx: Float = 46.0
+    /// Смещение центра bubble внутрь от правого края тела, в долях диаметра.
+    static let horizontalInsetRatio: Float = 0.18
+    /// Смещение центра bubble вниз от верха тела, в долях диаметра.
+    static let verticalInsetRatio: Float = 0.15
+
+    let gpu: AvatarCountBadgeStyleGPU
+
+    init(sizePx: Float, markerStyle: AvatarMarkerStyle) {
+        let diameterPx = max(sizePx * Self.sizeRatio, Self.minimumSizePx)
+        let centerXPx = markerStyle.bodySizePx.x * 0.5 - diameterPx * Self.horizontalInsetRatio
+        let centerYPx = markerStyle.pointerHeightPx + markerStyle.bodySizePx.y - diameterPx * Self.verticalInsetRatio
+
+        self.gpu = AvatarCountBadgeStyleGPU(sizePx: SIMD2<Float>(repeating: diameterPx),
+                                            originXPx: centerXPx - diameterPx * 0.5,
+                                            originYPx: centerYPx - diameterPx * 0.5)
+    }
+
+    var sizePx: SIMD2<Float> {
+        gpu.sizePx
     }
 }
 
