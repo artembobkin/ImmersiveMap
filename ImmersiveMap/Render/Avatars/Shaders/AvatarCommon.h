@@ -7,39 +7,43 @@ using namespace metal;
 #ifndef AVATAR_COMMON
 #define AVATAR_COMMON
 
-struct AvatarGeoInput {
-    float latitude;
-    float longitude;
-    float sizePx;
-    uint idHash;
-};
-
 struct AvatarInstanceGPU {
     float4 uvRect;
     float4 borderColor;
     float2 squashScale;
     uint atlasIndex;
     uint flags;
+    float morph;
+    float _pad0;
+    float2 _pad1;
 };
 
 struct AvatarBatteryBadgeInstanceGPU {
     float4 uvRect;
     uint flags;
     float screenSizeScale;
-    float2 _padding;
+    float contentAlpha;
+    float _padding;
 };
 
 struct AvatarSpeedBadgeInstanceGPU {
     float4 uvRect;
     uint flags;
     float screenSizeScale;
-    float2 _padding;
+    float contentAlpha;
+    float _padding;
 };
 
 struct AvatarOffset {
     float2 value;
     float scale;
     float _padding;
+};
+
+struct AvatarBeamStyleGPU {
+    float markerCenterOffsetPx;
+    float markerBodyHalfMinPx;
+    float2 _padding;
 };
 
 struct AvatarMarkerStyleGPU {

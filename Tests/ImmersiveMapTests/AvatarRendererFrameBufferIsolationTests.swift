@@ -16,10 +16,10 @@ final class AvatarRendererFrameBufferIsolationTests: XCTestCase {
         let perFrameStores = [
             "instanceBufferStore",
             "screenPointBufferStore",
-            "clusterInstanceBufferStore",
-            "clusterScreenPointBufferStore",
             "batteryBadgeInstanceBufferStore",
-            "speedBadgeInstanceBufferStore"
+            "speedBadgeInstanceBufferStore",
+            "beamAnchorBufferStore",
+            "beamOffsetBufferStore"
         ]
 
         for store in perFrameStores {

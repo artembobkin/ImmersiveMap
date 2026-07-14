@@ -11,7 +11,6 @@ import simd
 
 enum AvatarSelectionTarget: Equatable {
     case marker(UInt64)
-    case cluster(UInt64)
 }
 
 struct AvatarSelectionEntry {
@@ -74,35 +73,15 @@ struct AvatarSelectionSnapshot {
 struct AvatarSelectionProjector {
     private let globeHorizonFadeBandWidth: Float = 0.03
 
-    func makeSnapshot(markers: [AvatarMarker],
-                      drawSize: CGSize,
-                      cameraUniform: CameraUniform,
-                      resolvedPresentation: ResolvedPresentationState,
-                      markerStyle: AvatarMarkerStyle,
-                      badgeStyle: AvatarBatteryBadgeStyle,
-                      speedBadgeStyle: AvatarSpeedBadgeStyle) -> AvatarSelectionSnapshot {
-        let projected = project(markers: markers.map { PresentedAvatarMarker(marker: $0,
-                                                                              squashScale: SIMD2<Float>(repeating: 1)) },
-                                drawSize: drawSize,
-                                cameraUniform: cameraUniform,
-                                resolvedPresentation: resolvedPresentation)
-        return makeSnapshot(markerItems: projected.map {
-            AvatarClusterMarkerItem(marker: $0.marker,
-                                    squashScale: $0.squashScale,
-                                    screenPoint: $0.screenPoint,
-                                    drawOrder: $0.drawOrder)
-        },
-        clusterItems: [],
-        drawSize: drawSize,
-        markerStyle: markerStyle,
-        badgeStyle: badgeStyle,
-        speedBadgeStyle: speedBadgeStyle)
-    }
-
+    /// Проецирует маркеры на экран, отбрасывая всё за пределами вьюпорта с
+    /// полем `cullMarginPx` (запас на вынос коллизиями и размер маркера) и
+    /// невидимую сторону глобуса. Тригонометрии на маркер нет - только
+    /// линейная математика от кешированного базиса координаты.
     func project(markers: [PresentedAvatarMarker],
                  drawSize: CGSize,
                  cameraUniform: CameraUniform,
-                 resolvedPresentation: ResolvedPresentationState) -> [AvatarProjectedMarker] {
+                 resolvedPresentation: ResolvedPresentationState,
+                 cullMarginPx: Float) -> [AvatarProjectedMarker] {
         guard markers.isEmpty == false,
               drawSize.width > 0,
               drawSize.height > 0 else {
@@ -111,45 +90,60 @@ struct AvatarSelectionProjector {
 
         let viewport = SIMD2<Float>(Float(drawSize.width), Float(drawSize.height))
         var projectedMarkers: [AvatarProjectedMarker] = []
-        projectedMarkers.reserveCapacity(markers.count)
+        projectedMarkers.reserveCapacity(min(markers.count, 4096))
+
+        func isInsideViewport(_ point: ScreenPointOutput, screenSizeScale: Float) -> Bool {
+            let margin = cullMarginPx * max(1.0, screenSizeScale)
+            return point.position.x >= -margin
+                && point.position.x <= viewport.x + margin
+                && point.position.y >= -margin
+                && point.position.y <= viewport.y + margin
+        }
 
         switch resolvedPresentation.screenSpaceProjectionMode {
         case .flat:
-            for (drawOrder, presentedMarker) in markers.enumerated() {
-                let marker = presentedMarker.marker
-                let latitude = marker.coordinate.latitude * .pi / 180.0
-                let longitude = marker.coordinate.longitude * .pi / 180.0
-                let worldPosition = ImmersiveMapProjection.flatWorldPosition(latitude: latitude,
-                                                                    longitude: longitude,
-                                                                    flatRenderPan: resolvedPresentation.flatRenderState.pan,
-                                                                    renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)
-                let clip = cameraUniform.matrix * SIMD4<Float>(worldPosition.x, worldPosition.y, 0.0, 1.0)
+            let renderMapSize = resolvedPresentation.flatRenderState.renderMapSize
+            let halfRenderMapSize = renderMapSize * 0.5
+            let pan = resolvedPresentation.flatRenderState.pan
+            for presentedMarker in markers {
+                let basis = presentedMarker.projectionBasis
+                let xWorld = ImmersiveMapProjection.wrap(
+                    value: basis.normalizedWorldX * renderMapSize - halfRenderMapSize + pan.x * halfRenderMapSize,
+                    size: renderMapSize)
+                let yWorld = (basis.mercatorYNormalized - pan.y) * halfRenderMapSize
+                let clip = cameraUniform.matrix * SIMD4<Float>(Float(xWorld), Float(yWorld), 0.0, 1.0)
                 let point = screenPointFromClip(clip: clip, viewportSize: viewport)
+                guard point.visible != 0,
+                      isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
+                    continue
+                }
                 appendProjectedIfVisible(presentedMarker: presentedMarker,
                                          screenPoint: point,
-                                         drawOrder: drawOrder,
+                                         drawOrder: presentedMarker.drawOrder,
                                          projectedMarkers: &projectedMarkers)
             }
         case .globe:
             let constants = GlobeProjectionConstants(globe: resolvedPresentation.globeRenderUniform)
-            for (drawOrder, presentedMarker) in markers.enumerated() {
-                let marker = presentedMarker.marker
-                let latitude = Float(marker.coordinate.latitude * .pi / 180.0)
-                let longitude = Float(marker.coordinate.longitude * .pi / 180.0)
-                let projection = globeProjectLatLon(latitude: latitude,
-                                                    longitude: longitude,
-                                                    cameraUniform: cameraUniform,
-                                                    constants: constants)
+            for presentedMarker in markers {
+                let projection = globeProject(basis: presentedMarker.projectionBasis,
+                                              cameraUniform: cameraUniform,
+                                              constants: constants)
                 var point = screenPointFromClip(clip: projection.clip, viewportSize: viewport)
-                if point.visible != 0 {
-                    let visibility = globeProjectionVisibility(worldPosition: projection.worldPosition,
-                                                               cameraUniform: cameraUniform,
-                                                               constants: constants)
-                    point.visibilityAlpha = visibility.alpha
+                guard point.visible != 0,
+                      isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
+                    continue
                 }
+                let visibility = globeProjectionVisibility(worldPosition: projection.worldPosition,
+                                                           cameraUniform: cameraUniform,
+                                                           constants: constants)
+                // Обратная сторона шара не доходит до солвера и буферов.
+                guard visibility.alpha > 0.0 else {
+                    continue
+                }
+                point.visibilityAlpha = visibility.alpha
                 appendProjectedIfVisible(presentedMarker: presentedMarker,
                                          screenPoint: point,
-                                         drawOrder: drawOrder,
+                                         drawOrder: presentedMarker.drawOrder,
                                          projectedMarkers: &projectedMarkers)
             }
         }
@@ -157,8 +151,7 @@ struct AvatarSelectionProjector {
         return projectedMarkers
     }
 
-    func makeSnapshot(markerItems: [AvatarClusterMarkerItem],
-                      clusterItems: [AvatarClusterRenderable],
+    func makeSnapshot(markerItems: [AvatarCollisionMarkerItem],
                       drawSize: CGSize,
                       markerStyle: AvatarMarkerStyle,
                       badgeStyle: AvatarBatteryBadgeStyle,
@@ -171,29 +164,20 @@ struct AvatarSelectionProjector {
         let width = CGFloat(markerStyle.totalSizePx.x)
         let height = CGFloat(markerStyle.totalSizePx.y)
         var entries: [AvatarSelectionEntry] = []
-        entries.reserveCapacity(markerItems.count + clusterItems.count)
-
-        for cluster in clusterItems {
-            appendEntryIfVisible(target: .cluster(cluster.id),
-                                 hasBatteryBadge: false,
-                                 hasSpeedBadge: false,
-                                 screenPoint: cluster.screenPoint,
-                                 drawOrder: cluster.drawOrder,
-                                 markerWidth: width,
-                                 markerHeight: height,
-                                 badgeStyle: badgeStyle,
-                                 speedBadgeStyle: speedBadgeStyle,
-                                 entries: &entries)
-        }
+        entries.reserveCapacity(markerItems.count)
 
         for markerItem in markerItems {
+            // Сжатый маркер занимает меньше места и прячет бейджи: хит-зона
+            // масштабируется тем же displayScale, что и отрисовка.
+            let displayScale = CGFloat(max(markerItem.displayScale, 0.0))
+            let badgesVisible = AvatarCollisionMath.badgeContentAlpha(displayScale: markerItem.displayScale) > 0.0
             appendEntryIfVisible(target: .marker(markerItem.marker.id),
-                                 hasBatteryBadge: markerItem.marker.batteryBadge != nil,
-                                 hasSpeedBadge: markerItem.marker.speedBadge != nil,
+                                 hasBatteryBadge: badgesVisible && markerItem.marker.batteryBadge != nil,
+                                 hasSpeedBadge: badgesVisible && markerItem.marker.speedBadge != nil,
                                  screenPoint: markerItem.screenPoint,
                                  drawOrder: markerItem.drawOrder,
-                                 markerWidth: width,
-                                 markerHeight: height,
+                                 markerWidth: width * displayScale,
+                                 markerHeight: height * displayScale,
                                  badgeStyle: badgeStyle,
                                  speedBadgeStyle: speedBadgeStyle,
                                  entries: &entries)
@@ -212,9 +196,12 @@ struct AvatarSelectionProjector {
             return
         }
 
+        let basis = presentedMarker.projectionBasis
         projectedMarkers.append(AvatarProjectedMarker(marker: presentedMarker.marker,
                                                       squashScale: presentedMarker.squashScale,
                                                       screenPoint: screenPoint,
+                                                      worldPosition: SIMD2<Double>(basis.normalizedWorldX,
+                                                                                   basis.mercatorYNormalized),
                                                       drawOrder: drawOrder))
     }
 
@@ -296,14 +283,11 @@ struct AvatarSelectionProjector {
                                  visibilityAlpha: 1.0)
     }
 
-    private func globeProjectLatLon(latitude: Float,
-                                    longitude: Float,
-                                    cameraUniform: CameraUniform,
-                                    constants: GlobeProjectionConstants) -> GlobeProjectionResult {
-        let sphereWorldPosition = constants.rotatedSphereWorldPosition(latitude: latitude,
-                                                                       longitude: longitude)
-        let flatWorldPosition = constants.flatWorldPosition(latitude: latitude,
-                                                            longitude: longitude)
+    private func globeProject(basis: AvatarProjectionBasis,
+                              cameraUniform: CameraUniform,
+                              constants: GlobeProjectionConstants) -> GlobeProjectionResult {
+        let sphereWorldPosition = constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
+        let flatWorldPosition = constants.flatWorldPosition(basis: basis)
         let transition = constants.globe.transition
         let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * transition
         let clip = cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
@@ -355,6 +339,7 @@ private struct GlobeProjectionConstants {
     let mapSize: Float
     let panMercatorY: Float
     let rotationMatrix: matrix_float4x4
+    let transposedRotationMatrix: matrix_float4x4
     let horizonThreshold: Float
 
     init(globe: GlobeUniform) {
@@ -366,32 +351,27 @@ private struct GlobeProjectionConstants {
         let mapSizeScale = (1.0 - globe.transition) * distortion + globe.transition
         self.mapSize = 2.0 * .pi * globe.radius * mapSizeScale
         self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
-        self.rotationMatrix = GlobeProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
-                                                                          panLongitude: panLongitude)
+        let rotationMatrix = GlobeProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
+                                                                         panLongitude: panLongitude)
+        self.rotationMatrix = rotationMatrix
+        self.transposedRotationMatrix = simd_transpose(rotationMatrix)
         let horizonFade = GlobeProjectionConstants.smoothstep(edge0: 0.8,
                                                               edge1: 0.95,
                                                               x: globe.transition)
         self.horizonThreshold = (1.0 - horizonFade) * (globe.radius * globe.radius) + horizonFade * -1e6
     }
 
-    func rotatedSphereWorldPosition(latitude: Float,
-                                    longitude: Float) -> SIMD3<Float> {
-        let phi = latitude - (.pi * 0.5)
-        let theta = longitude + .pi
-
-        let x = globe.radius * sin(phi) * sin(theta)
-        let y = globe.radius * cos(phi)
-        let z = globe.radius * sin(phi) * cos(theta)
-        let rotatedPosition = simd_transpose(rotationMatrix) * SIMD4<Float>(x, y, z, 1.0)
+    func rotatedSphereWorldPosition(sphereUnit: SIMD3<Float>) -> SIMD3<Float> {
+        let scaled = sphereUnit * globe.radius
+        let rotatedPosition = transposedRotationMatrix * SIMD4<Float>(scaled, 1.0)
         return SIMD3<Float>(rotatedPosition.x,
                             rotatedPosition.y,
                             rotatedPosition.z - globe.radius)
     }
 
-    func flatWorldPosition(latitude: Float,
-                           longitude: Float) -> SIMD3<Float> {
-        let normalizedWorldX = (longitude + .pi) / (2.0 * .pi)
-        let mercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(latitude)))
+    func flatWorldPosition(basis: AvatarProjectionBasis) -> SIMD3<Float> {
+        let normalizedWorldX = Float(basis.normalizedWorldX)
+        let mercatorY = Float(basis.mercatorYNormalized)
         let halfMapSize = mapSize * 0.5
         let worldX = normalizedWorldX * mapSize
         let panOffsetX = globe.panX * halfMapSize

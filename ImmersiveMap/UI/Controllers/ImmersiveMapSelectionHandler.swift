@@ -132,13 +132,6 @@ final class ImmersiveMapSelectionHandler {
 
     func handleMapTap(at point: CGPoint) -> MapTapResult {
         if let target = avatarHitTarget(at: point) {
-            switch target {
-            case .cluster:
-                return .consumed
-            case .marker:
-                break
-            }
-
             if selectionController != nil,
                let selection = selection(from: target) {
                 _ = select(selection,

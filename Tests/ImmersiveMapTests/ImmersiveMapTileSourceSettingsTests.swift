@@ -185,7 +185,8 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.avatars.size, .px128)
         XCTAssertEqual(settings.avatars.sizeScale, 2.0)
         XCTAssertEqual(settings.avatars.borderWidthPx, 4.0)
-        XCTAssertEqual(settings.avatars.singleLiftScale, ImmersiveMapSettings.default.avatars.singleLiftScale)
+        XCTAssertEqual(settings.avatars.compressedScale, ImmersiveMapSettings.default.avatars.compressedScale)
+        XCTAssertEqual(settings.avatars.groupingThreshold, ImmersiveMapSettings.default.avatars.groupingThreshold)
         XCTAssertEqual(settings.avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
     }
 
@@ -242,7 +243,8 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(avatars.size, .px128)
         XCTAssertEqual(avatars.sizeScale, 2.0)
         XCTAssertEqual(avatars.borderWidthPx, 4.0)
-        XCTAssertEqual(avatars.singleLiftScale, ImmersiveMapSettings.default.avatars.singleLiftScale)
+        XCTAssertEqual(avatars.compressedScale, ImmersiveMapSettings.default.avatars.compressedScale)
+        XCTAssertEqual(avatars.groupingThreshold, ImmersiveMapSettings.default.avatars.groupingThreshold)
         XCTAssertEqual(avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
     }
 

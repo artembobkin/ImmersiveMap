@@ -42,7 +42,6 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
         let source = try rendererSource()
         let declarations = [
             "private let avatarAtlasResource: LazyAvatarRenderResource<AvatarTextureAtlas>",
-            "private let clusterIconAtlasResource: LazyAvatarRenderResource<AvatarClusterIconAtlas>",
             "private let batteryBadgeAtlasResource: LazyAvatarRenderResource<AvatarBatteryBadgeAtlas>",
             "private let speedBadgeAtlasResource: LazyAvatarRenderResource<AvatarSpeedBadgeAtlas>"
         ]
@@ -52,33 +51,36 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
         }
     }
 
-    func testRendererCleanupDoesNotInitializeAtlases() throws {
+    func testMarkerMutationsDoNotTouchAtlases() throws {
+        // Мутации маркеров (apply/clear) не должны обращаться к атласам:
+        // картинки грузятся лениво по видимости в rebuildFrameBuffers.
         let source = try rendererSource()
+        let applyStart = try XCTUnwrap(source.range(of: "private func apply(snapshot:"))
+        let applyEnd = try XCTUnwrap(source.range(of: "private func makeInstance"))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
 
-        XCTAssertTrue(source.contains("avatarAtlasResource.existingValue?.freeSlot(for: id)"))
-        XCTAssertTrue(source.contains("if let clusterIconAtlas = clusterIconAtlasResource.existingValue"))
+        XCTAssertNil(applySource.range(of: "AtlasResource"),
+                     "apply/clear не должны трогать ленивые атласы")
     }
 
-    func testFrameRebuildRequestsAtlasesOnlyInsideNonEmptyItemLoops() throws {
+    func testFrameRebuildGuardsEmptySceneBeforeAtlasAccess() throws {
+        // Пустая сцена выходит из rebuildFrameBuffers до первого обращения к
+        // ленивому атласу - карта без маркеров не аллоцирует текстуры.
         let source = try rendererSource()
         let rebuildStart = try XCTUnwrap(source.range(of: "private func rebuildFrameBuffers"))
         let rebuildEnd = try XCTUnwrap(source.range(of: "private func ensureFrameBufferCapacity"))
         let rebuildSource = source[rebuildStart.lowerBound..<rebuildEnd.lowerBound]
 
-        let markerLoop = try XCTUnwrap(rebuildSource.range(of: "for item in layout.markerItems"))
+        let emptyGuard = try XCTUnwrap(rebuildSource.range(of: "guard layout.markerItems.isEmpty == false"))
         let avatarAtlasAccess = try XCTUnwrap(rebuildSource.range(of: "avatarAtlasResource.value"))
-        XCTAssertLessThan(markerLoop.lowerBound, avatarAtlasAccess.lowerBound)
-
-        let clusterLoop = try XCTUnwrap(rebuildSource.range(of: "for cluster in layout.clusterItems"))
-        let clusterAtlasAccess = try XCTUnwrap(rebuildSource.range(of: "clusterIconAtlasResource.value"))
-        XCTAssertLessThan(clusterLoop.lowerBound, clusterAtlasAccess.lowerBound)
+        XCTAssertLessThan(emptyGuard.lowerBound, avatarAtlasAccess.lowerBound)
     }
 
     func testEmptyDrawReturnsBeforeAnyAtlasAccess() throws {
         let source = try rendererSource()
         let drawStart = try XCTUnwrap(source.range(of: "func drawAvatars"))
         let drawSource = source[drawStart.lowerBound...]
-        let emptyGuard = try XCTUnwrap(drawSource.range(of: "guard avatarCount > 0 || clusterCount > 0 else { return }"))
+        let emptyGuard = try XCTUnwrap(drawSource.range(of: "guard avatarCount > 0 else { return }"))
         let firstAtlasAccess = try XCTUnwrap(drawSource.range(of: "Resource.value"))
 
         XCTAssertLessThan(emptyGuard.lowerBound, firstAtlasAccess.lowerBound)
@@ -86,13 +88,16 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
 
     func testBadgeAtlasesAreRequestedOnlyAfterBadgePresenceCheck() throws {
         let source = try rendererSource()
+        // Проверка наличия бейджа и доступ к атласу живут в одной
+        // guard-цепочке: short-circuit гарантирует, что атлас не создаётся,
+        // пока у маркера нет бейджа.
         try assertAccess("batteryBadgeAtlasResource.value",
-                         follows: "guard let badge = marker.batteryBadge else",
+                         follows: "let badge = marker.batteryBadge",
                          between: "private func makeBatteryBadgeInstance",
                          and: "private func makeSpeedBadgeInstance",
                          in: source)
         try assertAccess("speedBadgeAtlasResource.value",
-                         follows: "guard let badge = marker.speedBadge else",
+                         follows: "let badge = marker.speedBadge",
                          between: "private func makeSpeedBadgeInstance",
                          and: "private func rebuildFrameBuffers",
                          in: source)

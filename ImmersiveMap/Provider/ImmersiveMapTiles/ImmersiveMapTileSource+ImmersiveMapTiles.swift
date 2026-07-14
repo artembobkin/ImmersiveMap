@@ -8,7 +8,9 @@ extension ImmersiveMapTileSource {
     /// Tiles service). The loader appends `/{z}/{x}/{y}.mvt` to `tileBaseURL`; the
     /// optional key travels as `?key=` so a CDN can cache on the path.
     static func immersiveMapTiles(tileBaseURL: URL, apiKey: String? = nil) -> ImmersiveMapTileSource {
-        let source = ImmersiveMapTileSource(tileBaseURL: tileBaseURL)
+        // TileJSON sits next to the tile path: ".../tiles" -> ".../tiles.json".
+        let tileJSONURL = tileBaseURL.deletingLastPathComponent().appendingPathComponent("tiles.json")
+        let source = ImmersiveMapTileSource(tileBaseURL: tileBaseURL, tileJSONURL: tileJSONURL)
         guard let apiKey, apiKey.isEmpty == false else {
             return source
         }

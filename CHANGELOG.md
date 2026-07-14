@@ -8,6 +8,10 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Changed
+
+- ImmersiveMap Tiles are now served over the `tiles.immersivemap.dev` Cloudflare CDN. The tile loader discovers a versioned, immutable tile URL template from the service's TileJSON, so tiles are fetched over a long-lived edge-cached path (falling back to the base path until/if discovery resolves).
+
 ## [0.1.1] - 2026-07-11
 
 Initial public alpha.

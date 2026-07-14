@@ -223,6 +223,10 @@ public struct ImmersiveMapSettings: Equatable {
             public var maxConcurrentFetches: Int
             public var pendingRequestQueueCapacity: Int
             public var tileBaseURL: URL
+            /// Optional TileJSON endpoint. When set, the tile loader discovers a
+            /// versioned, immutable URL template (…/v/<version>/tiles/{z}/{x}/{y}.pbf)
+            /// and falls back to `tileBaseURL/{z}/{x}/{y}.mvt` until/if it resolves.
+            public var tileJSONURL: URL?
             public var authorizationToken: String?
             public var authorizationMode: AuthorizationMode
             /// Provider `configurationFingerprint`, folded into the raw and prepared
@@ -234,12 +238,14 @@ public struct ImmersiveMapSettings: Equatable {
             public init(maxConcurrentFetches: Int,
                         pendingRequestQueueCapacity: Int,
                         tileBaseURL: URL = URL(string: "https://example.com/api/v1/map/tiles")!,
+                        tileJSONURL: URL? = nil,
                         authorizationToken: String? = nil,
                         authorizationMode: AuthorizationMode = .bearerHeader,
                         cacheIdentity: UInt64 = 0) {
                 self.maxConcurrentFetches = maxConcurrentFetches
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
                 self.tileBaseURL = tileBaseURL
+                self.tileJSONURL = tileJSONURL
                 self.authorizationToken = authorizationToken
                 self.authorizationMode = authorizationMode
                 self.cacheIdentity = cacheIdentity
@@ -661,57 +667,45 @@ public struct ImmersiveMapSettings: Equatable {
 
         public var size: Size
         public var sizeScale: Float
-        public var singleLiftScale: Float
-        public var secondaryScale: Float
+        public var compressedScale: Float
         public var atlasSizePx: Int
         public var atlasPagesMax: Int
         public var borderWidthPx: Float
         public var borderColor: SIMD4<Float>
-        public var beamWidthPx: Float
         public var beamColor: SIMD4<Float>
         public var collisionPaddingPx: Float
-        public var petalsThreshold: UInt32
-        public var petalSpacingPx: Float
+        public var groupingThreshold: Int
         public var maxOffsetPx: Float
-        public var clusterIterations: Int
-        public var repulsionK: Float
+        public var collisionIterations: Int
         public var springK: Float
         public var smoothing: Float
 
         public init(size: Size,
                     sizeScale: Float,
-                    singleLiftScale: Float,
-                    secondaryScale: Float,
+                    compressedScale: Float,
                     atlasSizePx: Int,
                     atlasPagesMax: Int,
                     borderWidthPx: Float,
                     borderColor: SIMD4<Float>,
-                    beamWidthPx: Float,
                     beamColor: SIMD4<Float>,
                     collisionPaddingPx: Float,
-                    petalsThreshold: UInt32,
-                    petalSpacingPx: Float,
+                    groupingThreshold: Int,
                     maxOffsetPx: Float,
-                    clusterIterations: Int,
-                    repulsionK: Float,
+                    collisionIterations: Int,
                     springK: Float,
                     smoothing: Float) {
             self.size = size
             self.sizeScale = sizeScale
-            self.singleLiftScale = singleLiftScale
-            self.secondaryScale = secondaryScale
+            self.compressedScale = compressedScale
             self.atlasSizePx = atlasSizePx
             self.atlasPagesMax = atlasPagesMax
             self.borderWidthPx = borderWidthPx
             self.borderColor = borderColor
-            self.beamWidthPx = beamWidthPx
             self.beamColor = beamColor
             self.collisionPaddingPx = collisionPaddingPx
-            self.petalsThreshold = petalsThreshold
-            self.petalSpacingPx = petalSpacingPx
+            self.groupingThreshold = groupingThreshold
             self.maxOffsetPx = maxOffsetPx
-            self.clusterIterations = clusterIterations
-            self.repulsionK = repulsionK
+            self.collisionIterations = collisionIterations
             self.springK = springK
             self.smoothing = smoothing
         }
@@ -799,6 +793,7 @@ public struct ImmersiveMapSettings: Equatable {
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
                                                                   tileBaseURL: ImmersiveMapTilesProvider.defaultTileBaseURL,
+                                                                  tileJSONURL: ImmersiveMapTilesProvider.defaultTileJSONURL,
                                                                   authorizationMode: .bearerHeader,
                                                                   cacheIdentity: ImmersiveMapTilesProvider().configurationFingerprint),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
@@ -840,22 +835,18 @@ public struct ImmersiveMapSettings: Equatable {
                                                                   landCover: SIMD4<Float>(0.4, 0.7, 0.4, 0.7))),
         avatars: AvatarSettings(size: .px64,
                                 sizeScale: 1.7,
-                                singleLiftScale: 0.8,
-                                secondaryScale: 0.85,
+                                compressedScale: 0.55,
                                 atlasSizePx: 4096,
                                 atlasPagesMax: 1,
                                 borderWidthPx: 3.0,
                                 borderColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-                                beamWidthPx: 6.0,
                                 beamColor: SIMD4<Float>(0.65, 0.75, 1.0, 0.7),
-                                collisionPaddingPx: 8.0,
-                                petalsThreshold: 10,
-                                petalSpacingPx: 80.0,
+                                collisionPaddingPx: 0.0,
+                                groupingThreshold: 5,
                                 maxOffsetPx: 220.0,
-                                clusterIterations: 5,
-                                repulsionK: 1.0,
+                                collisionIterations: 10,
                                 springK: 0.25,
-                                smoothing: 0.6),
+                                smoothing: 0.35),
         attribution: AttributionSettings(),
         postProcessing: PostProcessingSettings(fxaaEnabled: false),
         debug: DebugSettings(enableDebugPanel: false,
@@ -895,6 +886,7 @@ public extension ImmersiveMapSettings {
         var settings = self
         settings.tileProvider = tileProvider
         settings.tiles.network.tileBaseURL = tileProvider.tileSource.tileBaseURL
+        settings.tiles.network.tileJSONURL = tileProvider.tileSource.tileJSONURL
         settings.tiles.network.authorizationToken = tileProvider.tileSource.accessToken
         settings.tiles.network.authorizationMode = tileProvider.tileSource.authorization
         settings.tiles.network.cacheIdentity = tileProvider.configurationFingerprint
@@ -999,20 +991,16 @@ public extension ImmersiveMapSettings {
 
     func avatarSettings(size: AvatarSettings.Size? = nil,
                         sizeScale: Float? = nil,
-                        singleLiftScale: Float? = nil,
-                        secondaryScale: Float? = nil,
+                        compressedScale: Float? = nil,
                         atlasSizePx: Int? = nil,
                         atlasPagesMax: Int? = nil,
                         borderWidthPx: Float? = nil,
                         borderColor: SIMD4<Float>? = nil,
-                        beamWidthPx: Float? = nil,
                         beamColor: SIMD4<Float>? = nil,
                         collisionPaddingPx: Float? = nil,
-                        petalsThreshold: UInt32? = nil,
-                        petalSpacingPx: Float? = nil,
+                        groupingThreshold: Int? = nil,
                         maxOffsetPx: Float? = nil,
-                        clusterIterations: Int? = nil,
-                        repulsionK: Float? = nil,
+                        collisionIterations: Int? = nil,
                         springK: Float? = nil,
                         smoothing: Float? = nil) -> ImmersiveMapSettings {
         var avatars = self.avatars
@@ -1022,11 +1010,8 @@ public extension ImmersiveMapSettings {
         if let sizeScale {
             avatars.sizeScale = sizeScale
         }
-        if let singleLiftScale {
-            avatars.singleLiftScale = singleLiftScale
-        }
-        if let secondaryScale {
-            avatars.secondaryScale = secondaryScale
+        if let compressedScale {
+            avatars.compressedScale = compressedScale
         }
         if let atlasSizePx {
             avatars.atlasSizePx = atlasSizePx
@@ -1040,29 +1025,20 @@ public extension ImmersiveMapSettings {
         if let borderColor {
             avatars.borderColor = borderColor
         }
-        if let beamWidthPx {
-            avatars.beamWidthPx = beamWidthPx
-        }
         if let beamColor {
             avatars.beamColor = beamColor
         }
         if let collisionPaddingPx {
             avatars.collisionPaddingPx = collisionPaddingPx
         }
-        if let petalsThreshold {
-            avatars.petalsThreshold = petalsThreshold
-        }
-        if let petalSpacingPx {
-            avatars.petalSpacingPx = petalSpacingPx
+        if let groupingThreshold {
+            avatars.groupingThreshold = groupingThreshold
         }
         if let maxOffsetPx {
             avatars.maxOffsetPx = maxOffsetPx
         }
-        if let clusterIterations {
-            avatars.clusterIterations = clusterIterations
-        }
-        if let repulsionK {
-            avatars.repulsionK = repulsionK
+        if let collisionIterations {
+            avatars.collisionIterations = collisionIterations
         }
         if let springK {
             avatars.springK = springK

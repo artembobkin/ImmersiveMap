@@ -12,6 +12,7 @@ struct AvatarVertexOut {
     float4 uvRect;
     float4 borderColor;
     float visibilityAlpha;
+    float morph;
     uint atlasIndex [[flat]];
     uint flags [[flat]];
 };
@@ -21,6 +22,7 @@ struct AvatarBatteryBadgeVertexOut {
     float2 uv;
     float4 uvRect;
     float visibilityAlpha;
+    float contentAlpha;
 };
 
 struct AvatarSpeedBadgeVertexOut {
@@ -28,6 +30,7 @@ struct AvatarSpeedBadgeVertexOut {
     float2 uv;
     float4 uvRect;
     float visibilityAlpha;
+    float contentAlpha;
 };
 
 static inline float decodeSignedDistanceTexels(float encodedDistance,
@@ -55,6 +58,7 @@ vertex AvatarVertexOut avatarVertex(uint vid [[vertex_id]],
         out.uvRect = float4(0.0);
         out.borderColor = float4(0.0);
         out.visibilityAlpha = 0.0;
+        out.morph = 0.0;
         out.atlasIndex = 0;
         out.flags = 0;
         return out;
@@ -69,6 +73,7 @@ vertex AvatarVertexOut avatarVertex(uint vid [[vertex_id]],
     out.uvRect = instance.uvRect;
     out.borderColor = instance.borderColor;
     out.visibilityAlpha = point.visibilityAlpha;
+    out.morph = instance.morph;
     out.atlasIndex = instance.atlasIndex;
     out.flags = instance.flags;
     return out;
@@ -91,23 +96,33 @@ fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
     float encodedDistance = mtsdfSample.a;
     float markerDistanceTexels = decodeSignedDistanceTexels(encodedDistance, sdfParams);
     float2 sdfTextureSize = float2(float(sdfTexture.get_width()), float(sdfTexture.get_height()));
+    // Морф пин -> круг: аналитический SDF круга тела (без хвостика) в тех же
+    // текселях, что и семпл MTSDF, поэтому маски ниже не меняются.
+    float2 circleCenter = float2(0.5, (style.pointerHeightPx + style.bodySizePx.y * 0.5) / max(style.totalSizePx.y, 1.0));
+    float circleRadiusTexels = 0.5 * min(style.bodySizePx.x, style.bodySizePx.y) / max(style.totalSizePx.x, 1.0) * sdfTextureSize.x;
+    float circleDistanceTexels = length((in.uvLocal - circleCenter) * sdfTextureSize) - circleRadiusTexels;
+    float shapeDistanceTexels = mix(markerDistanceTexels, circleDistanceTexels, saturate(in.morph));
     float texelsPerPixelX = length(dfdx(in.uvLocal) * sdfTextureSize);
     float texelsPerPixelY = length(dfdy(in.uvLocal) * sdfTextureSize);
     float texelsPerPixel = max(max(texelsPerPixelX, texelsPerPixelY), 0.0001);
     float edgeWidthTexels = max(0.75 * texelsPerPixel, 0.75);
     float outlineWidthTexels = max(style.outlineWidthPx * texelsPerPixel, edgeWidthTexels);
-    fillMask = 1.0 - smoothstep(-edgeWidthTexels, edgeWidthTexels, markerDistanceTexels);
-    borderMask = smoothstep(-outlineWidthTexels - edgeWidthTexels, -edgeWidthTexels, markerDistanceTexels) * fillMask;
+    fillMask = 1.0 - smoothstep(-edgeWidthTexels, edgeWidthTexels, shapeDistanceTexels);
+    borderMask = smoothstep(-outlineWidthTexels - edgeWidthTexels, -edgeWidthTexels, shapeDistanceTexels) * fillMask;
     interiorMask = max(fillMask - borderMask, 0.0);
     float contentInsetTexels = max(style.contentInsetPx * texelsPerPixel, outlineWidthTexels + edgeWidthTexels);
     imageMask = 1.0 - smoothstep(-contentInsetTexels - edgeWidthTexels,
                                  -contentInsetTexels + edgeWidthTexels,
-                                 markerDistanceTexels);
+                                 shapeDistanceTexels);
     imageMask *= interiorMask;
 
-    float2 insetUv = float2(style.contentInsetPx / max(style.totalSizePx.x, 1.0),
-                            style.contentInsetPx / max(style.totalSizePx.y, 1.0));
-    float2 imageUv = clamp((in.uvLocal - insetUv) / max(float2(1.0) - 2.0 * insetUv, float2(0.0001)), 0.0, 1.0);
+    // Картинку центрируем по центру тела/круга (circleCenter), а не по центру
+    // всего квада: снизу у маркера хвостик-указатель высотой pointerHeightPx,
+    // из-за него центр квада ниже центра тела и картинка съезжала вниз.
+    float2 insetUv = float2(style.contentInsetPx) / max(style.totalSizePx, float2(1.0));
+    float2 bodyHalfUv = 0.5 * style.bodySizePx / max(style.totalSizePx, float2(1.0));
+    float2 contentHalfUv = max(bodyHalfUv - insetUv, float2(0.0001));
+    float2 imageUv = clamp((in.uvLocal - (circleCenter - contentHalfUv)) / (2.0 * contentHalfUv), 0.0, 1.0);
     float2 atlasUv = mix(in.uvRect.xy, in.uvRect.zw, imageUv);
     float4 tex = atlasTexture.sample(atlasSampler, atlasUv, in.atlasIndex);
 
@@ -137,11 +152,12 @@ vertex AvatarBatteryBadgeVertexOut avatarBatteryBadgeVertex(
     AvatarBatteryBadgeVertexOut out;
     AvatarBatteryBadgeInstanceGPU instance = instances[iid];
     ScreenPointOutput point = points[iid];
-    if (point.visible == 0 || (instance.flags & 1u) == 0u) {
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
         out.position = float4(-2.0, -2.0, 0.0, 1.0);
         out.uv = float2(0.0);
         out.uvRect = float4(0.0);
         out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
         return out;
     }
 
@@ -156,6 +172,7 @@ vertex AvatarBatteryBadgeVertexOut avatarBatteryBadgeVertex(
     out.uv = uv;
     out.uvRect = instance.uvRect;
     out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
     return out;
 }
 
@@ -164,7 +181,7 @@ fragment float4 avatarBatteryBadgeFragment(AvatarBatteryBadgeVertexOut in [[stag
     constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
     float4 color = badgeAtlas.sample(badgeSampler, uv);
-    color.a *= in.visibilityAlpha;
+    color.a *= in.visibilityAlpha * in.contentAlpha;
     return color;
 }
 
@@ -184,11 +201,12 @@ vertex AvatarSpeedBadgeVertexOut avatarSpeedBadgeVertex(
     AvatarSpeedBadgeVertexOut out;
     AvatarSpeedBadgeInstanceGPU instance = instances[iid];
     ScreenPointOutput point = points[iid];
-    if (point.visible == 0 || (instance.flags & 1u) == 0u) {
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
         out.position = float4(-2.0, -2.0, 0.0, 1.0);
         out.uv = float2(0.0);
         out.uvRect = float4(0.0);
         out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
         return out;
     }
 
@@ -202,6 +220,7 @@ vertex AvatarSpeedBadgeVertexOut avatarSpeedBadgeVertex(
     out.uv = uv;
     out.uvRect = instance.uvRect;
     out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
     return out;
 }
 
@@ -210,6 +229,6 @@ fragment float4 avatarSpeedBadgeFragment(AvatarSpeedBadgeVertexOut in [[stage_in
     constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
     float4 color = badgeAtlas.sample(badgeSampler, uv);
-    color.a *= in.visibilityAlpha;
+    color.a *= in.visibilityAlpha * in.contentAlpha;
     return color;
 }

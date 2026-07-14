@@ -4,15 +4,35 @@
 import Metal
 import MetalKit
 
+/// Пайплайн конуса-луча от геоточки к сдвинутому кружку; рисуется в
+/// overlay-пассе до пузырей аватаров.
 final class AvatarBeamPipeline {
-    let pipelineState: MTLRenderPipelineState
+    let beamPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          layer: CAMetalLayer,
          library: MTLLibrary,
          sampleCount: Int = 1) {
-        let vertexFunction = library.makeFunction(name: "avatarBeamVertex")
-        let fragmentFunction = library.makeFunction(name: "avatarBeamFragment")
+        self.beamPipelineState = Self.makePipelineState(metalDevice: metalDevice,
+                                                        layer: layer,
+                                                        library: library,
+                                                        sampleCount: sampleCount,
+                                                        vertexFunctionName: "avatarBeamVertex",
+                                                        fragmentFunctionName: "avatarBeamFragment")
+    }
+
+    func selectBeamPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(beamPipelineState)
+    }
+
+    private static func makePipelineState(metalDevice: MTLDevice,
+                                          layer: CAMetalLayer,
+                                          library: MTLLibrary,
+                                          sampleCount: Int,
+                                          vertexFunctionName: String,
+                                          fragmentFunctionName: String) -> MTLRenderPipelineState {
+        let vertexFunction = library.makeFunction(name: vertexFunctionName)
+        let fragmentFunction = library.makeFunction(name: fragmentFunctionName)
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.vertexFunction = vertexFunction
@@ -28,10 +48,6 @@ final class AvatarBeamPipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-    }
-
-    func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(pipelineState)
+        return try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
 }

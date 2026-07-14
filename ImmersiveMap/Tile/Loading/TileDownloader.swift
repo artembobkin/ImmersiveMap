@@ -27,6 +27,9 @@ class TileDownloader {
     private let authorizationToken: String?
     private let authorizationMode: ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
     private let session: URLSession
+    // Retains the TileJSON discovery task so it can be cancelled on deinit; nil
+    // when no TileJSON endpoint is configured (Mapbox/OSM, or a bare base URL).
+    private var tileJSONTemplateTask: Task<Void, Never>?
 
     init(config: ImmersiveMapSettings) {
         let configuration = Self.makeSessionConfiguration(urlCacheEnabled: config.tiles.cache.urlCacheEnabled)
@@ -36,11 +39,30 @@ class TileDownloader {
         let network = config.tiles.network
         authorizationToken = network.authorizationToken
         authorizationMode = network.authorizationMode
-        self.mapTileDownloader = BackendTileURLProvider(
-            baseURL: network.tileBaseURL,
-            queryItemsProvider: Self.queryItemsProvider(token: network.authorizationToken,
-                                                        mode: network.authorizationMode)
-        )
+        let queryItemsProvider = Self.queryItemsProvider(token: network.authorizationToken,
+                                                         mode: network.authorizationMode)
+        let baseProvider = BackendTileURLProvider(baseURL: network.tileBaseURL,
+                                                  queryItemsProvider: queryItemsProvider)
+        if let tileJSONURL = network.tileJSONURL {
+            // Prefer the versioned, immutable TileJSON template (…/v/<version>/…),
+            // which the CDN caches for a year. Until the document resolves - and
+            // permanently if it never does - tiles come from the legacy base path,
+            // so rendering is never blocked on the discovery request.
+            let store = TileJSONTemplateStore()
+            self.mapTileDownloader = TileJSONTileURLProvider(fallback: baseProvider,
+                                                             store: store,
+                                                             queryItemsProvider: queryItemsProvider)
+            let loader = TileJSONTemplateLoader()
+            tileJSONTemplateTask = Task(priority: .utility) {
+                guard let template = try? await loader.loadTemplate(from: tileJSONURL),
+                      Task.isCancelled == false else {
+                    return
+                }
+                store.update(template)
+            }
+        } else {
+            self.mapTileDownloader = baseProvider
+        }
         self.session = URLSession(configuration: configuration)
     }
 
@@ -49,6 +71,10 @@ class TileDownloader {
         self.session = session
         self.authorizationToken = authorizationToken
         self.authorizationMode = .bearerHeader
+    }
+
+    deinit {
+        tileJSONTemplateTask?.cancel()
     }
 
     static func makeSessionConfiguration(urlCacheEnabled: Bool = true) -> URLSessionConfiguration {

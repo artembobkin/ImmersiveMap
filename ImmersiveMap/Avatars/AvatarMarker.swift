@@ -122,6 +122,65 @@ public struct AvatarMarker {
         self.clusterPolicy = clusterPolicy
     }
 
+    /// Быстрая сборка аватара с картинкой из сети.
+    ///
+    /// Координаты задаются как широта/долгота, картинка грузится по `imageURL`
+    /// (до загрузки показывается `placeholder` либо встроенная заглушка).
+    /// `batteryPercent`/`speedKilometersPerHour` опциональны: `nil` означает, что
+    /// соответствующий бейдж не рисуется.
+    public init(id: UInt64,
+                latitude: Double,
+                longitude: Double,
+                imageURL: URL,
+                placeholder: CGImage? = nil,
+                batteryPercent: Int? = nil,
+                speedKilometersPerHour: Int? = nil,
+                borderColor: SIMD4<Float>? = nil,
+                screenSizeScale: Float = 1.0,
+                isSelected: Bool = false,
+                drawPriority: Int = 0,
+                clusterPolicy: AvatarClusterPolicy = .none) {
+        self.init(id: id,
+                  coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
+                  image: .remote(imageURL, placeholder: placeholder),
+                  batteryBadge: batteryPercent.map { AvatarBatteryBadge(levelPct: $0) },
+                  speedBadge: speedKilometersPerHour.map { AvatarSpeedBadge(kilometersPerHour: $0) },
+                  borderColor: borderColor,
+                  screenSizeScale: screenSizeScale,
+                  isSelected: isSelected,
+                  drawPriority: drawPriority,
+                  clusterPolicy: clusterPolicy)
+    }
+
+    /// Быстрая сборка аватара с готовой (локальной) картинкой.
+    ///
+    /// Симметрична сетевому инициализатору, но принимает уже нарисованный
+    /// `CGImage` - например результат `AvatarMarkerImageFactory.number(_:)`.
+    /// `batteryPercent`/`speedKilometersPerHour` опциональны: `nil` означает, что
+    /// соответствующий бейдж не рисуется.
+    public init(id: UInt64,
+                latitude: Double,
+                longitude: Double,
+                image: CGImage,
+                batteryPercent: Int? = nil,
+                speedKilometersPerHour: Int? = nil,
+                borderColor: SIMD4<Float>? = nil,
+                screenSizeScale: Float = 1.0,
+                isSelected: Bool = false,
+                drawPriority: Int = 0,
+                clusterPolicy: AvatarClusterPolicy = .none) {
+        self.init(id: id,
+                  coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
+                  image: image,
+                  batteryBadge: batteryPercent.map { AvatarBatteryBadge(levelPct: $0) },
+                  speedBadge: speedKilometersPerHour.map { AvatarSpeedBadge(kilometersPerHour: $0) },
+                  borderColor: borderColor,
+                  screenSizeScale: screenSizeScale,
+                  isSelected: isSelected,
+                  drawPriority: drawPriority,
+                  clusterPolicy: clusterPolicy)
+    }
+
 #if canImport(UIKit)
     public init(id: UInt64,
                 coordinate: GeoCoordinate,

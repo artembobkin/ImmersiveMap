@@ -75,7 +75,16 @@ struct AvatarAtlasSlot {
     let uvRect: SIMD4<Float>
 }
 
+/// Атлас аватарных картинок. Слоты ключуются идентичностью CGImage, а не id
+/// маркера: тысячи маркеров с общими картинками делят один слот. При
+/// переполнении вытесняется наименее недавно использованный слот, не
+/// задействованный в текущем кадре, - атлас работает как кеш видимой сцены.
 final class AvatarTextureAtlas {
+    private struct SlotState {
+        var slot: AvatarAtlasSlot
+        var lastUsedFrame: UInt64
+    }
+
     private let device: MTLDevice
     private let atlasSize: Int
     private let cellSize: Int
@@ -83,7 +92,8 @@ final class AvatarTextureAtlas {
 
     private(set) var textureArray: MTLTexture
     private var freeSlots: [AvatarAtlasSlot] = []
-    private var slotById: [UInt64: AvatarAtlasSlot] = [:]
+    private var slotsByImage: [ObjectIdentifier: SlotState] = [:]
+    private var currentFrame: UInt64 = 0
 
     init(device: MTLDevice, atlasSize: Int, cellSize: Int, pagesMax: Int) {
         self.device = device
@@ -106,30 +116,38 @@ final class AvatarTextureAtlas {
         appendSlots()
     }
 
-    func slot(for id: UInt64) -> AvatarAtlasSlot? {
-        return slotById[id]
+    var slotCapacity: Int {
+        let cellsPerSide = atlasSize / cellSize
+        return cellsPerSide * cellsPerSide * pagesMax
     }
 
-    func allocateSlot(for id: UInt64) -> AvatarAtlasSlot? {
-        if let existing = slotById[id] {
-            return existing
-        }
-        guard let slot = freeSlots.popLast() else {
+    /// Отметка начала кадра: использование слотов трекается покадрово, слоты
+    /// текущего кадра не вытесняются.
+    func beginFrame(_ frameIndex: UInt64) {
+        currentFrame = frameIndex
+    }
+
+    /// Слот уже загруженной картинки; помечает использование в текущем кадре.
+    func slot(for image: CGImage) -> AvatarAtlasSlot? {
+        let key = ObjectIdentifier(image)
+        guard var state = slotsByImage[key] else {
             return nil
         }
-        slotById[id] = slot
-        return slot
-    }
-
-    func freeSlot(for id: UInt64) {
-        guard let slot = slotById.removeValue(forKey: id) else {
-            return
+        if state.lastUsedFrame != currentFrame {
+            state.lastUsedFrame = currentFrame
+            slotsByImage[key] = state
         }
-        freeSlots.append(slot)
+        return state.slot
     }
 
-    func updateImage(id: UInt64, image: CGImage) -> AvatarAtlasSlot? {
-        guard let slot = allocateSlot(for: id) else {
+    /// Загружает картинку в свободный слот (или вытесняет LRU) и возвращает
+    /// его; nil - атлас целиком занят картинками текущего кадра.
+    func uploadImage(_ image: CGImage) -> AvatarAtlasSlot? {
+        let key = ObjectIdentifier(image)
+        if let existing = slotsByImage[key] {
+            return existing.slot
+        }
+        guard let slot = takeSlot() else {
             return nil
         }
         let bytesPerRow = cellSize * 4
@@ -138,6 +156,7 @@ final class AvatarTextureAtlas {
                                                               width: cellSize,
                                                               height: cellSize)
         else {
+            freeSlots.append(slot)
             return nil
         }
 
@@ -151,7 +170,25 @@ final class AvatarTextureAtlas {
                                  bytesPerRow: bytesPerRow,
                                  bytesPerImage: byteCount)
         }
+        slotsByImage[key] = SlotState(slot: slot, lastUsedFrame: currentFrame)
         return slot
+    }
+
+    private func takeSlot() -> AvatarAtlasSlot? {
+        if let free = freeSlots.popLast() {
+            return free
+        }
+        var oldestKey: ObjectIdentifier?
+        var oldestFrame = UInt64.max
+        for (key, state) in slotsByImage
+        where state.lastUsedFrame < currentFrame && state.lastUsedFrame < oldestFrame {
+            oldestKey = key
+            oldestFrame = state.lastUsedFrame
+        }
+        guard let oldestKey, let evicted = slotsByImage.removeValue(forKey: oldestKey) else {
+            return nil
+        }
+        return evicted.slot
     }
 
     private func appendSlots() {

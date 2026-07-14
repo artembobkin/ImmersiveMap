@@ -162,9 +162,35 @@ enum AvatarSelectionAnimationMath {
     }
 }
 
+/// Кешируемая тригонометрия проекции геокоординаты: пересчитывается только
+/// при смене координаты, пер-кадровая проекция 30k маркеров остаётся линейной
+/// (без sin/cos/log на маркер на кадр).
+struct AvatarProjectionBasis {
+    /// Единичный вектор точки на сфере в системе формулы глобуса
+    /// (до вращения панорамы): (cosLat*sinLon, sinLat, cosLat*cosLon).
+    let sphereUnit: SIMD3<Float>
+    /// (lon + pi) / 2pi - нормализованный X мировой развёртки.
+    let normalizedWorldX: Double
+    /// Нормализованный меркаторный Y широты.
+    let mercatorYNormalized: Double
+
+    init(coordinate: GeoCoordinate) {
+        let latitude = coordinate.latitude * .pi / 180.0
+        let longitude = coordinate.longitude * .pi / 180.0
+        let cosLatitude = cos(latitude)
+        sphereUnit = SIMD3<Float>(Float(cosLatitude * sin(longitude)),
+                                  Float(sin(latitude)),
+                                  Float(cosLatitude * cos(longitude)))
+        normalizedWorldX = (longitude + .pi) / (2.0 * .pi)
+        mercatorYNormalized = ImmersiveMapProjection.yMercatorNormalized(latitude: latitude)
+    }
+}
+
 struct PresentedAvatarMarker {
     var marker: AvatarMarker
     var squashScale: SIMD2<Float>
+    var drawOrder: Int
+    var projectionBasis: AvatarProjectionBasis
 }
 
 private struct AvatarPositionAnimation {
@@ -190,15 +216,34 @@ private struct AvatarPositionAnimation {
 private struct AvatarPresentationEntry {
     var marker: AvatarMarker
     var displayedCoordinate: GeoCoordinate
+    var projectionBasis: AvatarProjectionBasis
     var animation: AvatarPositionAnimation?
     var selectionAnimationStartTime: TimeInterval?
 
-    mutating func presentedAvatar(at time: TimeInterval) -> PresentedAvatarMarker {
+    init(marker: AvatarMarker, time: TimeInterval) {
+        self.marker = marker
+        self.displayedCoordinate = marker.coordinate
+        self.projectionBasis = AvatarProjectionBasis(coordinate: marker.coordinate)
+        self.animation = nil
+        self.selectionAnimationStartTime = marker.isSelected ? time : nil
+    }
+
+    /// Смена показываемой координаты пересчитывает проекционный базис -
+    /// единственное место с тригонометрией на маркер.
+    private mutating func moveDisplayedCoordinate(to coordinate: GeoCoordinate) {
+        guard coordinate.latitude != displayedCoordinate.latitude
+                || coordinate.longitude != displayedCoordinate.longitude else {
+            return
+        }
+        displayedCoordinate = coordinate
+        projectionBasis = AvatarProjectionBasis(coordinate: coordinate)
+    }
+
+    mutating func presentedAvatar(at time: TimeInterval, drawOrder: Int) -> PresentedAvatarMarker {
         if let animation {
-            let coordinate = animation.coordinate(at: time)
-            displayedCoordinate = coordinate
+            moveDisplayedCoordinate(to: animation.coordinate(at: time))
             if animation.isFinished(at: time) {
-                displayedCoordinate = animation.targetCoordinate
+                moveDisplayedCoordinate(to: animation.targetCoordinate)
                 self.animation = nil
             }
         }
@@ -207,7 +252,9 @@ private struct AvatarPresentationEntry {
         marker.coordinate = displayedCoordinate
         let squashScale = selectionSquashScale(at: time)
         return PresentedAvatarMarker(marker: marker,
-                                     squashScale: squashScale)
+                                     squashScale: squashScale,
+                                     drawOrder: drawOrder,
+                                     projectionBasis: projectionBasis)
     }
 
     mutating func update(with marker: AvatarMarker,
@@ -216,10 +263,10 @@ private struct AvatarPresentationEntry {
         let hasCoordinateChange = previousTargetCoordinate.latitude != marker.coordinate.latitude
             || previousTargetCoordinate.longitude != marker.coordinate.longitude
         if hasCoordinateChange {
-            let startCoordinate = presentedAvatar(at: time).marker.coordinate
+            let startCoordinate = presentedAvatar(at: time, drawOrder: 0).marker.coordinate
             let duration = AvatarAnimationMath.animationDuration(from: startCoordinate,
                                                                  to: marker.coordinate)
-            displayedCoordinate = startCoordinate
+            moveDisplayedCoordinate(to: startCoordinate)
             animation = duration > 0
                 ? AvatarPositionAnimation(startCoordinate: startCoordinate,
                                           targetCoordinate: marker.coordinate,
@@ -227,7 +274,7 @@ private struct AvatarPresentationEntry {
                                           duration: duration)
                 : nil
             if duration == 0 {
-                displayedCoordinate = marker.coordinate
+                moveDisplayedCoordinate(to: marker.coordinate)
             }
         }
 
@@ -241,7 +288,7 @@ private struct AvatarPresentationEntry {
         self.marker = marker
     }
 
-    mutating func hasActiveAnimations(at time: TimeInterval) -> Bool {
+    func hasActiveAnimations(at time: TimeInterval) -> Bool {
         animation != nil || marker.isSelected
     }
 
@@ -256,56 +303,79 @@ private struct AvatarPresentationEntry {
 
 }
 
+/// Стор презентации маркеров: держит записи по возрастанию id и кеш
+/// presented-списка. Пер-кадровая цена пропорциональна числу АНИМИРУЮЩИХСЯ
+/// маркеров (обычно единицы), а не общему количеству: статичные 30k маркеров
+/// между мутациями обходятся возвратом кешированного массива.
 final class AvatarPresentationStateStore {
-    private var entriesById: [UInt64: AvatarPresentationEntry] = [:]
+    private var entries: [AvatarPresentationEntry] = []
+    private var drawOrders: [Int] = []
+    private var presentedCache: [PresentedAvatarMarker] = []
+    private var animatingIndices: [Int] = []
     private(set) var hasActiveAnimations: Bool = false
 
     init() {}
 
     func apply(snapshot: AvatarsSnapshot, time: TimeInterval) {
-        for id in snapshot.removedIds {
-            entriesById.removeValue(forKey: id)
+        var previousEntriesByID = Dictionary<UInt64, AvatarPresentationEntry>(minimumCapacity: entries.count)
+        for entry in entries {
+            previousEntriesByID[entry.marker.id] = entry
         }
 
-        for marker in snapshot.markers {
-            if var entry = entriesById[marker.id] {
-                entry.update(with: marker, time: time)
-                entriesById[marker.id] = entry
-            } else {
-                entriesById[marker.id] = AvatarPresentationEntry(marker: marker,
-                                                                 displayedCoordinate: marker.coordinate,
-                                                                 animation: nil,
-                                                                 selectionAnimationStartTime: marker.isSelected ? time : nil)
+        let sortedMarkers = snapshot.markers.sorted { $0.id < $1.id }
+        entries = sortedMarkers.map { marker in
+            if var existing = previousEntriesByID[marker.id] {
+                existing.update(with: marker, time: time)
+                return existing
             }
+            return AvatarPresentationEntry(marker: marker, time: time)
         }
+
+        // Ранги порядка отрисовки по (drawPriority, id) фиксируются на
+        // мутации: solver получает вход, уже отсортированный по id, с готовым
+        // drawOrder - без пер-кадровой сортировки.
+        let rankedIndexes = entries.indices.sorted { lhs, rhs in
+            if entries[lhs].marker.drawPriority != entries[rhs].marker.drawPriority {
+                return entries[lhs].marker.drawPriority < entries[rhs].marker.drawPriority
+            }
+            return entries[lhs].marker.id < entries[rhs].marker.id
+        }
+        drawOrders = [Int](repeating: 0, count: entries.count)
+        for (rank, index) in rankedIndexes.enumerated() {
+            drawOrders[index] = rank
+        }
+
+        presentedCache = entries.indices.map { index in
+            entries[index].presentedAvatar(at: time, drawOrder: drawOrders[index])
+        }
+        animatingIndices = entries.indices.filter { entries[$0].hasActiveAnimations(at: time) }
+        hasActiveAnimations = animatingIndices.isEmpty == false
     }
 
     func presentedMarkers(at time: TimeInterval) -> [AvatarMarker] {
         presentedEntries(at: time).map(\.marker)
     }
 
+    /// Возвращает presented-список по возрастанию id (drawOrder - в поле).
+    /// Вызывающий не должен удерживать массив между кадрами: кеш обновляется
+    /// на месте, удержание вызвало бы COW-копию всех маркеров.
     func presentedEntries(at time: TimeInterval) -> [PresentedAvatarMarker] {
-        var markers: [PresentedAvatarMarker] = []
-        markers.reserveCapacity(entriesById.count)
-        hasActiveAnimations = false
-
-        let orderedIDs = entriesById.values
-            .sorted { lhs, rhs in
-                if lhs.marker.drawPriority != rhs.marker.drawPriority {
-                    return lhs.marker.drawPriority < rhs.marker.drawPriority
-                }
-                return lhs.marker.id < rhs.marker.id
-            }
-            .map(\.marker.id)
-
-        for id in orderedIDs {
-            guard var entry = entriesById[id] else { continue }
-            let marker = entry.presentedAvatar(at: time)
-            hasActiveAnimations = hasActiveAnimations || entry.hasActiveAnimations(at: time)
-            entriesById[id] = entry
-            markers.append(marker)
+        guard animatingIndices.isEmpty == false else {
+            hasActiveAnimations = false
+            return presentedCache
         }
 
-        return markers
+        var stillAnimating: [Int] = []
+        stillAnimating.reserveCapacity(animatingIndices.count)
+        for index in animatingIndices {
+            presentedCache[index] = entries[index].presentedAvatar(at: time,
+                                                                   drawOrder: drawOrders[index])
+            if entries[index].hasActiveAnimations(at: time) {
+                stillAnimating.append(index)
+            }
+        }
+        animatingIndices = stillAnimating
+        hasActiveAnimations = stillAnimating.isEmpty == false
+        return presentedCache
     }
 }

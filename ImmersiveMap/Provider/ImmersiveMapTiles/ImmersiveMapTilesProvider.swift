@@ -12,10 +12,15 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
 
     /// Base URL of the hosted ImmersiveMap Tiles service. Used as the out-of-the-box
     /// default so a bare `ImmersiveMapView()` renders without any provider wiring.
-    public static let defaultTileBaseURL = URL(string: "https://46.17.97.158.sslip.io/tiles")!
+    public static let defaultTileBaseURL = URL(string: "https://tiles.immersivemap.dev/tiles")!
+
+    /// TileJSON endpoint of the hosted service. The loader reads the versioned,
+    /// immutable tile URL template from here so tiles are fetched over the CDN-
+    /// cacheable `/v/<version>/…` path instead of the always-revalidated base path.
+    public static let defaultTileJSONURL = URL(string: "https://tiles.immersivemap.dev/tiles.json")!
 
     /// Manifest URL of the hosted night-lights tile set served alongside the tiles.
-    public static let defaultNightLightsManifestURL = URL(string: "https://46.17.97.158.sslip.io/night-lights/v1/night_lights_manifest.json")!
+    public static let defaultNightLightsManifestURL = URL(string: "https://tiles.immersivemap.dev/night-lights/v1/night_lights_manifest.json")!
 
     /// Manual "invalidate every cached tile" lever: bump to force all clients to
     /// re-fetch and re-parse. Routine content updates at a stable URL no longer need

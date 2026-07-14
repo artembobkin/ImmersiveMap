@@ -3,39 +3,43 @@
 
 import simd
 
-struct AvatarGeoInput {
-    var latitude: Float
-    var longitude: Float
-    var sizePx: Float
-    var idHash: UInt32
-}
-
 struct AvatarInstanceGPU {
     var uvRect: SIMD4<Float>
     var borderColor: SIMD4<Float>
     var squashScale: SIMD2<Float>
     var atlasIndex: UInt32
     var flags: UInt32
+    var morph: Float
+    var _pad0: Float = 0.0
+    var _pad1: SIMD2<Float> = .zero
 }
 
 struct AvatarBatteryBadgeInstanceGPU {
     var uvRect: SIMD4<Float>
     var flags: UInt32
     var screenSizeScale: Float
-    var _padding: SIMD2<Float>
+    var contentAlpha: Float
+    var _padding: Float = 0.0
 }
 
 struct AvatarSpeedBadgeInstanceGPU {
     var uvRect: SIMD4<Float>
     var flags: UInt32
     var screenSizeScale: Float
-    var _padding: SIMD2<Float>
+    var contentAlpha: Float
+    var _padding: Float = 0.0
 }
 
 struct AvatarOffset {
     var value: SIMD2<Float>
     var scale: Float
-    var _padding: Float
+    var _padding: Float = 0.0
+}
+
+struct AvatarBeamStyleGPU {
+    var markerCenterOffsetPx: Float
+    var markerBodyHalfMinPx: Float
+    var _padding: SIMD2<Float> = .zero
 }
 
 struct AvatarMarkerStyleGPU {
