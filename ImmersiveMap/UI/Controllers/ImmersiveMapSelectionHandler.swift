@@ -5,8 +5,8 @@ import CoreGraphics
 import Foundation
 
 /// Хранит selection state карты и применяет команды `ImmersiveMapSelectionController`.
-/// Отвечает за hit-testing avatar markers, select/clear события и синхронизацию
-/// выбранного объекта с доступными map objects.
+/// Отвечает за hit-testing avatar markers, select/clear события, доставку marker tap
+/// событий и синхронизацию выбранного объекта с доступными map objects.
 @MainActor
 final class ImmersiveMapSelectionHandler {
     enum MapTapResult {
@@ -20,6 +20,7 @@ final class ImmersiveMapSelectionHandler {
     private weak var selectionController: ImmersiveMapSelectionController?
     private var currentSelection: ImmersiveMapSelection?
     private var avatarSelectionSnapshot: AvatarSelectionSnapshot = .empty
+    private var markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?
 
     init(avatarRuntime: ImmersiveMapAvatarRuntime,
          viewportRuntime: ImmersiveMapViewportRuntime,
@@ -41,6 +42,10 @@ final class ImmersiveMapSelectionHandler {
             self?.handle(command) ?? false
         }
         newSelectionController?.updateCurrentSelection(currentSelection)
+    }
+
+    func setMarkerTapAction(_ action: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
+        markerTapAction = action
     }
 
     func currentMapSelection() -> ImmersiveMapSelection? {
@@ -132,11 +137,22 @@ final class ImmersiveMapSelectionHandler {
 
     func handleMapTap(at point: CGPoint) -> MapTapResult {
         if let target = avatarHitTarget(at: point) {
+            var isConsumed = false
+            if let markerTapAction,
+               case .marker(let markerID) = target,
+               let marker = avatarRuntime.marker(id: markerID) {
+                markerTapAction(ImmersiveMapMarkerTapEvent(marker: marker,
+                                                           screenPoint: point))
+                isConsumed = true
+            }
             if selectionController != nil,
                let selection = selection(from: target) {
                 _ = select(selection,
                            source: .tap,
                            screenPoint: point)
+                isConsumed = true
+            }
+            if isConsumed {
                 return .consumed
             }
         }

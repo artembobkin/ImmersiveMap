@@ -29,7 +29,8 @@ final class ImmersiveMapNSViewTests: XCTestCase {
                                       avatarsController: nil,
                                       cameraPosition: cameraPosition,
                                       cameraController: camera,
-                                      selectionController: nil)
+                                      selectionController: nil,
+                                      markerTapAction: nil)
 
         XCTAssertTrue(view.layer is CAMetalLayer)
         XCTAssertTrue(view.isFlipped)

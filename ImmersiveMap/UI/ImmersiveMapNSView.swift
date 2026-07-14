@@ -65,7 +65,8 @@ public class ImmersiveMapNSView: NSView {
                   avatarsController: avatarsController,
                   cameraPosition: cameraPosition,
                   cameraController: nil,
-                  selectionController: nil)
+                  selectionController: nil,
+                  markerTapAction: nil)
     }
 
     init(frame: NSRect,
@@ -73,13 +74,15 @@ public class ImmersiveMapNSView: NSView {
          avatarsController: ImmersiveMapAvatarsController?,
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
-         selectionController: ImmersiveMapSelectionController?) {
+         selectionController: ImmersiveMapSelectionController?,
+         markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
         super.init(frame: frame)
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
         hostRuntime.syncControllers(avatarsController: avatarsController,
                                     cameraController: cameraController,
-                                    selectionController: selectionController)
+                                    selectionController: selectionController,
+                                    markerTapAction: markerTapAction)
     }
 
     public override func makeBackingLayer() -> CALayer {
@@ -191,11 +194,13 @@ public class ImmersiveMapNSView: NSView {
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
+                markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
+                           markerTapAction: markerTapAction,
                            cameraPosition: cameraPosition)
     }
 

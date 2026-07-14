@@ -54,18 +54,21 @@ final class ImmersiveMapHostRuntime {
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
+                markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         cameraController: cameraController,
-                        selectionController: selectionController)
+                        selectionController: selectionController,
+                        markerTapAction: markerTapAction)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
     }
 
     func dismantle() {
         syncControllers(avatarsController: nil,
                         cameraController: nil,
-                        selectionController: nil)
+                        selectionController: nil,
+                        markerTapAction: nil)
     }
 
     func setEarthSceneEnabled(_ isEnabled: Bool) {
@@ -104,7 +107,9 @@ final class ImmersiveMapHostRuntime {
 
     func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
                          cameraController newCameraController: ImmersiveMapCameraController?,
-                         selectionController newSelectionController: ImmersiveMapSelectionController?) {
+                         selectionController newSelectionController: ImmersiveMapSelectionController?,
+                         markerTapAction newMarkerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
+        runtimeGraph.selectionHandler.setMarkerTapAction(newMarkerTapAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
         guard shouldUpdateAvatarsController
