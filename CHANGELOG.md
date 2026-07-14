@@ -8,6 +8,16 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-14
+
+### Added
+
+- `onMarkerTap` modifier on `ImmersiveMapView`: a native SwiftUI way to receive avatar marker taps. The `ImmersiveMapMarkerTapEvent` carries the tapped marker snapshot and screen point, and fires on every tap independent of the selection controller.
+- Cursor-anchored zoom: scroll wheel, trackpad pinch, and touch pinch keep the world point under the cursor / gesture centroid fixed while zooming. Anchoring strength is configurable via `CameraSettings.zoomAnchorFactor`.
+- Double-tap (iOS) / double-click (macOS) zoom that flies one zoom level toward the tapped point.
+- Merged avatar markers: `ImmersiveMapAvatarsController.merge(ids:mergedID:imageCycleInterval:)` collapses markers into one marker at the live spherical average of its members, cycling the avatar image between members on a configurable timer. A round count badge shows how many avatars are merged; `unmerge(mergedID:)` restores the members.
+- `AvatarCountBadge` on `AvatarMarker` for showing a count bubble on any marker.
+
 ### Changed
 
 - ImmersiveMap Tiles are now served over the `tiles.immersivemap.dev` Cloudflare CDN. The tile loader discovers a versioned, immutable tile URL template from the service's TileJSON, so tiles are fetched over a long-lived edge-cached path (falling back to the base path until/if discovery resolves).
@@ -35,5 +45,6 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-[Unreleased]: https://github.com/artembobkin/ImmersiveMap/compare/0.1.1...HEAD
+[Unreleased]: https://github.com/artembobkin/ImmersiveMap/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/artembobkin/ImmersiveMap/releases/tag/0.1.1
