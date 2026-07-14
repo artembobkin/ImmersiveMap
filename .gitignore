@@ -1,5 +1,7 @@
 .DS_Store
 CLAUDE.md
+# playwright-mcp browser-automation artifacts (console logs, screenshots)
+/.playwright-mcp/
 /.build/
 /.swiftpm/
 /.worktrees/
