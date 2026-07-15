@@ -208,10 +208,6 @@ See [Documentation/docs/architecture.md](Documentation/docs/architecture.md).
 - Tile provider terms and attribution are the responsibility of the app developer.
 - Performance characteristics are still being measured.
 
-## Roadmap
-
-See [Documentation/docs/roadmap.md](Documentation/docs/roadmap.md).
-
 ## Testing
 
 Run tests with Swift Package Manager:

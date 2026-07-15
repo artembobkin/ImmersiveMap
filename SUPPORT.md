@@ -16,7 +16,6 @@ on a best-effort basis.
 - [Documentation/docs/getting-started.md](Documentation/docs/getting-started.md)
 - [Documentation/docs/architecture.md](Documentation/docs/architecture.md)
 - [Documentation/docs/custom-tile-provider.md](Documentation/docs/custom-tile-provider.md)
-- [Documentation/docs/roadmap.md](Documentation/docs/roadmap.md)
 
 ## Commercial support
 
