@@ -6,8 +6,8 @@ import simd
 /// Tunable palette for `ImmersiveMapTilesDefaultMapStyle`. Mirrors the shape of the
 /// Mapbox/OpenStreetMap configurations so hosts can recolor the first-party
 /// OpenMapTiles basemap without touching the layer logic.
-public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
-    public struct LabelAppearance: Equatable {
+public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable {
+    public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
         public var strokeWidthPx: Float
@@ -27,7 +27,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LabelStyles: Equatable {
+    public struct LabelStyles: Equatable, Sendable {
         public var city: LabelAppearance
         public var town: LabelAppearance
         public var country: LabelAppearance
@@ -51,7 +51,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
     }
 
     /// One entry per OpenMapTiles `transportation.class` tier used by the style.
-    public struct RoadLayerStyles: Equatable {
+    public struct RoadLayerStyles: Equatable, Sendable {
         public var motorway: SIMD4<Float>
         public var trunk: SIMD4<Float>
         public var primary: SIMD4<Float>
@@ -86,7 +86,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LayerStyles: Equatable {
+    public struct LayerStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
         public var wood: SIMD4<Float>
@@ -136,7 +136,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
     /// Palette used only by the continuous ESA WorldCover overlay at overview
     /// zooms. Keeping it separate prevents globe-scale color choices from tinting
     /// the detailed OSM street map that takes over above z9.
-    public struct GlobalLandcoverStyles: Equatable {
+    public struct GlobalLandcoverStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
         public var forest: SIMD4<Float>
@@ -165,7 +165,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct FeatureStyles: Equatable {
+    public struct FeatureStyles: Equatable, Sendable {
         public var buildingFillColor: SIMD4<Float>
 
         public init(buildingFillColor: SIMD4<Float>) {

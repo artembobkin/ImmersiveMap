@@ -274,9 +274,12 @@ final class NightLightsTileCacheTests: XCTestCase {
         return url
     }
 
+    // Дедлайн с запасом: первый тест процесса на холодном симуляторе платит
+    // несколько секунд прогрева (dyld/ImageIO/URLCache), и 2s-лимит превращал
+    // детерминированную LRU-хореографию в гонку со стартом процесса.
     private func waitForReadyTile(_ tile: Tile,
                                   in cache: NightLightsTileCache,
-                                  timeout: TimeInterval = 2.0) throws -> NightLightsTileData {
+                                  timeout: TimeInterval = 10.0) throws -> NightLightsTileData {
         let deadline = Date().addingTimeInterval(timeout)
         var data: NightLightsTileData?
         while data == nil && Date() < deadline {

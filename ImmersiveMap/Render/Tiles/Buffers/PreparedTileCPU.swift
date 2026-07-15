@@ -7,7 +7,7 @@ import simd
 /// CPU-only snapshot of a parsed tile.
 /// It contains device-independent arrays so the expensive preparation path
 /// can be separated from the final MTLBuffer creation stage.
-struct PreparedTileCPU {
+struct PreparedTileCPU: Sendable {
     struct GeometryLayer {
         let vertices: [TilePipeline.VertexIn]
         let indices: [UInt32]

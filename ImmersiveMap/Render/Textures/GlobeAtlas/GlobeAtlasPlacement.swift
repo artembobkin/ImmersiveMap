@@ -79,7 +79,7 @@ struct GlobeAtlasPlan: Equatable {
     let downgradedAllocationCount: Int
     let skippedAllocationCount: Int
 
-    static let empty = GlobeAtlasPlan(allocations: [],
+    nonisolated(unsafe) static let empty = GlobeAtlasPlan(allocations: [],
                                       pageSummaries: [],
                                       downgradedAllocationCount: 0,
                                       skippedAllocationCount: 0)

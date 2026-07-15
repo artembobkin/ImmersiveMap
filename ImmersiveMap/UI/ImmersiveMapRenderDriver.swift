@@ -144,6 +144,7 @@ final class ImmersiveMapRenderDriver: NSObject {
     }
 }
 
+@MainActor
 protocol ImmersiveMapRenderDriverFrameDelegate: AnyObject {
     func renderDriverDidTick(_ driver: ImmersiveMapRenderDriver,
                              currentTime: CFTimeInterval)
@@ -161,7 +162,8 @@ private final class WeakDisplayLinkTarget: NSObject {
         self.frameDelegate = frameDelegate
     }
 
-    @objc func displayLinkDidFire(_ displayLink: CADisplayLink) {
+    // @MainActor: display link добавляется в main runloop, тик всегда на main.
+    @MainActor @objc func displayLinkDidFire(_ displayLink: CADisplayLink) {
         guard let driver else { return }
 
         frameDelegate?.renderDriverDidTick(driver,

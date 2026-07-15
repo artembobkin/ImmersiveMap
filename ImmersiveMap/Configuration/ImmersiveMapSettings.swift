@@ -4,7 +4,7 @@
 import Foundation
 import simd
 
-public struct ImmersiveMapSettings: Equatable {
+public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct LabelLanguage: Hashable, Codable, Sendable {
         public let code: String
 
@@ -46,7 +46,7 @@ public struct ImmersiveMapSettings: Equatable {
         case localFirst
     }
 
-    public struct RenderLoopSettings: Equatable {
+    public struct RenderLoopSettings: Equatable, Sendable {
         public var forceContinuousRendering: Bool
         public var interactionFramesPerSecond: Int
         public var labelFadeFramesPerSecond: Int
@@ -60,7 +60,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct CameraSettings: Equatable {
+    public struct CameraSettings: Equatable, Sendable {
         public var maximumPitch: Float
         public var maximumZoom: Double
         public var focusedMarkerZoom: Double
@@ -196,7 +196,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct PresentationSettings: Equatable {
+    public struct PresentationSettings: Equatable, Sendable {
         public var automaticTransitionStartZoom: Double
         public var automaticTransitionSpan: Double
         public var globeRadiusScale: Double
@@ -210,8 +210,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct TileSettings: Equatable {
-        public struct CoverageSettings: Equatable {
+    public struct TileSettings: Equatable, Sendable {
+        public struct CoverageSettings: Equatable, Sendable {
             public var maximumZoomLevel: Int
 
             public init(maximumZoomLevel: Int) {
@@ -219,8 +219,8 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct NetworkSettings: Equatable {
-            public enum AuthorizationMode: Equatable {
+        public struct NetworkSettings: Equatable, Sendable {
+            public enum AuthorizationMode: Equatable, Sendable {
                 case bearerHeader
                 case accessTokenQuery(parameterName: String)
             }
@@ -257,7 +257,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct CacheSettings: Equatable {
+        public struct CacheSettings: Equatable, Sendable {
             public static let defaultPreparedDiskCacheSizeInBytes: Int = 256 * 1_024 * 1_024
 
             public var clearDiskCachesOnLaunch: Bool
@@ -302,7 +302,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct ParsingSettings: Equatable {
+        public struct ParsingSettings: Equatable, Sendable {
             public var addTestBorders: Bool
 
             public init(addTestBorders: Bool) {
@@ -332,8 +332,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct LabelSettings: Equatable {
-        public struct HouseNumberSettings: Equatable {
+    public struct LabelSettings: Equatable, Sendable {
+        public struct HouseNumberSettings: Equatable, Sendable {
             public var enabled: Bool
             public var minimumZoom: Int
 
@@ -344,7 +344,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct SettlementVisibilitySettings: Equatable {
+        public struct SettlementVisibilitySettings: Equatable, Sendable {
             public var capitalMaximumZoom: Int
             public var cityMaximumZoom: Int
             public var smallSettlementMaximumZoom: Int
@@ -358,7 +358,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct LandmarkSettings: Equatable {
+        public struct LandmarkSettings: Equatable, Sendable {
             public var minimumZoom: Int
 
             public init(minimumZoom: Int = 15) {
@@ -366,7 +366,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct BaseSettings: Equatable {
+        public struct BaseSettings: Equatable, Sendable {
             public var gridCellSizePx: Float
             public var fadeInSeconds: TimeInterval
             public var fadeOutSeconds: TimeInterval
@@ -380,7 +380,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct RoadSettings: Equatable {
+        public struct RoadSettings: Equatable, Sendable {
             public var gridCellSizePx: Float
             public var maxGlyphTurnRadians: Float
 
@@ -416,7 +416,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct SpaceSettings: Equatable {
+    public struct SpaceSettings: Equatable, Sendable {
         public var clearColor: SIMD4<Double>
 
         public init(clearColor: SIMD4<Double>) {
@@ -424,7 +424,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct StarfieldSettings: Equatable {
+    public struct StarfieldSettings: Equatable, Sendable {
         public var starCount: Int
         public var sizeMin: Float
         public var sizeMax: Float
@@ -453,8 +453,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct EarthSceneSettings: Equatable {
-        public struct NightLightsSettings: Equatable {
+    public struct EarthSceneSettings: Equatable, Sendable {
+        public struct NightLightsSettings: Equatable, Sendable {
             public var isEnabled: Bool
             /// Light contribution multiplier. Expected range: `0...1`.
             public var intensity: Float
@@ -478,7 +478,7 @@ public struct ImmersiveMapSettings: Equatable {
             }
         }
 
-        public struct SunSettings: Equatable {
+        public struct SunSettings: Equatable, Sendable {
             public var isEnabled: Bool
             /// Apparent disk angular size in shader-facing normalized units.
             public var diskAngularSize: Float
@@ -555,7 +555,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct SceneSettings: Equatable {
+    public struct SceneSettings: Equatable, Sendable {
         public var mapClearColor: SIMD4<Double>
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
@@ -572,8 +572,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct StyleSettings: Equatable {
-        public struct BaseColors: Equatable {
+    public struct StyleSettings: Equatable, Sendable {
+        public struct BaseColors: Equatable, Sendable {
             public var tileBackground: SIMD4<Float>
             public var globeBackground: SIMD4<Double>
             public var water: SIMD4<Float>
@@ -609,7 +609,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct DebugSettings: Equatable {
+    public struct DebugSettings: Equatable, Sendable {
         public var enableDebugPanel: Bool
         public var coordinateScale: Float
         public var diagnosticsScale: Float
@@ -635,7 +635,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct PostProcessingSettings: Equatable {
+    public struct PostProcessingSettings: Equatable, Sendable {
         public var fxaaEnabled: Bool
 
         public init(fxaaEnabled: Bool = false) {
@@ -643,7 +643,7 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct AttributionSettings: Equatable {
+    public struct AttributionSettings: Equatable, Sendable {
         public var isVisible: Bool
         public var title: String
         public var copyright: String
@@ -660,8 +660,8 @@ public struct ImmersiveMapSettings: Equatable {
         }
     }
 
-    public struct AvatarSettings: Equatable {
-        public enum Size: Int, Equatable {
+    public struct AvatarSettings: Equatable, Sendable {
+        public enum Size: Int, Equatable, Sendable {
             case px64 = 64
             case px128 = 128
             case px256 = 256

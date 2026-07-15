@@ -14,10 +14,10 @@ struct TileJSONDocument: Decodable, Equatable {
 /// Loads a TileJSON document and extracts its first tile URL template. The
 /// injectable data loader mirrors `NightLightsTileSetMetadataLoader` so the
 /// parsing can be unit-tested without hitting the network.
-struct TileJSONTemplateLoader {
-    private let loadData: (URL) async throws -> Data
+struct TileJSONTemplateLoader: Sendable {
+    private let loadData: @Sendable (URL) async throws -> Data
 
-    init(loadData: @escaping (URL) async throws -> Data = Self.loadData(from:)) {
+    init(loadData: @escaping @Sendable (URL) async throws -> Data = Self.loadData(from:)) {
         self.loadData = loadData
     }
 
@@ -38,7 +38,8 @@ struct TileJSONTemplateLoader {
 /// Thread-safe holder for the resolved tile URL template. `nil` until the TileJSON
 /// document is fetched (or if it never resolves), which is the signal for the
 /// provider below to fall back to the static base-URL path.
-final class TileJSONTemplateStore {
+/// Внутренне синхронизирован: `storedTemplate` доступен только через `stateQueue`.
+final class TileJSONTemplateStore: @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.TileJSONTemplateStore.state")
     private var storedTemplate: String?
 

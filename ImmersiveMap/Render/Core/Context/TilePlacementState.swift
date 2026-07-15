@@ -9,7 +9,7 @@
 import Foundation
 
 struct TilePlacementState {
-    static let empty = TilePlacementState(placeTilesContext: .empty,
+    nonisolated(unsafe) static let empty = TilePlacementState(placeTilesContext: .empty,
                                           globeTexturePlaceTilesContext: .empty,
                                           placementVersion: 0,
                                           visibleTilesCount: 0,

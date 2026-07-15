@@ -40,7 +40,9 @@ struct PreparedTileCacheIdentity {
 /// All cache instances that target the same root share a serial utility queue
 /// and one root-wide index. This prevents two map views from racing atomic
 /// replacements/pruning and avoids rescanning every namespace after each save.
-private final class PreparedTileDiskIOCoordinator {
+/// Внутренне синхронизирован: реестр под `registryLock`, всё остальное состояние
+/// мутируется только на последовательной `queue`.
+private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private struct Policy {
         var byteQuota: Int64
         var timeToLive: TimeInterval
@@ -53,7 +55,7 @@ private final class PreparedTileDiskIOCoordinator {
     }
 
     private static let registryLock = NSLock()
-    private static var coordinatorsByRootPath: [String: PreparedTileDiskIOCoordinator] = [:]
+    nonisolated(unsafe) private static var coordinatorsByRootPath: [String: PreparedTileDiskIOCoordinator] = [:]
 
     static func shared(rootDirectory: URL, fileManager: FileManager) -> PreparedTileDiskIOCoordinator {
         let key = rootDirectory.standardizedFileURL.path

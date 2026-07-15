@@ -24,5 +24,5 @@ struct GlobeTexturePlaceTilesContext {
         self.tilePlacements = tilePlacements
     }
 
-    static let empty = GlobeTexturePlaceTilesContext(tilePlacements: [])
+    nonisolated(unsafe) static let empty = GlobeTexturePlaceTilesContext(tilePlacements: [])
 }

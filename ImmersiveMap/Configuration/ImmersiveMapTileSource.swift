@@ -3,7 +3,7 @@
 
 import Foundation
 
-public struct ImmersiveMapTileSource: Equatable {
+public struct ImmersiveMapTileSource: Equatable, Sendable {
     public typealias AuthorizationMode = ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
 
     public var tileBaseURL: URL

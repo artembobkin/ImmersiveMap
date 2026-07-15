@@ -3,8 +3,8 @@
 
 import simd
 
-public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable {
-    public struct LabelAppearance: Equatable {
+public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable, Sendable {
+    public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
         public var strokeWidthPx: Float
@@ -24,7 +24,7 @@ public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LabelStyles: Equatable {
+    public struct LabelStyles: Equatable, Sendable {
         public var place: LabelAppearance
         public var poi: LabelAppearance
         public var water: LabelAppearance
@@ -44,7 +44,7 @@ public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct RoadLayerStyles: Equatable {
+    public struct RoadLayerStyles: Equatable, Sendable {
         public var major: SIMD4<Float>
         public var minor: SIMD4<Float>
         public var path: SIMD4<Float>
@@ -61,7 +61,7 @@ public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LayerStyles: Equatable {
+    public struct LayerStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
         public var park: SIMD4<Float>
@@ -87,7 +87,7 @@ public struct OpenStreetMapDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct FeatureStyles: Equatable {
+    public struct FeatureStyles: Equatable, Sendable {
         public var buildingFillColor: SIMD4<Float>
 
         public init(buildingFillColor: SIMD4<Float>) {

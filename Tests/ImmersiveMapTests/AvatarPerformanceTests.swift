@@ -214,7 +214,7 @@ final class AvatarPerformanceTests: XCTestCase {
                               drawOrder: Int(id))
     }
 
-    private static var cachedImage: CGImage?
+    nonisolated(unsafe) private static var cachedImage: CGImage?
 
     private static func sharedImage() throws -> CGImage {
         if let cachedImage {

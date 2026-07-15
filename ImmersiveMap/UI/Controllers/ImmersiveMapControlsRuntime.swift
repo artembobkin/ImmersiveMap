@@ -9,6 +9,7 @@ import UIKit
 /// Владеет persistent map overlay controls одного map view.
 /// На touch-платформах создает pitch/zoom control zones; attribution badge
 /// существует на всех платформах. Раскладывает контролы и предоставляет hit-testing.
+@MainActor
 final class ImmersiveMapControlsRuntime {
     #if canImport(UIKit)
     private let pitchControlZone: PitchControlZone

@@ -4,7 +4,9 @@
 import Foundation
 import MetalKit
 
-final class TileRenderStore {
+/// Потокобезопасен (`@unchecked Sendable`): ссылки назначаются при wiring до
+/// старта загрузок, `memoryMetalTile` мутируется только на main actor.
+final class TileRenderStore: @unchecked Sendable {
     struct TileRequestResult {
         let readyTilesBySource: [Tile: MetalTile?]
         let readyTilesCount: Int

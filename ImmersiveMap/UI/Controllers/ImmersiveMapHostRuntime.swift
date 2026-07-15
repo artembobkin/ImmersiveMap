@@ -152,16 +152,13 @@ final class ImmersiveMapHostRuntime {
     }
 
     deinit {
-        runtimeGraph.cameraAnimationRuntime.reset()
-        let detachedAvatarRuntime = runtimeGraph.avatarRuntime
+        let detachedGraph = runtimeGraph
         Task { @MainActor in
-            detachedAvatarRuntime.detachController()
+            detachedGraph.cameraAnimationRuntime.reset()
+            detachedGraph.avatarRuntime.detachController()
+            detachedGraph.cameraRuntime.detachController()
+            detachedGraph.selectionHandler.syncController(nil)
+            detachedGraph.renderRuntime.stop()
         }
-        runtimeGraph.cameraRuntime.detachController()
-        let detachedSelectionHandler = runtimeGraph.selectionHandler
-        Task { @MainActor in
-            detachedSelectionHandler.syncController(nil)
-        }
-        runtimeGraph.renderRuntime.stop()
     }
 }

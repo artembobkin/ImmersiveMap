@@ -16,7 +16,7 @@ struct NightLightsAtlasEntry: Equatable {
 }
 
 struct NightLightsAtlasState {
-    static let empty = NightLightsAtlasState(pages: [], entries: [])
+    nonisolated(unsafe) static let empty = NightLightsAtlasState(pages: [], entries: [])
 
     var pages: [MTLTexture]
     var entries: [NightLightsAtlasEntry]
@@ -89,7 +89,7 @@ struct NightLightsAtlasEntryUniform {
 }
 
 struct BaseLabelState {
-    static let empty = BaseLabelState(labelInputsCount: 0,
+    nonisolated(unsafe) static let empty = BaseLabelState(labelInputsCount: 0,
                                       activeLabelSpanCount: 0,
                                       labelRuntimeMetaBuffer: nil,
                                       screenPositionsBuffer: nil,
@@ -107,7 +107,7 @@ struct BaseLabelState {
 }
 
 struct RoadLabelState {
-    static let empty = RoadLabelState(instanceCount: 0,
+    nonisolated(unsafe) static let empty = RoadLabelState(instanceCount: 0,
                                       glyphCount: 0,
                                       activeRoadLabelTiles: [],
                                       runtimeMetaBuffer: nil,

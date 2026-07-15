@@ -3,7 +3,7 @@
 
 import Foundation
 
-public enum EarthSceneTimeMode: Equatable {
+public enum EarthSceneTimeMode: Equatable, Sendable {
     case realtime
     case fixed(Date)
 

@@ -12,7 +12,9 @@ final class ImmersiveMapDebugOverlayRuntime {
     private let tileTraceRecorder: TileTraceRecorder
     private let baseLabelTraceRecorder: BaseLabelTraceRecorder
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
-    private var hudSnapshotTimer: Timer?
+    // nonisolated(unsafe): таймер создаётся и инвалидируется на main, но deinit
+    // в Swift 6 nonisolated - доступ безопасен, объект живёт только на main.
+    nonisolated(unsafe) private var hudSnapshotTimer: Timer?
     private var consumedHUDSnapshotVersion: UInt64 = 0
 
     init(mapView: ImmersiveMapHostView,

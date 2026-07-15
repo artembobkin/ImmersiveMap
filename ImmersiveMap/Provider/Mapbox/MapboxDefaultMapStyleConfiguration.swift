@@ -3,8 +3,8 @@
 
 import simd
 
-public struct MapboxDefaultMapStyleConfiguration: Equatable {
-    public struct LabelAppearance: Equatable {
+public struct MapboxDefaultMapStyleConfiguration: Equatable, Sendable {
+    public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
         public var strokeWidthPx: Float
@@ -21,7 +21,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LabelStyles: Equatable {
+    public struct LabelStyles: Equatable, Sendable {
         public var city: LabelAppearance
         public var smallSettlement: LabelAppearance
         public var district: LabelAppearance
@@ -59,7 +59,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct RoadLayerStyles: Equatable {
+    public struct RoadLayerStyles: Equatable, Sendable {
         public var major: SIMD4<Float>
         public var minor: SIMD4<Float>
         public var pedestrian: SIMD4<Float>
@@ -139,7 +139,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct RailwayLayerStyles: Equatable {
+    public struct RailwayLayerStyles: Equatable, Sendable {
         public var border: SIMD4<Float>
         public var fill: SIMD4<Float>
         public var sleepers: SIMD4<Float>
@@ -153,7 +153,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct LayerStyles: Equatable {
+    public struct LayerStyles: Equatable, Sendable {
         public var adminBoundary: SIMD4<Float>
         public var adminLevel1: SIMD4<Float>
         public var water: SIMD4<Float>
@@ -215,7 +215,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable {
         }
     }
 
-    public struct FeatureStyles: Equatable {
+    public struct FeatureStyles: Equatable, Sendable {
         public var buildingFillColor: SIMD4<Float>
 
         public init(buildingFillColor: SIMD4<Float>) {

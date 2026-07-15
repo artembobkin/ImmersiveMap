@@ -4,6 +4,7 @@
 @testable import ImmersiveMap
 import CoreGraphics
 import Foundation
+import Synchronization
 import XCTest
 
 final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
@@ -25,13 +26,13 @@ final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
         let loadedImage = try Self.makeTestImage(width: 2, height: 1)
         let loadStarted = expectation(description: "remote image load started")
         let updatePublished = expectation(description: "remote image update published")
-        var loadContinuation: CheckedContinuation<CGImage, Never>?
+        let loadContinuation = Mutex<CheckedContinuation<CGImage, Never>?>(nil)
 
         let controller = ImmersiveMapAvatarsController(imageLoader: { requestedURL in
             XCTAssertEqual(requestedURL, url)
             loadStarted.fulfill()
             return await withCheckedContinuation { continuation in
-                loadContinuation = continuation
+                loadContinuation.withLock { $0 = continuation }
             }
         })
 
@@ -48,7 +49,7 @@ final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
         controller.setChangeHandler {
             updatePublished.fulfill()
         }
-        loadContinuation?.resume(returning: loadedImage)
+        loadContinuation.withLock { $0 }?.resume(returning: loadedImage)
 
         await fulfillment(of: [updatePublished], timeout: 1.0)
         let updatedSnapshot = try XCTUnwrap(controller.consumeSnapshot())

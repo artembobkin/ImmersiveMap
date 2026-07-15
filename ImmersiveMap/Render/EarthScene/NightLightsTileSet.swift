@@ -96,10 +96,10 @@ final class NightLightsTileSet {
     }
 }
 
-struct NightLightsTileSetMetadataLoader {
-    private let loadData: (URL) async throws -> Data
+struct NightLightsTileSetMetadataLoader: Sendable {
+    private let loadData: @Sendable (URL) async throws -> Data
 
-    init(loadData: @escaping (URL) async throws -> Data = Self.loadData(from:)) {
+    init(loadData: @escaping @Sendable (URL) async throws -> Data = Self.loadData(from:)) {
         self.loadData = loadData
     }
 
@@ -115,7 +115,8 @@ struct NightLightsTileSetMetadataLoader {
     }
 }
 
-final class NightLightsTileSetStore {
+/// Внутренне синхронизирован: `storedTileSet` доступен только через `stateQueue`.
+final class NightLightsTileSetStore: @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.NightLightsTileSetStore.state")
     private var storedTileSet: NightLightsTileSet?
 

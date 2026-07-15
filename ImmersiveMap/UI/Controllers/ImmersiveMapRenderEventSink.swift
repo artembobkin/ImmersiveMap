@@ -6,7 +6,9 @@ import Foundation
 /// Принимает события renderer-пайплайна и передает их владельцам runtime-состояния карты.
 /// Не владеет renderer и не принимает решений о кадре; только связывает render events
 /// с `ImmersiveMapRenderRuntime` и selection runtime.
-final class ImmersiveMapRenderEventSink: RenderFrameEventSink {
+/// Потокобезопасен: weak-ссылки записываются только в init, адресаты сами
+/// потокобезопасны либо получают события через hop на main actor.
+final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendable {
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
     private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore

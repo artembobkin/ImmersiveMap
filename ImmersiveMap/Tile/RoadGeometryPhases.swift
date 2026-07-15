@@ -37,6 +37,7 @@ struct RoadGeometryPhases<Layer> {
 }
 
 extension RoadGeometryPhases: Equatable where Layer: Equatable {}
+extension RoadGeometryPhases: Sendable where Layer: Sendable {}
 
 struct RoadStructureBuckets<Bucket> {
     let tunnel: Bucket
@@ -66,3 +67,4 @@ struct RoadStructureBuckets<Bucket> {
 }
 
 extension RoadStructureBuckets: Equatable where Bucket: Equatable {}
+extension RoadStructureBuckets: Sendable where Bucket: Sendable {}

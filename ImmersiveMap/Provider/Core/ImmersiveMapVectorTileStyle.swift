@@ -130,7 +130,7 @@ public enum ImmersiveMapFeatureStyle: Equatable {
                    textStyle: ImmersiveMapLabelTextStyle)
 }
 
-public protocol ImmersiveMapVectorTileStyle {
+public protocol ImmersiveMapVectorTileStyle: Sendable {
     var cacheFingerprint: UInt32 { get }
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? { get }
 

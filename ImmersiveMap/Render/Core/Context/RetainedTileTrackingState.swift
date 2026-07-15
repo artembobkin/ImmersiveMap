@@ -7,7 +7,7 @@
 //
 
 struct PlaceTileTrackingState {
-    static let empty = PlaceTileTrackingState(placeTiles: [])
+    nonisolated(unsafe) static let empty = PlaceTileTrackingState(placeTiles: [])
 
     let placeTiles: [PlaceTile]
 

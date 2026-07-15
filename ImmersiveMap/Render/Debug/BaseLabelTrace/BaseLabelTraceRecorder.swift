@@ -142,7 +142,9 @@ struct BaseLabelTraceEvent {
     }
 }
 
-final class BaseLabelTraceRecorder {
+/// Внутренне синхронизирован: состояние под `stateLock`, запись в файл - на
+/// последовательной `queue`.
+final class BaseLabelTraceRecorder: @unchecked Sendable {
     let options: BaseLabelTraceOptions
 
     private let fileManager: FileManager

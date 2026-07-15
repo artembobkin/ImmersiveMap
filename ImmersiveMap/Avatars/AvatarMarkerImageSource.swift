@@ -4,7 +4,7 @@
 import CoreGraphics
 import Foundation
 
-public struct AvatarMarkerImageSource {
+public struct AvatarMarkerImageSource: Sendable {
     private enum Storage {
         case cgImage(CGImage)
         case remote(URL, placeholder: CGImage?)

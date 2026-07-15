@@ -4,7 +4,9 @@
 import MetalKit
 
 
-class MetalTile: Hashable {
+/// Иммутабелен после init: создаётся фабрикой в фоновой задаче и после
+/// публикации в кэш читается только рендером.
+final class MetalTile: Hashable, @unchecked Sendable {
     static func == (lhs: MetalTile, rhs: MetalTile) -> Bool {
         return lhs.tile.x == rhs.tile.x && lhs.tile.z == rhs.tile.z && lhs.tile.y == rhs.tile.y
     }

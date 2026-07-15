@@ -7,6 +7,7 @@ import simd
 
 /// Владеет mutable camera state одного map view.
 /// Оборачивает `FrameCameraStateResolver`, применяет camera changes, хранит settings и запрашивает frames.
+@MainActor
 final class ImmersiveMapCameraRuntime {
     private let initialCameraPosition: ImmersiveMapCameraPosition?
     let presentationStateResolver: MapPresentationStateController

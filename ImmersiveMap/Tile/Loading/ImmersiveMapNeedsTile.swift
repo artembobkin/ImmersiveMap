@@ -11,7 +11,9 @@ import MetalKit
 // загрузку/парс через `TileLoadPipeline`.
 // Решения о том, когда запрос тайла временно блокируется после ошибок, делегируются
 // в `TileRetryController` (per-tile backoff + глобальный cooldown).
-class ImmersiveMapNeedsTile {
+/// Потокобезопасен (`@unchecked Sendable`): мутабельное состояние загрузчика
+/// сериализовано `stateQueue`, задачи загрузки работают из фоновых Task.
+final class ImmersiveMapNeedsTile: @unchecked Sendable {
     typealias RetryPolicy = TileRetryController.Policy
 
     private struct OngoingTask {

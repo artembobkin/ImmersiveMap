@@ -19,7 +19,9 @@ public struct AvatarsSnapshot {
 
 /// Public thread-safe owner для avatar markers, которые передает app code.
 /// Собирает marker mutations в snapshots для renderer и selection runtime.
-public final class ImmersiveMapAvatarsController {
+/// Потокобезопасен (`@unchecked Sendable`): всё мутабельное состояние
+/// сериализовано `lock`, маркеры можно обновлять с любого потока.
+public final class ImmersiveMapAvatarsController: @unchecked Sendable {
     /// Группа объединённых маркеров: участники скрыты с карты, вместо них
     /// рисуется один merged-маркер с усреднённым гео, bubble-счётчиком и
     /// циклической сменой картинки участников.
@@ -33,7 +35,7 @@ public final class ImmersiveMapAvatarsController {
     }
 
     private let lock = NSLock()
-    private let imageLoader: (URL) async throws -> CGImage
+    private let imageLoader: @Sendable (URL) async throws -> CGImage
     private var markersById: [UInt64: AvatarMarker] = [:]
     private var mergedGroupsById: [UInt64: MergedAvatarGroup] = [:]
     private var imageCycleTimersById: [UInt64: DispatchSourceTimer] = [:]
@@ -50,7 +52,7 @@ public final class ImmersiveMapAvatarsController {
         })
     }
 
-    init(imageLoader: @escaping (URL) async throws -> CGImage) {
+    init(imageLoader: @escaping @Sendable (URL) async throws -> CGImage) {
         self.imageLoader = imageLoader
     }
 

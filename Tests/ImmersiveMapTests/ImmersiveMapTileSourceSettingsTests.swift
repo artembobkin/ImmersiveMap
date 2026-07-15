@@ -4,6 +4,7 @@
 @testable import ImmersiveMap
 import XCTest
 
+@MainActor
 final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     @MainActor
     func testImmersiveMapViewModifiersAttachControllersAndInitialCameraPosition() {

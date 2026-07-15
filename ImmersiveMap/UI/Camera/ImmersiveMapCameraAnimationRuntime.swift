@@ -7,6 +7,7 @@ import QuartzCore
 
 /// Владеет time-based camera animations для одного map view.
 /// Координирует camera flights и globe pan inertia, затем синхронизирует render-loop activity.
+@MainActor
 final class ImmersiveMapCameraAnimationRuntime {
     private let cameraRuntime: ImmersiveMapCameraRuntime
     private let interactionRuntime: ImmersiveMapInteractionRuntime

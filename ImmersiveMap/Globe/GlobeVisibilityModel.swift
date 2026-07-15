@@ -7,6 +7,7 @@
 //
 
 import simd
+import Synchronization
 
 struct GlobeVisibilityInputs {
     let globe: GlobeUniform
@@ -197,16 +198,18 @@ private struct TileCoordinateBounds {
     let eastLongitude: Float
 }
 
-private final class GlobeTileStaticBoundsCache {
-    private var boundsByTile: [Tile: GlobeTileStaticVisibilityBound] = [:]
+private final class GlobeTileStaticBoundsCache: Sendable {
+    private let boundsByTile = Mutex<[Tile: GlobeTileStaticVisibilityBound]>([:])
 
     func bound(for tile: Tile) -> GlobeTileStaticVisibilityBound {
-        if let cachedBound = boundsByTile[tile] {
-            return cachedBound
-        }
+        boundsByTile.withLock { bounds in
+            if let cachedBound = bounds[tile] {
+                return cachedBound
+            }
 
-        let bound = GlobeVisibilityModel.makeStaticBoundGeometry(for: tile)
-        boundsByTile[tile] = bound
-        return bound
+            let bound = GlobeVisibilityModel.makeStaticBoundGeometry(for: tile)
+            bounds[tile] = bound
+            return bound
+        }
     }
 }

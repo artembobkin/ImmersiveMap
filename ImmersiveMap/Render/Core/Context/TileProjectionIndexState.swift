@@ -9,7 +9,7 @@
 import Metal
 
 struct TileProjectionIndexState {
-    static let empty = TileProjectionIndexState(sourceProjectionTiles: [],
+    nonisolated(unsafe) static let empty = TileProjectionIndexState(sourceProjectionTiles: [],
                                                 tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: []),
                                                 tileOriginData: [],
                                                 tileOriginDataBuffer: nil,

@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-public enum LabelFontWeight: UInt8 {
+public enum LabelFontWeight: UInt8, Sendable {
     case bold = 0
     case thin = 1
 }

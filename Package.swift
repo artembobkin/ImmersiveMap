@@ -69,5 +69,5 @@ let package = Package(
             path: "Tests/ImmersiveMapTests"
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

@@ -17,7 +17,9 @@ public class ImmersiveMapUIView: UIView {
     // MARK: - Rendering
 
     private var hostRuntime: ImmersiveMapHostRuntime!
-    private var memoryWarningObserver: NSObjectProtocol?
+    // nonisolated(unsafe): пишется один раз на main, в nonisolated deinit только
+    // снимается с NotificationCenter (removeObserver потокобезопасен).
+    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     var metalLayer: CAMetalLayer {
         return layer as! CAMetalLayer

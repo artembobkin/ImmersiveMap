@@ -8,6 +8,7 @@ import UIKit
 
 /// Владеет zoom control zone, включая drag zoom и scroll zoom gestures.
 /// Переводит движение control в camera zoom commands и сообщает состояние zoom interaction.
+@MainActor
 final class ZoomControlZone {
     private enum Layout {
         static let size = CGSize(width: 132, height: 240)

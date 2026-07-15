@@ -46,7 +46,7 @@ private struct FixedTileURLProvider: GetMapTileDownloadUrl {
 }
 
 private final class SuccessfulTileURLProtocol: URLProtocol {
-    static var responseData = Data()
+    nonisolated(unsafe) static var responseData = Data()
 
     override class func canInit(with request: URLRequest) -> Bool {
         true

@@ -3,7 +3,7 @@
 
 import Foundation
 
-public struct ImmersiveMapVectorTileLabelProfile: Equatable {
+public struct ImmersiveMapVectorTileLabelProfile: Equatable, Sendable {
     public static let generic = ImmersiveMapVectorTileLabelProfile(
         textKeys: ["name:en"],
         rankKeys: ["rank", "sort_rank", "labelrank", "sizerank", "symbolrank"],

@@ -63,9 +63,10 @@ final class NightLightsTileSetTests: XCTestCase {
 
     func testMetadataLoaderBuildsTileSetFromManifestDataAsynchronously() async throws {
         let metadataURL = URL(string: "https://example.com/night-lights/v1/night_lights_manifest.json")!
+        let metadataJSON = self.metadataJSON
         let loader = NightLightsTileSetMetadataLoader { requestedURL in
             XCTAssertEqual(requestedURL, metadataURL)
-            return Data(self.metadataJSON.utf8)
+            return Data(metadataJSON.utf8)
         }
 
         let tileSet = try await loader.load(from: metadataURL)

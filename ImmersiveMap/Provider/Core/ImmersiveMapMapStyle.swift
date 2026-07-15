@@ -1,21 +1,21 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-public protocol ImmersiveMapMapStyle {
+public protocol ImmersiveMapMapStyle: Sendable {
     var configurationFingerprint: UInt64 { get }
     var vectorTileStyle: any ImmersiveMapVectorTileStyle { get }
 }
 
-protocol ImmersiveMapMapStyleRuntime {
+protocol ImmersiveMapMapStyleRuntime: Sendable {
     func makeRuntimeMapStyle(providerID: String,
                              settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
 }
 
-public struct AnyImmersiveMapMapStyle: Equatable {
+public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
     public let configurationFingerprint: UInt64
 
     let vectorTileStyle: any ImmersiveMapVectorTileStyle
-    private let runtimeMapStyleFactory: (String, ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
+    private let runtimeMapStyleFactory: @Sendable (String, ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
 
     public init<S: ImmersiveMapMapStyle>(_ mapStyle: S) {
         self.configurationFingerprint = mapStyle.configurationFingerprint

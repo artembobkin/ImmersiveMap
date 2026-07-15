@@ -13,7 +13,9 @@ struct RenderActivityState {
     let avatarAnimationRenderingActive: Bool
 }
 
-protocol RenderFrameEventSink: AnyObject {
+/// События приходят и с main thread, и из фоновых задач (загрузка тайлов,
+/// ретраи), поэтому реализации обязаны быть потокобезопасными.
+protocol RenderFrameEventSink: AnyObject, Sendable {
     func invalidate(_ reason: RenderInvalidationReason)
     func applyActivityState(_ state: RenderActivityState)
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)

@@ -10,5 +10,5 @@ struct PlaceTilesContext {
         self.tilePlacements = tilePlacements
     }
 
-    static let empty = PlaceTilesContext(tilePlacements: [])
+    nonisolated(unsafe) static let empty = PlaceTilesContext(tilePlacements: [])
 }

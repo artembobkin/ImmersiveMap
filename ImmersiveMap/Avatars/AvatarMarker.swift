@@ -10,7 +10,7 @@ import UIKit
 import AppKit
 #endif
 
-public struct GeoCoordinate: Hashable {
+public struct GeoCoordinate: Hashable, Sendable {
     public var latitude: Double
     public var longitude: Double
 
@@ -20,7 +20,7 @@ public struct GeoCoordinate: Hashable {
     }
 }
 
-public struct AvatarBatteryBadge: Equatable, Hashable {
+public struct AvatarBatteryBadge: Equatable, Hashable, Sendable {
     public let levelPct: Int
     public let isPlaceholder: Bool
 
@@ -39,7 +39,7 @@ public struct AvatarBatteryBadge: Equatable, Hashable {
     }
 }
 
-public struct AvatarSpeedBadge: Equatable, Hashable {
+public struct AvatarSpeedBadge: Equatable, Hashable, Sendable {
     public let kilometersPerHour: Int
     public let isPlaceholder: Bool
 
@@ -58,7 +58,7 @@ public struct AvatarSpeedBadge: Equatable, Hashable {
     }
 }
 
-public enum AvatarClusterPolicy: Equatable, Hashable {
+public enum AvatarClusterPolicy: Equatable, Hashable, Sendable {
     case none
     case event
 }
@@ -66,7 +66,7 @@ public enum AvatarClusterPolicy: Equatable, Hashable {
 /// Bubble-счётчик у маркера: показывает число объединённых аватаров.
 /// Ставится автоматически на merged-маркеры (`ImmersiveMapAvatarsController.merge`),
 /// но может задаваться и вручную. Значения выше 999 рисуются как «999+».
-public struct AvatarCountBadge: Equatable, Hashable {
+public struct AvatarCountBadge: Equatable, Hashable, Sendable {
     public let count: Int
 
     public init(count: Int) {
@@ -74,7 +74,7 @@ public struct AvatarCountBadge: Equatable, Hashable {
     }
 }
 
-public struct AvatarMarker {
+public struct AvatarMarker: Sendable {
     public let id: UInt64
     public var coordinate: GeoCoordinate
     public var image: CGImage

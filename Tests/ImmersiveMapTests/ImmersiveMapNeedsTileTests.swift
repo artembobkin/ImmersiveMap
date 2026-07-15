@@ -507,7 +507,7 @@ private final class RecordingRetryWakeScheduler {
     }
 }
 
-private final class ControlledTileLoadPipeline: TileLoadPipeline {
+private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sendable {
     private let suspendsSaves: Bool
     private let lock = NSLock()
     private var startedTiles: Set<Tile> = []

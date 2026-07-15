@@ -3,7 +3,7 @@
 
 import Foundation
 
-public protocol ImmersiveMapTileProvider {
+public protocol ImmersiveMapTileProvider: Sendable {
     var id: String { get }
     var cacheNamespace: String { get }
     var configurationFingerprint: UInt64 { get }
@@ -11,18 +11,18 @@ public protocol ImmersiveMapTileProvider {
     var maximumTileZoomLevel: Int? { get }
 }
 
-protocol ImmersiveMapTileProviderRuntime {
+protocol ImmersiveMapTileProviderRuntime: Sendable {
     func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
 }
 
-public struct AnyImmersiveMapTileProvider: Equatable {
+public struct AnyImmersiveMapTileProvider: Equatable, Sendable {
     public let id: String
     public let cacheNamespace: String
     public let configurationFingerprint: UInt64
     public let tileSource: ImmersiveMapTileSource
     public let maximumTileZoomLevel: Int?
 
-    private let labelProviderProfileFactory: (ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
+    private let labelProviderProfileFactory: @Sendable (ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
 
     public init<P: ImmersiveMapTileProvider>(_ provider: P) {
         self.id = provider.id
