@@ -286,6 +286,14 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Режим отображения выдавленных 3D-зданий в flat-презентации:
+    /// `.translucent` - полупрозрачные (по умолчанию), `.solid` - непрозрачные.
+    public func buildingExtrusionMode(_ mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.buildingExtrusionMode(mode)
+        return view
+    }
+
     public func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.avatarSettings(avatars)

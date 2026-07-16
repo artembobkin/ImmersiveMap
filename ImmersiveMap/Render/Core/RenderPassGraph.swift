@@ -9,7 +9,7 @@ final class RenderPassGraph {
         switch layer {
         case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion:
             return true
-        case .buildingWinner, .postProcessing, .labels, .avatars, .debugOverlay:
+        case .buildingImage, .postProcessing, .labels, .avatars, .debugOverlay:
             return false
         }
     }
@@ -18,28 +18,44 @@ final class RenderPassGraph {
         switch layer {
         case .labels, .avatars, .debugOverlay:
             return true
-        case .buildingWinner, .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
+        case .buildingImage, .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
              .postProcessing:
             return false
         }
     }
 
-    private final class BuildingWinnerDescriptorProvider: RenderPassDescriptorProvider {
+    private final class BuildingImageDescriptorProvider: RenderPassDescriptorProvider {
         func makeRenderPassDescriptor(frameContext: FrameContext,
                                       attachments: FrameAttachmentStore,
-                                      drawable _: CAMetalDrawable?) -> MTLRenderPassDescriptor? {
+                                      drawable: CAMetalDrawable?) -> MTLRenderPassDescriptor? {
             guard frameContext.renderSurfaceMode == .flat,
-                  let winnerIDTexture = attachments.ensureBuildingWinnerIDTexture(drawSize: frameContext.drawSize),
-                  let winnerDepthTexture = attachments.ensureBuildingWinnerDepthTexture(drawSize: frameContext.drawSize) else {
+                  let drawable,
+                  let buildingImageTexture = attachments.ensureBuildingImageTexture(drawSize: frameContext.drawSize,
+                                                                                    pixelFormat: drawable.texture.pixelFormat),
+                  let depthTexture = attachments.ensureDepthTexture(drawSize: frameContext.drawSize) else {
                 return nil
             }
 
             let descriptor = MTLRenderPassDescriptor()
-            descriptor.colorAttachments[0].texture = winnerIDTexture
+            if attachments.sampleCount > 1 {
+                guard let msaaColorTexture = attachments.ensureBuildingImageColorTexture(drawSize: frameContext.drawSize,
+                                                                                         pixelFormat: drawable.texture.pixelFormat) else {
+                    return nil
+                }
+                descriptor.colorAttachments[0].texture = msaaColorTexture
+                descriptor.colorAttachments[0].resolveTexture = buildingImageTexture
+                descriptor.colorAttachments[0].storeAction = .multisampleResolve
+            } else {
+                descriptor.colorAttachments[0].texture = buildingImageTexture
+                descriptor.colorAttachments[0].storeAction = .store
+            }
             descriptor.colorAttachments[0].loadAction = .clear
-            descriptor.colorAttachments[0].storeAction = .store
+            // Прозрачный фон: после resolve альфа хранит покрытие силуэта
+            // зданий, а цвет - премультиплицирован этим покрытием.
             descriptor.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
-            descriptor.depthAttachment.texture = winnerDepthTexture
+            // Depth переиспользуется с world-пассом: оба пасса стартуют с .clear
+            // и не читают прошлое содержимое, поэтому хазарда между ними нет.
+            descriptor.depthAttachment.texture = depthTexture
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .dontCare
             descriptor.depthAttachment.clearDepth = 1.0
@@ -163,14 +179,19 @@ final class RenderPassGraph {
             .map(\.layer)
 
         var nodes: [RenderPassNode] = []
+        // Offscreen building image нужен только полупрозрачным зданиям: они
+        // рисуются в него непрозрачно (depth-тест, MSAA), а world-пасс
+        // накладывает результат на карту одним блендом с общей альфой - каждый
+        // пиксель тонируется ровно один раз, без швов между поверхностями.
+        // Solid-режим рисует здания прямо в world-пасс.
         if frameContext.renderSurfaceMode == .flat,
-           let winnerIDTexture = attachments.ensureBuildingWinnerIDTexture(drawSize: frameContext.drawSize),
-           let winnerDepthTexture = attachments.ensureBuildingWinnerDepthTexture(drawSize: frameContext.drawSize) {
-            resourceRegistry.setTexture(winnerIDTexture, named: .buildingWinnerIDTexture)
-            resourceRegistry.setTexture(winnerDepthTexture, named: .buildingWinnerDepthTexture)
-            nodes.append(RenderPassNode(name: .buildingWinner,
-                                        descriptorProvider: BuildingWinnerDescriptorProvider(),
-                                        layers: [.buildingWinner]))
+           settings.style.buildingExtrusionMode == .translucent,
+           let buildingImageTexture = attachments.ensureBuildingImageTexture(drawSize: frameContext.drawSize,
+                                                                             pixelFormat: drawable.texture.pixelFormat) {
+            resourceRegistry.setTexture(buildingImageTexture, named: .buildingImageTexture)
+            nodes.append(RenderPassNode(name: .buildingImage,
+                                        descriptorProvider: BuildingImageDescriptorProvider(),
+                                        layers: [.buildingImage]))
         }
         let worldLayers = layerPlan.filter(Self.isWorldLayer)
         let overlayLayers = layerPlan.filter(Self.isOverlayLayer)

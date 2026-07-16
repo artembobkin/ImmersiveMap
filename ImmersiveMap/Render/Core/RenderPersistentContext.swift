@@ -31,7 +31,6 @@ final class RenderPersistentContext {
     let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
-    let extrudedColorPassDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
 
@@ -71,7 +70,6 @@ final class RenderPersistentContext {
         self.tileLoadingStatusReporter = config.debug.enableDebugPanel ? TileLoadingStatusReporter() : nil
 
         self.extrudedDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
-        self.extrudedColorPassDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeTransparentExtrudedDepthDescriptor())!
         self.globeCapDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.depthDisabledState = metal.device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
 
@@ -171,13 +169,6 @@ final class RenderPersistentContext {
     }
 
     private static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .lessEqual
-        descriptor.isDepthWriteEnabled = false
-        return descriptor
-    }
-
-    private static func makeTransparentExtrudedDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = false

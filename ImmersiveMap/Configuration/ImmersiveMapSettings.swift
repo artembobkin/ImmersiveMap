@@ -573,6 +573,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct StyleSettings: Equatable, Sendable {
+        /// How flat-mode extruded buildings are composited over the map.
+        public enum BuildingExtrusionMode: String, Codable, Sendable {
+            /// Buildings are blended over the map using `buildingExtrusionAlpha`.
+            case translucent
+            /// Buildings are fully opaque; `buildingExtrusionAlpha` and the
+            /// style color alpha are ignored.
+            case solid
+        }
+
         public struct BaseColors: Equatable, Sendable {
             public var tileBackground: SIMD4<Float>
             public var globeBackground: SIMD4<Double>
@@ -593,17 +602,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var preparedTileStyleRevision: UInt32
         public var flatSeparateRoadRenderingMinimumZoom: Int
         public var buildingExtrusionAlpha: Float
+        public var buildingExtrusionMode: BuildingExtrusionMode
         public var fallbackFeatureColor: SIMD4<Float>
         public var baseColors: BaseColors
 
         public init(preparedTileStyleRevision: UInt32,
                     flatSeparateRoadRenderingMinimumZoom: Int,
                     buildingExtrusionAlpha: Float,
+                    buildingExtrusionMode: BuildingExtrusionMode = .translucent,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {
             self.preparedTileStyleRevision = preparedTileStyleRevision
             self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
             self.buildingExtrusionAlpha = buildingExtrusionAlpha
+            self.buildingExtrusionMode = buildingExtrusionMode
             self.fallbackFeatureColor = fallbackFeatureColor
             self.baseColors = baseColors
         }
@@ -833,6 +845,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         style: StyleSettings(preparedTileStyleRevision: 85,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
+                             buildingExtrusionMode: .translucent,
                              fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
                              baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
                                                                   globeBackground: SIMD4<Double>(0.0039, 0.0431, 0.0980, 1.0),
@@ -985,6 +998,12 @@ public extension ImmersiveMapSettings {
     func styleSettings(_ style: StyleSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.style = style
+        return settings
+    }
+
+    func buildingExtrusionMode(_ mode: StyleSettings.BuildingExtrusionMode) -> ImmersiveMapSettings {
+        var settings = self
+        settings.style.buildingExtrusionMode = mode
         return settings
     }
 

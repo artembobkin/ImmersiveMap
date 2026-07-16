@@ -105,7 +105,11 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             mark(.labels, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
         if oldValue.style != newValue.style {
-            mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
+            if isOnlyBuildingExtrusionChanged(from: oldValue.style, to: newValue.style) {
+                mark(.style, actions: [.liveApply])
+            } else {
+                mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
+            }
         }
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
@@ -118,5 +122,16 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)
+    }
+
+    /// Альфа и режим выдавленных зданий - покадровые uniform'ы: subsystem читает их
+    /// из `FrameContext`, они не попадают в подготовленные тайлы и GPU-ресурсы,
+    /// поэтому смена только этих полей не требует пересоздания renderer'а.
+    private static func isOnlyBuildingExtrusionChanged(from oldStyle: ImmersiveMapSettings.StyleSettings,
+                                                       to newStyle: ImmersiveMapSettings.StyleSettings) -> Bool {
+        var oldStyleWithNewBuildingExtrusion = oldStyle
+        oldStyleWithNewBuildingExtrusion.buildingExtrusionAlpha = newStyle.buildingExtrusionAlpha
+        oldStyleWithNewBuildingExtrusion.buildingExtrusionMode = newStyle.buildingExtrusionMode
+        return oldStyleWithNewBuildingExtrusion == newStyle
     }
 }

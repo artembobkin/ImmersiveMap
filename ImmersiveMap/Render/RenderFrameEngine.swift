@@ -60,8 +60,8 @@ final class RenderFrameEngine {
                                                               postProcessingInputTextureProvider: { [attachments] in
                                                                   attachments.currentPostProcessingInputTexture
                                                               },
-                                                              buildingWinnerIDTextureProvider: { [attachments] in
-                                                                  attachments.currentBuildingWinnerIDTexture
+                                                              buildingImageTextureProvider: { [attachments] in
+                                                                  attachments.currentBuildingImageTexture
                                                               })
 
         self.settings = settings
@@ -198,7 +198,7 @@ final class RenderFrameEngine {
         resourceRegistry.setPipeline(persistentContext.polygonPipeline.pipelineState, named: .polygonPipeline)
         resourceRegistry.setPipeline(persistentContext.tilePipeline.pipelineState, named: .tilePipeline)
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.pipelineState, named: .extrudedTilePipeline)
-        resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.winnerPipelineState, named: .extrudedTileWinnerPipeline)
+        resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.compositePipelineState, named: .extrudedTileCompositePipeline)
         resourceRegistry.setPipeline(persistentContext.globePipeline.pipelineState, named: .globePipeline)
         resourceRegistry.setTexture(persistentContext.textRenderer.texture, named: .labelGlyphAtlas)
         resourceRegistry.setTexture(persistentContext.poiSpriteAtlas.texture, named: .poiSpriteAtlas)

@@ -15,8 +15,8 @@ final class FrameAttachmentStore {
     private var postProcessingInputTexture: MTLTexture?
     private var depthTexture: MTLTexture?
     private var overlayDepthTexture: MTLTexture?
-    private var buildingWinnerIDTexture: MTLTexture?
-    private var buildingWinnerDepthTexture: MTLTexture?
+    private var buildingImageColorTexture: MTLTexture?
+    private var buildingImageTexture: MTLTexture?
 
     init(metalDevice: MTLDevice,
          renderSampleCount: Int) {
@@ -32,8 +32,8 @@ final class FrameAttachmentStore {
         #endif
     }
 
-    var currentBuildingWinnerIDTexture: MTLTexture? {
-        buildingWinnerIDTexture
+    var currentBuildingImageTexture: MTLTexture? {
+        buildingImageTexture
     }
 
     var currentPostProcessingInputTexture: MTLTexture? {
@@ -150,49 +150,61 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    func ensureBuildingWinnerIDTexture(drawSize: CGSize) -> MTLTexture? {
+    /// MSAA-таргет offscreen-пасса building image: живёт только внутри пасса
+    /// (clear → multisampleResolve), поэтому использует transient storage.
+    func ensureBuildingImageColorTexture(drawSize: CGSize,
+                                         pixelFormat: MTLPixelFormat) -> MTLTexture? {
+        guard renderSampleCount > 1 else { return nil }
+
         let width = Int(drawSize.width)
         let height = Int(drawSize.height)
         guard width > 0, height > 0 else { return nil }
 
-        if let buildingWinnerIDTexture,
-           buildingWinnerIDTexture.width == width,
-           buildingWinnerIDTexture.height == height {
-            return buildingWinnerIDTexture
+        if let buildingImageColorTexture,
+           buildingImageColorTexture.width == width,
+           buildingImageColorTexture.height == height,
+           buildingImageColorTexture.pixelFormat == pixelFormat {
+            return buildingImageColorTexture
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Uint,
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
+                                                                  width: width,
+                                                                  height: height,
+                                                                  mipmapped: false)
+        descriptor.textureType = .type2DMultisample
+        descriptor.sampleCount = renderSampleCount
+        descriptor.usage = [.renderTarget]
+        descriptor.storageMode = transientStorageMode
+        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
+        newTexture?.label = RenderResourceName.buildingImageColorTexture.rawValue
+        buildingImageColorTexture = newTexture
+        return newTexture
+    }
+
+    /// Читаемое изображение зданий: resolve-текстура MSAA-пасса (или прямой
+    /// таргет без MSAA). Его world-пасс накладывает на карту с общей альфой.
+    func ensureBuildingImageTexture(drawSize: CGSize,
+                                    pixelFormat: MTLPixelFormat) -> MTLTexture? {
+        let width = Int(drawSize.width)
+        let height = Int(drawSize.height)
+        guard width > 0, height > 0 else { return nil }
+
+        if let buildingImageTexture,
+           buildingImageTexture.width == width,
+           buildingImageTexture.height == height,
+           buildingImageTexture.pixelFormat == pixelFormat {
+            return buildingImageTexture
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
                                                                   width: width,
                                                                   height: height,
                                                                   mipmapped: false)
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
         let newTexture = metalDevice.makeTexture(descriptor: descriptor)
-        newTexture?.label = RenderResourceName.buildingWinnerIDTexture.rawValue
-        buildingWinnerIDTexture = newTexture
-        return newTexture
-    }
-
-    func ensureBuildingWinnerDepthTexture(drawSize: CGSize) -> MTLTexture? {
-        let width = Int(drawSize.width)
-        let height = Int(drawSize.height)
-        guard width > 0, height > 0 else { return nil }
-
-        if let buildingWinnerDepthTexture,
-           buildingWinnerDepthTexture.width == width,
-           buildingWinnerDepthTexture.height == height {
-            return buildingWinnerDepthTexture
-        }
-
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
-                                                                  width: width,
-                                                                  height: height,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget]
-        descriptor.storageMode = transientStorageMode
-        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
-        newTexture?.label = RenderResourceName.buildingWinnerDepthTexture.rawValue
-        buildingWinnerDepthTexture = newTexture
+        newTexture?.label = RenderResourceName.buildingImageTexture.rawValue
+        buildingImageTexture = newTexture
         return newTexture
     }
 
@@ -201,7 +213,7 @@ final class FrameAttachmentStore {
         postProcessingInputTexture = nil
         depthTexture = nil
         overlayDepthTexture = nil
-        buildingWinnerIDTexture = nil
-        buildingWinnerDepthTexture = nil
+        buildingImageColorTexture = nil
+        buildingImageTexture = nil
     }
 }

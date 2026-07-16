@@ -88,6 +88,41 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
+    func testBuildingExtrusionModeChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.buildingExtrusionMode(.solid)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.style])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
+    func testBuildingExtrusionAlphaChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        var newSettings = oldSettings
+        newSettings.style.buildingExtrusionAlpha = 0.85
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.style])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
+    func testBuildingExtrusionModeChangeCombinedWithBaseColorsChangeRecreatesRenderer() {
+        let oldSettings = ImmersiveMapSettings.default
+        var newSettings = oldSettings.buildingExtrusionMode(.solid)
+        newSettings.style.baseColors.water = SIMD4<Float>(0.1, 0.2, 0.8, 1.0)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.style])
+        XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
+        XCTAssertTrue(plan.requiresRendererRecreation)
+    }
+
     func testMapStyleTokenChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
             .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))

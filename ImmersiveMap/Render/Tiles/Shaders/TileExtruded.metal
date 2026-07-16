@@ -32,11 +32,6 @@ struct ExtrudedLight {
     float4 intensities; // x: ambient, y: diffuse, z: specular, w: shininess
 };
 
-struct ExtrudedMaterial {
-    float alpha;
-    float3 padding;
-};
-
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
@@ -62,35 +57,15 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
 
 // localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
 // Retained-подмена рисует здания source целиком - фрагменты вне слота placeIn
-// отбрасываются и в winner-препассе, и в цветовом пассе, иначе здания родителя
-// перекрывали бы соседние точные тайлы (и их winner ID).
+// отбрасываются, иначе здания родителя перекрывали бы соседние точные тайлы.
 static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBounds) {
     return localPosition.x < localClipBounds.x || localPosition.y < localClipBounds.y ||
            localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
 }
 
-fragment uint tileExtrudedWinnerFragmentShader(VertexOut in [[stage_in]],
-                                               constant float4& localClipBounds [[buffer(4)]]) {
-    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
-        discard_fragment();
-    }
-    return in.surfaceID;
-}
-
-fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
-                                           texture2d<uint, access::read> winnerTexture [[texture(0)]],
-                                           constant Camera& camera [[buffer(1)]],
-                                           constant ExtrudedLight& light [[buffer(2)]],
-                                           constant ExtrudedMaterial& material [[buffer(3)]],
-                                           constant float4& localClipBounds [[buffer(4)]]) {
-    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
-        discard_fragment();
-    }
-    uint storedWinnerID = winnerTexture.read(uint2(in.position.xy)).r;
-    if (storedWinnerID == 0 || storedWinnerID != in.surfaceID) {
-        discard_fragment();
-    }
-
+static inline float3 extrudedLitColor(VertexOut in,
+                                      constant Camera& camera,
+                                      constant ExtrudedLight& light) {
     float3 normal = normalize(in.worldNormal);
     float3 lightDir = normalize(light.direction.xyz);
     float3 viewDir = normalize(camera.eye - in.worldPosition);
@@ -108,6 +83,42 @@ fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
     float3 diffuse = baseColor * light.intensities.y * diffuseFactor * lightColor;
     float3 specular = lightColor * light.intensities.z * specularFactor;
 
-    float3 finalColor = ambient + diffuse + specular;
-    return float4(finalColor, in.color.a * material.alpha);
+    return ambient + diffuse + specular;
+}
+
+// Геометрия зданий всегда рисуется непрозрачно с обычным depth-тестом и MSAA:
+// в solid-режиме - прямо в world-пасс, в translucent - в offscreen building
+// image, который world-пасс затем накладывает на карту с общей альфой.
+fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
+                                           constant Camera& camera [[buffer(1)]],
+                                           constant ExtrudedLight& light [[buffer(2)]],
+                                           constant float4& localClipBounds [[buffer(4)]]) {
+    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
+        discard_fragment();
+    }
+
+    return float4(extrudedLitColor(in, camera, light), 1.0);
+}
+
+struct ExtrudedCompositeVertexOut {
+    float4 position [[position]];
+};
+
+vertex ExtrudedCompositeVertexOut tileExtrudedCompositeVertexShader(uint vertexID [[vertex_id]]) {
+    const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
+    ExtrudedCompositeVertexOut out;
+    out.position = float4(positions[vertexID], 0.0, 1.0);
+    return out;
+}
+
+// Наложение building image на карту. Внутри изображения здания непрозрачны,
+// но MSAA-resolve прозрачного фона оставляет в альфе покрытие силуэта, а цвет -
+// премультиплицированным этим покрытием. Умножение на глобальную альфу и
+// premultiplied-блендинг (one / oneMinusSourceAlpha) тонируют каждый пиксель
+// карты ровно один раз - сколько бы поверхностей зданий ни перекрывалось.
+fragment float4 tileExtrudedCompositeFragmentShader(ExtrudedCompositeVertexOut in [[stage_in]],
+                                                    texture2d<float, access::read> buildingImage [[texture(0)]],
+                                                    constant float& alpha [[buffer(0)]]) {
+    float4 premultiplied = buildingImage.read(uint2(in.position.xy));
+    return premultiplied * alpha;
 }

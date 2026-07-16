@@ -8,7 +8,7 @@ enum RenderGraphFactory {
                                  settings: ImmersiveMapSettings,
                                  debugOverlayControls: DebugOverlayControlState,
                                  postProcessingInputTextureProvider: @escaping () -> MTLTexture?,
-                                 buildingWinnerIDTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
+                                 buildingImageTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
                                                                         tileTraceRecorder: context.tileTraceRecorder)
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
@@ -31,15 +31,12 @@ enum RenderGraphFactory {
         let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
                                                     avatarSource: context.avatarSource,
                                                     depthDisabledState: context.depthDisabledState)
-        let buildingWinnerSubsystem = BuildingWinnerRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
-                                                                    extrudedDepthState: context.extrudedDepthState)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls)
-        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingExtrusionAlpha: settings.style.buildingExtrusionAlpha,
-                                                                          buildingWinnerIDTextureProvider: buildingWinnerIDTextureProvider,
+        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingImageTextureProvider: buildingImageTextureProvider,
                                                                           extrudedTilePipeline: context.extrudedTilePipeline,
-                                                                          extrudedColorPassDepthState: context.extrudedColorPassDepthState,
+                                                                          extrudedDepthState: context.extrudedDepthState,
                                                                           depthDisabledState: context.depthDisabledState)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
@@ -67,7 +64,6 @@ enum RenderGraphFactory {
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,
-            buildingWinnerSubsystem,
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,

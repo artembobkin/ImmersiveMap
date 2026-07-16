@@ -11,29 +11,22 @@ enum BuildingExtrusionDrawer {
         var intensities: SIMD4<Float>
     }
 
-    private struct ExtrudedMaterialUniform {
-        var alpha: Float
-        var padding: SIMD3<Float> = .zero
-    }
-
-    static func drawColorPass(renderEncoder: MTLRenderCommandEncoder,
+    /// Непрозрачная геометрия зданий с depth-тестом и записью глубины:
+    /// solid-режим рисует ею прямо в world-пасс, translucent - в offscreen
+    /// building image.
+    static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               placeTilesContext: PlaceTilesContext,
                               flatRenderState: FlatRenderState,
-                              buildingExtrusionAlpha: Float,
-                              winnerIDTexture: MTLTexture?,
                               extrudedTilePipeline: ExtrudedTilePipeline,
-                              extrudedColorPassDepthState: MTLDepthStencilState,
+                              extrudedDepthState: MTLDepthStencilState,
                               depthDisabledState: MTLDepthStencilState) {
-        guard let winnerIDTexture else { return }
-
         var cameraUniformValue = cameraUniform
         renderEncoder.setCullMode(.back)
 
         extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setDepthStencilState(extrudedColorPassDepthState)
+        renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setFragmentTexture(winnerIDTexture, index: 0)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
         let lightDirection = simd_normalize(SIMD3<Float>(-0.4, -0.6, 1.0))
@@ -42,9 +35,7 @@ enum BuildingExtrusionDrawer {
             color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
             intensities: SIMD4<Float>(0.35, 0.65, 0.2, 24.0)
         )
-        var materialUniform = ExtrudedMaterialUniform(alpha: buildingExtrusionAlpha)
         renderEncoder.setFragmentBytes(&lightUniform, length: MemoryLayout<ExtrudedLightUniform>.stride, index: 2)
-        renderEncoder.setFragmentBytes(&materialUniform, length: MemoryLayout<ExtrudedMaterialUniform>.stride, index: 3)
         drawExtrudedGeometry(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              flatRenderState: flatRenderState)
@@ -53,20 +44,21 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
-    static func drawWinnerLayer(renderEncoder: MTLRenderCommandEncoder,
-                                cameraUniform: CameraUniform,
-                                placeTilesContext: PlaceTilesContext,
-                                flatRenderState: FlatRenderState,
-                                extrudedTilePipeline: ExtrudedTilePipeline,
-                                extrudedDepthState: MTLDepthStencilState) {
-        var cameraUniformValue = cameraUniform
-        renderEncoder.setCullMode(.back)
-        renderEncoder.setDepthStencilState(extrudedDepthState)
-        extrudedTilePipeline.selectWinnerPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        drawExtrudedGeometry(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             flatRenderState: flatRenderState)
+    /// Накладывает building image на world-пасс с общей альфой: premultiplied-бленд
+    /// тонирует каждый пиксель карты ровно один раз, покрытие силуэта зданий
+    /// (сглаженное MSAA-resolve) приходит в альфе изображения.
+    static func drawComposite(renderEncoder: MTLRenderCommandEncoder,
+                              buildingImageTexture: MTLTexture,
+                              alpha: Float,
+                              extrudedTilePipeline: ExtrudedTilePipeline,
+                              depthDisabledState: MTLDepthStencilState) {
+        renderEncoder.setCullMode(.none)
+        extrudedTilePipeline.selectCompositePipeline(renderEncoder: renderEncoder)
+        renderEncoder.setDepthStencilState(depthDisabledState)
+        renderEncoder.setFragmentTexture(buildingImageTexture, index: 0)
+        var alphaValue = alpha
+        renderEncoder.setFragmentBytes(&alphaValue, length: MemoryLayout<Float>.stride, index: 0)
+        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }
 
     private static func drawExtrudedGeometry(renderEncoder: MTLRenderCommandEncoder,
@@ -92,8 +84,8 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(buffers.extruded.verticesBuffer, offset: 0, index: 0)
             renderEncoder.setVertexBuffer(buffers.extruded.stylesBuffer, offset: 0, index: 2)
 
-            // Клип фрагментов к слоту placeIn - и в winner-препассе, и в цветовом
-            // пассе: здания retained-родителя не должны перекрывать соседние тайлы.
+            // Клип фрагментов к слоту placeIn: здания retained-родителя не должны
+            // перекрывать соседние точные тайлы.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
             renderEncoder.setFragmentBytes(&localClipBounds,
                                            length: MemoryLayout<SIMD4<Float>>.stride,

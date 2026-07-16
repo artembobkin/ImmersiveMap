@@ -8,6 +8,14 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Added
+
+- `buildingExtrusionMode` modifier on `ImmersiveMapView` (and `StyleSettings.buildingExtrusionMode`): flat-mode extruded buildings can now render fully opaque with `.solid`, in addition to the default `.translucent` blending. Switching the mode (or `buildingExtrusionAlpha`) applies live, without recreating the renderer.
+
+### Fixed
+
+- Flickering light seams on extruded buildings: thin background-colored lines along facade junctions that shimmered with camera movement. Buildings are now always drawn opaque with plain depth testing - solid mode directly in the world pass, translucent mode into an offscreen building image that is composited over the map with `buildingExtrusionAlpha` - replacing the single-sample "winner ID" discard that clashed with MSAA. Translucency is now uniform across the whole building silhouette, buildings correctly occlude each other, and building geometry is rendered once per frame instead of twice (per-feature building color alpha is no longer factored in).
+
 ## [0.2.0] - 2026-07-14
 
 ### Added

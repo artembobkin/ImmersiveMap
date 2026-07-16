@@ -9,7 +9,7 @@
 import Foundation
 
 enum RenderLayer: String, CaseIterable {
-    case buildingWinner
+    case buildingImage
     case starfield
     case globeSurface
     case globeCap

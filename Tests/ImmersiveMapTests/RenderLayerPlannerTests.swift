@@ -21,7 +21,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertTrue(plan.allSatisfy(\.enabled))
-        XCTAssertFalse(plan.map(\.layer).contains(.buildingWinner))
+        XCTAssertFalse(plan.map(\.layer).contains(.buildingImage))
     }
 
     func testFlatModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {
@@ -62,7 +62,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertTrue(plan.allSatisfy(\.enabled))
-        XCTAssertFalse(plan.map(\.layer).contains(.buildingWinner))
+        XCTAssertFalse(plan.map(\.layer).contains(.buildingImage))
     }
 
     func testGlobeModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {

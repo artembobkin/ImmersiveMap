@@ -5,7 +5,7 @@ import Metal
 import QuartzCore
 
 enum RenderPassName: String, CaseIterable {
-    case buildingWinner
+    case buildingImage
     case world
     case postProcessing
     case overlay

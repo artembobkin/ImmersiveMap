@@ -4,8 +4,12 @@
 import MetalKit
 
 class ExtrudedTilePipeline {
+    /// Непрозрачная геометрия зданий: solid рисует ею прямо в world-пасс,
+    /// translucent - в offscreen building image.
     let pipelineState: MTLRenderPipelineState
-    let winnerPipelineState: MTLRenderPipelineState
+    /// Наложение building image на world-пасс одним фуллскрин-треугольником
+    /// с premultiplied-блендингом.
+    let compositePipelineState: MTLRenderPipelineState
 
     struct VertexIn {
         let position: SIMD3<Float>
@@ -47,30 +51,31 @@ class ExtrudedTilePipeline {
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
-        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
-        let winnerDescriptor = MTLRenderPipelineDescriptor()
-        winnerDescriptor.vertexFunction = vertexFunction
-        winnerDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedWinnerFragmentShader")
-        winnerDescriptor.vertexDescriptor = vertexDescriptor
-        winnerDescriptor.colorAttachments[0].pixelFormat = .r32Uint
-        winnerDescriptor.depthAttachmentPixelFormat = .depth32Float
+        let compositeDescriptor = MTLRenderPipelineDescriptor()
+        compositeDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedCompositeVertexShader")
+        compositeDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedCompositeFragmentShader")
+        compositeDescriptor.rasterSampleCount = sampleCount
+        compositeDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        compositeDescriptor.depthAttachmentPixelFormat = .depth32Float
+        // Premultiplied alpha: цвет building image уже умножен на покрытие силуэта.
+        compositeDescriptor.colorAttachments[0].isBlendingEnabled = true
+        compositeDescriptor.colorAttachments[0].rgbBlendOperation = .add
+        compositeDescriptor.colorAttachments[0].alphaBlendOperation = .add
+        compositeDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+        compositeDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+        compositeDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        compositeDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        self.winnerPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: winnerDescriptor)
-    }
-
-    func selectWinnerPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(winnerPipelineState)
+        self.compositePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeDescriptor)
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+
+    func selectCompositePipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(compositePipelineState)
     }
 }
