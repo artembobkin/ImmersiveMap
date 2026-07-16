@@ -3,11 +3,12 @@
 
 import Metal
 
-/// Рисует выдавленные здания flat-режима. Solid: непрозрачная геометрия прямо
-/// в world-пасс. Translucent: та же непрозрачная геометрия уходит в offscreen
-/// building image (слой `.buildingImage`), а в world-пассе изображение
-/// накладывается на карту одним фуллскрин-блендом с `buildingExtrusionAlpha` -
-/// каждый пиксель тонируется ровно один раз, без швов между поверхностями.
+/// Рисует выдавленные здания flat-режима. Solid-путь: непрозрачная геометрия
+/// прямо в world-пасс. Composited-путь (translucent и зум-переход
+/// solidAtHighZoom): та же непрозрачная геометрия уходит в offscreen building
+/// image (слой `.buildingImage`), а в world-пассе изображение накладывается на
+/// карту одним фуллскрин-блендом с альфой кадра - каждый пиксель тонируется
+/// ровно один раз, без швов между поверхностями.
 final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     let name: String = "BuildingExtrusion"
 
@@ -36,21 +37,23 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         }
 
         // Режим и альфа читаются из настроек кадра: их смена применяется
-        // на лету, без пересоздания renderer'а (см. planner).
+        // на лету, без пересоздания renderer'а (см. planner). Путь на кадр
+        // резолвится так же, как в RenderPassGraph.plan.
         let style = frameContext.services.settings.style
+        let path = BuildingExtrusionPathResolver.resolve(style: style, zoom: frameContext.zoom)
         switch layer {
         case .buildingImage:
-            guard style.buildingExtrusionMode == .translucent else { return }
+            guard case .composited = path else { return }
             drawBuildings(encoder: encoder, frameContext: frameContext)
         case .buildingExtrusion:
-            switch style.buildingExtrusionMode {
+            switch path {
             case .solid:
                 drawBuildings(encoder: encoder, frameContext: frameContext)
-            case .translucent:
+            case .composited(let alpha):
                 guard let buildingImageTexture = buildingImageTextureProvider() else { return }
                 BuildingExtrusionDrawer.drawComposite(renderEncoder: encoder,
                                                       buildingImageTexture: buildingImageTexture,
-                                                      alpha: style.buildingExtrusionAlpha,
+                                                      alpha: alpha,
                                                       extrudedTilePipeline: extrudedTilePipeline,
                                                       depthDisabledState: depthDisabledState)
             }

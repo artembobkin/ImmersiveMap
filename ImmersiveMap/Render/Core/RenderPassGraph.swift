@@ -179,13 +179,15 @@ final class RenderPassGraph {
             .map(\.layer)
 
         var nodes: [RenderPassNode] = []
-        // Offscreen building image нужен только полупрозрачным зданиям: они
-        // рисуются в него непрозрачно (depth-тест, MSAA), а world-пасс
+        // Offscreen building image нужен, только когда здания накладываются на
+        // карту полупрозрачно (translucent или зум-переход solidAtHighZoom):
+        // они рисуются в него непрозрачно (depth-тест, MSAA), а world-пасс
         // накладывает результат на карту одним блендом с общей альфой - каждый
         // пиксель тонируется ровно один раз, без швов между поверхностями.
-        // Solid-режим рисует здания прямо в world-пасс.
+        // Полностью непрозрачные здания рисуются прямо в world-пасс.
         if frameContext.renderSurfaceMode == .flat,
-           settings.style.buildingExtrusionMode == .translucent,
+           case .composited = BuildingExtrusionPathResolver.resolve(style: settings.style,
+                                                                    zoom: frameContext.zoom),
            let buildingImageTexture = attachments.ensureBuildingImageTexture(drawSize: frameContext.drawSize,
                                                                              pixelFormat: drawable.texture.pixelFormat) {
             resourceRegistry.setTexture(buildingImageTexture, named: .buildingImageTexture)

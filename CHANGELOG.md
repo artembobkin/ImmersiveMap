@@ -10,7 +10,7 @@ once the public API stabilizes.
 
 ### Added
 
-- `buildingExtrusionMode` modifier on `ImmersiveMapView` (and `StyleSettings.buildingExtrusionMode`): flat-mode extruded buildings can now render fully opaque with `.solid`, in addition to the default `.translucent` blending. Switching the mode (or `buildingExtrusionAlpha`) applies live, without recreating the renderer.
+- `buildingExtrusionMode` modifier on `ImmersiveMapView` (and `StyleSettings.buildingExtrusionMode`): flat-mode extruded buildings can now render fully opaque with `.solid`, in addition to the default `.translucent` blending. `.solidAtHighZoom(startZoom:endZoom:)` blends translucent buildings into solid ones across a zoom range (default 17...18) as the camera zooms in. Switching the mode (or `buildingExtrusionAlpha`) applies live, without recreating the renderer.
 
 ### Fixed
 

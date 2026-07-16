@@ -574,12 +574,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     public struct StyleSettings: Equatable, Sendable {
         /// How flat-mode extruded buildings are composited over the map.
-        public enum BuildingExtrusionMode: String, Codable, Sendable {
+        public enum BuildingExtrusionMode: Equatable, Sendable {
             /// Buildings are blended over the map using `buildingExtrusionAlpha`.
             case translucent
             /// Buildings are fully opaque; `buildingExtrusionAlpha` and the
             /// style color alpha are ignored.
             case solid
+            /// Translucent below `startZoom`, fully opaque above `endZoom`;
+            /// in between the blend alpha is interpolated from
+            /// `buildingExtrusionAlpha` up to 1 as the camera zooms in.
+            case solidAtHighZoom(startZoom: Double, endZoom: Double)
+
+            /// `solidAtHighZoom` with the default 17...18 zoom transition range.
+            public static let solidAtHighZoom = BuildingExtrusionMode.solidAtHighZoom(startZoom: 17.0,
+                                                                                      endZoom: 18.0)
         }
 
         public struct BaseColors: Equatable, Sendable {

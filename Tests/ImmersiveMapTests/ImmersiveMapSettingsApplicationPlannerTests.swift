@@ -99,6 +99,17 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertFalse(plan.requiresRendererRecreation)
     }
 
+    func testBuildingExtrusionZoomTransitionRangeChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default.buildingExtrusionMode(.solidAtHighZoom)
+        let newSettings = oldSettings.buildingExtrusionMode(.solidAtHighZoom(startZoom: 16.0, endZoom: 17.5))
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.style])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
     func testBuildingExtrusionAlphaChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings

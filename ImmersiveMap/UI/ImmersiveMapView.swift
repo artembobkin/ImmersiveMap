@@ -287,7 +287,9 @@ public extension ImmersiveMapView {
     }
 
     /// Режим отображения выдавленных 3D-зданий в flat-презентации:
-    /// `.translucent` - полупрозрачные (по умолчанию), `.solid` - непрозрачные.
+    /// `.translucent` - полупрозрачные (по умолчанию), `.solid` - непрозрачные,
+    /// `.solidAtHighZoom` - плавный переход от полупрозрачных к непрозрачным
+    /// в диапазоне зумов (по умолчанию 17...18).
     public func buildingExtrusionMode(_ mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.buildingExtrusionMode(mode)
