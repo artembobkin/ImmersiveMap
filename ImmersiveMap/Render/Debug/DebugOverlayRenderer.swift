@@ -10,6 +10,11 @@ struct TileOverlayLineSegment {
     let end: SIMD2<Float>
 }
 
+struct TileWatermarkScreenPlacement: Equatable {
+    let xAxis: SIMD2<Float>
+    let yAxis: SIMD2<Float>
+}
+
 final class DebugOverlayRenderer {
     private var settings: ImmersiveMapSettings.DebugSettings
     private let axesVertexBuffer: MTLBuffer
@@ -22,6 +27,7 @@ final class DebugOverlayRenderer {
     private var tileTextEntriesScratch: [TextEntry] = []
     private var tileProjectedTextVerticesScratch: [TextVertex] = []
     private var tileWatermarkProjectionInputsScratch: [TilePointInput] = []
+    private var tileWatermarkVertexInputsScratch: [TilePointInput] = []
     private let tileOutlineThicknessPx: Float = 3.5
     private let tileLabelInsetPx = SIMD2<Float>(8.0, 8.0)
     private let tileWatermarkMaxWidthUV: Float = 0.22
@@ -366,6 +372,22 @@ final class DebugOverlayRenderer {
         return inputs
     }
 
+    static func tileWatermarkUVScale(metrics: TextMetrics,
+                                     maxWidthUV: Float,
+                                     maxHeightUV: Float,
+                                     paddingPx: SIMD2<Float>) -> Float? {
+        guard metrics.vertices.isEmpty == false,
+              metrics.size.width > 0,
+              metrics.size.height > 0 else {
+            return nil
+        }
+
+        let paddedWidth = Float(metrics.size.width) + paddingPx.x * 2.0
+        let paddedHeight = Float(metrics.size.height) + paddingPx.y * 2.0
+        return min(maxWidthUV / paddedWidth,
+                   maxHeightUV / paddedHeight)
+    }
+
     private static func appendTileWatermarkProjectionPointInputs(anchorUV: SIMD2<Float>,
                                                                  metrics: TextMetrics,
                                                                  tile: Tile,
@@ -373,16 +395,12 @@ final class DebugOverlayRenderer {
                                                                  maxHeightUV: Float,
                                                                  paddingPx: SIMD2<Float>,
                                                                  into inputs: inout [TilePointInput]) {
-        guard metrics.vertices.isEmpty == false,
-              metrics.size.width > 0,
-              metrics.size.height > 0 else {
+        guard let uvScale = tileWatermarkUVScale(metrics: metrics,
+                                                 maxWidthUV: maxWidthUV,
+                                                 maxHeightUV: maxHeightUV,
+                                                 paddingPx: paddingPx) else {
             return
         }
-
-        let paddedWidth = Float(metrics.size.width) + paddingPx.x * 2.0
-        let paddedHeight = Float(metrics.size.height) + paddingPx.y * 2.0
-        let uvScale = min(maxWidthUV / paddedWidth,
-                          maxHeightUV / paddedHeight)
         let tileVector = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))
         inputs.append(TilePointInput(uv: anchorUV,
                                      tile: tileVector,
@@ -393,6 +411,38 @@ final class DebugOverlayRenderer {
         inputs.append(TilePointInput(uv: SIMD2<Float>(anchorUV.x, anchorUV.y - uvScale),
                                      tile: tileVector,
                                      tileSlotIndex: 0))
+    }
+
+    /// Возле сингулярности проекции (clip.w -> 0+) аффинные оси водяного знака взрываются,
+    /// и один глиф размазывается на весь экран. Якорь отбрасывается, если оси невалидны,
+    /// экранный размер текста запределен или текст целиком вне вьюпорта.
+    static func makeTileWatermarkScreenPlacement(center: SIMD2<Float>,
+                                                 xUnitPoint: SIMD2<Float>,
+                                                 yUnitPoint: SIMD2<Float>,
+                                                 textSize: SIMD2<Float>,
+                                                 viewportSize: SIMD2<Float>,
+                                                 maxViewportSpanFactor: Float = 2.0) -> TileWatermarkScreenPlacement? {
+        let xAxis = xUnitPoint - center
+        let yAxis = yUnitPoint - center
+        let halfSize = textSize * 0.5
+        let halfExtentX = abs(xAxis.x) * halfSize.x + abs(yAxis.x) * halfSize.y
+        let halfExtentY = abs(xAxis.y) * halfSize.x + abs(yAxis.y) * halfSize.y
+        guard center.x.isFinite, center.y.isFinite,
+              halfExtentX.isFinite, halfExtentY.isFinite else {
+            return nil
+        }
+
+        let maxScreenSpan = maxViewportSpanFactor * max(viewportSize.x, viewportSize.y)
+        guard max(halfExtentX, halfExtentY) * 2.0 <= maxScreenSpan else {
+            return nil
+        }
+        guard center.x + halfExtentX >= 0.0,
+              center.x - halfExtentX <= viewportSize.x,
+              center.y + halfExtentY >= 0.0,
+              center.y - halfExtentY <= viewportSize.y else {
+            return nil
+        }
+        return TileWatermarkScreenPlacement(xAxis: xAxis, yAxis: yAxis)
     }
 
     static func makeTileOverlaySegments(segmentCountPerEdge: Int) -> [TileOverlayLineSegment] {
@@ -547,7 +597,13 @@ final class DebugOverlayRenderer {
                                              metrics: TextMetrics,
                                              placeTile: PlaceTile,
                                              frameContext: FrameContext) {
-        guard metrics.vertices.isEmpty == false else { return }
+        guard metrics.vertices.count >= 3,
+              let uvScale = Self.tileWatermarkUVScale(metrics: metrics,
+                                                      maxWidthUV: tileWatermarkMaxWidthUV,
+                                                      maxHeightUV: tileWatermarkMaxHeightUV,
+                                                      paddingPx: tileWatermarkPaddingPx) else { return }
+
+        let tileOriginData = makeTileOriginData(for: placeTile, frameContext: frameContext)
 
         tileWatermarkProjectionInputsScratch.removeAll(keepingCapacity: true)
         for anchorUV in Self.tileWatermarkUVs {
@@ -559,41 +615,82 @@ final class DebugOverlayRenderer {
                                                           paddingPx: tileWatermarkPaddingPx,
                                                           into: &tileWatermarkProjectionInputsScratch)
         }
-        let snapshot = TilePointToScreenPointSnapshot(pointInputs: tileWatermarkProjectionInputsScratch,
-                                                      tileSlotVisibleTileIndices: [0])
-        let points = tilePointScreenProjector.project(snapshot: snapshot,
-                                                      frameContext: frameContext,
-                                                      tileOriginData: makeTileOriginData(for: placeTile,
-                                                                                         frameContext: frameContext))
-        guard points.count == tileWatermarkProjectionInputsScratch.count else { return }
+        let basisSnapshot = TilePointToScreenPointSnapshot(pointInputs: tileWatermarkProjectionInputsScratch,
+                                                           tileSlotVisibleTileIndices: [0])
+        let basisPoints = tilePointScreenProjector.project(snapshot: basisSnapshot,
+                                                           frameContext: frameContext,
+                                                           tileOriginData: tileOriginData)
+        guard basisPoints.count == tileWatermarkProjectionInputsScratch.count else { return }
 
         let projectedPointCountPerAnchor = 3
-        let textCenter = SIMD2<Float>(Float(metrics.size.width) * 0.5,
-                                      Float(metrics.size.height) * 0.5)
+        let textSize = SIMD2<Float>(Float(metrics.size.width), Float(metrics.size.height))
+        let textCenter = textSize * 0.5
+        let viewportSize = SIMD2<Float>(Float(frameContext.drawSize.width),
+                                        Float(frameContext.drawSize.height))
+        var acceptedAnchorUVs: [SIMD2<Float>] = []
+        acceptedAnchorUVs.reserveCapacity(Self.tileWatermarkUVs.count)
         for anchorIndex in Self.tileWatermarkUVs.indices {
             let anchorOffset = anchorIndex * projectedPointCountPerAnchor
-            let centerPoint = points[anchorOffset]
-            let xUnitPoint = points[anchorOffset + 1]
-            let yUnitPoint = points[anchorOffset + 2]
+            let centerPoint = basisPoints[anchorOffset]
+            let xUnitPoint = basisPoints[anchorOffset + 1]
+            let yUnitPoint = basisPoints[anchorOffset + 2]
             guard centerPoint.visible != 0,
                   xUnitPoint.visible != 0,
-                  yUnitPoint.visible != 0 else {
+                  yUnitPoint.visible != 0,
+                  Self.makeTileWatermarkScreenPlacement(center: centerPoint.position,
+                                                        xUnitPoint: xUnitPoint.position,
+                                                        yUnitPoint: yUnitPoint.position,
+                                                        textSize: textSize,
+                                                        viewportSize: viewportSize) != nil else {
                 continue
             }
+            acceptedAnchorUVs.append(Self.tileWatermarkUVs[anchorIndex])
+        }
+        guard acceptedAnchorUVs.isEmpty == false else { return }
 
-            let xAxis = xUnitPoint.position - centerPoint.position
-            let yAxis = yUnitPoint.position - centerPoint.position
-            var vertexIndex = 0
-            while vertexIndex < metrics.vertices.count {
-                let vertex = metrics.vertices[vertexIndex]
+        // Каждая вершина глифа проецируется точно: аффинная экстраполяция от якоря
+        // при наклоне камеры «поднимала» текст из плоскости карты на камеру.
+        tileWatermarkVertexInputsScratch.removeAll(keepingCapacity: true)
+        tileWatermarkVertexInputsScratch.reserveCapacity(acceptedAnchorUVs.count * metrics.vertices.count)
+        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                      Int32(placeTile.placeIn.y),
+                                      Int32(placeTile.placeIn.z))
+        for anchorUV in acceptedAnchorUVs {
+            for vertex in metrics.vertices {
                 let centered = vertex.position - textCenter
-                let position = centerPoint.position + xAxis * centered.x + yAxis * centered.y
-                vertices.append(TextVertex(position: SIMD4<Float>(position.x,
-                                                                  position.y,
-                                                                  0.0,
-                                                                  1.0),
-                                           uv: vertex.uv))
-                vertexIndex += 1
+                let uv = SIMD2<Float>(anchorUV.x + centered.x * uvScale,
+                                      anchorUV.y - centered.y * uvScale)
+                tileWatermarkVertexInputsScratch.append(TilePointInput(uv: uv,
+                                                                       tile: tileVector,
+                                                                       tileSlotIndex: 0))
+            }
+        }
+        let vertexSnapshot = TilePointToScreenPointSnapshot(pointInputs: tileWatermarkVertexInputsScratch,
+                                                            tileSlotVisibleTileIndices: [0])
+        let vertexPoints = tilePointScreenProjector.project(snapshot: vertexSnapshot,
+                                                            frameContext: frameContext,
+                                                            tileOriginData: tileOriginData)
+        guard vertexPoints.count == tileWatermarkVertexInputsScratch.count else { return }
+
+        let verticesPerAnchor = metrics.vertices.count
+        for acceptedIndex in acceptedAnchorUVs.indices {
+            let anchorBase = acceptedIndex * verticesPerAnchor
+            var triangleStart = 0
+            while triangleStart + 2 < verticesPerAnchor {
+                let p0 = vertexPoints[anchorBase + triangleStart]
+                let p1 = vertexPoints[anchorBase + triangleStart + 1]
+                let p2 = vertexPoints[anchorBase + triangleStart + 2]
+                if p0.visible != 0, p1.visible != 0, p2.visible != 0 {
+                    for offset in 0..<3 {
+                        let point = vertexPoints[anchorBase + triangleStart + offset]
+                        vertices.append(TextVertex(position: SIMD4<Float>(point.position.x,
+                                                                          point.position.y,
+                                                                          0.0,
+                                                                          1.0),
+                                                   uv: metrics.vertices[triangleStart + offset].uv))
+                    }
+                }
+                triangleStart += 3
             }
         }
     }

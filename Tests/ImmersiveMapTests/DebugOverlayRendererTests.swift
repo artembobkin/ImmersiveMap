@@ -201,6 +201,67 @@ final class DebugOverlayRendererTests: XCTestCase {
         XCTAssertEqual(DebugOverlayRenderer.makeTileWatermarkTextStyle().strokeWidthPx, 2.0)
     }
 
+    func testTileWatermarkScreenPlacementReturnsAxesForOnScreenAnchor() {
+        let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
+            center: SIMD2<Float>(500, 400),
+            xUnitPoint: SIMD2<Float>(502, 400),
+            yUnitPoint: SIMD2<Float>(500, 398),
+            textSize: SIMD2<Float>(100, 20),
+            viewportSize: SIMD2<Float>(1000, 800)
+        )
+
+        XCTAssertEqual(placement, TileWatermarkScreenPlacement(xAxis: SIMD2<Float>(2, 0),
+                                                               yAxis: SIMD2<Float>(0, -2)))
+    }
+
+    func testTileWatermarkScreenPlacementRejectsBlownUpProjectionAxes() {
+        let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
+            center: SIMD2<Float>(500, 400),
+            xUnitPoint: SIMD2<Float>(120_500, 400),
+            yUnitPoint: SIMD2<Float>(500, -95_600),
+            textSize: SIMD2<Float>(100, 20),
+            viewportSize: SIMD2<Float>(1000, 800)
+        )
+
+        XCTAssertNil(placement)
+    }
+
+    func testTileWatermarkScreenPlacementRejectsNonFiniteProjection() {
+        let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
+            center: SIMD2<Float>(.infinity, 400),
+            xUnitPoint: SIMD2<Float>(502, 400),
+            yUnitPoint: SIMD2<Float>(500, 398),
+            textSize: SIMD2<Float>(100, 20),
+            viewportSize: SIMD2<Float>(1000, 800)
+        )
+
+        XCTAssertNil(placement)
+    }
+
+    func testTileWatermarkScreenPlacementRejectsFullyOffscreenText() {
+        let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
+            center: SIMD2<Float>(-500, 400),
+            xUnitPoint: SIMD2<Float>(-498, 400),
+            yUnitPoint: SIMD2<Float>(-500, 398),
+            textSize: SIMD2<Float>(100, 20),
+            viewportSize: SIMD2<Float>(1000, 800)
+        )
+
+        XCTAssertNil(placement)
+    }
+
+    func testTileWatermarkScreenPlacementKeepsPartiallyVisibleText() {
+        let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
+            center: SIMD2<Float>(-40, 400),
+            xUnitPoint: SIMD2<Float>(-38, 400),
+            yUnitPoint: SIMD2<Float>(-40, 398),
+            textSize: SIMD2<Float>(100, 20),
+            viewportSize: SIMD2<Float>(1000, 800)
+        )
+
+        XCTAssertNotNil(placement)
+    }
+
     func testOverlayDiagnosticsIncludeCameraLinesWithoutFrameDiagnostics() {
         let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
             cameraDebugLines: ["camera z:5.41 pitch:36.00 bearing:18.00"],
