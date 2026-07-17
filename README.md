@@ -8,7 +8,9 @@ Native Swift + Metal map rendering engine for SwiftUI apps.
 
 > **Status: early alpha.** The public API is not stable yet. Not production-ready. Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-ImmersiveMap is an experimental **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms. It is built for developers who need direct control over map rendering, custom vector tile providers, globe rendering, and native SwiftUI integration - without a WebView or a JavaScript bridge.
+ImmersiveMap is an experimental **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms.
+
+It is built for developers who want direct control over map rendering, their own vector tile data, globe rendering, and a native engine they can extend to fit their app.
 
 ## Features
 
@@ -187,16 +189,6 @@ To run:
 
 Both demo apps render the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox provider instead, attach it to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
 
-## Architecture
-
-See [Documentation/docs/architecture.md](Documentation/docs/architecture.md).
-
-## Screenshots
-
-![ImmersiveMap globe Europe view](Documentation/Assets/immersive-map-globe-europe.png)
-
-![ImmersiveMap globe overview](Documentation/Assets/immersive-map-globe-overview.png)
-
 ## Known Limitations
 
 - Early alpha; the public API may change.
@@ -206,16 +198,6 @@ See [Documentation/docs/architecture.md](Documentation/docs/architecture.md).
 - Requires Metal.
 - Tile provider terms and attribution are the responsibility of the app developer.
 - Performance characteristics are still being measured.
-
-## Testing
-
-Run tests with Swift Package Manager:
-
-```bash
-swift test
-```
-
-Or run the `ImmersiveMapTests` target from Xcode.
 
 ## Attribution and Tile Provider Terms
 
@@ -233,4 +215,10 @@ ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE).
 
 I am available for consulting and custom ImmersiveMap integrations.
 
-Contact: [@BobkinArtem](https://x.com/BobkinArtem)
+To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
+
+## Screenshots
+
+![ImmersiveMap globe Europe view](Documentation/Assets/immersive-map-globe-europe.png)
+
+![ImmersiveMap globe overview](Documentation/Assets/immersive-map-globe-overview.png)
