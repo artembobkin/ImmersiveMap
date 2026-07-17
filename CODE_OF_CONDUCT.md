@@ -46,8 +46,8 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the maintainer at [@BobkinArtem](https://x.com/BobkinArtem). All
-complaints will be reviewed and investigated promptly and fairly.
+reported by opening an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
+All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

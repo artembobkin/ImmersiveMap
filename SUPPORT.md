@@ -20,4 +20,4 @@ on a best-effort basis.
 ## Commercial support
 
 I am available for consulting and custom ImmersiveMap integrations.
-Contact: [@BobkinArtem](https://x.com/BobkinArtem)
+To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).

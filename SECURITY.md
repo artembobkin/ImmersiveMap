@@ -5,11 +5,8 @@ supported release lines. Security fixes are applied to the `main` branch.
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue for security vulnerabilities.
-
-Instead, report privately via GitHub's
-[private vulnerability reporting](https://github.com/artembobkin/ImmersiveMap/security/advisories/new),
-or contact the maintainer at [@BobkinArtem](https://x.com/BobkinArtem).
+To report a vulnerability, open an
+[issue](https://github.com/artembobkin/ImmersiveMap/issues).
 
 Please include:
 

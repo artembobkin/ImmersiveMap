@@ -672,7 +672,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isVisible: Bool = true,
                     title: String = "Immersive map",
                     copyright: String = "© 2025-2026 ImmersiveMap contributors",
-                    linkURL: URL? = URL(string: "https://x.com/BobkinArtem")) {
+                    linkURL: URL? = URL(string: "https://github.com/artembobkin/ImmersiveMap")) {
             self.isVisible = isVisible
             self.title = title
             self.copyright = copyright

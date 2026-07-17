@@ -5,9 +5,9 @@
 import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
-    func testDefaultAttributionLinksToArtemBobkinXAccount() {
+    func testDefaultAttributionLinksToGitHubProject() {
         let attribution = ImmersiveMapSettings.default.attribution
 
-        XCTAssertEqual(attribution.linkURL, URL(string: "https://x.com/BobkinArtem"))
+        XCTAssertEqual(attribution.linkURL, URL(string: "https://github.com/artembobkin/ImmersiveMap"))
     }
 }

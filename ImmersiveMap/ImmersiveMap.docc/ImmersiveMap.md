@@ -4,7 +4,7 @@ A native Swift and Metal vector-tile map engine for SwiftUI, with a continuous g
 
 ## Overview
 
-ImmersiveMap renders vector tiles directly with Metal and integrates with SwiftUI on iOS and macOS - no WebView and no JavaScript bridge. It provides a continuous globe/flat presentation that morphs between a sphere and a plane, labels, a starfield, avatar / live markers, and pluggable tile providers with disk and memory caching.
+ImmersiveMap renders vector tiles directly with Metal and integrates with SwiftUI on iOS and macOS. It provides a continuous globe/flat presentation that morphs between a sphere and a plane, labels, a starfield, avatar / live markers, and pluggable tile providers with disk and memory caching.
 
 Drop ``ImmersiveMapView`` into a SwiftUI hierarchy to render a map out of the box with the built-in tile provider. Attach a provider such as ``MapboxTileProvider`` to render other vector tiles, and drive the map with ``ImmersiveMapCameraController``.
 
