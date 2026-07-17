@@ -50,13 +50,7 @@ struct ContentView: View {
 
 ## No Mapbox token?
 
-Use the OpenStreetMap / Shortbread provider, which needs no token:
-
-```swift
-ImmersiveMapView()
-    .tileProvider(OpenStreetMapTileProvider())
-    .mapStyle(OpenStreetMapMapStyle())
-```
+The built-in ImmersiveMap tile provider needs no token or account - a plain `ImmersiveMapView()` without `.tileProvider(...)` renders it out of the box.
 
 ## Controlling the camera
 

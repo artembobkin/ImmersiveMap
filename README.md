@@ -19,7 +19,6 @@ ImmersiveMap is an experimental **native Swift + Metal map rendering engine for 
 | Native macOS (AppKit host, no Catalyst) | Alpha |
 | Native Metal renderer | Alpha |
 | Mapbox vector tiles | Alpha |
-| OpenStreetMap / Shortbread provider | Alpha |
 | Globe rendering | Alpha |
 | Labels | Alpha |
 | Avatars / live markers | Alpha |
@@ -186,7 +185,7 @@ To run:
 3. Select the `ImmersiveMapIOS` or `ImmersiveMapMac` scheme.
 4. Build and run.
 
-Both demo apps render the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox or OpenStreetMap provider instead, attach one to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
+Both demo apps render the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox provider instead, attach it to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
 
 ## Architecture
 
@@ -220,7 +219,7 @@ Or run the `ImmersiveMapTests` target from Xcode.
 
 ## Attribution and Tile Provider Terms
 
-ImmersiveMap is MIT-licensed, but map tiles, styles, and geospatial datasets may have their own licenses and attribution requirements. When using Mapbox, OpenStreetMap, or other providers, make sure your app follows their terms and attribution rules.
+ImmersiveMap is MIT-licensed, but map tiles, styles, and geospatial datasets may have their own licenses and attribution requirements. When using Mapbox or other providers, make sure your app follows their terms and attribution rules.
 
 ## Contributing
 

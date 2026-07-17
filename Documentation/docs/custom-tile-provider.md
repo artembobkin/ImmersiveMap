@@ -41,7 +41,7 @@ public protocol ImmersiveMapTileProvider {
 - `tileSource` - describes the tile URLs / scheme.
 - `maximumTileZoomLevel` - optional cap on requested zoom.
 
-The built-in `MapboxTileProvider` and `OpenStreetMapTileProvider` are concrete examples worth reading.
+The built-in `ImmersiveMapTilesProvider` and `MapboxTileProvider` are concrete examples worth reading.
 
 ## Map styles
 
@@ -49,7 +49,7 @@ Providers pair with an `ImmersiveMapMapStyle` (see `Provider/ImmersiveMapMapStyl
 
 ## Provider-specific schema logic
 
-MVT layers differ between providers (Mapbox streets vs OpenStreetMap / Shortbread). Provider-specific schema normalization is confined to `VectorTileAdaptation/`, `mapbox/`, and `openstreetmap/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data - keep provider quirks inside the adaptation layer.
+MVT layers differ between providers (Mapbox Streets vs OpenMapTiles). Provider-specific schema normalization is confined to `VectorTileAdaptation/` and the concrete provider folders under `Provider/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data - keep provider quirks inside the adaptation layer.
 
 ## Attribution
 

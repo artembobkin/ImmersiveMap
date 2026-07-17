@@ -15,7 +15,7 @@ UI → Render → domain folders → Utils
 - **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `EarthScene`, `Avatars`, `Starfield`, `Geo`.
 - **Utils** - shared stateless helpers.
 
-Domain folders must not depend on `UI`/`Render` and must not contain Metal code. `Render` must not contain networking or platform UI. Provider-specific MVT schema logic is confined to `VectorTileAdaptation/`, `mapbox/`, and `openstreetmap/`; `Render`, `Labels`, and `Tile` consume only provider-neutral, normalized data.
+Domain folders must not depend on `UI`/`Render` and must not contain Metal code. `Render` must not contain networking or platform UI. Provider-specific MVT schema logic is confined to `VectorTileAdaptation/` and the concrete provider folders under `Provider/` (`Provider/Mapbox`, `Provider/ImmersiveMapTiles`); `Render`, `Labels`, and `Tile` consume only provider-neutral, normalized data.
 
 ## Public API and wiring
 
@@ -33,7 +33,7 @@ RenderFrameEngine
 
 The package targets iOS 18 (UIKit) and native macOS 15 (AppKit); Mac Catalyst is not supported. Platform-specific UI (gestures, attribution badge, debug HUD, touch control zones) lives in per-platform files; shared runtime logic is platform-neutral and references the host view through the `ImmersiveMapHostView` typealias.
 
-Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsController`, `ImmersiveMapSelectionController`. Provider protocols live in `Provider/`; concrete implementations are `MapboxTileProvider`/`MapboxMapStyle` and `OpenStreetMapTileProvider`/`OpenStreetMapMapStyle`.
+Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsController`, `ImmersiveMapSelectionController`. Provider protocols live in `Provider/`; concrete implementations are `ImmersiveMapTilesProvider`/`ImmersiveMapTilesMapStyle` and `MapboxTileProvider`/`MapboxMapStyle`.
 
 ## Frame loop and render pipeline
 
