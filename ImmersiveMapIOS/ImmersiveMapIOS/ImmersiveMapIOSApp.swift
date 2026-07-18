@@ -18,6 +18,8 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
+            .cameraController(camera)
+            .enableCameraUIControls()
             .ignoresSafeArea()
     }
 }
