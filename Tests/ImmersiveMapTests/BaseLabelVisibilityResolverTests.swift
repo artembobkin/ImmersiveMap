@@ -7,42 +7,45 @@ import XCTest
 final class BaseLabelVisibilityResolverTests: XCTestCase {
     func testTargetVisibilityRequiresHorizonVisibility() {
         let inputs = [
-            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true),
-            BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true)
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0),
+            BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
         let collisionFlags: [UInt32] = [0, 0]
         let horizonVisibility = [true, false]
 
         let result = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                   collisionFlags: collisionFlags,
-                                                                  horizonVisibility: horizonVisibility)
+                                                                  horizonVisibility: horizonVisibility,
+                                                                  cameraZoom: 14)
 
         XCTAssertEqual(result, [true, false])
     }
 
     func testTargetVisibilityStillHonorsCollisionHidden() {
         let inputs = [
-            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true),
-            BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true)
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0),
+            BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
         let collisionFlags: [UInt32] = [0, 1]
         let horizonVisibility = [true, true]
 
         let result = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                   collisionFlags: collisionFlags,
-                                                                  horizonVisibility: horizonVisibility)
+                                                                  horizonVisibility: horizonVisibility,
+                                                                  cameraZoom: 14)
 
         XCTAssertEqual(result, [true, false])
     }
 
     func testTargetVisibilityAllowsHorizonVisibleLabelWhenCollisionVisibilityIsStale() {
         let inputs = [
-            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
 
         let result = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                   collisionFlags: [1],
                                                                   horizonVisibility: [true],
+                                                                  cameraZoom: 14,
                                                                   collisionVisibilityIsFresh: false)
 
         XCTAssertEqual(result, [true])
@@ -50,26 +53,49 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
 
     func testTargetVisibilityRejectsUnknownCollisionVisibility() {
         let inputs = [
-            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
 
         let result = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                   collisionVisibility: [.unknown],
-                                                                  horizonVisibility: [true])
+                                                                  horizonVisibility: [true],
+                                                                  cameraZoom: 14)
 
         XCTAssertEqual(result, [false])
     }
 
     func testTargetVisibilityRejectsHiddenCollisionVisibility() {
         let inputs = [
-            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
 
         let result = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                   collisionVisibility: [.hidden],
-                                                                  horizonVisibility: [true])
+                                                                  horizonVisibility: [true],
+                                                                  cameraZoom: 14)
 
         XCTAssertEqual(result, [false])
+    }
+
+    func testTargetVisibilityHidesLabelBelowMinCameraZoom() {
+        let inputs = [
+            BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 16),
+            BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
+        ]
+
+        // Камера на z14: лейбл с порогом 16 скрыт, лейбл без порога виден.
+        let atZoom14 = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
+                                                                    collisionVisibility: [.visible, .visible],
+                                                                    horizonVisibility: [true, true],
+                                                                    cameraZoom: 14)
+        XCTAssertEqual(atZoom14, [false, true])
+
+        // Камера на z16: порог достигнут - виден и iconless-лейбл.
+        let atZoom16 = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
+                                                                    collisionVisibility: [.visible, .visible],
+                                                                    horizonVisibility: [true, true],
+                                                                    cameraZoom: 16)
+        XCTAssertEqual(atZoom16, [true, true])
     }
 
     func testCollisionCandidateRemainsEnabledDuringFadeOutBehindHorizon() {
@@ -89,7 +115,9 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         let result = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                     screenPoints: screenPoints,
                                                                     horizonVisibility: [false],
-                                                                    currentAlphas: [0.4])
+                                                                    currentAlphas: [0.4],
+                                                                    minCameraZooms: [0],
+                                                                    cameraZoom: 14)
 
         XCTAssertEqual(result[0].position, SIMD2<Float>(40, 50))
         XCTAssertTrue(result[0].isEnabled)
@@ -112,7 +140,9 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         let result = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                     screenPoints: screenPoints,
                                                                     horizonVisibility: [false],
-                                                                    currentAlphas: [0])
+                                                                    currentAlphas: [0],
+                                                                    minCameraZooms: [0],
+                                                                    cameraZoom: 14)
 
         XCTAssertFalse(result[0].isEnabled)
     }
@@ -134,7 +164,9 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         let result = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                     screenPoints: screenPoints,
                                                                     horizonVisibility: [true],
-                                                                    currentAlphas: [1])
+                                                                    currentAlphas: [1],
+                                                                    minCameraZooms: [0],
+                                                                    cameraZoom: 14)
 
         XCTAssertFalse(result[0].isEnabled)
     }
@@ -151,9 +183,45 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         let result = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                     screenPoints: [],
                                                                     horizonVisibility: [true],
-                                                                    currentAlphas: [1])
+                                                                    currentAlphas: [1],
+                                                                    minCameraZooms: [0],
+                                                                    cameraZoom: 14)
 
         XCTAssertFalse(result[0].isEnabled)
+    }
+
+    func testCollisionCandidateSuppressedBelowMinCameraZoomWhenInvisible() {
+        let baseCandidates = [
+            ScreenCollisionCandidate(position: .zero,
+                                     halfSize: SIMD2<Float>(10, 4),
+                                     priority: 1,
+                                     secondaryPriority: 2,
+                                     isEnabled: true)
+        ]
+        let screenPoints = [
+            ScreenPointOutput(position: SIMD2<Float>(40, 50),
+                              depth: 0.5,
+                              visible: 1,
+                              visibilityAlpha: 1)
+        ]
+
+        // Ниже порога и полностью невидим - место в коллизиях не резервирует.
+        let suppressed = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
+                                                                         screenPoints: screenPoints,
+                                                                         horizonVisibility: [true],
+                                                                         currentAlphas: [0],
+                                                                         minCameraZooms: [16],
+                                                                         cameraZoom: 14)
+        XCTAssertFalse(suppressed[0].isEnabled)
+
+        // Тот же лейбл ещё затухает (alpha > 0) - продолжает удерживать место.
+        let fading = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
+                                                                     screenPoints: screenPoints,
+                                                                     horizonVisibility: [true],
+                                                                     currentAlphas: [0.5],
+                                                                     minCameraZooms: [16],
+                                                                     cameraZoom: 14)
+        XCTAssertTrue(fading[0].isEnabled)
     }
 
     func testHorizonReservationSignatureChangesWhenHiddenAlphaCrossesThreshold() {

@@ -495,6 +495,7 @@ enum PreparedTileDiskCodec {
         let collisionPriority: Int32
         let labelWidthPx: Float
         let labelHeightPx: Float
+        let minCameraZoom: Float
 
         init(_ input: TextLabelPlacementInput) throws {
             uvX = input.pointInput.uv.x
@@ -508,6 +509,7 @@ enum PreparedTileDiskCodec {
             collisionPriority = try encodeInt32(input.placementMeta.collisionPriority, field: "LabelPlacementMeta.collisionPriority")
             labelWidthPx = input.placementMeta.labelSizePx.x
             labelHeightPx = input.placementMeta.labelSizePx.y
+            minCameraZoom = input.placementMeta.minCameraZoom
         }
 
         func runtimeValue() -> TextLabelPlacementInput {
@@ -518,7 +520,8 @@ enum PreparedTileDiskCodec {
                 placementMeta: LabelPlacementMeta(key: key,
                                                   sortKey: Int(sortKey),
                                                   collisionPriority: Int(collisionPriority),
-                                                  labelSizePx: SIMD2<Float>(labelWidthPx, labelHeightPx))
+                                                  labelSizePx: SIMD2<Float>(labelWidthPx, labelHeightPx),
+                                                  minCameraZoom: minCameraZoom)
             )
         }
     }

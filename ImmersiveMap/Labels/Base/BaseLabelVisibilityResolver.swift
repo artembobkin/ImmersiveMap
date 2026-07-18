@@ -22,6 +22,7 @@ enum BaseLabelVisibilityResolver {
     static func targetVisibility(inputs: [BaseLabelPresentationInput],
                                  collisionFlags: [UInt32],
                                  horizonVisibility: [Bool],
+                                 cameraZoom: Float,
                                  collisionVisibilityIsFresh: Bool = true) -> [Bool] {
         let collisionVisibility = collisionFlags.map { flag -> BaseLabelCollisionVisibility in
             if collisionVisibilityIsFresh == false {
@@ -31,12 +32,14 @@ enum BaseLabelVisibilityResolver {
         }
         return targetVisibility(inputs: inputs,
                                 collisionVisibility: collisionVisibility,
-                                horizonVisibility: horizonVisibility)
+                                horizonVisibility: horizonVisibility,
+                                cameraZoom: cameraZoom)
     }
 
     static func targetVisibility(inputs: [BaseLabelPresentationInput],
                                  collisionVisibility: [BaseLabelCollisionVisibility],
-                                 horizonVisibility: [Bool]) -> [Bool] {
+                                 horizonVisibility: [Bool],
+                                 cameraZoom: Float) -> [Bool] {
         inputs.indices.map { index in
             let input = inputs[index]
             let collisionHidden = index < collisionVisibility.count ? collisionVisibility[index] != .visible : true
@@ -45,14 +48,17 @@ enum BaseLabelVisibilityResolver {
                 input.duplicate == 0 &&
                 input.isRetained == 0 &&
                 collisionHidden == false &&
-                horizonVisible
+                horizonVisible &&
+                input.minCameraZoom <= cameraZoom
         }
     }
 
     static func collisionCandidates(baseCandidates: [ScreenCollisionCandidate],
                                     screenPoints: [ScreenPointOutput],
                                     horizonVisibility: [Bool],
-                                    currentAlphas: [Float]) -> [ScreenCollisionCandidate] {
+                                    currentAlphas: [Float],
+                                    minCameraZooms: [Float],
+                                    cameraZoom: Float) -> [ScreenCollisionCandidate] {
         var candidates = baseCandidates
         let count = min(candidates.count, screenPoints.count)
 
@@ -68,7 +74,14 @@ enum BaseLabelVisibilityResolver {
 
             let horizonVisible = index < horizonVisibility.count ? horizonVisibility[index] : false
             let currentAlpha = index < currentAlphas.count ? currentAlphas[index] : 0
-            candidates[index].isEnabled = horizonVisible || currentAlpha > activeAlphaThreshold
+            let active = horizonVisible || currentAlpha > activeAlphaThreshold
+            // Лейбл ниже своего minCameraZoom не резервирует место в коллизиях,
+            // пока полностью невидим - иначе скрытый по зуму POI вытеснял бы
+            // видимые. Уже затухающий (alpha > 0) продолжает удерживать место,
+            // чтобы соседи не прыгали во время fade-out при переходе через порог.
+            let minCameraZoom = index < minCameraZooms.count ? minCameraZooms[index] : 0
+            let suppressedByZoom = minCameraZoom > cameraZoom && currentAlpha <= activeAlphaThreshold
+            candidates[index].isEnabled = active && suppressedByZoom == false
         }
 
         if count < candidates.count {

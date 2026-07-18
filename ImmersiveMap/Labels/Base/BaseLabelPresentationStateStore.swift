@@ -17,12 +17,15 @@ struct BaseLabelPresentationInput {
     static let empty = BaseLabelPresentationInput(labelKey: 0,
                                                   duplicate: 0,
                                                   isRetained: 0,
-                                                  isValid: false)
+                                                  isValid: false,
+                                                  minCameraZoom: 0)
 
     let labelKey: UInt64
     let duplicate: UInt8
     let isRetained: UInt8
     let isValid: Bool
+    /// Минимальный зум камеры, с которого лейбл виден (0 = всегда).
+    let minCameraZoom: Float
 }
 
 final class BaseLabelPresentationStateStore {

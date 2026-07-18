@@ -70,7 +70,10 @@ struct FeatureStyle {
     let labelTextStyle: LabelTextStyle?
     let roadLabelTextStyle: LabelTextStyle?
     let roadDecorationKind: TileMvtParser.RoadDecorationKind
-    
+    /// Минимальный зум КАМЕРЫ для точечного лейбла этой фичи (0 = виден всегда).
+    /// Едет с лейблом до рантайма, где сравнивается с текущим зумом камеры.
+    let labelMinCameraZoom: Float
+
     init(
         key: UInt8,
         color: SIMD4<Float>,
@@ -86,7 +89,8 @@ struct FeatureStyle {
         extrusionFallbackHeight: Float = 0,
         labelTextStyle: LabelTextStyle? = nil,
         roadLabelTextStyle: LabelTextStyle? = nil,
-        roadDecorationKind: TileMvtParser.RoadDecorationKind = .none
+        roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
+        labelMinCameraZoom: Float = 0
     ) {
         self.key = key
         self.color = color
@@ -103,6 +107,7 @@ struct FeatureStyle {
         self.labelTextStyle = labelTextStyle
         self.roadLabelTextStyle = roadLabelTextStyle
         self.roadDecorationKind = roadDecorationKind
+        self.labelMinCameraZoom = labelMinCameraZoom
     }
 
     var resolvedLineRenderPasses: [LineRenderPass] {

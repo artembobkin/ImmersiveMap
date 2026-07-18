@@ -6,7 +6,7 @@ import XCTest
 
 final class PreparedTileDiskCodecTests: XCTestCase {
     func testPreparedTileCacheFormatVersionIncludesLabelVisibilityPolicyRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 21)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 22)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -434,7 +434,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
             placementMeta: LabelPlacementMeta(key: UInt64(seed + 100),
                                               sortKey: Int(seed + 200),
                                               collisionPriority: Int(seed + 300),
-                                              labelSizePx: SIMD2<Float>(Float(seed) + 10.1, Float(seed) + 20.2))
+                                              labelSizePx: SIMD2<Float>(Float(seed) + 10.1, Float(seed) + 20.2),
+                                              minCameraZoom: Float(seed) + 0.5)
         )
         let glyphVertex = makeLabelVertex(seed: seed, labelIndex: seed + 400, spriteSeed: 0)
         let poiIconVertex = makeLabelVertex(seed: seed + 10, labelIndex: seed + 500, spriteSeed: seed + 20)
@@ -519,6 +520,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        file: file,
                        line: line)
         XCTAssertEqual(actual.placementMeta.labelSizePx, expected.placementMeta.labelSizePx, file: file, line: line)
+        XCTAssertEqual(actual.placementMeta.minCameraZoom, expected.placementMeta.minCameraZoom, file: file, line: line)
     }
 
     private func assertLabelTextStyle(_ actual: LabelTextStyle,

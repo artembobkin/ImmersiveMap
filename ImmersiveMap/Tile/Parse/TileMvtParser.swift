@@ -622,7 +622,8 @@ class TileMvtParser {
                                         sortKey: fallback.sortKey,
                                         collisionPriority: fallback.sortKey,
                                         textStyle: textStyle,
-                                        poiIcon: nil))
+                                        poiIcon: nil,
+                                        minCameraZoom: style.labelMinCameraZoom))
         }
     }
 
@@ -1016,7 +1017,8 @@ class TileMvtParser {
                                                     sortKey: decision.priority.visibilityRank,
                                                     collisionPriority: decision.priority.collisionRank,
                                                     textStyle: decision.style,
-                                                    poiIcon: decision.poiIcon))
+                                                    poiIcon: decision.poiIcon,
+                                                    minCameraZoom: style.labelMinCameraZoom))
                     }
                 }
             }

@@ -7,7 +7,7 @@ import XCTest
 final class BaseLabelPresentationStateStoreTests: XCTestCase {
     func testTargetVisibilityFalseStartsFadeOutOnFollowingFrame() {
         let store = BaseLabelPresentationStateStore()
-        let input = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
+        let input = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
 
         _ = store.resolveAlphas(inputs: [input],
                                 targetVisibility: [true],
@@ -77,11 +77,11 @@ final class BaseLabelPresentationStateStoreTests: XCTestCase {
 
     func testCurrentAlphaSnapshotReturnsZeroForDuplicateInvalidAndMissingEntries() {
         let store = BaseLabelPresentationStateStore()
-        let validUnseenInput = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
-        let duplicateEntryInput = BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true)
-        let duplicateInput = BaseLabelPresentationInput(labelKey: 2, duplicate: 1, isRetained: 0, isValid: true)
-        let invalidEntryInput = BaseLabelPresentationInput(labelKey: 3, duplicate: 0, isRetained: 0, isValid: true)
-        let invalidInput = BaseLabelPresentationInput(labelKey: 3, duplicate: 0, isRetained: 0, isValid: false)
+        let validUnseenInput = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
+        let duplicateEntryInput = BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
+        let duplicateInput = BaseLabelPresentationInput(labelKey: 2, duplicate: 1, isRetained: 0, isValid: true, minCameraZoom: 0)
+        let invalidEntryInput = BaseLabelPresentationInput(labelKey: 3, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
+        let invalidInput = BaseLabelPresentationInput(labelKey: 3, duplicate: 0, isRetained: 0, isValid: false, minCameraZoom: 0)
 
         _ = store.resolveAlphas(inputs: [duplicateEntryInput, invalidEntryInput],
                                 targetVisibility: [true, true],
@@ -107,7 +107,7 @@ final class BaseLabelPresentationStateStoreTests: XCTestCase {
     private func makeStoreAfterFadeOutTargetChange() -> (store: BaseLabelPresentationStateStore,
                                                          input: BaseLabelPresentationInput) {
         let store = BaseLabelPresentationStateStore()
-        let input = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true)
+        let input = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
 
         _ = store.resolveAlphas(inputs: [input],
                                 targetVisibility: [true],

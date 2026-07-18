@@ -12,6 +12,8 @@ extension TileMvtParser {
         let collisionPriority: Int
         let textStyle: LabelTextStyle
         let poiIcon: PoiSpriteIcon?
+        /// Минимальный зум камеры, с которого лейбл виден (0 = всегда).
+        let minCameraZoom: Float
 
         init(text: String,
              position: SIMD2<Int16>,
@@ -22,7 +24,8 @@ extension TileMvtParser {
              sortKey: Int,
              collisionPriority: Int,
              textStyle: LabelTextStyle,
-             poiIcon: PoiSpriteIcon? = nil) {
+             poiIcon: PoiSpriteIcon? = nil,
+             minCameraZoom: Float = 0) {
             self.text = text
             self.position = position
             self.key = TileMvtParser.makePointLabelKey(text: text,
@@ -34,6 +37,7 @@ extension TileMvtParser {
             self.collisionPriority = collisionPriority
             self.textStyle = textStyle
             self.poiIcon = poiIcon
+            self.minCameraZoom = minCameraZoom
         }
 
         init(text: String,
@@ -42,7 +46,8 @@ extension TileMvtParser {
              sortKey: Int,
              collisionPriority: Int,
              textStyle: LabelTextStyle,
-             poiIcon: PoiSpriteIcon? = nil) {
+             poiIcon: PoiSpriteIcon? = nil,
+             minCameraZoom: Float = 0) {
             self.text = text
             self.position = position
             self.key = key
@@ -50,6 +55,7 @@ extension TileMvtParser {
             self.collisionPriority = collisionPriority
             self.textStyle = textStyle
             self.poiIcon = poiIcon
+            self.minCameraZoom = minCameraZoom
         }
     }
 }

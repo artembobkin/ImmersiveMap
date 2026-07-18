@@ -70,7 +70,8 @@ final class TileTextLabelsBuilder {
                 placementMeta: LabelPlacementMeta(key: label.key,
                                                   sortKey: label.sortKey,
                                                   collisionPriority: label.collisionPriority,
-                                                  labelSizePx: size)
+                                                  labelSizePx: size,
+                                                  minCameraZoom: label.minCameraZoom)
             )
             builtLabels.append(BuiltBaseLabel(placementInput: placementInput,
                                              style: style,

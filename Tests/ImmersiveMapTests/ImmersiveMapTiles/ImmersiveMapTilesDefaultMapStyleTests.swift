@@ -100,6 +100,36 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                             .preparedTileStyleRevision)
     }
 
+    func testIconlessPoiCarriesConfiguredMinCameraZoom() {
+        // default labelVisibility.poiIconlessMinimumZoom == 16
+        let style = ImmersiveMapTilesDefaultMapStyle(
+            configuration: .immersiveMapTilesDefault
+        )
+
+        // Iconless POI (class "office" вне набора иконок): лейбл присутствует в
+        // prepared-тайле, но несёт порог minCameraZoom == 16. Видимость решается
+        // в рантайме по зуму камеры, поэтому tile.z здесь роли не играет.
+        let officeStyle = makeStyle(style, layerName: "poi", className: "office", zoom: 14)
+        XCTAssertNotNil(officeStyle.labelTextStyle)
+        XCTAssertEqual(officeStyle.labelMinCameraZoom, 16)
+
+        // Iconful POI (class "shop" -> иконка shopping): порога нет, виден всегда.
+        let shopStyle = makeStyle(style, layerName: "poi", className: "shop", zoom: 14)
+        XCTAssertNotNil(shopStyle.labelTextStyle)
+        XCTAssertEqual(shopStyle.labelMinCameraZoom, 0)
+    }
+
+    func testIconlessPoiZoomChangesPreparedTileRevision() {
+        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let updated = original.labelVisibility { visibility in
+            visibility.poiIconlessMinimumZoom = 14
+        }
+
+        XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+    }
+
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,
                            layerName: String,
                            className: String? = nil,

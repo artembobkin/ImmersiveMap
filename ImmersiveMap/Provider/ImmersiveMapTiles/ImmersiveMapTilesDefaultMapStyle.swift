@@ -7,12 +7,13 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 29
+    private static let implementationRevision: UInt32 = 30
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
     private let massiveOverviewMaximumZoom = 2
     private let globalLandcoverMaximumZoom = 9
+    private let poiSpriteResolver = PoiSpriteResolver()
     private let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
     private let settings: ImmersiveMapSettings.StyleSettings
     private let mapBaseColors: ImmersiveMapBaseColors
@@ -448,10 +449,19 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     // Ключ у всех POI один (72): runs группируются по полной идентичности стиля
     // (вес + цвета), поэтому разные категории раскладываются в отдельные draw-runs.
     private func poiLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+        // POI без распознанной иконки (офисы, компании и т.п.) появляются только
+        // с labelVisibility.poiIconlessMinimumZoom. Порог применяется в рантайме
+        // по зуму КАМЕРЫ (source-тайлы упёрты в maxzoom 14, поэтому фильтр по
+        // tile.z не сработал бы при overzoom), поэтому он едет с лейблом как
+        // minCameraZoom. У иконочных POI порога нет (видны с обычного зума).
+        let isIconless = poiSpriteResolver.resolve(attributes: props, layerName: "poi") == nil
+        let minCameraZoom = isIconless
+            ? Float(configuration.labelVisibility.poiIconlessMinimumZoom)
+            : 0
         var appearance = configuration.labels.poi
         appearance.fillColor = poiCategoryColor(cls: props["class"]?.stringValue.lowercased(),
                                                 subclass: props["subclass"]?.stringValue.lowercased())
-        return pointLabel(key: 72, appearance: appearance)
+        return pointLabel(key: 72, appearance: appearance, minCameraZoom: minCameraZoom)
     }
 
     private func poiCategoryColor(cls: String?, subclass: String?) -> SIMD3<Float> {
@@ -557,12 +567,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func pointLabel(key: UInt8,
-                            appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> FeatureStyle {
+                            appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance,
+                            minCameraZoom: Float = 0) -> FeatureStyle {
         FeatureStyle(
             key: key,
             color: SIMD4<Float>(0, 0, 0, 0),
             parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
-            labelTextStyle: labelTextStyle(key: Int(key), appearance: appearance)
+            labelTextStyle: labelTextStyle(key: Int(key), appearance: appearance),
+            labelMinCameraZoom: minCameraZoom
         )
     }
 

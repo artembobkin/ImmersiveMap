@@ -22,6 +22,7 @@ final class BaseLabelCache {
         var labelSortKeys: [Int]
         var labelCollisionPriorities: [Int]
         var labelSizes: [SIMD2<Float>]
+        var labelMinCameraZooms: [Float]
         var labelsByStyleRuns: [LabelsByStyleRun]
         var poiIconRuns: [PoiIconRunBuffer]
     }
@@ -246,7 +247,8 @@ final class BaseLabelCache {
                 presentationInputs[index] = BaseLabelPresentationInput(labelKey: labelKey,
                                                                        duplicate: duplicateFlag,
                                                                        isRetained: sourceEntry.isRetained ? 1 : 0,
-                                                                       isValid: true)
+                                                                       isValid: true,
+                                                                       minCameraZoom: record.labelMinCameraZooms[index])
                 seenLabelKeys.insert(labelKey)
             }
 
@@ -307,6 +309,7 @@ final class BaseLabelCache {
                 existingRecord.labelSortKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey)
                 existingRecord.labelCollisionPriorities = selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority)
                 existingRecord.labelSizes = selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePx)
+                existingRecord.labelMinCameraZooms = selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom)
                 existingRecord.labelsByStyleRuns = selectedTextLabelSet.labelsByStyleRuns
                 existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
             }
@@ -333,6 +336,7 @@ final class BaseLabelCache {
                                                            labelSortKeys: selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey),
                                                            labelCollisionPriorities: selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority),
                                                            labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePx),
+                                                           labelMinCameraZooms: selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom),
                                                            labelsByStyleRuns: selectedTextLabelSet.labelsByStyleRuns,
                                                            poiIconRuns: selectedTextLabelSet.poiIconRuns)
     }

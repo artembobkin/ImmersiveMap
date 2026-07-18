@@ -50,6 +50,21 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         }
     }
 
+    /// Zoom thresholds that decide whether a label class is drawn at all (as
+    /// opposed to `LabelStyles`, which only decides how a drawn label looks).
+    public struct LabelVisibility: Equatable, Sendable {
+        /// Минимальный tile-zoom, с которого рисуются POI без иконки (офисы,
+        /// компании и прочие категории вне набора распознаваемых иконок). POI с
+        /// иконкой рисуются с обычного порога, поэтому на обзорных зумах остаются
+        /// только иконочные POI, а плотная россыпь текстовых подписей включается
+        /// глубже.
+        public var poiIconlessMinimumZoom: Int
+
+        public init(poiIconlessMinimumZoom: Int = 16) {
+            self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
+        }
+    }
+
     /// One entry per OpenMapTiles `transportation.class` tier used by the style.
     public struct RoadLayerStyles: Equatable, Sendable {
         public var motorway: SIMD4<Float>
@@ -174,15 +189,18 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     }
 
     public var labels: LabelStyles
+    public var labelVisibility: LabelVisibility
     public var layers: LayerStyles
     public var features: FeatureStyles
     public var globalLandcover: GlobalLandcoverStyles
 
     public init(labels: LabelStyles = .immersiveMapTilesDefault,
+                labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .immersiveMapTilesDefault,
                 features: FeatureStyles = .immersiveMapTilesDefault,
                 globalLandcover: GlobalLandcoverStyles = .softBiomes) {
         self.labels = labels
+        self.labelVisibility = labelVisibility
         self.layers = layers
         self.features = features
         self.globalLandcover = globalLandcover
@@ -193,6 +211,13 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     public func labels(_ update: (inout LabelStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
         var copy = self
         update(&copy.labels)
+        return copy
+    }
+
+    public func labelVisibility(_ update: (inout LabelVisibility) -> Void)
+        -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+        var copy = self
+        update(&copy.labelVisibility)
         return copy
     }
 
@@ -253,6 +278,9 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         add(features.buildingFillColor)
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
+        // Not a palette value, but it changes which labels are drawn, so it must
+        // participate in the disk-cache identity.
+        out.append(Float(labelVisibility.poiIconlessMinimumZoom))
         return out
     }
 }

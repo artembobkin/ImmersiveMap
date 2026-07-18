@@ -229,7 +229,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let targetVisibility = BaseLabelVisibilityResolver.targetVisibility(
             inputs: baseLabelCache.presentationInputs,
             collisionVisibility: publishedBaseCollisionVisibility,
-            horizonVisibility: baseProjection.horizonVisibility
+            horizonVisibility: baseProjection.horizonVisibility,
+            cameraZoom: Float(frameContext.zoom)
         )
         let fadeResolution = presentationStateStore.resolveAlphas(inputs: baseLabelCache.presentationInputs,
                                                                   targetVisibility: targetVisibility,
@@ -887,7 +888,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             baseCandidates: baseLabelCache.labelCollisionAABBInputs,
             screenPoints: baseProjection.screenPoints,
             horizonVisibility: baseProjection.horizonVisibility,
-            currentAlphas: currentBaseAlphas
+            currentAlphas: currentBaseAlphas,
+            minCameraZooms: baseLabelCache.presentationInputs.map(\.minCameraZoom),
+            cameraZoom: Float(frameContext.zoom)
         )
 
         let roadPreparation = prepareRoadInstances(frameContext: frameContext,
@@ -1219,7 +1222,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 cachedRoadPresentationInputs.append(BaseLabelPresentationInput(labelKey: roadLabelCache.instanceKeys[index],
                                                                                duplicate: 0,
                                                                                isRetained: roadLabelCache.instanceRetainedFlags[index],
-                                                                               isValid: true))
+                                                                               isValid: true,
+                                                                               minCameraZoom: 0))
             }
             cachedRoadPresentationInputsGeneration = visibilityTopologyGeneration
         }

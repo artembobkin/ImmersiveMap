@@ -73,7 +73,8 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
                 placementMeta: LabelPlacementMeta(key: UInt64(index + 1),
                                                   sortKey: index,
                                                   collisionPriority: index,
-                                                  labelSizePx: SIMD2<Float>(10, 4))
+                                                  labelSizePx: SIMD2<Float>(10, 4),
+                                                  minCameraZoom: 0)
             ),
             style: style,
             textVertices: [
@@ -102,7 +103,8 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
                     placementMeta: LabelPlacementMeta(key: UInt64(index + 1),
                                                       sortKey: index,
                                                       collisionPriority: index,
-                                                      labelSizePx: SIMD2<Float>(10, 4))
+                                                      labelSizePx: SIMD2<Float>(10, 4),
+                                                  minCameraZoom: 0)
                 ),
                 style: style,
                 textVertices: [
