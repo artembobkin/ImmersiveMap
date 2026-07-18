@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing.
 
-ImmersiveMap is an early-stage, experimental Swift + Metal map rendering engine, currently maintained as a single-maintainer project. Contributions are welcome - especially around documentation, examples, tests, bug reports, and small focused improvements.
+ImmersiveMap is an early-stage Swift + Metal map rendering engine, currently maintained as a single-maintainer project. Contributions are welcome - especially around documentation, examples, tests, bug reports, and small focused improvements.
 
 ## Good first contributions
 

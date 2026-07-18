@@ -1,6 +1,6 @@
 # Support
 
-ImmersiveMap is an experimental, single-maintainer project. Support is provided
+ImmersiveMap is a single-maintainer project. Support is provided
 on a best-effort basis.
 
 ## Where to go

@@ -8,7 +8,7 @@ Native Swift + Metal map rendering engine for SwiftUI apps.
 
 > **Status: early alpha.** The public API is not stable yet. Not production-ready. Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-ImmersiveMap is an experimental **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms.
+ImmersiveMap is a **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms.
 
 It is built for developers who want direct control over map rendering, their own vector tile data, globe rendering, and a native engine they can extend to fit their app.
 
@@ -116,7 +116,7 @@ ImmersiveMap is MIT-licensed, but map tiles, styles, and geospatial datasets may
 
 ## Contributing
 
-ImmersiveMap is currently maintained as a single-maintainer experimental project. Issues and feedback are welcome. Pull requests are accepted for documentation, examples, bug fixes, and tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
+ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted for documentation, examples, bug fixes, and tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

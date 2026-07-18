@@ -1,6 +1,6 @@
 # Security Policy
 
-ImmersiveMap is an early-stage, experimental project and does not yet have formal
+ImmersiveMap is an early-stage project and does not yet have formal
 supported release lines. Security fixes are applied to the `main` branch.
 
 ## Reporting a vulnerability
