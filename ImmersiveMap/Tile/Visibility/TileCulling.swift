@@ -4,6 +4,12 @@
 import simd
 
 class TileCulling {
+    /// Зум подложки горизонта плоского режима: весь мир на этом зуме - 64
+    /// генерализованных тайла, след фрустума покрывают 1-4 из них, и все они
+    /// попадают в пиннинг мирового покрытия (z <= 3) - после прогрева подложка
+    /// не стоит ничего.
+    static let flatBackdropZoomLevel = 3
+
     private let globeVisibleTileResolver: any GlobeVisibleTileResolving
     private var coverageVersion: UInt64 = 0
 
@@ -22,6 +28,7 @@ class TileCulling {
         let center = makeCenter(centerWorldMercator: semanticCenterWorldMercator,
                                 targetZoom: targetZoom)
         let visibleTiles: [VisibleTile]
+        let backdropTiles: [VisibleTile]
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
@@ -31,20 +38,56 @@ class TileCulling {
                                             cameraFrustum: cameraFrustum,
                                             cameraEye: cameraEye)
             visibleTiles = resolution.visibleTiles
+            backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:
             visibleTiles = Array(iSeeTilesFlat(targetZoom: targetZoom,
                                                center: center,
                                                flatRenderState: resolvedPresentation.flatRenderState,
                                                cameraMatrix: cameraMatrix))
+            backdropTiles = resolveFlatBackdropTiles(centerWorldMercator: semanticCenterWorldMercator,
+                                                     targetZoom: targetZoom,
+                                                     flatRenderState: resolvedPresentation.flatRenderState,
+                                                     cameraMatrix: cameraMatrix)
         }
 
         coverageVersion &+= 1
         return VisibleContentState(centerWorldMercator: semanticCenterWorldMercator,
                                    center: center,
                                    visibleTiles: visibleTiles,
+                                   backdropTiles: backdropTiles,
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion)
+    }
+
+    /// Подложка перечисляется тем же flat-резолвером на фиксированном грубом
+    /// зуме: на нём радиусный кламп (15 тайлов) шире мира, так что след
+    /// фрустума покрывается целиком - до самого горизонта. Порядок
+    /// детерминированный для стабильности хешей размещений.
+    private func resolveFlatBackdropTiles(centerWorldMercator: SIMD2<Double>,
+                                          targetZoom: Int,
+                                          flatRenderState: FlatRenderState,
+                                          cameraMatrix: matrix_float4x4?) -> [VisibleTile] {
+        let backdropZoom = Self.flatBackdropZoomLevel
+        guard targetZoom > backdropZoom else {
+            return []
+        }
+
+        let backdropCenter = makeCenter(centerWorldMercator: centerWorldMercator,
+                                        targetZoom: backdropZoom)
+        return iSeeTilesFlat(targetZoom: backdropZoom,
+                             center: backdropCenter,
+                             flatRenderState: flatRenderState,
+                             cameraMatrix: cameraMatrix)
+            .sorted { lhs, rhs in
+                if lhs.loop != rhs.loop {
+                    return lhs.loop < rhs.loop
+                }
+                if lhs.x != rhs.x {
+                    return lhs.x < rhs.x
+                }
+                return lhs.y < rhs.y
+            }
     }
 
     func iSeeTilesGlobe(targetZoom: Int,

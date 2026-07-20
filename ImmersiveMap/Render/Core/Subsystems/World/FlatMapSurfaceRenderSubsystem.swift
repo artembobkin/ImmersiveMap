@@ -28,14 +28,27 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
             return
         }
 
+        let tilePlacementState = frameContext.sharedState.tilePlacementState
+        let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
+
+        // Подложка горизонта рисуется первой: основное покрытие ложится поверх
+        // (painter's order), а за его краем земля закрашена до самого горизонта.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
-                                  placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
+                                  placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   tilePipeline: tilePipeline,
-                                  isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled)
+                                  isWireframeEnabled: isWireframeEnabled)
+        FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
+                                  cameraUniform: frameContext.cameraUniform,
+                                  cameraZoom: frameContext.zoom,
+                                  separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
+                                  placeTilesContext: tilePlacementState.placeTilesContext,
+                                  flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                  tilePipeline: tilePipeline,
+                                  isWireframeEnabled: isWireframeEnabled)
     }
 
     func handleMemoryWarning() {}

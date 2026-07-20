@@ -10,6 +10,7 @@ import Foundation
 
 struct TilePlacementState {
     nonisolated(unsafe) static let empty = TilePlacementState(placeTilesContext: .empty,
+                                          backdropPlaceTilesContext: .empty,
                                           tileAtlasPlaceTilesContext: .empty,
                                           placementVersion: 0,
                                           visibleTilesCount: 0,
@@ -18,6 +19,9 @@ struct TilePlacementState {
                                           renderedTilesCount: 0)
 
     let placeTilesContext: PlaceTilesContext
+    /// Размещения подложки горизонта плоского режима: рисуются под основным
+    /// покрытием и не участвуют в лейблах/проекциях. На глобусе пусто.
+    let backdropPlaceTilesContext: PlaceTilesContext
     let tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext
     let placementVersion: UInt64
     let visibleTilesCount: Int

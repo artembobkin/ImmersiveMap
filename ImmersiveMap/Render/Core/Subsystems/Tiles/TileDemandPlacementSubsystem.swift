@@ -19,6 +19,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
+    private var backdropPlaceTilesContext: PlaceTilesContext = .empty
     private var tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     private var demandGateFingerprint: Int?
@@ -66,11 +67,15 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                            center: center,
                                                                            renderSurfaceMode: frameContext.renderSurfaceMode,
                                                                            transition: frameContext.transition)
+        // Подложка горизонта минует препроцессор: его дистанционный фильтр
+        // считает расстояния в тайлах целевого зума и выбросил бы грубые
+        // подложечные тайлы. Спрос и размещения у неё общие с покрытием.
+        let backdropTiles = visibleContent.backdropTiles
         // `VisibleTile` includes `loop`, so flat-mode wrapped copies can produce
         // multiple placement targets that share the same content tile (`Tile`).
         // Deduplicate before storage request to avoid repeated cache lookup/request
         // for identical source bytes.
-        let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles,
+        let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles,
                                                                                   parentFallbackDepth: 2)
         // Returns source-tile availability map for GPU rendering:
         // value contains Metal-ready tile buffers, or `nil` while still loading.
@@ -80,7 +85,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
         var hashBuilder = Hasher()
         hashBuilder.combine(PreprocessedVisibleTilesHasher.computePreprocessedVisibleTilesHash(
-            preprocessedVisibleTiles: preprocessedVisibleTiles,
+            preprocessedVisibleTiles: preprocessedVisibleTiles + backdropTiles,
             demandedSourceTiles: demandedSourceTiles,
             readyTilesBySource: readyTilesBySource
         ))
@@ -92,6 +97,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                      readyTilesBySource: readyTilesBySource,
                                                                      zoom: tileZoomLevel,
                                                                      previousContext: placeTilesContext)
+            backdropPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: backdropTiles,
+                                                                             readyTilesBySource: readyTilesBySource,
+                                                                             zoom: tileZoomLevel,
+                                                                             previousContext: backdropPlaceTilesContext)
             tileAtlasPlaceTilesContext = TileAtlasPlaceTilesPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
                                                                                          readyTilesBySource: readyTilesBySource,
                                                                                          baseZoom: tileZoomLevel,
@@ -139,6 +148,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let renderedTilesCount = placeTilesContext.tilePlacements.count
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
+            backdropPlaceTilesContext: backdropPlaceTilesContext,
             tileAtlasPlaceTilesContext: tileAtlasPlaceTilesContext,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
@@ -170,6 +180,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     func evict() {
         tileRenderStore.evict()
         placeTilesContext = .empty
+        backdropPlaceTilesContext = .empty
         tileAtlasPlaceTilesContext = .empty
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil

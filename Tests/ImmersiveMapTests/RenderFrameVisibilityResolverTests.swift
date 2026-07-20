@@ -83,6 +83,7 @@ private final class RecordingTileCulling: TileCulling {
         return VisibleContentState(centerWorldMercator: cameraState.centerWorldMercator,
                                    center: Center(tileX: 0, tileY: 0),
                                    visibleTiles: [VisibleTile(x: targetZoom, y: targetZoom, z: targetZoom)],
+                                   backdropTiles: [],
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: UInt64(targetZoom))
     }
