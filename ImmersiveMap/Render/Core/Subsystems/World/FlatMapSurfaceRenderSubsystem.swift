@@ -30,6 +30,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
 
         let tilePlacementState = frameContext.sharedState.tilePlacementState
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
+        let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
+                                                cameraEye: frameContext.cameraUniform.eye,
+                                                mapClearColor: frameContext.services.settings.scene.mapClearColor)
 
         // Подложка горизонта рисуется первой: основное покрытие ложится поверх
         // (painter's order), а за его краем земля закрашена до самого горизонта.
@@ -39,6 +42,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                  horizonFog: horizonFog,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
@@ -47,6 +51,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                  horizonFog: horizonFog,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled)
     }

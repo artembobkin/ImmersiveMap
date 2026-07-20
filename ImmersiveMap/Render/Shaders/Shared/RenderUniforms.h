@@ -62,4 +62,28 @@ struct NightLightsAtlasEntry {
     float4 uvOriginAndScale;
 };
 
+// Дымка у горизонта плоского представления; раскладка зеркалит
+// HorizonFogUniform.swift. Дистанции измеряются в высотах глаза над
+// плоскостью, поэтому полоса тумана геометрически приклеена к линии схода
+// и не зависит ни от зума, ни от смены рендерного масштаба на целых зумах.
+struct HorizonFog {
+    float3 color;
+    float3 eye;
+    float strength;
+    float startEyeHeights;
+    float endEyeHeights;
+    float _padding;
+};
+
+static inline float3 applyHorizonFog(float3 color,
+                                     constant HorizonFog& fog,
+                                     float3 worldPos) {
+    float eyeHeight = max(abs(fog.eye.z), 1e-4);
+    float distanceToEye = length(worldPos - fog.eye);
+    float fogAmount = smoothstep(fog.startEyeHeights * eyeHeight,
+                                 fog.endEyeHeights * eyeHeight,
+                                 distanceToEye) * fog.strength;
+    return mix(color, fog.color, fogAmount);
+}
+
 #endif

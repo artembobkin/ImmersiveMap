@@ -122,6 +122,12 @@ class TileAtlasTexture {
         renderEncoder!.setFragmentBytes(&localClipBounds,
                                         length: MemoryLayout<SIMD4<Float>>.stride,
                                         index: 1)
+        // Дымка горизонта - экранный эффект; при растеризации в слот атласа
+        // она обязана быть выключена, иначе затуманится содержимое текстуры.
+        var horizonFog = HorizonFogUniform.disabled
+        renderEncoder!.setFragmentBytes(&horizonFog,
+                                        length: MemoryLayout<HorizonFogUniform>.stride,
+                                        index: 2)
     }
     
     func endEncoding() {

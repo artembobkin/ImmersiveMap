@@ -35,6 +35,9 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         }
 
         encoder.setDepthStencilState(globeDepthState)
+        let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
+                                                cameraEye: frameContext.cameraUniform.eye,
+                                                mapClearColor: frameContext.services.settings.scene.mapClearColor)
         GlobeSurfaceDrawer.draw(renderEncoder: encoder,
                                 cameraUniform: frameContext.cameraUniform,
                                 globe: frameContext.globeRenderUniform,
@@ -43,6 +46,7 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                 globePipeline: globePipeline,
                                 mapSurfaceGridBuffers: mapSurfaceGridBuffers,
                                 tilesTexture: tilesTexture,
+                                horizonFog: horizonFog,
                                 isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled)
     }
 

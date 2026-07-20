@@ -12,6 +12,7 @@ enum GlobeSurfaceDrawer {
                      globePipeline: GlobePipeline,
                      mapSurfaceGridBuffers: MapSurfaceGridBuffers,
                      tilesTexture: TileAtlasTexture,
+                     horizonFog: HorizonFogUniform,
                      isWireframeEnabled: Bool) {
         var cameraUniformValue = cameraUniform
         var earthSceneValue = earthScene
@@ -29,10 +30,14 @@ enum GlobeSurfaceDrawer {
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.lines)
         }
+        var horizonFogValue = horizonFog
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&earthSceneValue, length: MemoryLayout<EarthSceneUniform>.stride, index: 2)
+        renderEncoder.setFragmentBytes(&horizonFogValue,
+                                       length: MemoryLayout<HorizonFogUniform>.stride,
+                                       index: 6)
         renderEncoder.setFragmentBytes(&nightLightsAtlasCounts,
                                        length: MemoryLayout<SIMD2<UInt32>>.stride,
                                        index: 4)

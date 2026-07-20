@@ -461,7 +461,8 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
                                     constant EarthScene& earthScene [[buffer(2)]],
                                     constant Tile& tileData [[buffer(3)]],
                                     constant uint2& nightLightsAtlasCounts [[buffer(4)]],
-                                    constant NightLightsAtlasEntry* nightLightsAtlasEntries [[buffer(5)]]) {
+                                    constant NightLightsAtlasEntry* nightLightsAtlasEntries [[buffer(5)]],
+                                    constant HorizonFog& horizonFog [[buffer(6)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
     
 //    return float4(1.0, 0, 0, 1);
@@ -526,6 +527,10 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
     float3 innerGlowColor = float3(0.28, 0.54, 1.0) * glowStrength;
     float3 outerGlowColor = float3(0.08, 0.22, 0.72) * outerGlow * 0.22 * (1.0 - in.transition);
     color.rgb += innerGlowColor + outerGlowColor;
+    // Дымка гейтится фазой перехода (strength = transition): чистый глобус в
+    // космосе остаётся без тумана, а к моменту смены поверхностей морф и
+    // плоскость затуманены одинаково - шов линии горизонта скрыт.
+    color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }
 

@@ -14,6 +14,7 @@ struct VertexIn {
 struct VertexOut {
     float4 position [[position]];
     float2 localPosition;
+    float3 worldPos;
     float4 color;
     float lowZoomFadeMask;
     float pointSize [[point_size]];
@@ -44,6 +45,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     VertexOut out;
     out.position = clipPosition;
     out.localPosition = float2(vertexIn.position.xy);
+    out.worldPos = worldPosition.xyz;
     out.pointSize = 5.0;
     out.color = style.color;
     out.lowZoomFadeMask = lowZoomFadeMasks[vertexIn.styleIndex];
@@ -55,7 +57,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 // отбрасываются, чтобы не перекрывать соседние точные тайлы.
 fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
                                    constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                   constant float4& localClipBounds [[buffer(1)]]) {
+                                   constant float4& localClipBounds [[buffer(1)]],
+                                   constant HorizonFog& horizonFog [[buffer(2)]]) {
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
         discard_fragment();
@@ -70,5 +73,6 @@ fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
         fade = overviewFade.overviewAlpha;
     }
     color.a *= fade;
+    color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }
