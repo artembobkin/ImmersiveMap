@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "GlobeTransitionProjection.h"
+#include "../Shared/AtlasSampling.h"
 
 // Add necessary structures for transformation and rendering
 struct VertexIn {
@@ -465,52 +466,13 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
     
 //    return float4(1.0, 0, 0, 1);
     
-    float u = in.texCoord.x;
-    float v = in.texCoord.y;
-    float posU = in.posU;
-    float posV = in.posV;
-    float lastPos = in.lastPos;
-    float uvSize = in.uvSize;
-    
-    // Compute tile bounds in atlas UV space
-    float u_min = posU * uvSize;
-    float u_max = u_min + uvSize;
-    float v_min = float(lastPos - posV) * uvSize;
-    float v_max = 1.0 - posV * uvSize;
-    
-    float pageTexels = 0.5 / in.halfTexel;
-    float2 uvTexels = float2(u, v) * pageTexels;
-    float2 lodDx = dfdx(uvTexels);
-    float2 lodDy = dfdy(uvTexels);
-    // Текселей страницы на один экранный пиксель в точке фрагмента.
-    float texelsPerPixel = sqrt(max(max(length_squared(lodDx), length_squared(lodDy)), 1e-12));
-
-    // Keep a small coverage overlap at tile edges; otherwise interpolation/MSAA
-    // can leave a visible gap between adjacent globe tile draw calls.
-    // Допуск обязан масштабироваться минификацией: на дальних рядах один пиксель -
-    // это десятки текселей, и фиксированные 4 текселя становились меньше выступа
-    // кромочного пикселя - кромки дискардились, шов рассыпался в бегущие точки
-    // цвета фона. Держим не меньше ~полутора экранных пикселей в UV-единицах.
-    float coverageTolerance = max(in.halfTexel * 8.0, 1.5 * texelsPerPixel / pageTexels);
-    if (v > v_max + coverageTolerance || v < v_min - coverageTolerance ||
-        u > u_max + coverageTolerance || u < u_min - coverageTolerance) {
+    AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
+    AtlasSampleCoords coords = atlasSampleCoords(in.texCoord, bounds, in.halfTexel);
+    if (coords.outsideCoverage) {
         discard_fragment();
     }
 
-    // Inset clamp for sampling to prevent bleed from adjacent tiles.
-    float lod = log2(texelsPerPixel);
-    float clampedLod = clamp(lod, 0.0, 6.0);
-    // LOD задаётся явно (level ниже), поэтому уровни фетча известны точно:
-    // trilinear читает floor и ceil этого значения. Инсет в полтекселя уровня
-    // ceil - минимальный, при котором фетч гарантированно не дотягивается за
-    // кромку слота (аппаратной формуле LOD выбирать уровень не даём: её
-    // расхождение с оценкой по производным и было источником то белого подмеса
-    // соседа, то тёмного размазывания кромки при страховочном запасе).
-    float sampleInset = in.halfTexel * exp2(ceil(clampedLod));
-    float u_clamped = max(u_min + sampleInset, min(u_max - sampleInset, u));
-    float v_clamped = max(v_min + sampleInset, min(v_max - sampleInset, v));
-
-    float4 color = texture.sample(textureSampler, float2(u_clamped, v_clamped), level(clampedLod));
+    float4 color = texture.sample(textureSampler, coords.uv, level(coords.lod));
     if (earthScene.isEnabled != 0) {
         float sunDot = dot(normalize(in.earthNormal), normalize(earthScene.sunDirection));
         float dayFactor = smoothstep(-earthScene.terminatorFadeWidth,
