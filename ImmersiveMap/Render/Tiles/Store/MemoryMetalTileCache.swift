@@ -4,6 +4,14 @@
 import Foundation
 
 class MemoryMetalTileCache {
+    /// Мировое покрытие низких зумов пинится лениво: материализовавшись один
+    /// раз, тайлы z <= этого уровня не вытесняются обычным LRU-давлением -
+    /// дальняя зона наклонённой камеры остаётся резидентной (весь мир на
+    /// z0-3 - максимум 85 генерализованных тайлов). Бюджет вытеснения
+    /// расширяется на их стоимость, чтобы пиннинг не выселял ближние тайлы.
+    /// Memory warning невидимые pinned-тайлы не переживают: прогреются заново.
+    static let pinnedWorldCoverMaxZoomLevel = 3
+
     private var cache: LRUMemoryCache<Tile, MetalTile>
     private let costLimit: Int
     private let stateLock = NSLock()
@@ -11,6 +19,8 @@ class MemoryMetalTileCache {
     // Тайлы текущего demanded-набора: не вытесняются ни при вставке, ни при trim,
     // иначе при рабочем наборе больше лимита кэш пинг-понгует видимыми тайлами.
     private var protectedTiles: Set<Tile> = []
+    private var pinnedTiles: Set<Tile> = []
+    private var pinnedCost: Int = 0
     private var mutationVersion: UInt64 = 0
 
     init(maxCacheSizeInBytes: Int, tileTraceRecorder: TileTraceRecorder) {
@@ -34,8 +44,10 @@ class MemoryMetalTileCache {
         // Overshoot от защиты demanded-тайлов ликвидируется, как только набор
         // сжался: иначе кэш держал бы превышение лимита до следующей вставки
         // или memory warning. В обычном случае (totalCost <= limit) - no-op.
-        if cache.totalCost > costLimit {
-            let evicted = cache.trim(toCost: costLimit, protectedKeys: protectedTiles)
+        let effectiveCostLimit = costLimit + pinnedCost
+        if cache.totalCost > effectiveCostLimit {
+            let evicted = cache.trim(toCost: effectiveCostLimit,
+                                     protectedKeys: protectedTiles.union(pinnedTiles))
             if evicted.isEmpty == false {
                 mutationVersion &+= 1
             }
@@ -95,11 +107,17 @@ class MemoryMetalTileCache {
 
     // Сбрасывает кэш до доли лимита, сохраняя защищённые (видимые) тайлы -
     // мягкая реакция на memory warning вместо полной очистки и пустой карты.
+    // Pinned-тайлы здесь не защищаются: под давлением памяти мировое покрытие
+    // отпускается и позже прогревается заново лениво.
     func trim(toFractionOfLimit fraction: Double) {
         let targetCost = Int(Double(costLimit) * max(0.0, min(1.0, fraction)))
         let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
         stateLock.lock()
         let evicted = cache.trim(toCost: targetCost, protectedKeys: protectedTiles)
+        for evictedEntry in evicted where pinnedTiles.contains(evictedEntry.key) {
+            pinnedTiles.remove(evictedEntry.key)
+            pinnedCost = max(0, pinnedCost - evictedEntry.cost)
+        }
         if evicted.isEmpty == false {
             mutationVersion &+= 1
         }
@@ -125,7 +143,15 @@ class MemoryMetalTileCache {
         defer { stateLock.unlock() }
 
         let replacedCost = cache.cost(forKey: key)
-        let evictedEntries = cache.setValue(tile, forKey: key, cost: cost, protectedKeys: protectedTiles) ?? []
+        if key.z <= Self.pinnedWorldCoverMaxZoomLevel {
+            pinnedTiles.insert(key)
+            pinnedCost = max(0, pinnedCost + max(0, cost) - (replacedCost ?? 0))
+        }
+        let evictedEntries = cache.setValue(tile,
+                                            forKey: key,
+                                            cost: cost,
+                                            protectedKeys: protectedTiles.union(pinnedTiles),
+                                            evictionCostLimit: costLimit + pinnedCost) ?? []
         mutationVersion &+= 1
         return (replacedCost, evictedEntries, cache.totalCost, cache.count)
     }
@@ -147,6 +173,8 @@ class MemoryMetalTileCache {
 
         let snapshot = (cache.totalCost, cache.count)
         _ = cache.removeAll()
+        pinnedTiles = []
+        pinnedCost = 0
         mutationVersion &+= 1
         return snapshot
     }

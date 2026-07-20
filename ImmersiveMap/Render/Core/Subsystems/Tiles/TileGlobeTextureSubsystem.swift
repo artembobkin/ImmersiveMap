@@ -112,6 +112,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
                                                      plan: atlasPlan,
                                                      encodedPages: allocationsByPage.count))
 
+        var encodedPageIndexes: [Int] = []
         for pageIndex in allocationsByPage.keys.sorted() {
             guard let allocations = allocationsByPage[pageIndex],
                   tilesTexture.beginPageEncoding(commandBuffer: commandBuffer, pageIndex: pageIndex) else {
@@ -134,7 +135,11 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
             }
 
             tilesTexture.endEncoding()
+            encodedPageIndexes.append(pageIndex)
         }
+
+        tilesTexture.generateMipmaps(commandBuffer: commandBuffer,
+                                     pageIndexes: encodedPageIndexes)
     }
 
     private func makeAtlasPlan(frameContext: FrameContext) -> GlobeAtlasPlan {

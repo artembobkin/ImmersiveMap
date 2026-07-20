@@ -107,7 +107,8 @@ final class RenderPersistentContext {
                                          sampleCount: 1)
         self.poiSpriteAtlas = PoiSpriteAtlas(device: metal.device)
         self.tilesTexture = GlobeTilesTexture(metalDevice: metal.device,
-                                              tilePipeline: globeTileTexturePipeline)
+                                              tilePipeline: globeTileTexturePipeline,
+                                              mapBaseColors: mapBaseColors)
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,
                                                metalDevice: metal.device,
                                                textRenderer: textRenderer,

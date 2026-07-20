@@ -77,8 +77,8 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
-    func panCamera(deltaX: Double, deltaY: Double) {
-        cameraStateController.pan(deltaX: deltaX, deltaY: deltaY)
+    func panCamera(deltaX: Double, deltaY: Double, transition: Float) {
+        cameraStateController.pan(deltaX: deltaX, deltaY: deltaY, transition: transition)
         requestRenderCameraUpdate()
     }
 

@@ -24,15 +24,12 @@ final class VisibleTilesPreprocessor {
     static let defaultMaxVisibleRelativeDistance = 15
 
     private let maxVisibleRelativeDistance: Int
-    private let coarseRelativeDistanceThreshold: Int
-    private let deepCoarseRelativeDistanceThreshold: Int
+    private let exactRelativeDistanceRadius: Int
 
     init(maxVisibleRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance,
-         coarseRelativeDistanceThreshold: Int = 2,
-         deepCoarseRelativeDistanceThreshold: Int = 10) {
+         exactRelativeDistanceRadius: Int = 2) {
         self.maxVisibleRelativeDistance = maxVisibleRelativeDistance
-        self.coarseRelativeDistanceThreshold = coarseRelativeDistanceThreshold
-        self.deepCoarseRelativeDistanceThreshold = deepCoarseRelativeDistanceThreshold
+        self.exactRelativeDistanceRadius = max(1, exactRelativeDistanceRadius)
     }
 
     /// Runs the full preprocessing pipeline:
@@ -40,12 +37,17 @@ final class VisibleTilesPreprocessor {
     /// 2) deterministic priority sort,
     /// 3) non-overlapping coverage selection,
     /// 4) deterministic output sort.
+    ///
+    /// `transition` — фаза глобус→плоскость (0 — глобус, 1 — плоскость):
+    /// управляет широтным LOD на сфере.
     func preprocess(visibleTiles: [VisibleTile],
                     center: Center,
-                    renderSurfaceMode: ViewMode) -> [VisibleTile] {
+                    renderSurfaceMode: ViewMode,
+                    transition: Float) -> [VisibleTile] {
         let stagedInputs = buildStageInputs(visibleTiles: visibleTiles,
                                             center: center,
-                                            renderSurfaceMode: renderSurfaceMode)
+                                            renderSurfaceMode: renderSurfaceMode,
+                                            transition: transition)
         let sortedInputs = sortInputsForSelection(stagedInputs)
         let selectedTargets = selectCoverageTargets(from: sortedInputs)
         return sortTargetsForOutput(selectedTargets)
@@ -58,7 +60,8 @@ final class VisibleTilesPreprocessor {
     /// - `preferredZoom` is clamped to `[0...visibleTile.z]`.
     private func buildStageInputs(visibleTiles: [VisibleTile],
                                   center: Center,
-                                  renderSurfaceMode: ViewMode) -> [InputTile] {
+                                  renderSurfaceMode: ViewMode,
+                                  transition: Float) -> [InputTile] {
         var inputs: [InputTile] = []
         inputs.reserveCapacity(visibleTiles.count)
 
@@ -69,9 +72,14 @@ final class VisibleTilesPreprocessor {
             guard distance <= maxVisibleRelativeDistance else {
                 continue
             }
+            let latitudeDrop = latitudeCoarseningDrop(for: visibleTile,
+                                                      renderSurfaceMode: renderSurfaceMode,
+                                                      transition: transition)
             inputs.append(InputTile(visibleTile: visibleTile,
                                     relativeDistance: distance,
-                                    preferredZoom: preferredZoom(for: visibleTile, distance: distance)))
+                                    preferredZoom: preferredZoom(for: visibleTile,
+                                                                 distance: distance,
+                                                                 latitudeDrop: latitudeDrop)))
         }
 
         return inputs
@@ -248,20 +256,62 @@ final class VisibleTilesPreprocessor {
         }
     }
 
-    /// Maps relative distance to preferred demand zoom.
+    /// Крутизна дистанционного LOD: 1.0 - честная перспектива (уровень на
+    /// удвоение дистанции), выше - агрессивнее огрубление дали. Детализация
+    /// у горизонта всё равно только мерцает при минификации, а тайлов на её
+    /// покрытие уходит кратно больше.
+    private static let distanceLodSteepness = 1.5
+
+    /// Кап суммарного дистанционного понижения: глубже z-4 даль не падает.
+    private static let maximumDistanceDrop = 4
+
+    /// Maps relative distance and latitude coarsening to preferred demand zoom.
     ///
-    /// Rules:
-    /// - near: exact (`z`),
-    /// - medium: one level coarser (`z-1`),
-    /// - far: two levels coarser (`z-2`).
-    private func preferredZoom(for visibleTile: VisibleTile, distance: Int) -> Int {
-        if distance > deepCoarseRelativeDistanceThreshold {
-            return max(0, visibleTile.z - 2)
+    /// Экранный размер тайла в перспективе падает как 1/дистанция; с учётом
+    /// крутизны 1.5 лесенка от точного радиуса 2: дистанция 3 → z-1,
+    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4.
+    ///
+    /// `latitudeDrop` добавляется к дистанционному понижению: оба эффекта
+    /// (перспектива и меркаторное сжатие) уменьшают экранный размер тайла
+    /// независимо.
+    private func preferredZoom(for visibleTile: VisibleTile,
+                               distance: Int,
+                               latitudeDrop: Int) -> Int {
+        return max(0, visibleTile.z - distanceCoarseningDrop(distance: distance) - latitudeDrop)
+    }
+
+    private func distanceCoarseningDrop(distance: Int) -> Int {
+        guard distance > exactRelativeDistanceRadius else {
+            return 0
         }
-        if distance > coarseRelativeDistanceThreshold {
-            return max(0, visibleTile.z - 1)
+
+        let doublings = log2(Double(distance) / Double(exactRelativeDistanceRadius))
+        let steepenedDrop = Int((doublings * Self.distanceLodSteepness).rounded(.up))
+        return min(Self.maximumDistanceDrop, steepenedDrop)
+    }
+
+    /// На сфере меркаторный тайл у полюса меньше экваторного в `cos(широты)` раз,
+    /// поэтому приполярные тайлы понижаются на `log2(1/cos)` уровней: плотность
+    /// покрытия на экран выравнивается с экваториальной. Широта берётся по краю
+    /// тайла, ближайшему к экватору, — консервативная оценка сжатия.
+    private func latitudeCoarseningDrop(for visibleTile: VisibleTile,
+                                        renderSurfaceMode: ViewMode,
+                                        transition: Float) -> Int {
+        guard renderSurfaceMode == .spherical else {
+            return 0
         }
-        return visibleTile.z
+
+        let tilesCount = Double(1 << visibleTile.z)
+        let northEdgeY = Double(visibleTile.y) / tilesCount
+        let southEdgeY = Double(visibleTile.y + 1) / tilesCount
+        guard northEdgeY > 0.5 || southEdgeY < 0.5 else {
+            return 0
+        }
+
+        let nearestToEquatorY = southEdgeY < 0.5 ? southEdgeY : northEdgeY
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: nearestToEquatorY)
+        let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
+        return max(0, Int(floor(-log2(surfaceScale))))
     }
 
     /// Computes Chebyshev-like relative tile distance from map center.

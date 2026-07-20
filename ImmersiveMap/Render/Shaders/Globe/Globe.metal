@@ -478,19 +478,39 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
     float v_min = float(lastPos - posV) * uvSize;
     float v_max = 1.0 - posV * uvSize;
     
+    float pageTexels = 0.5 / in.halfTexel;
+    float2 uvTexels = float2(u, v) * pageTexels;
+    float2 lodDx = dfdx(uvTexels);
+    float2 lodDy = dfdy(uvTexels);
+    // Текселей страницы на один экранный пиксель в точке фрагмента.
+    float texelsPerPixel = sqrt(max(max(length_squared(lodDx), length_squared(lodDy)), 1e-12));
+
     // Keep a small coverage overlap at tile edges; otherwise interpolation/MSAA
     // can leave a visible gap between adjacent globe tile draw calls.
-    float coverageTolerance = in.halfTexel * 8.0;
+    // Допуск обязан масштабироваться минификацией: на дальних рядах один пиксель -
+    // это десятки текселей, и фиксированные 4 текселя становились меньше выступа
+    // кромочного пикселя - кромки дискардились, шов рассыпался в бегущие точки
+    // цвета фона. Держим не меньше ~полутора экранных пикселей в UV-единицах.
+    float coverageTolerance = max(in.halfTexel * 8.0, 1.5 * texelsPerPixel / pageTexels);
     if (v > v_max + coverageTolerance || v < v_min - coverageTolerance ||
         u > u_max + coverageTolerance || u < u_min - coverageTolerance) {
         discard_fragment();
     }
-    
-    // Inset clamp for sampling to prevent bleed from adjacent tiles
-    float u_clamped = max(u_min + in.halfTexel, min(u_max - in.halfTexel, u));
-    float v_clamped = max(v_min + in.halfTexel, min(v_max - in.halfTexel, v));
-    
-    float4 color = texture.sample(textureSampler, float2(u_clamped, v_clamped));
+
+    // Inset clamp for sampling to prevent bleed from adjacent tiles.
+    float lod = log2(texelsPerPixel);
+    float clampedLod = clamp(lod, 0.0, 6.0);
+    // LOD задаётся явно (level ниже), поэтому уровни фетча известны точно:
+    // trilinear читает floor и ceil этого значения. Инсет в полтекселя уровня
+    // ceil - минимальный, при котором фетч гарантированно не дотягивается за
+    // кромку слота (аппаратной формуле LOD выбирать уровень не даём: её
+    // расхождение с оценкой по производным и было источником то белого подмеса
+    // соседа, то тёмного размазывания кромки при страховочном запасе).
+    float sampleInset = in.halfTexel * exp2(ceil(clampedLod));
+    float u_clamped = max(u_min + sampleInset, min(u_max - sampleInset, u));
+    float v_clamped = max(v_min + sampleInset, min(v_max - sampleInset, v));
+
+    float4 color = texture.sample(textureSampler, float2(u_clamped, v_clamped), level(clampedLod));
     if (earthScene.isEnabled != 0) {
         float sunDot = dot(normalize(in.earthNormal), normalize(earthScene.sunDirection));
         float dayFactor = smoothstep(-earthScene.terminatorFadeWidth,
@@ -585,8 +605,12 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
     float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
     float4 clip = camera.matrix * spherePositionTranslated;
     
-    float transitionFade = clamp(globe.transition, 0.0, 1.0);
-    
+    // Крышка не морфится в плоскость: при развороте она расходится с тайловой
+    // поверхностью, поэтому гаснет в первой трети перехода, пока расхождение
+    // ещё не заметно.
+    const float capFadeEndTransition = 0.35;
+    float transitionFade = smoothstep(0.0, capFadeEndTransition, clamp(globe.transition, 0.0, 1.0));
+
     CapVertexOut out;
     out.position = clip;
     out.capAlpha = 1.0 - transitionFade;

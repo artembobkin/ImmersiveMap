@@ -24,12 +24,22 @@ class GlobeTilesTexture {
     }
 
     let size: Int = 4096
+    /// Уровни мипов страницы (0..6): без предфильтрации дальние слоты мерцают.
+    /// Глубина до 64:1 нужна крупным слотам (2048 px), которые тянутся до самой
+    /// линии горизонта: их последние ряды сжаты перспективой в 20-60 раз.
+    /// Уровни глубже 3 почти бесплатны (+0.5% к +33% памяти), а их отсутствие
+    /// возвращает рябь ровно в приграничную полосу горизонта.
+    static let pageMipLevelCount = 7
     private(set) var pages: [Page] = []
     var projection: matrix_float4x4
     var previousProjectionCount: Int = 0
 
     private let metalDevice: MTLDevice
     private let tilePipeline: TilePipeline
+    // Фон страницы = подложка стиля, а не белый: при глубоких mip-уровнях
+    // кромка слота может подмешать фон страницы, и контрастный цвет даёт
+    // мигающую светлую линию на стыках тайлов.
+    private let pageClearColor: MTLClearColor
     private let depthStencilState: MTLDepthStencilState
     private var renderEncoder: MTLRenderCommandEncoder?
     private var activePageIndex: Int?
@@ -42,9 +52,16 @@ class GlobeTilesTexture {
     private var previousShiftY: Float? = nil
     private var previousScale: Float? = nil
     
-    init(metalDevice: MTLDevice, tilePipeline: TilePipeline) {
+    init(metalDevice: MTLDevice,
+         tilePipeline: TilePipeline,
+         mapBaseColors: ImmersiveMapBaseColors) {
         self.metalDevice = metalDevice
         self.tilePipeline = tilePipeline
+        let backgroundColor = mapBaseColors.getTileBgColor()
+        self.pageClearColor = MTLClearColor(red: Double(backgroundColor.x),
+                                            green: Double(backgroundColor.y),
+                                            blue: Double(backgroundColor.z),
+                                            alpha: 1.0)
         let depthStateDescriptor = MTLDepthStencilDescriptor()
         depthStateDescriptor.depthCompareFunction = .always
         depthStateDescriptor.isDepthWriteEnabled = false
@@ -82,7 +99,7 @@ class GlobeTilesTexture {
         renderPassDescriptor.colorAttachments[0].texture = page.texture
         renderPassDescriptor.colorAttachments[0].loadAction = .clear
         renderPassDescriptor.colorAttachments[0].storeAction = .store
-        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
+        renderPassDescriptor.colorAttachments[0].clearColor = pageClearColor
         renderPassDescriptor.depthAttachment.texture = depthTexture
         renderPassDescriptor.depthAttachment.loadAction = .clear
         renderPassDescriptor.depthAttachment.storeAction = .dontCare
@@ -213,6 +230,24 @@ class GlobeTilesTexture {
         }
     }
 
+    /// Перегенерирует mip-уровни перерисованных страниц; вызывается после
+    /// завершения рендер-пассов страниц в том же command buffer.
+    func generateMipmaps(commandBuffer: MTLCommandBuffer, pageIndexes: [Int]) {
+        guard renderEncoder == nil else { return }
+        let mippedPageIndexes = pageIndexes.filter {
+            pages.indices.contains($0) && pages[$0].texture.mipmapLevelCount > 1
+        }
+        guard mippedPageIndexes.isEmpty == false,
+              let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
+            return
+        }
+
+        for pageIndex in mippedPageIndexes {
+            blitEncoder.generateMipmaps(for: pages[pageIndex].texture)
+        }
+        blitEncoder.endEncoding()
+    }
+
     private func makePage() -> Page {
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = .type2D
@@ -221,6 +256,7 @@ class GlobeTilesTexture {
         descriptor.pixelFormat = .bgra8Unorm
         descriptor.usage = [.shaderRead, .renderTarget]
         descriptor.storageMode = .private
+        descriptor.mipmapLevelCount = Self.pageMipLevelCount
 
         return Page(texture: metalDevice.makeTexture(descriptor: descriptor)!,
                     tileData: [])

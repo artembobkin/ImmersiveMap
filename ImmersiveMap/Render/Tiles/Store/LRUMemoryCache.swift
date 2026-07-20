@@ -46,10 +46,13 @@ struct LRUMemoryCache<Key: Hashable, Value> {
         return slotsByKey.values[index].value
     }
 
+    /// `evictionCostLimit` заменяет лимит вытеснения для этой вставки:
+    /// вызывающий может расширить бюджет, например на стоимость pinned-записей.
     mutating func setValue(_ value: Value,
                            forKey key: Key,
                            cost: Int,
-                           protectedKeys: Set<Key> = []) -> [Entry]? {
+                           protectedKeys: Set<Key> = [],
+                           evictionCostLimit: Int? = nil) -> [Entry]? {
         let normalizedCost = max(0, cost)
         if let existingSlot = slotsByKey[key] {
             totalCost -= existingSlot.cost
@@ -59,7 +62,7 @@ struct LRUMemoryCache<Key: Hashable, Value> {
         slotsByKey[key] = Slot(value: value, cost: normalizedCost, lastUsedTick: usageTick)
         totalCost += normalizedCost
 
-        let evictedEntries = evict(toCost: costLimit,
+        let evictedEntries = evict(toCost: max(0, evictionCostLimit ?? costLimit),
                                    protectedKeys: protectedKeys,
                                    insertedKey: key,
                                    keepAtLeastOneEntry: true)

@@ -219,8 +219,15 @@ final class ImmersiveMapCameraRuntime {
 
     func panCamera(deltaX: Double,
                    deltaY: Double) {
-        renderCamera?.panCamera(deltaX: deltaX,
-                                deltaY: deltaY)
+        guard let renderCamera else {
+            return
+        }
+
+        let transition = presentationStateResolver.resolve(cameraState: renderCamera.currentCameraState())
+            .presentationState.transition
+        renderCamera.panCamera(deltaX: deltaX,
+                               deltaY: deltaY,
+                               transition: transition)
         notifyCameraPositionChanged()
         renderRuntime.requestFrame()
     }

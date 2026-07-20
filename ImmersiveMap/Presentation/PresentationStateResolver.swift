@@ -24,7 +24,7 @@ struct PresentationStateResolver {
                         settings: ImmersiveMapSettings.PresentationSettings,
                         forcedRenderSurfaceMode: ViewMode? = nil) -> ResolvedPresentationState {
         let renderZoomScale = pow(2.0, floor(cameraState.zoom))
-        let automaticTransition = automaticTransition(zoom: cameraState.zoom,
+        let automaticTransition = automaticTransition(cameraState: cameraState,
                                                       settings: settings)
         let transition = resolvedTransition(automaticTransition: automaticTransition,
                                             forcedRenderSurfaceMode: forcedRenderSurfaceMode)
@@ -56,12 +56,18 @@ struct PresentationStateResolver {
         )
     }
 
-    private static func automaticTransition(zoom: Double,
+    /// За окно перехода плоская цель морфа дорастает от `cos(широты центра)`
+    /// до полного меркаторного размера (см. `globeTransitionMapSize` в шейдере),
+    /// то есть проигрывает `log2(1/cos)` уровней видимого раздувания. Окно
+    /// растягивается на ту же величину, чтобы скорость раздувания при развороте
+    /// сферы в плоскость не зависела от широты.
+    private static func automaticTransition(cameraState: ImmersiveMapCameraState,
                                             settings: ImmersiveMapSettings.PresentationSettings) -> Float {
-        let from = Float(settings.automaticTransitionStartZoom)
-        let span = max(Float.leastNonzeroMagnitude, Float(settings.automaticTransitionSpan))
-        let to = from + span
-        return max(0.0, min(1.0, (Float(zoom) - from) / (to - from)))
+        let from = settings.automaticTransitionStartZoom
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: cameraState.centerWorldMercator.y)
+        let latitudeSpanExtension = log2(1.0 / max(cos(latitude), 0.01))
+        let span = max(.leastNonzeroMagnitude, settings.automaticTransitionSpan + latitudeSpanExtension)
+        return Float(max(0.0, min(1.0, (cameraState.zoom - from) / span)))
     }
 
     private static func resolvedTransition(automaticTransition: Float,

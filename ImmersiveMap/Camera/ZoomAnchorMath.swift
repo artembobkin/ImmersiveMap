@@ -100,8 +100,7 @@ enum ZoomAnchorMath {
                                                      globeRadiusScale: Double) -> Double {
         let cameraDistance = 1.0 - 0.5 * zoom.truncatingRemainder(dividingBy: 1.0)
         let renderMapSize = 2.0 * Double.pi * globeRadiusScale * pow(2.0, floor(zoom))
-        let flatness = Double(min(max(transition, 0.0), 1.0))
-        let surfaceScale = flatness + (1.0 - flatness) * max(cos(latitude), 1e-6)
+        let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
         return (2.0 * cameraDistance * halfFovTangent) / (viewportHeight * renderMapSize * surfaceScale)
     }
 }

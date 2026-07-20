@@ -6,6 +6,13 @@ import Foundation
 import simd
 
 struct GlobeAtlasPlacementPlanner {
+    /// Кап анизотропии слота: слот обслуживает растянутую ось экранного следа,
+    /// но не более чем в 4 раза детальнее сжатой оси. Чистый `max` давал полосе
+    /// у горизонта гигантский слот (рябь при минификации и раздутый бюджет
+    /// страниц), чистый `min` делал пиксельным ближний тайл, растянутый на весь
+    /// экран по ширине.
+    static let maximumSlotAnisotropy: Float = 4.0
+
     let pageSizePx: Int
     let qualityScale: Float
 
@@ -15,12 +22,18 @@ struct GlobeAtlasPlacementPlanner {
         self.qualityScale = max(0.25, qualityScale)
     }
 
+    static func screenDemandPx(boundsPx: CGRect) -> Float {
+        let stretchedSide = Float(max(boundsPx.width, boundsPx.height))
+        let compressedSide = Float(min(boundsPx.width, boundsPx.height))
+        return min(stretchedSide, maximumSlotAnisotropy * compressedSide)
+    }
+
     static func makeCandidateForTesting(placementIndex: Int,
                                         placeTile: PlaceTile,
                                         screenBoundsPx: CGRect,
                                         pageSizePx: Int,
                                         qualityScale: Float = 1.0) -> GlobeAtlasCandidate {
-        let demand = Float(max(screenBoundsPx.width, screenBoundsPx.height))
+        let demand = screenDemandPx(boundsPx: screenBoundsPx)
         return GlobeAtlasCandidate(placementIndex: placementIndex,
                                    placeTile: placeTile,
                                    screenDemandPx: demand,
@@ -74,7 +87,7 @@ struct GlobeAtlasPlacementPlanner {
                 return nil
             }
 
-            let demand = Float(max(footprint.bounds.width, footprint.bounds.height))
+            let demand = Self.screenDemandPx(boundsPx: footprint.bounds)
             return GlobeAtlasCandidate(placementIndex: index,
                                        placeTile: placeTile.placeTile,
                                        screenDemandPx: demand,

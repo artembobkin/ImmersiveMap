@@ -41,9 +41,24 @@ class CameraStateController {
         cameraState.pitch = min(max(0, cameraState.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
     }
 
-    func pan(deltaX: Double, deltaY: Double) {
+    /// Горизонтальная широтная компенсация пана включается по мере приближения:
+    /// ниже start её нет, выше end — полная.
+    private static let horizontalPanCompensationStartZoom = 2.5
+    private static let horizontalPanCompensationEndZoom = 5.0
+
+    /// Сдвигает центр карты на дельту жеста. `transition` — фаза глобус→плоскость
+    /// (0 — глобус, 1 — плоскость): на сфере меркаторная дельта делится на
+    /// `cos(широты)`, чтобы угловая скорость пана не падала у полюсов.
+    ///
+    /// По вертикали компенсация полная на любом зуме. По горизонтали у полюса
+    /// свайп — это вращение вокруг оси взгляда: на низких зумах (виден весь
+    /// глобус) полная компенсация превращает его в неуправляемое кручение,
+    /// поэтому горизонтальный множитель вводится плавно по зуму.
+    func pan(deltaX: Double, deltaY: Double, transition: Float) {
         let yaw = Double(cameraState.bearing)
         let startForward = SIMD2<Double>(0, 1)
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: cameraState.centerWorldMercator.y)
+        let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
         let sensitivity = settings.worldPanSensitivity / pow(2.0, zoom)
 
         let cosYaw = cos(-yaw)
@@ -57,8 +72,18 @@ class CameraStateController {
         )
 
         let panDelta = sensitivity * (forward * deltaY * settings.worldPanSpeed + right * deltaX * settings.worldPanSpeed)
-        let worldDelta = SIMD2<Double>(-0.5 * panDelta.x, -0.5 * panDelta.y)
+        let verticalCompensation = 1.0 / surfaceScale
+        let horizontalCompensation = 1.0 + (verticalCompensation - 1.0) * horizontalCompensationRamp(zoom: zoom)
+        let worldDelta = SIMD2<Double>(-0.5 * panDelta.x * horizontalCompensation,
+                                       -0.5 * panDelta.y * verticalCompensation)
         setCenterWorldMercator(cameraState.centerWorldMercator + worldDelta)
+    }
+
+    private func horizontalCompensationRamp(zoom: Double) -> Double {
+        let start = Self.horizontalPanCompensationStartZoom
+        let end = Self.horizontalPanCompensationEndZoom
+        let progress = min(max((zoom - start) / (end - start), 0.0), 1.0)
+        return progress * progress * (3.0 - 2.0 * progress)
     }
 
     func setZoom(zoom: Double) {

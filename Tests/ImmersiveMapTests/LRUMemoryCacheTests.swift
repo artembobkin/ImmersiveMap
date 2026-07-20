@@ -72,6 +72,20 @@ final class LRUMemoryCacheTests: XCTestCase {
         XCTAssertEqual(cache.count, 1)
     }
 
+    func testEvictionCostLimitOverrideExtendsBudgetForSingleInsert() {
+        var cache = LRUMemoryCache<String, Int>(costLimit: 10)
+        XCTAssertNil(cache.setValue(1, forKey: "a", cost: 6))
+
+        // Расширенный лимит 12 вмещает обе записи без вытеснения.
+        XCTAssertNil(cache.setValue(2, forKey: "b", cost: 6, evictionCostLimit: 12))
+        XCTAssertNotNil(cache.value(forKey: "a"))
+        XCTAssertNotNil(cache.value(forKey: "b"))
+
+        // Вставка со штатным лимитом 10 вытесняет наименее свежую запись.
+        let evicted = cache.setValue(3, forKey: "c", cost: 6)
+        XCTAssertEqual(evicted?.map(\.key).contains("a"), true)
+    }
+
     func testRemoveAllReturnsSnapshotAndClearsCache() {
         var cache = LRUMemoryCache<Int, String>(costLimit: 10)
         _ = cache.setValue("one", forKey: 1, cost: 2)

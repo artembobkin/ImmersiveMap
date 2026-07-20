@@ -450,6 +450,42 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertTrue(candidate.isFallback)
     }
 
+    /// Demand обслуживает растянутую ось следа, но анизотропия капится 4×:
+    /// полоса у горизонта получает малый слот, квадратный тайл - слот по
+    /// стороне, ближний тайл во весь экран - полноразмерный слот.
+    func testDemandCapsSlotAnisotropyOfDistortedFootprint() throws {
+        let metalTile = MetalTile(tile: Tile(x: 9, y: 9, z: 5), tileBuffers: try makeTileBuffers())
+        let placeTile = PlaceTile(metalTile: metalTile,
+                                  placeIn: VisibleTile(tile: Tile(x: 9, y: 9, z: 5)),
+                                  lodKind: .exact)
+
+        let horizonStrip = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+            placementIndex: 0,
+            placeTile: placeTile,
+            screenBoundsPx: CGRect(x: 0, y: 80, width: 1500, height: 60),
+            pageSizePx: 4096
+        )
+        let squareTile = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+            placementIndex: 1,
+            placeTile: placeTile,
+            screenBoundsPx: CGRect(x: 100, y: 100, width: 900, height: 900),
+            pageSizePx: 4096
+        )
+        let nearFullScreenTile = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+            placementIndex: 2,
+            placeTile: placeTile,
+            screenBoundsPx: CGRect(x: 0, y: 1000, width: 3360, height: 900),
+            pageSizePx: 4096
+        )
+
+        XCTAssertEqual(horizonStrip.screenDemandPx, 240, accuracy: 0.1)
+        XCTAssertEqual(horizonStrip.desiredDepth, .depth4)
+        XCTAssertEqual(squareTile.screenDemandPx, 900, accuracy: 0.1)
+        XCTAssertEqual(squareTile.desiredDepth, .depth2)
+        XCTAssertEqual(nearFullScreenTile.screenDemandPx, 3360, accuracy: 0.1)
+        XCTAssertEqual(nearFullScreenTile.desiredDepth, .depth0)
+    }
+
     func testMakeCandidatesUsesTargetTileForFallbackFootprint() throws {
         let source = Tile(x: 4, y: 4, z: 3)
         let target = Tile(x: 16, y: 16, z: 5)
