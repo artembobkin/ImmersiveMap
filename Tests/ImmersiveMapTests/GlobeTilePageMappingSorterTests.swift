@@ -5,7 +5,7 @@
 import simd
 import XCTest
 
-final class GlobeTilePageMappingSorterTests: XCTestCase {
+final class TileAtlasPageMappingSorterTests: XCTestCase {
     func testDrawsFallbackBeforeExactTileForSameTargetRegardlessOfPage() {
         let targetTile = simd_int3(38, 19, 6)
         let fallback = makePageMapping(pageIndex: 1,
@@ -18,7 +18,7 @@ final class GlobeTilePageMappingSorterTests: XCTestCase {
                                     sourceTile: targetTile)
 
         var pageMappings = [exact, fallback]
-        GlobeTilePageMappingSorter.sort(&pageMappings)
+        TileAtlasPageMappingSorter.sort(&pageMappings)
 
         XCTAssertEqual(pageMappings.map { $0.mapping.sourceTile }, [fallback.mapping.sourceTile, exact.mapping.sourceTile])
     }
@@ -34,7 +34,7 @@ final class GlobeTilePageMappingSorterTests: XCTestCase {
                                        sourceTile: simd_int3(38, 19, 6))
 
         var pageMappings = [detailed, coarse]
-        GlobeTilePageMappingSorter.sort(&pageMappings)
+        TileAtlasPageMappingSorter.sort(&pageMappings)
 
         XCTAssertEqual(pageMappings.map { $0.mapping.tile }, [coarse.mapping.tile, detailed.mapping.tile])
     }
@@ -42,8 +42,8 @@ final class GlobeTilePageMappingSorterTests: XCTestCase {
     private func makePageMapping(pageIndex: Int,
                                  position: Int32,
                                  targetTile: simd_int3,
-                                 sourceTile: simd_int3) -> GlobeTilePageMappingSorter.PageMapping {
-        let mapping = GlobeTilesTexture.TileData(position: simd_int1(position),
+                                 sourceTile: simd_int3) -> TileAtlasPageMappingSorter.PageMapping {
+        let mapping = TileAtlasTexture.TileData(position: simd_int1(position),
                                                  textureSize: simd_int1(4096),
                                                  cellSize: simd_int1(1024),
                                                  tile: targetTile,

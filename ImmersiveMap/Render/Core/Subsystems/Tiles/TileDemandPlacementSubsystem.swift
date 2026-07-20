@@ -19,7 +19,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
-    private var globeTexturePlaceTilesContext: GlobeTexturePlaceTilesContext = .empty
+    private var tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     private var demandGateFingerprint: Int?
     private var latestRequestedTilesCount: Int = 0
@@ -92,10 +92,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                      readyTilesBySource: readyTilesBySource,
                                                                      zoom: tileZoomLevel,
                                                                      previousContext: placeTilesContext)
-            globeTexturePlaceTilesContext = GlobeTexturePlacementPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
+            tileAtlasPlaceTilesContext = TileAtlasPlaceTilesPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
                                                                                          readyTilesBySource: readyTilesBySource,
                                                                                          baseZoom: tileZoomLevel,
-                                                                                         previousContext: globeTexturePlaceTilesContext)
+                                                                                         previousContext: tileAtlasPlaceTilesContext)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
         }
@@ -139,7 +139,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let renderedTilesCount = placeTilesContext.tilePlacements.count
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
-            globeTexturePlaceTilesContext: globeTexturePlaceTilesContext,
+            tileAtlasPlaceTilesContext: tileAtlasPlaceTilesContext,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
             readyTilesCount: readyTilesCount,
@@ -170,7 +170,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     func evict() {
         tileRenderStore.evict()
         placeTilesContext = .empty
-        globeTexturePlaceTilesContext = .empty
+        tileAtlasPlaceTilesContext = .empty
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil
         placementVersion &+= 1

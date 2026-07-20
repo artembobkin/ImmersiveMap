@@ -6,34 +6,34 @@ import CoreGraphics
 import MetalKit
 import XCTest
 
-final class GlobeAtlasPlacementPlannerTests: XCTestCase {
+final class TileAtlasPlacementPlannerTests: XCTestCase {
     func testSlotDepthCellSizesUseFixed4096Page() {
-        XCTAssertEqual(GlobeAtlasSlotDepth.depth0.cellSize(pageSizePx: 4096), 4096)
-        XCTAssertEqual(GlobeAtlasSlotDepth.depth1.cellSize(pageSizePx: 4096), 2048)
-        XCTAssertEqual(GlobeAtlasSlotDepth.depth2.cellSize(pageSizePx: 4096), 1024)
-        XCTAssertEqual(GlobeAtlasSlotDepth.depth3.cellSize(pageSizePx: 4096), 512)
-        XCTAssertEqual(GlobeAtlasSlotDepth.depth4.cellSize(pageSizePx: 4096), 256)
+        XCTAssertEqual(TileAtlasSlotDepth.depth0.cellSize(pageSizePx: 4096), 4096)
+        XCTAssertEqual(TileAtlasSlotDepth.depth1.cellSize(pageSizePx: 4096), 2048)
+        XCTAssertEqual(TileAtlasSlotDepth.depth2.cellSize(pageSizePx: 4096), 1024)
+        XCTAssertEqual(TileAtlasSlotDepth.depth3.cellSize(pageSizePx: 4096), 512)
+        XCTAssertEqual(TileAtlasSlotDepth.depth4.cellSize(pageSizePx: 4096), 256)
     }
 
     func testDesiredDepthRoundsScreenDemandUpToNextAvailableCell() {
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 2300, pageSizePx: 4096), .depth0)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 1600, pageSizePx: 4096), .depth1)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 900, pageSizePx: 4096), .depth2)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 420, pageSizePx: 4096), .depth3)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 90, pageSizePx: 4096), .depth4)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 2300, pageSizePx: 4096), .depth0)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 1600, pageSizePx: 4096), .depth1)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 900, pageSizePx: 4096), .depth2)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 420, pageSizePx: 4096), .depth3)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 90, pageSizePx: 4096), .depth4)
     }
 
     func testDesiredDepthClampsOversizedDemandToFullPageCell() {
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 4097, pageSizePx: 4096), .depth0)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 8000, pageSizePx: 4096), .depth0)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 4097, pageSizePx: 4096), .depth0)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 8000, pageSizePx: 4096), .depth0)
     }
 
     func testDesiredDepthKeepsExactBoundaryInCurrentCell() {
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 4096, pageSizePx: 4096), .depth0)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 2048, pageSizePx: 4096), .depth1)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 1024, pageSizePx: 4096), .depth2)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 512, pageSizePx: 4096), .depth3)
-        XCTAssertEqual(GlobeAtlasSlotDepth.desired(forScreenDemandPx: 256, pageSizePx: 4096), .depth4)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 4096, pageSizePx: 4096), .depth0)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 2048, pageSizePx: 4096), .depth1)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 1024, pageSizePx: 4096), .depth2)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 512, pageSizePx: 4096), .depth3)
+        XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 256, pageSizePx: 4096), .depth4)
     }
 
     func testSingleCandidateUpscalesToFullPageWithinExistingPageBudget() throws {
@@ -43,7 +43,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                           screenDemandPx: 90,
                                           distanceToCamera: 0)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [candidate])
 
         XCTAssertEqual(plan.allocations.map(\.atlasDepth), [.depth0])
@@ -59,7 +59,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -79,7 +79,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                       screenDemandPx: 900,
                                       distanceToCamera: 0)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [small, large])
 
         XCTAssertEqual(plan.allocations.map(\.candidate.placementIndex), [1, 0])
@@ -89,7 +89,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
     }
 
     func testPlannerKeepsAllocationStableAcrossSmallPriorityMetricJitter() throws {
-        let planner = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let planner = TileAtlasPlacementPlanner(pageSizePx: 4096)
         let firstFrameCandidates = try [
             makeCandidate(index: 0,
                           source: Tile(x: 4, y: 2, z: 5),
@@ -134,7 +134,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                       screenDemandPx: 260,
                                       distanceToCamera: 0.2)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [exact, fallback])
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -159,7 +159,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                        screenDemandPx: 2800,
                                        distanceToCamera: 0.1)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [first, second])
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -177,7 +177,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -197,7 +197,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -215,7 +215,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -238,7 +238,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                        screenDemandPx: 2800,
                                        distanceToCamera: 0.1)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [first, second])
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -249,7 +249,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertEqual(plan.skippedAllocationCount, 0)
     }
 
-    func testGlobeAtlasDebugSummaryCountsPagesSlotsAndHighResolutionFallbacks() throws {
+    func testTileAtlasDebugSummaryCountsPagesSlotsAndHighResolutionFallbacks() throws {
         let candidates = try [
             makeCandidate(index: 0,
                           source: Tile(x: 4, y: 4, z: 3),
@@ -277,10 +277,10 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                           screenDemandPx: 1500,
                           distanceToCamera: 4.0)
         ]
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
-        let summary = GlobeAtlasDebugSummary(plan: plan)
+        let summary = TileAtlasDebugSummary(plan: plan)
 
         XCTAssertEqual(summary.pageCount, 2)
         XCTAssertEqual(summary.allocationCount, 5)
@@ -303,7 +303,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         XCTAssertEqual(plan.allocations.count, 769)
@@ -322,7 +322,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: candidates)
 
         XCTAssertEqual(plan.allocations.count, 8)
@@ -339,15 +339,15 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                          screenDemandPx: 128,
                                          distanceToCamera: 0)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [fallback])
 
-        let summary = GlobeAtlasDebugSummary(plan: plan)
+        let summary = TileAtlasDebugSummary(plan: plan)
 
         XCTAssertEqual(summary.slotCount(depth: .depth0), 1)
     }
 
-    func testGlobeAtlasDebugSummaryIncludesPageAllocationLayout() throws {
+    func testTileAtlasDebugSummaryIncludesPageAllocationLayout() throws {
         let fallback = try makeCandidate(index: 0,
                                          source: Tile(x: 4, y: 2, z: 3),
                                          target: Tile(x: 17, y: 10, z: 5),
@@ -358,10 +358,10 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                       target: Tile(x: 18, y: 10, z: 5),
                                       screenDemandPx: 260,
                                       distanceToCamera: 0.2)
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [exact, fallback])
 
-        let summary = GlobeAtlasDebugSummary(plan: plan)
+        let summary = TileAtlasDebugSummary(plan: plan)
 
         XCTAssertEqual(summary.pages.count, 1)
         XCTAssertEqual(summary.pages[0].pageIndex, 0)
@@ -378,7 +378,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertFalse(summary.pages[0].allocations[1].isFallback)
     }
 
-    func testGlobeAtlasDebugSummaryKeepsAllocationLodKind() throws {
+    func testTileAtlasDebugSummaryKeepsAllocationLodKind() throws {
         let coarse = try makeCandidate(index: 0,
                                        source: Tile(x: 4, y: 2, z: 5),
                                        target: Tile(x: 4, y: 2, z: 5),
@@ -386,17 +386,17 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                        distanceToCamera: 0,
                                        lodKind: .coarseSubstitute)
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [coarse])
 
-        let summary = GlobeAtlasDebugSummary(plan: plan)
+        let summary = TileAtlasDebugSummary(plan: plan)
 
         XCTAssertEqual(summary.pages[0].allocations[0].lodKind, .coarseSubstitute)
         XCTAssertTrue(summary.pages[0].allocations[0].isFallback)
     }
 
     func testTextureTreeRejectsParentSlotAfterChildSlotAllocated() {
-        let tree = GlobeTileTextureTree()
+        let tree = TileAtlasSlotTree()
 
         XCTAssertNotNil(tree.addNewValue(value: TextureValue(), depth: 1))
         XCTAssertNil(tree.addNewValue(value: TextureValue(), depth: 0))
@@ -416,7 +416,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               distanceToCamera: Float(index))
         }
 
-        let plan = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let plan = TileAtlasPlacementPlanner(pageSizePx: 4096)
             .plan(candidates: [large] + small)
 
         assertNoOverlappingAllocations(plan.allocations)
@@ -436,7 +436,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                   placeIn: VisibleTile(tile: target),
                                   lodKind: .retainedReplacement)
 
-        let candidate = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+        let candidate = TileAtlasPlacementPlanner.makeCandidateForTesting(
             placementIndex: 0,
             placeTile: placeTile,
             screenBoundsPx: CGRect(x: 100, y: 100, width: 1300, height: 800),
@@ -459,19 +459,19 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                   placeIn: VisibleTile(tile: Tile(x: 9, y: 9, z: 5)),
                                   lodKind: .exact)
 
-        let horizonStrip = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+        let horizonStrip = TileAtlasPlacementPlanner.makeCandidateForTesting(
             placementIndex: 0,
             placeTile: placeTile,
             screenBoundsPx: CGRect(x: 0, y: 80, width: 1500, height: 60),
             pageSizePx: 4096
         )
-        let squareTile = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+        let squareTile = TileAtlasPlacementPlanner.makeCandidateForTesting(
             placementIndex: 1,
             placeTile: placeTile,
             screenBoundsPx: CGRect(x: 100, y: 100, width: 900, height: 900),
             pageSizePx: 4096
         )
-        let nearFullScreenTile = GlobeAtlasPlacementPlanner.makeCandidateForTesting(
+        let nearFullScreenTile = TileAtlasPlacementPlanner.makeCandidateForTesting(
             placementIndex: 2,
             placeTile: placeTile,
             screenBoundsPx: CGRect(x: 0, y: 1000, width: 3360, height: 900),
@@ -497,7 +497,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                               placeIn: VisibleTile(tile: target),
                               lodKind: .exact)
         let frameContext = makeGlobeFrameContext()
-        let planner = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let planner = TileAtlasPlacementPlanner(pageSizePx: 4096)
 
         let fallbackCandidate = try XCTUnwrap(planner.makeCandidates(placeTiles: [fallback],
                                                                      frameContext: frameContext).first)
@@ -525,7 +525,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                                      zoom: 0.86,
                                                      bearingDegrees: 15.0,
                                                      drawSize: CGSize(width: 3742, height: 2258))
-        let planner = GlobeAtlasPlacementPlanner(pageSizePx: 4096)
+        let planner = TileAtlasPlacementPlanner(pageSizePx: 4096)
 
         let candidates = planner.makeCandidates(placeTiles: [placeTile],
                                                 frameContext: frameContext)
@@ -535,7 +535,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
     }
 
     func testScreenFootprintIgnoresProjectedSamplesThatFailHorizonVisibility() {
-        let footprint = GlobeAtlasPlacementPlanner.screenFootprintForTesting(
+        let footprint = TileAtlasPlacementPlanner.screenFootprintForTesting(
             projectedSamples: [
                 (position: SIMD2<Float>(100, 100), depth: 0.1, passesHorizon: false),
                 (position: SIMD2<Float>(400, 300), depth: 0.2, passesHorizon: false)
@@ -547,7 +547,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
     }
 
     func testScreenFootprintBuildsBoundsFromOnlyHorizonVisibleSamples() throws {
-        let footprint = try XCTUnwrap(GlobeAtlasPlacementPlanner.screenFootprintForTesting(
+        let footprint = try XCTUnwrap(TileAtlasPlacementPlanner.screenFootprintForTesting(
             projectedSamples: [
                 (position: SIMD2<Float>(100, 100), depth: 0.1, passesHorizon: false),
                 (position: SIMD2<Float>(400, 300), depth: 0.2, passesHorizon: true),
@@ -567,20 +567,20 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                                target: Tile,
                                screenDemandPx: Float,
                                distanceToCamera: Float,
-                               lodKind: TileLodKind? = nil) throws -> GlobeAtlasCandidate {
+                               lodKind: TileLodKind? = nil) throws -> TileAtlasCandidate {
         let metalTile = MetalTile(tile: source, tileBuffers: try makeTileBuffers())
         let placeTile = PlaceTile(metalTile: metalTile,
                                   placeIn: VisibleTile(tile: target),
                                   lodKind: lodKind ?? (source == target ? .exact : .retainedReplacement))
-        return GlobeAtlasCandidate(placementIndex: index,
+        return TileAtlasCandidate(placementIndex: index,
                                    placeTile: placeTile,
                                    screenDemandPx: screenDemandPx,
                                    distanceToCamera: distanceToCamera,
-                                   desiredDepth: GlobeAtlasSlotDepth.desired(forScreenDemandPx: screenDemandPx,
+                                   desiredDepth: TileAtlasSlotDepth.desired(forScreenDemandPx: screenDemandPx,
                                                                              pageSizePx: 4096))
     }
 
-    private func stableAllocationLayout(_ plan: GlobeAtlasPlan) -> [AllocationLayout] {
+    private func stableAllocationLayout(_ plan: TileAtlasPlan) -> [AllocationLayout] {
         plan.allocations
             .map {
                 AllocationLayout(target: $0.placeTile.placeIn.tile,
@@ -605,7 +605,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
         let source: Tile
         let pageIndex: Int
         let position: PlacedPos
-        let atlasDepth: GlobeAtlasSlotDepth
+        let atlasDepth: TileAtlasSlotDepth
     }
 
     private func makeTileBuffers() throws -> TileBuffers {
@@ -723,7 +723,7 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
                             diagnostics: diagnostics)
     }
 
-    private func assertNoOverlappingAllocations(_ allocations: [GlobeAtlasAllocation],
+    private func assertNoOverlappingAllocations(_ allocations: [TileAtlasAllocation],
                                                 file: StaticString = #filePath,
                                                 line: UInt = #line) {
         for leftIndex in allocations.indices {
@@ -741,8 +741,8 @@ final class GlobeAtlasPlacementPlannerTests: XCTestCase {
         }
     }
 
-    private func atlasRect(_ allocation: GlobeAtlasAllocation) -> AtlasRect {
-        let commonDepth = Int(GlobeAtlasSlotDepth.depth4.rawValue)
+    private func atlasRect(_ allocation: TileAtlasAllocation) -> AtlasRect {
+        let commonDepth = Int(TileAtlasSlotDepth.depth4.rawValue)
         let depth = Int(allocation.atlasDepth.rawValue)
         let scale = 1 << (commonDepth - depth)
         let minX = Int(allocation.placedPosition.x) * scale

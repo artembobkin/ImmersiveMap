@@ -91,7 +91,7 @@ final class DebugOverlayRendererTests: XCTestCase {
     func testHudSnapshotIncludesAtlasPagesWhenSummaryExists() throws {
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
-        let summary = GlobeAtlasDebugSummary(plan: try makeSingleAllocationAtlasPlan())
+        let summary = TileAtlasDebugSummary(plan: try makeSingleAllocationAtlasPlan())
 
         let snapshot = DebugOverlayHUDSnapshot.make(
             settings: settings,
@@ -108,7 +108,7 @@ final class DebugOverlayRendererTests: XCTestCase {
     }
 
     func testAtlasAllocationLabelUsesTargetTileCoordinate() {
-        let allocation = GlobeAtlasDebugAllocation(pageIndex: 0,
+        let allocation = TileAtlasDebugAllocation(pageIndex: 0,
                                                    slotColumn: 0,
                                                    slotRow: 0,
                                                    slotsPerSide: 4,
@@ -390,25 +390,25 @@ final class DebugOverlayRendererTests: XCTestCase {
         })
     }
 
-    private func makeSingleAllocationAtlasPlan() throws -> GlobeAtlasPlan {
+    private func makeSingleAllocationAtlasPlan() throws -> TileAtlasPlan {
         let sourceTile = Tile(x: 0, y: 0, z: 1)
         let targetTile = Tile(x: 0, y: 0, z: 1)
         let metalTile = MetalTile(tile: sourceTile, tileBuffers: try makeTileBuffers())
         let placeTile = PlaceTile(metalTile: metalTile,
                                   placeIn: VisibleTile(tile: targetTile),
                                   lodKind: .exact)
-        let candidate = GlobeAtlasCandidate(placementIndex: 0,
+        let candidate = TileAtlasCandidate(placementIndex: 0,
                                             placeTile: placeTile,
                                             screenDemandPx: 128,
                                             distanceToCamera: 0,
                                             desiredDepth: .depth4)
-        let allocation = GlobeAtlasAllocation(candidate: candidate,
+        let allocation = TileAtlasAllocation(candidate: candidate,
                                               pageIndex: 0,
                                               placedPosition: PlacedPos(depth: 4, x: 0, y: 0),
                                               atlasDepth: .depth4,
                                               cellSizePx: 256)
-        return GlobeAtlasPlan(allocations: [allocation],
-                              pageSummaries: [GlobeAtlasPageSummary(pageIndex: 0, allocatedSlotCount: 1)],
+        return TileAtlasPlan(allocations: [allocation],
+                              pageSummaries: [TileAtlasPageSummary(pageIndex: 0, allocatedSlotCount: 1)],
                               downgradedAllocationCount: 0,
                               skippedAllocationCount: 0)
     }

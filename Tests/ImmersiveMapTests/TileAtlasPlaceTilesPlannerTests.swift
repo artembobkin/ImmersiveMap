@@ -5,12 +5,12 @@
 import MetalKit
 import XCTest
 
-final class GlobeTexturePlacementPlannerTests: XCTestCase {
+final class TileAtlasPlaceTilesPlannerTests: XCTestCase {
     func testBuildPlacementsKeepsOnlyBaseTargets() throws {
         let baseTile = Tile(x: 1, y: 1, z: 1)
         let baseMetalTile = MetalTile(tile: baseTile, tileBuffers: try makeTileBuffers())
 
-        let context = GlobeTexturePlacementPlanner.buildPlacements(
+        let context = TileAtlasPlaceTilesPlanner.buildPlacements(
             baseTargets: [VisibleTile(tile: baseTile)],
             readyTilesBySource: [
                 baseTile: baseMetalTile
@@ -26,7 +26,7 @@ final class GlobeTexturePlacementPlannerTests: XCTestCase {
         let baseTile = Tile(x: 1, y: 1, z: 1)
         let baseMetalTile = MetalTile(tile: baseTile, tileBuffers: try makeTileBuffers())
 
-        let context = GlobeTexturePlacementPlanner.buildPlacements(
+        let context = TileAtlasPlaceTilesPlanner.buildPlacements(
             baseTargets: [VisibleTile(tile: baseTile)],
             readyTilesBySource: [
                 baseTile: baseMetalTile

@@ -9,13 +9,13 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
     private let globeDepthState: MTLDepthStencilState
     private let globePipeline: GlobePipeline
     private let mapSurfaceGridBuffers: MapSurfaceGridBuffers
-    private let tilesTexture: GlobeTilesTexture
+    private let tilesTexture: TileAtlasTexture
     private let debugOverlayControls: DebugOverlayControlState
 
     init(globeDepthState: MTLDepthStencilState,
          globePipeline: GlobePipeline,
          mapSurfaceGridBuffers: MapSurfaceGridBuffers,
-         tilesTexture: GlobeTilesTexture,
+         tilesTexture: TileAtlasTexture,
          debugOverlayControls: DebugOverlayControlState) {
         self.globeDepthState = globeDepthState
         self.globePipeline = globePipeline

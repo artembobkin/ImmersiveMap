@@ -1,10 +1,10 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-enum GlobeTilePageMappingSorter {
-    typealias PageMapping = (pageIndex: Int, mapping: GlobeTilesTexture.TileData)
+enum TileAtlasPageMappingSorter {
+    typealias PageMapping = (pageIndex: Int, mapping: TileAtlasTexture.TileData)
 
-    static func sortedPageMappings(tilesTexture: GlobeTilesTexture) -> [PageMapping] {
+    static func sortedPageMappings(tilesTexture: TileAtlasTexture) -> [PageMapping] {
         var pageMappings: [PageMapping] = []
         for (pageIndex, page) in tilesTexture.pages.enumerated() {
             for mapping in page.tileData {
@@ -48,7 +48,7 @@ enum GlobeTilePageMappingSorter {
         return Int(lhsMapping.position) < Int(rhsMapping.position)
     }
 
-    private static func isReplacement(_ mapping: GlobeTilesTexture.TileData) -> Bool {
+    private static func isReplacement(_ mapping: TileAtlasTexture.TileData) -> Bool {
         mapping.sourceTile != mapping.tile
     }
 }

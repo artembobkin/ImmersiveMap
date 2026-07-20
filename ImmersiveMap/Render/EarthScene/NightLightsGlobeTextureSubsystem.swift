@@ -69,7 +69,7 @@ final class NightLightsGlobeTextureSubsystem: RenderSubsystem {
         }
 
         let visibleTiles = frameContext.sharedState.tilePlacementState
-            .globeTexturePlaceTilesContext
+            .tileAtlasPlaceTilesContext
             .tilePlacements
             .map(\.placeIn.tile)
         let requiredTiles = Self.renderableRequiredNightLightTiles(for: visibleTiles, tileSet: tileSet)

@@ -37,7 +37,7 @@ final class RenderPersistentContext {
     // MARK: - Tile and Label Resources
 
     let tileRenderStore: TileRenderStore
-    let tilesTexture: GlobeTilesTexture
+    let tilesTexture: TileAtlasTexture
     let textRenderer: TextRenderer
     let poiSpriteAtlas: PoiSpriteAtlas
     let baseLabelCache: BaseLabelCache
@@ -106,7 +106,7 @@ final class RenderPersistentContext {
                                          library: metal.library,
                                          sampleCount: 1)
         self.poiSpriteAtlas = PoiSpriteAtlas(device: metal.device)
-        self.tilesTexture = GlobeTilesTexture(metalDevice: metal.device,
+        self.tilesTexture = TileAtlasTexture(metalDevice: metal.device,
                                               tilePipeline: globeTileTexturePipeline,
                                               mapBaseColors: mapBaseColors)
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,

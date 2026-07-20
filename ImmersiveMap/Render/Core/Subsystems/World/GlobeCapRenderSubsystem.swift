@@ -9,12 +9,12 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
     private let globeCapDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let globeCapRenderer: GlobeCapRenderer
-    private let tilesTexture: GlobeTilesTexture
+    private let tilesTexture: TileAtlasTexture
 
     init(globeCapDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          globeCapRenderer: GlobeCapRenderer,
-         tilesTexture: GlobeTilesTexture) {
+         tilesTexture: TileAtlasTexture) {
         self.globeCapDepthState = globeCapDepthState
         self.depthDisabledState = depthDisabledState
         self.globeCapRenderer = globeCapRenderer

@@ -80,7 +80,7 @@ final class GlobeCapRenderer {
               cameraUniform: CameraUniform,
               globe: GlobeUniform,
               earthScene: EarthSceneUniform,
-              tilesTexture: GlobeTilesTexture) {
+              tilesTexture: TileAtlasTexture) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
         // Cap winding differs from the globe tile mesh after geographic-latitude
         // alignment, so disabling culling keeps the patch visible on both poles.
@@ -95,10 +95,10 @@ final class GlobeCapRenderer {
 
         var fallbackTileData = Self.makeFallbackTileData()
         renderEncoder.setFragmentTexture(fallbackTexture, index: 0)
-        renderEncoder.setFragmentBytes(&fallbackTileData, length: MemoryLayout<GlobeTilesTexture.TileData>.stride, index: 3)
+        renderEncoder.setFragmentBytes(&fallbackTileData, length: MemoryLayout<TileAtlasTexture.TileData>.stride, index: 3)
         drawCapPair(renderEncoder: renderEncoder, textureSamplingEnabled: false)
 
-        let pageMappings = GlobeTilePageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)
+        let pageMappings = TileAtlasPageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)
         var activePageIndex: Int?
         for pageMapping in pageMappings {
             if activePageIndex != pageMapping.pageIndex {
@@ -107,7 +107,7 @@ final class GlobeCapRenderer {
             }
 
             var mapping = pageMapping.mapping
-            renderEncoder.setFragmentBytes(&mapping, length: MemoryLayout<GlobeTilesTexture.TileData>.stride, index: 3)
+            renderEncoder.setFragmentBytes(&mapping, length: MemoryLayout<TileAtlasTexture.TileData>.stride, index: 3)
             let lastTileY = (1 << Int(mapping.tile.z)) - 1
             if mapping.tile.y == 0 {
                 drawNorthCap(renderEncoder: renderEncoder, textureSamplingEnabled: true)
@@ -182,8 +182,8 @@ final class GlobeCapRenderer {
                                             indexBufferOffset: 0)
     }
 
-    private static func makeFallbackTileData() -> GlobeTilesTexture.TileData {
-        GlobeTilesTexture.TileData(position: simd_int1(0),
+    private static func makeFallbackTileData() -> TileAtlasTexture.TileData {
+        TileAtlasTexture.TileData(position: simd_int1(0),
                                    textureSize: simd_int1(1),
                                    cellSize: simd_int1(1),
                                    tile: simd_int3(0, 0, 0),

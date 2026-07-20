@@ -5,7 +5,7 @@ import CoreGraphics
 import Foundation
 import simd
 
-struct GlobeAtlasPlacementPlanner {
+struct TileAtlasPlacementPlanner {
     /// Кап анизотропии слота: слот обслуживает растянутую ось экранного следа,
     /// но не более чем в 4 раза детальнее сжатой оси. Чистый `max` давал полосе
     /// у горизонта гигантский слот (рябь при минификации и раздутый бюджет
@@ -32,13 +32,13 @@ struct GlobeAtlasPlacementPlanner {
                                         placeTile: PlaceTile,
                                         screenBoundsPx: CGRect,
                                         pageSizePx: Int,
-                                        qualityScale: Float = 1.0) -> GlobeAtlasCandidate {
+                                        qualityScale: Float = 1.0) -> TileAtlasCandidate {
         let demand = screenDemandPx(boundsPx: screenBoundsPx)
-        return GlobeAtlasCandidate(placementIndex: placementIndex,
+        return TileAtlasCandidate(placementIndex: placementIndex,
                                    placeTile: placeTile,
                                    screenDemandPx: demand,
                                    distanceToCamera: 0,
-                                   desiredDepth: GlobeAtlasSlotDepth.desired(forScreenDemandPx: demand,
+                                   desiredDepth: TileAtlasSlotDepth.desired(forScreenDemandPx: demand,
                                                                              pageSizePx: pageSizePx,
                                                                              qualityScale: qualityScale))
     }
@@ -71,16 +71,16 @@ struct GlobeAtlasPlacementPlanner {
     }
 
     func makeCandidates(placeTiles: [PlaceTile],
-                        frameContext: FrameContext) -> [GlobeAtlasCandidate] {
+                        frameContext: FrameContext) -> [TileAtlasCandidate] {
         let texturePlaceTiles = placeTiles.map {
-            GlobeTexturePlaceTile(placeTile: $0)
+            TileAtlasPlaceTile(placeTile: $0)
         }
         return makeCandidates(placeTiles: texturePlaceTiles,
                               frameContext: frameContext)
     }
 
-    func makeCandidates(placeTiles: [GlobeTexturePlaceTile],
-                        frameContext: FrameContext) -> [GlobeAtlasCandidate] {
+    func makeCandidates(placeTiles: [TileAtlasPlaceTile],
+                        frameContext: FrameContext) -> [TileAtlasCandidate] {
         placeTiles.enumerated().compactMap { index, placeTile in
             guard let footprint = estimateScreenFootprint(placeTile: placeTile.placeTile,
                                                           frameContext: frameContext) else {
@@ -88,17 +88,17 @@ struct GlobeAtlasPlacementPlanner {
             }
 
             let demand = Self.screenDemandPx(boundsPx: footprint.bounds)
-            return GlobeAtlasCandidate(placementIndex: index,
+            return TileAtlasCandidate(placementIndex: index,
                                        placeTile: placeTile.placeTile,
                                        screenDemandPx: demand,
                                        distanceToCamera: footprint.minimumDepth,
-                                       desiredDepth: GlobeAtlasSlotDepth.desired(forScreenDemandPx: demand,
+                                       desiredDepth: TileAtlasSlotDepth.desired(forScreenDemandPx: demand,
                                                                                  pageSizePx: pageSizePx,
                                                                                  qualityScale: qualityScale))
         }
     }
 
-    func plan(candidates: [GlobeAtlasCandidate]) -> GlobeAtlasPlan {
+    func plan(candidates: [TileAtlasCandidate]) -> TileAtlasPlan {
         guard !candidates.isEmpty else { return .empty }
 
         let desiredDepths = Dictionary(uniqueKeysWithValues: candidates.map {
@@ -111,7 +111,7 @@ struct GlobeAtlasPlacementPlanner {
         }
 
         let pageBudget = baselinePlan.pageSummaries.count
-        let pageBudgetAreaUnits = pageBudget * GlobeAtlasSlotDepth.depth0.areaUnitsAtMaximumDepth
+        let pageBudgetAreaUnits = pageBudget * TileAtlasSlotDepth.depth0.areaUnitsAtMaximumDepth
         var selectedDepths = desiredDepths
         var selectedAreaUnits = selectedDepths.values.reduce(0) {
             $0 + $1.areaUnitsAtMaximumDepth
@@ -144,10 +144,10 @@ struct GlobeAtlasPlacementPlanner {
                         depthsByPlacementIndex: selectedDepths)
     }
 
-    private func makePlan(candidates: [GlobeAtlasCandidate],
-                          depthsByPlacementIndex: [Int: GlobeAtlasSlotDepth]) -> GlobeAtlasPlan {
+    private func makePlan(candidates: [TileAtlasCandidate],
+                          depthsByPlacementIndex: [Int: TileAtlasSlotDepth]) -> TileAtlasPlan {
         var pages: [Page] = []
-        var allocations: [GlobeAtlasAllocation] = []
+        var allocations: [TileAtlasAllocation] = []
         var downgradedAllocationCount = 0
         var skippedAllocationCount = 0
         let orderedCandidates = candidates.sorted {
@@ -167,14 +167,14 @@ struct GlobeAtlasPlacementPlanner {
             allocations.append(allocation)
         }
 
-        return GlobeAtlasPlan(allocations: allocations,
+        return TileAtlasPlan(allocations: allocations,
                               pageSummaries: pages.map(\.summary),
                               downgradedAllocationCount: downgradedAllocationCount,
                               skippedAllocationCount: skippedAllocationCount)
     }
 
-    private func shouldPlaceBefore(_ lhs: GlobeAtlasCandidate,
-                                   _ rhs: GlobeAtlasCandidate) -> Bool {
+    private func shouldPlaceBefore(_ lhs: TileAtlasCandidate,
+                                   _ rhs: TileAtlasCandidate) -> Bool {
         shouldPlaceBefore(lhs,
                           rhs,
                           depthsByPlacementIndex: [
@@ -183,9 +183,9 @@ struct GlobeAtlasPlacementPlanner {
                           ])
     }
 
-    private func shouldPlaceBefore(_ lhs: GlobeAtlasCandidate,
-                                   _ rhs: GlobeAtlasCandidate,
-                                   depthsByPlacementIndex: [Int: GlobeAtlasSlotDepth]) -> Bool {
+    private func shouldPlaceBefore(_ lhs: TileAtlasCandidate,
+                                   _ rhs: TileAtlasCandidate,
+                                   depthsByPlacementIndex: [Int: TileAtlasSlotDepth]) -> Bool {
         let lhsDepth = depthsByPlacementIndex[lhs.placementIndex] ?? desiredDepth(for: lhs)
         let rhsDepth = depthsByPlacementIndex[rhs.placementIndex] ?? desiredDepth(for: rhs)
         if lhsDepth != rhsDepth {
@@ -199,8 +199,8 @@ struct GlobeAtlasPlacementPlanner {
         return lhs.placementIndex < rhs.placementIndex
     }
 
-    private func shouldUpgradeBefore(_ lhs: GlobeAtlasCandidate,
-                                     _ rhs: GlobeAtlasCandidate) -> Bool {
+    private func shouldUpgradeBefore(_ lhs: TileAtlasCandidate,
+                                     _ rhs: TileAtlasCandidate) -> Bool {
         let lhsPriority = AtlasPriorityKey(candidate: lhs)
         let rhsPriority = AtlasPriorityKey(candidate: rhs)
         if lhsPriority != rhsPriority {
@@ -209,13 +209,13 @@ struct GlobeAtlasPlacementPlanner {
         return lhs.placementIndex < rhs.placementIndex
     }
 
-    private func allocate(candidate: GlobeAtlasCandidate,
-                          depth: GlobeAtlasSlotDepth,
-                          pages: inout [Page]) -> GlobeAtlasAllocation? {
+    private func allocate(candidate: TileAtlasCandidate,
+                          depth: TileAtlasSlotDepth,
+                          pages: inout [Page]) -> TileAtlasAllocation? {
         for index in pages.indices {
             if let placedPosition = pages[index].add(depth: depth) {
                 pages[index].allocatedSlotCount += 1
-                return GlobeAtlasAllocation(candidate: candidate,
+                return TileAtlasAllocation(candidate: candidate,
                                             pageIndex: pages[index].pageIndex,
                                             placedPosition: placedPosition,
                                             atlasDepth: depth,
@@ -229,16 +229,16 @@ struct GlobeAtlasPlacementPlanner {
             return nil
         }
         pages[pages.count - 1].allocatedSlotCount += 1
-        return GlobeAtlasAllocation(candidate: candidate,
+        return TileAtlasAllocation(candidate: candidate,
                                     pageIndex: page.pageIndex,
                                     placedPosition: placedPosition,
                                     atlasDepth: depth,
                                     cellSizePx: depth.cellSize(pageSizePx: pageSizePx))
     }
 
-    private func desiredDepth(for candidate: GlobeAtlasCandidate) -> GlobeAtlasSlotDepth {
+    private func desiredDepth(for candidate: TileAtlasCandidate) -> TileAtlasSlotDepth {
         guard qualityScale != 1.0 else { return candidate.desiredDepth }
-        return GlobeAtlasSlotDepth.desired(forScreenDemandPx: candidate.screenDemandPx,
+        return TileAtlasSlotDepth.desired(forScreenDemandPx: candidate.screenDemandPx,
                                            pageSizePx: pageSizePx,
                                            qualityScale: qualityScale)
     }
@@ -248,7 +248,7 @@ struct GlobeAtlasPlacementPlanner {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width),
                                     Float(frameContext.drawSize.height))
         let cameraUniform = frameContext.cameraUniform
-        let constants = GlobeAtlasProjectionConstants(globe: frameContext.globeRenderUniform)
+        let constants = GlobeFootprintProjectionConstants(globe: frameContext.globeRenderUniform)
         var minimumX = Float.greatestFiniteMagnitude
         var minimumY = Float.greatestFiniteMagnitude
         var maximumX = -Float.greatestFiniteMagnitude
@@ -318,7 +318,7 @@ struct GlobeAtlasPlacementPlanner {
     }
 
     private func sampleUVs(for tile: Tile,
-                           constants: GlobeAtlasProjectionConstants) -> [SIMD2<Float>] {
+                           constants: GlobeFootprintProjectionConstants) -> [SIMD2<Float>] {
         guard let centerUV = centerFacingUV(for: tile, constants: constants) else {
             return Self.sampleUVs
         }
@@ -327,7 +327,7 @@ struct GlobeAtlasPlacementPlanner {
     }
 
     private func centerFacingUV(for tile: Tile,
-                                constants: GlobeAtlasProjectionConstants) -> SIMD2<Float>? {
+                                constants: GlobeFootprintProjectionConstants) -> SIMD2<Float>? {
         let zPow = powf(2.0, Float(tile.z))
         let centerLongitude = -constants.panLongitude
         let normalizedWorldX = Float(
@@ -380,7 +380,7 @@ struct GlobeAtlasPlacementPlanner {
 
     private func globeProjectTileUV(input: TilePointInput,
                                     cameraUniform: CameraUniform,
-                                    constants: GlobeAtlasProjectionConstants) -> GlobeAtlasProjectionResult {
+                                    constants: GlobeFootprintProjectionConstants) -> TileAtlasProjectionResult {
         let zPow = powf(2.0, Float(input.tile.z))
         let size = 1.0 / zPow
         let vertexUvX = input.uv.x / zPow + size * Float(input.tile.x)
@@ -396,7 +396,7 @@ struct GlobeAtlasPlacementPlanner {
     private func globeProjectLatLon(latitude: Float,
                                     longitude: Float,
                                     cameraUniform: CameraUniform,
-                                    constants: GlobeAtlasProjectionConstants) -> GlobeAtlasProjectionResult {
+                                    constants: GlobeFootprintProjectionConstants) -> TileAtlasProjectionResult {
         let sphereWorldPosition = constants.rotatedSphereWorldPosition(latitude: latitude,
                                                                        longitude: longitude)
         let flatWorldPosition = constants.flatWorldPosition(latitude: latitude,
@@ -404,13 +404,13 @@ struct GlobeAtlasPlacementPlanner {
         let transition = constants.globe.transition
         let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * transition
         let clip = cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
-        return GlobeAtlasProjectionResult(clip: clip,
+        return TileAtlasProjectionResult(clip: clip,
                                           worldPosition: worldPosition)
     }
 
     private func globeProjectionVisibility(worldPosition: SIMD3<Float>,
                                            cameraUniform: CameraUniform,
-                                           constants: GlobeAtlasProjectionConstants) -> (visible: Bool, alpha: Float) {
+                                           constants: GlobeFootprintProjectionConstants) -> (visible: Bool, alpha: Float) {
         let globeCenter = SIMD3<Float>(0.0, 0.0, -constants.globe.radius)
         let toCamera = cameraUniform.eye - globeCenter
         if simd_length(toCamera) <= 0.0 || constants.globe.transition >= 0.95 {
@@ -465,7 +465,7 @@ private struct AtlasPriorityKey: Comparable, Equatable {
     let targetTile: Tile
     let lodKind: TileLodKind
 
-    init(candidate: GlobeAtlasCandidate) {
+    init(candidate: TileAtlasCandidate) {
         let placeTile = candidate.placeTile
         replacementRank = Self.replacementRank(for: placeTile)
         screenDemandBucket = Self.bucket(candidate.screenDemandPx,
@@ -532,12 +532,12 @@ private struct AtlasPriorityKey: Comparable, Equatable {
     }
 }
 
-private struct GlobeAtlasProjectionResult {
+private struct TileAtlasProjectionResult {
     let clip: SIMD4<Float>
     let worldPosition: SIMD3<Float>
 }
 
-private struct GlobeAtlasProjectionConstants {
+private struct GlobeFootprintProjectionConstants {
     let globe: GlobeUniform
     let panLatitude: Float
     let panLongitude: Float
@@ -555,9 +555,9 @@ private struct GlobeAtlasProjectionConstants {
         let mapSizeScale = (1.0 - globe.transition) * distortion + globe.transition
         self.mapSize = 2.0 * .pi * globe.radius * mapSizeScale
         self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
-        self.rotationMatrix = GlobeAtlasProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
+        self.rotationMatrix = GlobeFootprintProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
                                                                                panLongitude: panLongitude)
-        let horizonFade = GlobeAtlasProjectionConstants.smoothstep(edge0: 0.8,
+        let horizonFade = GlobeFootprintProjectionConstants.smoothstep(edge0: 0.8,
                                                                    edge1: 0.95,
                                                                    x: globe.transition)
         self.horizonThreshold = (1.0 - horizonFade) * (globe.radius * globe.radius) + horizonFade * -1e6
@@ -613,15 +613,15 @@ private struct GlobeAtlasProjectionConstants {
 
 private struct Page {
     let pageIndex: Int
-    var tree = GlobeTileTextureTree()
+    var tree = TileAtlasSlotTree()
     var allocatedSlotCount = 0
 
-    var summary: GlobeAtlasPageSummary {
-        GlobeAtlasPageSummary(pageIndex: pageIndex,
+    var summary: TileAtlasPageSummary {
+        TileAtlasPageSummary(pageIndex: pageIndex,
                               allocatedSlotCount: allocatedSlotCount)
     }
 
-    mutating func add(depth: GlobeAtlasSlotDepth) -> PlacedPos? {
+    mutating func add(depth: TileAtlasSlotDepth) -> PlacedPos? {
         tree.addNewValue(value: TextureValue(), depth: depth.rawValue)
     }
 }

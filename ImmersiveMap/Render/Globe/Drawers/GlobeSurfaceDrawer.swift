@@ -11,7 +11,7 @@ enum GlobeSurfaceDrawer {
                      nightLightsAtlasState: NightLightsAtlasState,
                      globePipeline: GlobePipeline,
                      mapSurfaceGridBuffers: MapSurfaceGridBuffers,
-                     tilesTexture: GlobeTilesTexture,
+                     tilesTexture: TileAtlasTexture,
                      isWireframeEnabled: Bool) {
         var cameraUniformValue = cameraUniform
         var earthSceneValue = earthScene
@@ -52,7 +52,7 @@ enum GlobeSurfaceDrawer {
         }
         renderEncoder.setVertexBuffer(mapSurfaceGridBuffers.verticesBuffer, offset: 0, index: 0)
 
-        let pageMappings = GlobeTilePageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)
+        let pageMappings = TileAtlasPageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)
         var activePageIndex: Int?
         for pageMapping in pageMappings {
             if activePageIndex != pageMapping.pageIndex {
@@ -69,10 +69,10 @@ enum GlobeSurfaceDrawer {
             let mapping = pageMapping.mapping
             var mappingValue = mapping
             renderEncoder.setVertexBytes(&mappingValue,
-                                         length: MemoryLayout<GlobeTilesTexture.TileData>.stride,
+                                         length: MemoryLayout<TileAtlasTexture.TileData>.stride,
                                          index: 3)
             renderEncoder.setFragmentBytes(&mappingValue,
-                                           length: MemoryLayout<GlobeTilesTexture.TileData>.stride,
+                                           length: MemoryLayout<TileAtlasTexture.TileData>.stride,
                                            index: 3)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: mapSurfaceGridBuffers.indicesCount,

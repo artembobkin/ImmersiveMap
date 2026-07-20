@@ -3,7 +3,7 @@
 
 import MetalKit
 
-class GlobeTilesTexture {
+class TileAtlasTexture {
     private struct TileOverviewFadeUniform {
         var overviewAlpha: Float
         var roadAlpha: Float
@@ -140,7 +140,7 @@ class GlobeTilesTexture {
                                        index: 0)
     }
     
-    func draw(allocation: GlobeAtlasAllocation) -> Bool {
+    func draw(allocation: TileAtlasAllocation) -> Bool {
         let placeTile = allocation.placeTile
         let placedPos = allocation.placedPosition
         let atlasDepth = allocation.atlasDepth.rawValue
@@ -280,7 +280,7 @@ class GlobeTilesTexture {
         depthDescriptor.storageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
         #endif
         let texture = metalDevice.makeTexture(descriptor: depthDescriptor)
-        texture?.label = "GlobeTilesTextureSharedDepth"
+        texture?.label = "TileAtlasTextureSharedDepth"
         sharedDepthTexture = texture
         return texture
     }

@@ -6,7 +6,7 @@ import CoreGraphics
 import simd
 import XCTest
 
-final class GlobeAtlasPlanCacheKeyTests: XCTestCase {
+final class TileAtlasPlanCacheKeyTests: XCTestCase {
     func testKeyIsStableForUnchangedAtlasInputs() {
         let first = makeKey()
         let second = makeKey()
@@ -37,8 +37,8 @@ final class GlobeAtlasPlanCacheKeyTests: XCTestCase {
 
     private func makeKey(placementVersion: UInt64 = 1,
                          matrixScale: Float = 1,
-                         globePanX: Float = 0) -> GlobeAtlasPlanCacheKey {
-        GlobeAtlasPlanCacheKey(
+                         globePanX: Float = 0) -> TileAtlasPlanCacheKey {
+        TileAtlasPlanCacheKey(
             renderSurfaceMode: .spherical,
             placementVersion: placementVersion,
             drawSize: CGSize(width: 390, height: 844),

@@ -2,30 +2,30 @@
 // SPDX-License-Identifier: MIT
 
 //
-//  TileGlobeTextureSubsystem.swift
+//  TileAtlasSubsystem.swift
 //  ImmersiveMap
 //
 
 import Foundation
 import Metal
 
-final class TileGlobeTextureSubsystem: RenderSubsystem {
+final class TileAtlasSubsystem: RenderSubsystem {
     let name: String = "Tiles"
 
-    private let tilesTexture: GlobeTilesTexture
+    private let tilesTexture: TileAtlasTexture
     private let tileTraceRecorder: TileTraceRecorder
 
     private let atlasQualityScale: Float = 1.0
     private var globeTextureVersionTracker = StagedHashChangeTracker()
-    private var atlasPlanCacheKey: GlobeAtlasPlanCacheKey?
-    private var placeTilesContext: GlobeTexturePlaceTilesContext = .empty
-    private var atlasPlan: GlobeAtlasPlan = .empty
+    private var atlasPlanCacheKey: TileAtlasPlanCacheKey?
+    private var placeTilesContext: TileAtlasPlaceTilesContext = .empty
+    private var atlasPlan: TileAtlasPlan = .empty
     private var overviewFadeAlpha: Float = 1.0
     private var roadFadeAlpha: Float = 0.0
     private var landuseFadeAlpha: Float = 0.0
-    private var globeAtlasDebugSummary: GlobeAtlasDebugSummary?
+    private var tileAtlasDebugSummary: TileAtlasDebugSummary?
 
-    init(tilesTexture: GlobeTilesTexture,
+    init(tilesTexture: TileAtlasTexture,
          tileTraceRecorder: TileTraceRecorder) {
         self.tilesTexture = tilesTexture
         self.tileTraceRecorder = tileTraceRecorder
@@ -33,14 +33,14 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
 
     func update(frameContext: FrameContext) {
         let tilePlacementState = frameContext.sharedState.tilePlacementState
-        placeTilesContext = tilePlacementState.globeTexturePlaceTilesContext
+        placeTilesContext = tilePlacementState.tileAtlasPlaceTilesContext
         overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .overviewFeatures)
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
         landuseFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .landuse)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
         refreshDebugSummaryIfNeeded(frameContext: frameContext)
-        frameContext.sharedState.globeAtlasDebugSummary = frameContext.renderSurfaceMode == .spherical ? globeAtlasDebugSummary : nil
+        frameContext.sharedState.tileAtlasDebugSummary = frameContext.renderSurfaceMode == .spherical ? tileAtlasDebugSummary : nil
 
         var hasher = Hasher()
         hasher.combine(Int(truncatingIfNeeded: tilePlacementState.placementVersion))
@@ -65,7 +65,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
             return
         }
 
-        renderGlobeTilesTextureIfNeeded(commandBuffer: commandBuffer, frameContext: frameContext)
+        renderTileAtlasTextureIfNeeded(commandBuffer: commandBuffer, frameContext: frameContext)
     }
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
@@ -82,7 +82,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         placeTilesContext = .empty
         atlasPlan = .empty
         atlasPlanCacheKey = nil
-        globeAtlasDebugSummary = nil
+        tileAtlasDebugSummary = nil
         globeTextureVersionTracker.invalidate()
         tilesTexture.releasePages()
     }
@@ -91,12 +91,12 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
         placeTilesContext = .empty
         atlasPlan = .empty
         atlasPlanCacheKey = nil
-        globeAtlasDebugSummary = nil
+        tileAtlasDebugSummary = nil
         globeTextureVersionTracker.invalidate()
         tilesTexture.releasePages()
     }
 
-    private func renderGlobeTilesTextureIfNeeded(commandBuffer: MTLCommandBuffer,
+    private func renderTileAtlasTextureIfNeeded(commandBuffer: MTLCommandBuffer,
                                                  frameContext: FrameContext) {
         guard frameContext.renderSurfaceMode == .spherical else { return }
 
@@ -142,10 +142,10 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
                                      pageIndexes: encodedPageIndexes)
     }
 
-    private func makeAtlasPlan(frameContext: FrameContext) -> GlobeAtlasPlan {
+    private func makeAtlasPlan(frameContext: FrameContext) -> TileAtlasPlan {
         guard frameContext.renderSurfaceMode == .spherical else { return .empty }
 
-        let planner = GlobeAtlasPlacementPlanner(pageSizePx: tilesTexture.size,
+        let planner = TileAtlasPlacementPlanner(pageSizePx: tilesTexture.size,
                                                  qualityScale: atlasQualityScale)
         let candidates = planner.makeCandidates(placeTiles: placeTilesContext.tilePlacements,
                                                 frameContext: frameContext)
@@ -154,7 +154,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
 
     private func updateAtlasPlanIfNeeded(frameContext: FrameContext,
                                          placementVersion: UInt64) {
-        let cacheKey = GlobeAtlasPlanCacheKey(renderSurfaceMode: frameContext.renderSurfaceMode,
+        let cacheKey = TileAtlasPlanCacheKey(renderSurfaceMode: frameContext.renderSurfaceMode,
                                              placementVersion: placementVersion,
                                              drawSize: frameContext.drawSize,
                                              cameraUniform: frameContext.cameraUniform,
@@ -171,7 +171,7 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
 
         atlasPlan = makeAtlasPlan(frameContext: frameContext)
         atlasPlanCacheKey = cacheKey
-        globeAtlasDebugSummary = nil
+        tileAtlasDebugSummary = nil
         tileTraceRecorder.record(.atlasPlanRebuilt(frameIndex: frameContext.frameIndex,
                                                    placementVersion: placementVersion,
                                                    plan: atlasPlan,
@@ -182,15 +182,15 @@ final class TileGlobeTextureSubsystem: RenderSubsystem {
     // а не на каждый rebuild плана (rebuild происходит каждый кадр движения камеры).
     private func refreshDebugSummaryIfNeeded(frameContext: FrameContext) {
         guard frameContext.services.settings.debug.enableDebugPanel else {
-            globeAtlasDebugSummary = nil
+            tileAtlasDebugSummary = nil
             return
         }
-        if globeAtlasDebugSummary == nil {
-            globeAtlasDebugSummary = GlobeAtlasDebugSummary(plan: atlasPlan)
+        if tileAtlasDebugSummary == nil {
+            tileAtlasDebugSummary = TileAtlasDebugSummary(plan: atlasPlan)
         }
     }
 
-    private func combineAtlasPlanHash(_ atlasPlan: GlobeAtlasPlan,
+    private func combineAtlasPlanHash(_ atlasPlan: TileAtlasPlan,
                                       into hasher: inout Hasher) {
         hasher.combine(atlasPlan.allocations.count)
         hasher.combine(atlasPlan.pageSummaries.count)

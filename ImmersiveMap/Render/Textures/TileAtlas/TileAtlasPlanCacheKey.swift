@@ -4,7 +4,7 @@
 import CoreGraphics
 import simd
 
-struct GlobeAtlasPlanCacheKey: Hashable {
+struct TileAtlasPlanCacheKey: Hashable {
     private let renderSurfaceMode: UInt8
     private let placementVersion: UInt64
     private let drawWidth: UInt64

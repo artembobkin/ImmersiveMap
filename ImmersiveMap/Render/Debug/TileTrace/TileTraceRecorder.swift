@@ -253,7 +253,7 @@ extension TileTraceEvent {
     static func atlasTextureStage(frameIndex: UInt64,
                                   textureChanged: Bool,
                                   placementVersion: UInt64,
-                                  plan: GlobeAtlasPlan,
+                                  plan: TileAtlasPlan,
                                   surface: String) -> TileTraceEvent {
         .event("atlas_texture_stage",
                frameIndex: frameIndex,
@@ -269,7 +269,7 @@ extension TileTraceEvent {
     }
 
     static func atlasTextureRedraw(frameIndex: UInt64,
-                                   plan: GlobeAtlasPlan,
+                                   plan: TileAtlasPlan,
                                    encodedPages: Int) -> TileTraceEvent {
         .event("atlas_texture_redraw",
                frameIndex: frameIndex,
@@ -283,7 +283,7 @@ extension TileTraceEvent {
 
     static func atlasPlanReused(frameIndex: UInt64,
                                 placementVersion: UInt64,
-                                plan: GlobeAtlasPlan,
+                                plan: TileAtlasPlan,
                                 surface: String) -> TileTraceEvent {
         .event("atlas_plan_reused",
                frameIndex: frameIndex,
@@ -297,7 +297,7 @@ extension TileTraceEvent {
 
     static func atlasPlanRebuilt(frameIndex: UInt64,
                                  placementVersion: UInt64,
-                                 plan: GlobeAtlasPlan,
+                                 plan: TileAtlasPlan,
                                  surface: String) -> TileTraceEvent {
         .event("atlas_plan_rebuilt",
                frameIndex: frameIndex,

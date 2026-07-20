@@ -773,7 +773,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         static let borderWidth: CGFloat = 1
     }
 
-    private var pages: [GlobeAtlasDebugPage] = []
+    private var pages: [TileAtlasDebugPage] = []
 
     override var isFlipped: Bool { true }
 
@@ -781,7 +781,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         pages.count
     }
 
-    func apply(pages: [GlobeAtlasDebugPage]) {
+    func apply(pages: [TileAtlasDebugPage]) {
         self.pages = pages
         needsDisplay = true
     }
@@ -827,7 +827,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         text.draw(in: rect.insetBy(dx: 2, dy: 14), withAttributes: attributes)
     }
 
-    private func drawPageLabel(page: GlobeAtlasDebugPage, in rect: CGRect) {
+    private func drawPageLabel(page: TileAtlasDebugPage, in rect: CGRect) {
         let text = "page \(page.pageIndex) slots \(page.allocations.count)"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
@@ -836,7 +836,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         text.draw(in: rect, withAttributes: attributes)
     }
 
-    private func drawPage(_ page: GlobeAtlasDebugPage,
+    private func drawPage(_ page: TileAtlasDebugPage,
                           in pageRect: CGRect,
                           context: CGContext) {
         context.setFillColor(NSColor.white.withAlphaComponent(0.06).cgColor)
@@ -850,7 +850,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         }
     }
 
-    private func drawAllocation(_ allocation: GlobeAtlasDebugAllocation,
+    private func drawAllocation(_ allocation: TileAtlasDebugAllocation,
                                 pageRect: CGRect,
                                 context: CGContext) {
         let slots = CGFloat(max(allocation.slotsPerSide, 1))
@@ -869,7 +869,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         drawAllocationLabel(allocation, in: allocationRect)
     }
 
-    private func drawAllocationLabel(_ allocation: GlobeAtlasDebugAllocation,
+    private func drawAllocationLabel(_ allocation: TileAtlasDebugAllocation,
                                      in allocationRect: CGRect) {
         let inset = min(max(allocationRect.width * 0.08, 2), 5)
         let labelRect = allocationRect.insetBy(dx: inset, dy: inset)
@@ -888,7 +888,7 @@ private final class DebugOverlayAtlasLayoutView: NSView {
         allocation.atlasPreviewLabel.draw(in: labelRect, withAttributes: attributes)
     }
 
-    private func color(for allocation: GlobeAtlasDebugAllocation) -> NSColor {
+    private func color(for allocation: TileAtlasDebugAllocation) -> NSColor {
         if allocation.isFallback {
             return NSColor.systemOrange
         }

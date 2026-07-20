@@ -1,11 +1,11 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-struct GlobeTexturePlacementPlanner {
+struct TileAtlasPlaceTilesPlanner {
     static func buildPlacements(baseTargets: [VisibleTile],
                                 readyTilesBySource: [Tile: MetalTile?],
                                 baseZoom: Int,
-                                previousContext: GlobeTexturePlaceTilesContext) -> GlobeTexturePlaceTilesContext {
+                                previousContext: TileAtlasPlaceTilesContext) -> TileAtlasPlaceTilesContext {
         let previousBaseContext = PlaceTilesContext(
             tilePlacements: previousContext.tilePlacements.map(\.placeTile)
         )
@@ -14,9 +14,9 @@ struct GlobeTexturePlacementPlanner {
                                                                zoom: baseZoom,
                                                                previousContext: previousBaseContext)
         let basePlacements = baseContext.tilePlacements.map {
-            GlobeTexturePlaceTile(placeTile: $0)
+            TileAtlasPlaceTile(placeTile: $0)
         }
 
-        return GlobeTexturePlaceTilesContext(tilePlacements: basePlacements)
+        return TileAtlasPlaceTilesContext(tilePlacements: basePlacements)
     }
 }

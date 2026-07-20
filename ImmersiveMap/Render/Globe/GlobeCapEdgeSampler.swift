@@ -7,7 +7,7 @@ import simd
 enum GlobeCapEdgeSampler {
     static func atlasSampleUV(latitude: Float,
                               longitude: Float,
-                              tileData: GlobeTilesTexture.TileData) -> SIMD2<Float>? {
+                              tileData: TileAtlasTexture.TileData) -> SIMD2<Float>? {
         let textureSize = Float(tileData.textureSize)
         let cellSize = Float(tileData.cellSize)
         guard textureSize > 0,

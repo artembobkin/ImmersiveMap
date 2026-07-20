@@ -6,7 +6,7 @@ import Foundation
 /// Платформенно-нейтральное построение текстов debug HUD.
 /// UIKit и AppKit view используют одни и те же строки; сами контролы платформенные.
 enum DebugOverlayHUDTextComposer {
-    static func atlasDetailsText(pages: [GlobeAtlasDebugPage]) -> String {
+    static func atlasDetailsText(pages: [TileAtlasDebugPage]) -> String {
         guard pages.isEmpty == false else {
             return "atlas pages: none"
         }
@@ -60,7 +60,7 @@ enum DebugOverlayHUDTextComposer {
         return "\(prefix): \(fileURL.path)"
     }
 
-    private static func allocationStateSuffix(_ allocation: GlobeAtlasDebugAllocation) -> String {
+    private static func allocationStateSuffix(_ allocation: TileAtlasDebugAllocation) -> String {
         switch allocation.lodKind {
         case .exact:
             return allocation.sourceTile == allocation.targetTile ? "" : " retained"

@@ -143,9 +143,9 @@ final class DebugOverlayHUDViewTests: XCTestCase {
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
             atlasPages: [
-                GlobeAtlasDebugPage(pageIndex: 0,
+                TileAtlasDebugPage(pageIndex: 0,
                                     allocations: [
-                                        GlobeAtlasDebugAllocation(pageIndex: 0,
+                                        TileAtlasDebugAllocation(pageIndex: 0,
                                                                   slotColumn: 0,
                                                                   slotRow: 0,
                                                                   slotsPerSide: 4,
@@ -541,9 +541,9 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    earthSceneEnabled: true)
         view.apply(snapshot: makeSnapshot(settings: settings,
                                           atlasPages: [
-                                              GlobeAtlasDebugPage(pageIndex: 0,
+                                              TileAtlasDebugPage(pageIndex: 0,
                                                                   allocations: [
-                                                                      GlobeAtlasDebugAllocation(pageIndex: 0,
+                                                                      TileAtlasDebugAllocation(pageIndex: 0,
                                                                                                 slotColumn: 1,
                                                                                                 slotRow: 2,
                                                                                                 slotsPerSide: 4,
@@ -572,7 +572,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
     }
 
     private func makeSnapshot(settings: ImmersiveMapSettings.DebugSettings,
-                              atlasPages: [GlobeAtlasDebugPage]) -> DebugOverlayHUDSnapshot {
+                              atlasPages: [TileAtlasDebugPage]) -> DebugOverlayHUDSnapshot {
         DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -605,10 +605,10 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         )
     }
 
-    private func makeAtlasPage(pageIndex: Int) -> GlobeAtlasDebugPage {
-        GlobeAtlasDebugPage(pageIndex: pageIndex,
+    private func makeAtlasPage(pageIndex: Int) -> TileAtlasDebugPage {
+        TileAtlasDebugPage(pageIndex: pageIndex,
                             allocations: [
-                                GlobeAtlasDebugAllocation(pageIndex: pageIndex,
+                                TileAtlasDebugAllocation(pageIndex: pageIndex,
                                                           slotColumn: 0,
                                                           slotRow: 0,
                                                           slotsPerSide: 4,

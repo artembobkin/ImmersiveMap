@@ -50,8 +50,8 @@ final class GlobeCapEdgeSamplerTests: XCTestCase {
     private func makeTileData(position: Int32,
                               textureSize: Int32,
                               cellSize: Int32,
-                              tile: SIMD3<Int32>) -> GlobeTilesTexture.TileData {
-        GlobeTilesTexture.TileData(position: simd_int1(position),
+                              tile: SIMD3<Int32>) -> TileAtlasTexture.TileData {
+        TileAtlasTexture.TileData(position: simd_int1(position),
                                    textureSize: simd_int1(textureSize),
                                    cellSize: simd_int1(cellSize),
                                    tile: tile,

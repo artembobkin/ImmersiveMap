@@ -39,10 +39,10 @@ enum RendererDebugOverlayDrawer {
         }
     }
 
-    static func makeAtlasDebugLines(summary: GlobeAtlasDebugSummary?) -> [String] {
+    static func makeAtlasDebugLines(summary: TileAtlasDebugSummary?) -> [String] {
         guard let summary else { return [] }
 
-        let depthCounts = GlobeAtlasSlotDepth.allCases
+        let depthCounts = TileAtlasSlotDepth.allCases
             .map { "d\($0.rawValue):\(summary.slotCount(depth: $0))" }
             .joined(separator: " ")
         return [

@@ -5,7 +5,7 @@ struct TextureValue {
     
 }
 
-class GlobeTileTextureTree {
+class TileAtlasSlotTree {
     var root: TextureNode
     var values: [TextureValue] = []
     

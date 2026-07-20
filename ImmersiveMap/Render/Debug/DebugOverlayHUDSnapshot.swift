@@ -12,7 +12,7 @@ struct DebugOverlayCoordinateLines: Equatable {
 struct DebugOverlayHUDSnapshot: Equatable {
     let coordinateLines: DebugOverlayCoordinateLines
     let diagnosticsLines: [String]
-    let atlasPages: [GlobeAtlasDebugPage]
+    let atlasPages: [TileAtlasDebugPage]
     let tileLoadingStatusLines: [String]
     let tileLoadingStatusTiles: [TileLoadingStatusTileSnapshot]
     let coordinateScale: Float
@@ -28,7 +28,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
                      longitude: Double,
                      cameraDebugLines: [String],
                      diagnostics: FrameDiagnostics?,
-                     atlasDebugSummary: GlobeAtlasDebugSummary? = nil,
+                     atlasDebugSummary: TileAtlasDebugSummary? = nil,
                      tileLoadingStatus: TileLoadingStatusSnapshot? = nil) -> DebugOverlayHUDSnapshot? {
         guard settings.enableDebugPanel else {
             return nil
@@ -65,7 +65,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
                     longitude: cameraPosition.longitudeDegrees,
                     cameraDebugLines: makeCameraDebugLines(frameContext: frameContext),
                     diagnostics: diagnostics,
-                    atlasDebugSummary: frameContext.sharedState.globeAtlasDebugSummary,
+                    atlasDebugSummary: frameContext.sharedState.tileAtlasDebugSummary,
                     tileLoadingStatus: tileLoadingStatus)
     }
 
@@ -86,7 +86,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
             "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))",
             targetZoomCounts,
             sourceZoomCounts
-        ] + RendererDebugOverlayDrawer.makeAtlasDebugLines(summary: frameContext.sharedState.globeAtlasDebugSummary)
+        ] + RendererDebugOverlayDrawer.makeAtlasDebugLines(summary: frameContext.sharedState.tileAtlasDebugSummary)
     }
 
     private static func zoomCountsLine(title: String, tiles: [Tile]) -> String {

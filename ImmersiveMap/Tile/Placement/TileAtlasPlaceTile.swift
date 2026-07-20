@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-struct GlobeTexturePlaceTile: Hashable {
+struct TileAtlasPlaceTile: Hashable {
     let placeTile: PlaceTile
 
     var metalTile: MetalTile {
@@ -17,12 +17,12 @@ struct GlobeTexturePlaceTile: Hashable {
     }
 }
 
-struct GlobeTexturePlaceTilesContext {
-    let tilePlacements: [GlobeTexturePlaceTile]
+struct TileAtlasPlaceTilesContext {
+    let tilePlacements: [TileAtlasPlaceTile]
 
-    init(tilePlacements: [GlobeTexturePlaceTile]) {
+    init(tilePlacements: [TileAtlasPlaceTile]) {
         self.tilePlacements = tilePlacements
     }
 
-    nonisolated(unsafe) static let empty = GlobeTexturePlaceTilesContext(tilePlacements: [])
+    nonisolated(unsafe) static let empty = TileAtlasPlaceTilesContext(tilePlacements: [])
 }
