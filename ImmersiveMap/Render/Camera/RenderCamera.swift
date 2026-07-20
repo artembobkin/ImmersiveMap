@@ -19,7 +19,13 @@ class RenderCamera {
     init() {}
 
     func recalculateProjection(aspect: Float) {
-        self.projection = Matrix.perspectiveMatrix(fovRadians: Float.pi / 4, aspect: aspect, near: 0.01, far: 20.0)
+        // Far-плоскость должна быть много дальше видимой земли: на плоской карте
+        // с наклоном линия среза far и есть видимый «горизонт», и при far = 20
+        // она прыгала на ~13 px при каждом пересечении целого зума (рендерный
+        // масштаб мира удваивается, а срез остаётся на тех же 20 единицах).
+        // При far = 200 срез лежит в пределах ~пикселя от линии схода, чьё
+        // положение от зума не зависит.
+        self.projection = Matrix.perspectiveMatrix(fovRadians: Float.pi / 4, aspect: aspect, near: 0.01, far: 200.0)
         recalculateMatrix()
     }
 
