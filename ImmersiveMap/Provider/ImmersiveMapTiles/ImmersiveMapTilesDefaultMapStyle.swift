@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 30
+    private static let implementationRevision: UInt32 = 31
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
@@ -397,7 +397,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: key,
             color: configuration.layers.boundary,
             lowZoomFadeMask: 1.0,
-            parseGeometryStyleData: makeDashedRoadGeometry(width: width, dashLength: 8, dashGap: 6)
+            parseGeometryStyleData: makeDashedRoadGeometry(width: width, dashLength: 8, dashGap: 6),
+            // Границы рисуем только линиями. Некоторые фичи (индейские
+            // резервации) приходят полигонами - их площадь заливать нельзя,
+            // иначе получаются сплошные фиолетовые пятна.
+            suppressPolygonFill: true
         )
     }
 

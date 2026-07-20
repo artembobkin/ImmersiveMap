@@ -73,6 +73,11 @@ struct FeatureStyle {
     /// Минимальный зум КАМЕРЫ для точечного лейбла этой фичи (0 = виден всегда).
     /// Едет с лейблом до рантайма, где сравнивается с текущим зумом камеры.
     let labelMinCameraZoom: Float
+    /// Линейный стиль (например граница) не должен заливать площадную
+    /// геометрию: некоторые фичи слоя приходят полигонами (индейские
+    /// резервации в `boundary`), и заливать их цветом линии неверно. Парсер
+    /// пропускает polygon-геометрию таких фич, оставляя только линии.
+    let suppressPolygonFill: Bool
 
     init(
         key: UInt8,
@@ -90,7 +95,8 @@ struct FeatureStyle {
         labelTextStyle: LabelTextStyle? = nil,
         roadLabelTextStyle: LabelTextStyle? = nil,
         roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
-        labelMinCameraZoom: Float = 0
+        labelMinCameraZoom: Float = 0,
+        suppressPolygonFill: Bool = false
     ) {
         self.key = key
         self.color = color
@@ -108,6 +114,7 @@ struct FeatureStyle {
         self.roadLabelTextStyle = roadLabelTextStyle
         self.roadDecorationKind = roadDecorationKind
         self.labelMinCameraZoom = labelMinCameraZoom
+        self.suppressPolygonFill = suppressPolygonFill
     }
 
     var resolvedLineRenderPasses: [LineRenderPass] {

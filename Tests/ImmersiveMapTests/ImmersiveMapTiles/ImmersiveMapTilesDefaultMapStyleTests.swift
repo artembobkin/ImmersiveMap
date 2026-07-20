@@ -130,6 +130,17 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                           ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
     }
 
+    func testBoundaryStyleSuppressesPolygonFill() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+
+        // Границы - линейный стиль: площадную геометрию (напр. индейские
+        // резервации, приходящие полигонами) заливать нельзя.
+        XCTAssertTrue(makeStyle(style, layerName: "boundary", zoom: 6).suppressPolygonFill)
+
+        // Обычные площадные слои полигоны заливают как прежде.
+        XCTAssertFalse(makeStyle(style, layerName: "water", zoom: 6).suppressPolygonFill)
+    }
+
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,
                            layerName: String,
                            className: String? = nil,
