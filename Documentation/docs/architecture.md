@@ -1,6 +1,6 @@
 # Architecture
 
-ImmersiveMap is a Swift 6 package (`ImmersiveMap/`, ~330 Swift files and 17 Metal shaders) that renders vector tiles with Metal and integrates with SwiftUI. This document is a high-level map of the engine. For hard boundary rules, each top-level source folder has its own `README.md`.
+ImmersiveMap is a Swift 6 package (`ImmersiveMap/`, ~330 Swift files and 17 Metal shaders) that renders vector tiles with Metal and integrates with SwiftUI. This document is a high-level map of the engine.
 
 ## Layering
 
