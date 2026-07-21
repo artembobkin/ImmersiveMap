@@ -15,6 +15,7 @@ on a best-effort basis.
 - [README](README.md): overview, installation, quick start.
 - [Documentation/docs/architecture.md](Documentation/docs/architecture.md)
 - [Documentation/docs/custom-tile-provider.md](Documentation/docs/custom-tile-provider.md)
+- [Documentation/docs/markers.md](Documentation/docs/markers.md)
 
 ## Commercial support
 
