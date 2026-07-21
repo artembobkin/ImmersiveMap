@@ -118,6 +118,8 @@ ImmersiveMap is MIT-licensed, but map tiles, styles, and geospatial datasets may
 
 ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted for documentation, examples, bug fixes, and tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Bug reports and feature requests belong in [Issues](https://github.com/artembobkin/ImmersiveMap/issues). Questions, ideas, and anything open-ended belong in [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions).
+
 ## License
 
 ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE).
@@ -126,7 +128,7 @@ ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE).
 
 I am available for consulting and custom ImmersiveMap integrations.
 
-To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
+To get in touch, start a [discussion](https://github.com/artembobkin/ImmersiveMap/discussions).
 
 ## Screenshots
 
