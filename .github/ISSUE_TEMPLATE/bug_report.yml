@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to file a bug report. ImmersiveMap is an early alpha, so anything you can share helps - only the first field is required, but the more detail you fill in, the faster this gets fixed.
+        Thanks for taking the time to file a bug report. ImmersiveMap is an early alpha, so anything you can share helps. Only the first field is required, but the more detail you fill in, the faster this gets fixed.
   - type: textarea
     id: what-happened
     attributes:
@@ -36,16 +36,14 @@ body:
         - iOS device
         - iOS simulator
         - macOS
-  - type: input
-    id: environment
-    attributes:
-      label: OS / Xcode / Swift versions
-      placeholder: "iOS 18.2, Xcode 16.2, Swift 6.0"
-  - type: input
+  - type: dropdown
     id: provider
     attributes:
       label: Tile provider
-      placeholder: "Mapbox / OpenStreetMap / custom"
+      options:
+        - ImmersiveMap (Base)
+        - Mapbox
+        - Different
   - type: textarea
     id: logs
     attributes:
