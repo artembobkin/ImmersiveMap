@@ -8,7 +8,7 @@ on a best-effort basis.
 - **Questions / how do I…?** - ask in [Discussions → Q&A](https://github.com/artembobkin/ImmersiveMap/discussions/new?category=q-a). The issue tracker is for actionable work.
 - **Bugs** - open a [Bug report](https://github.com/artembobkin/ImmersiveMap/issues/new?template=bug_report.yml) with reproduction steps.
 - **Feature ideas** - open a [Feature request](https://github.com/artembobkin/ImmersiveMap/issues/new?template=feature_request.yml).
-- **Security issues** - see [SECURITY.md](SECURITY.md). Do not open a public issue.
+- **Security issues**: report privately through [Security Advisories](https://github.com/artembobkin/ImmersiveMap/security/advisories/new). Do not open a public issue. See [SECURITY.md](SECURITY.md).
 
 ## Documentation
 

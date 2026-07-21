@@ -60,4 +60,4 @@ Use the GitHub issue templates for bug reports and feature requests - the issue 
 
 For questions about how to do something, or anything open-ended, use [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions) - the [Q&A](https://github.com/artembobkin/ImmersiveMap/discussions/categories/q-a) category is the right place to start.
 
-For security issues, see [SECURITY.md](SECURITY.md).
+For security issues, report privately through [Security Advisories](https://github.com/artembobkin/ImmersiveMap/security/advisories/new) rather than opening a public issue. See [SECURITY.md](SECURITY.md).
