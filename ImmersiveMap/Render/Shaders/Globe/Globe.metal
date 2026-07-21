@@ -183,7 +183,11 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     out.lastPos = lastPos;
     out.halfTexel = 0.5 / textureSize;
     out.normal = normalize((float4(spherePosition, 0.0) * rotation).xyz);
-    out.worldPos = spherePositionTranslated.xyz;
+    // Морфированная позиция, а не сферическая: по ней считается туман, и его
+    // дистанции обязаны совпадать с плоским путём (на сфере хорды короче, и
+    // туман был жиже, «дотягиваясь» скачком на свапе). При t = 0 значения
+    // бит-в-бит равны сферическим, так что свечение лимба не меняется.
+    out.worldPos = position.xyz;
     out.transition = transition;
     out.nightLightsUV = float2(vertexUvX, vertexUvY);
     out.earthNormal = normalize(spherePosition);
