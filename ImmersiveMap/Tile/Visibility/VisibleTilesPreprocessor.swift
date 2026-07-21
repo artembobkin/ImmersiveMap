@@ -24,11 +24,17 @@ final class VisibleTilesPreprocessor {
     ///
     /// Радиус определяет видимую дальность плоского представления: туман
     /// обязан насыщаться до кромки покрытия (`HorizonFogUniform`), поэтому
-    /// короткий радиус буквально приближает горизонт. Кольцо дистанций 16-40
-    /// целиком под капом лесенки (z-4) - это меньше дюжины очень грубых
-    /// тайлов, зато дальность обзора почти утраивается и перестаёт заметно
-    /// отличаться от глобусной стороны перехода.
+    /// короткий радиус буквально приближает горизонт. Кольцо дистанций за
+    /// `farRingRelativeDistance` заполняется тайлами зума подложки (z3) из
+    /// пиннинга мирового покрытия - дальность обзора почти утраивается ценой
+    /// пары всегда резидентных тайлов.
     static let defaultMaxVisibleRelativeDistance = 40
+
+    /// За этой дистанцией кольцо покрытия падает на абсолютный зум подложки
+    /// (`TileCulling.flatBackdropZoomLevel`): тайлы z3 в пиннинге мирового
+    /// покрытия, дальнее кольцо после прогрева не стоит ничего и совпадает по
+    /// контенту с подложкой горизонта - граница радиуса не видна.
+    private static let farRingRelativeDistance = 15
 
     private let maxVisibleRelativeDistance: Int
     private let exactRelativeDistanceRadius: Int
@@ -284,7 +290,11 @@ final class VisibleTilesPreprocessor {
     private func preferredZoom(for visibleTile: VisibleTile,
                                distance: Int,
                                latitudeDrop: Int) -> Int {
-        return max(0, visibleTile.z - distanceCoarseningDrop(distance: distance) - latitudeDrop)
+        let ladderZoom = max(0, visibleTile.z - distanceCoarseningDrop(distance: distance) - latitudeDrop)
+        guard distance > Self.farRingRelativeDistance else {
+            return ladderZoom
+        }
+        return min(ladderZoom, TileCulling.flatBackdropZoomLevel)
     }
 
     private func distanceCoarseningDrop(distance: Int) -> Int {

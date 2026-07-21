@@ -32,6 +32,26 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         }
     }
 
+    /// За радиусом 15 кольцо падает на абсолютный зум подложки (z3) независимо
+    /// от целевого зума: тайлы из пиннинга, дальний план бесплатный и совпадает
+    /// по контенту с подложкой горизонта.
+    func testFarRingCollapsesToBackdropZoom() {
+        let farTile = VisibleTile(x: 20, y: 10, z: 9)
+        let midTile = VisibleTile(x: 8, y: 10, z: 9)
+
+        let farOutput = preprocessor.preprocess(visibleTiles: [farTile],
+                                                center: Center(tileX: 0.0, tileY: 10.0),
+                                                renderSurfaceMode: .flat,
+                                                transition: 1)
+        let midOutput = preprocessor.preprocess(visibleTiles: [midTile],
+                                                center: Center(tileX: 0.0, tileY: 10.0),
+                                                renderSurfaceMode: .flat,
+                                                transition: 1)
+
+        XCTAssertEqual(farOutput.map(\.z), [TileCulling.flatBackdropZoomLevel])
+        XCTAssertEqual(midOutput.map(\.z), [6], "Внутри радиуса 15 работает обычная лесенка (z-3 на дистанции 8)")
+    }
+
     func testTilesBeyondMaxVisibleDistanceAreDropped() {
         let tile = VisibleTile(x: 41, y: 10, z: 6)
 
