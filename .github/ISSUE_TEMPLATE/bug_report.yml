@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to file a bug report. ImmersiveMap is an early alpha, so please include enough detail to reproduce.
+        Thanks for taking the time to file a bug report. ImmersiveMap is an early alpha, so anything you can share helps - only the first field is required, but the more detail you fill in, the faster this gets fixed.
   - type: textarea
     id: what-happened
     attributes:
@@ -22,15 +22,11 @@ body:
         1. Create an `ImmersiveMapView` with …
         2. Set camera to …
         3. See error
-    validations:
-      required: true
   - type: input
     id: version
     attributes:
       label: ImmersiveMap version / commit
       placeholder: "0.1.1 or commit SHA"
-    validations:
-      required: true
   - type: dropdown
     id: platform
     attributes:
@@ -39,17 +35,12 @@ body:
       options:
         - iOS device
         - iOS simulator
-        - Mac Catalyst
         - macOS
-    validations:
-      required: true
   - type: input
     id: environment
     attributes:
       label: OS / Xcode / Swift versions
       placeholder: "iOS 18.2, Xcode 16.2, Swift 6.0"
-    validations:
-      required: true
   - type: input
     id: provider
     attributes:

@@ -14,8 +14,6 @@ body:
     attributes:
       label: Proposed solution
       description: How would you like it to work? API sketches welcome.
-    validations:
-      required: true
   - type: textarea
     id: alternatives
     attributes:
