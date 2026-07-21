@@ -87,7 +87,11 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
 
     float3 sphereWorldPosition = globeSphereWorldPosition(lat, lon, globe, rotation);
     float3 flatWorldPosition = globeFlatWorldPosition(lat, lon, globe, mapSize, panMercatorY);
-    float3 worldPosition = mix(sphereWorldPosition, flatWorldPosition, globe.transition);
+    // Та же волна разворота, что в вершиннике поверхности: проекции лейблов
+    // и футпринтов обязаны сидеть на фактической морф-геометрии.
+    float frontDot = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6);
+    float localTransition = globeTransitionLocalPhase(globe.transition, frontDot);
+    float3 worldPosition = mix(sphereWorldPosition, flatWorldPosition, localTransition);
 
     GlobeVisibilityProjectionResult result;
     result.worldPosition = worldPosition;

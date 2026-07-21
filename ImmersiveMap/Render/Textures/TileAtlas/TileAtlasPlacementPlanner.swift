@@ -401,8 +401,10 @@ struct TileAtlasPlacementPlanner {
                                                                        longitude: longitude)
         let flatWorldPosition = constants.flatWorldPosition(latitude: latitude,
                                                             longitude: longitude)
-        let transition = constants.globe.transition
-        let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * transition
+        let frontDot = (sphereWorldPosition.z + constants.globe.radius) / max(constants.globe.radius, 1e-6)
+        let localTransition = GlobeFootprintProjectionConstants.transitionLocalPhase(constants.globe.transition,
+                                                                                     frontDot: frontDot)
+        let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * localTransition
         let clip = cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
         return TileAtlasProjectionResult(clip: clip,
                                           worldPosition: worldPosition)
@@ -612,6 +614,15 @@ private struct GlobeFootprintProjectionConstants {
                                    x: Float) -> Float {
         let t = simd_clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
         return t * t * (3.0 - 2.0 * t)
+    }
+
+    /// Зеркало `globeTransitionLocalPhase` из GlobeTransitionProjection.h:
+    /// волна разворота, ближняя к центру взгляда область встаёт в плоскость
+    /// первой, дальние углы - последними. Менять только синхронно с шейдером.
+    static func transitionLocalPhase(_ transition: Float, frontDot: Float) -> Float {
+        let spread: Float = 0.6
+        let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
+        return simd_clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0)
     }
 }
 

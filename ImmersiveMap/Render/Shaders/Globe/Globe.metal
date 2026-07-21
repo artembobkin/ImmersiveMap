@@ -149,7 +149,9 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     float4x4 translationM = translationMatrix(float3(0, 0, -globeRadius));
     float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
     float4 flatPosition = float4(flatWorldPosition, 0, 1.0);
-    float4 position = mix(spherePositionTranslated, flatPosition, transition);
+    float3 rotatedSphereDirection = normalize((float4(spherePosition, 0.0) * rotation).xyz);
+    float localTransition = globeTransitionLocalPhase(transition, rotatedSphereDirection.z);
+    float4 position = mix(spherePositionTranslated, flatPosition, localTransition);
     float4 clip = matrix * position;
     // Compute texture coordinates for blending
     float u = 1.0 - vertexUvX;
@@ -182,7 +184,7 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     out.posV = posV;
     out.lastPos = lastPos;
     out.halfTexel = 0.5 / textureSize;
-    out.normal = normalize((float4(spherePosition, 0.0) * rotation).xyz);
+    out.normal = rotatedSphereDirection;
     // Морфированная позиция, а не сферическая: по ней считается туман, и его
     // дистанции обязаны совпадать с плоским путём (на сфере хорды короче, и
     // туман был жиже, «дотягиваясь» скачком на свапе). При t = 0 значения
