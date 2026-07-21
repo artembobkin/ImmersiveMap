@@ -14,14 +14,5 @@ Please include:
 - Steps to reproduce, if possible.
 - The affected version or commit.
 
-You can expect an initial acknowledgement as time permits - this is a
+You can expect an initial acknowledgement as time permits. This is a
 single-maintainer project, so response times may vary.
-
-## Scope
-
-ImmersiveMap renders map data from third-party tile providers. Note that:
-
-- Tile provider tokens, credentials, and API keys are the responsibility of the
-  app developer and must never be committed to this repository.
-- Tile provider terms and attribution requirements are the responsibility of the
-  app developer.
