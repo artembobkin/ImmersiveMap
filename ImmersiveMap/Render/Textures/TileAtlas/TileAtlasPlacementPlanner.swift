@@ -557,10 +557,14 @@ private struct GlobeFootprintProjectionConstants {
         self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
         self.rotationMatrix = GlobeFootprintProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
                                                                                panLongitude: panLongitude)
-        let horizonFade = GlobeFootprintProjectionConstants.smoothstep(edge0: 0.8,
+        // Зеркало globeVisibilityHorizonThreshold из GlobeVisibility.h:
+        // непрерывное ослабление в масштабе геометрии вместо ступеньки на
+        // t = 0.8, которую давал огромный -1e6.
+        let horizonFade = GlobeFootprintProjectionConstants.smoothstep(edge0: 0.0,
                                                                    edge1: 0.95,
                                                                    x: globe.transition)
-        self.horizonThreshold = (1.0 - horizonFade) * (globe.radius * globe.radius) + horizonFade * -1e6
+        let radiusSquared = globe.radius * globe.radius
+        self.horizonThreshold = (1.0 - horizonFade) * radiusSquared + horizonFade * (-4.0 * radiusSquared)
     }
 
     func rotatedSphereWorldPosition(latitude: Float,

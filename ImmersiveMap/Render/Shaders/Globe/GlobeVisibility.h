@@ -96,8 +96,16 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
 }
 
 static inline float globeVisibilityHorizonThreshold(constant Globe& globe) {
-    float horizonFade = smoothstep(0.8, 0.95, globe.transition);
-    return mix(globe.radius * globe.radius, -1e6, horizonFade);
+    // Порог ослабляется непрерывно по всему морфу и в масштабе геометрии.
+    // Прежний mix(R², -1e6, smoothstep(0.8, 0.95, t)) из-за огромного -1e6
+    // проваливался ниже минимально возможного dot уже при fade ≈ 0.0003 -
+    // фактически ступенька ровно на t = 0.8: загоризонтная геометрия
+    // вспыхивала одним кадром. -4R² ниже минимума dot любой точки сферы,
+    // так что к t = 0.95 каллинг полностью выключен, как и раньше, но путь
+    // к этому - плавный.
+    float horizonFade = smoothstep(0.0, 0.95, globe.transition);
+    float radiusSquared = globe.radius * globe.radius;
+    return mix(radiusSquared, -4.0 * radiusSquared, horizonFade);
 }
 
 static inline bool globePointPassesVisibility(float3 worldPosition,
