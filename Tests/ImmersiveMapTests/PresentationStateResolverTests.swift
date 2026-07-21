@@ -76,6 +76,37 @@ final class PresentationStateResolverTests: XCTestCase {
         XCTAssertEqual(Set(transitions).count, transitions.count, "Ступени перехода не должны слипаться")
     }
 
+    /// Геометрия морфа завершает разворот к 90% фазы: последнюю десятую часть
+    /// глобусный путь рендерит готовую плоскость, а свап поверхностей на t = 1
+    /// происходит между геометрически идентичными кадрами. Семантический
+    /// transition при этом продолжает расти до 1.
+    func testMorphGeometryCompletesBeforeSurfaceSwap() {
+        let resolver = MapPresentationStateController(settings: .default)
+        let lateMorphState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),
+                                                     zoom: 6.92,
+                                                     bearing: 0,
+                                                     pitch: 0)
+
+        let lateMorph = resolver.resolve(cameraState: lateMorphState)
+
+        XCTAssertEqual(lateMorph.renderSurfaceMode, .spherical)
+        XCTAssertEqual(lateMorph.transition, 0.92, accuracy: 1e-3)
+        XCTAssertEqual(lateMorph.globeRenderState.globeUniform.transition, 1.0)
+    }
+
+    func testMorphGeometryRunsSlightlyAheadOfSemanticTransition() {
+        let resolver = MapPresentationStateController(settings: .default)
+        let midMorphState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),
+                                                    zoom: 6.45,
+                                                    bearing: 0,
+                                                    pitch: 0)
+
+        let midMorph = resolver.resolve(cameraState: midMorphState)
+
+        XCTAssertEqual(midMorph.transition, 0.45, accuracy: 1e-3)
+        XCTAssertEqual(midMorph.globeRenderState.globeUniform.transition, 0.5, accuracy: 1e-3)
+    }
+
     func testSwitchRenderSurfaceModeTemporarilyForcesOppositeSurfaceAndSecondSwitchReturnsToAutomatic() {
         let resolver = MapPresentationStateController(settings: .default)
         let highZoomCameraState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),

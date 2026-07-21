@@ -36,7 +36,7 @@ struct PresentationStateResolver {
         let globe = GlobeUniform(panX: Float(globePan.x),
                           panY: Float(globePan.y),
                           radius: Float(globeRenderRadius),
-                          transition: transition)
+                          transition: geometryTransition(transition))
         let renderSurfaceMode = resolveRenderSurfaceMode(transition: transition)
         let screenSpaceProjectionMode = resolveScreenSpaceProjectionMode(renderSurfaceMode: renderSurfaceMode)
 
@@ -80,6 +80,19 @@ struct PresentationStateResolver {
         case .flat:
             return 1.0
         }
+    }
+
+    /// Доля фазы перехода, к которой геометрия морфа полностью разворачивается
+    /// в плоскость.
+    private static let geometryCompletionPhase: Float = 0.9
+
+    /// Transition для шейдерной геометрии (GlobeUniform): анимация разворота
+    /// завершается к `geometryCompletionPhase`, и остаток фазы глобусный путь
+    /// рендерит уже готовую плоскость - смена поверхностей на t = 1 происходит
+    /// между геометрически идентичными кадрами. Семантический transition
+    /// (fades, туман, выбор поверхности) остаётся непрерывным до 1.
+    private static func geometryTransition(_ transition: Float) -> Float {
+        min(1.0, transition / geometryCompletionPhase)
     }
 
     private static func resolveRenderSurfaceMode(transition: Float) -> ViewMode {
