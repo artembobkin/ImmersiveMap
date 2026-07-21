@@ -15,7 +15,8 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
             (3, 5),
             (4, 4), (5, 4),
             (6, 3), (8, 3),
-            (9, 2), (15, 2)
+            (9, 2), (15, 2),
+            (16, 2), (40, 2)
         ]
 
         for testCase in casesByDistance {
@@ -32,7 +33,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
     }
 
     func testTilesBeyondMaxVisibleDistanceAreDropped() {
-        let tile = VisibleTile(x: 16, y: 10, z: 6)
+        let tile = VisibleTile(x: 41, y: 10, z: 6)
 
         let output = preprocessor.preprocess(visibleTiles: [tile],
                                              center: Center(tileX: 0.0, tileY: 10.0),

@@ -28,11 +28,13 @@ struct HorizonFogUniform {
     static let defaultStartEyeHeights: Float = 12
     /// Полная непрозрачность обязана наступать ДО ближайшей возможной кромки
     /// тайлового покрытия, иначе при смене поверхностей за ней вспыхивает
-    /// подложка. Кромка = радиус покрытия (15 тайлов целевого зума ×
-    /// 2π·globeRadiusScale ≈ 13.2 render-единицы) на максимальной высоте глаза
-    /// 0.25 → минимум ≈ 53 высоты. 45 даёт запас; angular это ≈ atan(1/45) ≈
-    /// 1.3° ниже линии схода - узкая полоса у самого горизонта.
-    static let defaultEndEyeHeights: Float = 45
+    /// подложка. Кромка = радиус покрытия (40 тайлов целевого зума ×
+    /// 2π·globeRadiusScale ≈ 35.2 render-единицы) на максимальной высоте глаза
+    /// 0.25 → минимум ≈ 140 высот. 120 даёт запас; angular это ≈ atan(1/120) ≈
+    /// 0.48° ниже линии схода - тонкая кайма у самого горизонта. При изменении
+    /// `VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance` или
+    /// `globeRadiusScale` пересчитать.
+    static let defaultEndEyeHeights: Float = 120
 
     static let disabled = HorizonFogUniform(color: .zero,
                                             eye: .zero,

@@ -21,7 +21,14 @@ final class VisibleTilesPreprocessor {
     /// Радиус дистанционного фильтра (Чебышёв, в тайлах целевого зума).
     /// На него же опирается кламп кандидатов в `FlatVisibleTileResolver`:
     /// перечислять тайлы дальше этого радиуса бессмысленно - фильтр их выбросит.
-    static let defaultMaxVisibleRelativeDistance = 15
+    ///
+    /// Радиус определяет видимую дальность плоского представления: туман
+    /// обязан насыщаться до кромки покрытия (`HorizonFogUniform`), поэтому
+    /// короткий радиус буквально приближает горизонт. Кольцо дистанций 16-40
+    /// целиком под капом лесенки (z-4) - это меньше дюжины очень грубых
+    /// тайлов, зато дальность обзора почти утраивается и перестаёт заметно
+    /// отличаться от глобусной стороны перехода.
+    static let defaultMaxVisibleRelativeDistance = 40
 
     private let maxVisibleRelativeDistance: Int
     private let exactRelativeDistanceRadius: Int
