@@ -686,19 +686,34 @@ extension TileMvtParser {
         return indices.isEmpty ? nil : ParsedExtrudedMesh(vertices: vertices, indices: indices)
     }
 
+    /// Wraps a candidate with its footprint bbox and area, both computed exactly
+    /// once. The passes below compare O(n^2) candidate pairs; recomputing these
+    /// per pair (instead of per candidate) used to dominate tile-parse CPU time.
+    private struct MeasuredBuildingExtrusionCandidate {
+        let candidate: BuildingExtrusionCandidate
+        let bounds: FootprintBounds
+        let area: Float
+    }
+
     func resolveExteriorBuildingExtrusions(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
         guard candidates.count > 1 else { return candidates }
 
-        var filtered: [BuildingExtrusionCandidate] = []
-        filtered.reserveCapacity(candidates.count)
+        let measuredCandidates = candidates.map { candidate in
+            MeasuredBuildingExtrusionCandidate(candidate: candidate,
+                                               bounds: footprintBounds(candidate.clippedExterior),
+                                               area: polygonAreaMagnitude(candidate.clippedExterior))
+        }
 
-        let groupedByBuilding = Dictionary(grouping: candidates, by: \.buildingId)
+        var filtered: [MeasuredBuildingExtrusionCandidate] = []
+        filtered.reserveCapacity(measuredCandidates.count)
+
+        let groupedByBuilding = Dictionary(grouping: measuredCandidates, by: \.candidate.buildingId)
         for (_, buildingCandidates) in groupedByBuilding {
             let uniqueCandidates = deduplicateBuildingExtrusionCandidates(buildingCandidates)
             filtered.append(contentsOf: suppressNestedBuildingExtrusionCandidates(uniqueCandidates))
         }
 
-        return clampEnvelopeBuildingExtrusions(filtered)
+        return clampEnvelopeBuildingExtrusions(filtered).map(\.candidate)
     }
 
     /// Some sources (e.g. OpenMapTiles for St. Basil's Cathedral) emit a tall
@@ -708,36 +723,40 @@ extension TileMvtParser {
     /// base-0 candidate whose footprint encloses many stacked (base>0) parts from
     /// OTHER buildings - and clamp its top down to the lowest enclosed part's base,
     /// leaving a solid pedestal while the parts articulate everything above.
-    private func clampEnvelopeBuildingExtrusions(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
+    private func clampEnvelopeBuildingExtrusions(
+        _ candidates: [MeasuredBuildingExtrusionCandidate]
+    ) -> [MeasuredBuildingExtrusionCandidate] {
         let minEnclosedParts = 4
         guard candidates.count > minEnclosedParts else { return candidates }
 
         let baseEpsilon: Float = 0.5
-        let bounds = candidates.map { footprintBounds($0.clippedExterior) }
+        // Only stacked (base>0) parts can witness an envelope; base-0 candidates
+        // never enclose themselves because the outer pass skips base>0 entries.
+        let stackedIndices = candidates.indices.filter { candidates[$0].candidate.baseHeight > baseEpsilon }
+        guard stackedIndices.count >= minEnclosedParts else { return candidates }
 
-        return candidates.enumerated().map { index, candidate in
-            guard candidate.baseHeight <= baseEpsilon else { return candidate }
-            let envelopeBounds = bounds[index]
+        return candidates.map { measured in
+            let candidate = measured.candidate
+            guard candidate.baseHeight <= baseEpsilon else { return measured }
 
             var minStackedBase = Float.greatestFiniteMagnitude
             var enclosedCount = 0
-            for other in candidates.indices where other != index {
+            for other in stackedIndices {
                 let part = candidates[other]
-                guard part.buildingId != candidate.buildingId,
-                      part.baseHeight > baseEpsilon,
-                      bounds[other].isInsideOrEqual(to: envelopeBounds),
-                      isRingContained(part.clippedExterior, in: candidate.clippedExterior) else {
+                guard part.candidate.buildingId != candidate.buildingId,
+                      part.bounds.isInsideOrEqual(to: measured.bounds),
+                      isRingContained(part.candidate.clippedExterior, in: candidate.clippedExterior) else {
                     continue
                 }
                 enclosedCount += 1
-                minStackedBase = min(minStackedBase, part.baseHeight)
+                minStackedBase = min(minStackedBase, part.candidate.baseHeight)
             }
 
-            guard enclosedCount >= minEnclosedParts else { return candidate }
+            guard enclosedCount >= minEnclosedParts else { return measured }
             let clampedTop = max(candidate.baseHeight, minStackedBase)
-            guard clampedTop < candidate.topHeight else { return candidate }
+            guard clampedTop < candidate.topHeight else { return measured }
 
-            return BuildingExtrusionCandidate(
+            let clamped = BuildingExtrusionCandidate(
                 styleKey: candidate.styleKey,
                 buildingId: candidate.buildingId,
                 footprintSignature: candidate.footprintSignature,
@@ -748,51 +767,56 @@ extension TileMvtParser {
                 baseHeight: candidate.baseHeight,
                 topHeight: clampedTop
             )
+            return MeasuredBuildingExtrusionCandidate(candidate: clamped,
+                                                      bounds: measured.bounds,
+                                                      area: measured.area)
         }
     }
 
-    private func deduplicateBuildingExtrusionCandidates(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
+    private func deduplicateBuildingExtrusionCandidates(
+        _ candidates: [MeasuredBuildingExtrusionCandidate]
+    ) -> [MeasuredBuildingExtrusionCandidate] {
         var seen = Set<BuildingExtrusionCandidateKey>()
-        var unique: [BuildingExtrusionCandidate] = []
+        var unique: [MeasuredBuildingExtrusionCandidate] = []
         unique.reserveCapacity(candidates.count)
 
-        for candidate in candidates {
-            let key = BuildingExtrusionCandidateKey(candidate: candidate)
+        for measured in candidates {
+            let key = BuildingExtrusionCandidateKey(candidate: measured.candidate)
             if seen.insert(key).inserted {
-                unique.append(candidate)
+                unique.append(measured)
             }
         }
 
         return unique
     }
 
-    private func suppressNestedBuildingExtrusionCandidates(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
+    private func suppressNestedBuildingExtrusionCandidates(
+        _ candidates: [MeasuredBuildingExtrusionCandidate]
+    ) -> [MeasuredBuildingExtrusionCandidate] {
         guard candidates.count > 1 else { return candidates }
 
         let sortedCandidates = candidates.sorted { lhs, rhs in
-            let lhsArea = polygonAreaMagnitude(lhs.clippedExterior)
-            let rhsArea = polygonAreaMagnitude(rhs.clippedExterior)
-            if lhsArea != rhsArea {
-                return lhsArea > rhsArea
+            if lhs.area != rhs.area {
+                return lhs.area > rhs.area
             }
-            if lhs.baseHeight != rhs.baseHeight {
-                return lhs.baseHeight < rhs.baseHeight
+            if lhs.candidate.baseHeight != rhs.candidate.baseHeight {
+                return lhs.candidate.baseHeight < rhs.candidate.baseHeight
             }
-            return lhs.topHeight > rhs.topHeight
+            return lhs.candidate.topHeight > rhs.candidate.topHeight
         }
 
-        var kept: [BuildingExtrusionCandidate] = []
+        var kept: [MeasuredBuildingExtrusionCandidate] = []
         kept.reserveCapacity(sortedCandidates.count)
 
-        for candidate in sortedCandidates {
+        for measured in sortedCandidates {
             let isNested = kept.contains { container in
-                candidate.baseHeight >= container.baseHeight
-                    && candidate.topHeight <= container.topHeight
-                    && footprintBounds(candidate.clippedExterior).isInsideOrEqual(to: footprintBounds(container.clippedExterior))
-                    && isRingContained(candidate.clippedExterior, in: container.clippedExterior)
+                measured.candidate.baseHeight >= container.candidate.baseHeight
+                    && measured.candidate.topHeight <= container.candidate.topHeight
+                    && measured.bounds.isInsideOrEqual(to: container.bounds)
+                    && isRingContained(measured.candidate.clippedExterior, in: container.candidate.clippedExterior)
             }
             if isNested == false {
-                kept.append(candidate)
+                kept.append(measured)
             }
         }
 
