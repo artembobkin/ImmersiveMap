@@ -33,8 +33,12 @@ final class VisibleTilesPreprocessor {
     /// За этой дистанцией кольцо покрытия падает на абсолютный зум подложки
     /// (`TileCulling.flatBackdropZoomLevel`): тайлы z3 в пиннинге мирового
     /// покрытия, дальнее кольцо после прогрева не стоит ничего и совпадает по
-    /// контенту с подложкой горизонта - граница радиуса не видна.
-    private static let farRingRelativeDistance = 15
+    /// контенту с подложкой горизонта, поэтому граница радиуса не видна.
+    /// В плоском режиме порог короче: даль агрессивно отдаётся подложке,
+    /// чтобы срезать количество векторных тайлов.
+    private static func farRingRelativeDistance(for renderSurfaceMode: ViewMode) -> Int {
+        renderSurfaceMode == .flat ? 10 : 15
+    }
 
     private let maxVisibleRelativeDistance: Int
     private let exactRelativeDistanceRadius: Int
@@ -92,7 +96,8 @@ final class VisibleTilesPreprocessor {
                                     relativeDistance: distance,
                                     preferredZoom: preferredZoom(for: visibleTile,
                                                                  distance: distance,
-                                                                 latitudeDrop: latitudeDrop)))
+                                                                 latitudeDrop: latitudeDrop,
+                                                                 renderSurfaceMode: renderSurfaceMode)))
         }
 
         return inputs
@@ -272,38 +277,44 @@ final class VisibleTilesPreprocessor {
     /// Крутизна дистанционного LOD: 1.0 - честная перспектива (уровень на
     /// удвоение дистанции), выше - агрессивнее огрубление дали. Детализация
     /// у горизонта всё равно только мерцает при минификации, а тайлов на её
-    /// покрытие уходит кратно больше.
-    private static let distanceLodSteepness = 1.5
+    /// покрытие уходит кратно больше. В плоском режиме крутизна выше: даль
+    /// целиком декоративна, приоритет за количеством тайлов.
+    private static func distanceLodSteepness(for renderSurfaceMode: ViewMode) -> Double {
+        renderSurfaceMode == .flat ? 3.0 : 1.5
+    }
 
     /// Кап суммарного дистанционного понижения: глубже z-4 даль не падает.
     private static let maximumDistanceDrop = 4
 
     /// Maps relative distance and latitude coarsening to preferred demand zoom.
     ///
-    /// Экранный размер тайла в перспективе падает как 1/дистанция; с учётом
-    /// крутизны 1.5 лесенка от точного радиуса 2: дистанция 3 → z-1,
-    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4.
+    /// Экранный размер тайла в перспективе падает как 1/дистанция; лесенка
+    /// идёт от точного радиуса 2. Сфера (крутизна 1.5): дистанция 3 → z-1,
+    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4. Плоскость (крутизна 3.0): 3 → z-2,
+    /// 4 → z-3, 5+ → z-4, а за порогом подложки кламп к z3.
     ///
     /// `latitudeDrop` добавляется к дистанционному понижению: оба эффекта
     /// (перспектива и меркаторное сжатие) уменьшают экранный размер тайла
     /// независимо.
     private func preferredZoom(for visibleTile: VisibleTile,
                                distance: Int,
-                               latitudeDrop: Int) -> Int {
-        let ladderZoom = max(0, visibleTile.z - distanceCoarseningDrop(distance: distance) - latitudeDrop)
-        guard distance > Self.farRingRelativeDistance else {
+                               latitudeDrop: Int,
+                               renderSurfaceMode: ViewMode) -> Int {
+        let distanceDrop = distanceCoarseningDrop(distance: distance, renderSurfaceMode: renderSurfaceMode)
+        let ladderZoom = max(0, visibleTile.z - distanceDrop - latitudeDrop)
+        guard distance > Self.farRingRelativeDistance(for: renderSurfaceMode) else {
             return ladderZoom
         }
         return min(ladderZoom, TileCulling.flatBackdropZoomLevel)
     }
 
-    private func distanceCoarseningDrop(distance: Int) -> Int {
+    private func distanceCoarseningDrop(distance: Int, renderSurfaceMode: ViewMode) -> Int {
         guard distance > exactRelativeDistanceRadius else {
             return 0
         }
 
         let doublings = log2(Double(distance) / Double(exactRelativeDistanceRadius))
-        let steepenedDrop = Int((doublings * Self.distanceLodSteepness).rounded(.up))
+        let steepenedDrop = Int((doublings * Self.distanceLodSteepness(for: renderSurfaceMode)).rounded(.up))
         return min(Self.maximumDistanceDrop, steepenedDrop)
     }
 
