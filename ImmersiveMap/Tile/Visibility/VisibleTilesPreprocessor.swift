@@ -22,20 +22,19 @@ final class VisibleTilesPreprocessor {
     /// На него же опирается кламп кандидатов в `FlatVisibleTileResolver`:
     /// перечислять тайлы дальше этого радиуса бессмысленно - фильтр их выбросит.
     ///
-    /// Радиус определяет видимую дальность плоского представления: туман
+    /// Радиус определяет видимую дальность сферического представления: туман
     /// обязан насыщаться до кромки покрытия (`HorizonFogUniform`), поэтому
-    /// короткий радиус буквально приближает горизонт. Кольцо дистанций за
-    /// `farRingRelativeDistance` заполняется тайлами зума подложки (z3) из
-    /// пиннинга мирового покрытия - дальность обзора почти утраивается ценой
-    /// пары всегда резидентных тайлов.
+    /// короткий радиус буквально приближает горизонт. В плоском режиме даль
+    /// радиусом не ограничена: за `farRingRelativeDistance` покрытие целиком
+    /// отдано сплошной z3-подложке горизонта (`TileCulling.resolveFlatBackdropTiles`).
     static let defaultMaxVisibleRelativeDistance = 40
 
-    /// За этой дистанцией кольцо покрытия падает на абсолютный зум подложки
-    /// (`TileCulling.flatBackdropZoomLevel`): тайлы z3 в пиннинге мирового
-    /// покрытия, дальнее кольцо после прогрева не стоит ничего и совпадает по
-    /// контенту с подложкой горизонта, поэтому граница радиуса не видна.
-    /// В плоском режиме порог короче: даль агрессивно отдаётся подложке,
-    /// чтобы срезать количество векторных тайлов.
+    /// За этой дистанцией даль перестаёт быть честным покрытием целевой лесенки.
+    /// Сфера: предпочтение падает на абсолютный зум подложки
+    /// (`TileCulling.flatBackdropZoomLevel`), тайлы z3 в пиннинге мирового
+    /// покрытия. Плоскость: кольцо выбрасывается ещё на стадии инпутов
+    /// (`isFarRingHandedToBackdrop`), порог короче, даль агрессивно отдаётся
+    /// подложке, чтобы срезать количество векторных тайлов.
     private static func farRingRelativeDistance(for renderSurfaceMode: ViewMode) -> Int {
         renderSurfaceMode == .flat ? 10 : 15
     }
@@ -87,6 +86,11 @@ final class VisibleTilesPreprocessor {
                                                center: center,
                                                renderSurfaceMode: renderSurfaceMode)
             guard distance <= maxVisibleRelativeDistance else {
+                continue
+            }
+            guard !isFarRingHandedToBackdrop(visibleTile,
+                                             distance: distance,
+                                             renderSurfaceMode: renderSurfaceMode) else {
                 continue
             }
             let latitudeDrop = latitudeCoarseningDrop(for: visibleTile,
@@ -286,12 +290,32 @@ final class VisibleTilesPreprocessor {
     /// Кап суммарного дистанционного понижения: глубже z-4 даль не падает.
     private static let maximumDistanceDrop = 4
 
+    /// Плоское дальнее кольцо принадлежит подложке: за порогом
+    /// `farRingRelativeDistance` тайл не размещается вовсе, его область уже
+    /// закрашена сплошным z3-покрытием следа фрустума
+    /// (`TileCulling.resolveFlatBackdropTiles`, рисуется под основным
+    /// покрытием). Размещать z3-предка в основном наборе нельзя: он
+    /// продублировал бы подложку двойной отрисовкой, а при перекрытии с
+    /// ближним покрытием жадный выбор эскалировал бы его к свободному мелкому
+    /// предку, и кольцо превращалось бы в настоящие векторные тайлы z5-z9.
+    /// Без подложки (целевой зум не глубже z3) кольцо остаётся обычным
+    /// покрытием, иначе врапнутые мировые копии остались бы дырами.
+    private func isFarRingHandedToBackdrop(_ visibleTile: VisibleTile,
+                                           distance: Int,
+                                           renderSurfaceMode: ViewMode) -> Bool {
+        renderSurfaceMode == .flat
+            && visibleTile.z > TileCulling.flatBackdropZoomLevel
+            && distance > Self.farRingRelativeDistance(for: renderSurfaceMode)
+    }
+
     /// Maps relative distance and latitude coarsening to preferred demand zoom.
     ///
     /// Экранный размер тайла в перспективе падает как 1/дистанция; лесенка
     /// идёт от точного радиуса 2. Сфера (крутизна 1.5): дистанция 3 → z-1,
-    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4. Плоскость (крутизна 3.0): 3 → z-2,
-    /// 4 → z-3, 5+ → z-4, а за порогом подложки кламп к z3.
+    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4, за порогом кольца кламп к z3.
+    /// Плоскость (крутизна 3.0): 3 → z-2, 4 → z-3, 5+ → z-4, дальнее кольцо
+    /// сюда не доходит (выброшено в `isFarRingHandedToBackdrop`), кламп
+    /// срабатывает только для мелких целевых зумов, где он ничего не меняет.
     ///
     /// `latitudeDrop` добавляется к дистанционному понижению: оба эффекта
     /// (перспектива и меркаторное сжатие) уменьшают экранный размер тайла

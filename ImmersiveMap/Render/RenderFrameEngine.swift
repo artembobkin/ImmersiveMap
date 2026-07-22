@@ -243,7 +243,12 @@ final class RenderFrameEngine {
         guard let tileLoadingStatusReporter = persistentContext.tileLoadingStatusReporter else {
             return
         }
-        let displayedTiles = frameContext.sharedState.placeTileTrackingState.placeTiles.map(\.metalTile.tile)
+        // Подложка горизонта не входит в placeTileTrackingState (лейблы и
+        // проекционный индекс её не видят), но на экране она есть: без неё
+        // HUD выглядит так, будто z3-фолбэка нет вовсе.
+        let backdropPlacements = frameContext.sharedState.tilePlacementState.backdropPlaceTilesContext.tilePlacements
+        let displayedTiles = (frameContext.sharedState.placeTileTrackingState.placeTiles + backdropPlacements)
+            .map(\.metalTile.tile)
         tileLoadingStatusReporter.recordDisplayedTiles(displayedTiles)
     }
 
