@@ -103,20 +103,11 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(unwrappedSettings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
     }
 
-    func testEarthSceneModifierControlsFullSunTerminatorAndNightLightsPackage() {
+    func testEarthSceneModifierControlsFullSunAndTerminatorPackage() {
         let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
 
         XCTAssertFalse(settings.scene.earth.isEnabled)
         XCTAssertTrue(settings.scene.earth.sun.isEnabled)
-        XCTAssertFalse(settings.scene.earth.nightLights.isEnabled)
-    }
-
-    func testNightLightsTileManifestURLModifierStoresRemoteManifestURL() {
-        let manifestURL = URL(string: "http://localhost:9000/night-lights/v1/night_lights_manifest.json")!
-
-        let settings = ImmersiveMapSettings.default.nightLightsTileManifestURL(manifestURL)
-
-        XCTAssertEqual(settings.scene.earth.nightLights.tileManifestURL, manifestURL)
     }
 
     func testCacheSettingsLegacyInitializerFunctionReferenceUsesDefaultPreparedDiskCacheSize() {
@@ -249,23 +240,13 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
     }
 
-    func testImmersiveMapViewEarthSceneModifierControlsFullSunTerminatorAndNightLightsPackage() {
+    func testImmersiveMapViewEarthSceneModifierControlsFullSunAndTerminatorPackage() {
         let view = ImmersiveMapView().earthScene(isEnabled: false)
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
 
         XCTAssertFalse(settings?.scene.earth.isEnabled == true)
         XCTAssertTrue(settings?.scene.earth.sun.isEnabled == true)
-        XCTAssertFalse(settings?.scene.earth.nightLights.isEnabled == true)
-    }
-
-    func testImmersiveMapViewNightLightsTileManifestURLModifierStoresRemoteManifestURL() {
-        let manifestURL = URL(string: "http://localhost:9000/night-lights/v1/night_lights_manifest.json")!
-        let view = ImmersiveMapView().nightLightsTileManifestURL(manifestURL)
-
-        let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
-
-        XCTAssertEqual(settings?.scene.earth.nightLights.tileManifestURL, manifestURL)
     }
 
     func testFluentSettingsModifiersReplaceEverySettingsDomain() {

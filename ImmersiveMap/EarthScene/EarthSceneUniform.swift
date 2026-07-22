@@ -10,9 +10,6 @@ struct EarthSceneUniform {
     var daySideMinimumBrightness: Float
     var nightSideBrightness: Float
     var terminatorFadeWidth: Float
-    var nightLightsIntensity: Float
-    var nightLightsTerminatorFadeWidth: Float
-    var nightLightsEnabled: UInt32
     var sunVisualEnabled: UInt32
     var sunDiskAngularSize: Float
     var sunDiskIntensity: Float
@@ -37,9 +34,6 @@ struct EarthSceneUniform {
         daySideMinimumBrightness: 0,
         nightSideBrightness: 0,
         terminatorFadeWidth: minimumFadeWidth,
-        nightLightsIntensity: 0,
-        nightLightsTerminatorFadeWidth: minimumFadeWidth,
-        nightLightsEnabled: 0,
         sunVisualEnabled: 0,
         sunDiskAngularSize: minimumFadeWidth,
         sunDiskIntensity: 0,
@@ -60,7 +54,6 @@ struct EarthSceneUniform {
         }
 
         let date = settings.timeMode.resolvedDate(now: now)
-        let nightLights = settings.nightLights
         let sun = settings.sun
         let sunVisualEnabled: UInt32 = sun.isEnabled ? 1 : 0
 
@@ -70,9 +63,6 @@ struct EarthSceneUniform {
             daySideMinimumBrightness: Self.clampedUnit(settings.daySideMinimumBrightness),
             nightSideBrightness: Self.clampedUnit(settings.nightSideBrightness),
             terminatorFadeWidth: Self.resolvedFadeWidth(settings.terminatorFadeWidth),
-            nightLightsIntensity: Self.clampedUnit(nightLights.intensity),
-            nightLightsTerminatorFadeWidth: Self.resolvedFadeWidth(nightLights.terminatorFadeWidth),
-            nightLightsEnabled: nightLights.isEnabled ? 1 : 0,
             sunVisualEnabled: sunVisualEnabled,
             sunDiskAngularSize: Self.resolvedFadeWidth(sun.diskAngularSize),
             sunDiskIntensity: sun.isEnabled ? Self.clampedUnit(sun.diskIntensity) : 0,
@@ -90,9 +80,6 @@ struct EarthSceneUniform {
                  daySideMinimumBrightness: Float,
                  nightSideBrightness: Float,
                  terminatorFadeWidth: Float,
-                 nightLightsIntensity: Float,
-                 nightLightsTerminatorFadeWidth: Float,
-                 nightLightsEnabled: UInt32,
                  sunVisualEnabled: UInt32,
                  sunDiskAngularSize: Float,
                  sunDiskIntensity: Float,
@@ -107,9 +94,6 @@ struct EarthSceneUniform {
         self.daySideMinimumBrightness = daySideMinimumBrightness
         self.nightSideBrightness = nightSideBrightness
         self.terminatorFadeWidth = terminatorFadeWidth
-        self.nightLightsIntensity = nightLightsIntensity
-        self.nightLightsTerminatorFadeWidth = nightLightsTerminatorFadeWidth
-        self.nightLightsEnabled = nightLightsEnabled
         self.sunVisualEnabled = sunVisualEnabled
         self.sunDiskAngularSize = sunDiskAngularSize
         self.sunDiskIntensity = sunDiskIntensity

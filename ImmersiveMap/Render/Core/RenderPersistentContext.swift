@@ -25,9 +25,6 @@ final class RenderPersistentContext {
 
     let globeCapRenderer: GlobeCapRenderer
     let starfieldRenderer: StarfieldRenderer
-    let nightLightsTileSetStore: NightLightsTileSetStore
-    let nightLightsTileCache: NightLightsTileCache
-    let nightLightsAtlasTexture: NightLightsAtlasTexture
     let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
@@ -51,8 +48,6 @@ final class RenderPersistentContext {
     let tileTraceRecorder: TileTraceRecorder
     let baseLabelTraceRecorder: BaseLabelTraceRecorder
     let tileLoadingStatusReporter: TileLoadingStatusReporter?
-
-    private var nightLightsMetadataTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -95,13 +90,6 @@ final class RenderPersistentContext {
                                                  sampleCount: metal.renderSampleCount,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  mapBaseColors: mapBaseColors)
-        let nightLightsTileSetStore = NightLightsTileSetStore()
-        self.nightLightsTileSetStore = nightLightsTileSetStore
-        self.nightLightsTileCache = NightLightsTileCache { tile in
-            nightLightsTileSetStore.tileSet?.url(for: tile)
-        }
-        self.nightLightsAtlasTexture = NightLightsAtlasTexture(device: metal.device)
-
         self.textRenderer = TextRenderer(device: metal.device,
                                          library: metal.library,
                                          sampleCount: 1)
@@ -127,37 +115,12 @@ final class RenderPersistentContext {
                                                sampleCount: 1,
                                                config: config.avatars)
         self.debugOverlayRenderer = DebugOverlayRenderer(metalDevice: metal.device, settings: config.debug)
-        startNightLightsMetadataLoad(settings: config.scene.earth.nightLights,
-                                     eventSink: eventSink)
     }
 
     // MARK: - Settings
 
     func applySettings(_ settings: ImmersiveMapSettings) {
         debugOverlayRenderer.apply(settings: settings.debug)
-    }
-
-    private func startNightLightsMetadataLoad(settings: ImmersiveMapSettings.EarthSceneSettings.NightLightsSettings,
-                                              eventSink: RenderFrameEventSink) {
-        guard let tileManifestURL = settings.tileManifestURL else {
-            nightLightsTileSetStore.update(nil)
-            return
-        }
-
-        let loader = NightLightsTileSetMetadataLoader()
-        let tileSetStore = nightLightsTileSetStore
-        nightLightsMetadataTask = Task(priority: .utility) {
-            guard let tileSet = try? await loader.load(from: tileManifestURL),
-                  Task.isCancelled == false else {
-                return
-            }
-            tileSetStore.update(tileSet)
-            eventSink.invalidate(.tileAvailable)
-        }
-    }
-
-    deinit {
-        nightLightsMetadataTask?.cancel()
     }
 
     // MARK: - Depth States

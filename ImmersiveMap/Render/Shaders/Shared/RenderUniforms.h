@@ -31,9 +31,6 @@ struct EarthScene {
     float daySideMinimumBrightness;
     float nightSideBrightness;
     float terminatorFadeWidth;
-    float nightLightsIntensity;
-    float nightLightsTerminatorFadeWidth;
-    uint nightLightsEnabled;
     uint sunVisualEnabled;
     float sunDiskAngularSize;
     float sunDiskIntensity;
@@ -55,11 +52,6 @@ struct SunVisualState {
     float limbHaloAlpha;
     uint isEnabled;
     uint padding;
-};
-
-struct NightLightsAtlasEntry {
-    int4 tileAndPage;
-    float4 uvOriginAndScale;
 };
 
 // Дымка у горизонта плоского представления; раскладка зеркалит

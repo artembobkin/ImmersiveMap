@@ -454,30 +454,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct EarthSceneSettings: Equatable, Sendable {
-        public struct NightLightsSettings: Equatable, Sendable {
-            public var isEnabled: Bool
-            /// Light contribution multiplier. Expected range: `0...1`.
-            public var intensity: Float
-            /// Positive normalized dot-product width used to fade across the terminator.
-            public var terminatorFadeWidth: Float
-            /// Optional manifest URL for server-hosted night-light tiles.
-            public var tileManifestURL: URL?
-
-            /// Creates night-lights settings.
-            /// - Parameters:
-            ///   - intensity: Light contribution multiplier in the expected range `0...1`.
-            ///   - terminatorFadeWidth: Positive normalized dot-product fade width.
-            public init(isEnabled: Bool = true,
-                        intensity: Float = 1.0,
-                        terminatorFadeWidth: Float = 0.18,
-                        tileManifestURL: URL? = nil) {
-                self.isEnabled = isEnabled
-                self.intensity = intensity
-                self.terminatorFadeWidth = terminatorFadeWidth
-                self.tileManifestURL = tileManifestURL
-            }
-        }
-
         public struct SunSettings: Equatable, Sendable {
             public var isEnabled: Bool
             /// Apparent disk angular size in shader-facing normalized units.
@@ -519,8 +495,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
-        /// Controls the full Earth scene lighting package: visible Sun, planet terminator shading,
-        /// night-side brightness, and night lights.
+        /// Controls the full Earth scene lighting package: visible Sun, planet
+        /// terminator shading and night-side brightness.
         public var isEnabled: Bool
         public var timeMode: EarthSceneTimeMode
         /// Minimum daylight brightness. Expected range: `0...1`.
@@ -529,12 +505,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var nightSideBrightness: Float
         /// Positive normalized dot-product width used to fade across the terminator.
         public var terminatorFadeWidth: Float
-        public var nightLights: NightLightsSettings
         public var sun: SunSettings
 
         /// Creates Earth scene settings.
         /// - Parameters:
-        ///   - isEnabled: Enables the full Sun, terminator shading, and night-lights package.
+        ///   - isEnabled: Enables the full Sun and terminator shading package.
         ///   - daySideMinimumBrightness: Minimum daylight brightness in the expected range `0...1`.
         ///   - nightSideBrightness: Night-side base brightness in the expected range `0...1`.
         ///   - terminatorFadeWidth: Positive normalized dot-product fade width.
@@ -543,14 +518,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     daySideMinimumBrightness: Float = 0.82,
                     nightSideBrightness: Float = 0.18,
                     terminatorFadeWidth: Float = 0.12,
-                    nightLights: NightLightsSettings = NightLightsSettings(),
                     sun: SunSettings = SunSettings()) {
             self.isEnabled = isEnabled
             self.timeMode = timeMode
             self.daySideMinimumBrightness = daySideMinimumBrightness
             self.nightSideBrightness = nightSideBrightness
             self.terminatorFadeWidth = terminatorFadeWidth
-            self.nightLights = nightLights
             self.sun = sun
         }
     }
@@ -848,8 +821,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           near: 0.1,
                                                           far: 6000.0,
                                                           radiusScale: 10.5),
-                             earth: EarthSceneSettings(nightLights: EarthSceneSettings.NightLightsSettings(isEnabled: false,
-                                                                                                          tileManifestURL: ImmersiveMapTilesProvider.defaultNightLightsManifestURL))),
+                             earth: EarthSceneSettings()),
         style: StyleSettings(preparedTileStyleRevision: 85,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
@@ -994,12 +966,6 @@ public extension ImmersiveMapSettings {
     func earthScene(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.earth.isEnabled = isEnabled
-        return settings
-    }
-
-    func nightLightsTileManifestURL(_ url: URL?) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.earth.nightLights.tileManifestURL = url
         return settings
     }
 

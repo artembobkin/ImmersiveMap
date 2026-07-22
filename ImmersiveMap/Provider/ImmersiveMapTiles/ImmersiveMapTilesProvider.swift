@@ -19,9 +19,6 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     /// cacheable `/v/<version>/…` path instead of the always-revalidated base path.
     public static let defaultTileJSONURL = URL(string: "https://tiles.immersivemap.dev/tiles.json")!
 
-    /// Manifest URL of the hosted night-lights tile set served alongside the tiles.
-    public static let defaultNightLightsManifestURL = URL(string: "https://tiles.immersivemap.dev/night-lights/v1/night_lights_manifest.json")!
-
     /// Manual "invalidate every cached tile" lever: bump to force all clients to
     /// re-fetch and re-parse. Routine content updates at a stable URL no longer need
     /// a bump - the prepared cache is keyed by the raw tile's ETag and raw tiles

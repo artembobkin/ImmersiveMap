@@ -12,8 +12,8 @@ struct TileJSONDocument: Decodable, Equatable {
 }
 
 /// Loads a TileJSON document and extracts its first tile URL template. The
-/// injectable data loader mirrors `NightLightsTileSetMetadataLoader` so the
-/// parsing can be unit-tested without hitting the network.
+/// injectable data loader keeps the parsing unit-testable without hitting
+/// the network.
 struct TileJSONTemplateLoader: Sendable {
     private let loadData: @Sendable (URL) async throws -> Data
 
