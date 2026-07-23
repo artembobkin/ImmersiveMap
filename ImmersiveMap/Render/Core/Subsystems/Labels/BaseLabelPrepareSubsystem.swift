@@ -1128,12 +1128,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let slot = frameContext.frameSlotIndex
 
         for (recordIndex, record) in roadLabelCache.orderedTileRecords.enumerated() {
-            let tileCornerPoints = projectRoadRecordTileCorners(record: record,
-                                                                frameContext: frameContext,
-                                                                projectionIndexState: projectionIndexState)
-            guard RoadLabelNearCameraFilter.shouldKeepTile(cornerPoints: tileCornerPoints,
+            let tileClipCorners = projectRoadRecordTileCorners(record: record,
+                                                               frameContext: frameContext,
+                                                               projectionIndexState: projectionIndexState)
+            guard RoadLabelNearCameraFilter.shouldKeepTile(clipCorners: tileClipCorners,
                                                            viewportWidth: viewportWidth,
-                                                           viewportHeight: viewportHeight) else {
+                                                           viewportHeight: viewportHeight,
+                                                           underzoomLevels: max(0, frameContext.visibleContent.tileZoomLevel - record.ownerKey.z)) else {
                 nearCameraCulledPathCount += record.entries.count
                 appendRoadRecordInstanceIndices(record: record,
                                                 into: &hiddenInstanceIndices)
@@ -1269,12 +1270,12 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
     private func projectRoadRecordTileCorners(record: RoadLabelTileRecord,
                                               frameContext: FrameContext,
-                                              projectionIndexState: TileProjectionIndexState) -> [ScreenPointOutput] {
+                                              projectionIndexState: TileProjectionIndexState) -> [SIMD4<Float>] {
         let snapshot = TilePointToScreenPointSnapshot(pointInputs: RoadLabelNearCameraFilter.makeTileCornerInputs(tile: record.ownerKey),
                                                       tileSlotVisibleTileIndices: [record.visibleTileIndex])
-        return tilePointScreenProjector.project(snapshot: snapshot,
-                                                frameContext: frameContext,
-                                                tileOriginData: projectionIndexState.tileOriginData)
+        return tilePointScreenProjector.projectFlatClipSpacePoints(snapshot: snapshot,
+                                                                   frameContext: frameContext,
+                                                                   tileOriginData: projectionIndexState.tileOriginData)
     }
 
     private func buildRoadLabelState(frameContext: FrameContext,

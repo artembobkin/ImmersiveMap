@@ -49,6 +49,42 @@ struct TilePointScreenProjector {
         }
     }
 
+    /// Clip-space координаты точек flat-проекции, без перспективного деления
+    /// и отбрасывания точек за камерой: потребитель (фильтр дорожных лейблов)
+    /// сам клипит полигон по near-плоскости и вьюпорту, чтобы мерить видимую
+    /// экранную площадь. Невалидные слоты дают w = -1 (отсекаются клипом).
+    func projectFlatClipSpacePoints(snapshot: TilePointToScreenPointSnapshot,
+                                    frameContext: FrameContext,
+                                    tileOriginData: [FlatTileOriginData]) -> [SIMD4<Float>] {
+        let cameraMatrix = frameContext.cameraMatrices.projectionView
+        var outputs = Array(repeating: SIMD4<Float>(0, 0, 0, -1),
+                            count: snapshot.pointsCount)
+
+        for index in snapshot.pointInputs.indices {
+            let input = snapshot.pointInputs[index]
+            let tileSlotIndex = Int(input.tileSlotIndex)
+            guard tileSlotIndex >= 0,
+                  tileSlotIndex < snapshot.tileSlotVisibleTileIndices.count else {
+                continue
+            }
+
+            let visibleTileIndex = Int(snapshot.tileSlotVisibleTileIndices[tileSlotIndex])
+            guard visibleTileIndex >= 0,
+                  visibleTileIndex < tileOriginData.count else {
+                continue
+            }
+
+            let originData = tileOriginData[visibleTileIndex]
+            let local = SIMD2<Float>(input.uv.x * originData.size,
+                                     (1.0 - input.uv.y) * originData.size)
+            let worldPosition = originData.panRelativeOrigin + local
+            let world = SIMD4<Float>(worldPosition.x, worldPosition.y, 0.0, 1.0)
+            outputs[index] = cameraMatrix * world
+        }
+
+        return outputs
+    }
+
     private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {

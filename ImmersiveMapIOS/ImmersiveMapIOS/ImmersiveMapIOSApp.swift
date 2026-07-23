@@ -21,5 +21,5 @@ private struct MapScreen: View {
             .cameraController(camera)
             .enableCameraUIControls()
             .ignoresSafeArea()
-    }
+    }   
 }
