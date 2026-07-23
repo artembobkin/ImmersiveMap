@@ -11,6 +11,22 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     private let lowZoomOverviewMaximumTileZoom = 4
     private let poiMinimumZoom = 13
 
+    /// Уличная фурнитура OSM, которая не должна становиться подписью ни на
+    /// каком зуме: скобы для великов, урны, ворота, входы в здания и т.п.
+    /// Такие классы составляют тысячи фич на тайл и только засоряют коллизии.
+    private static let excludedPoiClasses: Set<String> = [
+        "bicycle_parking", "waste_basket", "gate", "entrance", "bench",
+        "drinking_water", "toilets", "vending_machine", "recycling"
+    ]
+
+    /// Кап локального ранга OpenMapTiles: rank считается внутри клетки сетки
+    /// ~128px тайла, поэтому порог означает «не больше N подписей на клетку».
+    /// Хвост глубже капа не попадает даже в буферы: в плотном центре это
+    /// тысячи фич на тайл. Число согласовано с расписанием раскрытия стиля
+    /// (бюджет клетки, учетверяемый оверзумом): 64 = 4^3, то есть кап держит
+    /// ровно то, что расписание способно показать к tile.z + 3.
+    private static let maximumPoiRank = 64
+
     let providerID = "immersivemaptiles"
     let languagePreferences: VectorTileLabelLanguagePreferences
 
@@ -70,7 +86,17 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         case "mountain_peak", "aerodrome_label":
             return true
         case "poi":
-            return tileZoom >= poiMinimumZoom
+            guard tileZoom >= poiMinimumZoom else {
+                return false
+            }
+            if let poiClass = properties["class"]?.stringValue.lowercased(),
+               Self.excludedPoiClasses.contains(poiClass) {
+                return false
+            }
+            if let rank = parseIntValue(properties["rank"]), rank > Self.maximumPoiRank {
+                return false
+            }
+            return true
         default:
             return false
         }

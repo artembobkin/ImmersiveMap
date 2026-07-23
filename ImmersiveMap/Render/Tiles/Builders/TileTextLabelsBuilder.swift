@@ -9,6 +9,28 @@ final class TileTextLabelsBuilder {
         let style: LabelTextStyle
         let textVertices: [LabelVertex]
         let iconVertices: [LabelVertex]
+        /// Категория для тировой политики (см. `tierRepresentation`).
+        let detailCategory: VectorTileLabelDetailCategory
+        /// Икон-only представление для деградации в среднем тире: иконка в
+        /// начале координат и её квадратный бокс. Пусто у лейблов без иконки.
+        let iconOnlyVertices: [LabelVertex]
+        let iconOnlySizePx: SIMD2<Float>
+
+        init(placementInput: TextLabelPlacementInput,
+             style: LabelTextStyle,
+             textVertices: [LabelVertex],
+             iconVertices: [LabelVertex],
+             detailCategory: VectorTileLabelDetailCategory = .anchor,
+             iconOnlyVertices: [LabelVertex] = [],
+             iconOnlySizePx: SIMD2<Float> = .zero) {
+            self.placementInput = placementInput
+            self.style = style
+            self.textVertices = textVertices
+            self.iconVertices = iconVertices
+            self.detailCategory = detailCategory
+            self.iconOnlyVertices = iconOnlyVertices
+            self.iconOnlySizePx = iconOnlySizePx
+        }
     }
 
     private let textRenderer: TextRenderer
@@ -57,11 +79,11 @@ final class TileTextLabelsBuilder {
                                                                 scale: textScale,
                                                                 wrap: wrap,
                                                                 weight: weight)
-            let (vertices, size, iconVertices) = makeCombinedLabelGeometry(textMetrics: textMetrics,
-                                                                           poiIcon: label.poiIcon,
-                                                                           textStyle: style,
-                                                                           labelIndex: labelIndex,
-                                                                           contentScale: contentScale)
+            let geometry = makeCombinedLabelGeometry(textMetrics: textMetrics,
+                                                     poiIcon: label.poiIcon,
+                                                     textStyle: style,
+                                                     labelIndex: labelIndex,
+                                                     contentScale: contentScale)
 
             let placementInput = TextLabelPlacementInput(
                 pointInput: TilePointInput(uv: uv,
@@ -70,13 +92,16 @@ final class TileTextLabelsBuilder {
                 placementMeta: LabelPlacementMeta(key: label.key,
                                                   sortKey: label.sortKey,
                                                   collisionPriority: label.collisionPriority,
-                                                  labelSizePx: size,
+                                                  labelSizePx: geometry.size,
                                                   minCameraZoom: label.minCameraZoom)
             )
             builtLabels.append(BuiltBaseLabel(placementInput: placementInput,
                                              style: style,
-                                             textVertices: vertices,
-                                             iconVertices: iconVertices))
+                                             textVertices: geometry.textVertices,
+                                             iconVertices: geometry.iconVertices,
+                                             detailCategory: label.detailCategory,
+                                             iconOnlyVertices: geometry.iconOnlyVertices,
+                                             iconOnlySizePx: geometry.iconOnlySize))
         }
 
         return Self.makeTextLabels(from: builtLabels)
@@ -90,27 +115,97 @@ final class TileTextLabelsBuilder {
         )
     }
 
+    /// Представление лейбла в тире детализации.
+    private enum TierRepresentation {
+        case full
+        case iconOnly
+        case dropped
+    }
+
+    /// POI с классовым зумом появления не глубже этого порога считается
+    /// «якорным» (больница, вокзал, парк): в среднем тире он сохраняет текст.
+    private static let majorPoiMaximumMinCameraZoom: Float = 14.5
+
+    /// Тировая политика детализации:
+    /// full - всё как есть; reduced - якорные подписи и крупные POI целиком,
+    /// остальные иконочные POI деградируют до иконки без текста (маленький
+    /// коллизионный бокс), безыконная мелочь и номера домов выпадают;
+    /// minimal - только горстка самых важных якорных подписей, даль без POI.
+    private static func tierRepresentation(for builtLabel: BuiltBaseLabel,
+                                           tier: BaseLabelDetailTier) -> TierRepresentation {
+        switch tier {
+        case .full:
+            return .full
+        case .reduced:
+            switch builtLabel.detailCategory {
+            case .anchor:
+                return .full
+            case .housenumber:
+                return .dropped
+            case .poi:
+                if builtLabel.placementInput.placementMeta.minCameraZoom <= majorPoiMaximumMinCameraZoom {
+                    return .full
+                }
+                return builtLabel.iconOnlyVertices.isEmpty ? .dropped : .iconOnly
+            }
+        case .minimal:
+            return builtLabel.detailCategory == .anchor ? .full : .dropped
+        }
+    }
+
     private static func makeTextLabelSet(from builtLabels: [BuiltBaseLabel],
                                          tier: BaseLabelDetailTier) -> PreparedTileCPU.TextLabelSet {
-        let retainedCount = BaseLabelDetailTier.retainedLabelCount(labelCount: builtLabels.count, tier: tier)
-        let retainedLabels = builtLabels.prefix(retainedCount)
+        // Абсолютные бюджеты тайла: плотный тайл отдаёт не больше бюджета,
+        // разреженный - всё своё. Лейблы уже отсортированы по приоритету
+        // коллизий, поэтому бюджет забирают самые важные (внутри POI порядок
+        // совпадает с локальным рангом - расход равномерен по тайлу).
+        var anchorBudget = BaseLabelDetailTier.anchorLabelBudget(tier: tier)
+        var poiBudget = BaseLabelDetailTier.poiLabelBudget(tier: tier)
+        var retainedLabels: [(label: BuiltBaseLabel, representation: TierRepresentation)] = []
+        retainedLabels.reserveCapacity(builtLabels.count)
+        for builtLabel in builtLabels {
+            let representation = tierRepresentation(for: builtLabel, tier: tier)
+            guard representation != .dropped else {
+                continue
+            }
+            switch builtLabel.detailCategory {
+            case .anchor:
+                guard Self.consumeBudget(&anchorBudget) else { continue }
+            case .poi:
+                guard Self.consumeBudget(&poiBudget) else { continue }
+            case .housenumber:
+                break
+            }
+            retainedLabels.append((builtLabel, representation))
+        }
 
         var verticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
         var iconVerticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
         var styleByIdentity: [LabelRunStyleIdentity: LabelTextStyle] = [:]
         var placementInputs: [TextLabelPlacementInput] = []
-        placementInputs.reserveCapacity(retainedCount)
+        placementInputs.reserveCapacity(retainedLabels.count)
 
-        for (compactIndex, builtLabel) in retainedLabels.enumerated() {
+        for (compactIndex, retained) in retainedLabels.enumerated() {
+            let builtLabel = retained.label
             let labelIndex = simd_int1(compactIndex)
             let identity = LabelRunStyleIdentity(builtLabel.style)
             styleByIdentity[identity] = builtLabel.style
-            placementInputs.append(builtLabel.placementInput)
-            verticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.textVertices,
-                                                                                        labelIndex: labelIndex))
-            if builtLabel.iconVertices.isEmpty == false {
-                iconVerticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.iconVertices,
+
+            switch retained.representation {
+            case .full:
+                placementInputs.append(builtLabel.placementInput)
+                verticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.textVertices,
+                                                                                            labelIndex: labelIndex))
+                if builtLabel.iconVertices.isEmpty == false {
+                    iconVerticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.iconVertices,
+                                                                                                    labelIndex: labelIndex))
+                }
+            case .iconOnly:
+                placementInputs.append(iconOnlyPlacementInput(for: builtLabel))
+                iconVerticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.iconOnlyVertices,
                                                                                                 labelIndex: labelIndex))
+            case .dropped:
+                continue
             }
         }
 
@@ -132,6 +227,32 @@ final class TileTextLabelsBuilder {
         return PreparedTileCPU.TextLabelSet(placementInputs: placementInputs,
                                             glyphRuns: glyphRuns,
                                             poiIconRuns: poiIconRuns)
+    }
+
+    /// Расход абсолютного бюджета: `nil` - без ограничения, 0 - исчерпан.
+    private static func consumeBudget(_ budget: inout Int?) -> Bool {
+        guard let remaining = budget else {
+            return true
+        }
+        guard remaining > 0 else {
+            return false
+        }
+        budget = remaining - 1
+        return true
+    }
+
+    /// Плейсмент икон-only представления: тот же анкер и приоритеты, но
+    /// коллизионный бокс равен квадрату иконки, а не связке иконка+текст.
+    private static func iconOnlyPlacementInput(for builtLabel: BuiltBaseLabel) -> TextLabelPlacementInput {
+        let meta = builtLabel.placementInput.placementMeta
+        return TextLabelPlacementInput(
+            pointInput: builtLabel.placementInput.pointInput,
+            placementMeta: LabelPlacementMeta(key: meta.key,
+                                              sortKey: meta.sortKey,
+                                              collisionPriority: meta.collisionPriority,
+                                              labelSizePx: builtLabel.iconOnlySizePx,
+                                              minCameraZoom: meta.minCameraZoom)
+        )
     }
 
     /// Идентичность гомогенного glyph/icon-run: всё, что применяет код отрисовки лейблов
@@ -185,15 +306,27 @@ final class TileTextLabelsBuilder {
         }
     }
 
+    private struct CombinedLabelGeometry {
+        let textVertices: [LabelVertex]
+        let size: SIMD2<Float>
+        let iconVertices: [LabelVertex]
+        let iconOnlyVertices: [LabelVertex]
+        let iconOnlySize: SIMD2<Float>
+    }
+
     private func makeCombinedLabelGeometry(textMetrics: TextMetrics,
                                            poiIcon: PoiSpriteIcon?,
                                            textStyle: LabelTextStyle,
                                            labelIndex: simd_int1,
-                                           contentScale: Float) -> ([LabelVertex], SIMD2<Float>, [LabelVertex]) {
+                                           contentScale: Float) -> CombinedLabelGeometry {
         guard let poiIcon,
               let region = poiAtlasLayout.region(for: poiIcon) else {
             let size = SIMD2<Float>(textMetrics.size.width, textMetrics.size.height)
-            return (textMetrics.vertices, size, [])
+            return CombinedLabelGeometry(textVertices: textMetrics.vertices,
+                                         size: size,
+                                         iconVertices: [],
+                                         iconOnlyVertices: [],
+                                         iconOnlySize: .zero)
         }
 
         let iconSize = poiIconSize(for: textStyle, contentScale: contentScale)
@@ -212,7 +345,24 @@ final class TileTextLabelsBuilder {
         }
 
         let uvRect = region.uvRect
-        let iconVertices = [
+        return CombinedLabelGeometry(textVertices: shiftedTextVertices,
+                                     size: SIMD2<Float>(combinedWidth, combinedHeight),
+                                     iconVertices: Self.makeIconQuad(iconSize: iconSize,
+                                                                     iconYOffset: iconYOffset,
+                                                                     labelIndex: labelIndex,
+                                                                     uvRect: uvRect),
+                                     iconOnlyVertices: Self.makeIconQuad(iconSize: iconSize,
+                                                                         iconYOffset: 0.0,
+                                                                         labelIndex: labelIndex,
+                                                                         uvRect: uvRect),
+                                     iconOnlySize: SIMD2<Float>(iconSize, iconSize))
+    }
+
+    private static func makeIconQuad(iconSize: Float,
+                                     iconYOffset: Float,
+                                     labelIndex: simd_int1,
+                                     uvRect: SIMD4<Float>) -> [LabelVertex] {
+        [
             LabelVertex(position: SIMD2<Float>(0.0, iconYOffset),
                         uv: SIMD2<Float>(uvRect.z, uvRect.w),
                         labelIndex: labelIndex,
@@ -238,10 +388,6 @@ final class TileTextLabelsBuilder {
                         labelIndex: labelIndex,
                         spriteUV: SIMD2<Float>(0.0, 1.0))
         ]
-
-        return (shiftedTextVertices,
-                SIMD2<Float>(combinedWidth, combinedHeight),
-                iconVertices)
     }
 
     private func poiIconSize(for textStyle: LabelTextStyle, contentScale: Float) -> Float {

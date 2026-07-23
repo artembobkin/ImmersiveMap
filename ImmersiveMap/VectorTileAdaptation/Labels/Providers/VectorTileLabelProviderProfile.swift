@@ -16,6 +16,7 @@ protocol VectorTileLabelProviderProfile {
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity
     func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String
     func isHouseNumberLayer(_ layerName: String) -> Bool
+    func detailCategory(layerName: String) -> VectorTileLabelDetailCategory
 }
 
 extension VectorTileLabelProviderProfile {
@@ -25,5 +26,18 @@ extension VectorTileLabelProviderProfile {
 
     var houseNumberTextKeys: [String] {
         []
+    }
+
+    /// Категория тира по имени слоя: покрывает схемы OpenMapTiles (`poi`) и
+    /// Mapbox Streets (`poi_label`), остальные точечные слои считаются
+    /// якорными подписями.
+    func detailCategory(layerName: String) -> VectorTileLabelDetailCategory {
+        if isHouseNumberLayer(layerName) {
+            return .housenumber
+        }
+        if layerName.lowercased().contains("poi") {
+            return .poi
+        }
+        return .anchor
     }
 }

@@ -90,7 +90,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "water_name":
             return waterLabelStyle(props: props)
         case "poi":
-            return poiLabelStyle(props: props)
+            return poiLabelStyle(props: props, tileZoom: z)
         case "mountain_peak":
             return pointLabel(key: 74, appearance: configuration.labels.poi)
         case "aerodrome_label":
@@ -452,20 +452,77 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     // (PoiIconStyleUniform.backgroundColor), и заливка текста; глиф иконки белый.
     // Ключ у всех POI один (72): runs группируются по полной идентичности стиля
     // (вес + цвета), поэтому разные категории раскладываются в отдельные draw-runs.
-    private func poiLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
-        // POI без распознанной иконки (офисы, компании и т.п.) появляются только
-        // с labelVisibility.poiIconlessMinimumZoom. Порог применяется в рантайме
-        // по зуму КАМЕРЫ (source-тайлы упёрты в maxzoom 14, поэтому фильтр по
-        // tile.z не сработал бы при overzoom), поэтому он едет с лейблом как
-        // minCameraZoom. У иконочных POI порога нет (видны с обычного зума).
+    private func poiLabelStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
+        // Появление POI выводится из бюджета и приоритетов, без абсолютных
+        // зум-рамп: лейбл виден, когда его эффективный ранг укладывается в
+        // бюджет клетки сетки, а бюджет растёт вчетверо за каждый зум
+        // оверзума - ровно как экранная площадь тайла. Решение сворачивается
+        // в статичный порог minCameraZoom = tile.z + log4(effRank / бюджет),
+        // который рантайм и коллизии применяют по зуму камеры. Классы задают
+        // не зумы, а смещение приоритета в единицах ранга, поэтому подход не
+        // зависит от maxzoom источника: смена источника сдвигает пороги
+        // автоматически через tile.z.
+        let cls = props["class"]?.stringValue.lowercased()
+        let subclass = props["subclass"]?.stringValue.lowercased()
+        let rank = Double(parseIntValue(props["rank"]) ?? Self.poiDefaultRank)
+        let effectiveRank = max(Self.poiNativeCellBudget,
+                                rank + Self.poiClassRankBias(cls: cls, subclass: subclass))
+        var minCameraZoom = Float(tileZoom)
+            + Float(log2(effectiveRank / Self.poiNativeCellBudget) / 2.0)
         let isIconless = poiSpriteResolver.resolve(attributes: props, layerName: "poi") == nil
-        let minCameraZoom = isIconless
-            ? Float(configuration.labelVisibility.poiIconlessMinimumZoom)
-            : 0
+        if isIconless {
+            minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiIconlessMinimumZoom))
+        }
+        minCameraZoom = min(minCameraZoom, Float(tileZoom) + Self.poiMaximumOverzoomAppearanceDelay)
+
         var appearance = configuration.labels.poi
-        appearance.fillColor = poiCategoryColor(cls: props["class"]?.stringValue.lowercased(),
-                                                subclass: props["subclass"]?.stringValue.lowercased())
+        appearance.fillColor = poiCategoryColor(cls: cls, subclass: subclass)
         return pointLabel(key: 72, appearance: appearance, minCameraZoom: minCameraZoom)
+    }
+
+    /// Бюджет клетки сетки ранга на РОДНОМ зуме тайла: rank <= бюджета виден
+    /// сразу с появлением тайла, каждый зум оверзума учетверяет бюджет.
+    private static let poiNativeCellBudget = 1.0
+
+    /// Ранг для фич без атрибута rank: середина хвоста.
+    private static let poiDefaultRank = 15
+
+    /// Потолок раскрытия: нейтральный хвост капа (rank 64) исчерпывается
+    /// ровно к tile.z + 3, смещённая в плюс инфраструктура доезжает клампом
+    /// к tile.z + 3.5. Глубже доставать из тайла уже нечего.
+    private static let poiMaximumOverzoomAppearanceDelay: Float = 3.5
+
+    /// Смещения приоритета классов в единицах ранга (зум-агностичны). Якоря
+    /// уводятся в минус и видны с рождения тайла, городская ткань чуть раньше
+    /// нейтральной коммерции, декоративная зелень чуть позже, уличная
+    /// инфраструктура на ~два зума позже нейтральных.
+    private static let poiMajorClasses: Set<String> = [
+        "hospital", "railway", "aerodrome", "university", "college", "stadium",
+        "museum", "zoo", "attraction", "harbor", "monument", "castle"
+    ]
+    private static let poiCommunityClasses: Set<String> = [
+        "school", "theatre", "cinema", "lodging", "town_hall", "townhall",
+        "library", "police", "fire_station", "pharmacy", "grocery", "park",
+        "place_of_worship", "post", "bank", "campsite"
+    ]
+    private static let poiLateClasses: Set<String> = [
+        "garden", "playground", "swimming_pool", "kindergarten", "sport"
+    ]
+    private static let poiInfrastructureClasses: Set<String> = [
+        "bus", "bicycle_rental", "bicycle_rent", "parking", "fuel",
+        "charging_station", "car", "car_rental", "atm"
+    ]
+
+    private static func poiClassRankBias(cls: String?, subclass: String?) -> Double {
+        func bias(_ value: String?) -> Double? {
+            guard let value else { return nil }
+            if poiMajorClasses.contains(value) { return -1_000 }
+            if poiCommunityClasses.contains(value) { return -4 }
+            if poiLateClasses.contains(value) { return 8 }
+            if poiInfrastructureClasses.contains(value) { return 40 }
+            return nil
+        }
+        return bias(subclass) ?? bias(cls) ?? 0
     }
 
     private func poiCategoryColor(cls: String?, subclass: String?) -> SIMD3<Float> {

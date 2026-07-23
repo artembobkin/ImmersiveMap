@@ -14,6 +14,8 @@ extension TileMvtParser {
         let poiIcon: PoiSpriteIcon?
         /// Минимальный зум камеры, с которого лейбл виден (0 = всегда).
         let minCameraZoom: Float
+        /// Категория для дистанционных тиров детализации (см. билдер лейблов).
+        let detailCategory: VectorTileLabelDetailCategory
 
         init(text: String,
              position: SIMD2<Int16>,
@@ -25,7 +27,8 @@ extension TileMvtParser {
              collisionPriority: Int,
              textStyle: LabelTextStyle,
              poiIcon: PoiSpriteIcon? = nil,
-             minCameraZoom: Float = 0) {
+             minCameraZoom: Float = 0,
+             detailCategory: VectorTileLabelDetailCategory = .anchor) {
             self.text = text
             self.position = position
             self.key = TileMvtParser.makePointLabelKey(text: text,
@@ -38,6 +41,7 @@ extension TileMvtParser {
             self.textStyle = textStyle
             self.poiIcon = poiIcon
             self.minCameraZoom = minCameraZoom
+            self.detailCategory = detailCategory
         }
 
         init(text: String,
@@ -47,7 +51,8 @@ extension TileMvtParser {
              collisionPriority: Int,
              textStyle: LabelTextStyle,
              poiIcon: PoiSpriteIcon? = nil,
-             minCameraZoom: Float = 0) {
+             minCameraZoom: Float = 0,
+             detailCategory: VectorTileLabelDetailCategory = .anchor) {
             self.text = text
             self.position = position
             self.key = key
@@ -56,6 +61,7 @@ extension TileMvtParser {
             self.textStyle = textStyle
             self.poiIcon = poiIcon
             self.minCameraZoom = minCameraZoom
+            self.detailCategory = detailCategory
         }
     }
 }

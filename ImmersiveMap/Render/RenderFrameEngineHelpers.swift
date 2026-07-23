@@ -23,7 +23,8 @@ enum RenderDebugOverlayPolicy {
         guard controls.axesEnabled
             || controls.tileLayersEnabled
             || controls.roadLabelTilesEnabled
-            || controls.labelBoundsEnabled else {
+            || controls.baseLabelBoundsEnabled
+            || controls.roadLabelBoundsEnabled else {
             return false
         }
         #if DEBUG

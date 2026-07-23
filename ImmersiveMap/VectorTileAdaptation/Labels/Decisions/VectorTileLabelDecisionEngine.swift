@@ -51,6 +51,7 @@ struct VectorTileLabelDecisionEngine {
                                                                          drawRank: sortKey),
                                        placement: .centered,
                                        style: style,
-                                       poiIcon: poiIcon)
+                                       poiIcon: poiIcon,
+                                       detailCategory: profile.detailCategory(layerName: feature.layerName))
     }
 }

@@ -24,22 +24,31 @@ final class DebugOverlayControlStateTests: XCTestCase {
                                                             controls: controls.snapshot()))
     }
 
-    func testSetLabelBoundsEnabledUpdatesSnapshot() {
+    func testSetLabelBoundsEnabledUpdatesSnapshotIndependently() {
         let controls = DebugOverlayControlState()
 
-        controls.setLabelBoundsEnabled(true)
+        controls.setBaseLabelBoundsEnabled(true)
+        XCTAssertTrue(controls.snapshot().baseLabelBoundsEnabled)
+        XCTAssertFalse(controls.snapshot().roadLabelBoundsEnabled)
 
-        XCTAssertTrue(controls.snapshot().labelBoundsEnabled)
+        controls.setBaseLabelBoundsEnabled(false)
+        controls.setRoadLabelBoundsEnabled(true)
+        XCTAssertFalse(controls.snapshot().baseLabelBoundsEnabled)
+        XCTAssertTrue(controls.snapshot().roadLabelBoundsEnabled)
     }
 
-    func testLabelBoundsDebugEncodesOverlayPass() {
+    func testEitherLabelBoundsToggleEncodesOverlayPass() {
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
-        let controls = DebugOverlayControlState()
 
-        controls.setLabelBoundsEnabled(true)
-
+        let baseControls = DebugOverlayControlState()
+        baseControls.setBaseLabelBoundsEnabled(true)
         XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
-                                                            controls: controls.snapshot()))
+                                                            controls: baseControls.snapshot()))
+
+        let roadControls = DebugOverlayControlState()
+        roadControls.setRoadLabelBoundsEnabled(true)
+        XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
+                                                            controls: roadControls.snapshot()))
     }
 }

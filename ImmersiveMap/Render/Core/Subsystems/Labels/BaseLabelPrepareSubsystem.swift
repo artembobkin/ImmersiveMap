@@ -261,7 +261,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                         multiplier: overviewFadeAlpha)
         frameContext.sharedState.baseLabelDebugBoxesState = makeDebugBoxesState(
             baseProjection: baseProjection,
-            fadeAlphas: fadeResolution.fadeAlphas
+            fadeAlphas: fadeResolution.fadeAlphas,
+            cameraZoom: Float(frameContext.zoom)
         )
         // visibilityCycle != nil: незавершённый цикл обязан удерживать кадры,
         // иначе при статичной камере (fingerprint публикуется первым же
@@ -456,40 +457,54 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// позициями кадра. Спрятанные (коллизией, горизонтом лейбла, фейдом)
     /// включаются наравне с видимыми: смысл оверлея - показать всё, что
     /// участвует в кадре. За горизонтом проекции точка невалидна и рамки нет.
+    /// Лейблы ниже своего minCameraZoom пропускаются: коллизия их не считает,
+    /// и красный цвет должен означать «проиграл коллизию», а не «ещё не дорос
+    /// до зума». Базовые и дорожные рамки включаются раздельными тумблерами.
     private func makeDebugBoxesState(baseProjection: TilePointScreenProjectionResult,
-                                     fadeAlphas: [Float]) -> BaseLabelDebugBoxesState {
-        guard debugOverlayControls?.snapshot().labelBoundsEnabled == true else {
+                                     fadeAlphas: [Float],
+                                     cameraZoom: Float) -> BaseLabelDebugBoxesState {
+        guard let controls = debugOverlayControls?.snapshot(),
+              controls.baseLabelBoundsEnabled || controls.roadLabelBoundsEnabled else {
             return .empty
         }
 
-        let candidates = baseLabelCache.labelCollisionAABBInputs
-        let screenPoints = baseProjection.screenPoints
-        let count = min(candidates.count, screenPoints.count)
         var boxes: [BaseLabelDebugBox] = []
-        boxes.reserveCapacity(count)
+        if controls.baseLabelBoundsEnabled {
+            let candidates = baseLabelCache.labelCollisionAABBInputs
+            let presentationInputs = baseLabelCache.presentationInputs
+            let screenPoints = baseProjection.screenPoints
+            let count = min(candidates.count, screenPoints.count)
+            boxes.reserveCapacity(count)
 
-        for index in 0..<count {
-            let candidate = candidates[index]
-            let screenPoint = screenPoints[index]
-            guard candidate.isEnabled, screenPoint.visible != 0 else {
-                continue
+            for index in 0..<count {
+                let candidate = candidates[index]
+                let screenPoint = screenPoints[index]
+                guard candidate.isEnabled, screenPoint.visible != 0 else {
+                    continue
+                }
+                if index < presentationInputs.count,
+                   presentationInputs[index].minCameraZoom > cameraZoom {
+                    continue
+                }
+                let alpha = index < fadeAlphas.count ? fadeAlphas[index] : 0.0
+                boxes.append(BaseLabelDebugBox(center: screenPoint.position,
+                                               halfSize: candidate.halfSize,
+                                               isVisible: alpha > 0.01))
             }
-            let alpha = index < fadeAlphas.count ? fadeAlphas[index] : 0.0
-            boxes.append(BaseLabelDebugBox(center: screenPoint.position,
-                                           halfSize: candidate.halfSize,
-                                           isVisible: alpha > 0.01))
         }
 
         // Дорожные рамки: per-glyph AABB из последней подготовки цикла
         // видимости, видимость по опубликованному решению коллизий инстанса.
         var roadBoxes: [BaseLabelDebugBox] = []
-        for instance in latestRoadPreparedInstances {
-            let isVisible = instance.targetIndex < publishedRoadInstanceVisibility.count
-                && publishedRoadInstanceVisibility[instance.targetIndex]
-            for candidate in instance.collisionCandidates {
-                roadBoxes.append(BaseLabelDebugBox(center: candidate.position,
-                                                   halfSize: candidate.halfSize,
-                                                   isVisible: isVisible))
+        if controls.roadLabelBoundsEnabled {
+            for instance in latestRoadPreparedInstances {
+                let isVisible = instance.targetIndex < publishedRoadInstanceVisibility.count
+                    && publishedRoadInstanceVisibility[instance.targetIndex]
+                for candidate in instance.collisionCandidates {
+                    roadBoxes.append(BaseLabelDebugBox(center: candidate.position,
+                                                       halfSize: candidate.halfSize,
+                                                       isVisible: isVisible))
+                }
             }
         }
         return BaseLabelDebugBoxesState(boxes: boxes, roadBoxes: roadBoxes)

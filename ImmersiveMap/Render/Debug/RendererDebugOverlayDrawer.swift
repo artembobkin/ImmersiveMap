@@ -37,7 +37,7 @@ enum RendererDebugOverlayDrawer {
                                                           frameContext: frameContext,
                                                           placeTiles: roadLabelPlaceTiles)
         }
-        if controls.labelBoundsEnabled {
+        if controls.baseLabelBoundsEnabled || controls.roadLabelBoundsEnabled {
             debugOverlayRenderer.drawLabelBoundsOverlay(renderEncoder: renderEncoder,
                                                         polygonPipeline: polygonPipeline,
                                                         frameContext: frameContext,

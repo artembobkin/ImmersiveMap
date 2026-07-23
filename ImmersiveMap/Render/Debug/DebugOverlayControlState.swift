@@ -8,18 +8,21 @@ struct DebugOverlayControlSnapshot: Equatable {
     let tileLayersEnabled: Bool
     let wireframeEnabled: Bool
     let roadLabelTilesEnabled: Bool
-    let labelBoundsEnabled: Bool
+    let baseLabelBoundsEnabled: Bool
+    let roadLabelBoundsEnabled: Bool
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
          wireframeEnabled: Bool,
          roadLabelTilesEnabled: Bool = false,
-         labelBoundsEnabled: Bool = false) {
+         baseLabelBoundsEnabled: Bool = false,
+         roadLabelBoundsEnabled: Bool = false) {
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
         self.roadLabelTilesEnabled = roadLabelTilesEnabled
-        self.labelBoundsEnabled = labelBoundsEnabled
+        self.baseLabelBoundsEnabled = baseLabelBoundsEnabled
+        self.roadLabelBoundsEnabled = roadLabelBoundsEnabled
     }
 }
 
@@ -29,7 +32,8 @@ final class DebugOverlayControlState {
     private var tileLayersEnabled = false
     private var wireframeEnabled = false
     private var roadLabelTilesEnabled = false
-    private var labelBoundsEnabled = false
+    private var baseLabelBoundsEnabled = false
+    private var roadLabelBoundsEnabled = false
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -38,7 +42,8 @@ final class DebugOverlayControlState {
                                            tileLayersEnabled: tileLayersEnabled,
                                            wireframeEnabled: wireframeEnabled,
                                            roadLabelTilesEnabled: roadLabelTilesEnabled,
-                                           labelBoundsEnabled: labelBoundsEnabled)
+                                           baseLabelBoundsEnabled: baseLabelBoundsEnabled,
+                                           roadLabelBoundsEnabled: roadLabelBoundsEnabled)
     }
 
     func setAxesEnabled(_ isEnabled: Bool) {
@@ -65,9 +70,15 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
-    func setLabelBoundsEnabled(_ isEnabled: Bool) {
+    func setBaseLabelBoundsEnabled(_ isEnabled: Bool) {
         lock.lock()
-        labelBoundsEnabled = isEnabled
+        baseLabelBoundsEnabled = isEnabled
+        lock.unlock()
+    }
+
+    func setRoadLabelBoundsEnabled(_ isEnabled: Bool) {
+        lock.lock()
+        roadLabelBoundsEnabled = isEnabled
         lock.unlock()
     }
 }

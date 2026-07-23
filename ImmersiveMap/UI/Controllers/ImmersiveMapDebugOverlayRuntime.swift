@@ -46,8 +46,12 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setRoadLabelTilesEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
-        hudView.onLabelBoundsEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
-            controls?.setLabelBoundsEnabled(isEnabled)
+        hudView.onBaseLabelBoundsEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
+            controls?.setBaseLabelBoundsEnabled(isEnabled)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onRoadLabelBoundsEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
+            controls?.setRoadLabelBoundsEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onEarthSceneEnabledChanged = { [weak mapView] isEnabled in

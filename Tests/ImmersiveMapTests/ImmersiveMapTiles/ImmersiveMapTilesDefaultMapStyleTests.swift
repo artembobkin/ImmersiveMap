@@ -100,23 +100,39 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                             .preparedTileStyleRevision)
     }
 
-    func testIconlessPoiCarriesConfiguredMinCameraZoom() {
-        // default labelVisibility.poiIconlessMinimumZoom == 16
+    func testPoiMinCameraZoomDerivesFromOverzoomBudgetAndPriorities() {
+        // Порог появления = tile.z + log4(effRank / бюджет): бюджет клетки
+        // учетверяется за зум оверзума. Абсолютных зум-рамп нет, поэтому
+        // подход переживает смену maxzoom источника.
         let style = ImmersiveMapTilesDefaultMapStyle(
             configuration: .immersiveMapTilesDefault
         )
 
-        // Iconless POI (class "office" вне набора иконок): лейбл присутствует в
-        // prepared-тайле, но несёт порог minCameraZoom == 16. Видимость решается
-        // в рантайме по зуму камеры, поэтому tile.z здесь роли не играет.
-        let officeStyle = makeStyle(style, layerName: "poi", className: "office", zoom: 14)
-        XCTAssertNotNil(officeStyle.labelTextStyle)
+        // Якорь (hospital): отрицательное смещение клампится в бюджет, виден
+        // с рождения тайла независимо от ранга.
+        let hospitalStyle = makeStyle(style, layerName: "poi", className: "hospital", rank: 20, zoom: 14)
+        XCTAssertEqual(hospitalStyle.labelMinCameraZoom, 14)
+
+        // Нейтральная коммерция (shop, rank 2): log4(2) = 0.5 зума оверзума.
+        let shopStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 14)
+        XCTAssertEqual(shopStyle.labelMinCameraZoom, 14.5, accuracy: 0.001)
+
+        // Хвост ранга приходит позже: log4(20) ~ 2.16 зума.
+        let deepRankStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 20, zoom: 14)
+        XCTAssertEqual(deepRankStyle.labelMinCameraZoom, 14 + log2(Float(20)) / 2, accuracy: 0.001)
+
+        // Инфраструктура (bus, rank 2): смещение +40 -> log4(42) ~ 2.7 зума.
+        let busStyle = makeStyle(style, layerName: "poi", className: "bus", rank: 2, zoom: 14)
+        XCTAssertEqual(busStyle.labelMinCameraZoom, 14 + log2(Float(42)) / 2, accuracy: 0.001)
+
+        // Iconless POI (class "office" вне набора иконок): конфигурируемый
+        // порог безыконных (16) остаётся нижней границей.
+        let officeStyle = makeStyle(style, layerName: "poi", className: "office", rank: 2, zoom: 14)
         XCTAssertEqual(officeStyle.labelMinCameraZoom, 16)
 
-        // Iconful POI (class "shop" -> иконка shopping): порога нет, виден всегда.
-        let shopStyle = makeStyle(style, layerName: "poi", className: "shop", zoom: 14)
-        XCTAssertNotNil(shopStyle.labelTextStyle)
-        XCTAssertEqual(shopStyle.labelMinCameraZoom, 0)
+        // Зум-агностичность: тот же shop в тайле z13 появляется на зум раньше.
+        let earlierTileStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 13)
+        XCTAssertEqual(earlierTileStyle.labelMinCameraZoom, 13.5, accuracy: 0.001)
     }
 
     func testIconlessPoiZoomChangesPreparedTileRevision() {
@@ -144,10 +160,16 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,
                            layerName: String,
                            className: String? = nil,
+                           rank: Int? = nil,
                            zoom: Int) -> FeatureStyle {
         var properties: [String: VectorTile_Tile.Value] = [:]
         if let className {
             properties["class"] = stringValue(className)
+        }
+        if let rank {
+            var rankValue = VectorTile_Tile.Value()
+            rankValue.intValue = Int64(rank)
+            properties["rank"] = rankValue
         }
         return style.makeStyle(
             data: DetFeatureStyleData(layerName: layerName,

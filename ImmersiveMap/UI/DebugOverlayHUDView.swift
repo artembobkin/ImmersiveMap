@@ -48,8 +48,10 @@ final class DebugOverlayHUDView: UIView {
     private let baseLabelTraceStatusLabel = UILabel()
     private let roadLabelTilesLabel = UILabel()
     private let roadLabelTilesSwitch = UISwitch()
-    private let labelBoundsLabel = UILabel()
-    private let labelBoundsSwitch = UISwitch()
+    private let baseLabelBoundsLabel = UILabel()
+    private let baseLabelBoundsSwitch = UISwitch()
+    private let roadLabelBoundsLabel = UILabel()
+    private let roadLabelBoundsSwitch = UISwitch()
     private let zoomLabel = UILabel()
     private let latLonLabel = UILabel()
     private let diagnosticsLabel = UILabel()
@@ -81,7 +83,8 @@ final class DebugOverlayHUDView: UIView {
     var onTileLayersEnabledChanged: ((Bool) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
-    var onLabelBoundsEnabledChanged: ((Bool) -> Void)?
+    var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
+    var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onEarthSceneEnabledChanged: ((Bool) -> Void)?
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
@@ -114,13 +117,15 @@ final class DebugOverlayHUDView: UIView {
         configureControlLabel(wireframeLabel, text: "Wireframe")
         configureControlLabel(earthSceneLabel, text: "Earth scene")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
-        configureControlLabel(labelBoundsLabel, text: "Label boxes")
+        configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
+        configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
         axesSwitch.addTarget(self, action: #selector(axesSwitchChanged), for: .valueChanged)
         tileLayersSwitch.addTarget(self, action: #selector(tileLayersSwitchChanged), for: .valueChanged)
         wireframeSwitch.addTarget(self, action: #selector(wireframeSwitchChanged), for: .valueChanged)
         earthSceneSwitch.addTarget(self, action: #selector(earthSceneSwitchChanged), for: .valueChanged)
         roadLabelTilesSwitch.addTarget(self, action: #selector(roadLabelTilesSwitchChanged), for: .valueChanged)
-        labelBoundsSwitch.addTarget(self, action: #selector(labelBoundsSwitchChanged), for: .valueChanged)
+        baseLabelBoundsSwitch.addTarget(self, action: #selector(baseLabelBoundsSwitchChanged), for: .valueChanged)
+        roadLabelBoundsSwitch.addTarget(self, action: #selector(roadLabelBoundsSwitchChanged), for: .valueChanged)
         containerView.addSubview(axesLabel)
         containerView.addSubview(axesSwitch)
         containerView.addSubview(tileLayersLabel)
@@ -131,8 +136,10 @@ final class DebugOverlayHUDView: UIView {
         containerView.addSubview(earthSceneSwitch)
         containerView.addSubview(roadLabelTilesLabel)
         containerView.addSubview(roadLabelTilesSwitch)
-        containerView.addSubview(labelBoundsLabel)
-        containerView.addSubview(labelBoundsSwitch)
+        containerView.addSubview(baseLabelBoundsLabel)
+        containerView.addSubview(baseLabelBoundsSwitch)
+        containerView.addSubview(roadLabelBoundsLabel)
+        containerView.addSubview(roadLabelBoundsSwitch)
         configureSurfaceModeButton()
         containerView.addSubview(surfaceModeButton)
         tabControl.selectedSegmentIndex = SelectedTab.stats.rawValue
@@ -207,7 +214,8 @@ final class DebugOverlayHUDView: UIView {
         tileLayersSwitch.setOn(controls.tileLayersEnabled, animated: false)
         wireframeSwitch.setOn(controls.wireframeEnabled, animated: false)
         roadLabelTilesSwitch.setOn(controls.roadLabelTilesEnabled, animated: false)
-        labelBoundsSwitch.setOn(controls.labelBoundsEnabled, animated: false)
+        baseLabelBoundsSwitch.setOn(controls.baseLabelBoundsEnabled, animated: false)
+        roadLabelBoundsSwitch.setOn(controls.roadLabelBoundsEnabled, animated: false)
         earthSceneSwitch.setOn(earthSceneEnabled, animated: false)
         updateVisibility()
         setNeedsLayout()
@@ -276,8 +284,8 @@ final class DebugOverlayHUDView: UIView {
         let tilesBodyHeight = tilesStatusSize.height
             + traceBlockHeight
             + (tilesListHeight > 0 ? sectionSpacing + tilesListHeight : 0)
-        let baseLabelsBodyHeight = Layout.controlRowHeight * 2
-            + Layout.controlSpacing * 2
+        let baseLabelsBodyHeight = Layout.controlRowHeight * 3
+            + Layout.controlSpacing * 3
             + traceBlockHeight
         let panelY = top - zoomSize.height - Layout.contentInset
         let chromeHeight = Layout.headerHeight
@@ -422,16 +430,24 @@ final class DebugOverlayHUDView: UIView {
                                             y: roadLabelTilesLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
                                             width: switchSize.width,
                                             height: switchSize.height)
-        labelBoundsLabel.frame = CGRect(x: Layout.contentInset,
-                                        y: roadLabelTilesLabel.frame.maxY + Layout.controlSpacing,
-                                        width: labelWidth,
-                                        height: Layout.controlRowHeight)
-        labelBoundsSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                         y: labelBoundsLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                         width: switchSize.width,
-                                         height: switchSize.height)
+        baseLabelBoundsLabel.frame = CGRect(x: Layout.contentInset,
+                                            y: roadLabelTilesLabel.frame.maxY + Layout.controlSpacing,
+                                            width: labelWidth,
+                                            height: Layout.controlRowHeight)
+        baseLabelBoundsSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
+                                             y: baseLabelBoundsLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
+                                             width: switchSize.width,
+                                             height: switchSize.height)
+        roadLabelBoundsLabel.frame = CGRect(x: Layout.contentInset,
+                                            y: baseLabelBoundsLabel.frame.maxY + Layout.controlSpacing,
+                                            width: labelWidth,
+                                            height: Layout.controlRowHeight)
+        roadLabelBoundsSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
+                                             y: roadLabelBoundsLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
+                                             width: switchSize.width,
+                                             height: switchSize.height)
         baseLabelTraceButton.frame = CGRect(x: Layout.contentInset,
-                                            y: labelBoundsLabel.frame.maxY + Layout.controlSpacing,
+                                            y: roadLabelBoundsLabel.frame.maxY + Layout.controlSpacing,
                                             width: contentWidth,
                                             height: Layout.controlRowHeight)
         baseLabelTraceStatusLabel.frame = CGRect(x: Layout.contentInset,
@@ -699,8 +715,10 @@ final class DebugOverlayHUDView: UIView {
         baseLabelTraceStatusLabel.isHidden = isBaseLabelsVisible == false
         roadLabelTilesLabel.isHidden = isBaseLabelsVisible == false
         roadLabelTilesSwitch.isHidden = isBaseLabelsVisible == false
-        labelBoundsLabel.isHidden = isBaseLabelsVisible == false
-        labelBoundsSwitch.isHidden = isBaseLabelsVisible == false
+        baseLabelBoundsLabel.isHidden = isBaseLabelsVisible == false
+        baseLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
+        roadLabelBoundsLabel.isHidden = isBaseLabelsVisible == false
+        roadLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
         atlasScrollView.isHidden = isAtlasVisible == false
     }
 
@@ -726,8 +744,12 @@ final class DebugOverlayHUDView: UIView {
         onRoadLabelTilesEnabledChanged?(roadLabelTilesSwitch.isOn)
     }
 
-    @objc private func labelBoundsSwitchChanged() {
-        onLabelBoundsEnabledChanged?(labelBoundsSwitch.isOn)
+    @objc private func baseLabelBoundsSwitchChanged() {
+        onBaseLabelBoundsEnabledChanged?(baseLabelBoundsSwitch.isOn)
+    }
+
+    @objc private func roadLabelBoundsSwitchChanged() {
+        onRoadLabelBoundsEnabledChanged?(roadLabelBoundsSwitch.isOn)
     }
 
     @objc private func earthSceneSwitchChanged() {

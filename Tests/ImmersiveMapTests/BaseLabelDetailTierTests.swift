@@ -14,22 +14,17 @@ final class BaseLabelDetailTierTests: XCTestCase {
         XCTAssertEqual(BaseLabelDetailTier.tier(forRelativeDistance: 8), .minimal)
     }
 
-    func testMinimalCountKeepsFormulaBoundedBetweenOneAndFour() {
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 0, tier: .minimal), 0)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 1, tier: .minimal), 1)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 10, tier: .minimal), 1)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 11, tier: .minimal), 2)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 21, tier: .minimal), 3)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 31, tier: .minimal), 4)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 100, tier: .minimal), 4)
-    }
+    func testTierBudgetsAreAbsoluteAndShrinkWithDistance() {
+        // Абсолютные бюджеты: плотный тайл отдаёт ровно бюджет, разреженный
+        // всё своё, поэтому экранная плотность не зависит от плотности данных.
+        XCTAssertNil(BaseLabelDetailTier.anchorLabelBudget(tier: .full))
+        XCTAssertNil(BaseLabelDetailTier.poiLabelBudget(tier: .full))
 
-    func testReducedCountKeepsHalfButNeverBelowMinimal() {
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 0, tier: .reduced), 0)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 1, tier: .reduced), 1)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 3, tier: .reduced), 2)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 10, tier: .reduced), 5)
-        XCTAssertEqual(BaseLabelDetailTier.retainedLabelCount(labelCount: 11, tier: .reduced), 6)
+        XCTAssertEqual(BaseLabelDetailTier.anchorLabelBudget(tier: .reduced), 12)
+        XCTAssertEqual(BaseLabelDetailTier.poiLabelBudget(tier: .reduced), 12)
+
+        XCTAssertEqual(BaseLabelDetailTier.anchorLabelBudget(tier: .minimal), 4)
+        XCTAssertEqual(BaseLabelDetailTier.poiLabelBudget(tier: .minimal), 0)
     }
 
     func testRelativeDistanceMatchesFlatLoopAwareDistance() {
