@@ -66,16 +66,23 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var roadTargetVisibilityScratch: [Bool] = []
 
     private let roadPriorityBase: Int = 1_000_000_000
+    private let debugOverlayControls: DebugOverlayControlState?
+    // Последняя подготовка дорожных инстансов цикла видимости: экранные AABB
+    // глифов для debug-рамок. Обновляется со стартом цикла, при неподвижной
+    // камере позиции остаются актуальными.
+    private var latestRoadPreparedInstances: [RoadPreparedInstance] = []
 
     init(baseLabelCache: BaseLabelCache,
          roadLabelCache: RoadLabelCache? = nil,
          baseLabelTraceRecorder: BaseLabelTraceRecorder = BaseLabelTraceRecorder(),
          metalDevice: MTLDevice,
          library: MTLLibrary,
-         settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels) {
+         settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels,
+         debugOverlayControls: DebugOverlayControlState? = nil) {
         self.baseLabelCache = baseLabelCache
         self.roadLabelCache = roadLabelCache
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
+        self.debugOverlayControls = debugOverlayControls
         self.baseScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, library: library)
         self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, library: library)
         self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: RoadLabelPlacementPipeline(metalDevice: metalDevice,
@@ -252,6 +259,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
         baseLabelCache.updateFadeAlphas(fadeResolution.fadeAlphas,
                                         multiplier: overviewFadeAlpha)
+        frameContext.sharedState.baseLabelDebugBoxesState = makeDebugBoxesState(
+            baseProjection: baseProjection,
+            fadeAlphas: fadeResolution.fadeAlphas
+        )
         // visibilityCycle != nil: незавершённый цикл обязан удерживать кадры,
         // иначе при статичной камере (fingerprint публикуется первым же
         // advance) display link заснёт на середине цикла, не дойдя до
@@ -439,6 +450,49 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         frameContext.sharedState.baseLabelState.baseLabelsDrawBatches = baseLabelCache.baseLabelsDrawBatches
         frameContext.sharedState.baseLabelState.hasActiveFadeAnimations = hasActiveFadeAnimations
         frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle = hasActiveVisibilityCycle
+    }
+
+    /// Рамки лейблов для debug-оверлея: коллизионные AABB со свежими экранными
+    /// позициями кадра. Спрятанные (коллизией, горизонтом лейбла, фейдом)
+    /// включаются наравне с видимыми: смысл оверлея - показать всё, что
+    /// участвует в кадре. За горизонтом проекции точка невалидна и рамки нет.
+    private func makeDebugBoxesState(baseProjection: TilePointScreenProjectionResult,
+                                     fadeAlphas: [Float]) -> BaseLabelDebugBoxesState {
+        guard debugOverlayControls?.snapshot().labelBoundsEnabled == true else {
+            return .empty
+        }
+
+        let candidates = baseLabelCache.labelCollisionAABBInputs
+        let screenPoints = baseProjection.screenPoints
+        let count = min(candidates.count, screenPoints.count)
+        var boxes: [BaseLabelDebugBox] = []
+        boxes.reserveCapacity(count)
+
+        for index in 0..<count {
+            let candidate = candidates[index]
+            let screenPoint = screenPoints[index]
+            guard candidate.isEnabled, screenPoint.visible != 0 else {
+                continue
+            }
+            let alpha = index < fadeAlphas.count ? fadeAlphas[index] : 0.0
+            boxes.append(BaseLabelDebugBox(center: screenPoint.position,
+                                           halfSize: candidate.halfSize,
+                                           isVisible: alpha > 0.01))
+        }
+
+        // Дорожные рамки: per-glyph AABB из последней подготовки цикла
+        // видимости, видимость по опубликованному решению коллизий инстанса.
+        var roadBoxes: [BaseLabelDebugBox] = []
+        for instance in latestRoadPreparedInstances {
+            let isVisible = instance.targetIndex < publishedRoadInstanceVisibility.count
+                && publishedRoadInstanceVisibility[instance.targetIndex]
+            for candidate in instance.collisionCandidates {
+                roadBoxes.append(BaseLabelDebugBox(center: candidate.position,
+                                                   halfSize: candidate.halfSize,
+                                                   isVisible: isVisible))
+            }
+        }
+        return BaseLabelDebugBoxesState(boxes: boxes, roadBoxes: roadBoxes)
     }
 
     private func makeCpuBaseProjection(frameContext: FrameContext,
@@ -895,6 +949,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
         let roadPreparation = prepareRoadInstances(frameContext: frameContext,
                                                    projectionIndexState: frameContext.sharedState.tileProjectionIndexState)
+        latestRoadPreparedInstances = roadPreparation.instances
         let seededBaseGroups = Self.makeSeededBaseCollisionGroups(candidates: baseCollisionCandidates,
                                                                   visibility: publishedBaseCollisionVisibility)
         let seededRoadGroups = makeSeededRoadCollisionGroups(roadInstances: roadPreparation.instances,

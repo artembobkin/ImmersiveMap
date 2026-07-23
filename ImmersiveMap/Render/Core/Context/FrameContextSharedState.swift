@@ -26,6 +26,26 @@ struct BaseLabelState {
     var hasActiveVisibilityCycle: Bool
 }
 
+/// Дебажная рамка одного базового лейбла в экранных пикселях: коллизионный
+/// AABB и текущая видимость (спрятанные коллизией/горизонтом лейблы тоже
+/// участвуют в кадре и должны быть видны в оверлее).
+struct BaseLabelDebugBox {
+    let center: SIMD2<Float>
+    let halfSize: SIMD2<Float>
+    let isVisible: Bool
+}
+
+/// Снимок рамок лейблов для debug-оверлея. Заполняется только при включённом
+/// тумблере HUD, иначе пуст и ничего не стоит. Дорожные рамки идут отдельным
+/// списком (по глифу на рамку): они участвуют в том же коллизионном решателе,
+/// но рисуются своим цветом, чтобы отличаться от базовых.
+struct BaseLabelDebugBoxesState {
+    nonisolated(unsafe) static let empty = BaseLabelDebugBoxesState(boxes: [], roadBoxes: [])
+
+    let boxes: [BaseLabelDebugBox]
+    let roadBoxes: [BaseLabelDebugBox]
+}
+
 struct RoadLabelState {
     nonisolated(unsafe) static let empty = RoadLabelState(instanceCount: 0,
                                       glyphCount: 0,
@@ -64,6 +84,7 @@ final class FrameContextSharedState {
     var tileProjectionIndexState: TileProjectionIndexState = .empty
     var tileAtlasDebugSummary: TileAtlasDebugSummary?
     var baseLabelState: BaseLabelState = .empty
+    var baseLabelDebugBoxesState: BaseLabelDebugBoxesState = .empty
     var roadLabelState: RoadLabelState = .empty
     var avatarState: AvatarState = .empty
 }

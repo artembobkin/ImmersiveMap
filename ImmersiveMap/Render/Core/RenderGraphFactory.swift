@@ -19,7 +19,8 @@ enum RenderGraphFactory {
                                                            baseLabelTraceRecorder: context.baseLabelTraceRecorder,
                                                            metalDevice: context.metalContext.device,
                                                            library: context.metalContext.library,
-                                                           settings: settings.labels)
+                                                           settings: settings.labels,
+                                                           debugOverlayControls: debugOverlayControls)
         let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,
                                                             poiSpriteAtlas: context.poiSpriteAtlas,
                                                             metalDevice: context.metalContext.device)

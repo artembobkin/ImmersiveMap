@@ -37,6 +37,12 @@ enum RendererDebugOverlayDrawer {
                                                           frameContext: frameContext,
                                                           placeTiles: roadLabelPlaceTiles)
         }
+        if controls.labelBoundsEnabled {
+            debugOverlayRenderer.drawLabelBoundsOverlay(renderEncoder: renderEncoder,
+                                                        polygonPipeline: polygonPipeline,
+                                                        frameContext: frameContext,
+                                                        boxesState: frameContext.sharedState.baseLabelDebugBoxesState)
+        }
     }
 
     static func makeAtlasDebugLines(summary: TileAtlasDebugSummary?) -> [String] {

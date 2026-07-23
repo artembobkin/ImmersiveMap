@@ -238,7 +238,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertTrue(view.isTilesContentVisibleForTesting)
         XCTAssertEqual(view.tilesStatusRowCountForTesting, 2)
         XCTAssertEqual(view.tilesStatusTextForTesting,
-                       "network in:1 done:2 fail:0 bytes:1024\nparse in:1 done:1 fail:0\ncurrent net:z4/1/1 parse:z4/2/1")
+                       "network in:1 done:2 fail:0 bytes:1024\nparse in:1 done:1 fail:0\ncurrent net:z4/1/1 parse:z4/2/1\ntiles total: 2")
         XCTAssertFalse(view.isStatsContentVisibleForTesting)
         XCTAssertFalse(view.isAtlasContentVisibleForTesting)
     }
@@ -408,7 +408,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.simulateTilesTabSelectionForTesting()
         view.layoutIfNeeded()
 
-        XCTAssertEqual(view.tilesStatusTextForTesting, "tiles: idle")
+        XCTAssertEqual(view.tilesStatusTextForTesting, "tiles: idle\ntiles total: 0")
     }
 
     func testApplyingSameSnapshotDoesNotRebuildText() {

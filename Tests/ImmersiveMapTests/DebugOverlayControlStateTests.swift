@@ -23,4 +23,23 @@ final class DebugOverlayControlStateTests: XCTestCase {
         XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
                                                             controls: controls.snapshot()))
     }
+
+    func testSetLabelBoundsEnabledUpdatesSnapshot() {
+        let controls = DebugOverlayControlState()
+
+        controls.setLabelBoundsEnabled(true)
+
+        XCTAssertTrue(controls.snapshot().labelBoundsEnabled)
+    }
+
+    func testLabelBoundsDebugEncodesOverlayPass() {
+        var settings = ImmersiveMapSettings.default.debug
+        settings.enableDebugPanel = true
+        let controls = DebugOverlayControlState()
+
+        controls.setLabelBoundsEnabled(true)
+
+        XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
+                                                            controls: controls.snapshot()))
+    }
 }

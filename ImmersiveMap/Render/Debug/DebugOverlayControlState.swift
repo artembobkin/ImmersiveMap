@@ -8,15 +8,18 @@ struct DebugOverlayControlSnapshot: Equatable {
     let tileLayersEnabled: Bool
     let wireframeEnabled: Bool
     let roadLabelTilesEnabled: Bool
+    let labelBoundsEnabled: Bool
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
          wireframeEnabled: Bool,
-         roadLabelTilesEnabled: Bool = false) {
+         roadLabelTilesEnabled: Bool = false,
+         labelBoundsEnabled: Bool = false) {
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
         self.roadLabelTilesEnabled = roadLabelTilesEnabled
+        self.labelBoundsEnabled = labelBoundsEnabled
     }
 }
 
@@ -26,6 +29,7 @@ final class DebugOverlayControlState {
     private var tileLayersEnabled = false
     private var wireframeEnabled = false
     private var roadLabelTilesEnabled = false
+    private var labelBoundsEnabled = false
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -33,7 +37,8 @@ final class DebugOverlayControlState {
         return DebugOverlayControlSnapshot(axesEnabled: axesEnabled,
                                            tileLayersEnabled: tileLayersEnabled,
                                            wireframeEnabled: wireframeEnabled,
-                                           roadLabelTilesEnabled: roadLabelTilesEnabled)
+                                           roadLabelTilesEnabled: roadLabelTilesEnabled,
+                                           labelBoundsEnabled: labelBoundsEnabled)
     }
 
     func setAxesEnabled(_ isEnabled: Bool) {
@@ -57,6 +62,12 @@ final class DebugOverlayControlState {
     func setRoadLabelTilesEnabled(_ isEnabled: Bool) {
         lock.lock()
         roadLabelTilesEnabled = isEnabled
+        lock.unlock()
+    }
+
+    func setLabelBoundsEnabled(_ isEnabled: Bool) {
+        lock.lock()
+        labelBoundsEnabled = isEnabled
         lock.unlock()
     }
 }

@@ -34,6 +34,12 @@ enum DebugOverlayHUDTextComposer {
         return lines.joined(separator: "\n")
     }
 
+    /// Итог списка тайлов: сколько их сейчас отслеживается всего. Рисуется
+    /// платформенными view выделенным цветом отдельно от белого статуса.
+    static func tilesTotalText(count: Int) -> String {
+        "tiles total: \(count)"
+    }
+
     static func traceButtonTitle(isRecording: Bool) -> String {
         isRecording ? "Stop recording" : "Start recording"
     }

@@ -38,6 +38,11 @@ final class DebugOverlayRenderer {
     private let tileLabelStrokeWidthPx: Float = 5.0
     private let tileOutlineColor = SIMD4<Float>(1.0, 0.95, 0.2, 0.95)
     private let roadLabelTileOutlineColor = SIMD4<Float>(0.0, 0.85, 1.0, 0.95)
+    private let labelBoundsVisibleColor = SIMD4<Float>(0.2, 1.0, 0.35, 0.9)
+    private let labelBoundsHiddenColor = SIMD4<Float>(1.0, 0.25, 0.2, 0.9)
+    private let roadLabelBoundsVisibleColor = SIMD4<Float>(0.0, 0.85, 1.0, 0.9)
+    private let roadLabelBoundsHiddenColor = SIMD4<Float>(1.0, 0.65, 0.1, 0.9)
+    private let labelBoundsThicknessPx: Float = 1.5
     private static let tileWatermarkUVs = makeTileWatermarkUVs()
 
     init(metalDevice: MTLDevice,
@@ -183,6 +188,60 @@ final class DebugOverlayRenderer {
                              screenMatrix: frameContext.cameraMatrices.screen,
                              frameSlotIndex: frameContext.frameSlotIndex,
                              vertices: lineVerticesScratch)
+        }
+    }
+
+    /// Рамки всех лейблов кадра в экранных координатах: видимые и спрятанные
+    /// (коллизией, горизонтом лейбла или фейдом). Базовые лейблы зелёные и
+    /// красные, дорожные (по глифу на рамку) голубые и оранжевые: они
+    /// участвуют в том же коллизионном решателе. Даёт визуальную оценку
+    /// общего количества лейблов, участвующих в кадре.
+    func drawLabelBoundsOverlay(renderEncoder: MTLRenderCommandEncoder,
+                                polygonPipeline: PolygonsPipeline,
+                                frameContext: FrameContext,
+                                boxesState: BaseLabelDebugBoxesState) {
+        guard boxesState.boxes.isEmpty == false || boxesState.roadBoxes.isEmpty == false else { return }
+
+        lineVerticesScratch.removeAll(keepingCapacity: true)
+        lineVerticesScratch.reserveCapacity((boxesState.boxes.count + boxesState.roadBoxes.count) * 24)
+
+        appendLabelBoundsVertices(boxes: boxesState.boxes,
+                                  visibleColor: labelBoundsVisibleColor,
+                                  hiddenColor: labelBoundsHiddenColor)
+        appendLabelBoundsVertices(boxes: boxesState.roadBoxes,
+                                  visibleColor: roadLabelBoundsVisibleColor,
+                                  hiddenColor: roadLabelBoundsHiddenColor)
+
+        if lineVerticesScratch.isEmpty == false {
+            drawLineVertices(renderEncoder: renderEncoder,
+                             polygonPipeline: polygonPipeline,
+                             screenMatrix: frameContext.cameraMatrices.screen,
+                             frameSlotIndex: frameContext.frameSlotIndex,
+                             vertices: lineVerticesScratch)
+        }
+    }
+
+    private func appendLabelBoundsVertices(boxes: [BaseLabelDebugBox],
+                                           visibleColor: SIMD4<Float>,
+                                           hiddenColor: SIMD4<Float>) {
+        for box in boxes {
+            guard box.halfSize.x > 0, box.halfSize.y > 0 else { continue }
+            let color = box.isVisible ? visibleColor : hiddenColor
+            let minCorner = box.center - box.halfSize
+            let maxCorner = box.center + box.halfSize
+            let corners = [
+                SIMD2<Float>(minCorner.x, minCorner.y),
+                SIMD2<Float>(maxCorner.x, minCorner.y),
+                SIMD2<Float>(maxCorner.x, maxCorner.y),
+                SIMD2<Float>(minCorner.x, maxCorner.y)
+            ]
+            for index in 0..<4 {
+                appendThickLineQuad(into: &lineVerticesScratch,
+                                    start: corners[index],
+                                    end: corners[(index + 1) % 4],
+                                    thickness: labelBoundsThicknessPx,
+                                    color: color)
+            }
         }
     }
 
