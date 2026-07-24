@@ -44,6 +44,9 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     }
 
     private var ongoingTasks: [Tile: OngoingTask] = [:]
+    // Позиция тайла в последнем request(): чем меньше, тем ближе к камере.
+    // Определяет выбор из очереди CPU-стадий.
+    private var wantedTilePriorities: [Tile: Int] = [:]
     private var nextTaskGeneration: UInt64 = 1
     private let maxConcurrentFetches: Int
     private let maxConcurrentPrepares: Int
@@ -130,6 +133,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             tileTraceRecorder.record(.tileSchedulerRequest(input: tiles.count,
                                                            deduplicated: deduplicatedTiles.count))
             wantedTiles = wanted
+            wantedTilePriorities = Dictionary(uniqueKeysWithValues: deduplicatedTiles.enumerated()
+                .map { ($0.element, $0.offset) })
 
             pendingTilesQueue.clear()
             retryController.retainOnly(tiles: wantedTiles)
@@ -318,18 +323,31 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
 
     // Запускает отложенные CPU-стадии, пока есть свободные слоты, отбрасывая
     // устаревшие записи (тайл отменён или заменён новой generation).
+    // Выбор не FIFO, а по актуальному приоритету спроса: грубые дальние тайлы
+    // скачиваются быстрее детальных ближних и в порядке завершения сети
+    // систематически обгоняли бы их в очереди на парсинг.
     private func startNextQueuedCPUWorkLocked() {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         while cpuInFlightCount < maxConcurrentPrepares, queuedCPUWork.isEmpty == false {
-            let work = queuedCPUWork.removeFirst()
-            guard ongoingTasks[work.tile]?.generation == work.generation,
-                  ongoingTasks[work.tile]?.stage == .cpuQueued else {
-                continue
+            queuedCPUWork.removeAll { work in
+                ongoingTasks[work.tile]?.generation != work.generation
+                    || ongoingTasks[work.tile]?.stage != .cpuQueued
             }
+            guard let bestIndex = queuedCPUWork.indices.min(by: { lhs, rhs in
+                priorityRankLocked(of: queuedCPUWork[lhs].tile) < priorityRankLocked(of: queuedCPUWork[rhs].tile)
+            }) else {
+                return
+            }
+            let work = queuedCPUWork.remove(at: bestIndex)
             startCPUStageLocked(tile: work.tile,
                                 generation: work.generation,
                                 downloadResult: work.downloadResult)
         }
+    }
+
+    // Тайлы вне актуального спроса (кратко выпали из demand) парсятся последними.
+    private func priorityRankLocked(of tile: Tile) -> Int {
+        wantedTilePriorities[tile] ?? Int.max
     }
 
     // CPU-стадия: prepared-кэш по ETag -> парс -> materialize -> сохранение.
@@ -547,6 +565,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     func cancelAll() {
         stateQueue.sync {
             wantedTiles.removeAll()
+            wantedTilePriorities.removeAll()
             pendingTilesQueue.clear()
             queuedCPUWork.removeAll()
             retryController.reset()

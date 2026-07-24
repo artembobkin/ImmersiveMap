@@ -77,9 +77,18 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // for identical source bytes.
         let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles,
                                                                                   parentFallbackDepth: 2)
+        // Порядок спроса = приоритет сети и парсинга: ближние к камере тайлы
+        // стартуют первыми. Для хеша размещений используется стабильный
+        // `demandedSourceTiles` (сортировка по центру менялась бы при каждом
+        // сдвиге камеры и вызывала лишние ребилды) - состав списков одинаков.
+        let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(preprocessedVisibleTiles,
+                                                                                centerWorldMercator: visibleContent.centerWorldMercator,
+                                                                                renderSurfaceMode: frameContext.renderSurfaceMode)
+        let prioritizedDemand = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: prioritizedTargets + backdropTiles,
+                                                                                parentFallbackDepth: 2)
         // Returns source-tile availability map for GPU rendering:
         // value contains Metal-ready tile buffers, or `nil` while still loading.
-        let tileRequestResult = tileRenderStore.requestTiles(demandedSourceTiles,
+        let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
                                                              frameIndex: frameContext.frameIndex)
         let readyTilesBySource = tileRequestResult.readyTilesBySource
 

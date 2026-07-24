@@ -347,6 +347,58 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         pipeline.completeMaterialize(secondTile, result: true)
     }
 
+    func testQueuedCPUWorkIsPickedByDemandPriorityNotDownloadCompletionOrder() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 3
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentPrepares: 1)
+        let occupyingTile = Tile(x: 1, y: 1, z: 4)
+        let nearTile = Tile(x: 2, y: 1, z: 4)
+        let farTile = Tile(x: 3, y: 1, z: 4)
+
+        // Порядок request() = приоритет: occupying, потом near, потом far.
+        loader.request(tiles: [occupyingTile, nearTile, farTile])
+        for tile in [occupyingTile, nearTile, farTile] {
+            let started = await pipeline.waitUntilStarted(tile)
+            XCTAssertTrue(started)
+        }
+
+        // Первый тайл занимает единственный CPU-слот.
+        pipeline.completeDownload(occupyingTile, result: .success(Data([1]), etag: nil))
+        let occupyingPrepared = await pipeline.waitUntilPrepared(occupyingTile)
+        XCTAssertTrue(occupyingPrepared)
+
+        // Дальний тайл скачался РАНЬШЕ ближнего: в FIFO он бы парсился первым.
+        pipeline.completeDownload(farTile, result: .success(Data([3]), etag: nil))
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        pipeline.completeDownload(nearTile, result: .success(Data([2]), etag: nil))
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        pipeline.completePrepare(occupyingTile)
+        let occupyingMaterialized = await pipeline.waitUntilMaterialized(occupyingTile)
+        XCTAssertTrue(occupyingMaterialized)
+        pipeline.completeMaterialize(occupyingTile, result: true)
+
+        // Слот освободился: парсится ближний (приоритет спроса), не дальний.
+        let nearPrepared = await pipeline.waitUntilPrepared(nearTile)
+        XCTAssertTrue(nearPrepared)
+        XCTAssertFalse(pipeline.hasPrepared(farTile))
+
+        pipeline.completePrepare(nearTile)
+        let nearMaterialized = await pipeline.waitUntilMaterialized(nearTile)
+        XCTAssertTrue(nearMaterialized)
+        pipeline.completeMaterialize(nearTile, result: true)
+
+        let farPrepared = await pipeline.waitUntilPrepared(farTile)
+        XCTAssertTrue(farPrepared)
+        pipeline.completePrepare(farTile)
+        let farMaterialized = await pipeline.waitUntilMaterialized(farTile)
+        XCTAssertTrue(farMaterialized)
+        pipeline.completeMaterialize(farTile, result: true)
+    }
+
     func testFailedDownloadArmsRetryWakeThatFiresCallback() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1
