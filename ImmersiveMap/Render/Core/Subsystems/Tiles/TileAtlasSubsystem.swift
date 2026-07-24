@@ -24,6 +24,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
     private var roadFadeAlpha: Float = 0.0
     private var landuseFadeAlpha: Float = 0.0
     private var tileAtlasDebugSummary: TileAtlasDebugSummary?
+    private var pageRetention = TileAtlasPageRetention()
 
     init(tilesTexture: TileAtlasTexture,
          tileTraceRecorder: TileTraceRecorder) {
@@ -32,6 +33,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
     }
 
     func update(frameContext: FrameContext) {
+        releaseStalePagesIfNeeded(frameContext: frameContext)
+
         let tilePlacementState = frameContext.sharedState.tilePlacementState
         placeTilesContext = tilePlacementState.tileAtlasPlaceTilesContext
         overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .overviewFeatures)
@@ -94,6 +97,17 @@ final class TileAtlasSubsystem: RenderSubsystem {
         tileAtlasDebugSummary = nil
         globeTextureVersionTracker.invalidate()
         tilesTexture.releasePages()
+    }
+
+    // Глобусный атлас нужен только spherical-режиму: после устойчивого ухода в
+    // flat его страницы выгружаются, чтобы не держать сотни МиБ мёртвых текстур.
+    private func releaseStalePagesIfNeeded(frameContext: FrameContext) {
+        guard pageRetention.shouldReleasePages(isSpherical: frameContext.renderSurfaceMode == .spherical,
+                                               hasPages: tilesTexture.pages.isEmpty == false,
+                                               time: frameContext.time) else {
+            return
+        }
+        evict()
     }
 
     private func renderTileAtlasTextureIfNeeded(commandBuffer: MTLCommandBuffer,

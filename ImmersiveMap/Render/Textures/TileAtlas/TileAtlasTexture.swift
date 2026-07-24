@@ -264,7 +264,9 @@ class TileAtlasTexture {
         descriptor.storageMode = .private
         descriptor.mipmapLevelCount = Self.pageMipLevelCount
 
-        return Page(texture: metalDevice.makeTexture(descriptor: descriptor)!,
+        let texture = metalDevice.makeTexture(descriptor: descriptor)!
+        texture.label = "TileAtlasPage\(pages.count)"
+        return Page(texture: texture,
                     tileData: [])
     }
 
