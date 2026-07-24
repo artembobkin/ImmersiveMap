@@ -34,14 +34,15 @@ enum PreparedTileDiskEnvelope {
     private static let maximumCompressionExpansionRatio = 512
     private static let minimumCompressedPayloadSize = 16
 
-    static func encode(payload: Data) throws -> Data {
+    static func encode(payload: Data, compressionEnabled: Bool = true) throws -> Data {
         guard payload.count <= maximumDecodedPayloadSize else {
             throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile payload is too large.")
         }
         let storedPayload: Data
         let algorithm: Algorithm
 #if canImport(Compression)
-        if let compressed = try? compressLZFSE(payload),
+        if compressionEnabled,
+           let compressed = try? compressLZFSE(payload),
            compressed.count < payload.count,
            hasPlausibleCompressionSizes(storedByteCount: compressed.count,
                                         decodedByteCount: payload.count) {
@@ -668,11 +669,13 @@ enum PreparedTileDiskCodec {
 
     static func encode(preparedTile: PreparedTileCPU,
                        cacheIdentity: PreparedTileCacheIdentity,
-                       sourceETag: String = "") throws -> Data {
+                       sourceETag: String = "",
+                       compressionEnabled: Bool = true) throws -> Data {
         let payload = try encodeLegacyPropertyList(preparedTile: preparedTile,
                                                    cacheIdentity: cacheIdentity,
                                                    sourceETag: sourceETag)
-        return try PreparedTileDiskEnvelope.encode(payload: payload)
+        return try PreparedTileDiskEnvelope.encode(payload: payload,
+                                                   compressionEnabled: compressionEnabled)
     }
 
     /// The pre-envelope representation. Kept internal so compatibility can be

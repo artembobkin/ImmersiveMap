@@ -111,14 +111,15 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     }
 
     func testCacheSettingsLegacyInitializerFunctionReferenceUsesDefaultPreparedDiskCacheSize() {
-        let initialize: (Bool, Bool, Bool, TimeInterval, Int) -> ImmersiveMapSettings.TileSettings.CacheSettings =
+        let initialize: (Bool, Bool, Bool, Bool, TimeInterval, Int) -> ImmersiveMapSettings.TileSettings.CacheSettings =
             ImmersiveMapSettings.TileSettings.CacheSettings.init
 
-        let cache = initialize(true, false, false, 34, 56)
+        let cache = initialize(true, false, false, false, 34, 56)
 
         XCTAssertTrue(cache.clearDiskCachesOnLaunch)
         XCTAssertFalse(cache.urlCacheEnabled)
         XCTAssertFalse(cache.preparedTileCacheEnabled)
+        XCTAssertFalse(cache.preparedDiskCompressionEnabled)
         XCTAssertEqual(cache.preparedDiskTimeToLive, 34)
         XCTAssertEqual(cache.preparedDiskCacheSizeInBytes,
                        ImmersiveMapSettings.TileSettings.CacheSettings.defaultPreparedDiskCacheSizeInBytes)
@@ -128,14 +129,15 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     func testTileCacheSettingsLegacyModifierFunctionReferencePreservesPreparedDiskCacheSize() {
         var baseSettings = ImmersiveMapSettings.default
         baseSettings.tiles.cache.preparedDiskCacheSizeInBytes = 45
-        let modify: (Bool?, Bool?, Bool?, TimeInterval?, Int?) -> ImmersiveMapSettings =
+        let modify: (Bool?, Bool?, Bool?, Bool?, TimeInterval?, Int?) -> ImmersiveMapSettings =
             baseSettings.tileSettings
 
-        let settings = modify(true, false, false, 78, 90)
+        let settings = modify(true, false, false, false, 78, 90)
 
         XCTAssertTrue(settings.tiles.cache.clearDiskCachesOnLaunch)
         XCTAssertFalse(settings.tiles.cache.urlCacheEnabled)
         XCTAssertFalse(settings.tiles.cache.preparedTileCacheEnabled)
+        XCTAssertFalse(settings.tiles.cache.preparedDiskCompressionEnabled)
         XCTAssertEqual(settings.tiles.cache.preparedDiskTimeToLive, 78)
         XCTAssertEqual(settings.tiles.cache.preparedDiskCacheSizeInBytes, 45)
         XCTAssertEqual(settings.tiles.cache.memoryCacheSizeInBytes, 90)
@@ -194,15 +196,16 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     func testImmersiveMapViewLegacyTileCacheSettingsModifierFunctionReferencePreservesPreparedDiskCacheSize() {
         var baseSettings = ImmersiveMapSettings.default
         baseSettings.tiles.cache.preparedDiskCacheSizeInBytes = 45
-        let modify: (Bool?, Bool?, Bool?, TimeInterval?, Int?) -> ImmersiveMapView =
+        let modify: (Bool?, Bool?, Bool?, Bool?, TimeInterval?, Int?) -> ImmersiveMapView =
             ImmersiveMapView(settings: baseSettings).tileSettings
 
-        let view = modify(true, false, false, 78, 90)
+        let view = modify(true, false, false, false, 78, 90)
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
 
         XCTAssertTrue(settings?.tiles.cache.clearDiskCachesOnLaunch == true)
         XCTAssertFalse(settings?.tiles.cache.urlCacheEnabled == true)
         XCTAssertFalse(settings?.tiles.cache.preparedTileCacheEnabled == true)
+        XCTAssertFalse(settings?.tiles.cache.preparedDiskCompressionEnabled == true)
         XCTAssertEqual(settings?.tiles.cache.preparedDiskTimeToLive, 78)
         XCTAssertEqual(settings?.tiles.cache.preparedDiskCacheSizeInBytes, 45)
         XCTAssertEqual(settings?.tiles.cache.memoryCacheSizeInBytes, 90)

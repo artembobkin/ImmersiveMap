@@ -228,11 +228,13 @@ public extension ImmersiveMapView {
     public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,
+                             preparedDiskCompressionEnabled: Bool? = nil,
                              preparedDiskTimeToLive: TimeInterval? = nil,
                              memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapView {
         tileSettings(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
                      urlCacheEnabled: urlCacheEnabled,
                      preparedTileCacheEnabled: preparedTileCacheEnabled,
+                     preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
                      preparedDiskTimeToLive: preparedDiskTimeToLive,
                      preparedDiskCacheSizeInBytes: nil,
                      memoryCacheSizeInBytes: memoryCacheSizeInBytes)
@@ -241,6 +243,7 @@ public extension ImmersiveMapView {
     public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,
+                             preparedDiskCompressionEnabled: Bool? = nil,
                              preparedDiskTimeToLive: TimeInterval? = nil,
                              preparedDiskCacheSizeInBytes: Int?,
                              memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapView {
@@ -249,6 +252,7 @@ public extension ImmersiveMapView {
             clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
             urlCacheEnabled: urlCacheEnabled,
             preparedTileCacheEnabled: preparedTileCacheEnabled,
+            preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
             preparedDiskTimeToLive: preparedDiskTimeToLive,
             preparedDiskCacheSizeInBytes: preparedDiskCacheSizeInBytes,
             memoryCacheSizeInBytes: memoryCacheSizeInBytes

@@ -134,6 +134,39 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: encoded), payload)
     }
 
+    func testPreparedTileEnvelopeSkipsCompressionWhenDisabled() throws {
+        let payload = Data(repeating: 0, count: 1 * 1_024 * 1_024)
+
+        let encoded = try PreparedTileDiskEnvelope.encode(payload: payload, compressionEnabled: false)
+
+        XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encoded))
+        XCTAssertFalse(PreparedTileDiskEnvelope.isCompressedEnvelope(encoded))
+        XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: encoded), payload)
+    }
+
+    func testPreparedTileCodecRoundTripsWithCompressionDisabled() throws {
+        let tile = Tile(x: 21, y: 22, z: 10)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let preparedTile = makePreparedTile(
+            tile: tile,
+            textLabels: PreparedTileCPU.TextLabels(full: makeTextLabelSet(seed: 4),
+                                                    reduced: makeTextLabelSet(seed: 5),
+                                                    minimal: makeTextLabelSet(seed: 6))
+        )
+
+        let encodedData = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                           cacheIdentity: cacheIdentity,
+                                                           compressionEnabled: false)
+
+        XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encodedData))
+        XCTAssertFalse(PreparedTileDiskEnvelope.isCompressedEnvelope(encodedData))
+        let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity)
+        XCTAssertEqual(decoded.tile, tile)
+        assertTextLabelSet(decoded.textLabels.full, equals: preparedTile.textLabels.full)
+    }
+
     func testPreparedTileDiskCacheSerializesSaveBeforeFollowingRead() async throws {
         let baseDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("PreparedTileDiskCache-ordering-\(UUID().uuidString)")

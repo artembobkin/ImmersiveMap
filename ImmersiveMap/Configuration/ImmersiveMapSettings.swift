@@ -267,6 +267,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// On-disk cache of parsed/tessellated tiles. When false, tiles are
             /// re-parsed from the raw bytes on every load.
             public var preparedTileCacheEnabled: Bool
+            /// LZFSE compression of prepared tiles before they hit the disk cache.
+            /// When false, entries are written uncompressed: larger cache files in
+            /// exchange for less CPU (and battery) burned while exploring new areas.
+            /// Both variants stay readable regardless of this flag.
+            public var preparedDiskCompressionEnabled: Bool
             public var preparedDiskTimeToLive: TimeInterval
             /// Root-wide byte quota for all prepared-tile format/style namespaces.
             /// The most recently initialized map/cache instance makes its quota
@@ -277,11 +282,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public init(clearDiskCachesOnLaunch: Bool,
                         urlCacheEnabled: Bool = true,
                         preparedTileCacheEnabled: Bool = true,
+                        preparedDiskCompressionEnabled: Bool = true,
                         preparedDiskTimeToLive: TimeInterval,
                         memoryCacheSizeInBytes: Int) {
                 self.init(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
                           urlCacheEnabled: urlCacheEnabled,
                           preparedTileCacheEnabled: preparedTileCacheEnabled,
+                          preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
                           preparedDiskTimeToLive: preparedDiskTimeToLive,
                           preparedDiskCacheSizeInBytes: Self.defaultPreparedDiskCacheSizeInBytes,
                           memoryCacheSizeInBytes: memoryCacheSizeInBytes)
@@ -290,12 +297,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public init(clearDiskCachesOnLaunch: Bool,
                         urlCacheEnabled: Bool = true,
                         preparedTileCacheEnabled: Bool = true,
+                        preparedDiskCompressionEnabled: Bool = true,
                         preparedDiskTimeToLive: TimeInterval,
                         preparedDiskCacheSizeInBytes: Int,
                         memoryCacheSizeInBytes: Int) {
                 self.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
                 self.urlCacheEnabled = urlCacheEnabled
                 self.preparedTileCacheEnabled = preparedTileCacheEnabled
+                self.preparedDiskCompressionEnabled = preparedDiskCompressionEnabled
                 self.preparedDiskTimeToLive = preparedDiskTimeToLive
                 self.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
                 self.memoryCacheSizeInBytes = memoryCacheSizeInBytes
@@ -913,11 +922,13 @@ public extension ImmersiveMapSettings {
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                       urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
+                      preparedDiskCompressionEnabled: Bool? = nil,
                       preparedDiskTimeToLive: TimeInterval? = nil,
                       memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
         tileSettings(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
                      urlCacheEnabled: urlCacheEnabled,
                      preparedTileCacheEnabled: preparedTileCacheEnabled,
+                     preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
                      preparedDiskTimeToLive: preparedDiskTimeToLive,
                      preparedDiskCacheSizeInBytes: nil,
                      memoryCacheSizeInBytes: memoryCacheSizeInBytes)
@@ -926,6 +937,7 @@ public extension ImmersiveMapSettings {
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                       urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
+                      preparedDiskCompressionEnabled: Bool? = nil,
                       preparedDiskTimeToLive: TimeInterval? = nil,
                       preparedDiskCacheSizeInBytes: Int?,
                       memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
@@ -938,6 +950,9 @@ public extension ImmersiveMapSettings {
         }
         if let preparedTileCacheEnabled {
             settings.tiles.cache.preparedTileCacheEnabled = preparedTileCacheEnabled
+        }
+        if let preparedDiskCompressionEnabled {
+            settings.tiles.cache.preparedDiskCompressionEnabled = preparedDiskCompressionEnabled
         }
         if let preparedDiskTimeToLive {
             settings.tiles.cache.preparedDiskTimeToLive = preparedDiskTimeToLive

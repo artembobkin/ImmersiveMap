@@ -363,12 +363,14 @@ final class PreparedTileDiskCaching {
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
     private let ioCoordinator: PreparedTileDiskIOCoordinator
+    private let compressionEnabled: Bool
 
     init(config: ImmersiveMapSettings,
          cacheIdentity: PreparedTileCacheIdentity,
          fileManager: FileManager = .default,
          baseCachesDirectory: URL? = nil) {
         self.cacheIdentity = cacheIdentity
+        self.compressionEnabled = config.tiles.cache.preparedDiskCompressionEnabled
 
         let cachesDirectory = baseCachesDirectory
             ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -442,7 +444,8 @@ final class PreparedTileDiskCaching {
                 do {
                     let data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                                 cacheIdentity: cacheIdentity,
-                                                                sourceETag: sourceETag ?? "")
+                                                                sourceETag: sourceETag ?? "",
+                                                                compressionEnabled: compressionEnabled)
                     try ioCoordinator.writeFile(data, to: cachePath)
                 } catch {
 #if DEBUG
