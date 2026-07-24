@@ -281,6 +281,121 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
     }
 
+    func testBuildPlacementsKeepsPartialRetainedChildrenOverBackdropLevelParent() throws {
+        let backdropTile = Tile(x: 2, y: 1, z: 3)
+        let childTile = Tile(x: 68, y: 44, z: 7)
+        let targetTile = Tile(x: 34, y: 22, z: 6)
+        let backdropMetalTile = MetalTile(tile: backdropTile, tileBuffers: try makeTileBuffers())
+        let childMetalTile = MetalTile(tile: childTile, tileBuffers: try makeTileBuffers())
+        let previousContext = PlaceTilesContext(tilePlacements: [
+            PlaceTile(metalTile: childMetalTile,
+                      placeIn: VisibleTile(tile: childTile),
+                      lodKind: .exact)
+        ])
+
+        let context = TilePlacementPlanner.buildPlacements(
+            targets: [VisibleTile(tile: targetTile)],
+            readyTilesBySource: [
+                targetTile: nil,
+                backdropTile: backdropMetalTile
+            ],
+            zoom: 6,
+            previousContext: previousContext,
+            backdropZoomLevel: 3
+        )
+
+        // Подложка того же зума уже нарисована слоем ниже: частичная деталь
+        // лучше, чем сплошная копия подложки поверх неё.
+        XCTAssertEqual(context.tilePlacements.count, 1)
+        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, childTile)
+        XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
+    }
+
+    func testBuildPlacementsStillPrefersUsefulParentOverPartialChildrenWithBackdrop() throws {
+        let readyParentTile = Tile(x: 17, y: 11, z: 5)
+        let childTile = Tile(x: 68, y: 44, z: 7)
+        let targetTile = Tile(x: 34, y: 22, z: 6)
+        let readyParentMetalTile = MetalTile(tile: readyParentTile, tileBuffers: try makeTileBuffers())
+        let childMetalTile = MetalTile(tile: childTile, tileBuffers: try makeTileBuffers())
+        let previousContext = PlaceTilesContext(tilePlacements: [
+            PlaceTile(metalTile: childMetalTile,
+                      placeIn: VisibleTile(tile: childTile),
+                      lodKind: .exact)
+        ])
+
+        let context = TilePlacementPlanner.buildPlacements(
+            targets: [VisibleTile(tile: targetTile)],
+            readyTilesBySource: [
+                targetTile: nil,
+                readyParentTile: readyParentMetalTile
+            ],
+            zoom: 6,
+            previousContext: previousContext,
+            backdropZoomLevel: 3
+        )
+
+        // Родитель детальнее подложки по-прежнему выигрывает у дырявой детали.
+        XCTAssertEqual(context.tilePlacements.count, 1)
+        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, readyParentTile)
+        XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
+    }
+
+    func testBuildPlacementsLeavesUncoveredTargetToBackdropUnderlay() throws {
+        let backdropTile = Tile(x: 2, y: 1, z: 3)
+        let targetTile = Tile(x: 34, y: 22, z: 6)
+        let backdropMetalTile = MetalTile(tile: backdropTile, tileBuffers: try makeTileBuffers())
+
+        let context = TilePlacementPlanner.buildPlacements(
+            targets: [VisibleTile(tile: targetTile)],
+            readyTilesBySource: [
+                targetTile: nil,
+                backdropTile: backdropMetalTile
+            ],
+            zoom: 6,
+            previousContext: .empty,
+            backdropZoomLevel: 3
+        )
+
+        // Совсем без контента: рисовать копию подложки поверх подложки незачем.
+        XCTAssertTrue(context.tilePlacements.isEmpty)
+    }
+
+    func testBuildPlacementsBackdropLevelRetainedSourceDoesNotPoisonPartialCoverage() throws {
+        // Регресс зум-аута: слот, упавший в подложечный зум в прошлом кадре,
+        // не считается покрытием (source вне таргета) и не должен через
+        // bestFullReplacement снова затирать детальные partial-слоты.
+        let backdropTile = Tile(x: 4, y: 2, z: 3)
+        let detailedChildTiles = [
+            Tile(x: 34, y: 22, z: 6),
+            Tile(x: 35, y: 22, z: 6),
+            Tile(x: 34, y: 23, z: 6)
+        ]
+        let poisonedChildSlot = Tile(x: 35, y: 23, z: 6)
+        let targetTile = Tile(x: 17, y: 11, z: 5)
+        var previousPlacements = try detailedChildTiles.map { childTile in
+            PlaceTile(metalTile: MetalTile(tile: childTile, tileBuffers: try makeTileBuffers()),
+                      placeIn: VisibleTile(tile: childTile),
+                      lodKind: .exact)
+        }
+        previousPlacements.append(PlaceTile(metalTile: MetalTile(tile: backdropTile,
+                                                                 tileBuffers: try makeTileBuffers()),
+                                            placeIn: VisibleTile(tile: poisonedChildSlot),
+                                            lodKind: .retainedReplacement))
+        let previousContext = PlaceTilesContext(tilePlacements: previousPlacements)
+
+        let context = TilePlacementPlanner.buildPlacements(
+            targets: [VisibleTile(tile: targetTile)],
+            readyTilesBySource: [targetTile: nil],
+            zoom: 5,
+            previousContext: previousContext,
+            backdropZoomLevel: 3
+        )
+
+        XCTAssertEqual(context.tilePlacements.count, 3)
+        XCTAssertEqual(Set(context.tilePlacements.map(\.metalTile.tile)), Set(detailedChildTiles))
+        XCTAssertTrue(context.tilePlacements.allSatisfy { $0.lodKind == .retainedReplacement })
+    }
+
     private func makeTileBuffers() throws -> TileBuffers {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is required for MetalTile test fixture.")

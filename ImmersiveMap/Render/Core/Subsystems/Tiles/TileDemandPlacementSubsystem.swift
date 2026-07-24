@@ -93,10 +93,15 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
         let placementChanged = preprocessedVisibleTilesHashTracker.stage(preprocessedVisibleTilesHash)
         if placementChanged {
+            // Подложка существует - под основным покрытием весь кадр закрашен
+            // на её зуме, и планировщик не должен подменять дыры контентом
+            // этого зума (он уже нарисован слоем ниже).
+            let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: preprocessedVisibleTiles,
                                                                      readyTilesBySource: readyTilesBySource,
                                                                      zoom: tileZoomLevel,
-                                                                     previousContext: placeTilesContext)
+                                                                     previousContext: placeTilesContext,
+                                                                     backdropZoomLevel: backdropZoomLevel)
             backdropPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: backdropTiles,
                                                                              readyTilesBySource: readyTilesBySource,
                                                                              zoom: tileZoomLevel,

@@ -2,10 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 struct TilePlacementPlanner {
+    /// `backdropZoomLevel` - зум полноэкранной подложки, уже нарисованной ПОД
+    /// основным покрытием (flat-режим). Подмены этого зума и грубее не несут
+    /// информации поверх подложки, поэтому не конкурируют с детальными
+    /// partial-слотами: без фильтра запиненный z3-backdrop выигрывал у любого
+    /// неполного retained-покрытия, а упавшие в z3 слоты не участвуют в
+    /// покрытии родителя - и при зум-ауте грубая зона расползалась с краёв
+    /// на весь экран за несколько ребилдов. nil - подложки нет (глобус).
     static func buildPlacements(targets: [VisibleTile],
                                 readyTilesBySource: [Tile: MetalTile?],
                                 zoom: Int,
-                                previousContext: PlaceTilesContext) -> PlaceTilesContext {
+                                previousContext: PlaceTilesContext,
+                                backdropZoomLevel: Int? = nil) -> PlaceTilesContext {
         var placeTiles: [PlaceTile] = []
         let readyReplacementCandidates = readyTilesBySource.values.compactMap { $0 }.sorted { lhs, rhs in
             if lhs.tile.z != rhs.tile.z {
@@ -22,11 +30,22 @@ struct TilePlacementPlanner {
             let lodKind: TileLodKind = sourceTile.z < zoom ? .coarseSubstitute : .exact
             let metalTile = readyTilesBySource[sourceTile] ?? nil
 
+            // Подмена полезна, только если детальнее подложки под покрытием.
+            func isUsefulSubstitute(_ tile: Tile) -> Bool {
+                guard let backdropZoomLevel else {
+                    return true
+                }
+                return tile.z > backdropZoomLevel
+            }
+
             func bestFullReplacement() -> MetalTile? {
                 var bestReplacement: MetalTile?
                 for prev in previousContext.tilePlacements {
                     let prevSourceTile = prev.metalTile.tile
 
+                    guard isUsefulSubstitute(prevSourceTile) else {
+                        continue
+                    }
                     // Previous tile fully covers the required tile
                     // (including exact same tile identity).
                     if prevSourceTile == target.tile || prevSourceTile.covers(target.tile) {
@@ -83,7 +102,8 @@ struct TilePlacementPlanner {
                 for candidate in readyReplacementCandidates {
                     let candidateTile = candidate.tile
                     guard candidateTile != target.tile,
-                          candidateTile.covers(target.tile) else {
+                          candidateTile.covers(target.tile),
+                          isUsefulSubstitute(candidateTile) else {
                         continue
                     }
                     return candidate
