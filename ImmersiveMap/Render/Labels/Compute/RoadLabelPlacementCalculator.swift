@@ -4,23 +4,30 @@
 import Metal
 
 final class RoadLabelPlacementCalculator {
+    /// Буферы одного тайл-рекорда для dispatch-а размещения глифов.
+    struct RecordDispatch {
+        let pathPointsBuffer: MTLBuffer
+        let pathRangesBuffer: MTLBuffer
+        let anchorsBuffer: MTLBuffer
+        let glyphInputsBuffer: MTLBuffer
+        let placementsBuffer: MTLBuffer
+        let screenPointsBuffer: MTLBuffer
+        let collisionInputsBuffer: MTLBuffer
+        let collisionAabbBuffer: MTLBuffer
+        let glyphCount: Int
+    }
+
     private let pipeline: RoadLabelPlacementPipeline
 
     init(pipeline: RoadLabelPlacementPipeline) {
         self.pipeline = pipeline
     }
 
-    func run(commandBuffer: MTLCommandBuffer,
-             pathPointsBuffer: MTLBuffer,
-             pathRangesBuffer: MTLBuffer,
-             anchorsBuffer: MTLBuffer,
-             glyphInputsBuffer: MTLBuffer,
-             placementsBuffer: MTLBuffer,
-             screenPointsBuffer: MTLBuffer,
-             collisionInputsBuffer: MTLBuffer,
-             collisionAabbBuffer: MTLBuffer,
-             glyphCount: Int) {
-        guard glyphCount > 0 else {
+    // Все рекорды кадра кодируются в один compute-энкодер: pipeline state
+    // ставится один раз, dispatch-и различаются только буферами и счётчиком.
+    func run(commandBuffer: MTLCommandBuffer, dispatches: [RecordDispatch]) {
+        let activeDispatches = dispatches.filter { $0.glyphCount > 0 }
+        guard activeDispatches.isEmpty == false else {
             return
         }
         let passLabel = "ScreenCompute.RoadLabelPlacement [roadLabelPlacementKernel]"
@@ -32,28 +39,31 @@ final class RoadLabelPlacementCalculator {
         }
 
         pipeline.encode(encoder: encoder)
-        var count = UInt32(glyphCount)
-
-        encoder.setBuffer(pathPointsBuffer, offset: 0, index: 0)
-        encoder.setBuffer(pathRangesBuffer, offset: 0, index: 1)
-        encoder.setBuffer(anchorsBuffer, offset: 0, index: 2)
-        encoder.setBuffer(glyphInputsBuffer, offset: 0, index: 3)
-        encoder.setBuffer(placementsBuffer, offset: 0, index: 4)
-        encoder.setBuffer(screenPointsBuffer, offset: 0, index: 5)
-        encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 6)
-        encoder.setBuffer(collisionInputsBuffer, offset: 0, index: 7)
-        encoder.setBuffer(collisionAabbBuffer, offset: 0, index: 8)
-
         let threadsPerThreadgroup = MTLSize(
             width: max(1, pipeline.pipelineState.threadExecutionWidth),
             height: 1,
             depth: 1
         )
-        let threadgroupsPerGrid = MTLSize(
-            width: (glyphCount + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
-            height: 1,
-            depth: 1
-        )
-        encoder.dispatchThreadgroups(threadgroupsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
+
+        for recordDispatch in activeDispatches {
+            var count = UInt32(recordDispatch.glyphCount)
+
+            encoder.setBuffer(recordDispatch.pathPointsBuffer, offset: 0, index: 0)
+            encoder.setBuffer(recordDispatch.pathRangesBuffer, offset: 0, index: 1)
+            encoder.setBuffer(recordDispatch.anchorsBuffer, offset: 0, index: 2)
+            encoder.setBuffer(recordDispatch.glyphInputsBuffer, offset: 0, index: 3)
+            encoder.setBuffer(recordDispatch.placementsBuffer, offset: 0, index: 4)
+            encoder.setBuffer(recordDispatch.screenPointsBuffer, offset: 0, index: 5)
+            encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 6)
+            encoder.setBuffer(recordDispatch.collisionInputsBuffer, offset: 0, index: 7)
+            encoder.setBuffer(recordDispatch.collisionAabbBuffer, offset: 0, index: 8)
+
+            let threadgroupsPerGrid = MTLSize(
+                width: (recordDispatch.glyphCount + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
+                height: 1,
+                depth: 1
+            )
+            encoder.dispatchThreadgroups(threadgroupsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
+        }
     }
 }

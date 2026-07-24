@@ -314,84 +314,121 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // Стампы прошлого кадра, не дошедшие до frameCommitted (кадр отброшен
         // без commit) - компьют не исполнился, фиксировать их нельзя.
         pendingPlacementStamps.removeAll(keepingCapacity: true)
+        guard let commandBuffer = frameContext.commandBuffer else {
+            return
+        }
         let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
         let basePointCount = baseLabelCache.activeLabelSpanCount
+
+        // Дорожные рекорды собираются заранее: все point-to-screen dispatch-и
+        // кадра (базовые лейблы + пути дорог) уходят в один compute-энкодер,
+        // все placement-dispatch-и во второй, вместо пары энкодеров на рекорд.
+        struct RoadPathDispatch {
+            let pointCount: Int
+            let inputBuffer: MTLBuffer
+            let tileSlotVisibleTileIndicesBuffer: MTLBuffer
+            let outputBuffer: MTLBuffer
+        }
+        var roadPathDispatches: [RoadPathDispatch] = []
+        var placementDispatches: [RoadLabelPlacementCalculator.RecordDispatch] = []
+        var drawBatches: [DrawRoadLabels] = []
+        var hasRoadRecords = false
+
+        if let roadLabelCache, roadLabelCache.orderedTileRecords.isEmpty == false {
+            hasRoadRecords = true
+            let staticBatches = frameContext.sharedState.roadLabelState.drawLabels
+            let records = roadLabelCache.orderedTileRecords
+            let activeRecordIndices = latestActiveRoadRecordIndices
+            drawBatches.reserveCapacity(records.count)
+
+            for (index, record) in records.enumerated() {
+                if let activeRecordIndices,
+                   activeRecordIndices.contains(index) == false {
+                    continue
+                }
+
+                guard record.pathPointCount > 0,
+                      record.glyphCount > 0,
+                      let pathInputsBuffer = record.pathInputsBuffer,
+                      let pathRangesBuffer = record.pathRangesBuffer,
+                      let anchorsBuffer = record.anchorsBuffer,
+                      let glyphInputsBuffer = record.glyphInputsBuffer,
+                      let collisionInputsBuffer = record.collisionInputsBuffer else {
+                    continue
+                }
+
+                let pathPointsBuffer = record.pathPointScreenBuffer(slot: frameContext.frameSlotIndex)
+                roadPathDispatches.append(RoadPathDispatch(
+                    pointCount: record.pathPointCount,
+                    inputBuffer: pathInputsBuffer,
+                    tileSlotVisibleTileIndicesBuffer: record.visibleTileIndexBuffer,
+                    outputBuffer: pathPointsBuffer
+                ))
+
+                let placementBuffer = record.placementBuffer(slot: frameContext.frameSlotIndex)
+                let glyphScreenPointsBuffer = record.glyphScreenPointBuffer(slot: frameContext.frameSlotIndex)
+                let collisionAabbBuffer = record.collisionAabbBuffer(slot: frameContext.frameSlotIndex)
+                placementDispatches.append(RoadLabelPlacementCalculator.RecordDispatch(
+                    pathPointsBuffer: pathPointsBuffer,
+                    pathRangesBuffer: pathRangesBuffer,
+                    anchorsBuffer: anchorsBuffer,
+                    glyphInputsBuffer: glyphInputsBuffer,
+                    placementsBuffer: placementBuffer,
+                    screenPointsBuffer: glyphScreenPointsBuffer,
+                    collisionInputsBuffer: collisionInputsBuffer,
+                    collisionAabbBuffer: collisionAabbBuffer,
+                    glyphCount: record.glyphCount
+                ))
+                // Стамп фиксируется только в frameCommitted(): кадр может быть
+                // отброшен после prepareGPU (нет drawable), и закодированный
+                // компьют никогда не исполнится.
+                pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
+
+                if index < staticBatches.count {
+                    let existingBatch = staticBatches[index]
+                    drawBatches.append(DrawRoadLabels(placementBuffer: placementBuffer,
+                                                      glyphInputBuffer: glyphInputsBuffer,
+                                                      runtimeMetaBuffer: existingBatch.runtimeMetaBuffer,
+                                                      localGlyphVerticesBuffer: record.localGlyphVerticesBuffer,
+                                                      glyphCount: record.glyphCount,
+                                                      localGlyphVertexCount: record.localGlyphVertexCount,
+                                                      labelStyle: record.labelStyle))
+                }
+            }
+        }
+
+        // Энкодер 1: все point-to-screen вычисления кадра.
+        if basePointCount > 0 || roadPathDispatches.isEmpty == false,
+           let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer,
+                                                     label: TilePointScreenCompute.passLabel(for: frameContext)) {
+            if basePointCount > 0 {
+                baseScreenCompute.encode(encoder: encoder,
+                                         frameContext: frameContext,
+                                         pointCount: basePointCount,
+                                         tileOriginDataBuffer: tileOriginDataBuffer)
+            }
+            for pathDispatch in roadPathDispatches {
+                roadPathScreenCompute.encode(encoder: encoder,
+                                             frameContext: frameContext,
+                                             pointCount: pathDispatch.pointCount,
+                                             inputBuffer: pathDispatch.inputBuffer,
+                                             tileSlotVisibleTileIndicesBuffer: pathDispatch.tileSlotVisibleTileIndicesBuffer,
+                                             tileOriginDataBuffer: tileOriginDataBuffer,
+                                             outputBuffer: pathDispatch.outputBuffer)
+            }
+            MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
+        }
         if basePointCount > 0 {
-            baseScreenCompute.run(frameContext: frameContext,
-                                  pointCount: basePointCount,
-                                  tileOriginDataBuffer: tileOriginDataBuffer)
             frameContext.sharedState.baseLabelState.screenPositionsBuffer = baseScreenCompute.outputBuffer(slot: frameContext.frameSlotIndex,
                                                                                                            count: basePointCount)
         }
 
-        guard let roadLabelCache,
-              roadLabelCache.orderedTileRecords.isEmpty == false else {
+        guard hasRoadRecords else {
             return
         }
 
-        guard let commandBuffer = frameContext.commandBuffer else {
-            return
-        }
-
-        var drawBatches: [DrawRoadLabels] = []
-        let staticBatches = frameContext.sharedState.roadLabelState.drawLabels
-        let records = roadLabelCache.orderedTileRecords
-        let activeRecordIndices = latestActiveRoadRecordIndices
-        drawBatches.reserveCapacity(records.count)
-
-        for (index, record) in records.enumerated() {
-            if let activeRecordIndices,
-               activeRecordIndices.contains(index) == false {
-                continue
-            }
-
-            guard record.pathPointCount > 0,
-                  record.glyphCount > 0,
-                  let pathInputsBuffer = record.pathInputsBuffer,
-                  let pathRangesBuffer = record.pathRangesBuffer,
-                  let anchorsBuffer = record.anchorsBuffer,
-                  let glyphInputsBuffer = record.glyphInputsBuffer,
-                  let collisionInputsBuffer = record.collisionInputsBuffer else {
-                continue
-            }
-
-            let pathPointsBuffer = record.pathPointScreenBuffer(slot: frameContext.frameSlotIndex)
-            roadPathScreenCompute.run(frameContext: frameContext,
-                                      pointCount: record.pathPointCount,
-                                      inputBuffer: pathInputsBuffer,
-                                      tileSlotVisibleTileIndicesBuffer: record.visibleTileIndexBuffer,
-                                      tileOriginDataBuffer: tileOriginDataBuffer,
-                                      outputBuffer: pathPointsBuffer)
-
-            let placementBuffer = record.placementBuffer(slot: frameContext.frameSlotIndex)
-            let glyphScreenPointsBuffer = record.glyphScreenPointBuffer(slot: frameContext.frameSlotIndex)
-            let collisionAabbBuffer = record.collisionAabbBuffer(slot: frameContext.frameSlotIndex)
-            roadPlacementCalculator.run(commandBuffer: commandBuffer,
-                                        pathPointsBuffer: pathPointsBuffer,
-                                        pathRangesBuffer: pathRangesBuffer,
-                                        anchorsBuffer: anchorsBuffer,
-                                        glyphInputsBuffer: glyphInputsBuffer,
-                                        placementsBuffer: placementBuffer,
-                                        screenPointsBuffer: glyphScreenPointsBuffer,
-                                        collisionInputsBuffer: collisionInputsBuffer,
-                                        collisionAabbBuffer: collisionAabbBuffer,
-                                        glyphCount: record.glyphCount)
-            // Стамп фиксируется только в frameCommitted(): кадр может быть
-            // отброшен после prepareGPU (нет drawable), и закодированный
-            // компьют никогда не исполнится.
-            pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
-
-            if index < staticBatches.count {
-                let existingBatch = staticBatches[index]
-                drawBatches.append(DrawRoadLabels(placementBuffer: placementBuffer,
-                                                  glyphInputBuffer: glyphInputsBuffer,
-                                                  runtimeMetaBuffer: existingBatch.runtimeMetaBuffer,
-                                                  localGlyphVerticesBuffer: record.localGlyphVerticesBuffer,
-                                                  glyphCount: record.glyphCount,
-                                                  localGlyphVertexCount: record.localGlyphVertexCount,
-                                                  labelStyle: record.labelStyle))
-            }
-        }
+        // Энкодер 2: размещение глифов всех рекордов кадра.
+        roadPlacementCalculator.run(commandBuffer: commandBuffer, dispatches: placementDispatches)
 
         frameContext.sharedState.roadLabelState.drawLabels = drawBatches
         frameContext.sharedState.roadLabelState.placementBuffer = drawBatches.first?.placementBuffer

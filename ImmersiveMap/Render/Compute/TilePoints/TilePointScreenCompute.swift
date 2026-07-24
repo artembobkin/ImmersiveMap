@@ -60,30 +60,44 @@ final class TilePointScreenCompute {
         outputBufferStore.ensureCapacity(slot: slot, count: max(1, count))
     }
 
-    func run(frameContext: FrameContext,
-             pointCount: Int,
-             tileOriginDataBuffer: MTLBuffer?) {
-        run(frameContext: frameContext,
-            pointCount: pointCount,
-            inputBuffer: inputBuffer,
-            tileSlotVisibleTileIndicesBuffer: tileSlotVisibleTileIndicesBuffer,
-            tileOriginDataBuffer: tileOriginDataBuffer,
-            outputBuffer: outputBuffer(slot: frameContext.frameSlotIndex, count: pointCount))
+    /// Лейбл общего compute-энкодера, в который кадр кодирует все
+    /// point-to-screen dispatch-и (базовые лейблы + дорожные рекорды).
+    static func passLabel(for frameContext: FrameContext) -> String {
+        switch frameContext.screenSpaceProjectionMode {
+        case .flat:
+            return "ScreenCompute.TilePointToScreen.Flat [tilePointToScreenFlatKernel]"
+        case .globe:
+            return "ScreenCompute.TilePointToScreen.Globe [tilePointToScreenGlobeKernel]"
+        }
     }
 
-    func run(frameContext: FrameContext,
-             pointCount: Int,
-             inputBuffer: MTLBuffer,
-             tileSlotVisibleTileIndicesBuffer: MTLBuffer,
-             tileOriginDataBuffer: MTLBuffer?,
-             outputBuffer: MTLBuffer) {
-        guard pointCount > 0,
-              let commandBuffer = frameContext.commandBuffer else {
+    func encode(encoder: MTLComputeCommandEncoder,
+                frameContext: FrameContext,
+                pointCount: Int,
+                tileOriginDataBuffer: MTLBuffer?) {
+        encode(encoder: encoder,
+               frameContext: frameContext,
+               pointCount: pointCount,
+               inputBuffer: inputBuffer,
+               tileSlotVisibleTileIndicesBuffer: tileSlotVisibleTileIndicesBuffer,
+               tileOriginDataBuffer: tileOriginDataBuffer,
+               outputBuffer: outputBuffer(slot: frameContext.frameSlotIndex, count: pointCount))
+    }
+
+    // Кодирует один dispatch в уже открытый энкодер: владелец кадра собирает
+    // все point-to-screen вычисления в один compute-энкодер вместо энкодера
+    // на каждый вызов.
+    func encode(encoder: MTLComputeCommandEncoder,
+                frameContext: FrameContext,
+                pointCount: Int,
+                inputBuffer: MTLBuffer,
+                tileSlotVisibleTileIndicesBuffer: MTLBuffer,
+                tileOriginDataBuffer: MTLBuffer?,
+                outputBuffer: MTLBuffer) {
+        guard pointCount > 0 else {
             return
         }
 
-        let label: String
-        let pipelineState: MTLComputePipelineState
         let screenParams = ScreenParams(viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                                    Float(frameContext.drawSize.height)),
                                         outputPixels: 1)
@@ -95,16 +109,7 @@ final class TilePointScreenCompute {
             guard let tileOriginDataBuffer else {
                 return
             }
-            label = "ScreenCompute.TilePointToScreen.Flat [tilePointToScreenFlatKernel]"
-            pipelineState = flatPipelineState
-            guard let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer, label: label) else {
-                return
-            }
-            defer {
-                MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
-            }
-
-            encoder.setComputePipelineState(pipelineState)
+            encoder.setComputePipelineState(flatPipelineState)
             encoder.setBuffer(inputBuffer, offset: 0, index: 0)
             encoder.setBuffer(tileSlotVisibleTileIndicesBuffer, offset: 0, index: 1)
             encoder.setBuffer(tileOriginDataBuffer, offset: 0, index: 2)
@@ -113,19 +118,10 @@ final class TilePointScreenCompute {
             var screenParamsValue = screenParams
             encoder.setBytes(&screenParamsValue, length: MemoryLayout<ScreenParams>.stride, index: 5)
             encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 6)
-            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: pipelineState)
+            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: flatPipelineState)
         case .globe:
-            label = "ScreenCompute.TilePointToScreen.Globe [tilePointToScreenGlobeKernel]"
-            pipelineState = globePipelineState
-            guard let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer, label: label) else {
-                return
-            }
-            defer {
-                MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
-            }
-
             var globe = frameContext.globeRenderUniform
-            encoder.setComputePipelineState(pipelineState)
+            encoder.setComputePipelineState(globePipelineState)
             encoder.setBuffer(inputBuffer, offset: 0, index: 0)
             encoder.setBuffer(outputBuffer, offset: 0, index: 1)
             encoder.setBytes(&camera, length: MemoryLayout<CameraUniform>.stride, index: 2)
@@ -133,7 +129,7 @@ final class TilePointScreenCompute {
             var screenParamsValue = screenParams
             encoder.setBytes(&screenParamsValue, length: MemoryLayout<ScreenParams>.stride, index: 4)
             encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 5)
-            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: pipelineState)
+            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: globePipelineState)
         }
     }
 
