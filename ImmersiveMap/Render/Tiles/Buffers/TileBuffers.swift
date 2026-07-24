@@ -21,19 +21,22 @@ struct TextLabelPlacementInput {
 }
 
 struct TileBuffers {
+    // Буферы nil у пустых слоёв (у тайла без мостов/туннелей их большинство):
+    // заглушка минимального размера всё равно стоила бы страницу аллокации
+    // и слот в таблице ресурсов на каждый из десятков буферов тайла.
     struct GeometryLayer {
-        let verticesBuffer: MTLBuffer
-        let indicesBuffer: MTLBuffer
-        let stylesBuffer: MTLBuffer
-        let overviewStyleMaskBuffer: MTLBuffer
+        let verticesBuffer: MTLBuffer?
+        let indicesBuffer: MTLBuffer?
+        let stylesBuffer: MTLBuffer?
+        let overviewStyleMaskBuffer: MTLBuffer?
         let indicesCount: Int
         let verticesCount: Int
     }
 
     struct Extruded {
-        let verticesBuffer: MTLBuffer
-        let indicesBuffer: MTLBuffer
-        let stylesBuffer: MTLBuffer
+        let verticesBuffer: MTLBuffer?
+        let indicesBuffer: MTLBuffer?
+        let stylesBuffer: MTLBuffer?
         let indicesCount: Int
         let verticesCount: Int
     }

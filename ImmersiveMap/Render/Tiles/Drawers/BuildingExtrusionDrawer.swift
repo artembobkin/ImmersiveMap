@@ -71,7 +71,8 @@ enum BuildingExtrusionDrawer {
             let buffers = metalTile.tileBuffers
             let placeIn = placeTile.placeIn
 
-            guard buffers.extruded.indicesCount > 0 else { continue }
+            guard buffers.extruded.indicesCount > 0,
+                  let extrudedIndicesBuffer = buffers.extruded.indicesBuffer else { continue }
 
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,
@@ -111,7 +112,7 @@ enum BuildingExtrusionDrawer {
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: buffers.extruded.indicesCount,
                                                 indexType: .uint32,
-                                                indexBuffer: buffers.extruded.indicesBuffer,
+                                                indexBuffer: extrudedIndicesBuffer,
                                                 indexBufferOffset: 0)
         }
     }

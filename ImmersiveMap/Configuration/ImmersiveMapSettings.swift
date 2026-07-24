@@ -805,7 +805,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                                   cacheIdentity: ImmersiveMapTilesProvider().configurationFingerprint),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
-                                                              memoryCacheSizeInBytes: 512 * 1024 * 1024),
+                                                              memoryCacheSizeInBytes: 256 * 1024 * 1024),
                             parsing: TileSettings.ParsingSettings(addTestBorders: false)),
         labels: LabelSettings(language: .english,
                               fallbackPolicy: .international,

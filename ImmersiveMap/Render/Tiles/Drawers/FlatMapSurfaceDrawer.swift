@@ -98,7 +98,7 @@ enum FlatMapSurfaceDrawer {
                                               tile: Tile,
                                               placeIn: VisibleTile,
                                               flatRenderState: FlatRenderState) {
-        guard buffers.indicesCount > 0 else { return }
+        guard buffers.indicesCount > 0, let indicesBuffer = buffers.indicesBuffer else { return }
 
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
@@ -130,7 +130,7 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: buffers.indicesCount,
                                             indexType: .uint32,
-                                            indexBuffer: buffers.indicesBuffer,
+                                            indexBuffer: indicesBuffer,
                                             indexBufferOffset: 0)
     }
 }

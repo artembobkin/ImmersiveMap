@@ -217,6 +217,12 @@ class TileAtlasTexture {
         
         // Set tile data for rendering
         let buffers = metalTile.tileBuffers
+        // Пустой ground: слот уже очищен фоном страницы, метаданные размещения
+        // добавлены выше - рисовать нечего, но размещение состоялось.
+        guard buffers.ground.indicesCount > 0,
+              let groundIndicesBuffer = buffers.ground.indicesBuffer else {
+            return true
+        }
         renderEncoder.setVertexBuffer(buffers.ground.verticesBuffer, offset: 0, index: 0)
         renderEncoder.setVertexBuffer(buffers.ground.stylesBuffer, offset: 0, index: 2)
         renderEncoder.setVertexBuffer(buffers.ground.overviewStyleMaskBuffer, offset: 0, index: 4)
@@ -224,9 +230,9 @@ class TileAtlasTexture {
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: buffers.ground.indicesCount,
                                             indexType: .uint32,
-                                            indexBuffer: buffers.ground.indicesBuffer,
+                                            indexBuffer: groundIndicesBuffer,
                                             indexBufferOffset: 0)
-        
+
         return true
     }
 

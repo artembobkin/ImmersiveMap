@@ -186,14 +186,14 @@ class MemoryMetalTileCache {
             + tileBuffers.roads.drawOrderBuckets.flatMap(\.drawOrderLayers)
             + [tileBuffers.bridgeOverlay]
         let geometrySize = layers.reduce(0) { partial, layer in
-            partial + layer.verticesBuffer.allocatedSize
-                + layer.indicesBuffer.allocatedSize
-                + layer.stylesBuffer.allocatedSize
-                + layer.overviewStyleMaskBuffer.allocatedSize
+            partial + (layer.verticesBuffer?.allocatedSize ?? 0)
+                + (layer.indicesBuffer?.allocatedSize ?? 0)
+                + (layer.stylesBuffer?.allocatedSize ?? 0)
+                + (layer.overviewStyleMaskBuffer?.allocatedSize ?? 0)
         }
-        let extrudedSize = tileBuffers.extruded.verticesBuffer.allocatedSize
-            + tileBuffers.extruded.indicesBuffer.allocatedSize
-            + tileBuffers.extruded.stylesBuffer.allocatedSize
+        let extrudedSize = (tileBuffers.extruded.verticesBuffer?.allocatedSize ?? 0)
+            + (tileBuffers.extruded.indicesBuffer?.allocatedSize ?? 0)
+            + (tileBuffers.extruded.stylesBuffer?.allocatedSize ?? 0)
         let textLabelSets = [tileBuffers.textLabels.full,
                              tileBuffers.textLabels.reduced,
                              tileBuffers.textLabels.minimal]
