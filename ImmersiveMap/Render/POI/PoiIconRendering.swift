@@ -8,7 +8,7 @@
 
 import simd
 
-struct PoiIconStyleUniform {
+struct PoiIconStyleUniform: Equatable {
     var backgroundColor: SIMD4<Float>
     var iconColor: SIMD4<Float>
 

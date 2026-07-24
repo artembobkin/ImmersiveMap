@@ -82,7 +82,7 @@ struct TextVertex {
     var uv: SIMD2<Float>
 }
 
-struct TextStyleUniform {
+struct TextStyleUniform: Equatable {
     var textColor: SIMD3<Float>
     var _padding0: Float = 0.0
     var strokeColor: SIMD3<Float>

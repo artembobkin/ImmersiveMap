@@ -7,6 +7,20 @@ import simd
 final class RendererLabelDrawer {
     private init() {}
 
+    // Кэш реально привязанного состояния энкодера. Слоты аргументов Metal живут
+    // на уровне encoder и переживают смену pipeline state, поэтому повторный
+    // set того же значения в тот же слот можно пропускать: у лейблов почти все
+    // style-run'ы одного батча делят текстуру шрифта и label shift, и без кэша
+    // GPU Frame Capture помечал десятки таких вызовов как redundant binding.
+    private struct EncoderBindings {
+        var isPoiPipelineBound = false
+        var fragmentTexture: ObjectIdentifier?
+        var vertexBuffer0: ObjectIdentifier?
+        var labelShift: simd_int1?
+        var textStyle: TextStyleUniform?
+        var poiIconStyle: PoiIconStyleUniform?
+    }
+
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                textRenderer: TextRenderer,
@@ -20,6 +34,8 @@ final class RendererLabelDrawer {
         renderEncoder.setVertexBuffer(screenPositionsBuffer, offset: 0, index: 2)
         renderEncoder.setVertexBuffer(labelRuntimeMetaBuffer, offset: 0, index: 6)
 
+        var bindings = EncoderBindings()
+
         for drawBatch in baseLabelsDrawBatches {
             for poiIconRun in drawBatch.poiIconRuns {
                 guard let poiIconVerticesBuffer = poiIconRun.localVerticesBuffer,
@@ -27,21 +43,27 @@ final class RendererLabelDrawer {
                     continue
                 }
 
-                renderEncoder.setRenderPipelineState(textRenderer.poiIconPipelineState)
-                renderEncoder.setFragmentTexture(poiSpriteAtlas.texture, index: 0)
-                var iconStyle = PoiIconStyleUniform(
+                if bindings.isPoiPipelineBound == false {
+                    renderEncoder.setRenderPipelineState(textRenderer.poiIconPipelineState)
+                    setFragmentTexture(poiSpriteAtlas.texture, renderEncoder: renderEncoder, bindings: &bindings)
+                    bindings.isPoiPipelineBound = true
+                }
+                let iconStyle = PoiIconStyleUniform(
                     backgroundColor: SIMD4<Float>(poiIconRun.style.fillColor.x,
                                                   poiIconRun.style.fillColor.y,
                                                   poiIconRun.style.fillColor.z,
                                                   1.0),
                     iconColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
                 )
-                renderEncoder.setFragmentBytes(&iconStyle,
-                                               length: MemoryLayout<PoiIconStyleUniform>.stride,
-                                               index: 0)
-                renderEncoder.setVertexBuffer(poiIconVerticesBuffer, offset: 0, index: 0)
-                var globalIconShift = simd_int1(drawBatch.globalLabelStart)
-                renderEncoder.setVertexBytes(&globalIconShift, length: MemoryLayout<simd_int1>.stride, index: 3)
+                if bindings.poiIconStyle != iconStyle {
+                    var iconStyleValue = iconStyle
+                    renderEncoder.setFragmentBytes(&iconStyleValue,
+                                                   length: MemoryLayout<PoiIconStyleUniform>.stride,
+                                                   index: 0)
+                    bindings.poiIconStyle = iconStyle
+                }
+                setVertexBuffer0(poiIconVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
+                setLabelShift(simd_int1(drawBatch.globalLabelStart), renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
                                              vertexCount: poiIconRun.localVertexCount)
@@ -52,11 +74,13 @@ final class RendererLabelDrawer {
         drawBaseLabelTextPass(renderEncoder: renderEncoder,
                               textRenderer: textRenderer,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
-                              pass: .outline)
+                              pass: .outline,
+                              bindings: &bindings)
         drawBaseLabelTextPass(renderEncoder: renderEncoder,
                               textRenderer: textRenderer,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
-                              pass: .fill)
+                              pass: .fill,
+                              bindings: &bindings)
     }
 
     static func drawRoadLabels(renderEncoder: MTLRenderCommandEncoder,
@@ -70,6 +94,15 @@ final class RendererLabelDrawer {
         renderEncoder.setRenderPipelineState(textRenderer.roadLabelPipelineState)
         var screenMatrixValue = screenMatrix
         renderEncoder.setVertexBytes(&screenMatrixValue, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
+        // Одинаковы для всех дорожных лейблов - привязываются один раз на пасс.
+        var glyphShift: simd_int1 = 0
+        renderEncoder.setVertexBytes(&glyphShift, length: MemoryLayout<simd_int1>.stride, index: 5)
+        var screenOffset = SIMD2<Float>(repeating: 0.0)
+        renderEncoder.setVertexBytes(&screenOffset,
+                                     length: MemoryLayout<SIMD2<Float>>.stride,
+                                     index: 6)
+
+        var bindings = EncoderBindings()
         for drawLabel in roadDrawLabels {
             guard let placementBuffer = drawLabel.placementBuffer,
                   let glyphInputBuffer = drawLabel.glyphInputBuffer,
@@ -82,7 +115,7 @@ final class RendererLabelDrawer {
             renderEncoder.setVertexBuffer(placementBuffer, offset: 0, index: 2)
             renderEncoder.setVertexBuffer(glyphInputBuffer, offset: 0, index: 3)
             renderEncoder.setVertexBuffer(runtimeMetaBuffer, offset: 0, index: 4)
-            renderEncoder.setVertexBuffer(localGlyphVerticesBuffer, offset: 0, index: 0)
+            setVertexBuffer0(localGlyphVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
 
             let style = drawLabel.labelStyle
                 ?? LabelTextStyle(key: 0,
@@ -92,32 +125,22 @@ final class RendererLabelDrawer {
                                   sizePx: 36.0,
                                   weight: .thin)
             let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
-            renderEncoder.setFragmentTexture(texture, index: 0)
+            setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
 
-            var glyphShift: simd_int1 = 0
-            renderEncoder.setVertexBytes(&glyphShift, length: MemoryLayout<simd_int1>.stride, index: 5)
-            var screenOffset = SIMD2<Float>(repeating: 0.0)
-            renderEncoder.setVertexBytes(&screenOffset,
-                                         length: MemoryLayout<SIMD2<Float>>.stride,
-                                         index: 6)
             if style.strokeWidthPx > 0.0 {
-                var outlineStyle = TextStyleUniform(textColor: style.strokeColor,
+                let outlineStyle = TextStyleUniform(textColor: style.strokeColor,
                                                     strokeColor: style.strokeColor,
                                                     strokeWidthPx: style.strokeWidthPx)
-                renderEncoder.setFragmentBytes(&outlineStyle,
-                                               length: MemoryLayout<TextStyleUniform>.stride,
-                                               index: 0)
+                setTextStyle(outlineStyle, renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
                                              vertexCount: drawLabel.localGlyphVertexCount)
             }
 
-            var fillStyle = TextStyleUniform(textColor: style.fillColor,
+            let fillStyle = TextStyleUniform(textColor: style.fillColor,
                                              strokeColor: style.fillColor,
                                              strokeWidthPx: 0.0)
-            renderEncoder.setFragmentBytes(&fillStyle,
-                                           length: MemoryLayout<TextStyleUniform>.stride,
-                                           index: 0)
+            setTextStyle(fillStyle, renderEncoder: renderEncoder, bindings: &bindings)
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
                                          vertexCount: drawLabel.localGlyphVertexCount)
@@ -132,7 +155,8 @@ final class RendererLabelDrawer {
     private static func drawBaseLabelTextPass(renderEncoder: MTLRenderCommandEncoder,
                                               textRenderer: TextRenderer,
                                               baseLabelsDrawBatches: [BaseLabelDrawBatch],
-                                              pass: BaseLabelTextPass) {
+                                              pass: BaseLabelTextPass,
+                                              bindings: inout EncoderBindings) {
         for drawBatch in baseLabelsDrawBatches {
             for run in drawBatch.labelsByStyleRuns {
                 guard let localGlyphVerticesBuffer = run.localGlyphVerticesBuffer,
@@ -142,7 +166,7 @@ final class RendererLabelDrawer {
 
                 let style = run.style
                 let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
-                var textStyle: TextStyleUniform
+                let textStyle: TextStyleUniform
                 switch pass {
                 case .outline:
                     textStyle = TextStyleUniform(textColor: style.strokeColor,
@@ -154,17 +178,53 @@ final class RendererLabelDrawer {
                                                  strokeWidthPx: 0.0)
                 }
 
-                renderEncoder.setFragmentTexture(texture, index: 0)
-                renderEncoder.setFragmentBytes(&textStyle,
-                                               length: MemoryLayout<TextStyleUniform>.stride,
-                                               index: 0)
-                renderEncoder.setVertexBuffer(localGlyphVerticesBuffer, offset: 0, index: 0)
-                var globalTextShift = simd_int1(drawBatch.globalLabelStart)
-                renderEncoder.setVertexBytes(&globalTextShift, length: MemoryLayout<simd_int1>.stride, index: 3)
+                setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
+                setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)
+                setVertexBuffer0(localGlyphVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
+                setLabelShift(simd_int1(drawBatch.globalLabelStart), renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
                                              vertexCount: run.localGlyphVertexCount)
             }
         }
+    }
+
+    private static func setFragmentTexture(_ texture: MTLTexture?,
+                                           renderEncoder: MTLRenderCommandEncoder,
+                                           bindings: inout EncoderBindings) {
+        guard let texture else { return }
+        let identity = ObjectIdentifier(texture)
+        guard bindings.fragmentTexture != identity else { return }
+        renderEncoder.setFragmentTexture(texture, index: 0)
+        bindings.fragmentTexture = identity
+    }
+
+    private static func setVertexBuffer0(_ buffer: MTLBuffer,
+                                         renderEncoder: MTLRenderCommandEncoder,
+                                         bindings: inout EncoderBindings) {
+        let identity = ObjectIdentifier(buffer)
+        guard bindings.vertexBuffer0 != identity else { return }
+        renderEncoder.setVertexBuffer(buffer, offset: 0, index: 0)
+        bindings.vertexBuffer0 = identity
+    }
+
+    private static func setLabelShift(_ shift: simd_int1,
+                                      renderEncoder: MTLRenderCommandEncoder,
+                                      bindings: inout EncoderBindings) {
+        guard bindings.labelShift != shift else { return }
+        var shiftValue = shift
+        renderEncoder.setVertexBytes(&shiftValue, length: MemoryLayout<simd_int1>.stride, index: 3)
+        bindings.labelShift = shift
+    }
+
+    private static func setTextStyle(_ textStyle: TextStyleUniform,
+                                     renderEncoder: MTLRenderCommandEncoder,
+                                     bindings: inout EncoderBindings) {
+        guard bindings.textStyle != textStyle else { return }
+        var textStyleValue = textStyle
+        renderEncoder.setFragmentBytes(&textStyleValue,
+                                       length: MemoryLayout<TextStyleUniform>.stride,
+                                       index: 0)
+        bindings.textStyle = textStyle
     }
 }
