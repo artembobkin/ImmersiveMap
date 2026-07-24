@@ -6,19 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
-## [Unreleased]
+## [0.3.0] - 2026-07-24
 
 ### Removed
 
 - OpenStreetMap / Shortbread provider (`OpenStreetMapTileProvider` / `OpenStreetMapMapStyle`). The package now ships two providers: the built-in ImmersiveMap tiles and Mapbox. Custom MVT sources remain supported via `VectorTileProvider`.
+- City night lights feature.
 
 ### Added
 
 - `buildingExtrusionMode` modifier on `ImmersiveMapView` (and `StyleSettings.buildingExtrusionMode`): flat-mode extruded buildings can now render fully opaque with `.solid`, in addition to the default `.translucent` blending. `.solidAtHighZoom(startZoom:endZoom:)` blends translucent buildings into solid ones across a zoom range (default 17...18) as the camera zooms in. Switching the mode (or `buildingExtrusionAlpha`) applies live, without recreating the renderer.
+- Reworked globe ↔ flat transition: the globe unrolls as a wave travelling from the view center outward, the morph geometry completes before the surface swap, and horizon culling relaxes continuously through the morph.
+- Flat-mode horizon: the far coverage ring is filled with pinned backdrop-zoom tiles up to the horizon, with haze anchored to the vanishing line. The flat view distance now matches the globe side of the transition.
+- Latitude-aware camera and tile LOD, and a mip-mapped tile atlas for steeply tilted views.
+- POI visibility is derived from rank budgets instead of zoom ramps; iconless POI labels are gated by camera zoom; road labels are gated by clipped visible area and content density.
+- `preparedDiskCompressionEnabled` in `.tileSettings(...)`: LZFSE compression of the prepared tile disk cache is now optional. Disabling it trades disk footprint for noticeably less CPU (and battery) while exploring uncached areas.
+- Debug HUD: label collision boxes overlay and a total tiles counter.
+
+### Changed
+
+- The package now builds in Swift 6 language mode with strict concurrency.
+- Tile loading is split into independent network and parsing stages: a network slot frees right after the download, and parsing runs in separate tasks bounded by the device's core count. Slow networks no longer starve parsing, and long parses no longer block new downloads.
+- Default in-memory tile cache budget lowered from 512 to 256 MiB; evicted tiles reload cheaply from the prepared disk cache. The previous budget is still available via `.tileSettings(memoryCacheSizeInBytes:)`.
+
+### Performance
+
+- Globe atlas pages (hundreds of MiB of textures) are released after the map stays in flat presentation for a few seconds, instead of being retained until a memory warning.
+- Empty tile geometry layers no longer allocate placeholder GPU buffers (a tile without bridges or tunnels used to allocate buffers for every road phase).
+- MSDF text atlases load into private GPU storage via a staging blit, dropping their shadow CPU copies.
+- Label rendering skips redundant Metal bindings (font atlas, styles, shifts), and label compute work is batched into two encoders per frame instead of a pair of encoders per road tile record, with frame constants bound once per pass.
+- The flat far ring is handed fully to the z3 backdrop with a steeper distance LOD, and building extrusion resolution reuses precomputed footprint bounds and areas.
 
 ### Fixed
 
 - Flickering light seams on extruded buildings: thin background-colored lines along facade junctions that shimmered with camera movement. Buildings are now always drawn opaque with plain depth testing - solid mode directly in the world pass, translucent mode into an offscreen building image that is composited over the map with `buildingExtrusionAlpha` - replacing the single-sample "winner ID" discard that clashed with MSAA. Translucency is now uniform across the whole building silhouette, buildings correctly occlude each other, and building geometry is rendered once per frame instead of twice (per-feature building color alpha is no longer factored in).
+- Fog is applied to the morph surface at its morphed positions instead of the sphere's, removing fog popping during the globe ↔ flat transition.
+- The flat horizon no longer jumps between zoom bands: the far plane is pushed out and horizon haze saturates before the coverage edge.
+- Line-only boundary styles no longer fill their polygon features.
+- Debug tile overlay watermarks stay flat and bounded at high tilt.
 
 ## [0.2.0] - 2026-07-14
 
@@ -57,6 +82,6 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
-[Unreleased]: https://github.com/artembobkin/ImmersiveMap/compare/0.2.0...HEAD
+[0.3.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/artembobkin/ImmersiveMap/releases/tag/0.1.1
