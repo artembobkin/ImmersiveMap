@@ -185,22 +185,27 @@ class MemoryMetalTileCache {
         let layers = [tileBuffers.ground]
             + tileBuffers.roads.drawOrderBuckets.flatMap(\.drawOrderLayers)
             + [tileBuffers.bridgeOverlay]
+        // Суммы разбиты на пошаговые +=: цепочка из нескольких `?? 0` в одном
+        // выражении превышает лимит type-checker'а на слабых машинах (CI).
         let geometrySize = layers.reduce(0) { partial, layer in
-            partial + (layer.verticesBuffer?.allocatedSize ?? 0)
-                + (layer.indicesBuffer?.allocatedSize ?? 0)
-                + (layer.stylesBuffer?.allocatedSize ?? 0)
-                + (layer.overviewStyleMaskBuffer?.allocatedSize ?? 0)
+            var size = partial
+            size += layer.verticesBuffer?.allocatedSize ?? 0
+            size += layer.indicesBuffer?.allocatedSize ?? 0
+            size += layer.stylesBuffer?.allocatedSize ?? 0
+            size += layer.overviewStyleMaskBuffer?.allocatedSize ?? 0
+            return size
         }
-        let extrudedSize = (tileBuffers.extruded.verticesBuffer?.allocatedSize ?? 0)
-            + (tileBuffers.extruded.indicesBuffer?.allocatedSize ?? 0)
-            + (tileBuffers.extruded.stylesBuffer?.allocatedSize ?? 0)
+        var extrudedSize = tileBuffers.extruded.verticesBuffer?.allocatedSize ?? 0
+        extrudedSize += tileBuffers.extruded.indicesBuffer?.allocatedSize ?? 0
+        extrudedSize += tileBuffers.extruded.stylesBuffer?.allocatedSize ?? 0
         let textLabelSets = [tileBuffers.textLabels.full,
                              tileBuffers.textLabels.reduced,
                              tileBuffers.textLabels.minimal]
         let textLabelsSize = textLabelSets.reduce(0) { partial, labelSet in
-            partial
-                + labelSet.labelsByStyleRuns.reduce(0) { $0 + ($1.localGlyphVerticesBuffer?.allocatedSize ?? 0) }
-                + labelSet.poiIconRuns.reduce(0) { $0 + ($1.localVerticesBuffer?.allocatedSize ?? 0) }
+            var size = partial
+            size += labelSet.labelsByStyleRuns.reduce(0) { $0 + ($1.localGlyphVerticesBuffer?.allocatedSize ?? 0) }
+            size += labelSet.poiIconRuns.reduce(0) { $0 + ($1.localVerticesBuffer?.allocatedSize ?? 0) }
+            return size
         }
         let roadLabelsSize = tileBuffers.roadLabels.localGlyphVerticesBuffer?.allocatedSize ?? 0
         return geometrySize + extrudedSize + textLabelsSize + roadLabelsSize
