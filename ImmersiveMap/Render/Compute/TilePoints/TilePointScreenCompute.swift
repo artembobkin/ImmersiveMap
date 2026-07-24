@@ -10,9 +10,23 @@ import CoreGraphics
 import Metal
 import simd
 
+/// Общие compute-пайплайны point-to-screen: один набор PSO на все инстансы
+/// `TilePointScreenCompute` кадра, чтобы объединённый энкодер не перебиндивал
+/// одинаковый pipeline state между dispatch-ами разных владельцев буферов.
+final class TilePointScreenPipelines {
+    let flat: MTLComputePipelineState
+    let globe: MTLComputePipelineState
+
+    init(metalDevice: MTLDevice, library: MTLLibrary) {
+        let flatKernel = library.makeFunction(name: "tilePointToScreenFlatKernel")
+        let globeKernel = library.makeFunction(name: "tilePointToScreenGlobeKernel")
+        self.flat = try! metalDevice.makeComputePipelineState(function: flatKernel!)
+        self.globe = try! metalDevice.makeComputePipelineState(function: globeKernel!)
+    }
+}
+
 final class TilePointScreenCompute {
-    private let flatPipelineState: MTLComputePipelineState
-    private let globePipelineState: MTLComputePipelineState
+    private let pipelines: TilePointScreenPipelines
     private let inputBufferStore: DynamicMetalBuffer<TilePointInput>
     private let tileSlotVisibleTileIndicesBufferStore: DynamicMetalBuffer<UInt32>
     private let outputBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
@@ -20,11 +34,8 @@ final class TilePointScreenCompute {
     private(set) var inputBuffer: MTLBuffer
     private(set) var tileSlotVisibleTileIndicesBuffer: MTLBuffer
 
-    init(metalDevice: MTLDevice, library: MTLLibrary) {
-        let flatKernel = library.makeFunction(name: "tilePointToScreenFlatKernel")
-        let globeKernel = library.makeFunction(name: "tilePointToScreenGlobeKernel")
-        self.flatPipelineState = try! metalDevice.makeComputePipelineState(function: flatKernel!)
-        self.globePipelineState = try! metalDevice.makeComputePipelineState(function: globeKernel!)
+    init(metalDevice: MTLDevice, pipelines: TilePointScreenPipelines) {
+        self.pipelines = pipelines
         self.inputBufferStore = DynamicMetalBuffer(metalDevice: metalDevice, options: [.storageModeShared])
         self.tileSlotVisibleTileIndicesBufferStore = DynamicMetalBuffer(metalDevice: metalDevice, options: [.storageModeShared])
         self.outputBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
@@ -71,65 +82,74 @@ final class TilePointScreenCompute {
         }
     }
 
-    func encode(encoder: MTLComputeCommandEncoder,
-                frameContext: FrameContext,
-                pointCount: Int,
-                tileOriginDataBuffer: MTLBuffer?) {
-        encode(encoder: encoder,
-               frameContext: frameContext,
-               pointCount: pointCount,
-               inputBuffer: inputBuffer,
-               tileSlotVisibleTileIndicesBuffer: tileSlotVisibleTileIndicesBuffer,
-               tileOriginDataBuffer: tileOriginDataBuffer,
-               outputBuffer: outputBuffer(slot: frameContext.frameSlotIndex, count: pointCount))
-    }
-
-    // Кодирует один dispatch в уже открытый энкодер: владелец кадра собирает
-    // все point-to-screen вычисления в один compute-энкодер вместо энкодера
-    // на каждый вызов.
-    func encode(encoder: MTLComputeCommandEncoder,
-                frameContext: FrameContext,
-                pointCount: Int,
-                inputBuffer: MTLBuffer,
-                tileSlotVisibleTileIndicesBuffer: MTLBuffer,
-                tileOriginDataBuffer: MTLBuffer?,
-                outputBuffer: MTLBuffer) {
-        guard pointCount > 0 else {
-            return
-        }
-
-        let screenParams = ScreenParams(viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
+    /// Привязывает константное на кадр состояние объединённого пасса: PSO,
+    /// камеру, параметры экрана и (для flat) буфер origin-ов тайлов. Dispatch-и
+    /// после этого вешают только свои буферы. Возвращает false, если пасс
+    /// невозможен (flat-режим без origin-буфера).
+    static func beginPass(encoder: MTLComputeCommandEncoder,
+                          frameContext: FrameContext,
+                          pipelines: TilePointScreenPipelines,
+                          tileOriginDataBuffer: MTLBuffer?) -> Bool {
+        var camera = frameContext.cameraUniform
+        var screenParams = ScreenParams(viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                                    Float(frameContext.drawSize.height)),
                                         outputPixels: 1)
-        var count = UInt32(pointCount)
-        var camera = frameContext.cameraUniform
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
             guard let tileOriginDataBuffer else {
-                return
+                return false
             }
-            encoder.setComputePipelineState(flatPipelineState)
-            encoder.setBuffer(inputBuffer, offset: 0, index: 0)
-            encoder.setBuffer(tileSlotVisibleTileIndicesBuffer, offset: 0, index: 1)
+            encoder.setComputePipelineState(pipelines.flat)
             encoder.setBuffer(tileOriginDataBuffer, offset: 0, index: 2)
-            encoder.setBuffer(outputBuffer, offset: 0, index: 3)
             encoder.setBytes(&camera, length: MemoryLayout<CameraUniform>.stride, index: 4)
-            var screenParamsValue = screenParams
-            encoder.setBytes(&screenParamsValue, length: MemoryLayout<ScreenParams>.stride, index: 5)
-            encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 6)
-            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: flatPipelineState)
+            encoder.setBytes(&screenParams, length: MemoryLayout<ScreenParams>.stride, index: 5)
         case .globe:
             var globe = frameContext.globeRenderUniform
-            encoder.setComputePipelineState(globePipelineState)
-            encoder.setBuffer(inputBuffer, offset: 0, index: 0)
-            encoder.setBuffer(outputBuffer, offset: 0, index: 1)
+            encoder.setComputePipelineState(pipelines.globe)
             encoder.setBytes(&camera, length: MemoryLayout<CameraUniform>.stride, index: 2)
             encoder.setBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 3)
-            var screenParamsValue = screenParams
-            encoder.setBytes(&screenParamsValue, length: MemoryLayout<ScreenParams>.stride, index: 4)
+            encoder.setBytes(&screenParams, length: MemoryLayout<ScreenParams>.stride, index: 4)
+        }
+        return true
+    }
+
+    func encodeDispatch(encoder: MTLComputeCommandEncoder,
+                        frameContext: FrameContext,
+                        pointCount: Int) {
+        encodeDispatch(encoder: encoder,
+                       frameContext: frameContext,
+                       pointCount: pointCount,
+                       inputBuffer: inputBuffer,
+                       tileSlotVisibleTileIndicesBuffer: tileSlotVisibleTileIndicesBuffer,
+                       outputBuffer: outputBuffer(slot: frameContext.frameSlotIndex, count: pointCount))
+    }
+
+    // Кодирует один dispatch в пасс, начатый `beginPass`: только пер-рекордные
+    // буферы и счётчик, константы кадра уже привязаны.
+    func encodeDispatch(encoder: MTLComputeCommandEncoder,
+                        frameContext: FrameContext,
+                        pointCount: Int,
+                        inputBuffer: MTLBuffer,
+                        tileSlotVisibleTileIndicesBuffer: MTLBuffer,
+                        outputBuffer: MTLBuffer) {
+        guard pointCount > 0 else {
+            return
+        }
+        var count = UInt32(pointCount)
+
+        switch frameContext.screenSpaceProjectionMode {
+        case .flat:
+            encoder.setBuffer(inputBuffer, offset: 0, index: 0)
+            encoder.setBuffer(tileSlotVisibleTileIndicesBuffer, offset: 0, index: 1)
+            encoder.setBuffer(outputBuffer, offset: 0, index: 3)
+            encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 6)
+            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: pipelines.flat)
+        case .globe:
+            encoder.setBuffer(inputBuffer, offset: 0, index: 0)
+            encoder.setBuffer(outputBuffer, offset: 0, index: 1)
             encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 5)
-            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: globePipelineState)
+            dispatch(pointCount: pointCount, encoder: encoder, pipelineState: pipelines.globe)
         }
     }
 

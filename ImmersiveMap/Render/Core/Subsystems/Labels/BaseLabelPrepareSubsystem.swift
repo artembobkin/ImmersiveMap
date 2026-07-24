@@ -18,6 +18,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let roadLabelCache: RoadLabelCache?
     private let baseLabelTraceRecorder: BaseLabelTraceRecorder
     private let tilePointScreenProjector = TilePointScreenProjector()
+    private let screenComputePipelines: TilePointScreenPipelines
     private let baseScreenCompute: TilePointScreenCompute
     private let roadPathScreenCompute: TilePointScreenCompute
     private let roadPlacementCalculator: RoadLabelPlacementCalculator
@@ -83,8 +84,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.roadLabelCache = roadLabelCache
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.debugOverlayControls = debugOverlayControls
-        self.baseScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, library: library)
-        self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, library: library)
+        let screenComputePipelines = TilePointScreenPipelines(metalDevice: metalDevice, library: library)
+        self.screenComputePipelines = screenComputePipelines
+        self.baseScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
+        self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
         self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: RoadLabelPlacementPipeline(metalDevice: metalDevice,
                                                                                                          library: library))
         self.roadRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
@@ -397,24 +400,29 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
-        // Энкодер 1: все point-to-screen вычисления кадра.
+        // Энкодер 1: все point-to-screen вычисления кадра. Константы пасса
+        // (PSO, камера, screenParams, origin-буфер) привязываются один раз,
+        // dispatch-и вешают только свои буферы.
         if basePointCount > 0 || roadPathDispatches.isEmpty == false,
            let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer,
                                                      label: TilePointScreenCompute.passLabel(for: frameContext)) {
-            if basePointCount > 0 {
-                baseScreenCompute.encode(encoder: encoder,
-                                         frameContext: frameContext,
-                                         pointCount: basePointCount,
-                                         tileOriginDataBuffer: tileOriginDataBuffer)
-            }
-            for pathDispatch in roadPathDispatches {
-                roadPathScreenCompute.encode(encoder: encoder,
-                                             frameContext: frameContext,
-                                             pointCount: pathDispatch.pointCount,
-                                             inputBuffer: pathDispatch.inputBuffer,
-                                             tileSlotVisibleTileIndicesBuffer: pathDispatch.tileSlotVisibleTileIndicesBuffer,
-                                             tileOriginDataBuffer: tileOriginDataBuffer,
-                                             outputBuffer: pathDispatch.outputBuffer)
+            if TilePointScreenCompute.beginPass(encoder: encoder,
+                                                frameContext: frameContext,
+                                                pipelines: screenComputePipelines,
+                                                tileOriginDataBuffer: tileOriginDataBuffer) {
+                if basePointCount > 0 {
+                    baseScreenCompute.encodeDispatch(encoder: encoder,
+                                                     frameContext: frameContext,
+                                                     pointCount: basePointCount)
+                }
+                for pathDispatch in roadPathDispatches {
+                    roadPathScreenCompute.encodeDispatch(encoder: encoder,
+                                                         frameContext: frameContext,
+                                                         pointCount: pathDispatch.pointCount,
+                                                         inputBuffer: pathDispatch.inputBuffer,
+                                                         tileSlotVisibleTileIndicesBuffer: pathDispatch.tileSlotVisibleTileIndicesBuffer,
+                                                         outputBuffer: pathDispatch.outputBuffer)
+                }
             }
             MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
         }
