@@ -4,7 +4,7 @@
 import Foundation
 
 class TileDownloader {
-    enum DownloadFailure: Equatable {
+    enum DownloadFailure: Equatable, Sendable {
         case missingAuthorizationToken
         case nonHTTPResponse
         case unauthorized
@@ -18,7 +18,7 @@ class TileDownloader {
         case network
     }
 
-    enum DownloadResult: Equatable {
+    enum DownloadResult: Equatable, Sendable {
         case success(Data, etag: String?)
         case failure(DownloadFailure)
     }

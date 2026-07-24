@@ -278,6 +278,75 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         pipeline.completeDownload(secondTile, result: .failure(.network))
     }
 
+    func testNetworkSlotFreesWhileParseIsStillRunning() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let firstTile = Tile(x: 1, y: 1, z: 4)
+        let secondTile = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [firstTile, secondTile])
+        let firstStarted = await pipeline.waitUntilStarted(firstTile)
+        XCTAssertTrue(firstStarted)
+        XCTAssertFalse(pipeline.hasStarted(secondTile))
+
+        pipeline.completeDownload(firstTile, result: .success(Data([1]), etag: nil))
+        let firstPrepared = await pipeline.waitUntilPrepared(firstTile)
+        XCTAssertTrue(firstPrepared)
+
+        // Сетевой слот освободился сразу после download: второй тайл начинает
+        // скачиваться, пока первый ещё парсится.
+        let secondStarted = await pipeline.waitUntilStarted(secondTile)
+        XCTAssertTrue(secondStarted)
+
+        pipeline.completePrepare(firstTile)
+        let firstMaterialized = await pipeline.waitUntilMaterialized(firstTile)
+        XCTAssertTrue(firstMaterialized)
+        pipeline.completeMaterialize(firstTile, result: true)
+        pipeline.completeDownload(secondTile, result: .failure(.network))
+    }
+
+    func testCPUStageHonorsItsOwnConcurrencyLimit() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 2
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentPrepares: 1)
+        let firstTile = Tile(x: 1, y: 1, z: 4)
+        let secondTile = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [firstTile, secondTile])
+        let firstStarted = await pipeline.waitUntilStarted(firstTile)
+        let secondStarted = await pipeline.waitUntilStarted(secondTile)
+        XCTAssertTrue(firstStarted)
+        XCTAssertTrue(secondStarted)
+
+        pipeline.completeDownload(firstTile, result: .success(Data([1]), etag: nil))
+        let firstPrepared = await pipeline.waitUntilPrepared(firstTile)
+        XCTAssertTrue(firstPrepared)
+
+        // Единственный CPU-слот занят первым тайлом: второй скачан, но его
+        // парсинг ждёт в очереди CPU-стадий.
+        pipeline.completeDownload(secondTile, result: .success(Data([2]), etag: nil))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(pipeline.hasPrepared(secondTile))
+
+        pipeline.completePrepare(firstTile)
+        let firstMaterialized = await pipeline.waitUntilMaterialized(firstTile)
+        XCTAssertTrue(firstMaterialized)
+        pipeline.completeMaterialize(firstTile, result: true)
+
+        // CPU-слот освободился: отложенная CPU-стадия второго тайла стартует.
+        let secondPrepared = await pipeline.waitUntilPrepared(secondTile)
+        XCTAssertTrue(secondPrepared)
+        pipeline.completePrepare(secondTile)
+        let secondMaterialized = await pipeline.waitUntilMaterialized(secondTile)
+        XCTAssertTrue(secondMaterialized)
+        pipeline.completeMaterialize(secondTile, result: true)
+    }
+
     func testFailedDownloadArmsRetryWakeThatFiresCallback() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1

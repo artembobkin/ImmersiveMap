@@ -6,9 +6,11 @@ import MetalKit
 
 // Бизнес-назначение:
 // Оркестратор загрузки тайлов для текущего кадра карты.
-// Принимает актуальный набор нужных тайлов, ограничивает параллелизм,
-// ставит отложенные запросы в deduplicated FIFO и запускает
-// загрузку/парс через `TileLoadPipeline`.
+// Принимает актуальный набор нужных тайлов, ставит отложенные запросы в
+// deduplicated FIFO и ведёт каждый тайл через двухстадийный конвейер:
+// сетевая стадия (download) и CPU-стадия (prepared-кэш/парс/materialize) -
+// отдельные Task с независимыми лимитами параллелизма, чтобы медленная сеть
+// не занимала парс-слоты, а долгий парсинг не блокировал старт загрузок.
 // Решения о том, когда запрос тайла временно блокируется после ошибок, делегируются
 // в `TileRetryController` (per-tile backoff + глобальный cooldown).
 /// Потокобезопасен (`@unchecked Sendable`): мутабельное состояние загрузчика
@@ -16,14 +18,38 @@ import MetalKit
 final class ImmersiveMapNeedsTile: @unchecked Sendable {
     typealias RetryPolicy = TileRetryController.Policy
 
+    // Лимит CPU-стадии по умолчанию. Парсинг идёт с utility QoS и фактически
+    // выполняется на E-ядрах, поэтому потолок привязан к числу ядер, а не к
+    // сетевым слотам.
+    static let defaultMaxConcurrentPrepares = max(2, min(ProcessInfo.processInfo.activeProcessorCount - 2, 6))
+
+    // Стадия жизненного цикла тайла внутри конвейера. Переходы только на `stateQueue`.
+    private enum LoadStage {
+        case network    // сетевая Task скачивает тайл, занимает сетевой слот
+        case cpuQueued  // скачан, ждёт свободного CPU-слота
+        case cpu        // CPU-Task парсит/материализует, занимает CPU-слот
+    }
+
     private struct OngoingTask {
         let generation: UInt64
-        let task: Task<Void, Never>
+        var task: Task<Void, Never>
+        var stage: LoadStage
+    }
+
+    // Скачанный тайл, ожидающий свободного CPU-слота.
+    private struct QueuedCPUWork {
+        let tile: Tile
+        let generation: UInt64
+        let downloadResult: TileDownloader.DownloadResult
     }
 
     private var ongoingTasks: [Tile: OngoingTask] = [:]
     private var nextTaskGeneration: UInt64 = 1
     private let maxConcurrentFetches: Int
+    private let maxConcurrentPrepares: Int
+    private var networkInFlightCount = 0
+    private var cpuInFlightCount = 0
+    private var queuedCPUWork: [QueuedCPUWork] = []
     private let pendingTilesQueue: DeduplicatedTilesFIFO
     private var wantedTiles: Set<Tile> = []
     private let loadPipeline: TileLoadPipeline
@@ -61,6 +87,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     init(config: ImmersiveMapSettings,
          loadPipeline: TileLoadPipeline,
          retryPolicy: RetryPolicy = .default,
+         maxConcurrentPrepares: Int = ImmersiveMapNeedsTile.defaultMaxConcurrentPrepares,
          now: @escaping () -> Date = Date.init,
          retryWakeScheduler: @escaping (TimeInterval, DispatchWorkItem) -> Void = { delay, workItem in
              DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -68,6 +95,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
          tileTraceRecorder: TileTraceRecorder = TileTraceRecorder(),
          tileLoadingStatusReporter: TileLoadingStatusReporter? = nil) {
         self.maxConcurrentFetches = config.tiles.network.maxConcurrentFetches
+        self.maxConcurrentPrepares = max(1, maxConcurrentPrepares)
         self.pendingTilesQueue = DeduplicatedTilesFIFO(capacity: config.tiles.network.pendingRequestQueueCapacity)
         self.loadPipeline = loadPipeline
         self.retryController = TileRetryController(policy: retryPolicy, now: now)
@@ -129,16 +157,16 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             return
         }
 
-        if ongoingTasks.count >= maxConcurrentFetches {
+        if networkInFlightCount >= maxConcurrentFetches {
             pendingTilesQueue.enqueue(tile)
-            tileTraceRecorder.record(.tileSchedulerEnqueued(tile, inFlight: ongoingTasks.count))
+            tileTraceRecorder.record(.tileSchedulerEnqueued(tile, inFlight: networkInFlightCount))
             return
         }
 
         createLoadTileTaskLocked(tile: tile)
     }
 
-    // Создает async-задачу загрузки тайла и регистрирует ее как in-flight.
+    // Создает async-задачу сетевой стадии и регистрирует тайл как in-flight.
     // Должна вызываться только изнутри `stateQueue`.
     private func createLoadTileTaskLocked(tile: Tile) {
         dispatchPrecondition(condition: .onQueue(stateQueue))
@@ -148,61 +176,176 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         // .utility: без явного приоритета задача унаследовала бы user-interactive QoS
         // рендер-потока, и CPU-bound парсинг конкурировал бы с рендером за P-ядра.
         let task = Task(priority: .utility) {
-            await loadTile(tile: tile, generation: generation)
+            await self.runNetworkStage(tile: tile, generation: generation)
         }
-        ongoingTasks[tile] = OngoingTask(generation: generation, task: task)
-        tileTraceRecorder.record(.tileLoadScheduled(tile, inFlight: ongoingTasks.count))
+        ongoingTasks[tile] = OngoingTask(generation: generation, task: task, stage: .network)
+        networkInFlightCount += 1
+        tileTraceRecorder.record(.tileLoadScheduled(tile, inFlight: networkInFlightCount))
     }
-    
-    // Полный цикл загрузки тайла: сеть (URLCache) -> prepared-кэш по ETag -> парс ->
-    // materialize -> сохранение. prepared-кэш ключуется по ETag сырого тайла, поэтому
-    // текущий ETag узнаём из загрузки (URLCache делает её дешёвой) и только затем
-    // решаем - переиспользовать распарсенный тайл или парсить заново.
-    // На любом этапе учитывает отмену задачи и обновляет retry-state по результату.
-    private func loadTile(tile: Tile, generation: UInt64) async {
+
+    // Сетевая стадия: скачивает тайл и освобождает сетевой слот сразу после
+    // download, не дожидаясь парсинга. Продолжение (prepared-кэш/парс/materialize)
+    // уходит в отдельную CPU-задачу со своим лимитом параллелизма.
+    private func runNetworkStage(tile: Tile, generation: UInt64) async {
+        let downloadResult = await downloadStage(tile: tile, generation: generation)
+        let isCurrent = releaseNetworkSlot(tile: tile, generation: generation)
+
+        var isCPUStageScheduled = false
+        if isCurrent, let downloadResult, Task.isCancelled == false {
+            isCPUStageScheduled = scheduleCPUStage(tile: tile,
+                                                   generation: generation,
+                                                   downloadResult: downloadResult)
+        }
+        if isCPUStageScheduled == false {
+            Task { @MainActor in
+                self.finishLoading(tile: tile, generation: generation)
+            }
+        }
+    }
+
+    // Выполняет download с учётом отмены и записывает сетевые события репортера.
+    // Возвращает nil, если задача отменена или уже неактуальна.
+    private func downloadStage(tile: Tile, generation: UInt64) async -> TileDownloader.DownloadResult? {
         if Task.isCancelled {
-            return
+            return nil
         }
         guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
             tileLoadingStatusReporter?.recordLoadStarted(tile: tile)
             tileTraceRecorder.record(.tileLoadStart(tile))
-        }) else {
-            return
-        }
-        defer {
-            Task { @MainActor in
-                finishLoading(tile: tile, generation: generation)
-            }
-        }
-
-        await proceedToNetwork(tile: tile, generation: generation)
-    }
-
-    private func proceedToNetwork(tile: Tile, generation: UInt64) async {
-        if Task.isCancelled {
-            return
-        }
-
-        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
             tileLoadingStatusReporter?.recordNetworkStarted(tile: tile)
         }) else {
-            return
+            return nil
         }
         let downloadResult = await loadPipeline.download(tile: tile)
+        if Task.isCancelled {
+            return nil
+        }
+
+        switch downloadResult {
+        case let .success(data, _):
+            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+                tileLoadingStatusReporter?.recordNetworkSucceeded(tile: tile,
+                                                                  bytes: data.count)
+                tileTraceRecorder.record(.tileDownloadSuccess(tile, bytes: data.count))
+            }) else {
+                return nil
+            }
+        case let .failure(downloadFailure):
+            let failureDescription = Self.downloadFailureDescription(downloadFailure)
+            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+                tileLoadingStatusReporter?.recordNetworkFailed(tile: tile,
+                                                               reason: failureDescription)
+                tileTraceRecorder.record(.tileDownloadFailed(tile,
+                                                             reason: failureDescription))
+            }) else {
+                return nil
+            }
+        }
+        return downloadResult
+    }
+
+    // Освобождает сетевой слот тайла и сразу запускает следующий из pending-очереди.
+    // Возвращает false, если задача уже неактуальна (cancelAll или замена).
+    private func releaseNetworkSlot(tile: Tile, generation: UInt64) -> Bool {
+        stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation,
+                  ongoingTasks[tile]?.stage == .network else {
+                return false
+            }
+            ongoingTasks[tile]?.stage = .cpuQueued
+            networkInFlightCount = max(0, networkInFlightCount - 1)
+            startNextPendingNetworkLoadLocked()
+            return true
+        }
+    }
+
+    // Планирует CPU-стадию: запускает сразу при свободном CPU-слоте, иначе ставит
+    // скачанный тайл в очередь. Возвращает false, если тайл уже неактуален.
+    private func scheduleCPUStage(tile: Tile,
+                                  generation: UInt64,
+                                  downloadResult: TileDownloader.DownloadResult) -> Bool {
+        stateQueue.sync {
+            guard ongoingTasks[tile]?.generation == generation,
+                  ongoingTasks[tile]?.stage == .cpuQueued else {
+                return false
+            }
+            if cpuInFlightCount < maxConcurrentPrepares {
+                startCPUStageLocked(tile: tile, generation: generation, downloadResult: downloadResult)
+            } else {
+                queuedCPUWork.append(QueuedCPUWork(tile: tile,
+                                                   generation: generation,
+                                                   downloadResult: downloadResult))
+            }
+            return true
+        }
+    }
+
+    // Создает async-задачу CPU-стадии и занимает CPU-слот.
+    // Должна вызываться только изнутри `stateQueue`.
+    private func startCPUStageLocked(tile: Tile,
+                                     generation: UInt64,
+                                     downloadResult: TileDownloader.DownloadResult) {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        cpuInFlightCount += 1
+        ongoingTasks[tile]?.stage = .cpu
+        let task = Task(priority: .utility) {
+            await self.runCPUStage(tile: tile, generation: generation, downloadResult: downloadResult)
+        }
+        // Актуальная Task тайла подменяется: cancelAll должен отменять именно
+        // живую стадию, сетевая задача к этому моменту уже завершилась.
+        ongoingTasks[tile]?.task = task
+    }
+
+    private func runCPUStage(tile: Tile,
+                             generation: UInt64,
+                             downloadResult: TileDownloader.DownloadResult) async {
+        await processDownloadResult(tile: tile, generation: generation, downloadResult: downloadResult)
+        releaseCPUSlot(tile: tile, generation: generation)
+        Task { @MainActor in
+            self.finishLoading(tile: tile, generation: generation)
+        }
+    }
+
+    // Освобождает CPU-слот тайла и запускает следующую отложенную CPU-стадию.
+    private func releaseCPUSlot(tile: Tile, generation: UInt64) {
+        stateQueue.sync {
+            if ongoingTasks[tile]?.generation == generation, ongoingTasks[tile]?.stage == .cpu {
+                cpuInFlightCount = max(0, cpuInFlightCount - 1)
+            }
+            startNextQueuedCPUWorkLocked()
+        }
+    }
+
+    // Запускает отложенные CPU-стадии, пока есть свободные слоты, отбрасывая
+    // устаревшие записи (тайл отменён или заменён новой generation).
+    private func startNextQueuedCPUWorkLocked() {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        while cpuInFlightCount < maxConcurrentPrepares, queuedCPUWork.isEmpty == false {
+            let work = queuedCPUWork.removeFirst()
+            guard ongoingTasks[work.tile]?.generation == work.generation,
+                  ongoingTasks[work.tile]?.stage == .cpuQueued else {
+                continue
+            }
+            startCPUStageLocked(tile: work.tile,
+                                generation: work.generation,
+                                downloadResult: work.downloadResult)
+        }
+    }
+
+    // CPU-стадия: prepared-кэш по ETag -> парс -> materialize -> сохранение.
+    // prepared-кэш ключуется по ETag сырого тайла, поэтому текущий ETag узнаём
+    // из сетевой стадии и только затем решаем - переиспользовать распарсенный
+    // тайл или парсить заново. На любом этапе учитывает отмену задачи и
+    // обновляет retry-state по результату.
+    private func processDownloadResult(tile: Tile,
+                                       generation: UInt64,
+                                       downloadResult: TileDownloader.DownloadResult) async {
         if Task.isCancelled {
             return
         }
 
         switch downloadResult {
         case let .success(data, etag):
-            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
-                tileLoadingStatusReporter?.recordNetworkSucceeded(tile: tile,
-                                                                  bytes: data.count)
-                tileTraceRecorder.record(.tileDownloadSuccess(tile, bytes: data.count))
-            }) else {
-                return
-            }
-
             // Reuse the prepared (parsed) tile only when the server provided an ETag
             // and it matches the one this prepared tile was derived from. Without an
             // ETag we cannot prove freshness, so we parse the bytes we just downloaded
@@ -271,16 +414,6 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
             }
         case let .failure(downloadFailure):
-            let failureDescription = Self.downloadFailureDescription(downloadFailure)
-            guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
-                tileLoadingStatusReporter?.recordNetworkFailed(tile: tile,
-                                                               reason: failureDescription)
-                tileTraceRecorder.record(.tileDownloadFailed(tile,
-                                                             reason: failureDescription))
-            }) else {
-                return
-            }
-
             // Offline / server error: render any cached prepared tile for this
             // coordinate, regardless of ETag, so a warm cache still shows content
             // without the network. materializePreparedTile returns false on
@@ -381,7 +514,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         }
     }
 
-    // Завершает in-flight загрузку тайла и пытается запустить следующий подходящий тайл из pending-очереди.
+    // Завершает жизненный цикл тайла: снимает его из in-flight реестра.
+    // Слоты к этому моменту уже освобождены соответствующей стадией.
     @MainActor
     private func finishLoading(tile: Tile, generation: UInt64) {
         #if DEBUG
@@ -394,12 +528,17 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 return
             }
             ongoingTasks.removeValue(forKey: tile)
+        }
+    }
 
-            while let popped = pendingTilesQueue.dequeue() {
-                if wantedTiles.contains(popped), ongoingTasks[popped] == nil {
-                    requestSingleTileLocked(tile: popped)
-                    break
-                }
+    // Запускает следующий подходящий тайл из pending-очереди в освободившийся сетевой слот.
+    // Должна вызываться только изнутри `stateQueue`.
+    private func startNextPendingNetworkLoadLocked() {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        while let popped = pendingTilesQueue.dequeue() {
+            if wantedTiles.contains(popped), ongoingTasks[popped] == nil {
+                requestSingleTileLocked(tile: popped)
+                break
             }
         }
     }
@@ -409,6 +548,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         stateQueue.sync {
             wantedTiles.removeAll()
             pendingTilesQueue.clear()
+            queuedCPUWork.removeAll()
             retryController.reset()
             retryWakeWorkItem?.cancel()
             retryWakeWorkItem = nil
@@ -419,6 +559,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             }
             tileLoadingStatusReporter?.recordLoadsCancelled(tiles: cancelledTiles)
             ongoingTasks.removeAll()
+            // Отменённые задачи не декрементируют счётчики (generation уже не
+            // совпадёт), поэтому слоты освобождаются здесь.
+            networkInFlightCount = 0
+            cpuInFlightCount = 0
         }
     }
 
