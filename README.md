@@ -77,7 +77,7 @@ ImmersiveMapView()
 | Mapbox vector tiles | Alpha |
 | Globe rendering | Alpha |
 | Labels | Alpha |
-| [Avatars / live markers](Documentation/docs/markers.md) | Alpha |
+| [Avatars / live markers](Documentation/docs/avatars.md) | Alpha |
 | Disk / memory tile cache | Alpha |
 | Offline maps | Planned |
 | 3D Tiles | Planned |

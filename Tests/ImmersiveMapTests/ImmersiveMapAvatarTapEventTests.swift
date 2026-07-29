@@ -5,56 +5,56 @@
 import CoreGraphics
 import XCTest
 
-/// Tap по avatar marker должен доставлять `ImmersiveMapMarkerTapEvent` независимо
+/// Tap по avatar marker должен доставлять `ImmersiveMapAvatarTapEvent` независимо
 /// от selection: без `ImmersiveMapSelectionController`, при повторном tap по уже
 /// выбранному маркеру, и не должен срабатывать на background tap.
-final class AvatarMarkerTapEventTests: XCTestCase {
+final class ImmersiveMapAvatarTapEventTests: XCTestCase {
     private let markerID: UInt64 = 7
-    private let markerTapPoint = CGPoint(x: 400, y: 300)
+    private let avatarTapPoint = CGPoint(x: 400, y: 300)
     private let backgroundTapPoint = CGPoint(x: 10, y: 10)
 
     @MainActor
-    func testMarkerTapActionReceivesTappedMarkerWithoutSelectionController() throws {
+    func testAvatarTapActionReceivesTappedMarkerWithoutSelectionController() throws {
         let environment = try makeEnvironment()
-        var receivedEvents: [ImmersiveMapMarkerTapEvent] = []
-        environment.selectionHandler.setMarkerTapAction { event in
+        var receivedEvents: [ImmersiveMapAvatarTapEvent] = []
+        environment.selectionHandler.setAvatarTapAction { event in
             receivedEvents.append(event)
         }
 
-        let result = environment.selectionHandler.handleMapTap(at: markerTapPoint)
+        let result = environment.selectionHandler.handleMapTap(at: avatarTapPoint)
 
         XCTAssertEqual(result, .consumed)
         XCTAssertEqual(receivedEvents.count, 1)
         XCTAssertEqual(receivedEvents.first?.marker.id, markerID)
-        XCTAssertEqual(receivedEvents.first?.screenPoint, markerTapPoint)
+        XCTAssertEqual(receivedEvents.first?.screenPoint, avatarTapPoint)
         XCTAssertNil(environment.selectionHandler.currentMapSelection(),
                      "Tap action без selection controller не должен создавать selection")
     }
 
     @MainActor
-    func testMarkerTapWithoutHandlersFallsBackToBackground() throws {
+    func testAvatarTapWithoutHandlersFallsBackToBackground() throws {
         let environment = try makeEnvironment()
 
-        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: markerTapPoint), .background)
+        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: avatarTapPoint), .background)
     }
 
     @MainActor
-    func testMarkerTapActionFiresOnRepeatedTapWhileSelectionChangesOnce() throws {
+    func testAvatarTapActionFiresOnRepeatedTapWhileSelectionChangesOnce() throws {
         let environment = try makeEnvironment()
         let selectionController = ImmersiveMapSelectionController()
         environment.selectionHandler.syncController(selectionController)
 
         var tapEventCount = 0
         var selectionChangeCount = 0
-        environment.selectionHandler.setMarkerTapAction { _ in
+        environment.selectionHandler.setAvatarTapAction { _ in
             tapEventCount += 1
         }
         selectionController.onSelectionChanged = { _ in
             selectionChangeCount += 1
         }
 
-        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: markerTapPoint), .consumed)
-        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: markerTapPoint), .consumed)
+        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: avatarTapPoint), .consumed)
+        XCTAssertEqual(environment.selectionHandler.handleMapTap(at: avatarTapPoint), .consumed)
 
         XCTAssertEqual(tapEventCount, 2,
                        "Tap event приходит на каждое нажатие, включая уже выбранный маркер")
@@ -64,10 +64,10 @@ final class AvatarMarkerTapEventTests: XCTestCase {
     }
 
     @MainActor
-    func testBackgroundTapDoesNotFireMarkerTapAction() throws {
+    func testBackgroundTapDoesNotFireAvatarTapAction() throws {
         let environment = try makeEnvironment()
         var tapEventCount = 0
-        environment.selectionHandler.setMarkerTapAction { _ in
+        environment.selectionHandler.setAvatarTapAction { _ in
             tapEventCount += 1
         }
 
@@ -84,7 +84,7 @@ final class AvatarMarkerTapEventTests: XCTestCase {
     }
 
     /// Собирает selection handler с одним маркером `markerID`, чья hit-зона
-    /// накрывает `markerTapPoint` (contentsScale = 1, snapshot Y направлен вверх).
+    /// накрывает `avatarTapPoint` (contentsScale = 1, snapshot Y направлен вверх).
     @MainActor
     private func makeEnvironment() throws -> Environment {
         let avatarRuntime = ImmersiveMapAvatarRuntime()
@@ -103,8 +103,8 @@ final class AvatarMarkerTapEventTests: XCTestCase {
                                        renderRuntime: renderRuntime)
 
         let drawSize = CGSize(width: 800, height: 600)
-        let anchorPoint = CGPoint(x: markerTapPoint.x,
-                                  y: drawSize.height - markerTapPoint.y - 50)
+        let anchorPoint = CGPoint(x: avatarTapPoint.x,
+                                  y: drawSize.height - avatarTapPoint.y - 50)
         let bounds = CGRect(x: anchorPoint.x - 50,
                             y: anchorPoint.y,
                             width: 100,

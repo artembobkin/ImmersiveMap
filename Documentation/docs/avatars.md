@@ -10,7 +10,7 @@ struct MapScreen: View {
         ImmersiveMapView()
             .avatars(avatars)
             .avatarSettings(size: .px128)          // optional marker size
-            .onMarkerTap { event in                // tap handling (native SwiftUI)
+            .onAvatarTap { event in                // tap handling (native SwiftUI)
                 print("tapped marker \(event.marker.id) at \(event.screenPoint)")
             }
             .task {

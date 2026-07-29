@@ -54,13 +54,13 @@ final class ImmersiveMapHostRuntime {
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
-                markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?,
+                avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         cameraController: cameraController,
                         selectionController: selectionController,
-                        markerTapAction: markerTapAction)
+                        avatarTapAction: avatarTapAction)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
     }
 
@@ -68,7 +68,7 @@ final class ImmersiveMapHostRuntime {
         syncControllers(avatarsController: nil,
                         cameraController: nil,
                         selectionController: nil,
-                        markerTapAction: nil)
+                        avatarTapAction: nil)
     }
 
     func setEarthSceneEnabled(_ isEnabled: Bool) {
@@ -108,8 +108,8 @@ final class ImmersiveMapHostRuntime {
     func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
-                         markerTapAction newMarkerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
-        runtimeGraph.selectionHandler.setMarkerTapAction(newMarkerTapAction)
+                         avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
+        runtimeGraph.selectionHandler.setAvatarTapAction(newAvatarTapAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
         guard shouldUpdateAvatarsController

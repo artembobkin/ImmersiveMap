@@ -66,7 +66,7 @@ public class ImmersiveMapUIView: UIView {
                   cameraPosition: cameraPosition,
                   cameraController: nil,
                   selectionController: nil,
-                  markerTapAction: nil)
+                  avatarTapAction: nil)
     }
 
     init(frame: CGRect,
@@ -75,14 +75,14 @@ public class ImmersiveMapUIView: UIView {
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
          selectionController: ImmersiveMapSelectionController?,
-         markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
+         avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
         super.init(frame: frame)
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
         hostRuntime.syncControllers(avatarsController: avatarsController,
                                     cameraController: cameraController,
                                     selectionController: selectionController,
-                                    markerTapAction: markerTapAction)
+                                    avatarTapAction: avatarTapAction)
     }
 
     private func setup(settings: ImmersiveMapSettings,
@@ -135,13 +135,13 @@ public class ImmersiveMapUIView: UIView {
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
-                markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?,
+                avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
-                           markerTapAction: markerTapAction,
+                           avatarTapAction: avatarTapAction,
                            cameraPosition: cameraPosition)
     }
 

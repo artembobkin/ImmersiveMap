@@ -20,7 +20,7 @@ final class ImmersiveMapSelectionHandler {
     private weak var selectionController: ImmersiveMapSelectionController?
     private var currentSelection: ImmersiveMapSelection?
     private var avatarSelectionSnapshot: AvatarSelectionSnapshot = .empty
-    private var markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?
+    private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
 
     init(avatarRuntime: ImmersiveMapAvatarRuntime,
          viewportRuntime: ImmersiveMapViewportRuntime,
@@ -44,8 +44,8 @@ final class ImmersiveMapSelectionHandler {
         newSelectionController?.updateCurrentSelection(currentSelection)
     }
 
-    func setMarkerTapAction(_ action: ((ImmersiveMapMarkerTapEvent) -> Void)?) {
-        markerTapAction = action
+    func setAvatarTapAction(_ action: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
+        avatarTapAction = action
     }
 
     func currentMapSelection() -> ImmersiveMapSelection? {
@@ -138,10 +138,10 @@ final class ImmersiveMapSelectionHandler {
     func handleMapTap(at point: CGPoint) -> MapTapResult {
         if let target = avatarHitTarget(at: point) {
             var isConsumed = false
-            if let markerTapAction,
+            if let avatarTapAction,
                case .marker(let markerID) = target,
                let marker = avatarRuntime.marker(id: markerID) {
-                markerTapAction(ImmersiveMapMarkerTapEvent(marker: marker,
+                avatarTapAction(ImmersiveMapAvatarTapEvent(marker: marker,
                                                            screenPoint: point))
                 isConsumed = true
             }

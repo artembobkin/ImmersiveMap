@@ -15,7 +15,7 @@ public struct ImmersiveMapView: View {
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
     private var selectionController: ImmersiveMapSelectionController?
-    private var markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?
+    private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
 
     public init(settings: ImmersiveMapSettings = .default,
                 avatarsController: ImmersiveMapAvatarsController? = nil,
@@ -35,7 +35,7 @@ public struct ImmersiveMapView: View {
                                                       cameraPosition: cameraPosition,
                                                       cameraController: cameraController,
                                                       selectionController: selectionController,
-                                                      markerTapAction: markerTapAction)
+                                                      avatarTapAction: avatarTapAction)
 
         if let cameraUIControls, cameraUIControls.isEnabled, let cameraController {
             mapView.immersiveMapCameraControlsOverlay(
@@ -56,7 +56,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
-    let markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?
+    let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
 
     public func makeUIView(context: Context) -> ImmersiveMapUIView {
         let uiView = ImmersiveMapUIView(frame: .zero,
@@ -65,7 +65,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
-                                        markerTapAction: markerTapAction)
+                                        avatarTapAction: avatarTapAction)
         return uiView
     }
 
@@ -74,7 +74,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       avatarsController: avatarsController,
                       cameraController: cameraController,
                       selectionController: selectionController,
-                      markerTapAction: markerTapAction,
+                      avatarTapAction: avatarTapAction,
                       cameraPosition: cameraPosition)
     }
 
@@ -89,7 +89,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
-    let markerTapAction: ((ImmersiveMapMarkerTapEvent) -> Void)?
+    let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
 
     public func makeNSView(context: Context) -> ImmersiveMapNSView {
         let nsView = ImmersiveMapNSView(frame: .zero,
@@ -98,7 +98,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
-                                        markerTapAction: markerTapAction)
+                                        avatarTapAction: avatarTapAction)
         return nsView
     }
 
@@ -107,7 +107,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       avatarsController: avatarsController,
                       cameraController: cameraController,
                       selectionController: selectionController,
-                      markerTapAction: markerTapAction,
+                      avatarTapAction: avatarTapAction,
                       cameraPosition: cameraPosition)
     }
 
@@ -175,9 +175,9 @@ public extension ImmersiveMapView {
     /// Вызывает `action` на каждое нажатие по avatar marker.
     /// Работает без ``ImmersiveMapSelectionController``: событие приходит и когда
     /// selection не используется, и повторно при tap по уже выбранному маркеру.
-    func onMarkerTap(_ action: @escaping (ImmersiveMapMarkerTapEvent) -> Void) -> ImmersiveMapView {
+    func onAvatarTap(_ action: @escaping (ImmersiveMapAvatarTapEvent) -> Void) -> ImmersiveMapView {
         var view = self
-        view.markerTapAction = action
+        view.avatarTapAction = action
         return view
     }
 

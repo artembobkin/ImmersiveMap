@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [Unreleased]
+
+### Changed
+
+- Renamed the avatar tap API: the `onMarkerTap` modifier is now `onAvatarTap`, and `ImmersiveMapMarkerTapEvent` is now `ImmersiveMapAvatarTapEvent` (same fields). No compatibility shims. The term "marker" is freed up for the upcoming SwiftUI marker overlay API. The avatars guide moved from `Documentation/docs/markers.md` to `Documentation/docs/avatars.md`.
+
 ## [0.3.0] - 2026-07-24
 
 ### Removed
