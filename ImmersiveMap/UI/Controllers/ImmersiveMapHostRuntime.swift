@@ -55,13 +55,19 @@ final class ImmersiveMapHostRuntime {
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction)
+        updateMarkerContent(markerContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
+    }
+
+    func updateMarkerContent(_ markerContent: MarkerViewContent?) {
+        runtimeGraph.markerRuntime.update(content: markerContent)
     }
 
     func dismantle() {
@@ -69,6 +75,7 @@ final class ImmersiveMapHostRuntime {
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil)
+        updateMarkerContent(nil)
     }
 
     func setEarthSceneEnabled(_ isEnabled: Bool) {

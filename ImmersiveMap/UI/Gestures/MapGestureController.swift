@@ -60,6 +60,20 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         return false
     }
 
+    /// Касание, начавшееся на интерактивном SwiftUI-маркере, целиком уходит
+    /// его контенту: жесты карты (pan/pinch/rotation/tap/doubleTap) такое
+    /// касание не получают. Распознаватели висят на host view и без этого
+    /// фильтра видели бы касания всех subviews.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldReceive touch: UITouch) -> Bool {
+        guard let mapView,
+              let markerContainer = mapView.markerRuntime.markerContainerViewIfLoaded,
+              let touchView = touch.view else {
+            return true
+        }
+        return touchView.isDescendant(of: markerContainer) == false
+    }
+
     private func configureGestures(in mapView: ImmersiveMapUIView) {
         panGesture.addTarget(self, action: #selector(handlePan(_:)))
         panGesture.delegate = self
@@ -67,10 +81,12 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         mapView.addGestureRecognizer(panGesture)
 
         doubleTapGesture.addTarget(self, action: #selector(handleDoubleTap(_:)))
+        doubleTapGesture.delegate = self
         doubleTapGesture.numberOfTapsRequired = 2
         mapView.addGestureRecognizer(doubleTapGesture)
 
         tapGesture.addTarget(self, action: #selector(handleTap(_:)))
+        tapGesture.delegate = self
         tapGesture.numberOfTapsRequired = 1
         tapGesture.require(toFail: doubleTapGesture)
         mapView.addGestureRecognizer(tapGesture)

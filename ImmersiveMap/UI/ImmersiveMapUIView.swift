@@ -32,6 +32,7 @@ public class ImmersiveMapUIView: UIView {
     var renderRuntime: ImmersiveMapRenderRuntime { runtimeGraph.renderRuntime }
     var viewportRuntime: ImmersiveMapViewportRuntime { runtimeGraph.viewportRuntime }
     var avatarRuntime: ImmersiveMapAvatarRuntime { runtimeGraph.avatarRuntime }
+    var markerRuntime: ImmersiveMapMarkerRuntime { runtimeGraph.markerRuntime }
     var controlsRuntime: ImmersiveMapControlsRuntime { runtimeGraph.controlsRuntime }
     var cameraRuntime: ImmersiveMapCameraRuntime { runtimeGraph.cameraRuntime }
     var cameraCommandHandler: ImmersiveMapCameraCommandHandler { runtimeGraph.cameraCommandHandler }
@@ -75,7 +76,8 @@ public class ImmersiveMapUIView: UIView {
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
          selectionController: ImmersiveMapSelectionController?,
-         avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
+         avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+         markerContent: MarkerViewContent? = nil) {
         super.init(frame: frame)
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
@@ -83,6 +85,7 @@ public class ImmersiveMapUIView: UIView {
                                     cameraController: cameraController,
                                     selectionController: selectionController,
                                     avatarTapAction: avatarTapAction)
+        hostRuntime.updateMarkerContent(markerContent)
     }
 
     private func setup(settings: ImmersiveMapSettings,
@@ -126,6 +129,7 @@ public class ImmersiveMapUIView: UIView {
                                safeAreaInsets: safeAreaInsets)
         debugOverlayRuntime.layout(in: bounds,
                                    safeAreaTopInset: safeAreaInsets.top)
+        markerRuntime.layout(in: bounds)
     }
 
     // MARK: - Updates
@@ -136,12 +140,14 @@ public class ImmersiveMapUIView: UIView {
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
+                           markerContent: markerContent,
                            cameraPosition: cameraPosition)
     }
 

@@ -33,6 +33,7 @@ final class ImmersiveMapRuntimeGraph {
         let avatarRuntime = ImmersiveMapAvatarRuntime()
         let markerRuntime = ImmersiveMapMarkerRuntime(viewportRuntime: viewportRuntime,
                                                       renderRuntime: renderRuntime)
+        markerRuntime.attach(hostView: mapView)
         #if canImport(UIKit)
         let controlsRuntime = ImmersiveMapControlsRuntime(mapView: mapView,
                                                           mapPanGesture: gestureController.panGesture,
