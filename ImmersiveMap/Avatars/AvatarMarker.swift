@@ -10,16 +10,6 @@ import UIKit
 import AppKit
 #endif
 
-public struct GeoCoordinate: Hashable, Sendable {
-    public var latitude: Double
-    public var longitude: Double
-
-    public init(latitude: Double, longitude: Double) {
-        self.latitude = latitude
-        self.longitude = longitude
-    }
-}
-
 public struct AvatarBatteryBadge: Equatable, Hashable, Sendable {
     public let levelPct: Int
     public let isPlaceholder: Bool
