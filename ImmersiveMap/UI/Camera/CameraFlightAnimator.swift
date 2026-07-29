@@ -22,7 +22,8 @@ final class CameraFlightAnimator {
         let targetState: ImmersiveMapCameraState
         let duration: TimeInterval
         let routeStyle: ResolvedRouteStyle
-        let altitudeStyle: CameraFlightAltitudeStyle
+        /// nil означает прямую интерполяцию зума (`.direct` или вырожденный маршрут).
+        let overviewProfile: CameraFlightMath.OverviewFlightProfile?
         let startTime: CFTimeInterval
     }
 
@@ -49,9 +50,35 @@ final class CameraFlightAnimator {
                         targetState: targetState,
                         duration: sanitizedDuration,
                         routeStyle: routeStyle,
-                        altitudeStyle: altitudeStyle,
+                        overviewProfile: Self.makeOverviewProfile(from: startState,
+                                                                  to: targetState,
+                                                                  routeStyle: routeStyle,
+                                                                  altitudeStyle: altitudeStyle),
                         startTime: currentTime)
         return true
+    }
+
+    private static func makeOverviewProfile(from startState: ImmersiveMapCameraState,
+                                            to targetState: ImmersiveMapCameraState,
+                                            routeStyle: ResolvedRouteStyle,
+                                            altitudeStyle: CameraFlightAltitudeStyle)
+        -> CameraFlightMath.OverviewFlightProfile? {
+        guard altitudeStyle == .overviewFirst else {
+            return nil
+        }
+
+        let routeDistance: Double
+        switch routeStyle {
+        case .mercatorShortestPath:
+            routeDistance = CameraFlightMath.mercatorRouteDistance(from: startState.centerWorldMercator,
+                                                                   to: targetState.centerWorldMercator)
+        case .greatCircle:
+            routeDistance = CameraFlightMath.greatCircleRouteDistance(from: startState.centerWorldMercator,
+                                                                      to: targetState.centerWorldMercator)
+        }
+        return CameraFlightMath.OverviewFlightProfile.make(startZoom: startState.zoom,
+                                                           targetZoom: targetState.zoom,
+                                                           normalizedWorldDistance: routeDistance)
     }
 
     func advance(currentTime: CFTimeInterval) -> Step? {
@@ -62,26 +89,27 @@ final class CameraFlightAnimator {
         let rawProgress = flight.duration > 0 ? (currentTime - flight.startTime) / flight.duration : 1
         let clampedProgress = min(max(rawProgress, 0), 1)
         let easedProgress = CameraFlightMath.easeInOutCubic(clampedProgress)
+        // Профиль связывает пан и зум: у земли центр почти стоит, основную
+        // дистанцию камера проходит на апексе, поэтому пан идёт по panProgress.
+        let overviewSample = flight.overviewProfile?.sample(atProgress: easedProgress)
+        let panProgress = overviewSample?.panProgress ?? easedProgress
         let centerWorldMercator: SIMD2<Double>
         switch flight.routeStyle {
         case .mercatorShortestPath:
             centerWorldMercator = CameraFlightMath.mercatorCenter(from: flight.startState.centerWorldMercator,
                                                                   to: flight.targetState.centerWorldMercator,
-                                                                  progress: easedProgress)
+                                                                  progress: panProgress)
         case .greatCircle:
             centerWorldMercator = CameraFlightMath.greatCircleCenter(from: flight.startState.centerWorldMercator,
                                                                      to: flight.targetState.centerWorldMercator,
-                                                                     progress: easedProgress)
+                                                                     progress: panProgress)
             ?? CameraFlightMath.mercatorCenter(from: flight.startState.centerWorldMercator,
                                                to: flight.targetState.centerWorldMercator,
-                                               progress: easedProgress)
+                                               progress: panProgress)
         }
 
-        let zoom = CameraFlightMath.interpolatedZoom(from: flight.startState,
-                                                     to: flight.targetState,
-                                                     rawProgress: clampedProgress,
-                                                     easedProgress: easedProgress,
-                                                     altitudeStyle: flight.altitudeStyle)
+        let zoom = overviewSample?.zoom
+            ?? flight.startState.zoom + (flight.targetState.zoom - flight.startState.zoom) * easedProgress
         let bearing = CameraFlightMath.interpolateBearing(from: flight.startState.bearing,
                                                           to: flight.targetState.bearing,
                                                           progress: easedProgress)

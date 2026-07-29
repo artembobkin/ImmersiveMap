@@ -73,23 +73,96 @@ enum CameraFlightMath {
                       start.y + (end.y - start.y) * progress)
     }
 
-    static func interpolatedZoom(from startState: ImmersiveMapCameraState,
-                                 to targetState: ImmersiveMapCameraState,
-                                 rawProgress: Double,
-                                 easedProgress: Double,
-                                 altitudeStyle: CameraFlightAltitudeStyle) -> Double {
-        switch altitudeStyle {
-        case .direct:
-            return startState.zoom + (targetState.zoom - startState.zoom) * easedProgress
-        case .overviewFirst:
-            let clampedProgress = min(max(rawProgress, 0), 1)
-            let delayedZoomProgress = clampedProgress
-                * clampedProgress
-                * clampedProgress
-                * clampedProgress
-                * clampedProgress
-                * clampedProgress
-            return startState.zoom + (targetState.zoom - startState.zoom) * delayedZoomProgress
+    /// Длина маршрута по кратчайшему mercator-пути в нормализованных мировых
+    /// координатах (1.0 = полный оборот по x).
+    static func mercatorRouteDistance(from start: SIMD2<Double>,
+                                      to end: SIMD2<Double>) -> Double {
+        let deltaX = shortestWrappedWorldDelta(from: start.x, to: end.x)
+        return simd_length(SIMD2<Double>(deltaX, end.y - start.y))
+    }
+
+    /// Длина маршрута по большой дуге в тех же единицах: доля экваториальной
+    /// окружности (угол дуги / 2π), чтобы быть сопоставимой с mercator-дистанцией.
+    static func greatCircleRouteDistance(from start: SIMD2<Double>,
+                                         to end: SIMD2<Double>) -> Double {
+        let startVector = normalizedCartesian(
+            latitudeRadians: ImmersiveMapProjection.latitude(fromNormalizedWorldY: start.y),
+            longitudeRadians: ImmersiveMapProjection.longitude(fromNormalizedWorldX: start.x)
+        )
+        let endVector = normalizedCartesian(
+            latitudeRadians: ImmersiveMapProjection.latitude(fromNormalizedWorldY: end.y),
+            longitudeRadians: ImmersiveMapProjection.longitude(fromNormalizedWorldX: end.x)
+        )
+        let dotProduct = min(1.0, max(-1.0, simd_dot(startVector, endVector)))
+        return acos(dotProduct) / (2.0 * .pi)
+    }
+
+    /// Траектория зума и пана «взлёт, полёт, пикирование» по van Wijk и Nuij
+    /// ("Smooth and efficient zooming and panning", 2003). Высота апекса растёт
+    /// с дальностью перелёта вплоть до вида глобуса, а скорость пана связана
+    /// с высотой: у земли камера ползёт, на апексе покрывает основную дистанцию.
+    struct OverviewFlightProfile {
+        struct Sample {
+            /// Прогресс центра камеры вдоль маршрута в [0, 1].
+            let panProgress: Double
+            let zoom: Double
+        }
+
+        /// Крутизна дуги: чем больше, тем выше апекс. 1.42 - значение из
+        /// оригинальной статьи, его же использует Mapbox flyTo.
+        private static let rho = 1.42
+        private static let distanceEpsilon = 1e-9
+
+        private let startVisibleSpan: Double
+        private let routeDistance: Double
+        private let startR: Double
+        private let totalS: Double
+        private let coshStartR: Double
+        private let sinhStartR: Double
+
+        /// Возвращает nil для вырожденных перелётов (нет горизонтального
+        /// смещения), где траектория совпадает с прямой интерполяцией зума.
+        static func make(startZoom: Double,
+                         targetZoom: Double,
+                         normalizedWorldDistance: Double) -> OverviewFlightProfile? {
+            let routeDistance = normalizedWorldDistance
+            guard routeDistance.isFinite, routeDistance > distanceEpsilon else {
+                return nil
+            }
+
+            // Видимая ширина мира w = 2^-zoom: единицы согласованы с мировой
+            // дистанцией, константа вьюпорта на форму дуги не влияет.
+            let startSpan = pow(2.0, -startZoom)
+            let targetSpan = pow(2.0, -targetZoom)
+            let rhoSquared = rho * rho
+            let spanDelta = targetSpan * targetSpan - startSpan * startSpan
+            let arcTerm = rhoSquared * rhoSquared * routeDistance * routeDistance
+            let b0 = (spanDelta + arcTerm) / (2.0 * startSpan * rhoSquared * routeDistance)
+            let b1 = (spanDelta - arcTerm) / (2.0 * targetSpan * rhoSquared * routeDistance)
+            // r(b) = ln(sqrt(b^2 + 1) - b) = -asinh(b), asinh численно стабильнее.
+            let startR = -asinh(b0)
+            let targetR = -asinh(b1)
+            let totalS = (targetR - startR) / rho
+            guard totalS.isFinite, totalS > 0 else {
+                return nil
+            }
+
+            return OverviewFlightProfile(startVisibleSpan: startSpan,
+                                         routeDistance: routeDistance,
+                                         startR: startR,
+                                         totalS: totalS,
+                                         coshStartR: cosh(startR),
+                                         sinhStartR: sinh(startR))
+        }
+
+        func sample(atProgress progress: Double) -> Sample {
+            let clampedProgress = min(max(progress, 0), 1)
+            let x = Self.rho * clampedProgress * totalS + startR
+            let traveled = startVisibleSpan / (Self.rho * Self.rho)
+                * (coshStartR * tanh(x) - sinhStartR)
+            let visibleSpan = startVisibleSpan * coshStartR / cosh(x)
+            return Sample(panProgress: min(max(traveled / routeDistance, 0), 1),
+                          zoom: -log2(visibleSpan))
         }
     }
 

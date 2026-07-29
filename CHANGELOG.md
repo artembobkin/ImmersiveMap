@@ -14,6 +14,7 @@ once the public API stabilizes.
 
 ### Changed
 
+- `CameraFlightAltitudeStyle.overviewFirst` now flies a true van Wijk & Nuij overview arc: the camera climbs out (up to a full-globe view for intercontinental flights, proportionally lower for short hops), covers the distance at the apex, then dives to the target. Pan speed is coupled to altitude, so the camera crawls near the ground instead of streaking across street-level tiles. Previously the style merely delayed a direct zoom interpolation, so long flights panned the whole route at the start zoom.
 - Renamed the avatar tap API: the `onMarkerTap` modifier is now `onAvatarTap`, and `ImmersiveMapMarkerTapEvent` is now `ImmersiveMapAvatarTapEvent` (same fields). No compatibility shims. The term "marker" is freed up for the upcoming SwiftUI marker overlay API. The avatars guide moved from `Documentation/docs/markers.md` to `Documentation/docs/avatars.md`.
 
 ## [0.3.0] - 2026-07-24
