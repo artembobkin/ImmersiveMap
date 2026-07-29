@@ -1,6 +1,6 @@
-# Markers
+# Avatars
 
-Markers (avatars) are owned by an `ImmersiveMapAvatarsController`. The controller is thread-safe - call its methods from any thread and the map redraws itself (rendering is on-demand, so idle markers cost nothing). Attach it with `.avatars(_:)`:
+Avatar markers are owned by an `ImmersiveMapAvatarsController`. For anchoring arbitrary SwiftUI views to coordinates see [SwiftUI markers](markers.md); avatars are the GPU-atlas path for large numbers of uniform, image-based markers. The controller is thread-safe - call its methods from any thread and the map redraws itself (rendering is on-demand, so idle markers cost nothing). Attach it with `.avatars(_:)`:
 
 ```swift
 struct MapScreen: View {

@@ -8,6 +8,10 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Added
+
+- Declarative SwiftUI markers: `.markers(items, coordinate:anchor:content:)` on `ImmersiveMapView` anchors arbitrary SwiftUI views to geographic coordinates. Markers are repositioned every rendered frame (flat, globe, and through the morph, riding the unfurl wave), fade behind the globe horizon, and stay fully interactive: buttons and gestures inside marker content work while the map keeps gestures elsewhere. See `Documentation/docs/markers.md`.
+
 ### Changed
 
 - Renamed the avatar tap API: the `onMarkerTap` modifier is now `onAvatarTap`, and `ImmersiveMapMarkerTapEvent` is now `ImmersiveMapAvatarTapEvent` (same fields). No compatibility shims. The term "marker" is freed up for the upcoming SwiftUI marker overlay API. The avatars guide moved from `Documentation/docs/markers.md` to `Documentation/docs/avatars.md`.
