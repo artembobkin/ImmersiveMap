@@ -11,13 +11,16 @@ import Foundation
 final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendable {
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
+    private weak var markerRuntime: ImmersiveMapMarkerRuntime?
     private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore
 
     init(renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
+         markerRuntime: ImmersiveMapMarkerRuntime,
          debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore) {
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
+        self.markerRuntime = markerRuntime
         self.debugOverlayHUDSnapshotStore = debugOverlayHUDSnapshotStore
     }
 
@@ -37,5 +40,14 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
 
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {
         debugOverlayHUDSnapshotStore.publish(snapshot)
+    }
+
+    func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {
+        // Единственный вызов: RenderFrameEngine.renderFrame на main thread
+        // (display link в main runloop). Без hop: снапшот должен примениться
+        // в той же CA-транзакции, что и present этого кадра.
+        MainActor.assumeIsolated {
+            markerRuntime?.apply(snapshot)
+        }
     }
 }

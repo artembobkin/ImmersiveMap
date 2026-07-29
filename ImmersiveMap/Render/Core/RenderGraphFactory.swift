@@ -29,6 +29,7 @@ enum RenderGraphFactory {
         let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
                                                     avatarSource: context.avatarSource,
                                                     depthDisabledState: context.depthDisabledState)
+        let markerSubsystem = MarkerRenderSubsystem(markerSource: context.markerSource)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls)
@@ -61,6 +62,7 @@ enum RenderGraphFactory {
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,
+            markerSubsystem,
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,

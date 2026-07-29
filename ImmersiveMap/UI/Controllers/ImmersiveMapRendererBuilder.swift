@@ -9,6 +9,7 @@ import QuartzCore
 final class ImmersiveMapRendererBuilder {
     private let cameraRuntime: ImmersiveMapCameraRuntime
     private let avatarRuntime: ImmersiveMapAvatarRuntime
+    private let markerRuntime: ImmersiveMapMarkerRuntime
     private let renderRuntime: ImmersiveMapRenderRuntime
     private let selectionHandler: ImmersiveMapSelectionHandler
     private let debugOverlayControls: DebugOverlayControlState
@@ -18,6 +19,7 @@ final class ImmersiveMapRendererBuilder {
 
     init(cameraRuntime: ImmersiveMapCameraRuntime,
          avatarRuntime: ImmersiveMapAvatarRuntime,
+         markerRuntime: ImmersiveMapMarkerRuntime,
          renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
          debugOverlayControls: DebugOverlayControlState,
@@ -26,6 +28,7 @@ final class ImmersiveMapRendererBuilder {
          baseLabelTraceRecorder: BaseLabelTraceRecorder) {
         self.cameraRuntime = cameraRuntime
         self.avatarRuntime = avatarRuntime
+        self.markerRuntime = markerRuntime
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
         self.debugOverlayControls = debugOverlayControls
@@ -41,10 +44,12 @@ final class ImmersiveMapRendererBuilder {
                                                           cameraPosition: cameraPosition)
         let eventSink = ImmersiveMapRenderEventSink(renderRuntime: renderRuntime,
                                                     selectionHandler: selectionHandler,
+                                                    markerRuntime: markerRuntime,
                                                     debugOverlayHUDSnapshotStore: debugOverlayHUDSnapshotStore)
         let providerRuntime = ImmersiveMapProviderRuntimeContext(settings: settings)
         return RenderFrameEngine(layer: layer,
                                  avatarSource: avatarRuntime,
+                                 markerSource: markerRuntime,
                                  providerRuntime: providerRuntime,
                                  settings: settings,
                                  debugOverlayControls: debugOverlayControls,

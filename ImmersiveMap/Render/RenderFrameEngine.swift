@@ -36,6 +36,7 @@ final class RenderFrameEngine {
 
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
+         markerSource: MarkerRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          settings: ImmersiveMapSettings = .default,
          debugOverlayControls: DebugOverlayControlState = DebugOverlayControlState(),
@@ -46,6 +47,7 @@ final class RenderFrameEngine {
          baseLabelTraceRecorder: BaseLabelTraceRecorder) {
         let persistentContext = RenderPersistentContext(layer: layer,
                                                         avatarSource: avatarSource,
+                                                        markerSource: markerSource,
                                                         providerRuntime: providerRuntime,
                                                         config: settings,
                                                         eventSink: eventSink,
@@ -144,6 +146,12 @@ final class RenderFrameEngine {
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations))
+        // Синхронно и в том же кадре: позиции SwiftUI-маркеров должны попасть
+        // в ту же CA-транзакцию, что и present этого кадра. При didSchedule ==
+        // false экран показывает старый кадр, и публиковать нечего.
+        if didSchedule, let markerProjectionSnapshot = frameContext.sharedState.markerState.snapshot {
+            eventSink.updateMarkerProjectionSnapshot(markerProjectionSnapshot)
+        }
         publishDebugOverlayHUDSnapshot(frameContext: frameContext)
 
         currentDiagnostics = frameContext.diagnostics

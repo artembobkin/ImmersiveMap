@@ -78,6 +78,14 @@ struct AvatarState {
     var selectionSnapshot: AvatarSelectionSnapshot
 }
 
+struct MarkerFrameState {
+    static let empty = MarkerFrameState(snapshot: nil)
+
+    /// nil: маркеров нет, публиковать нечего. Пустой снапшот: маркеры есть,
+    /// но все скрыты, и UI обязан спрятать view.
+    var snapshot: MarkerProjectionSnapshot?
+}
+
 final class FrameContextSharedState {
     var tilePlacementState: TilePlacementState = .empty
     var placeTileTrackingState: PlaceTileTrackingState = .empty
@@ -87,4 +95,5 @@ final class FrameContextSharedState {
     var baseLabelDebugBoxesState: BaseLabelDebugBoxesState = .empty
     var roadLabelState: RoadLabelState = .empty
     var avatarState: AvatarState = .empty
+    var markerState: MarkerFrameState = .empty
 }

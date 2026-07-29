@@ -43,6 +43,7 @@ final class RenderPersistentContext {
     // MARK: - Avatar and Debug Resources
 
     let avatarSource: AvatarRenderSource
+    let markerSource: MarkerRenderSource
     let avatarsRenderer: AvatarsRenderer
     let debugOverlayRenderer: DebugOverlayRenderer
     let tileTraceRecorder: TileTraceRecorder
@@ -53,6 +54,7 @@ final class RenderPersistentContext {
 
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
+         markerSource: MarkerRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -109,6 +111,7 @@ final class RenderPersistentContext {
                                              textRenderer: textRenderer)
 
         self.avatarSource = avatarSource
+        self.markerSource = markerSource
         self.avatarsRenderer = AvatarsRenderer(metalDevice: metal.device,
                                                layer: layer,
                                                library: metal.library,

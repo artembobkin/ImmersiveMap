@@ -35,6 +35,7 @@ let package = Package(
                 "Globe/README.md",
                 "ImmersiveMap.docc/README.md",
                 "Labels/README.md",
+                "Markers/README.md",
                 "Presentation/README.md",
                 "Proto/README.md",
                 "Render/README.md",

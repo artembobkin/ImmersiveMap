@@ -20,4 +20,8 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     func applyActivityState(_ state: RenderActivityState)
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?)
+    /// В отличие от `updateAvatarSelectionSnapshot` (completion handler,
+    /// off-main) зовётся синхронно из render-цикла на main thread, чтобы
+    /// позиции маркеров применились в той же CA-транзакции, что и кадр.
+    func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot)
 }

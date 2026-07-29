@@ -11,6 +11,7 @@ final class ImmersiveMapRuntimeGraph {
     let renderRuntime: ImmersiveMapRenderRuntime
     let viewportRuntime: ImmersiveMapViewportRuntime
     let avatarRuntime: ImmersiveMapAvatarRuntime
+    let markerRuntime: ImmersiveMapMarkerRuntime
     let controlsRuntime: ImmersiveMapControlsRuntime
     let cameraRuntime: ImmersiveMapCameraRuntime
     let interactionRuntime: ImmersiveMapInteractionRuntime
@@ -30,6 +31,8 @@ final class ImmersiveMapRuntimeGraph {
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: settings.renderLoop)
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let avatarRuntime = ImmersiveMapAvatarRuntime()
+        let markerRuntime = ImmersiveMapMarkerRuntime(viewportRuntime: viewportRuntime,
+                                                      renderRuntime: renderRuntime)
         #if canImport(UIKit)
         let controlsRuntime = ImmersiveMapControlsRuntime(mapView: mapView,
                                                           mapPanGesture: gestureController.panGesture,
@@ -70,6 +73,7 @@ final class ImmersiveMapRuntimeGraph {
                                                 cameraRuntime: cameraRuntime)
         let rendererBuilder = ImmersiveMapRendererBuilder(cameraRuntime: cameraRuntime,
                                                           avatarRuntime: avatarRuntime,
+                                                          markerRuntime: markerRuntime,
                                                           renderRuntime: renderRuntime,
                                                           selectionHandler: selectionHandler,
                                                           debugOverlayControls: debugOverlayControls,
@@ -85,6 +89,7 @@ final class ImmersiveMapRuntimeGraph {
         self.renderRuntime = renderRuntime
         self.viewportRuntime = viewportRuntime
         self.avatarRuntime = avatarRuntime
+        self.markerRuntime = markerRuntime
         self.controlsRuntime = controlsRuntime
         self.cameraRuntime = cameraRuntime
         self.interactionRuntime = interactionRuntime
