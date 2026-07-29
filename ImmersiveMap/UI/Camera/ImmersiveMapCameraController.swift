@@ -24,6 +24,10 @@ public final class ImmersiveMapCameraController {
     public var onCameraPositionChanged: ((ImmersiveMapCameraPosition) -> Void)?
     public var onCameraSnapshotChanged: ((ImmersiveMapCameraSnapshot) -> Void)?
 
+    /// Внутренние подписчики начала пользовательского жеста (например, камера-тур).
+    /// Отдельный список, чтобы не конфликтовать с публичным `onUserInteractionBegan`.
+    @MainActor private var userInteractionObservers: [UUID: () -> Void] = [:]
+
     public init() {}
 
     public func jump(to position: ImmersiveMapCameraPosition) {
@@ -99,8 +103,19 @@ public final class ImmersiveMapCameraController {
         onMapBackgroundTap?()
     }
 
-    func notifyUserInteractionBegan() {
+    @MainActor func addUserInteractionObserver(_ observer: @escaping () -> Void) -> UUID {
+        let token = UUID()
+        userInteractionObservers[token] = observer
+        return token
+    }
+
+    @MainActor func removeUserInteractionObserver(_ token: UUID) {
+        userInteractionObservers[token] = nil
+    }
+
+    @MainActor func notifyUserInteractionBegan() {
         onUserInteractionBegan?()
+        userInteractionObservers.values.forEach { $0() }
     }
 
     func notifyCameraPositionChanged(_ position: ImmersiveMapCameraPosition) {

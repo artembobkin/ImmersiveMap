@@ -10,6 +10,7 @@ once the public API stabilizes.
 
 ### Added
 
+- `ImmersiveMapCameraTourController`: runs the camera through a sequence of `ImmersiveMapCameraTourShot`s (position, flight options, hold time), chaining flights back to back. Supports an optional establishing jump, looping, a finish callback, and stops automatically when the user starts a gesture (without occupying the public `onUserInteractionBegan` callback). Useful for cinematic fly-throughs, demo reels, and onboarding tours.
 - Declarative SwiftUI markers: `.markers(items, coordinate:anchor:content:)` on `ImmersiveMapView` anchors arbitrary SwiftUI views to geographic coordinates. Markers are repositioned every rendered frame (flat, globe, and through the morph, riding the unfurl wave), fade behind the globe horizon, and stay fully interactive: buttons and gestures inside marker content work while the map keeps gestures elsewhere. See `Documentation/docs/markers.md`.
 
 ### Changed
