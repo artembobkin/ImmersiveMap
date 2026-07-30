@@ -11,6 +11,7 @@ once the public API stabilizes.
 ### Fixed
 
 - Avatar markers now project through the same shared projector as tiles and SwiftUI markers (`GeoScreenProjectionMath`): the unfurl-wave morph and the soft per-point horizon. Previously avatars used a plain sphere-to-plane lerp with a stale horizon threshold, so mid-morph at high tilt a far-away avatar (Moscow with the camera over Dubai) drifted across the screen, floated above the horizon and popped in and out while zooming. The duplicated projection math in `AvatarSelectionProjector` is gone.
+- Markers far behind the globe horizon no longer flash across the viewport at the tail of the globe-to-flat morph. The unfurl wave carries such a point from the far side of the sphere to its flat position far off-screen, and for a few frames the trajectory crossed the visible area over empty ocean (tiles never render that far coverage mid-flight). During the morph a marker now stays hidden unless its sphere position is within the spherical horizon plus a margin for what the unfurl legitimately brings into view.
 
 ## [0.4.0] - 2026-07-30
 

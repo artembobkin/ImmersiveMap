@@ -221,6 +221,34 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.visibilityAlpha, 0.0)
     }
 
+    /// Регресс «пролетающих» маркеров: в хвосте морфа локальная фаза дальней
+    /// точки уже ~1 (позиция уехала со сферы к плоскому месту и по пути может
+    /// пересекать вьюпорт), но глобальный transition ещё < 0.95. Точка из-за
+    /// горизонта СФЕРЫ обязана оставаться скрытой весь морф: Лондон при
+    /// камере над Токио не должен мигать над пустым океаном.
+    func testLateMorphKeepsFarMarkerHiddenDuringUnfurlTransit() throws {
+        let tokyoLatitude = 35.6595
+        let latitudeExtension = log2(1.0 / cos(tokyoLatitude * .pi / 180.0))
+        let lateMorphZoom = presentationSettings.automaticTransitionStartZoom
+            + (presentationSettings.automaticTransitionSpan + latitudeExtension) * 0.79
+        let environment = try makeEnvironment(
+            cameraState: makeCameraState(latitude: tokyoLatitude,
+                                         longitude: 139.7005,
+                                         zoom: lateMorphZoom,
+                                         pitch: 1.28))
+        XCTAssertEqual(environment.constants.mode, .globe)
+        XCTAssertGreaterThan(environment.constants.globe.transition, 0.8)
+        XCTAssertLessThan(environment.constants.globe.transition, 0.95)
+
+        let london = GeoProjectionBasis(coordinate: GeoCoordinate(latitude: 51.5072,
+                                                                  longitude: -0.1276))
+        let point = GeoScreenProjectionMath.project(basis: london,
+                                                    constants: environment.constants)
+
+        XCTAssertEqual(point.visible, 0)
+        XCTAssertEqual(point.visibilityAlpha, 0.0)
+    }
+
     /// При почти завершённом морфе (геометрия уже плоская, поверхность ещё
     /// globe) бывшая обратная сторона легитимно видима. Камера на экваторе:
     /// на широте окно морфа растягивается на log2(1/cos(lat)), и доля фазы
