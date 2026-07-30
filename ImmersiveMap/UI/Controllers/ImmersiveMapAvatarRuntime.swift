@@ -24,19 +24,19 @@ final class ImmersiveMapAvatarRuntime: @preconcurrency AvatarRenderSource {
             return
         }
 
-        controller?.setChangeHandler(nil)
+        controller?.clearChangeHandler(ownedBy: self)
         controller = newController
-        newController?.setChangeHandler { [weak selectionHandler, weak renderRuntime] in
+        newController?.setChangeHandler({ [weak selectionHandler, weak renderRuntime] in
             selectionHandler?.handleAvatarControllerDidChange()
             renderRuntime?.requestFrame()
-        }
+        }, owner: self)
         newController?.markSnapshotDirty()
         selectionHandler.syncSelectionWithAvailableMapObjects()
         renderRuntime.requestFrame()
     }
 
     func detachController() {
-        controller?.setChangeHandler(nil)
+        controller?.clearChangeHandler(ownedBy: self)
         controller = nil
     }
 

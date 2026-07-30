@@ -149,7 +149,10 @@ final class ImmersiveMapHostRuntime {
     }
 
     private func recreateRenderer(with settings: ImmersiveMapSettings) {
-        runtimeGraph.cameraAnimationRuntime.cancelAnimations(notifyFlightCompletion: false)
+        // Активный перелёт гасится С завершением (success == false): молча
+        // проглоченный completion вешает цепочки fly навсегда (например,
+        // камера-тур ждёт continuation, который иначе никогда не резюмится).
+        runtimeGraph.cameraAnimationRuntime.cancelAnimations()
         let cameraPosition = runtimeGraph.cameraRuntime.cameraPositionForRendererRecreation()
         runtimeGraph.renderRuntime.detachRenderer()
         renderer = nil

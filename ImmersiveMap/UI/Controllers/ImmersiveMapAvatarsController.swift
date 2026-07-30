@@ -45,6 +45,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
     private var version: UInt64 = 0
     private var hasChanges: Bool = false
     private var changeHandler: (() -> Void)?
+    private weak var changeHandlerOwner: AnyObject?
 
     public convenience init() {
         self.init(imageLoader: { url in
@@ -458,9 +459,22 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         imageCycleTimersById.removeValue(forKey: mergedID)?.cancel()
     }
 
-    func setChangeHandler(_ handler: (() -> Void)?) {
+    func setChangeHandler(_ handler: (() -> Void)?, owner: AnyObject) {
         lock.lock()
         changeHandler = handler
+        changeHandlerOwner = owner
+        lock.unlock()
+    }
+
+    /// Чистит хендлер только если им всё ещё владеет `owner`: демонтаж
+    /// старого host view не должен отвязывать контроллер от нового view,
+    /// который уже перепривязал его к себе.
+    func clearChangeHandler(ownedBy owner: AnyObject) {
+        lock.lock()
+        if changeHandlerOwner === owner {
+            changeHandler = nil
+            changeHandlerOwner = nil
+        }
         lock.unlock()
     }
 

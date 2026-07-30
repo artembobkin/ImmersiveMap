@@ -35,10 +35,9 @@ final class ImmersiveMapSelectionHandler {
             return
         }
 
-        selectionController?.setCommandHandler(nil)
-        selectionController?.updateCurrentSelection(nil)
+        selectionController?.detachHandler(ownedBy: self)
         selectionController = newSelectionController
-        newSelectionController?.setCommandHandler { [weak self] command in
+        newSelectionController?.attachHandler(owner: self) { [weak self] command in
             self?.handle(command) ?? false
         }
         newSelectionController?.updateCurrentSelection(currentSelection)

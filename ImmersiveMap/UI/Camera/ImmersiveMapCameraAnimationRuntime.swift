@@ -142,11 +142,11 @@ final class ImmersiveMapCameraAnimationRuntime {
         refreshRenderingState()
     }
 
-    func cancelAnimations(notifyFlightCompletion: Bool = true) {
+    func cancelAnimations() {
         cancelGlobeCameraPanInertia()
         cancelCameraPitchFollow()
         cancelCameraBearingFollow()
-        flightController.cancel(notifyCompletion: notifyFlightCompletion)
+        flightController.cancel(notifyCompletion: true)
     }
 
     func advanceAnimationsIfNeeded(currentTime: CFTimeInterval) {

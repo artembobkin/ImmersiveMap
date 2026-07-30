@@ -78,9 +78,9 @@ final class AvatarMergedMarkersTests: XCTestCase {
 
         let cycled = expectation(description: "Таймер цикла сменил картинку merged-маркера")
         cycled.assertForOverFulfill = false
-        controller.setChangeHandler {
+        controller.setChangeHandler({
             cycled.fulfill()
-        }
+        }, owner: self)
 
         wait(for: [cycled], timeout: 2.0)
         let merged = try XCTUnwrap(controller.marker(id: mergedID))

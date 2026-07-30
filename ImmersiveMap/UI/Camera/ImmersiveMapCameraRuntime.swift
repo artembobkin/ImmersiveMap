@@ -59,11 +59,9 @@ final class ImmersiveMapCameraRuntime {
             return
         }
 
-        controller?.setCommandHandler(nil)
-        controller?.updateCurrentCameraPosition(nil)
-        controller?.updateCurrentCameraSnapshot(nil)
+        controller?.detachRuntime(owner: self)
         controller = newController
-        newController?.setCommandHandler { command in
+        newController?.attachRuntime(owner: self) { command in
             commandHandler.handle(command)
         }
         newController?.updateCurrentCameraPosition(currentCameraPosition())
@@ -71,9 +69,7 @@ final class ImmersiveMapCameraRuntime {
     }
 
     func detachController() {
-        controller?.setCommandHandler(nil)
-        controller?.updateCurrentCameraPosition(nil)
-        controller?.updateCurrentCameraSnapshot(nil)
+        controller?.detachRuntime(owner: self)
         controller = nil
     }
 

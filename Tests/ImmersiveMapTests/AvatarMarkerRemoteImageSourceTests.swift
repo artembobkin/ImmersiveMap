@@ -46,9 +46,9 @@ final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
         let initialSnapshot = try XCTUnwrap(controller.consumeSnapshot())
         XCTAssertEqual(initialSnapshot.markers.first?.image.width, 1)
 
-        controller.setChangeHandler {
+        controller.setChangeHandler({
             updatePublished.fulfill()
-        }
+        }, owner: self)
         loadContinuation.withLock { $0 }?.resume(returning: loadedImage)
 
         await fulfillment(of: [updatePublished], timeout: 1.0)

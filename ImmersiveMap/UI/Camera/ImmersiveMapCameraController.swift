@@ -18,6 +18,9 @@ public final class ImmersiveMapCameraController {
     private var currentSnapshot: ImmersiveMapCameraSnapshot?
     private var pendingCommands: [ImmersiveMapCameraCommand] = []
     private var commandHandler: ((ImmersiveMapCameraCommand) -> Void)?
+    /// Владелец текущей привязки (camera runtime конкретного host view).
+    /// Читается и пишется только на main (см. performOnMain).
+    private weak var runtimeOwner: AnyObject?
 
     public var onMapBackgroundTap: (() -> Void)?
     public var onUserInteractionBegan: (() -> Void)?
@@ -63,16 +66,33 @@ public final class ImmersiveMapCameraController {
         return currentSnapshot
     }
 
-    func setCommandHandler(_ handler: ((ImmersiveMapCameraCommand) -> Void)?) {
+    /// Привязывает контроллер к runtime карты и реиграет накопленные команды.
+    /// `owner` запоминается, чтобы отвязка была строго по владельцу.
+    func attachRuntime(owner: AnyObject,
+                       commandHandler: @escaping (ImmersiveMapCameraCommand) -> Void) {
         performOnMain {
-            self.commandHandler = handler
-            guard let handler else {
+            self.runtimeOwner = owner
+            self.commandHandler = commandHandler
+            let commands = self.pendingCommands
+            self.pendingCommands.removeAll(keepingCapacity: true)
+            commands.forEach(commandHandler)
+        }
+    }
+
+    /// Отвязывает контроллер только если им всё ещё владеет `owner`.
+    /// SwiftUI сначала создаёт новый host view, затем демонтирует старый:
+    /// демонтаж старого не должен стирать привязку и кэши, которые уже
+    /// установил новый view для того же контроллера.
+    func detachRuntime(owner: AnyObject) {
+        performOnMain {
+            guard self.runtimeOwner === owner else {
                 return
             }
 
-            let commands = self.pendingCommands
-            self.pendingCommands.removeAll(keepingCapacity: true)
-            commands.forEach(handler)
+            self.runtimeOwner = nil
+            self.commandHandler = nil
+            self.updateCurrentCameraPosition(nil)
+            self.updateCurrentCameraSnapshot(nil)
         }
     }
 

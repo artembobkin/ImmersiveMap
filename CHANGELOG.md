@@ -13,6 +13,12 @@ once the public API stabilizes.
 - `ImmersiveMapCameraTourController`: runs the camera through a sequence of `ImmersiveMapCameraTourShot`s (position, flight options, hold time), chaining flights back to back. Supports an optional establishing jump, looping, a finish callback, and stops automatically when the user starts a gesture (without occupying the public `onUserInteractionBegan` callback). Useful for cinematic fly-throughs, demo reels, and onboarding tours.
 - Declarative SwiftUI markers: `.markers(items, coordinate:anchor:content:)` on `ImmersiveMapView` anchors arbitrary SwiftUI views to geographic coordinates. Markers are repositioned every rendered frame (flat, globe, and through the morph, riding the unfurl wave), fade behind the globe horizon, and stay fully interactive: buttons and gestures inside marker content work while the map keeps gestures elsewhere. See `Documentation/docs/markers.md`.
 
+### Fixed
+
+- Toggling `enableCameraUIControls` no longer tears down and recreates the whole platform map view: the SwiftUI body keeps one stable view identity, so the renderer, tile caches and controller attachments survive UI chrome toggles.
+- A dismantled host view no longer detaches camera, avatars and selection controllers from a newer host view that reuses them (SwiftUI creates the replacement representable before dismantling the old one). Detach is now ownership-checked, which unbreaks camera commands, including `ImmersiveMapCameraTourController` tours, across view recreation.
+- Renderer recreation now completes an active camera flight with `success == false` instead of silently swallowing its completion, so chained `fly` calls cannot hang on a never-resumed continuation.
+
 ### Changed
 
 - `CameraFlightAltitudeStyle.overviewFirst` now flies a true van Wijk & Nuij overview arc: the camera climbs out (up to a full-globe view for intercontinental flights, proportionally lower for short hops), covers the distance at the apex, then dives to the target. Pan speed is coupled to altitude, so the camera crawls near the ground instead of streaking across street-level tiles. Previously the style merely delayed a direct zoom interpolation, so long flights panned the whole route at the start zoom.

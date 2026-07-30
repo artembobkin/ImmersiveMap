@@ -68,6 +68,8 @@ enum ImmersiveMapSelectionCommand {
 public final class ImmersiveMapSelectionController {
     private var selectedSelection: ImmersiveMapSelection?
     private var commandHandler: ((ImmersiveMapSelectionCommand) -> Bool)?
+    /// Владелец текущей привязки (selection handler конкретного host view).
+    private weak var handlerOwner: AnyObject?
 
     public var onSelectionChanged: ((ImmersiveMapSelectionChangeEvent) -> Void)?
     public var onSelectionCleared: ((ImmersiveMapSelectionClearEvent) -> Void)?
@@ -89,8 +91,22 @@ public final class ImmersiveMapSelectionController {
         commandHandler?(.clear) ?? false
     }
 
-    func setCommandHandler(_ handler: ((ImmersiveMapSelectionCommand) -> Bool)?) {
+    func attachHandler(owner: AnyObject,
+                       _ handler: @escaping (ImmersiveMapSelectionCommand) -> Bool) {
+        handlerOwner = owner
         commandHandler = handler
+    }
+
+    /// Отвязка строго по владельцу: демонтаж старого host view не должен
+    /// стирать привязку и кэш выделения, установленные новым view.
+    func detachHandler(ownedBy owner: AnyObject) {
+        guard handlerOwner === owner else {
+            return
+        }
+
+        handlerOwner = nil
+        commandHandler = nil
+        updateCurrentSelection(nil)
     }
 
     func updateCurrentSelection(_ selection: ImmersiveMapSelection?) {

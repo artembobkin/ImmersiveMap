@@ -30,24 +30,24 @@ public struct ImmersiveMapView: View {
         self.selectionController = selectionController
     }
 
+    /// Дерево body стабильно по identity при любом сочетании модификаторов:
+    /// переключение `enableCameraUIControls` не должно менять тип дерева,
+    /// иначе SwiftUI уничтожает и пересоздаёт весь платформенный map view
+    /// (рендерер, кэши, привязки контроллеров).
     public var body: some View {
-        let mapView = ImmersiveMapUIViewRepresentable(settings: settings,
-                                                      avatarsController: avatarsController,
-                                                      cameraPosition: cameraPosition,
-                                                      cameraController: cameraController,
-                                                      selectionController: selectionController,
-                                                      avatarTapAction: avatarTapAction,
-                                                      markerContent: markerContent)
-
-        if let cameraUIControls, cameraUIControls.isEnabled, let cameraController {
-            mapView.immersiveMapCameraControlsOverlay(
+        ImmersiveMapUIViewRepresentable(settings: settings,
+                                        avatarsController: avatarsController,
+                                        cameraPosition: cameraPosition,
+                                        cameraController: cameraController,
+                                        selectionController: selectionController,
+                                        avatarTapAction: avatarTapAction,
+                                        markerContent: markerContent)
+            .immersiveMapCameraControlsOverlay(
+                isEnabled: (cameraUIControls?.isEnabled ?? false) && cameraController != nil,
                 camera: cameraController,
                 initialCameraPosition: cameraPosition ?? Self.defaultCameraControlsPosition,
-                maximumPitch: cameraUIControls.maximumPitch
+                maximumPitch: cameraUIControls?.maximumPitch ?? ImmersiveMapSettings.default.camera.maximumPitch
             )
-        } else {
-            mapView
-        }
     }
 }
 

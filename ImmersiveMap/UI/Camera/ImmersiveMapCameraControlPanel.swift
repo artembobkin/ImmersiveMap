@@ -5,26 +5,34 @@
 import SwiftUI
 
 extension View {
-    func immersiveMapCameraControlsOverlay(camera: ImmersiveMapCameraController,
+    /// Модификатор применяется всегда, а включённость панели передаётся
+    /// параметром: тип дерева body не зависит от `isEnabled`, поэтому тоггл
+    /// контролов не пересоздаёт платформенный map view (identity стабильна).
+    func immersiveMapCameraControlsOverlay(isEnabled: Bool,
+                                           camera: ImmersiveMapCameraController?,
                                            initialCameraPosition: ImmersiveMapCameraPosition = ImmersiveMapCameraPosition(latitudeDegrees: 0,
                                                                                                                           longitudeDegrees: 0,
                                                                                                                           zoom: 0),
                                            maximumPitch: Float = ImmersiveMapSettings.default.camera.maximumPitch) -> some View {
-        modifier(ImmersiveMapCameraControlsModifier(camera: camera,
+        modifier(ImmersiveMapCameraControlsModifier(isEnabled: isEnabled,
+                                                    camera: camera,
                                                     initialCameraPosition: initialCameraPosition,
                                                     maximumPitch: maximumPitch))
     }
 }
 
 private struct ImmersiveMapCameraControlsModifier: ViewModifier {
-    let camera: ImmersiveMapCameraController
+    let isEnabled: Bool
+    let camera: ImmersiveMapCameraController?
     let maximumPitch: Float
     @State private var liveCameraPosition: ImmersiveMapCameraPosition
     @State private var liveCameraSnapshot: ImmersiveMapCameraSnapshot?
 
-    init(camera: ImmersiveMapCameraController,
+    init(isEnabled: Bool,
+         camera: ImmersiveMapCameraController?,
          initialCameraPosition: ImmersiveMapCameraPosition,
          maximumPitch: Float) {
+        self.isEnabled = isEnabled
         self.camera = camera
         self.maximumPitch = maximumPitch
         _liveCameraPosition = State(initialValue: initialCameraPosition)
@@ -34,18 +42,24 @@ private struct ImmersiveMapCameraControlsModifier: ViewModifier {
         ZStack {
             content
 
-            ImmersiveMapCameraControlPanel(
-                cameraSnapshot: liveCameraSnapshot ?? fallbackCameraSnapshot
-            ) { nextPosition in
-                let cameraSnapshot = liveCameraSnapshot ?? fallbackCameraSnapshot
-                let constrainedPosition = cameraSnapshot.clampedPosition(nextPosition)
-                liveCameraPosition = constrainedPosition
-                camera.setCameraAngleTarget(bearingRadians: constrainedPosition.bearing,
-                                            pitchRadians: constrainedPosition.pitch)
+            if isEnabled, let camera {
+                panel(for: camera)
             }
-            .padding(.trailing, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         }
+    }
+
+    private func panel(for camera: ImmersiveMapCameraController) -> some View {
+        ImmersiveMapCameraControlPanel(
+            cameraSnapshot: liveCameraSnapshot ?? fallbackCameraSnapshot
+        ) { nextPosition in
+            let cameraSnapshot = liveCameraSnapshot ?? fallbackCameraSnapshot
+            let constrainedPosition = cameraSnapshot.clampedPosition(nextPosition)
+            liveCameraPosition = constrainedPosition
+            camera.setCameraAngleTarget(bearingRadians: constrainedPosition.bearing,
+                                        pitchRadians: constrainedPosition.pitch)
+        }
+        .padding(.trailing, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         .onAppear {
             camera.onCameraSnapshotChanged = { snapshot in
                 Task { @MainActor in
