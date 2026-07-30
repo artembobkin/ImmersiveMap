@@ -26,9 +26,6 @@ enum GeoScreenProjectionMath {
         let globeMapSize: Float
         let globePanMercatorY: Float
         let globeTransposedRotationMatrix: matrix_float4x4
-        /// Зеркало globeVisibilityHorizonThreshold из GlobeVisibility.h:
-        /// непрерывное ослабление порога в масштабе геометрии по мере морфа.
-        let horizonThreshold: Float
 
         init(drawSize: CGSize,
              cameraUniform: CameraUniform,
@@ -52,11 +49,6 @@ enum GeoScreenProjectionMath {
             globeTransposedRotationMatrix = simd_transpose(
                 Self.makeRotationMatrix(panLatitude: panLatitude,
                                         panLongitude: panLongitude))
-            let horizonFade = GeoScreenProjectionMath.smoothstep(edge0: 0.0,
-                                                                 edge1: 0.95,
-                                                                 x: globe.transition)
-            let radiusSquared = globe.radius * globe.radius
-            horizonThreshold = (1.0 - horizonFade) * radiusSquared + horizonFade * (-4.0 * radiusSquared)
         }
 
         func rotatedSphereWorldPosition(sphereUnit: SIMD3<Float>) -> SIMD3<Float> {
@@ -112,7 +104,15 @@ enum GeoScreenProjectionMath {
     /// Мягкий горизонт: точка за краем шара гаснет в полосе
     /// ±`horizonFadeBandWidth` вместо ступеньки, alpha годится как
     /// коэффициент прозрачности.
+    ///
+    /// Порог ослабляется по ЛОКАЛЬНОЙ фазе волны разворота этой точки
+    /// (`transitionLocalPhase`), а не по глобальному transition, как в
+    /// GlobeVisibility.h: точка на ещё сферической части (локальная фаза 0)
+    /// обязана проходить строгий сферический тест, иначе обратная сторона
+    /// шара просачивается в середине морфа. У тайлов такую утечку прячет
+    /// depth-тест, у оверлея (SwiftUI-маркеры) глубины нет.
     static func globeVisibility(worldPosition: SIMD3<Float>,
+                                localTransition: Float,
                                 constants: FrameConstants) -> (visible: Bool, alpha: Float) {
         let globeCenter = SIMD3<Float>(0.0, 0.0, -constants.globe.radius)
         let toCamera = constants.cameraUniform.eye - globeCenter
@@ -122,10 +122,13 @@ enum GeoScreenProjectionMath {
         }
 
         let radius = max(constants.globe.radius, 1e-6)
+        let horizonFade = smoothstep(edge0: 0.0, edge1: 0.95, x: localTransition)
+        let radiusSquared = radius * radius
+        let horizonThreshold = (1.0 - horizonFade) * radiusSquared + horizonFade * (-4.0 * radiusSquared)
         let dotToCamera = simd_dot(worldPosition - globeCenter, toCamera)
         let normalization = max(toCameraLength * radius, 1e-6)
         let normalizedDot = dotToCamera / normalization
-        let normalizedThreshold = constants.horizonThreshold / normalization
+        let normalizedThreshold = horizonThreshold / normalization
         let visibilityDelta = normalizedDot - normalizedThreshold
 
         if visibilityDelta <= -horizonFadeBandWidth {
@@ -162,7 +165,9 @@ enum GeoScreenProjectionMath {
             return point
         }
 
-        let visibility = globeVisibility(worldPosition: worldPosition, constants: constants)
+        let visibility = globeVisibility(worldPosition: worldPosition,
+                                         localTransition: localTransition,
+                                         constants: constants)
         guard visibility.alpha > 0.0 else {
             return ScreenPointOutput(position: point.position,
                                      depth: point.depth,

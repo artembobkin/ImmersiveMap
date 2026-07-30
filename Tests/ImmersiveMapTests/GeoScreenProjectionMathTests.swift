@@ -199,6 +199,48 @@ final class GeoScreenProjectionMathTests: XCTestCase {
                              "Равномерный лерп должен давать заметно другую экранную точку")
     }
 
+    /// Регресс скриншотного артефакта: в середине морфа (средний зум) маркер
+    /// на обратной стороне шара (Фиджи при камере над Воронежем) не должен
+    /// просачиваться сквозь глобально ослабленный порог горизонта: волна
+    /// разворота до него ещё не дошла, точка всё ещё сферическая.
+    func testMidMorphKeepsFarSideMarkerHiddenUntilWaveArrives() throws {
+        let midMorphZoom = presentationSettings.automaticTransitionStartZoom
+            + presentationSettings.automaticTransitionSpan * 0.37
+        let environment = try makeEnvironment(
+            cameraState: makeCameraState(latitude: 51.209, longitude: 39.205, zoom: midMorphZoom))
+        XCTAssertEqual(environment.constants.mode, .globe)
+        XCTAssertGreaterThan(environment.constants.globe.transition, 0.0)
+        XCTAssertLessThan(environment.constants.globe.transition, 0.95)
+
+        let point = GeoScreenProjectionMath.project(
+            basis: GeoProjectionBasis(coordinate: GeoCoordinate(latitude: -17.7134, longitude: 179.2)),
+            constants: environment.constants)
+
+        XCTAssertEqual(point.visible, 0,
+                       "Точка на ещё сферической обратной стороне обязана скрываться")
+        XCTAssertEqual(point.visibilityAlpha, 0.0)
+    }
+
+    /// При почти завершённом морфе (геометрия уже плоская, поверхность ещё
+    /// globe) бывшая обратная сторона легитимно видима. Камера на экваторе:
+    /// на широте окно морфа растягивается на log2(1/cos(lat)), и доля фазы
+    /// считалась бы от другого span.
+    func testNearFlatMorphShowsFormerFarSideMarker() throws {
+        let nearFlatZoom = presentationSettings.automaticTransitionStartZoom
+            + presentationSettings.automaticTransitionSpan * 0.92
+        let environment = try makeEnvironment(
+            cameraState: makeCameraState(latitude: 0.0, longitude: 39.205, zoom: nearFlatZoom))
+        XCTAssertEqual(environment.constants.mode, .globe)
+        XCTAssertGreaterThanOrEqual(environment.constants.globe.transition, 0.95)
+
+        let point = GeoScreenProjectionMath.project(
+            basis: GeoProjectionBasis(coordinate: GeoCoordinate(latitude: -17.7134, longitude: 179.2)),
+            constants: environment.constants)
+
+        XCTAssertNotEqual(point.visible, 0)
+        XCTAssertEqual(point.visibilityAlpha, 1.0)
+    }
+
     // MARK: - Хелперы
 
     private struct Environment {

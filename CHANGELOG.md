@@ -18,6 +18,7 @@ once the public API stabilizes.
 - Toggling `enableCameraUIControls` no longer tears down and recreates the whole platform map view: the SwiftUI body keeps one stable view identity, so the renderer, tile caches and controller attachments survive UI chrome toggles.
 - A dismantled host view no longer detaches camera, avatars and selection controllers from a newer host view that reuses them (SwiftUI creates the replacement representable before dismantling the old one). Detach is now ownership-checked, which unbreaks camera commands, including `ImmersiveMapCameraTourController` tours, across view recreation.
 - Renderer recreation now completes an active camera flight with `success == false` instead of silently swallowing its completion, so chained `fly` calls cannot hang on a never-resumed continuation.
+- SwiftUI markers on the far side of the globe no longer leak through the horizon mid-morph. The horizon threshold now relaxes per point with the unfurl-wave local phase instead of the global transition: a still-spherical point keeps the strict spherical test. Tiles hide this leak behind the depth test, the view overlay has none.
 
 ### Changed
 
