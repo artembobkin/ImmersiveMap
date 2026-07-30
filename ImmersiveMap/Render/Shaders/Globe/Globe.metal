@@ -368,7 +368,18 @@ fragment float4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
             discard_fragment();
             return float4(0.0);
         }
-        color = texture.sample(textureSampler, sample.uv);
+        // Явный level(0): шапка размазывает один краевой ряд текселей тайла,
+        // базовый мип точен и стабилен. Автоматический LOD у полюса
+        // взрывается (меридианы сходятся в точку, а wrap долготы даёт разрыв
+        // производных uv), выборка ныряет в глубокие мипы атласа, где тексели
+        // усредняют соседние тайлы страницы: веер серых клиньев по
+        // треугольникам сетки и мерцание при каждой перепаковке атласа.
+        float4 sampled = texture.sample(textureSampler, sample.uv, level(0.0));
+        // Фезер к цвету полюса: краевой ряд продолжает поверхность у кромки
+        // (seamBlend 0), но не дотягивается «иглами» до самого полюса: узкие
+        // прибрежные фичи кромки (например вода моря Росса на 85°S) иначе
+        // размазываются радиальными полосами через всю шапку.
+        color = mix(sampled, params.fillColor, seamBlend);
     } else {
         color = mix(params.edgeColor, params.fillColor, seamBlend);
     }

@@ -19,6 +19,7 @@ once the public API stabilizes.
 - A dismantled host view no longer detaches camera, avatars and selection controllers from a newer host view that reuses them (SwiftUI creates the replacement representable before dismantling the old one). Detach is now ownership-checked, which unbreaks camera commands, including `ImmersiveMapCameraTourController` tours, across view recreation.
 - Renderer recreation now completes an active camera flight with `success == false` instead of silently swallowing its completion, so chained `fly` calls cannot hang on a never-resumed continuation.
 - SwiftUI markers on the far side of the globe no longer leak through the horizon mid-morph. The horizon threshold now relaxes per point with the unfurl-wave local phase instead of the global transition: a still-spherical point keeps the strict spherical test. Tiles hide this leak behind the depth test, the view overlay has none.
+- The globe polar caps no longer flicker or break into gray triangle fans. The cap smears a single edge-texel row of the boundary tiles, but sampled it with automatic mip selection: near the pole the uv derivatives explode (meridians converge, the longitude wrap adds a derivative discontinuity), so the sampler dove into deep atlas mips where texels average unrelated tiles, and every atlas repack reshuffled the colors. The cap now samples the base mip explicitly and feathers toward the pole color, so narrow coastal features at the boundary row (like Ross Sea water) no longer smear radial needles across the cap.
 
 ### Changed
 
