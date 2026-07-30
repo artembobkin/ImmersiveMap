@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
-## [Unreleased]
+## [0.4.1] - 2026-07-30
+
+### Changed
+
+- The macOS example app (`ImmersiveMapMac`) now ships the full demo scene: a looping cinematic tour (globe, tilted pass through the globe-to-flat morph, Tokyo streets, Dubai, back to orbit) built on `ImmersiveMapCameraTourController`, SwiftUI city-card markers, avatar markers with badges, and an enlarged GPU-ready tile cache via `.tileSettings(memoryCacheSizeInBytes:)`. Start the tour with the Cinematic Tour button or R, stop with R, Esc, or any map gesture.
 
 ### Fixed
 
