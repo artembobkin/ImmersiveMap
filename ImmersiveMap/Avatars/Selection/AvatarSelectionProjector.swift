@@ -71,10 +71,11 @@ struct AvatarSelectionSnapshot {
 }
 
 struct AvatarSelectionProjector {
-    private let globeHorizonFadeBandWidth: Float = 0.03
-
-    /// Проецирует маркеры на экран, отбрасывая всё за пределами вьюпорта с
-    /// полем `cullMarginPx` (запас на вынос коллизиями и размер маркера) и
+    /// Проецирует маркеры на экран общим проектором GeoScreenProjectionMath:
+    /// та же математика, что у тайлов и SwiftUI-маркеров (волна морфа и
+    /// мягкий горизонт), иначе аватары «плывут» относительно поверхности в
+    /// середине перехода. Отбрасывает всё за пределами вьюпорта с полем
+    /// `cullMarginPx` (запас на вынос коллизиями и размер маркера) и
     /// невидимую сторону глобуса. Тригонометрии на маркер нет - только
     /// линейная математика от кешированного базиса координаты.
     func project(markers: [PresentedAvatarMarker],
@@ -88,7 +89,10 @@ struct AvatarSelectionProjector {
             return []
         }
 
-        let viewport = SIMD2<Float>(Float(drawSize.width), Float(drawSize.height))
+        let constants = GeoScreenProjectionMath.FrameConstants(drawSize: drawSize,
+                                                               cameraUniform: cameraUniform,
+                                                               resolvedPresentation: resolvedPresentation)
+        let viewport = constants.viewport
         var projectedMarkers: [AvatarProjectedMarker] = []
         projectedMarkers.reserveCapacity(min(markers.count, 4096))
 
@@ -100,52 +104,19 @@ struct AvatarSelectionProjector {
                 && point.position.y <= viewport.y + margin
         }
 
-        switch resolvedPresentation.screenSpaceProjectionMode {
-        case .flat:
-            let renderMapSize = resolvedPresentation.flatRenderState.renderMapSize
-            let halfRenderMapSize = renderMapSize * 0.5
-            let pan = resolvedPresentation.flatRenderState.pan
-            for presentedMarker in markers {
-                let basis = presentedMarker.projectionBasis
-                let xWorld = ImmersiveMapProjection.wrap(
-                    value: basis.normalizedWorldX * renderMapSize - halfRenderMapSize + pan.x * halfRenderMapSize,
-                    size: renderMapSize)
-                let yWorld = (basis.mercatorYNormalized - pan.y) * halfRenderMapSize
-                let clip = cameraUniform.matrix * SIMD4<Float>(Float(xWorld), Float(yWorld), 0.0, 1.0)
-                let point = screenPointFromClip(clip: clip, viewportSize: viewport)
-                guard point.visible != 0,
-                      isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
-                    continue
-                }
-                appendProjectedIfVisible(presentedMarker: presentedMarker,
-                                         screenPoint: point,
-                                         drawOrder: presentedMarker.drawOrder,
-                                         projectedMarkers: &projectedMarkers)
+        for presentedMarker in markers {
+            let point = GeoScreenProjectionMath.project(basis: presentedMarker.projectionBasis,
+                                                        constants: constants)
+            // Обратная сторона шара и точки за камерой не доходят до солвера.
+            guard point.visible != 0,
+                  point.visibilityAlpha > 0.0,
+                  isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
+                continue
             }
-        case .globe:
-            let constants = GlobeProjectionConstants(globe: resolvedPresentation.globeRenderUniform)
-            for presentedMarker in markers {
-                let projection = globeProject(basis: presentedMarker.projectionBasis,
-                                              cameraUniform: cameraUniform,
-                                              constants: constants)
-                var point = screenPointFromClip(clip: projection.clip, viewportSize: viewport)
-                guard point.visible != 0,
-                      isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
-                    continue
-                }
-                let visibility = globeProjectionVisibility(worldPosition: projection.worldPosition,
-                                                           cameraUniform: cameraUniform,
-                                                           constants: constants)
-                // Обратная сторона шара не доходит до солвера и буферов.
-                guard visibility.alpha > 0.0 else {
-                    continue
-                }
-                point.visibilityAlpha = visibility.alpha
-                appendProjectedIfVisible(presentedMarker: presentedMarker,
-                                         screenPoint: point,
-                                         drawOrder: presentedMarker.drawOrder,
-                                         projectedMarkers: &projectedMarkers)
-            }
+            appendProjectedIfVisible(presentedMarker: presentedMarker,
+                                     screenPoint: point,
+                                     drawOrder: presentedMarker.drawOrder,
+                                     projectedMarkers: &projectedMarkers)
         }
 
         return projectedMarkers
@@ -265,140 +236,4 @@ struct AvatarSelectionProjector {
         return bounds
     }
 
-    private func screenPointFromClip(clip: SIMD4<Float>,
-                                     viewportSize: SIMD2<Float>) -> ScreenPointOutput {
-        guard clip.w > 0.0 else {
-            return ScreenPointOutput(position: .zero,
-                                     depth: 0.0,
-                                     visible: 0,
-                                     visibilityAlpha: 0.0)
-        }
-
-        let ndc = SIMD2<Float>(clip.x, clip.y) / clip.w
-        let depth = clip.z / clip.w
-        let position = (ndc * 0.5 + 0.5) * viewportSize
-        return ScreenPointOutput(position: position,
-                                 depth: depth,
-                                 visible: 1,
-                                 visibilityAlpha: 1.0)
-    }
-
-    private func globeProject(basis: AvatarProjectionBasis,
-                              cameraUniform: CameraUniform,
-                              constants: GlobeProjectionConstants) -> GlobeProjectionResult {
-        let sphereWorldPosition = constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
-        let flatWorldPosition = constants.flatWorldPosition(basis: basis)
-        let transition = constants.globe.transition
-        let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * transition
-        let clip = cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
-        return GlobeProjectionResult(clip: clip, worldPosition: worldPosition)
-    }
-
-    private func globeProjectionVisibility(worldPosition: SIMD3<Float>,
-                                           cameraUniform: CameraUniform,
-                                           constants: GlobeProjectionConstants) -> (visible: Bool, alpha: Float) {
-        let globeCenter = SIMD3<Float>(0.0, 0.0, -constants.globe.radius)
-        let toCamera = cameraUniform.eye - globeCenter
-        if simd_length(toCamera) <= 0.0 || constants.globe.transition >= 0.95 {
-            return (true, 1.0)
-        }
-
-        let toCameraLength = simd_length(toCamera)
-        let radius = max(constants.globe.radius, 1e-6)
-        let dotToCamera = simd_dot(worldPosition - globeCenter, toCamera)
-        let normalization = max(toCameraLength * radius, 1e-6)
-        let normalizedDot = dotToCamera / normalization
-        let normalizedThreshold = constants.horizonThreshold / normalization
-        let visibilityDelta = normalizedDot - normalizedThreshold
-
-        if visibilityDelta <= -globeHorizonFadeBandWidth {
-            return (false, 0.0)
-        }
-
-        let alpha = smoothstep(edge0: -globeHorizonFadeBandWidth,
-                               edge1: globeHorizonFadeBandWidth,
-                               x: visibilityDelta)
-        return (true, alpha)
-    }
-
-    private func smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
-        let t = simd_clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-        return t * t * (3.0 - 2.0 * t)
-    }
-}
-
-private struct GlobeProjectionResult {
-    let clip: SIMD4<Float>
-    let worldPosition: SIMD3<Float>
-}
-
-private struct GlobeProjectionConstants {
-    let globe: GlobeUniform
-    let panLatitude: Float
-    let panLongitude: Float
-    let mapSize: Float
-    let panMercatorY: Float
-    let rotationMatrix: matrix_float4x4
-    let transposedRotationMatrix: matrix_float4x4
-    let horizonThreshold: Float
-
-    init(globe: GlobeUniform) {
-        self.globe = globe
-        let maxLatitude = Float(ImmersiveMapProjection.maxMercatorLatitude)
-        self.panLatitude = globe.panY * maxLatitude
-        self.panLongitude = globe.panX * .pi
-        let distortion = cos(panLatitude)
-        let mapSizeScale = (1.0 - globe.transition) * distortion + globe.transition
-        self.mapSize = 2.0 * .pi * globe.radius * mapSizeScale
-        self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
-        let rotationMatrix = GlobeProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
-                                                                         panLongitude: panLongitude)
-        self.rotationMatrix = rotationMatrix
-        self.transposedRotationMatrix = simd_transpose(rotationMatrix)
-        let horizonFade = GlobeProjectionConstants.smoothstep(edge0: 0.8,
-                                                              edge1: 0.95,
-                                                              x: globe.transition)
-        self.horizonThreshold = (1.0 - horizonFade) * (globe.radius * globe.radius) + horizonFade * -1e6
-    }
-
-    func rotatedSphereWorldPosition(sphereUnit: SIMD3<Float>) -> SIMD3<Float> {
-        let scaled = sphereUnit * globe.radius
-        let rotatedPosition = transposedRotationMatrix * SIMD4<Float>(scaled, 1.0)
-        return SIMD3<Float>(rotatedPosition.x,
-                            rotatedPosition.y,
-                            rotatedPosition.z - globe.radius)
-    }
-
-    func flatWorldPosition(basis: AvatarProjectionBasis) -> SIMD3<Float> {
-        let normalizedWorldX = Float(basis.normalizedWorldX)
-        let mercatorY = Float(basis.mercatorYNormalized)
-        let halfMapSize = mapSize * 0.5
-        let worldX = normalizedWorldX * mapSize
-        let panOffsetX = globe.panX * halfMapSize
-        let wrappedXInput = worldX - halfMapSize + panOffsetX
-        let x = ImmersiveMapProjection.wrap(value: Double(wrappedXInput),
-                                   size: Double(mapSize))
-        let y = Double((mercatorY - panMercatorY) * halfMapSize)
-        return SIMD3<Float>(Float(x), Float(y), 0.0)
-    }
-
-    private static func makeRotationMatrix(panLatitude: Float,
-                                           panLongitude: Float) -> matrix_float4x4 {
-        let xRotation = matrix_float4x4(SIMD4<Float>(1, 0, 0, 0),
-                                        SIMD4<Float>(0, cos(panLatitude), -sin(panLatitude), 0),
-                                        SIMD4<Float>(0, sin(panLatitude), cos(panLatitude), 0),
-                                        SIMD4<Float>(0, 0, 0, 1))
-        let yRotation = matrix_float4x4(SIMD4<Float>(cos(panLongitude), 0, sin(panLongitude), 0),
-                                        SIMD4<Float>(0, 1, 0, 0),
-                                        SIMD4<Float>(-sin(panLongitude), 0, cos(panLongitude), 0),
-                                        SIMD4<Float>(0, 0, 0, 1))
-        return matrix_multiply(yRotation, xRotation)
-    }
-
-    private static func smoothstep(edge0: Float,
-                                   edge1: Float,
-                                   x: Float) -> Float {
-        let t = simd_clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-        return t * t * (3.0 - 2.0 * t)
-    }
 }

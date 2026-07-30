@@ -162,35 +162,11 @@ enum AvatarSelectionAnimationMath {
     }
 }
 
-/// Кешируемая тригонометрия проекции геокоординаты: пересчитывается только
-/// при смене координаты, пер-кадровая проекция 30k маркеров остаётся линейной
-/// (без sin/cos/log на маркер на кадр).
-struct AvatarProjectionBasis {
-    /// Единичный вектор точки на сфере в системе формулы глобуса
-    /// (до вращения панорамы): (cosLat*sinLon, sinLat, cosLat*cosLon).
-    let sphereUnit: SIMD3<Float>
-    /// (lon + pi) / 2pi - нормализованный X мировой развёртки.
-    let normalizedWorldX: Double
-    /// Нормализованный меркаторный Y широты.
-    let mercatorYNormalized: Double
-
-    init(coordinate: GeoCoordinate) {
-        let latitude = coordinate.latitude * .pi / 180.0
-        let longitude = coordinate.longitude * .pi / 180.0
-        let cosLatitude = cos(latitude)
-        sphereUnit = SIMD3<Float>(Float(cosLatitude * sin(longitude)),
-                                  Float(sin(latitude)),
-                                  Float(cosLatitude * cos(longitude)))
-        normalizedWorldX = (longitude + .pi) / (2.0 * .pi)
-        mercatorYNormalized = ImmersiveMapProjection.yMercatorNormalized(latitude: latitude)
-    }
-}
-
 struct PresentedAvatarMarker {
     var marker: AvatarMarker
     var squashScale: SIMD2<Float>
     var drawOrder: Int
-    var projectionBasis: AvatarProjectionBasis
+    var projectionBasis: GeoProjectionBasis
 }
 
 private struct AvatarPositionAnimation {
@@ -216,14 +192,14 @@ private struct AvatarPositionAnimation {
 private struct AvatarPresentationEntry {
     var marker: AvatarMarker
     var displayedCoordinate: GeoCoordinate
-    var projectionBasis: AvatarProjectionBasis
+    var projectionBasis: GeoProjectionBasis
     var animation: AvatarPositionAnimation?
     var selectionAnimationStartTime: TimeInterval?
 
     init(marker: AvatarMarker, time: TimeInterval) {
         self.marker = marker
         self.displayedCoordinate = marker.coordinate
-        self.projectionBasis = AvatarProjectionBasis(coordinate: marker.coordinate)
+        self.projectionBasis = GeoProjectionBasis(coordinate: marker.coordinate)
         self.animation = nil
         self.selectionAnimationStartTime = marker.isSelected ? time : nil
     }
@@ -236,7 +212,7 @@ private struct AvatarPresentationEntry {
             return
         }
         displayedCoordinate = coordinate
-        projectionBasis = AvatarProjectionBasis(coordinate: coordinate)
+        projectionBasis = GeoProjectionBasis(coordinate: coordinate)
     }
 
     mutating func presentedAvatar(at time: TimeInterval, drawOrder: Int) -> PresentedAvatarMarker {

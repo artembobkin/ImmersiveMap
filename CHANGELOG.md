@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [Unreleased]
+
+### Fixed
+
+- Avatar markers now project through the same shared projector as tiles and SwiftUI markers (`GeoScreenProjectionMath`): the unfurl-wave morph and the soft per-point horizon. Previously avatars used a plain sphere-to-plane lerp with a stale horizon threshold, so mid-morph at high tilt a far-away avatar (Moscow with the camera over Dubai) drifted across the screen, floated above the horizon and popped in and out while zooming. The duplicated projection math in `AvatarSelectionProjector` is gone.
+
 ## [0.4.0] - 2026-07-30
 
 ### Added

@@ -61,7 +61,7 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
         let settled = store.presentedEntries(at: 5.0)[0]
         XCTAssertEqual(settled.marker.coordinate.latitude, 10.0, accuracy: 1e-9)
         XCTAssertEqual(settled.marker.coordinate.longitude, 20.0, accuracy: 1e-9)
-        let expectedBasis = AvatarProjectionBasis(coordinate: settled.marker.coordinate)
+        let expectedBasis = GeoProjectionBasis(coordinate: settled.marker.coordinate)
         XCTAssertEqual(settled.projectionBasis.sphereUnit.x, expectedBasis.sphereUnit.x, accuracy: 1e-6)
         XCTAssertEqual(settled.projectionBasis.sphereUnit.y, expectedBasis.sphereUnit.y, accuracy: 1e-6)
         XCTAssertEqual(settled.projectionBasis.mercatorYNormalized,
