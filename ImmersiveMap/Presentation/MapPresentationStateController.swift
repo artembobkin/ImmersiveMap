@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Хранит текущий surface mode карты и резолвит presentation state для frame pipeline.
+/// Stores the map's current surface mode and resolves the presentation state for the frame pipeline.
 final class MapPresentationStateController {
     private var settings: ImmersiveMapSettings
     private var forcedRenderSurfaceMode: ViewMode?

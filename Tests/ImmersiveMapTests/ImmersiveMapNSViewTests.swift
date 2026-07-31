@@ -14,8 +14,8 @@ final class ImmersiveMapNSViewTests: XCTestCase {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
-        // swift test (SwiftPM CLI) не компилирует .metal в metallib - рендерер там не собрать;
-        // под xcodebuild test шейдеры компилируются и тест выполняется целиком.
+        // swift test (SwiftPM CLI) does not compile .metal into a metallib - the renderer cannot be built there;
+        // under xcodebuild test the shaders compile and the test runs in full.
         guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
@@ -47,7 +47,7 @@ final class ImmersiveMapNSViewTests: XCTestCase {
         let attachedPosition = try XCTUnwrap(camera.currentCameraPosition())
         XCTAssertEqual(attachedPosition.zoom, cameraPosition.zoom, accuracy: 0.0001)
 
-        // Клик по пустой карте доходит до camera callbacks через tap handler.
+        // A click on an empty map reaches the camera callbacks through the tap handler.
         var backgroundTapCount = 0
         camera.onMapBackgroundTap = { backgroundTapCount += 1 }
         view.simulateMapTapForTesting(at: CGPoint(x: 160, y: 120))

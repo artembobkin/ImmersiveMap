@@ -40,8 +40,8 @@ struct RoadGlyphPlacementOutput {
     var position: SIMD2<Float>
     var angle: Float
     var visible: UInt32
-    // Глиф размещён экстраполяцией за концы пути - рисуется, но в коллизионные
-    // кандидаты не попадает (см. roadLabelPlacementKernel).
+    // Glyph placed by extrapolation beyond the path ends - it is drawn, but
+    // does not become a collision candidate (see roadLabelPlacementKernel).
     var extrapolated: UInt32
 }
 

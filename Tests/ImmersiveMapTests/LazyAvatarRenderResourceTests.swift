@@ -52,8 +52,8 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
     }
 
     func testMarkerMutationsDoNotTouchAtlases() throws {
-        // Мутации маркеров (apply/clear) не должны обращаться к атласам:
-        // картинки грузятся лениво по видимости в rebuildFrameBuffers.
+        // Marker mutations (apply/clear) must not touch the atlases:
+        // images load lazily on visibility in rebuildFrameBuffers.
         let source = try rendererSource()
         let applyStart = try XCTUnwrap(source.range(of: "private func apply(snapshot:"))
         let applyEnd = try XCTUnwrap(source.range(of: "private func makeInstance"))
@@ -64,8 +64,8 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
     }
 
     func testFrameRebuildGuardsEmptySceneBeforeAtlasAccess() throws {
-        // Пустая сцена выходит из rebuildFrameBuffers до первого обращения к
-        // ленивому атласу - карта без маркеров не аллоцирует текстуры.
+        // An empty scene exits rebuildFrameBuffers before the first access to
+        // a lazy atlas - a map without markers allocates no textures.
         let source = try rendererSource()
         let rebuildStart = try XCTUnwrap(source.range(of: "private func rebuildFrameBuffers"))
         let rebuildEnd = try XCTUnwrap(source.range(of: "private func ensureFrameBufferCapacity"))
@@ -88,9 +88,9 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
 
     func testBadgeAtlasesAreRequestedOnlyAfterBadgePresenceCheck() throws {
         let source = try rendererSource()
-        // Проверка наличия бейджа и доступ к атласу живут в одной
-        // guard-цепочке: short-circuit гарантирует, что атлас не создаётся,
-        // пока у маркера нет бейджа.
+        // The badge-presence check and the atlas access live in one guard
+        // chain: short-circuiting guarantees the atlas is not created while
+        // the marker has no badge.
         try assertAccess("batteryBadgeAtlasResource.value",
                          follows: "let badge = marker.batteryBadge",
                          between: "private func makeBatteryBadgeInstance",

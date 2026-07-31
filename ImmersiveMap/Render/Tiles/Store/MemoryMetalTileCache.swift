@@ -4,20 +4,20 @@
 import Foundation
 
 class MemoryMetalTileCache {
-    /// Мировое покрытие низких зумов пинится лениво: материализовавшись один
-    /// раз, тайлы z <= этого уровня не вытесняются обычным LRU-давлением -
-    /// дальняя зона наклонённой камеры остаётся резидентной (весь мир на
-    /// z0-3 - максимум 85 генерализованных тайлов). Бюджет вытеснения
-    /// расширяется на их стоимость, чтобы пиннинг не выселял ближние тайлы.
-    /// Memory warning невидимые pinned-тайлы не переживают: прогреются заново.
+    /// Low-zoom world coverage is pinned lazily: once materialized,
+    /// tiles with z <= this level are not evicted by regular LRU pressure -
+    /// the far zone of a tilted camera stays resident (the whole world at
+    /// z0-3 is at most 85 generalized tiles). The eviction budget
+    /// is extended by their cost so pinning doesn't evict nearby tiles.
+    /// Invisible pinned tiles don't survive a memory warning: they warm up again.
     static let pinnedWorldCoverMaxZoomLevel = 3
 
     private var cache: LRUMemoryCache<Tile, MetalTile>
     private let costLimit: Int
     private let stateLock = NSLock()
     private let tileTraceRecorder: TileTraceRecorder
-    // Тайлы текущего demanded-набора: не вытесняются ни при вставке, ни при trim,
-    // иначе при рабочем наборе больше лимита кэш пинг-понгует видимыми тайлами.
+    // Tiles of the current demanded set: not evicted on insert or on trim,
+    // otherwise with a working set larger than the limit the cache ping-pongs visible tiles.
     private var protectedTiles: Set<Tile> = []
     private var pinnedTiles: Set<Tile> = []
     private var pinnedCost: Int = 0
@@ -29,8 +29,8 @@ class MemoryMetalTileCache {
         self.cache = LRUMemoryCache(costLimit: maxCacheSizeInBytes)
     }
 
-    // Меняется при каждой мутации содержимого (вставка/вытеснение/очистка) -
-    // ключ для dirty-гейтов, зависящих от готовности тайлов.
+    // Changes on every content mutation (insert/eviction/clear) -
+    // the key for dirty-gates that depend on tile readiness.
     var contentVersion: UInt64 {
         stateLock.lock()
         defer { stateLock.unlock() }
@@ -41,9 +41,9 @@ class MemoryMetalTileCache {
         let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
         stateLock.lock()
         protectedTiles = tiles
-        // Overshoot от защиты demanded-тайлов ликвидируется, как только набор
-        // сжался: иначе кэш держал бы превышение лимита до следующей вставки
-        // или memory warning. В обычном случае (totalCost <= limit) - no-op.
+        // The overshoot from protecting demanded tiles is eliminated as soon as the set
+        // shrinks: otherwise the cache would hold the limit excess until the next insert
+        // or memory warning. In the normal case (totalCost <= limit) - a no-op.
         let effectiveCostLimit = costLimit + pinnedCost
         if cache.totalCost > effectiveCostLimit {
             let evicted = cache.trim(toCost: effectiveCostLimit,
@@ -105,10 +105,10 @@ class MemoryMetalTileCache {
                                         ]))
     }
 
-    // Сбрасывает кэш до доли лимита, сохраняя защищённые (видимые) тайлы -
-    // мягкая реакция на memory warning вместо полной очистки и пустой карты.
-    // Pinned-тайлы здесь не защищаются: под давлением памяти мировое покрытие
-    // отпускается и позже прогревается заново лениво.
+    // Resets the cache down to a fraction of the limit, keeping protected (visible) tiles -
+    // a soft memory warning response instead of a full clear and an empty map.
+    // Pinned tiles are not protected here: under memory pressure the world coverage
+    // is released and later warms up again lazily.
     func trim(toFractionOfLimit fraction: Double) {
         let targetCost = Int(Double(costLimit) * max(0.0, min(1.0, fraction)))
         let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
@@ -185,8 +185,8 @@ class MemoryMetalTileCache {
         let layers = [tileBuffers.ground]
             + tileBuffers.roads.drawOrderBuckets.flatMap(\.drawOrderLayers)
             + [tileBuffers.bridgeOverlay]
-        // Суммы разбиты на пошаговые +=: цепочка из нескольких `?? 0` в одном
-        // выражении превышает лимит type-checker'а на слабых машинах (CI).
+        // Sums are split into step-by-step +=: a chain of several `?? 0` in one
+        // expression exceeds the type-checker limit on weak machines (CI).
         let geometrySize = layers.reduce(0) { partial, layer in
             var size = partial
             size += layer.verticesBuffer?.allocatedSize ?? 0

@@ -171,10 +171,11 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     out.lastPos = lastPos;
     out.halfTexel = 0.5 / textureSize;
     out.normal = rotatedSphereDirection;
-    // Морфированная позиция, а не сферическая: по ней считается туман, и его
-    // дистанции обязаны совпадать с плоским путём (на сфере хорды короче, и
-    // туман был жиже, «дотягиваясь» скачком на свапе). При t = 0 значения
-    // бит-в-бит равны сферическим, так что свечение лимба не меняется.
+    // The morphed position, not the spherical one: fog is computed from it, and
+    // its distances must match the flat path (on the sphere chords are shorter,
+    // so the fog was thinner, "catching up" with a jump at the swap). At t = 0
+    // the values are bit-for-bit equal to the spherical ones, so the limb glow
+    // does not change.
     out.worldPos = position.xyz;
     out.transition = transition;
     out.earthNormal = normalize(spherePosition);
@@ -285,9 +286,9 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
     float3 innerGlowColor = float3(0.28, 0.54, 1.0) * glowStrength;
     float3 outerGlowColor = float3(0.08, 0.22, 0.72) * outerGlow * 0.22 * (1.0 - in.transition);
     color.rgb += innerGlowColor + outerGlowColor;
-    // Дымка гейтится фазой перехода (strength = transition): чистый глобус в
-    // космосе остаётся без тумана, а к моменту смены поверхностей морф и
-    // плоскость затуманены одинаково - шов линии горизонта скрыт.
+    // The haze is gated by the transition phase (strength = transition): a pure
+    // globe in space stays fog-free, and by the moment the surfaces swap, the
+    // morph and the plane are fogged identically - the horizon-line seam is hidden.
     color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }
@@ -330,9 +331,9 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
     float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
     float4 clip = camera.matrix * spherePositionTranslated;
     
-    // Крышка не морфится в плоскость: при развороте она расходится с тайловой
-    // поверхностью, поэтому гаснет в первой трети перехода, пока расхождение
-    // ещё не заметно.
+    // The cap does not morph into the plane: during the unfurl it diverges from
+    // the tile surface, so it fades out in the first third of the transition,
+    // while the divergence is not yet noticeable.
     const float capFadeEndTransition = 0.35;
     float transitionFade = smoothstep(0.0, capFadeEndTransition, clamp(globe.transition, 0.0, 1.0));
 
@@ -368,17 +369,17 @@ fragment float4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
             discard_fragment();
             return float4(0.0);
         }
-        // Явный level(0): шапка размазывает один краевой ряд текселей тайла,
-        // базовый мип точен и стабилен. Автоматический LOD у полюса
-        // взрывается (меридианы сходятся в точку, а wrap долготы даёт разрыв
-        // производных uv), выборка ныряет в глубокие мипы атласа, где тексели
-        // усредняют соседние тайлы страницы: веер серых клиньев по
-        // треугольникам сетки и мерцание при каждой перепаковке атласа.
+        // Explicit level(0): the cap smears a single edge row of tile texels,
+        // and the base mip is precise and stable. Automatic LOD explodes near
+        // the pole (meridians converge to a point, and the longitude wrap makes
+        // the uv derivatives discontinuous), so sampling dives into deep atlas
+        // mips where texels average neighboring page tiles: a fan of gray
+        // wedges across the grid triangles and flicker on every atlas repack.
         float4 sampled = texture.sample(textureSampler, sample.uv, level(0.0));
-        // Фезер к цвету полюса: краевой ряд продолжает поверхность у кромки
-        // (seamBlend 0), но не дотягивается «иглами» до самого полюса: узкие
-        // прибрежные фичи кромки (например вода моря Росса на 85°S) иначе
-        // размазываются радиальными полосами через всю шапку.
+        // Feather toward the pole color: the edge row continues the surface at
+        // the rim (seamBlend 0) but does not reach the pole itself as "needles":
+        // narrow coastal features of the rim (e.g. the Ross Sea water at 85°S)
+        // would otherwise smear as radial stripes across the whole cap.
         color = mix(sampled, params.fillColor, seamBlend);
     } else {
         color = mix(params.edgeColor, params.fillColor, seamBlend);

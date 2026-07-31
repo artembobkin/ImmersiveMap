@@ -4,16 +4,16 @@
 import CoreGraphics
 import simd
 
-/// Экранная позиция одного маркера в drawable-пикселях (origin снизу слева,
-/// y вверх). `visibilityAlpha` несёт мягкий фейд горизонта глобуса.
+/// Screen position of one marker in drawable pixels (origin at bottom left,
+/// y up). `visibilityAlpha` carries the soft globe-horizon fade.
 struct MarkerProjectedEntry: Equatable, Sendable {
     let id: UInt64
     let positionPx: SIMD2<Float>
     let visibilityAlpha: Float
 }
 
-/// Пер-кадровый снапшот проекции маркеров. В `entries` только видимые
-/// маркеры: отсутствие id означает «скрыть view».
+/// Per-frame snapshot of the marker projection. `entries` contains only visible
+/// markers: an absent id means "hide the view".
 struct MarkerProjectionSnapshot: Equatable, Sendable {
     static let empty = MarkerProjectionSnapshot(frameIndex: 0,
                                                 drawSize: .zero,

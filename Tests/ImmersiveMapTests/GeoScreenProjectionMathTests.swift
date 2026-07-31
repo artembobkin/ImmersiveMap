@@ -6,10 +6,10 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// GeoScreenProjectionMath должен проецировать координату теми же формулами,
-/// что вершинный путь рендера: flat-мир, сфера глобуса, волна морфа и мягкий
-/// горизонт. Камера собирается как в рендере (RenderCamera + PoseResolver),
-/// прецедент: ZoomAnchorMathTests.projectToScreen.
+/// GeoScreenProjectionMath must project a coordinate with the same formulas as
+/// the renderer's vertex path: flat world, globe sphere, morph wave, and soft
+/// horizon. The camera is assembled as in the renderer (RenderCamera + PoseResolver),
+/// precedent: ZoomAnchorMathTests.projectToScreen.
 final class GeoScreenProjectionMathTests: XCTestCase {
     private let drawSize = CGSize(width: 800, height: 600)
     private let presentationSettings = ImmersiveMapSettings.default.presentation
@@ -56,8 +56,8 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.position.y, expected.y, accuracy: 0.01)
     }
 
-    /// Маркер по другую сторону антимеридиана от камеры должен через wrap
-    /// оказаться рядом с центром экрана, а не на другом конце мира.
+    /// A marker on the other side of the antimeridian from the camera must,
+    /// via wrap, end up near the screen center rather than across the world.
     func testFlatAntimeridianWrapKeepsMarkerNearCamera() throws {
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: 0.0, longitude: 179.9, zoom: 10.0))
@@ -72,7 +72,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertLessThan(point.position.x, Float(drawSize.width))
         XCTAssertEqual(point.position.y, Float(drawSize.height) * 0.5, accuracy: 0.5)
 
-        // Эквивалентная «неразвёрнутая» долгота обязана дать ту же точку.
+        // The equivalent "unwrapped" longitude must yield the same point.
         let unwrapped = GeoScreenProjectionMath.project(
             basis: GeoProjectionBasis(coordinate: GeoCoordinate(latitude: 0.0, longitude: 180.1)),
             constants: environment.constants)
@@ -81,8 +81,8 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.position.y, unwrapped.position.y, accuracy: 0.01)
     }
 
-    /// Точка плоскости далеко позади наклонённой камеры даёт clip.w <= 0
-    /// и должна помечаться невидимой.
+    /// A plane point far behind the tilted camera yields clip.w <= 0
+    /// and must be marked invisible.
     func testFlatPointFarBehindTiltedCameraIsInvisible() throws {
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: 0.0, longitude: 0.0, zoom: 16.0, pitch: 1.2))
@@ -136,8 +136,8 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.visibilityAlpha, 0.0)
     }
 
-    /// В полосе горизонта alpha должна проходить промежуточные значения,
-    /// а не переключаться ступенькой.
+    /// Within the horizon band, alpha must pass through intermediate values
+    /// rather than switching as a step.
     func testGlobeHorizonFadeBandProducesPartialAlpha() throws {
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: 0.0, longitude: 0.0, zoom: 1.0))
@@ -157,8 +157,8 @@ final class GeoScreenProjectionMathTests: XCTestCase {
                       "Ожидалась долгота с частичной alpha в полосе горизонта")
     }
 
-    /// В середине морфа точка обязана ехать по волне разворота
-    /// (transitionLocalPhase), а не по равномерному лерпу global transition.
+    /// Mid-morph, a point must ride the unfurl wave (transitionLocalPhase)
+    /// rather than a uniform lerp of the global transition.
     func testMidMorphAppliesUnfurlWaveInsteadOfUniformLerp() throws {
         let midMorphZoom = presentationSettings.automaticTransitionStartZoom
             + presentationSettings.automaticTransitionSpan * 0.45
@@ -178,7 +178,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         let flat = environment.constants.globeFlatWorldPosition(basis: basis)
         let frontDot = (sphere.z + environment.constants.globe.radius) / environment.constants.globe.radius
 
-        // Независимая копия волны из GlobeTransitionProjection.h.
+        // An independent copy of the wave from GlobeTransitionProjection.h.
         let spread: Float = 0.6
         let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
         let localPhase = simd_clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0)
@@ -199,10 +199,10 @@ final class GeoScreenProjectionMathTests: XCTestCase {
                              "Равномерный лерп должен давать заметно другую экранную точку")
     }
 
-    /// Регресс скриншотного артефакта: в середине морфа (средний зум) маркер
-    /// на обратной стороне шара (Фиджи при камере над Воронежем) не должен
-    /// просачиваться сквозь глобально ослабленный порог горизонта: волна
-    /// разворота до него ещё не дошла, точка всё ещё сферическая.
+    /// Regression of a screenshot artifact: mid-morph (medium zoom), a marker
+    /// on the far side of the sphere (Fiji with the camera over Voronezh) must
+    /// not leak through the globally relaxed horizon threshold: the unfurl wave
+    /// has not reached it yet, the point is still spherical.
     func testMidMorphKeepsFarSideMarkerHiddenUntilWaveArrives() throws {
         let midMorphZoom = presentationSettings.automaticTransitionStartZoom
             + presentationSettings.automaticTransitionSpan * 0.37
@@ -221,11 +221,12 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.visibilityAlpha, 0.0)
     }
 
-    /// Регресс «пролетающих» маркеров: в хвосте морфа локальная фаза дальней
-    /// точки уже ~1 (позиция уехала со сферы к плоскому месту и по пути может
-    /// пересекать вьюпорт), но глобальный transition ещё < 0.95. Точка из-за
-    /// горизонта СФЕРЫ обязана оставаться скрытой весь морф: Лондон при
-    /// камере над Токио не должен мигать над пустым океаном.
+    /// Regression of "fly-through" markers: in the morph tail the local phase
+    /// of a far point is already ~1 (its position has left the sphere for its
+    /// flat location and can cross the viewport on the way), but the global
+    /// transition is still < 0.95. A point beyond the SPHERE's horizon must
+    /// stay hidden throughout the morph: London with the camera over Tokyo
+    /// must not flash over empty ocean.
     func testLateMorphKeepsFarMarkerHiddenDuringUnfurlTransit() throws {
         let tokyoLatitude = 35.6595
         let latitudeExtension = log2(1.0 / cos(tokyoLatitude * .pi / 180.0))
@@ -249,10 +250,10 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.visibilityAlpha, 0.0)
     }
 
-    /// При почти завершённом морфе (геометрия уже плоская, поверхность ещё
-    /// globe) бывшая обратная сторона легитимно видима. Камера на экваторе:
-    /// на широте окно морфа растягивается на log2(1/cos(lat)), и доля фазы
-    /// считалась бы от другого span.
+    /// With the morph nearly complete (geometry already flat, surface still
+    /// globe) the former far side is legitimately visible. Camera on the
+    /// equator: at latitude the morph window stretches by log2(1/cos(lat)),
+    /// and the phase fraction would be computed from a different span.
     func testNearFlatMorphShowsFormerFarSideMarker() throws {
         let nearFlatZoom = presentationSettings.automaticTransitionStartZoom
             + presentationSettings.automaticTransitionSpan * 0.92
@@ -269,7 +270,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         XCTAssertEqual(point.visibilityAlpha, 1.0)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private struct Environment {
         let presentation: ResolvedPresentationState
@@ -307,8 +308,8 @@ final class GeoScreenProjectionMathTests: XCTestCase {
                                        pitch: pitch)
     }
 
-    /// Экранная точка мировой позиции той же камерой, что у FrameConstants
-    /// (drawable px, origin снизу слева).
+    /// Screen point of a world position through the same camera as FrameConstants
+    /// (drawable px, origin bottom-left).
     private func screenPoint(worldPosition: SIMD3<Float>,
                              constants: GeoScreenProjectionMath.FrameConstants) -> SIMD2<Float>? {
         let clip = constants.cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)

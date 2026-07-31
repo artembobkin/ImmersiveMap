@@ -204,8 +204,8 @@ private struct AvatarPresentationEntry {
         self.selectionAnimationStartTime = marker.isSelected ? time : nil
     }
 
-    /// Смена показываемой координаты пересчитывает проекционный базис -
-    /// единственное место с тригонометрией на маркер.
+    /// Changing the presented coordinate recomputes the projection basis:
+    /// the only place with per-marker trigonometry.
     private mutating func moveDisplayedCoordinate(to coordinate: GeoCoordinate) {
         guard coordinate.latitude != displayedCoordinate.latitude
                 || coordinate.longitude != displayedCoordinate.longitude else {
@@ -279,10 +279,10 @@ private struct AvatarPresentationEntry {
 
 }
 
-/// Стор презентации маркеров: держит записи по возрастанию id и кеш
-/// presented-списка. Пер-кадровая цена пропорциональна числу АНИМИРУЮЩИХСЯ
-/// маркеров (обычно единицы), а не общему количеству: статичные 30k маркеров
-/// между мутациями обходятся возвратом кешированного массива.
+/// Marker presentation store: keeps entries sorted by ascending id plus a
+/// cached presented list. Per-frame cost is proportional to the number of
+/// ANIMATING markers (usually a handful), not the total count: 30k static
+/// markers between mutations cost only returning the cached array.
 final class AvatarPresentationStateStore {
     private var entries: [AvatarPresentationEntry] = []
     private var drawOrders: [Int] = []
@@ -307,9 +307,9 @@ final class AvatarPresentationStateStore {
             return AvatarPresentationEntry(marker: marker, time: time)
         }
 
-        // Ранги порядка отрисовки по (drawPriority, id) фиксируются на
-        // мутации: solver получает вход, уже отсортированный по id, с готовым
-        // drawOrder - без пер-кадровой сортировки.
+        // Draw-order ranks by (drawPriority, id) are fixed at mutation time:
+        // the solver receives input already sorted by id with a precomputed
+        // drawOrder, no per-frame sorting.
         let rankedIndexes = entries.indices.sorted { lhs, rhs in
             if entries[lhs].marker.drawPriority != entries[rhs].marker.drawPriority {
                 return entries[lhs].marker.drawPriority < entries[rhs].marker.drawPriority
@@ -332,9 +332,9 @@ final class AvatarPresentationStateStore {
         presentedEntries(at: time).map(\.marker)
     }
 
-    /// Возвращает presented-список по возрастанию id (drawOrder - в поле).
-    /// Вызывающий не должен удерживать массив между кадрами: кеш обновляется
-    /// на месте, удержание вызвало бы COW-копию всех маркеров.
+    /// Returns the presented list sorted by ascending id (drawOrder is a field).
+    /// The caller must not retain the array across frames: the cache is updated
+    /// in place, and retaining it would trigger a COW copy of all markers.
     func presentedEntries(at time: TimeInterval) -> [PresentedAvatarMarker] {
         guard animatingIndices.isEmpty == false else {
             hasActiveAnimations = false

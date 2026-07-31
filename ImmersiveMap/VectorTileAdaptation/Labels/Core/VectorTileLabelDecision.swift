@@ -1,9 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Категория лейбла для дистанционных тиров детализации: якорные подписи
-/// (места, вода, пики) живут во всех тирах, заведения деградируют до иконки
-/// в среднем тире и исчезают в дальнем, номера домов живут только в ближнем.
+/// Label category for the distance detail tiers: anchor labels
+/// (places, water, peaks) live in all tiers, POIs degrade to an icon
+/// in the middle tier and disappear in the far one, house numbers live only in the near tier.
 enum VectorTileLabelDetailCategory: UInt8 {
     case anchor
     case poi

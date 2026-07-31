@@ -7,10 +7,10 @@ import AppKit
 import Metal
 import QuartzCore
 
-/// AppKit/Metal host view для ImmersiveMap.
-/// Владеет `CAMetalLayer` (backing layer), AppKit lifecycle, layout и мостом обновлений
-/// из SwiftUI; состояние и поведение отдельных функций живут в `ImmersiveMapHostRuntime`
-/// и его `ImmersiveMapRuntimeGraph`.
+/// AppKit/Metal host view for ImmersiveMap.
+/// Owns the `CAMetalLayer` (backing layer), AppKit lifecycle, layout, and the update
+/// bridge from SwiftUI; per-feature state and behavior live in `ImmersiveMapHostRuntime`
+/// and its `ImmersiveMapRuntimeGraph`.
 public class ImmersiveMapNSView: NSView {
     // MARK: - Rendering
 
@@ -21,8 +21,8 @@ public class ImmersiveMapNSView: NSView {
         return layer as! CAMetalLayer
     }
 
-    /// Top-left origin, как в UIKit: общие layout-расчеты контролов, HUD
-    /// и координаты жестов совпадают между платформами.
+    /// Top-left origin, as in UIKit: shared layout math for controls, the HUD,
+    /// and gesture coordinates match across platforms.
     public override var isFlipped: Bool { true }
 
     // MARK: - Controllers
@@ -95,7 +95,7 @@ public class ImmersiveMapNSView: NSView {
     private func setup(settings: ImmersiveMapSettings,
                        initialCameraPosition: ImmersiveMapCameraPosition?) {
         wantsLayer = true
-        // Содержимое слоя целиком рисует Metal - AppKit не должен просить redraw.
+        // The layer's content is drawn entirely by Metal - AppKit must not request redraws.
         layerContentsRedrawPolicy = .never
         metalLayer.contentsScale = currentBackingScaleFactor()
 
@@ -106,8 +106,8 @@ public class ImmersiveMapNSView: NSView {
                                               requestsLayout: { [weak self] in
                                                   self?.needsLayout = true
                                               })
-        // CADisplayLink от NSView привязан к дисплею окна и сам следует
-        // за перемещением окна между мониторами.
+        // The NSView-created CADisplayLink is bound to the window's display and
+        // follows the window on its own when it moves between monitors.
         hostRuntime.start(displayLinkFactory: { [unowned self] target, selector in
             self.displayLink(target: target, selector: selector)
         })
@@ -193,7 +193,7 @@ public class ImmersiveMapNSView: NSView {
 
     // MARK: - Updates
 
-    /// Синхронизирует новые параметры из SwiftUI `updateNSView` с уже созданным AppKit/Metal view.
+    /// Syncs new parameters from the SwiftUI `updateNSView` hook with the already created AppKit/Metal view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,

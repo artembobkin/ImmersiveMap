@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// Один кадр камера-тура: куда лететь, с какими опциями перелёта и сколько
-/// удерживать кадр после прилёта.
+/// One camera-tour shot: where to fly, with which flight options, and how long
+/// to hold the shot after arrival.
 public struct ImmersiveMapCameraTourShot: Sendable, Equatable {
     public let position: ImmersiveMapCameraPosition
     public let options: CameraFlightOptions
@@ -19,18 +19,18 @@ public struct ImmersiveMapCameraTourShot: Sendable, Equatable {
     }
 }
 
-/// Прогоняет камеру по заранее заданной последовательности кадров, сцепляя
-/// перелёты через completion `fly`: кино-туры, демо-облёты, onboarding.
-/// Останавливается по `stop()` и, по умолчанию, когда пользователь берёт
-/// управление на себя, чтобы перелёты не боролись с жестами.
+/// Drives the camera through a predefined sequence of shots, chaining flights
+/// via the `fly` completion: cinematic tours, demo flyovers, onboarding.
+/// Stops on `stop()` and, by default, when the user takes over control, so
+/// flights don't fight with gestures.
 @MainActor
 public final class ImmersiveMapCameraTourController {
     private let camera: ImmersiveMapCameraController
     private var task: Task<Void, Never>?
     private var interactionObserverToken: UUID?
     private var onFinished: (() -> Void)?
-    /// Растёт при каждом `start`, чтобы хвост отменённой задачи не завершил
-    /// тур, запущенный после неё.
+    /// Incremented on every `start` so the tail of a cancelled task can't
+    /// finish a tour started after it.
     private var generation = 0
 
     public init(camera: ImmersiveMapCameraController) {
@@ -41,13 +41,13 @@ public final class ImmersiveMapCameraTourController {
         task != nil
     }
 
-    /// Запускает тур, предварительно остановив предыдущий.
+    /// Starts the tour, stopping the previous one first.
     /// - Parameters:
-    ///   - shots: последовательность кадров, минимум один.
-    ///   - establish: опциональная стартовая позиция, применяется мгновенным `jump`.
-    ///   - loop: повторять последовательность до явной остановки.
-    ///   - stopOnUserInteraction: гасить тур при начале пользовательского жеста.
-    ///   - onFinished: вызывается один раз при любом завершении тура.
+    ///   - shots: the sequence of shots, at least one.
+    ///   - establish: optional starting position, applied with an instant `jump`.
+    ///   - loop: repeat the sequence until explicitly stopped.
+    ///   - stopOnUserInteraction: kill the tour when a user gesture begins.
+    ///   - onFinished: called exactly once on any tour completion.
     public func start(shots: [ImmersiveMapCameraTourShot],
                       establish: ImmersiveMapCameraPosition? = nil,
                       loop: Bool = false,
@@ -111,9 +111,10 @@ public final class ImmersiveMapCameraTourController {
         onFinished?()
     }
 
-    /// Оборачивает callback-based `fly` в async. Отдельный обработчик отмены не
-    /// нужен: единственный путь отмены задачи это `stop()`, а он гасит перелёт
-    /// через `cancelFlight()`, что триггерит completion и снимает continuation.
+    /// Wraps the callback-based `fly` in async. No separate cancellation handler
+    /// is needed: the only way the task gets cancelled is `stop()`, which kills
+    /// the flight via `cancelFlight()`, triggering the completion and resuming
+    /// the continuation.
     private func fly(to position: ImmersiveMapCameraPosition,
                      options: CameraFlightOptions) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

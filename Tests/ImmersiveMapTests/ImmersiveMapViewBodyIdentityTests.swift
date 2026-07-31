@@ -5,10 +5,10 @@
 import SwiftUI
 import XCTest
 
-/// Тип дерева body не должен зависеть от `enableCameraUIControls`: смена
-/// типа (ветки `_ConditionalContent`) заставляет SwiftUI уничтожить и
-/// пересоздать весь платформенный map view вместе с рендерером и привязками
-/// контроллеров.
+/// The body tree type must not depend on `enableCameraUIControls`: a type
+/// change (`_ConditionalContent` branches) forces SwiftUI to destroy and
+/// recreate the entire platform map view along with the renderer and
+/// controller bindings.
 @MainActor
 final class ImmersiveMapViewBodyIdentityTests: XCTestCase {
     func testBodyTypeDoesNotDependOnCameraUIControlsToggle() {

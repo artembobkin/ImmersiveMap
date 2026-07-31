@@ -3,8 +3,8 @@
 
 import QuartzCore
 
-/// Применяет команды `ImmersiveMapCameraController` к camera runtime.
-/// Использует только узкие зависимости для применения позиции камеры и запуска camera animations.
+/// Applies `ImmersiveMapCameraController` commands to the camera runtime.
+/// Uses only narrow dependencies for applying the camera position and starting camera animations.
 @MainActor
 final class ImmersiveMapCameraCommandHandler {
     private let cameraRuntime: ImmersiveMapCameraRuntime

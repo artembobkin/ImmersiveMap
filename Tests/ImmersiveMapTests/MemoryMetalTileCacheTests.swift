@@ -5,9 +5,9 @@
 import MetalKit
 import XCTest
 
-/// Пиннинг мирового покрытия: тайлы z <= 3, однажды попав в кэш, переживают
-/// обычное LRU-давление, но отпускаются при memory warning (если не видимы)
-/// и при полной очистке.
+/// World-coverage pinning: tiles with z <= 3, once in the cache, survive
+/// regular LRU pressure but are released on memory warning (if not visible)
+/// and on a full clear.
 final class MemoryMetalTileCacheTests: XCTestCase {
     func testPinnedWorldCoverTileSurvivesLruPressure() throws {
         let cache = makeCache()
@@ -58,8 +58,8 @@ final class MemoryMetalTileCacheTests: XCTestCase {
         XCTAssertNotNil(cache.getTile(forKey: pinnedTile))
     }
 
-    // Лимит 1 байт: любая вставка создаёт давление вытеснения, что позволяет
-    // проверять защиту pinned-тайлов без знания фактических размеров буферов.
+    // A 1-byte limit: any insertion creates eviction pressure, which lets us
+    // test pinned-tile protection without knowing actual buffer sizes.
     private func makeCache() -> MemoryMetalTileCache {
         MemoryMetalTileCache(maxCacheSizeInBytes: 1,
                              tileTraceRecorder: TileTraceRecorder())

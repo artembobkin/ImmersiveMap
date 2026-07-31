@@ -3,8 +3,8 @@
 
 import QuartzCore
 
-/// Composition root для runtime collaborators платформенного host view.
-/// Создает и владеет feature runtimes/controllers, затем отдает view прямые зависимости.
+/// Composition root for the platform host view's runtime collaborators.
+/// Creates and owns feature runtimes/controllers, then hands the view its direct dependencies.
 @MainActor
 final class ImmersiveMapRuntimeGraph {
     let gestureController: MapGestureController

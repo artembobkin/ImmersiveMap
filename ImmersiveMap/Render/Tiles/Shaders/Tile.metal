@@ -52,9 +52,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     return out;
 }
 
-// localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
-// Retained-подмена рисуется полным квадом source - фрагменты вне слота placeIn
-// отбрасываются, чтобы не перекрывать соседние точные тайлы.
+// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
+// A retained substitute is drawn as the full source quad - fragments outside the
+// placeIn slot are discarded so they don't overlap neighboring exact tiles.
 fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
                                    constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                    constant float4& localClipBounds [[buffer(1)]],

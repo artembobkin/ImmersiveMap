@@ -7,8 +7,8 @@ import simd
 import XCTest
 
 final class AvatarPresentationStateStoreTests: XCTestCase {
-    /// Presented-список идёт по возрастанию id, а порядок отрисовки задан
-    /// полем drawOrder с рангом по (drawPriority, id).
+    /// The presented list goes in ascending id order, while draw order is given
+    /// by the drawOrder field ranked by (drawPriority, id).
     func testPresentedEntriesAreIDOrderedWithDrawOrderRanks() throws {
         let store = AvatarPresentationStateStore()
         let markers = [
@@ -20,12 +20,12 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
 
         let presented = store.presentedEntries(at: 0)
         XCTAssertEqual(presented.map(\.marker.id), [1, 5, 9])
-        // Ранги по (drawPriority, id): (0, 5) -> 0, (1, 9) -> 1, (2, 1) -> 2.
+        // Ranks by (drawPriority, id): (0, 5) -> 0, (1, 9) -> 1, (2, 1) -> 2.
         XCTAssertEqual(presented.map(\.drawOrder), [2, 0, 1])
     }
 
-    /// Статичные маркеры между мутациями не пересобираются: повторные вызовы
-    /// возвращают кеш и не сообщают об анимациях.
+    /// Static markers are not rebuilt between mutations: repeated calls return
+    /// the cache and report no animations.
     func testStaticMarkersReturnCachedListWithoutAnimations() throws {
         let store = AvatarPresentationStateStore()
         let markers = try (1...5).map { try Self.makeMarker(id: UInt64($0), drawPriority: 0) }
@@ -39,8 +39,8 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
                        second[2].marker.coordinate.latitude)
     }
 
-    /// Смена координаты анимирует показ и пересчитывает проекционный базис;
-    /// по завершении анимаций стор затихает.
+    /// A coordinate change animates the presentation and recomputes the projection
+    /// basis; once the animations complete the store goes quiet.
     func testCoordinateChangeAnimatesAndRefreshesProjectionBasis() throws {
         let store = AvatarPresentationStateStore()
         var marker = try Self.makeMarker(id: 7, drawPriority: 0)
@@ -51,13 +51,13 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
         store.apply(snapshot: Self.makeSnapshot(markers: [marker]), time: 1.0)
         XCTAssertTrue(store.hasActiveAnimations)
 
-        // Середина перелёта: координата между стартом и целью.
+        // Mid-flight: the coordinate is between the start and the target.
         let midway = store.presentedEntries(at: 1.2)[0]
         XCTAssertGreaterThan(midway.marker.coordinate.latitude, 0.0)
         XCTAssertLessThan(midway.marker.coordinate.latitude, 10.0)
 
-        // Достаточно времени: маркер на цели, базис соответствует координате,
-        // анимации затихли.
+        // Enough time has passed: the marker is at the target, the basis matches
+        // the coordinate, the animations have gone quiet.
         let settled = store.presentedEntries(at: 5.0)[0]
         XCTAssertEqual(settled.marker.coordinate.latitude, 10.0, accuracy: 1e-9)
         XCTAssertEqual(settled.marker.coordinate.longitude, 20.0, accuracy: 1e-9)
@@ -71,7 +71,7 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
         XCTAssertFalse(store.hasActiveAnimations)
     }
 
-    /// Удалённые из снапшота маркеры исчезают из presented-списка.
+    /// Markers removed from the snapshot disappear from the presented list.
     func testRemovedMarkersDisappearFromPresentedList() throws {
         let store = AvatarPresentationStateStore()
         let markers = try (1...3).map { try Self.makeMarker(id: UInt64($0), drawPriority: 0) }
@@ -82,7 +82,7 @@ final class AvatarPresentationStateStoreTests: XCTestCase {
         XCTAssertEqual(store.presentedEntries(at: 1).map(\.marker.id), [2])
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private static func makeSnapshot(markers: [AvatarMarker]) -> AvatarsSnapshot {
         AvatarsSnapshot(markers: markers,

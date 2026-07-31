@@ -30,13 +30,13 @@ static inline float globeTransitionMapSize(constant Globe& globe,
     return 2.0 * M_PI_F * globe.radius * mapSizeScale;
 }
 
-/// Волна разворота сферы в плоскость. При равномерном лерпе дальние углы
-/// меркаторного полотна, которым лететь дальше всех, стартуют сразу и «встают»
-/// первыми. Здесь локальная фаза вершины отстаёт от глобальной пропорционально
-/// угловому расстоянию до центра взгляда (`frontDot` - косинус этого угла):
-/// ближняя область завершает разворот первой, волна катится наружу, углы
-/// встают последними. Крайние состояния совпадают с равномерным лерпом:
-/// t = 0 - сфера, t = 1 - плоскость. Зеркало на CPU -
+/// The wave of the sphere unfurling into a plane. With a uniform lerp the far
+/// corners of the mercator sheet, which have to travel the farthest, start
+/// immediately and "settle" first. Here a vertex's local phase lags the global
+/// one proportionally to its angular distance from the view center (`frontDot`
+/// is the cosine of that angle): the near area finishes unfurling first, the
+/// wave rolls outward, the corners settle last. The extremes match the uniform
+/// lerp: t = 0 - sphere, t = 1 - plane. CPU mirror -
 /// `GlobeFootprintProjectionConstants.transitionLocalPhase`.
 static inline float globeTransitionLocalPhase(float transition, float frontDot) {
     const float spread = 0.6;

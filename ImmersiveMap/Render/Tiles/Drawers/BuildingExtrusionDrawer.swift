@@ -11,9 +11,9 @@ enum BuildingExtrusionDrawer {
         var intensities: SIMD4<Float>
     }
 
-    /// Непрозрачная геометрия зданий с depth-тестом и записью глубины:
-    /// solid-режим рисует ею прямо в world-пасс, translucent - в offscreen
-    /// building image.
+    /// Opaque building geometry with depth test and depth write:
+    /// solid mode draws it straight into the world pass, translucent into the
+    /// offscreen building image.
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               placeTilesContext: PlaceTilesContext,
@@ -44,9 +44,10 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
-    /// Накладывает building image на world-пасс с общей альфой: premultiplied-бленд
-    /// тонирует каждый пиксель карты ровно один раз, покрытие силуэта зданий
-    /// (сглаженное MSAA-resolve) приходит в альфе изображения.
+    /// Composites the building image over the world pass with a shared alpha:
+    /// the premultiplied blend tints each map pixel exactly once, and the
+    /// building silhouette coverage (smoothed by MSAA resolve) arrives in the
+    /// image alpha.
     static func drawComposite(renderEncoder: MTLRenderCommandEncoder,
                               buildingImageTexture: MTLTexture,
                               alpha: Float,
@@ -85,17 +86,17 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(buffers.extruded.verticesBuffer, offset: 0, index: 0)
             renderEncoder.setVertexBuffer(buffers.extruded.stylesBuffer, offset: 0, index: 2)
 
-            // Клип фрагментов к слоту placeIn: здания retained-родителя не должны
-            // перекрывать соседние точные тайлы.
+            // Clip fragments to the placeIn slot: buildings of a retained parent
+            // must not overlap neighboring exact tiles.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
             renderEncoder.setFragmentBytes(&localClipBounds,
                                            length: MemoryLayout<SIMD4<Float>>.stride,
                                            index: 4)
 
-            // Клип режет здание вертикальной плоскостью без закрывающей грани:
-            // при отсечении back-faces срез выглядит «полым» насквозь. Для
-            // клипнутых размещений рисуем и внутренние стены - тёмный срез
-            // вместо дыры.
+            // The clip cuts a building with a vertical plane and no capping face:
+            // with back-face culling the cut looks hollow all the way through.
+            // For clipped placements we also draw the inner walls, giving a dark
+            // cut instead of a hole.
             let isClipped = localClipBounds != TileLocalClipMath.disabledBounds
             if isClipped == isBackCullingEnabled {
                 isBackCullingEnabled = !isClipped

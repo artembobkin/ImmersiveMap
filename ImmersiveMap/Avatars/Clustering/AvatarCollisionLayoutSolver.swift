@@ -10,13 +10,13 @@ import CoreGraphics
 import Foundation
 import simd
 
-/// Проекция маркера на экран до разрешения коллизий.
+/// Marker projection onto the screen before collision resolution.
 struct AvatarProjectedMarker {
     let marker: AvatarMarker
     let squashScale: SIMD2<Float>
     let screenPoint: ScreenPointOutput
-    /// Мировая (нормализованная меркаторная) позиция якоря: стабильная при
-    /// пане основа для разреза размазанных куч мировой сеткой.
+    /// World (normalized Mercator) anchor position: a pan-stable basis for
+    /// splitting sprawling piles with the world grid.
     let worldPosition: SIMD2<Double>
     let drawOrder: Int
 
@@ -28,8 +28,8 @@ struct AvatarProjectedMarker {
         self.marker = marker
         self.squashScale = squashScale
         self.screenPoint = screenPoint
-        // Запасной вариант для синтетических вызовов (тесты): любое линейное
-        // отображение экрана в «мир» согласовано с разрезом по сетке.
+        // Fallback for synthetic calls (tests): any linear mapping of the
+        // screen into "world" is consistent with the grid split.
         self.worldPosition = worldPosition
             ?? SIMD2<Double>(Double(screenPoint.position.x) * 0.001,
                              Double(screenPoint.position.y) * 0.001)
@@ -37,8 +37,9 @@ struct AvatarProjectedMarker {
     }
 }
 
-/// Итог размещения одного маркера: смещённая экранная точка, истинный якорь
-/// (проекция геопозиции) и текущая форма (пин на месте или сдвинутый кружок).
+/// Placement result for one marker: the displaced screen point, the true anchor
+/// (projection of the geo position), and the current shape (pin in place or a
+/// displaced circle).
 struct AvatarCollisionMarkerItem {
     let marker: AvatarMarker
     let squashScale: SIMD2<Float>
@@ -46,34 +47,37 @@ struct AvatarCollisionMarkerItem {
     let anchorScreenPoint: ScreenPointOutput
     let displayScale: Float
     let morph: Float
-    /// Лепесток цветка: стоит в слоте кольца и не двигается коррекциями.
+    /// Flower petal: sits in its ring slot and is not moved by corrections.
     let isFlowerPetal: Bool
     let drawOrder: Int
 }
 
-/// Метаданные цветка-кластера: состав кучи и видимые лепестки. Рендерится
-/// цветок обычными marker item-ами; структура нужна интроспекции и тестам.
+/// Flower-cluster metadata: pile membership and visible petals. The flower is
+/// rendered with regular marker items; this structure exists for introspection
+/// and tests.
 struct AvatarFlowerGroup {
     let memberIDs: [UInt64]
     let visibleMemberIDs: [UInt64]
     let center: SIMD2<Float>
 }
 
-/// Экранная геометрия маркера, нужная солверу: тело маркера смещено вверх от
-/// якоря (низ пина стоит на геоточке), поэтому коллизии решаются по центрам
-/// тел, а не по якорям - иначе маркеры разного масштаба наезжают друг на друга.
+/// Screen-space marker geometry the solver needs: the marker body is offset up
+/// from the anchor (the pin's bottom stands on the geo point), so collisions are
+/// resolved on body centers, not anchors, otherwise markers of different scales
+/// would ride over each other.
 struct AvatarCollisionGeometry {
-    /// Полный размер маркера (для порогов группировки).
+    /// Full marker size (for grouping thresholds).
     let markerSizePx: Float
-    /// Радиус тела пина при масштабе 1 (полуширина скруглённого квадрата).
+    /// Pin body radius at scale 1 (half-width of the rounded square).
     let bodyRadiusPx: Float
-    /// Видимый радиус кружка (морф 1) при масштабе 1: вписанный круг тела.
+    /// Visible circle radius (morph 1) at scale 1: the body's inscribed circle.
     let circleBodyRadiusPx: Float
-    /// Вертикальный сдвиг центра тела от якоря при масштабе 1.
+    /// Vertical shift of the body center from the anchor at scale 1.
     let bodyCenterOffsetPx: Float
 
-    /// Номинальный радиус тела для текущей формы: пин шире кружка, и расчёт
-    /// по пиновому радиусу оставлял бы видимую щель между кружками.
+    /// Nominal body radius for the current shape: the pin is wider than the
+    /// circle, and computing from the pin radius would leave a visible gap
+    /// between circles.
     func bodyRadius(morph: Float) -> Float {
         bodyRadiusPx + (circleBodyRadiusPx - bodyRadiusPx) * simd_clamp(morph, 0.0, 1.0)
     }
@@ -89,12 +93,12 @@ struct AvatarCollisionLayout {
     let hasActiveAnimations: Bool
 }
 
-/// Zenly-подобное размещение аватаров: маркеры расталкиваются кругами в
-/// screen-space (Gauss-Seidel с пружиной к якорю); форма пина - только у
-/// маркера, стоящего ровно на геоточке, сдвинутый маркер - уменьшенный кружок
-/// с конусом к геоточке; плотные кучи раскладываются «цветком» из лепестков,
-/// не вместившиеся участники скрываются. Держит межкадровое состояние для
-/// плавных, независимых от fps переходов.
+/// Zenly-like avatar placement: markers push each other apart as circles in
+/// screen space (Gauss-Seidel with a spring to the anchor); only a marker
+/// standing exactly on its geo point keeps the pin shape, a displaced marker is
+/// a shrunken circle with a cone to the geo point; dense piles are laid out as
+/// a "flower" of petals, members that don't fit are hidden. Keeps inter-frame
+/// state for smooth, fps-independent transitions.
 final class AvatarCollisionLayoutSolver {
 
     private struct MarkerMotionState {
@@ -112,18 +116,18 @@ final class AvatarCollisionLayoutSolver {
 
     private struct ClusterSeed {
         let stateKey: UInt64
-        /// Индексы участников во входе кадра, по возрастанию (id-порядок).
-        /// Состав хранится индексами: копирование массивов маркеров с их
-        /// ссылками на картинки было заметной статьёй расходов мега-кучи.
+        /// Member indexes into the frame input, ascending (id order).
+        /// Membership is stored as indexes: copying marker arrays with their
+        /// image references was a noticeable cost item for the mega-pile.
         let memberIndexes: [Int]
         let memberIDs: [UInt64]
-        /// Центроид экранных якорей участников.
+        /// Centroid of the members' screen anchors.
         let anchor: SIMD2<Float>
-        /// Габариты экранных якорей: лимит компактности слияний.
+        /// Bounds of the screen anchors: the compactness limit for merges.
         let boundsMin: SIMD2<Float>
         let boundsMax: SIMD2<Float>
-        /// Позиция кольца: центроид якорей, при разведении пересекающихся
-        /// несливаемых колец может быть смещена.
+        /// Ring position: the anchor centroid, may be shifted when separating
+        /// intersecting unmergeable rings.
         var center: SIMD2<Float>
     }
 
@@ -136,7 +140,7 @@ final class AvatarCollisionLayoutSolver {
     }
 
     private var markerStates: [UInt64: MarkerMotionState] = [:]
-    /// Ключ - минимальный id участника: сохраняет состояние при смене состава.
+    /// Key is the minimum member id: preserves state across membership changes.
     private var clusterStates: [UInt64: ClusterMotionState] = [:]
     private var previouslyGroupedMarkerIDs: Set<UInt64> = []
     private var lastTime: TimeInterval?
@@ -162,8 +166,8 @@ final class AvatarCollisionLayoutSolver {
         let compressedScale = min(config.compressedScale, 1.0)
         let petalBodyRadius = geometry.circleBodyRadiusPx * compressedScale
 
-        // Вход почти всегда уже упорядочен по id; сортировка - страховка для
-        // произвольных вызовов (полная сортировка 30k каждый кадр заметна).
+        // The input is almost always already ordered by id; sorting is a safety
+        // net for arbitrary calls (a full sort of 30k every frame is noticeable).
         var inputIsSorted = true
         for index in 1..<projectedMarkers.count
         where projectedMarkers[index - 1].marker.id >= projectedMarkers[index].marker.id {
@@ -175,15 +179,15 @@ final class AvatarCollisionLayoutSolver {
             : projectedMarkers.sorted { $0.marker.id < $1.marker.id }
         var unsettled = false
 
-        // Прошлокадровый состав групп: гистерезис группировки и распознавание
-        // стационарно скрытых участников, чьё состояние уже сброшено.
+        // Previous frame's group membership: grouping hysteresis and detection
+        // of stationarily hidden members whose state has already been reset.
         let groupedLastFrame = previouslyGroupedMarkerIDs
 
-        // Кластер обязан быть локальным: лимит разброса экранных якорей
-        // одного цветка режет перколяцию цепочек и каскады слияний.
+        // A cluster must be local: the limit on the spread of one flower's
+        // screen anchors cuts chain percolation and merge cascades.
         let compactnessLimit = markerSizePx * AvatarCollisionMath.flowerCompactnessLimitScale
 
-        // Группировка: legacy event-кластеры + overflow-кучи с гистерезисом.
+        // Grouping: legacy event clusters + overflow piles with hysteresis.
         let eventSeeds = eventClusterSeeds(input: input, markerSizePx: markerSizePx, config: config)
         let eventClusteredIDs = Set(eventSeeds.flatMap(\.memberIDs))
         let overflowSeeds = overflowClusterSeeds(input: input,
@@ -192,10 +196,10 @@ final class AvatarCollisionLayoutSolver {
                                                  compactnessLimit: compactnessLimit,
                                                  config: config)
 
-        // Цветки и жёсткие тела не могут уступать друг другу, поэтому
-        // конфликты между ними разрешаются составом: пересекающиеся кольцами
-        // цветки сливаются; выбранный маркер, касающийся цветка телом, входит
-        // в него лепестком; маркер с якорем внутри кольца поглощается.
+        // Flowers and rigid bodies cannot yield to each other, so conflicts
+        // between them are resolved by membership: flowers with intersecting
+        // rings merge; a selected marker touching a flower with its body joins
+        // it as a petal; a marker whose anchor lies inside the ring is absorbed.
         var clusterSeeds = mergeIntersectingFlowers((eventSeeds + overflowSeeds),
                                                     input: input,
                                                     petalBodyRadius: petalBodyRadius,
@@ -219,12 +223,12 @@ final class AvatarCollisionLayoutSolver {
                                                 compactnessLimit: compactnessLimit)
             .sorted { $0.stateKey < $1.stateKey }
 
-        // Кольца несливаемых соседей (лимит компактности) разводятся до
-        // непересечения: лепестки разных цветков не накладываются.
+        // Rings of unmergeable neighbors (compactness limit) are separated
+        // until they no longer intersect: petals of different flowers don't overlap.
         separateFlowerRings(&clusterSeeds, petalBodyRadius: petalBodyRadius)
 
-        // Гистерезис следующего кадра держит расширенный радиус для всех
-        // участников цветков (поглощённые и слитые - тоже часть кучи).
+        // Next frame's hysteresis keeps the widened radius for all flower
+        // members (absorbed and merged ones are part of the pile too).
         var groupedThisFrame = Set<UInt64>(minimumCapacity: input.count)
         for seed in clusterSeeds {
             groupedThisFrame.formUnion(seed.memberIDs)
@@ -233,18 +237,18 @@ final class AvatarCollisionLayoutSolver {
 
         let standaloneMarkers = standaloneIndexes.map { input[$0] }
 
-        // В каждой куче касающихся маркеров есть доминант: он сохраняет форму
-        // пина и не сдвигается, уступают (кружками) только остальные.
+        // Every pile of touching markers has a dominant: it keeps the pin shape
+        // and does not move, only the others yield (as circles).
         let dominantIDs = dominantMarkerIDs(standaloneMarkers: standaloneMarkers,
                                             clusterSeeds: clusterSeeds,
                                             geometry: geometry,
                                             config: config)
 
-        // Двухпрогонная схема без межкадровой обратной связи (радиус узла от
-        // сглаженного морфа осциллировал на границе контакта): прогон A с
-        // полноразмерными телами решает, кто сдвинут; прогон B с радиусами по
-        // морф-целям A даёт финальные позиции. Обе цели - чистые непрерывные
-        // функции якорей, поэтому размер и форма не дёргаются.
+        // Two-pass scheme without inter-frame feedback (a node radius driven by
+        // the smoothed morph oscillated at the contact boundary): pass A with
+        // full-size bodies decides who is displaced; pass B with radii from
+        // pass A's morph targets yields the final positions. Both targets are
+        // pure continuous functions of the anchors, so size and shape don't jitter.
         var probeNodes = makeNodes(standaloneMarkers: standaloneMarkers,
                                    clusterSeeds: clusterSeeds,
                                    dominantIDs: dominantIDs,
@@ -259,8 +263,8 @@ final class AvatarCollisionLayoutSolver {
             fullBodyMorphs.append(AvatarCollisionMath.displacedMorph(offsetLength: simd_length(probeOffset)))
         }
 
-        // Промежуточный прогон с формами по A1 определяет фактические позиции
-        // и размеры соседей для статической проверки касания.
+        // An intermediate pass with shapes from A1 determines the actual
+        // neighbor positions and sizes for the static touch check.
         var shapedProbeNodes = makeNodes(standaloneMarkers: standaloneMarkers,
                                          clusterSeeds: clusterSeeds,
                                          dominantIDs: dominantIDs,
@@ -272,12 +276,12 @@ final class AvatarCollisionLayoutSolver {
                                          })
         relax(nodes: &shapedProbeNodes, config: config)
 
-        // Физичность формы: маркер становится кружком, только если его
-        // полноразмерное тело на якоре фактически касается уже уменьшенных
-        // тел соседей. Сосед-кружок не «давит» с дистанции своего полного
-        // радиуса. Кандидаты - через сетку: вклад в глубину дают только тела
-        // ближе суммы максимальных радиусов, дальние дают отрицательную
-        // глубину и на максимум не влияют.
+        // Physical shape rule: a marker becomes a circle only if its full-size
+        // body at the anchor actually touches neighbors' already shrunken
+        // bodies. A circle neighbor doesn't "press" from the distance of its
+        // full radius. Candidates come via the grid: only bodies closer than
+        // the sum of maximum radii contribute depth; farther ones yield
+        // negative depth and don't affect the maximum.
         var maxStandaloneSizeScale: Float = 0.0
         for projected in standaloneMarkers {
             maxStandaloneSizeScale = max(maxStandaloneSizeScale, projected.marker.screenSizeScale)
@@ -327,10 +331,10 @@ final class AvatarCollisionLayoutSolver {
                               })
         relax(nodes: &nodes, config: config)
 
-        // Сжатие кружков вынужденное и переменное: базовый сдвинутый кружок -
-        // displacedCircleScale, при тесноте сжимается по финальным дистанциям
-        // прогона B, но не ниже лимита compressedScale. Соседи - через сетку:
-        // на требуемый масштаб влияют только тела в пределах суммы радиусов.
+        // Circle compression is forced and variable: the base displaced circle
+        // is displacedCircleScale, under crowding it compresses per pass B's
+        // final distances but not below the compressedScale limit. Neighbors
+        // via the grid: only bodies within the sum of radii affect the required scale.
         var targetScales: [Float] = []
         targetScales.reserveCapacity(standaloneMarkers.count)
         if standaloneMarkers.isEmpty == false {
@@ -346,9 +350,9 @@ final class AvatarCollisionLayoutSolver {
             var scaleCandidates: [Int] = []
 
             for (index, projected) in standaloneMarkers.enumerated() {
-                // Форма определяется прогоном A: пин - только когда полноразмерному
-                // маркеру хватает места стоять на геоточке. Иначе в пограничной
-                // зоне (полные тела толкаются, кружки - нет) пины пересекались бы.
+                // The shape is decided by pass A: a pin only when the full-size
+                // marker has room to stand on its geo point. Otherwise in the
+                // boundary zone (full bodies push, circles don't) pins would intersect.
                 let morphTarget = morphTargets[index]
                 let capScale = AvatarCollisionMath.scaleCap(morph: morphTarget)
                 var scale = capScale
@@ -393,8 +397,8 @@ final class AvatarCollisionLayoutSolver {
         var seenClusterKeys = Set<UInt64>()
         var seenMarkerIDs = Set<UInt64>()
 
-        // Принадлежность кластеру по индексу входа: выбор лепестков и
-        // продвижение скрытых участников без полного скана мега-состава.
+        // Cluster membership by input index: petal selection and advancing
+        // hidden members without a full scan of the mega membership.
         var seedIndexByInputIndex = [Int](repeating: -1, count: input.count)
         for (seedIndex, seed) in clusterSeeds.enumerated() {
             for memberIndex in seed.memberIndexes {
@@ -409,8 +413,8 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Живые цветки: кольцо на центре кучи (центроид якорей, возможно
-        // разведённый от соседних колец), раскладка лепестков.
+        // Live flowers: the ring at the pile center (the anchor centroid,
+        // possibly separated from neighboring rings), petal layout.
         for (seedIndex, seed) in clusterSeeds.enumerated() {
             seenClusterKeys.insert(seed.stateKey)
             var state = clusterStates[seed.stateKey] ?? ClusterMotionState(presence: 1.0,
@@ -426,9 +430,9 @@ final class AvatarCollisionLayoutSolver {
             let petalCount = min(seed.memberIndexes.count, AvatarCollisionMath.maxFlowerPetals)
             let ringRadius = AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalBodyRadius,
                                                                   petalCount: petalCount)
-            // Выбранные участники гарантированно среди видимых лепестков и
-            // первыми; добор - младшие id (состав отсортирован, добор
-            // обходит только префикс, а не весь мега-состав).
+            // Selected members are guaranteed among the visible petals and go
+            // first; the fill-up takes the lowest ids (membership is sorted, so
+            // the fill-up walks only a prefix, not the whole mega membership).
             var visibleMemberIndexes: [Int] = []
             visibleMemberIndexes.reserveCapacity(petalCount)
             for selectedIndex in selectedIndexesBySeed[seedIndex] {
@@ -465,10 +469,10 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Скрытые участники цветков: стационарные состояния не имеют и не
-        // требуют работы, поэтому продвигаются только живые межкадровые
-        // состояния (единицы), а не весь мега-состав. Лепестки уже учтены
-        // и пропускаются по seenMarkerIDs.
+        // Hidden flower members: stationary ones have no state and need no
+        // work, so only live inter-frame states (a handful) are advanced, not
+        // the whole mega membership. Petals are already accounted for and
+        // skipped via seenMarkerIDs.
         if markerStates.isEmpty == false, clusterSeeds.isEmpty == false {
             for id in markerStates.keys.sorted() where seenMarkerIDs.contains(id) == false {
                 guard let inputIndex = Self.inputIndex(ofID: id, in: input) else { continue }
@@ -487,9 +491,9 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Распавшиеся цветки: центр ещё нужен вылетающим участникам, пока
-        // гаснет presence. Карта участник -> ключ позволяет стационарно
-        // скрытым (без состояния) начать вылет из центра распавшейся кучи.
+        // Dissolved flowers: the center is still needed by members flying out
+        // while presence fades. The member -> key map lets stationarily hidden
+        // ones (no state) start their fly-out from the dissolved pile's center.
         var dissolvedKeyByMemberID: [UInt64: UInt64] = [:]
         for key in clusterStates.keys.sorted() where seenClusterKeys.contains(key) == false {
             guard var state = clusterStates[key] else { continue }
@@ -518,22 +522,22 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Одиночные маркеры: сглаживание смещения/масштаба/морфа, вылет из
-        // цветка.
+        // Standalone markers: smoothing of offset/scale/morph, fly-out from
+        // the flower.
         for (index, projected) in standaloneMarkers.enumerated() {
             let id = projected.marker.id
             seenMarkerIDs.insert(id)
             let targetOffset = nodes[index].position - nodes[index].anchor
-            // Форму пина маркер имеет только когда полноразмерному телу
-            // хватает места на геоточке (морф-цель прогона A).
+            // A marker keeps the pin shape only when the full-size body has
+            // room on the geo point (pass A's morph target).
             let targetMorph = morphTargets[index]
             var state: MarkerMotionState
             if let existing = markerStates[id] {
                 state = existing
             } else if groupedLastFrame.contains(id),
                       let dissolvedKey = dissolvedKeyByMemberID[id] {
-                // Стационарно скрытый участник распавшейся кучи (состояние
-                // сброшено): проявляется вылетом из гаснущего центра цветка.
+                // A stationarily hidden member of a dissolved pile (state
+                // reset): reappears by flying out of the fading flower center.
                 state = MarkerMotionState(offset: targetOffset,
                                           scale: targetScales[index],
                                           morph: targetMorph,
@@ -561,8 +565,8 @@ final class AvatarCollisionLayoutSolver {
             let blendActive = advanceBlend(&state.clusterBlend, target: 0.0, step: blendStep)
             unsettled = unsettled || offsetActive || scaleActive || morphActive || blendActive
 
-            // Поправка якоря: центр фактического (сжатого) тела остаётся в
-            // точке, решённой прогоном B для тела масштаба scaleCap(morph A).
+            // Anchor correction: the center of the actual (compressed) body
+            // stays at the point solved by pass B for a body of scale scaleCap(morph A).
             let nodeScale = AvatarCollisionMath.scaleCap(morph: morphTargets[index])
             let bodyCenterLift = geometry.bodyCenterOffsetPx * projected.marker.screenSizeScale
                 * (nodeScale - state.scale)
@@ -601,10 +605,10 @@ final class AvatarCollisionLayoutSolver {
             markerStates.removeValue(forKey: id)
         }
 
-        // Жёсткая гарантия кадра: сглаживание отстаёт от целей, и в переходных
-        // кадрах тела могут наложиться. Финальный проход разрешает перекрытия
-        // отображаемых тел напрямую; в сошедшемся состоянии он нулевой и не
-        // трогает межкадровое состояние.
+        // Hard per-frame guarantee: smoothing lags behind the targets, and in
+        // transitional frames bodies may overlap. The final pass resolves
+        // displayed-body overlaps directly; in the converged state it is a
+        // no-op and does not touch inter-frame state.
         resolveDisplayedOverlaps(markerItems: &markerItems,
                                  geometry: geometry,
                                  compressedScale: compressedScale)
@@ -621,9 +625,9 @@ final class AvatarCollisionLayoutSolver {
                                      hasActiveAnimations: unsettled)
     }
 
-    /// Микрокоррекция отображаемых позиций: устраняет краткие наложения
-    /// фактических тел во время анимаций. Работает поверх сглаженного
-    /// состояния и не пишет в него, поэтому не влияет на сходимость.
+    /// Micro-correction of displayed positions: removes brief overlaps of the
+    /// actual bodies during animations. Works on top of the smoothed state and
+    /// does not write into it, so it does not affect convergence.
     private func resolveDisplayedOverlaps(markerItems: inout [AvatarCollisionMarkerItem],
                                           geometry: AvatarCollisionGeometry,
                                           compressedScale: Float) {
@@ -639,22 +643,21 @@ final class AvatarCollisionLayoutSolver {
             let bodyScale = item.displayScale * item.marker.screenSizeScale
             centers.append(item.screenPoint.position
                 + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * bodyScale))
-            // Тающие участники кластерного кроссфейда пролетают сквозь
-            // остальных: нулевой радиус исключает их из коррекции.
+            // Fading members of the cluster crossfade fly through the others:
+            // a zero radius excludes them from the correction.
             let isFadingThrough = item.screenPoint.visibilityAlpha
                 < item.anchorScreenPoint.visibilityAlpha * 0.99
             radii.append(isFadingThrough ? 0.0 : geometry.bodyRadius(morph: item.morph) * bodyScale)
-            // Пины (morph 0) и лепестки цветка стоят на месте, уступают
-            // только свободные кружки.
+            // Pins (morph 0) and flower petals stay put; only free circles yield.
             let isImmovable = item.marker.isSelected || item.isFlowerPetal
             inverseMasses.append(isImmovable ? 0.0 : item.morph)
         }
 
-        // Пары ищутся через сетку по твёрдым (ненулевой радиус) телам. Пары
-        // тающих между собой невозможны (minDistance 0), тающие против
-        // твёрдых проверяются точечными запросами - иначе транзиент
-        // схлопывания большой кучи (тысячи тающих в одной точке) снова
-        // давал бы квадратичный перебор.
+        // Pairs are found via a grid over solid (nonzero-radius) bodies.
+        // Fading-vs-fading pairs are impossible (minDistance 0); fading vs
+        // solid are checked with point queries, otherwise the collapse
+        // transient of a large pile (thousands of fading bodies at one point)
+        // would again produce a quadratic scan.
         var solidIndices: [Int] = []
         var fadingIndices: [Int] = []
         var maxSolidRadius: Float = 1.0
@@ -675,10 +678,10 @@ final class AvatarCollisionLayoutSolver {
             var rhsInverseMass = inverseMasses[rhsIndex]
             let bothPetals = markerItems[lhsIndex].isFlowerPetal && markerItems[rhsIndex].isFlowerPetal
             if bothPetals {
-                // Лепестки неподвижны только для одиночных кружков. Пара
-                // лепестков разных цветков - два «неподвижных» тела: в
-                // сверхплотной мозаике колец сепарация центров развести их
-                // не может, и без взаимной уступки наложение замерзало бы.
+                // Petals are immovable only toward standalone circles. A pair of
+                // petals from different flowers is two "immovable" bodies: in a
+                // super-dense mosaic of rings the center separation cannot pull
+                // them apart, and without mutual yielding the overlap would freeze.
                 lhsInverseMass = markerItems[lhsIndex].marker.isSelected ? 0.0 : 1.0
                 rhsInverseMass = markerItems[rhsIndex].marker.isSelected ? 0.0 : 1.0
             }
@@ -690,8 +693,8 @@ final class AvatarCollisionLayoutSolver {
             guard distanceSquared < minDistance * minDistance else { return }
             let distance = distanceSquared.squareRoot()
             let overlap = minDistance - distance
-            // Слоты одного кольца касаются впритык: микрошум флоатов не
-            // должен расталкивать собственные лепестки цветка.
+            // Slots of one ring touch exactly: float micro-noise must not push
+            // a flower's own petals apart.
             if bothPetals, overlap <= 1.0 { return }
             let direction = distance > 1e-4
                 ? delta / distance
@@ -701,8 +704,8 @@ final class AvatarCollisionLayoutSolver {
             centers[rhsIndex] += direction * overlap * (rhsInverseMass / inverseMassSum)
         }
 
-        // Кандидатные пары собираются один раз: за итерации коррекции тела
-        // смещаются в пределах радиуса, радиусный запас это покрывает.
+        // Candidate pairs are collected once: over the correction iterations
+        // bodies move within a radius, which the radius margin covers.
         for (localIndex, itemIndex) in solidIndices.enumerated() {
             solidPositions[localIndex] = centers[itemIndex]
         }
@@ -731,18 +734,19 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Плотная мозаика колец сходится медленно: пара, разведённая на
-        // первой итерации, создаёт наложение со следующим соседом.
+        // A dense mosaic of rings converges slowly: a pair separated on the
+        // first iteration creates an overlap with the next neighbor.
         for _ in 0..<20 {
             for pair in pairs {
                 resolvePair(pair.0, pair.1)
             }
         }
 
-        // Рассинхрон мозаики: солвер сжимал кружки по слотам колец, а
-        // фактические лепестки сдвинуты коррекцией. Кружок, зажатый между
-        // неподвижными для него телами, дожимается по фактическим дистанциям
-        // (в пределах лимита сжатия), после чего позиции доразглаживаются.
+        // Mosaic desync: the solver compressed circles against ring slots while
+        // the actual petals were shifted by the correction. A circle squeezed
+        // between bodies immovable to it is compressed further per the actual
+        // distances (within the compression limit), after which the positions
+        // are re-settled.
         var scaleAdjusted = false
         for pair in pairs {
             let residualMinDistance = radii[pair.0] + radii[pair.1]
@@ -806,11 +810,11 @@ final class AvatarCollisionLayoutSolver {
         }
     }
 
-    // MARK: - Лепестки цветка
+    // MARK: - Flower petals
 
-    /// Лепесток - обычный маркер, чья цель смещения задана слотом на кольце
-    /// цветка: перелёт в слот и обратно идёт тем же сглаживанием, что и
-    /// расталкивание.
+    /// A petal is a regular marker whose offset target is set by a slot on the
+    /// flower ring: the flight into the slot and back uses the same smoothing
+    /// as the push-apart.
     private func emitPetal(member: AvatarProjectedMarker,
                            slotCenter: SIMD2<Float>,
                            stateKey: UInt64,
@@ -825,12 +829,12 @@ final class AvatarCollisionLayoutSolver {
         let id = member.marker.id
         seenMarkerIDs.insert(id)
         let screenSizeScale = member.marker.screenSizeScale
-        // Целевое смещение кладёт центр тела лепестка ровно в слот.
+        // The target offset puts the petal's body center exactly into the slot.
         let targetOffset = slotCenter - member.screenPoint.position
             - SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * screenSizeScale * compressedScale)
-        // Стационарно скрытый участник состояния не имеет (оно сброшено);
-        // выход в лепестки начинается с blend 1 - проявление фейдом, как
-        // раньше со «живым» скрытым состоянием.
+        // A stationarily hidden member has no state (it was reset); promotion
+        // to a petal starts with blend 1, a fade-in appearance, just like the
+        // earlier "live" hidden state.
         var state = markerStates[id] ?? MarkerMotionState(offset: targetOffset,
                                                           scale: compressedScale,
                                                           morph: 1.0,
@@ -866,7 +870,7 @@ final class AvatarCollisionLayoutSolver {
                                                      drawOrder: member.drawOrder))
     }
 
-    /// Не вместившийся в цветок участник: тает, слетаясь к центру цветка.
+    /// A member that did not fit into the flower: fades out while converging on the flower center.
     private func emitHiddenMember(member: AvatarProjectedMarker,
                                   flowerCenter: SIMD2<Float>,
                                   stateKey: UInt64,
@@ -878,9 +882,9 @@ final class AvatarCollisionLayoutSolver {
                                   seenMarkerIDs: inout Set<UInt64>,
                                   markerItems: inout [AvatarCollisionMarkerItem]) {
         let id = member.marker.id
-        // Стационарно скрытый участник: состояния нет - создавать нечего,
-        // анимировать нечего, не рисуется. Ранний выход делает спокойный
-        // мировой зум с десятками тысяч скрытых участников почти бесплатным.
+        // A stationarily hidden member: no state, nothing to create, nothing
+        // to animate, not drawn. The early exit makes a calm world zoom with
+        // tens of thousands of hidden members nearly free.
         guard var state = markerStates[id] else { return }
         seenMarkerIDs.insert(id)
         state.lastClusterKey = stateKey
@@ -899,9 +903,9 @@ final class AvatarCollisionLayoutSolver {
                                        epsilon: AvatarCollisionMath.scaleSnapEpsilon)
         unsettled = unsettled || blendActive || offsetActive || scaleActive || morphActive
 
-        // Полностью растаявший участник устоялся: состояние сбрасывается, на
-        // повторное появление лепестком/одиночкой укажет прошлокадровый
-        // состав группы (groupedLastFrame).
+        // A fully faded member has settled: the state is reset; a reappearance
+        // as a petal or standalone will be indicated by the previous frame's
+        // group membership (groupedLastFrame).
         if state.clusterBlend >= 0.999,
            blendActive == false, offsetActive == false,
            scaleActive == false, morphActive == false {
@@ -926,7 +930,7 @@ final class AvatarCollisionLayoutSolver {
                                                      drawOrder: member.drawOrder))
     }
 
-    // MARK: - Группировка
+    // MARK: - Grouping
 
     private func eventClusterSeeds(input: [AvatarProjectedMarker],
                                    markerSizePx: Float,
@@ -957,28 +961,29 @@ final class AvatarCollisionLayoutSolver {
         let components = connectedGroups(of: candidateIndexes,
                                          in: input,
                                          maxJoinDistance: exitRadius) { lhs, rhs in
-            // Расширенный (гистерезисный) радиус удерживает уже сложившуюся
-            // группу, но не затягивает проходящих мимо соседей.
+            // The widened (hysteresis) radius holds an already formed group
+            // together but does not pull in neighbors passing by.
             let widened = previouslyGrouped.contains(lhs.marker.id) && previouslyGrouped.contains(rhs.marker.id)
             let radius = widened ? exitRadius : enterRadius
             return simd_length_squared(lhs.screenPoint.position - rhs.screenPoint.position) <= radius * radius
         }
-        // Перколяция цепочек: на плотном поле компонента связности тянется
-        // через весь экран, и кольцо получало бы участников за сотни px от
-        // себя. Переростки режутся мировой сеткой на локальные кучи.
+        // Chain percolation: on a dense field a connected component stretches
+        // across the whole screen, and a ring would receive members hundreds of
+        // px away. Overgrown components are cut by the world grid into local piles.
         return splitSprawlingComponents(components,
                                         input: input,
                                         compactnessLimit: compactnessLimit,
                                         groupingThreshold: config.groupingThreshold)
-            // Цветок собирается, когда куча дорастает до порога (и минимум из пары).
+            // A flower forms once the pile reaches the threshold (and at least a pair).
             .filter { $0.count > 1 && $0.count >= config.groupingThreshold }
             .map { makeSeed(memberIndexes: $0, input: input) }
     }
 
-    /// Режет компоненты с разбросом экранных якорей больше лимита по мировой
-    /// сетке: границы ячеек привязаны к миру (стабильны при пане и повороте),
-    /// шаг - степень двойки (меняется октавами зума, скачки состава сглаживает
-    /// кроссфейд кластеров). Масштаб пиксель/мир берётся из самих точек.
+    /// Splits components whose screen-anchor spread exceeds the limit by a
+    /// world grid: cell boundaries are anchored to the world (stable under pan
+    /// and rotation), the step is a power of two (changes in zoom octaves, and
+    /// membership jumps are smoothed by the cluster crossfade). The pixel/world
+    /// scale is derived from the points themselves.
     private func splitSprawlingComponents(_ components: [[Int]],
                                           input: [AvatarProjectedMarker],
                                           compactnessLimit: Float,
@@ -1026,13 +1031,13 @@ final class AvatarCollisionLayoutSolver {
                                         Int64((world.y / step).rounded(.down)))
                 cellsBuckets[cell, default: []].append(index)
             }
-            // Порядок словаря недетерминирован: подгруппы сортируются по
-            // наименьшему участнику.
+            // Dictionary order is nondeterministic: subgroups are sorted by
+            // their smallest member.
             var subgroups = cellsBuckets.values.sorted { ($0.first ?? 0) < ($1.first ?? 0) }
 
-            // Подгруппы-недоборы вливаются в ближайшую полноценную подгруппу
-            // той же кучи: свободному кружку внутри сплошной мозаики колец
-            // физически нет места - его тело замерзало бы в наложении.
+            // Undersized subgroups merge into the nearest full subgroup of the
+            // same pile: a free circle inside a solid mosaic of rings physically
+            // has no room, its body would freeze in an overlap.
             let seedThreshold = max(groupingThreshold, 2)
             var fullSubgroups: [(subgroupIndex: Int, centroid: SIMD2<Float>)] = []
             for (subgroupIndex, subgroup) in subgroups.enumerated() where subgroup.count >= seedThreshold {
@@ -1072,21 +1077,20 @@ final class AvatarCollisionLayoutSolver {
         return result
     }
 
-    /// Плотная ячейка сетки: столько кандидатов в одной ячейке радиуса
-    /// объединения - гарантированно толпа, попарные проверки внутри неё не
-    /// нужны (участники и так связались бы цепочками через 3x3 окрестность).
+    /// Dense grid cell: this many candidates in one cell of the join radius is
+    /// guaranteed to be a crowd, pairwise checks inside it are unnecessary
+    /// (members would chain together through the 3x3 neighborhood anyway).
     private static let denseGroupingCellPopulation = 16
-    /// Против скольких участников плотной ячейки соседний разреженный маркер
-    /// проверяется точно, прежде чем считать, что связи нет.
+    /// How many members of a dense cell a neighboring sparse marker is checked
+    /// against exactly before concluding there is no link.
     private static let denseGroupingProbeLimit = 64
 
-    /// Компоненты связности по парному предикату через пространственную
-    /// сетку: cellSize = максимальная дистанция объединения, поэтому все
-    /// потенциальные пары лежат в 3x3 окрестности. Плотные ячейки (толпы)
-    /// объединяются целиком без попарного перебора - иначе куча в 30k
-    /// маркеров на одном экране давала бы сотни миллионов проверок. Кандидаты
-    /// приходят по возрастанию (id-порядок), состав групп детерминирован;
-    /// возвращаются группы индексов входа.
+    /// Connected components by a pairwise predicate via a spatial grid:
+    /// cellSize = the maximum join distance, so all potential pairs lie within
+    /// the 3x3 neighborhood. Dense cells (crowds) are united wholesale without
+    /// pairwise scanning, otherwise a 30k-marker pile on one screen would cost
+    /// hundreds of millions of checks. Candidates arrive in ascending order
+    /// (id order), group membership is deterministic; returns groups of input indexes.
     private func connectedGroups(of candidateIndexes: [Int],
                                  in input: [AvatarProjectedMarker],
                                  maxJoinDistance: Float,
@@ -1101,9 +1105,9 @@ final class AvatarCollisionLayoutSolver {
         var disjointSet = AvatarDisjointSet(count: candidateIndexes.count)
         var neighbors: [Int] = []
 
-        // Плотные ячейки обрабатываются на уровне ячеек: толпа объединяется
-        // целиком, соседние толпы сливаются (их кольца-цветки пересеклись бы
-        // и слились составом в любом случае).
+        // Dense cells are handled at cell level: a crowd is united wholesale,
+        // neighboring crowds merge (their flower rings would have intersected
+        // and merged by membership anyway).
         let denseSlots = grid.cellSlots(withPopulationAtLeast: Self.denseGroupingCellPopulation)
         var isDenseSlot = [Bool](repeating: false, count: grid.cellCount)
         for slot in denseSlots {
@@ -1123,14 +1127,14 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Точечный проход - только для точек разреженных ячеек.
+        // The pointwise pass covers only points of sparse cells.
         for lhsIndex in candidateIndexes.indices
         where isDenseSlot[grid.cellSlot(ofPointAt: lhsIndex)] == false {
             grid.forEachNeighborCell(ofPointAt: lhsIndex) { cell, _ in
                 if cell.count >= Self.denseGroupingCellPopulation {
-                    // Разреженный маркер против толпы: точная проверка по
-                    // ограниченной выборке (ids в ячейке распределены по
-                    // экрану случайно, выборка покрывает её равномерно).
+                    // A sparse marker against a crowd: an exact check over a
+                    // bounded sample (ids within the cell are randomly
+                    // distributed across the screen, so the sample covers it evenly).
                     var probesLeft = Self.denseGroupingProbeLimit
                     for rhsIndex in cell {
                         if joinable(input[candidateIndexes[lhsIndex]], input[candidateIndexes[rhsIndex]]) {
@@ -1142,7 +1146,7 @@ final class AvatarCollisionLayoutSolver {
                     }
                     return
                 }
-                // Разреженные ячейки: точный перебор пар (i, j > i).
+                // Sparse cells: exact pair scan (i, j > i).
                 for rhsIndex in cell where rhsIndex > lhsIndex {
                     neighbors.append(rhsIndex)
                 }
@@ -1157,9 +1161,9 @@ final class AvatarCollisionLayoutSolver {
             }
         }
 
-        // Компоненты извлекаются без хеширования: корень - минимальный
-        // индекс, первая встреча корня задаёт порядок групп, поэтому они
-        // сразу отсортированы по наименьшему id.
+        // Components are extracted without hashing: the root is the minimum
+        // index, the first encounter of a root sets the group order, so the
+        // groups come out already sorted by smallest id.
         var slotOfRoot = [Int](repeating: -1, count: candidateIndexes.count)
         var groupedIndexes: [[Int]] = []
         for index in candidateIndexes.indices {
@@ -1176,20 +1180,19 @@ final class AvatarCollisionLayoutSolver {
         return groupedIndexes.map { indexes in indexes.map { candidateIndexes[$0] } }
     }
 
-    /// Внешний радиус цветка: кольцо слотов плюс тело лепестка.
+    /// Outer flower radius: the slot ring plus the petal body.
     private func flowerOuterRadius(memberCount: Int, petalBodyRadius: Float) -> Float {
         let petalCount = min(memberCount, AvatarCollisionMath.maxFlowerPetals)
         return AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalBodyRadius,
                                                     petalCount: petalCount) + petalBodyRadius
     }
 
-    /// Цветки неподвижны и не могут уступать друг другу: пересекающиеся
-    /// кольцами кучи сливаются в один цветок. Слияния идут раундами через
-    /// union-find (слияние растит кольцо и может зацепить новых соседей,
-    /// поэтому раунды повторяются до неподвижной точки). Слияние, разброс
-    /// якорей которого превысил бы лимит компактности, запрещено: каскад
-    /// слияний размазывал кластер на пол-экрана, и в него попадали маркеры
-    /// вдалеке от кольца.
+    /// Flowers are immovable and cannot yield to each other: piles with
+    /// intersecting rings merge into one flower. Merging runs in rounds via
+    /// union-find (a merge grows the ring and can catch new neighbors, so
+    /// rounds repeat to a fixed point). A merge whose anchor spread would
+    /// exceed the compactness limit is forbidden: a merge cascade used to smear
+    /// a cluster across half the screen and pull in markers far from the ring.
     private func mergeIntersectingFlowers(_ seeds: [ClusterSeed],
                                           input: [AvatarProjectedMarker],
                                           petalBodyRadius: Float,
@@ -1242,10 +1245,10 @@ final class AvatarCollisionLayoutSolver {
         return merged
     }
 
-    /// Пересекающиеся кольца цветков, которым слияние запрещено лимитом
-    /// компактности, разводятся: смещается цветок с меньшим составом (при
-    /// равенстве - с большим ключом). Гарантия непересечения сохраняется,
-    /// одиночные маркеры цветки по-прежнему не двигают.
+    /// Intersecting flower rings that are forbidden to merge by the compactness
+    /// limit are separated: the flower with the smaller membership moves (on a
+    /// tie, the one with the larger key). The non-intersection guarantee is
+    /// preserved, and standalone markers still do not move flowers.
     private func separateFlowerRings(_ seeds: inout [ClusterSeed],
                                      petalBodyRadius: Float) {
         guard seeds.count > 1 else { return }
@@ -1283,7 +1286,7 @@ final class AvatarCollisionLayoutSolver {
         }
     }
 
-    /// Слияние двух отсортированных списков индексов за линейное время.
+    /// Merges two sorted index lists in linear time.
     private static func mergeSortedIndexes(_ lhs: [Int], _ rhs: [Int]) -> [Int] {
         var result: [Int] = []
         result.reserveCapacity(lhs.count + rhs.count)
@@ -1303,7 +1306,7 @@ final class AvatarCollisionLayoutSolver {
         return result
     }
 
-    /// Бинарный поиск индекса маркера по id в отсортированном входе кадра.
+    /// Binary search for a marker index by id in the sorted frame input.
     private static func inputIndex(ofID id: UInt64,
                                    in input: [AvatarProjectedMarker]) -> Int? {
         var low = 0
@@ -1322,7 +1325,7 @@ final class AvatarCollisionLayoutSolver {
         return nil
     }
 
-    /// Бинарный поиск маркера по id в отсортированном входе кадра.
+    /// Binary search for a marker by id in the sorted frame input.
     private static func projectedMarker(withID id: UInt64,
                                         in input: [AvatarProjectedMarker]) -> AvatarProjectedMarker? {
         var low = 0
@@ -1341,10 +1344,10 @@ final class AvatarCollisionLayoutSolver {
         return nil
     }
 
-    /// Поглощение маркеров цветком: выбранный входит лепестком при касании
-    /// телом (он неподвижен и не может уступить цветку), обычный маркер
-    /// поглощается, когда его якорное тело оказывается внутри кольца - там
-    /// пружина навсегда тянула бы его внутрь цветка.
+    /// Marker absorption by a flower: a selected marker joins as a petal on
+    /// body touch (it is immovable and cannot yield to the flower); a regular
+    /// marker is absorbed when its anchor body ends up inside the ring, where
+    /// the spring would forever pull it into the flower.
     private func absorbMarkersIntoFlowers(seeds: inout [ClusterSeed],
                                           standaloneIndexes: inout [Int],
                                           input: [AvatarProjectedMarker],
@@ -1359,9 +1362,10 @@ final class AvatarCollisionLayoutSolver {
             let screenSizeScale = projected.marker.screenSizeScale
             let bodyCenter = projected.screenPoint.position
                 + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * screenSizeScale)
-            // Минимально возможное тело: если даже предельно сжатый кружок
-            // касается лепестков двух и более цветков, маркер зажат в кармане
-            // мозаики - отступать некуда, наложение замерзало бы навсегда.
+            // The smallest possible body: if even a maximally compressed circle
+            // touches petals of two or more flowers, the marker is wedged in a
+            // pocket of the mosaic with nowhere to retreat, and the overlap
+            // would freeze forever.
             let minimalBodyRadius = petalBodyRadius * screenSizeScale
             var touchedSeedCount = 0
             var nearestTouchedSeedIndex = -1
@@ -1443,16 +1447,16 @@ final class AvatarCollisionLayoutSolver {
                            center: centroid)
     }
 
-    // MARK: - Релаксация
+    // MARK: - Relaxation
 
-    /// Узлы солвера: одиночные маркеры + живые цветки. Узел маркера
-    /// центрируется на центре тела (якорь + вертикальный сдвиг по текущему
-    /// масштабу) с радиусом фактического размера: кружки прилегают плотно,
-    /// пины - на полных дистанциях. Узел цветка накрывает всё кольцо
-    /// лепестков. Релаксация стартует с несмещённых позиций: цель тогда -
-    /// чистая функция входа, без памяти, иначе недоразрешённые скопления
-    /// накапливают вращательный дрейф («карусель») кадр за кадром.
-    /// Детерминированный джиттер старта ломает вырожденные конфигурации.
+    /// Solver nodes: standalone markers + live flowers. A marker node is
+    /// centered on the body center (anchor + vertical shift by the current
+    /// scale) with the radius of its actual size: circles pack tightly, pins
+    /// keep full distances. A flower node covers the whole petal ring.
+    /// Relaxation starts from undisplaced positions: the target is then a pure
+    /// function of the input, memoryless; otherwise under-resolved clusters
+    /// accumulate rotational drift (the "carousel") frame after frame.
+    /// Deterministic start jitter breaks degenerate configurations.
     private func makeNodes(standaloneMarkers: [AvatarProjectedMarker],
                            clusterSeeds: [ClusterSeed],
                            dominantIDs: Set<UInt64>,
@@ -1482,9 +1486,9 @@ final class AvatarCollisionLayoutSolver {
                                     inverseMass: isRigid ? 0.0 : 1.0,
                                     directionKey: projected.marker.id))
         }
-        // Цветок неподвижен и представлен фактическими лепестками: соседи
-        // взаимодействуют с видимыми кружками, а не с невидимым описанным
-        // кругом кольца (иначе пин «чувствовал» кластер с дистанции).
+        // A flower is immovable and represented by its actual petals: neighbors
+        // interact with the visible circles, not with the invisible circumscribed
+        // circle of the ring (otherwise a pin would "feel" the cluster from a distance).
         for seed in clusterSeeds {
             let petalCount = min(seed.memberIDs.count, AvatarCollisionMath.maxFlowerPetals)
             let ringRadius = AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalBodyRadius,
@@ -1504,11 +1508,11 @@ final class AvatarCollisionLayoutSolver {
         return nodes
     }
 
-    /// Доминанты куч: в каждой связной компоненте касающихся полноразмерных
-    /// тел лучший по рангу (выбранный, затем drawPriority, затем меньший id)
-    /// маркер не сдвигается и сохраняет форму пина. Маркер, чьё якорное тело
-    /// пересекает цветок, доминантом быть не может: цветок неподвижен, и два
-    /// неподвижных тела заморозили бы перекрытие.
+    /// Pile dominants: in each connected component of touching full-size
+    /// bodies, the best-ranked marker (selected, then drawPriority, then lower
+    /// id) does not move and keeps the pin shape. A marker whose anchor body
+    /// intersects a flower cannot be a dominant: the flower is immovable, and
+    /// two immovable bodies would freeze the overlap.
     private func dominantMarkerIDs(standaloneMarkers: [AvatarProjectedMarker],
                                    clusterSeeds: [ClusterSeed],
                                    geometry: AvatarCollisionGeometry,
@@ -1540,8 +1544,8 @@ final class AvatarCollisionLayoutSolver {
         }
         for group in groups where group.count > 1 {
             guard group.count == 2 else {
-                // Три и более маркеров вплотную показываются кружочками все:
-                // доминант-пин с ромашкой вокруг оставлен только для пары.
+                // Three or more markers packed tightly are all shown as circles:
+                // the dominant pin with a daisy around it is kept only for a pair.
                 for memberIndex in group {
                     dominants.remove(standaloneMarkers[memberIndex].marker.id)
                 }
@@ -1568,8 +1572,8 @@ final class AvatarCollisionLayoutSolver {
         }
         let compressedScale = min(config.compressedScale, 1.0)
         let petalBodyRadius = geometry.circleBodyRadiusPx * compressedScale
-        // Слоты лепестков всех цветков собираются в одну сетку: близость к
-        // цветку проверяется точечным запросом, а не перебором всех куч.
+        // Petal slots of all flowers are gathered into one grid: proximity to a
+        // flower is checked with a point query rather than scanning every pile.
         var petalSlotCenters: [SIMD2<Float>] = []
         for seed in clusterSeeds {
             let petalCount = min(seed.memberIDs.count, AvatarCollisionMath.maxFlowerPetals)
@@ -1598,11 +1602,11 @@ final class AvatarCollisionLayoutSolver {
         return dominants
     }
 
-    /// Позиционная релаксация: пружина к якорю, затем разрешение перекрытий
-    /// пар (немедленное применение - Gauss-Seidel). Ограничение выноса
-    /// применяется один раз к финальной цели: clamp внутри итераций делает
-    /// цель разрывной при несовместных ограничениях (толпа больше, чем
-    /// допускает maxOffsetPx), и сглаживание никогда не сходится.
+    /// Positional relaxation: a spring toward the anchor, then pairwise overlap
+    /// resolution (immediate application, Gauss-Seidel). The displacement limit
+    /// is applied once to the final target: clamping inside iterations makes the
+    /// target discontinuous under incompatible constraints (a crowd larger than
+    /// maxOffsetPx allows), and the smoothing never converges.
     private func relax(nodes: inout [SolverNode], config: ImmersiveMapSettings.AvatarSettings) {
         let maxOffset = max(0.0, config.maxOffsetPx)
         defer {
@@ -1625,10 +1629,10 @@ final class AvatarCollisionLayoutSolver {
         }
 
         let springK = simd_clamp(config.springK, 0.0, 1.0)
-        // Кандидатные пары собираются один раз по стартовым позициям (якоря
-        // плюс джиттер): cellSize с полуторным запасом покрывает и пары,
-        // сближающиеся в ходе итераций. Редкая упущенная пара разрешится
-        // resolveDisplayedOverlaps и пересчётом целей в следующем кадре.
+        // Candidate pairs are collected once from the start positions (anchors
+        // plus jitter): the cellSize with a 1.5x margin also covers pairs that
+        // converge during iterations. A rare missed pair is resolved by
+        // resolveDisplayedOverlaps and the target recompute next frame.
         var maxRadius: Float = 1.0
         for node in nodes {
             maxRadius = max(maxRadius, node.radius)
@@ -1644,8 +1648,8 @@ final class AvatarCollisionLayoutSolver {
         for index in nodes.indices {
             grid.collectNeighbors(ofPointAt: index, greaterThan: index, into: &neighbors)
             for neighbor in neighbors {
-                // Пара остаётся кандидатом, если может коснуться при сближении
-                // на бюджет maxRadius; остальное из 3x3 окрестности - шум.
+                // A pair stays a candidate if it can touch after closing in by
+                // the maxRadius budget; the rest of the 3x3 neighborhood is noise.
                 let reach = nodes[index].radius + nodes[neighbor].radius + maxRadius
                 if simd_length_squared(positions[index] - positions[neighbor]) < reach * reach {
                     pairNeighbors.append(Int32(neighbor))
@@ -1686,10 +1690,11 @@ final class AvatarCollisionLayoutSolver {
         }
     }
 
-    // MARK: - Сглаживание
+    // MARK: - Smoothing
 
-    /// Двигает значение к цели на долю пути; возвращает true, пока анимация
-    /// не сошлась (после снапа к цели возвращает false).
+    /// Moves a value toward the target by a fraction of the way; returns true
+    /// while the animation hasn't converged (after snapping to the target it
+    /// returns false).
     private func smoothToward(_ value: inout Float, target: Float, factor: Float, epsilon: Float) -> Bool {
         let delta = target - value
         if abs(delta) <= epsilon {
@@ -1710,7 +1715,7 @@ final class AvatarCollisionLayoutSolver {
         return true
     }
 
-    /// Линейный ход кроссфейда к цели; true, пока не дошёл.
+    /// Linear crossfade step toward the target; true until it arrives.
     private func advanceBlend(_ value: inout Float, target: Float, step: Float) -> Bool {
         let delta = target - value
         if abs(delta) <= 0.001 {

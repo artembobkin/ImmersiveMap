@@ -4,9 +4,9 @@
 import CoreGraphics
 import Foundation
 
-/// Хранит selection state карты и применяет команды `ImmersiveMapSelectionController`.
-/// Отвечает за hit-testing avatar markers, select/clear события, доставку marker tap
-/// событий и синхронизацию выбранного объекта с доступными map objects.
+/// Holds the map's selection state and applies `ImmersiveMapSelectionController` commands.
+/// Responsible for hit-testing avatar markers, select/clear events, delivering marker tap
+/// events, and syncing the selected object with the available map objects.
 @MainActor
 final class ImmersiveMapSelectionHandler {
     enum MapTapResult {

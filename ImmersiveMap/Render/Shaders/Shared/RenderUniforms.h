@@ -54,10 +54,10 @@ struct SunVisualState {
     uint padding;
 };
 
-// Дымка у горизонта плоского представления; раскладка зеркалит
-// HorizonFogUniform.swift. Дистанции измеряются в высотах глаза над
-// плоскостью, поэтому полоса тумана геометрически приклеена к линии схода
-// и не зависит ни от зума, ни от смены рендерного масштаба на целых зумах.
+// Haze at the horizon of the flat presentation; the layout mirrors
+// HorizonFogUniform.swift. Distances are measured in eye heights above the
+// plane, so the fog band is geometrically glued to the vanishing line and
+// depends neither on zoom nor on render-scale changes at integer zooms.
 struct HorizonFog {
     float3 color;
     float3 eye;

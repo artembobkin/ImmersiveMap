@@ -75,10 +75,11 @@ enum BaseLabelVisibilityResolver {
             let horizonVisible = index < horizonVisibility.count ? horizonVisibility[index] : false
             let currentAlpha = index < currentAlphas.count ? currentAlphas[index] : 0
             let active = horizonVisible || currentAlpha > activeAlphaThreshold
-            // Лейбл ниже своего minCameraZoom не резервирует место в коллизиях,
-            // пока полностью невидим - иначе скрытый по зуму POI вытеснял бы
-            // видимые. Уже затухающий (alpha > 0) продолжает удерживать место,
-            // чтобы соседи не прыгали во время fade-out при переходе через порог.
+            // A label below its minCameraZoom does not reserve collision space
+            // while it is fully invisible, otherwise a zoom-hidden POI would
+            // displace visible ones. One already fading out (alpha > 0) keeps
+            // holding its spot so neighbors don't jump during the fade-out
+            // when crossing the threshold.
             let minCameraZoom = index < minCameraZooms.count ? minCameraZooms[index] : 0
             let suppressedByZoom = minCameraZoom > cameraZoom && currentAlpha <= activeAlphaThreshold
             candidates[index].isEnabled = active && suppressedByZoom == false

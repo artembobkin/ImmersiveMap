@@ -3,20 +3,21 @@
 
 import Foundation
 
-/// Атрибуция источника данных карты: то, что обязан показать продукт, использующий
-/// чужие тайлы. Принадлежит провайдеру, а не движку: тайлы приносит провайдер, значит
-/// он же знает, чьи это данные и под какой лицензией они отданы.
+/// Map data source attribution: what a product using third-party tiles is
+/// obligated to display. It belongs to the provider, not the engine: the
+/// provider brings the tiles, so it knows whose data they are and under
+/// which license they are served.
 ///
-/// Движок никогда не подставляет сюда собственный бренд: карта, нарисованная поверх
-/// данных OpenStreetMap, обязана называть OpenStreetMap, а не рендерер.
+/// The engine never puts its own brand here: a map drawn on top of
+/// OpenStreetMap data must credit OpenStreetMap, not the renderer.
 public struct ImmersiveMapAttribution: Equatable, Sendable {
-    /// Первая строка бейджа: источник тайлов.
+    /// First line of the badge: the tile source.
     public var title: String
 
-    /// Вторая строка бейджа: копирайты данных.
+    /// Second line of the badge: data copyrights.
     public var copyright: String
 
-    /// Куда ведет тап по бейджу. Обычно страница лицензии источника данных.
+    /// Where a tap on the badge leads. Usually the data source's license page.
     public var linkURL: URL?
 
     public var isEmpty: Bool {
@@ -29,12 +30,12 @@ public struct ImmersiveMapAttribution: Equatable, Sendable {
         self.linkURL = linkURL
     }
 
-    /// Пустая атрибуция: бейдж ничего не рисует. Значение по умолчанию для провайдеров,
-    /// чей источник данных движку неизвестен. Если такой провайдер отдает данные OSM или
-    /// другие данные с требованием атрибуции, ее обязан задать автор провайдера.
+    /// Empty attribution: the badge draws nothing. The default for providers
+    /// whose data source is unknown to the engine. If such a provider serves OSM
+    /// or other data that requires attribution, the provider's author must set it.
     public static let none = ImmersiveMapAttribution(title: "", copyright: "")
 
-    /// Минимальная атрибуция для данных OpenStreetMap (ODbL).
+    /// Minimal attribution for OpenStreetMap data (ODbL).
     public static let openStreetMap = ImmersiveMapAttribution(
         title: "© OpenStreetMap",
         copyright: "OpenStreetMap contributors",

@@ -5,8 +5,8 @@
 import simd
 import XCTest
 
-/// Дымка у горизонта: сила равна фазе перехода (на чистом глобусе тумана нет,
-/// на плоскости - полный), цвет берётся из фона карты.
+/// Horizon haze: strength equals the transition phase (no fog on a pure globe,
+/// full fog on the plane); the color comes from the map background.
 final class HorizonFogUniformTests: XCTestCase {
     func testStrengthEqualsClampedTransition() {
         XCTAssertEqual(makeFog(transition: -0.5).strength, 0)

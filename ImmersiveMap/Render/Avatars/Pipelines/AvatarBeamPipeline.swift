@@ -4,8 +4,8 @@
 import Metal
 import MetalKit
 
-/// Пайплайн конуса-луча от геоточки к сдвинутому кружку; рисуется в
-/// overlay-пассе до пузырей аватаров.
+/// Pipeline for the beam cone from the geo point to the displaced circle;
+/// drawn in the overlay pass before the avatar bubbles.
 final class AvatarBeamPipeline {
     let beamPipelineState: MTLRenderPipelineState
 

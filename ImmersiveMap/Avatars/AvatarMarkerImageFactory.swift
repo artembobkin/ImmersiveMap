@@ -9,24 +9,24 @@ import UIKit
 import AppKit
 #endif
 
-/// Генерация простых картинок для аватар-маркеров на CPU.
+/// CPU-side generation of simple images for avatar markers.
 ///
-/// Используется, когда не нужна сетевая картинка, а достаточно нарисованной
-/// заглушки - например квадрат с крупной цифрой.
+/// Used when a network image is not needed and a drawn placeholder is
+/// enough - for example a square with a large digit.
 public enum AvatarMarkerImageFactory {
-    /// Тёмно-серый фон, как у встроенной заглушки аватара.
+    /// Dark gray background, matching the built-in avatar placeholder.
     public static let defaultBackgroundColor = CGColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1.0)
-    /// Белый текст поверх фона.
+    /// White text on top of the background.
     public static let defaultTextColor = CGColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
 
-    /// Рисует квадратную картинку с указанным числом по центру.
+    /// Draws a square image with the given number centered.
     ///
     /// - Parameters:
-    ///   - value: число, которое будет нарисовано.
-    ///   - sizePx: сторона квадрата в пикселях.
-    ///   - backgroundColor: цвет заливки фона.
-    ///   - textColor: цвет цифр.
-    /// - Returns: `CGImage` для передачи в `AvatarMarker`.
+    ///   - value: the number to draw.
+    ///   - sizePx: side of the square in pixels.
+    ///   - backgroundColor: background fill color.
+    ///   - textColor: color of the digits.
+    /// - Returns: a `CGImage` to pass to `AvatarMarker`.
     public static func number(_ value: Int,
                               sizePx: Int = 256,
                               backgroundColor: CGColor = defaultBackgroundColor,
@@ -42,7 +42,7 @@ public enum AvatarMarkerImageFactory {
             let maxWidth = side * 0.78
             let maxHeight = side * 0.72
 
-            // Подбираем кегль так, чтобы число вписалось по ширине и высоте.
+            // Pick a font size so the number fits both in width and height.
             let probeSize: CGFloat = 100.0
             let probeAttributes: [NSAttributedString.Key: Any] = [
                 .font: PlatformFont.systemFont(ofSize: probeSize, weight: .bold)

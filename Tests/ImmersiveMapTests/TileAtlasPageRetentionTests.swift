@@ -28,9 +28,9 @@ final class TileAtlasPageRetentionTests: XCTestCase {
 
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: true, hasPages: true, time: 0))
         XCTAssertTrue(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay))
-        // Страницы выгружены: следующие flat-кадры без страниц ничего не выгружают.
+        // Pages are released: subsequent flat frames without pages release nothing.
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: false, time: delay * 3))
-        // Если страницы почему-то живы (выгрузка не состоялась), отсчёт начинается заново.
+        // If the pages are somehow still alive (the release did not happen), the countdown restarts.
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay * 4))
         XCTAssertTrue(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay * 5))
     }
@@ -42,7 +42,7 @@ final class TileAtlasPageRetentionTests: XCTestCase {
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: true, hasPages: true, time: 0))
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay * 0.9))
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: true, hasPages: true, time: delay))
-        // Осцилляция вокруг границы перехода: свежий глобусный кадр обнуляет отсчёт.
+        // Oscillation around the transition boundary: a fresh spherical frame resets the countdown.
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay * 1.5))
         XCTAssertTrue(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: delay * 2))
     }
@@ -51,8 +51,8 @@ final class TileAtlasPageRetentionTests: XCTestCase {
         var retention = TileAtlasPageRetention()
         let delay = TileAtlasPageRetention.releaseDelay
 
-        // Страницы пережили пересоздание состояния: не выгружаем мгновенно,
-        // отсчёт стартует с первого наблюдаемого flat-кадра.
+        // Pages survived a state recreation: do not release instantly, the
+        // countdown starts from the first observed flat frame.
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: 1000))
         XCTAssertFalse(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: 1000 + delay * 0.5))
         XCTAssertTrue(retention.shouldReleasePages(isSpherical: false, hasPages: true, time: 1000 + delay))

@@ -18,8 +18,8 @@ struct TilePointScreenProjector {
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
-            // Во flat-режиме horizon-маска тождественна флагу visible:
-            // ни массив horizonVisibility, ни маскирующая копия не нужны.
+            // In flat mode the horizon mask is identical to the visible flag:
+            // neither the horizonVisibility array nor a masking copy is needed.
             return projectFlatScreenPoints(snapshot: snapshot,
                                            frameContext: frameContext,
                                            tileOriginData: tileOriginData)
@@ -49,10 +49,10 @@ struct TilePointScreenProjector {
         }
     }
 
-    /// Clip-space координаты точек flat-проекции, без перспективного деления
-    /// и отбрасывания точек за камерой: потребитель (фильтр дорожных лейблов)
-    /// сам клипит полигон по near-плоскости и вьюпорту, чтобы мерить видимую
-    /// экранную площадь. Невалидные слоты дают w = -1 (отсекаются клипом).
+    /// Clip-space coordinates of flat-projection points, without perspective divide
+    /// or discarding points behind the camera: the consumer (the road label filter)
+    /// clips the polygon against the near plane and viewport itself to measure the
+    /// visible screen area. Invalid slots yield w = -1 (culled by the clip).
     func projectFlatClipSpacePoints(snapshot: TilePointToScreenPointSnapshot,
                                     frameContext: FrameContext,
                                     tileOriginData: [FlatTileOriginData]) -> [SIMD4<Float>] {

@@ -10,8 +10,8 @@ struct LRUMemoryCache<Key: Hashable, Value> {
         let cost: Int
     }
 
-    // Recency хранится тиком на слоте, а не позицией в массиве: проба кэша
-    // остаётся O(1), а поиск жертвы выполняется только при вытеснении.
+    // Recency is stored as a tick on the slot rather than a position in an array:
+    // a cache probe stays O(1), and the victim search runs only on eviction.
     private struct Slot {
         var value: Value
         var cost: Int
@@ -46,8 +46,8 @@ struct LRUMemoryCache<Key: Hashable, Value> {
         return slotsByKey.values[index].value
     }
 
-    /// `evictionCostLimit` заменяет лимит вытеснения для этой вставки:
-    /// вызывающий может расширить бюджет, например на стоимость pinned-записей.
+    /// `evictionCostLimit` overrides the eviction limit for this insertion:
+    /// the caller can widen the budget, e.g. by the cost of pinned entries.
     mutating func setValue(_ value: Value,
                            forKey key: Key,
                            cost: Int,
@@ -105,7 +105,7 @@ struct LRUMemoryCache<Key: Hashable, Value> {
                 }
             }
 
-            // Все оставшиеся записи защищены - допускаем перерасход лимита.
+            // All remaining entries are protected - allow exceeding the limit.
             guard let victimKey,
                   let victimSlot = slotsByKey.removeValue(forKey: victimKey) else {
                 break

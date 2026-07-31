@@ -22,10 +22,10 @@ struct EarthSceneUniform {
 
     static let minimumFadeWidth: Float = 0.001
 
-    /// Зум, на котором тень от солнца (терминатор день/ночь) ещё полностью видна.
+    /// Zoom at which the sun shadow (day/night terminator) is still fully visible.
     static let sunShadowFadeStartZoom: Double = 1.0
 
-    /// Зум, на котором тень от солнца полностью исчезает.
+    /// Zoom at which the sun shadow disappears completely.
     static let sunShadowFadeEndZoom: Double = 2.0
 
     static let disabled = EarthSceneUniform(
@@ -105,8 +105,8 @@ struct EarthSceneUniform {
         self._padding0 = _padding0
     }
 
-    /// Доля исчезновения тени от солнца по зуму: 0 - тень видна полностью,
-    /// 1 - тени нет. Плавно нарастает по smoothstep между стартовым и конечным зумом.
+    /// Sun shadow fade-out fraction by zoom: 0 means the shadow is fully visible,
+    /// 1 means no shadow. Ramps smoothly via smoothstep between the start and end zooms.
     private static func sunShadowFade(zoom: Double) -> Float {
         let start = sunShadowFadeStartZoom
         let end = sunShadowFadeEndZoom

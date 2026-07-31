@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// Платформенно-нейтральное построение текстов debug HUD.
-/// UIKit и AppKit view используют одни и те же строки; сами контролы платформенные.
+/// Platform-neutral construction of debug HUD texts.
+/// UIKit and AppKit views use the same strings; the controls themselves are platform-specific.
 enum DebugOverlayHUDTextComposer {
     static func atlasDetailsText(pages: [TileAtlasDebugPage]) -> String {
         guard pages.isEmpty == false else {
@@ -34,8 +34,8 @@ enum DebugOverlayHUDTextComposer {
         return lines.joined(separator: "\n")
     }
 
-    /// Итог списка тайлов: сколько их сейчас отслеживается всего. Рисуется
-    /// платформенными view выделенным цветом отдельно от белого статуса.
+    /// Summary of the tile list: how many are currently tracked in total. Drawn
+    /// by the platform views in a highlight color, separately from the white status.
     static func tilesTotalText(count: Int) -> String {
         "tiles total: \(count)"
     }
@@ -78,7 +78,7 @@ enum DebugOverlayHUDTextComposer {
     }
 }
 
-/// Строка списка статусов тайлов debug HUD; общая модель для платформенных list view.
+/// Row of the debug HUD tile status list; a shared model for the platform list views.
 enum DebugOverlayTilesStatusRow: Equatable {
     case tile(TileLoadingStatusTileSnapshot, isExpanded: Bool, canExpand: Bool)
     case stage(tile: Tile, stage: TilePreparationStageSnapshot, isExpanded: Bool)

@@ -6,9 +6,9 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Подложка горизонта плоского режима: несколько тайлов фиксированного грубого
-/// зума закрывают след фрустума без радиусного клампа. На глобусе и при целевом
-/// зуме не выше подложечного её нет.
+/// Flat-mode horizon backdrop: a few tiles at a fixed coarse zoom cover the
+/// frustum footprint without the radius clamp. Absent on the globe and when the
+/// target zoom is not above the backdrop zoom.
 final class TileCullingBackdropTests: XCTestCase {
     func testFlatModeResolvesBackdropTilesAtFixedZoom() throws {
         let fixture = try makeFixture(zoom: 9.0, renderSurfaceMode: .flat)

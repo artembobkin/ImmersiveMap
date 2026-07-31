@@ -142,8 +142,8 @@ struct BaseLabelTraceEvent {
     }
 }
 
-/// Внутренне синхронизирован: состояние под `stateLock`, запись в файл - на
-/// последовательной `queue`.
+/// Internally synchronized: state is guarded by `stateLock`, file writes happen
+/// on the serial `queue`.
 final class BaseLabelTraceRecorder: @unchecked Sendable {
     let options: BaseLabelTraceOptions
 

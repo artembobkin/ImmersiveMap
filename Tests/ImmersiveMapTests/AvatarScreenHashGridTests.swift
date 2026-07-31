@@ -17,8 +17,8 @@ final class AvatarScreenHashGridTests: XCTestCase {
         }
     }
 
-    /// Полнота broad-phase: пары в пределах cellSize через сетку совпадают с
-    /// полным перебором - и по составу, и по порядку обхода (i, j возрастают).
+    /// Broad-phase completeness: pairs within cellSize via the grid match a
+    /// brute-force scan - both in membership and in traversal order (i, j ascending).
     func testNeighborPairsMatchBruteForceIncludingOrder() {
         var generator = SplitMix(state: 99)
         let positions = (0..<600).map { _ in
@@ -50,8 +50,8 @@ final class AvatarScreenHashGridTests: XCTestCase {
     }
 
     func testNegativeCoordinatesAndCellBoundaries() {
-        // Точки около нуля и на границах ячеек: floor-квантование не должен
-        // склеивать ячейки -1 и 0.
+        // Points near zero and on cell boundaries: floor quantization must not
+        // merge cells -1 and 0.
         let positions: [SIMD2<Float>] = [
             SIMD2(-0.5, -0.5),
             SIMD2(0.5, 0.5),
@@ -61,8 +61,8 @@ final class AvatarScreenHashGridTests: XCTestCase {
         ]
         let grid = AvatarScreenHashGrid(positions: positions, cellSize: 100.0)
 
-        // Точка 3 на (100, 0) лежит в ячейке (1, 0) - вне 3x3 окрестности
-        // ячейки (-1, -1); её дистанция 100.5 > cellSize, полнота не нарушена.
+        // Point 3 at (100, 0) lies in cell (1, 0) - outside the 3x3 neighborhood
+        // of cell (-1, -1); its distance 100.5 > cellSize, so completeness holds.
         var neighbors: [Int] = []
         grid.collectNeighbors(ofPointAt: 0, greaterThan: -1, into: &neighbors)
         XCTAssertEqual(neighbors, [0, 1, 2, 4])
@@ -102,8 +102,8 @@ final class AvatarScreenHashGridTests: XCTestCase {
         XCTAssertEqual(grid.cellPopulation(ofPointAt: 42), 10_000)
     }
 
-    /// Итеративный find: цепочка объединений в 50k элементов не роняет стек
-    /// (рекурсивная реализация здесь падала).
+    /// Iterative find: a union chain of 50k elements does not blow the stack
+    /// (a recursive implementation crashed here).
     func testDisjointSetSurvivesDeepChain() {
         let count = 50_000
         var set = AvatarDisjointSet(count: count)

@@ -6,8 +6,8 @@ import CoreGraphics
 import SwiftUI
 import XCTest
 
-/// Конверсия drawable-пикселей проекции (origin снизу слева, y вверх) в
-/// поинты view (origin сверху слева) и позиционирование по якорю UnitPoint.
+/// Conversion of projection drawable pixels (origin at bottom left, y up) into
+/// view points (origin at top left) and positioning by the UnitPoint anchor.
 final class MarkerOverlayLayoutMathTests: XCTestCase {
     private let drawSize = CGSize(width: 800, height: 600)
 

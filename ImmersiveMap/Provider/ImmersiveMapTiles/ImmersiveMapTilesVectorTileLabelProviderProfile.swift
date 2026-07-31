@@ -11,20 +11,20 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     private let lowZoomOverviewMaximumTileZoom = 4
     private let poiMinimumZoom = 13
 
-    /// Уличная фурнитура OSM, которая не должна становиться подписью ни на
-    /// каком зуме: скобы для великов, урны, ворота, входы в здания и т.п.
-    /// Такие классы составляют тысячи фич на тайл и только засоряют коллизии.
+    /// OSM street furniture that must never become a label at any zoom:
+    /// bicycle racks, waste baskets, gates, building entrances, etc.
+    /// Such classes amount to thousands of features per tile and only clutter collisions.
     private static let excludedPoiClasses: Set<String> = [
         "bicycle_parking", "waste_basket", "gate", "entrance", "bench",
         "drinking_water", "toilets", "vending_machine", "recycling"
     ]
 
-    /// Кап локального ранга OpenMapTiles: rank считается внутри клетки сетки
-    /// ~128px тайла, поэтому порог означает «не больше N подписей на клетку».
-    /// Хвост глубже капа не попадает даже в буферы: в плотном центре это
-    /// тысячи фич на тайл. Число согласовано с расписанием раскрытия стиля
-    /// (бюджет клетки, учетверяемый оверзумом): 64 = 4^3, то есть кап держит
-    /// ровно то, что расписание способно показать к tile.z + 3.
+    /// Cap on the OpenMapTiles local rank: rank is computed within a ~128px
+    /// grid cell of the tile, so the threshold means "no more than N labels per cell".
+    /// The tail beyond the cap never even reaches the buffers: in a dense center
+    /// that is thousands of features per tile. The number is aligned with the
+    /// style's reveal schedule (cell budget quadrupled by overzoom): 64 = 4^3,
+    /// i.e. the cap holds exactly what the schedule can show by tile.z + 3.
     private static let maximumPoiRank = 64
 
     let providerID = "immersivemaptiles"

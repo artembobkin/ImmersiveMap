@@ -15,9 +15,9 @@ struct CameraFrameState {
     let qualityTier: RenderQualityTier
 }
 
-/// Отвечает за подготовку состояния камеры для кадра рендера:
-/// синхронизирует управляющую камеру с render-камерой, применяет ограничения
-/// и собирает матрицы, frustum, eye position и camera state для frame pipeline.
+/// Responsible for preparing the camera state for a render frame:
+/// syncs the controlling camera with the render camera, applies constraints,
+/// and assembles matrices, frustum, eye position, and camera state for the frame pipeline.
 final class FrameCameraStateResolver {
     private let camera: RenderCamera
     private let cameraStateController: CameraStateController

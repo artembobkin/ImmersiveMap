@@ -11,7 +11,7 @@ final class AvatarCollisionMathTests: XCTestCase {
     }
 
     func testSmoothingFactorIsFrameRateIndependent() {
-        // Один шаг 1/30 должен съедать ту же долю пути, что два шага 1/60.
+        // One 1/30 step must cover the same fraction of the path as two 1/60 steps.
         let single = AvatarCollisionMath.smoothingFactor(smoothing: 0.35, deltaSeconds: 1.0 / 30.0)
         let half = AvatarCollisionMath.smoothingFactor(smoothing: 0.35, deltaSeconds: 1.0 / 60.0)
         let doubled = 1.0 - (1.0 - half) * (1.0 - half)
@@ -27,14 +27,14 @@ final class AvatarCollisionMathTests: XCTestCase {
     }
 
     func testRequiredScaleIsForcedOnlyByLackOfSpace() {
-        // Дистанции хватает для полных тел: сжатие не требуется.
+        // The distance is enough for full bodies: no compression needed.
         XCTAssertEqual(AvatarCollisionMath.requiredScale(distance: 120,
                                                          bodyRadius: 50,
                                                          otherBodyRadius: 50,
                                                          padding: 8,
                                                          otherIsRigid: false),
                        1.0)
-        // Места нет: пара делит нехватку поровну.
+        // No room: the pair splits the shortfall evenly.
         XCTAssertEqual(AvatarCollisionMath.requiredScale(distance: 66,
                                                          bodyRadius: 50,
                                                          otherBodyRadius: 50,
@@ -42,7 +42,7 @@ final class AvatarCollisionMathTests: XCTestCase {
                                                          otherIsRigid: false),
                        0.5,
                        accuracy: 0.0001)
-        // Сосед несжимаемый (выбранный/кластер): вся нехватка на текущем.
+        // The neighbor is incompressible (selected/cluster): the whole shortfall falls on the current one.
         XCTAssertEqual(AvatarCollisionMath.requiredScale(distance: 91,
                                                          bodyRadius: 50,
                                                          otherBodyRadius: 50,
@@ -63,7 +63,7 @@ final class AvatarCollisionMathTests: XCTestCase {
     }
 
     func testFlowerLayoutPacksTouchingPetalsAroundCenter() {
-        // Соседние лепестки касаются: дистанция центров равна 2 * радиус тела.
+        // Adjacent petals touch: the center distance equals 2 * body radius.
         let petalRadius: Float = 30.0
         let count = 5
         let ring = AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalRadius, petalCount: count)
@@ -76,7 +76,7 @@ final class AvatarCollisionMathTests: XCTestCase {
             XCTAssertEqual(simd_length(current - next), petalRadius * 2.0, accuracy: 0.01)
         }
 
-        // Пара лепестков стоит бок о бок.
+        // A pair of petals stands side by side.
         XCTAssertEqual(AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalRadius, petalCount: 2),
                        petalRadius,
                        accuracy: 0.001)
@@ -84,7 +84,7 @@ final class AvatarCollisionMathTests: XCTestCase {
     }
 
     func testDisplacedMorphTurnsShiftedMarkerIntoCircle() {
-        // Форма пина только у маркера ровно на геоточке; любой сдвиг - кружок.
+        // Only a marker exactly on its geo point gets the pin shape; any offset means a circle.
         XCTAssertEqual(AvatarCollisionMath.displacedMorph(offsetLength: 0.0), 0.0)
         XCTAssertEqual(AvatarCollisionMath.displacedMorph(offsetLength: AvatarCollisionMath.displacedMorphEndPx),
                        1.0,

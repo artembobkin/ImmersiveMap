@@ -5,8 +5,8 @@
 
 import UIKit
 
-/// Прозрачная UIKit hit-test surface для map control zones.
-/// Не владеет состоянием карты; конкретные control-zone классы цепляют gestures и управляют layout.
+/// Transparent UIKit hit-test surface for map control zones.
+/// Owns no map state; concrete control-zone classes attach gestures and drive layout.
 final class ControlZoneView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)

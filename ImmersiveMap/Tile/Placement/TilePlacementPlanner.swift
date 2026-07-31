@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 struct TilePlacementPlanner {
-    /// `backdropZoomLevel` - зум полноэкранной подложки, уже нарисованной ПОД
-    /// основным покрытием (flat-режим). Подмены этого зума и грубее не несут
-    /// информации поверх подложки, поэтому не конкурируют с детальными
-    /// partial-слотами: без фильтра запиненный z3-backdrop выигрывал у любого
-    /// неполного retained-покрытия, а упавшие в z3 слоты не участвуют в
-    /// покрытии родителя - и при зум-ауте грубая зона расползалась с краёв
-    /// на весь экран за несколько ребилдов. nil - подложки нет (глобус).
+    /// `backdropZoomLevel` - zoom of the full-screen backdrop already drawn
+    /// UNDER the main coverage (flat mode). Substitutes at this zoom or coarser
+    /// carry no information on top of the backdrop, so they do not compete with
+    /// detailed partial slots: without the filter, the pinned z3 backdrop won
+    /// over any incomplete retained coverage, while slots that fell to z3 do
+    /// not participate in the parent's coverage - and on zoom-out the coarse
+    /// zone crept from the edges across the whole screen over a few rebuilds.
+    /// nil - no backdrop (globe).
     static func buildPlacements(targets: [VisibleTile],
                                 readyTilesBySource: [Tile: MetalTile?],
                                 zoom: Int,
@@ -30,7 +31,7 @@ struct TilePlacementPlanner {
             let lodKind: TileLodKind = sourceTile.z < zoom ? .coarseSubstitute : .exact
             let metalTile = readyTilesBySource[sourceTile] ?? nil
 
-            // Подмена полезна, только если детальнее подложки под покрытием.
+            // A substitute is useful only if it is more detailed than the backdrop under the coverage.
             func isUsefulSubstitute(_ tile: Tile) -> Bool {
                 guard let backdropZoomLevel else {
                     return true
@@ -68,9 +69,10 @@ struct TilePlacementPlanner {
 
                     // Previous tile is inside the required tile
                     // (including exact same tile identity).
-                    // Сравнение по placeIn.loop: контент общий между wrapped-копиями,
-                    // но рисуется placement строго в мировой копии своего placeIn -
-                    // копию таргета в другом loop он не закрашивает.
+                    // Compare by placeIn.loop: content is shared between wrapped
+                    // copies, but a placement is drawn strictly in the world copy
+                    // of its placeIn - it does not paint the target's copy in
+                    // another loop.
                     if prev.placeIn.loop == target.loop,
                        prevSourceTile == target.tile || target.tile.covers(prevSourceTile) {
                         partialPlacements.append(PlaceTile(metalTile: prevMetalTile,
@@ -80,11 +82,11 @@ struct TilePlacementPlanner {
                     }
                 }
 
-                // Покрытие - площадь ОБЪЕДИНЕНИЯ слотов placeIn (слот глубины d
-                // занимает 1/4^d площади таргета): рисуется ровно область placeIn
-                // (фрагментный клип), а не весь source. Слоты разных поколений
-                // могут быть вложены - вложенные в уже учтённый более грубый слот
-                // площади не добавляют.
+                // Coverage is the area of the UNION of placeIn slots (a slot of
+                // depth d occupies 1/4^d of the target's area): exactly the
+                // placeIn region is drawn (fragment clip), not the whole source.
+                // Slots from different generations can be nested - ones nested
+                // inside an already-counted coarser slot add no area.
                 var coveredFraction = 0.0
                 var countedPlaceInTiles: [Tile] = []
                 for placeInTile in uniquePlaceInTiles.sorted(by: { ($0.z, $0.x, $0.y) < ($1.z, $1.x, $1.y) }) {
@@ -112,16 +114,17 @@ struct TilePlacementPlanner {
                 return nil
             }
 
-            // Каскад подмен отсутствующего таргета - по максимуму детальности:
-            // 1) прежние тайлы ВНУТРИ таргета (всегда детальнее любого
-            //    покрывающего source), но только если закрывают его целиком -
-            //    детальный контент с дырами хуже полного грубого;
-            // 2) более детальный из: покрывающего source прошлого кадра
-            //    (retention, включая сам таргет по strong-ссылке) и готового
-            //    родителя из кэша; при равенстве - родитель из кэша (свежее);
-            // 3) неполные прежние тайлы - лучше, чем пустой регион.
-            // Два source в одном слоте не смешиваются: наложение даёт двойной
-            // blend полупрозрачных слоёв (дороги).
+            // Substitution cascade for a missing target - maximum detail first:
+            // 1) previous tiles INSIDE the target (always more detailed than any
+            //    covering source), but only if they cover it entirely -
+            //    detailed content with holes is worse than full coarse content;
+            // 2) the more detailed of: the previous frame's covering source
+            //    (retention, including the target itself via a strong reference)
+            //    and a ready parent from the cache; on a tie - the cached
+            //    parent (fresher);
+            // 3) incomplete previous tiles - better than an empty region.
+            // Two sources never mix in one slot: overlapping yields a double
+            // blend of translucent layers (roads).
             if metalTile == nil {
                 let partial = collectPartialReplacements()
                 if partial.coversTarget {

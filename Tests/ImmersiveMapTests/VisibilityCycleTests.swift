@@ -120,8 +120,8 @@ final class VisibilityCycleTests: XCTestCase {
     }
 
     func testIncrementalPublicationKeepsPreviousForUndecidedLabels() {
-        // Цикл с двумя группами: одна публикуется, вторая ещё не обработана -
-        // published-состояние нерешённого индекса не затирается.
+        // A cycle with two groups: one is published, the other not yet processed -
+        // the published state of the undecided index is not clobbered.
         let cycle = VisibilityCycle(topologyGeneration: 0,
                                     cameraFingerprint: 10,
                                     horizonReservationSignature: [],
@@ -153,7 +153,7 @@ final class VisibilityCycleTests: XCTestCase {
     }
 
     func testIncrementalPublicationDrainsSeededRejectionsAndClearsQueue() {
-        // Заблокированный сид публикует .hidden сразу; повторный drain пуст.
+        // A blocked seed publishes .hidden immediately; a repeated drain is empty.
         let blockingSeed = makeBaseGroup(index: 0,
                                          position: SIMD2<Float>(50, 50),
                                          priority: 0)
@@ -178,8 +178,8 @@ final class VisibilityCycleTests: XCTestCase {
             },
             road: { _, _ in }
         )
-        // Успешный сид не публикует решения (published уже хранит .visible),
-        // заблокированный - публикует .hidden.
+        // A successful seed publishes no decision (published already holds .visible),
+        // a blocked one publishes .hidden.
         XCTAssertEqual(published, [.visible, .hidden])
 
         var drainedAgain = false

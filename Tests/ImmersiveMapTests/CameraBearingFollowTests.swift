@@ -14,7 +14,7 @@ final class CameraBearingFollowTests: XCTestCase {
     }
 
     func testShortestDeltaTakesShortPathAcrossWrap() {
-        // 170° -> -170° это +20° через 180°, а не -340° вокруг.
+        // 170° -> -170° is +20° through 180°, not -340° the long way around.
         let delta = CameraBearingFollowMath.shortestDelta(current: radians(170), target: radians(-170))
         XCTAssertEqual(delta, radians(20), accuracy: 0.001)
     }
@@ -42,7 +42,7 @@ final class CameraBearingFollowTests: XCTestCase {
     }
 
     func testFollowCrossesWrapBoundaryTheShortWay() {
-        // От 170° к -170° follow должен идти ВВЕРХ через 180° (bearing растет), а не вниз через 0.
+        // From 170° to -170° the follow must go UP through 180° (bearing grows), not down through 0.
         let follow = CameraBearingFollow(configuration: enabledConfiguration())
         let start = radians(170)
         let target = radians(-170)
@@ -91,12 +91,12 @@ final class CameraBearingFollowTests: XCTestCase {
     }
 
     func testFollowStopsWhenBearingSaturatedAtLimit() {
-        // Если bearing уперся в constraint (значение не меняется), а цель выше — follow обязан
-        // остановиться, иначе display link крутится бесконечно.
+        // If bearing hit a constraint (the value stops changing) while the target is beyond it,
+        // follow must stop, otherwise the display link spins forever.
         let follow = CameraBearingFollow(configuration: enabledConfiguration())
         follow.retarget(radians(90), currentTime: 0)
 
-        let saturatedBearing = radians(30) // предел; каждый кадр возвращаем одно и то же
+        let saturatedBearing = radians(30) // the limit; return the same value every frame
         var time: CFTimeInterval = 0
         var becameInactive = false
         for _ in 0..<10 {

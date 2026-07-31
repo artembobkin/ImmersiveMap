@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Вычисляет видимый tile content для кадра на основе camera snapshot, presentation state и tile settings.
+/// Computes the visible tile content for a frame from the camera snapshot, presentation state, and tile settings.
 final class RenderFrameVisibilityResolver {
     private let tileCulling: TileCulling
     private var cachedFingerprint: Int?
@@ -18,9 +18,9 @@ final class RenderFrameVisibilityResolver {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
-        // Culling - чистая функция позы камеры, drawSize и presentation-состояния:
-        // при неизменном fingerprint переиспользуется прошлый результат (и его
-        // coverageVersion, на который опирается dirty-gate demand-конвейера).
+        // Culling is a pure function of the camera pose, drawSize, and presentation
+        // state: with an unchanged fingerprint the previous result is reused (along
+        // with its coverageVersion, which the demand pipeline's dirty-gate relies on).
         let fingerprint = Self.makeFingerprint(cameraFrameState: cameraFrameState,
                                                resolvedPresentation: resolvedPresentation,
                                                targetZoom: zoomPlan.baseZoom)

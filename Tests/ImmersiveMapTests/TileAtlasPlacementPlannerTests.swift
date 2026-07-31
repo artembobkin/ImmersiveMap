@@ -450,9 +450,9 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertTrue(candidate.isFallback)
     }
 
-    /// Demand обслуживает растянутую ось следа, но анизотропия капится 4×:
-    /// полоса у горизонта получает малый слот, квадратный тайл - слот по
-    /// стороне, ближний тайл во весь экран - полноразмерный слот.
+    /// Demand serves the stretched axis of the footprint, but anisotropy is
+    /// capped at 4x: a strip at the horizon gets a small slot, a square tile
+    /// a slot by its side, a near full-screen tile a full-size slot.
     func testDemandCapsSlotAnisotropyOfDistortedFootprint() throws {
         let metalTile = MetalTile(tile: Tile(x: 9, y: 9, z: 5), tileBuffers: try makeTileBuffers())
         let placeTile = PlaceTile(metalTile: metalTile,

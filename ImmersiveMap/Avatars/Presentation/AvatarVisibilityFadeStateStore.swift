@@ -19,8 +19,8 @@ final class AvatarVisibilityFadeStateStore {
     }
 
     private var entriesById: [UInt64: Entry] = [:]
-    /// Прошлокадровые полностью видимые маркеры без состояния (passthrough),
-    /// по возрастанию id: при затемнении их фейд стартует с единицы.
+    /// Fully visible markers from the previous frame that carry no state (passthrough),
+    /// in ascending id order: when they dim, their fade starts from one.
     private var previouslyFullyVisibleIDs: [UInt64] = []
     private(set) var hasActiveAnimations: Bool = false
 
@@ -39,9 +39,9 @@ final class AvatarVisibilityFadeStateStore {
             let id = projectedMarker.marker.id
             let targetAlpha = simd_clamp(projectedMarker.screenPoint.visibilityAlpha, 0.0, 1.0)
 
-            // Полностью видимый маркер без фейд-состояния проходит насквозь:
-            // это типовой случай для всех маркеров плоского режима, состояние
-            // не создаётся и словарь не трогается.
+            // A fully visible marker without fade state passes straight through:
+            // this is the common case for all flat-mode markers, no state is
+            // created and the dictionary is untouched.
             if targetAlpha >= 1.0, entriesById.isEmpty || entriesById[id] == nil {
                 fullyVisibleIDs.append(id)
                 resolvedMarkers.append(projectedMarker)
@@ -53,7 +53,7 @@ final class AvatarVisibilityFadeStateStore {
             if let existing = entriesById[id] {
                 entry = existing
             } else if Self.containsSorted(previouslyFullyVisibleIDs, id) {
-                // Был passthrough-видимым: фейд стартует с полной альфы.
+                // Was passthrough-visible: the fade starts at full alpha.
                 entry = Entry(currentAlpha: 1.0, targetAlpha: 1.0, lastUpdateTime: time)
             } else {
                 entry = Entry(currentAlpha: targetAlpha, targetAlpha: targetAlpha, lastUpdateTime: time)
@@ -68,8 +68,8 @@ final class AvatarVisibilityFadeStateStore {
 
             let isActive = isActive(entry)
 
-            // Дошедшее до полной видимости состояние снимается: дальше маркер
-            // идёт по бесплатному passthrough-пути.
+            // State that has reached full visibility is dropped: from here the
+            // marker takes the free passthrough path.
             if isActive == false, targetAlpha >= 1.0, entry.currentAlpha >= 1.0 {
                 entriesById.removeValue(forKey: id)
                 fullyVisibleIDs.append(id)
@@ -99,8 +99,8 @@ final class AvatarVisibilityFadeStateStore {
             }
         }
 
-        // Вход идёт по возрастанию id, но произвольные вызывающие могут
-        // передать иначе - бинарный поиск требует сортированности.
+        // Input arrives in ascending id order, but arbitrary callers may
+        // pass it otherwise - binary search requires sortedness.
         if fullyVisibleIDs.count > 1 {
             for index in 1..<fullyVisibleIDs.count where fullyVisibleIDs[index - 1] > fullyVisibleIDs[index] {
                 fullyVisibleIDs.sort()

@@ -5,8 +5,8 @@
 
 import UIKit
 
-/// Рендерит компактный attribution overlay.
-/// Владеет только labels, styling и layout badge; состояние карты остается в surrounding runtimes.
+/// Renders the compact attribution overlay.
+/// Owns only the badge labels, styling, and layout; map state stays in the surrounding runtimes.
 final class AttributionBadgeView: UIView {
     private enum Layout {
         static let containerInset: CGFloat = 12
@@ -56,7 +56,7 @@ final class AttributionBadgeView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Пустая атрибуция прячет бейдж целиком: рисовать пустую плашку незачем.
+    /// Empty attribution hides the badge entirely: no point drawing an empty plate.
     func apply(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
         isHidden = isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL

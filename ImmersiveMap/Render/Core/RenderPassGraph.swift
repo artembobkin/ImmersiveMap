@@ -50,11 +50,11 @@ final class RenderPassGraph {
                 descriptor.colorAttachments[0].storeAction = .store
             }
             descriptor.colorAttachments[0].loadAction = .clear
-            // Прозрачный фон: после resolve альфа хранит покрытие силуэта
-            // зданий, а цвет - премультиплицирован этим покрытием.
+            // Transparent background: after resolve the alpha holds the building
+            // silhouette coverage, and the color is premultiplied by that coverage.
             descriptor.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
-            // Depth переиспользуется с world-пассом: оба пасса стартуют с .clear
-            // и не читают прошлое содержимое, поэтому хазарда между ними нет.
+            // Depth is shared with the world pass: both passes start with .clear
+            // and never read previous contents, so there is no hazard between them.
             descriptor.depthAttachment.texture = depthTexture
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .dontCare
@@ -179,12 +179,12 @@ final class RenderPassGraph {
             .map(\.layer)
 
         var nodes: [RenderPassNode] = []
-        // Offscreen building image нужен, только когда здания накладываются на
-        // карту полупрозрачно (translucent или зум-переход solidAtHighZoom):
-        // они рисуются в него непрозрачно (depth-тест, MSAA), а world-пасс
-        // накладывает результат на карту одним блендом с общей альфой - каждый
-        // пиксель тонируется ровно один раз, без швов между поверхностями.
-        // Полностью непрозрачные здания рисуются прямо в world-пасс.
+        // The offscreen building image is needed only when buildings composite over
+        // the map translucently (translucent, or the solidAtHighZoom zoom
+        // transition): they render into it opaquely (depth test, MSAA), and the
+        // world pass composites the result over the map with a single blend at a
+        // shared alpha, so every pixel is tinted exactly once with no seams
+        // between surfaces. Fully opaque buildings render straight into the world pass.
         if frameContext.renderSurfaceMode == .flat,
            case .composited = BuildingExtrusionPathResolver.resolve(style: settings.style,
                                                                     zoom: frameContext.zoom),

@@ -11,9 +11,9 @@ struct DemoPlace: Identifiable {
     let photoURL: URL
 }
 
-/// Города для SwiftUI-маркеров-карточек. Намеренно НЕ пересекаются с
-/// городами аватаров (DemoAvatars): в одном месте либо карточка, либо
-/// аватары. Фиджи заодно проверяет антимеридиан (wrap развёртки).
+/// Cities for the SwiftUI card markers. Deliberately do NOT overlap with the
+/// avatar cities (DemoAvatars): any one place has either a card or avatars.
+/// Fiji also exercises the antimeridian (unfurl wrap).
 enum DemoMarkerPlaces {
     static let all: [DemoPlace] = [
         DemoPlace(id: 1,
@@ -34,15 +34,15 @@ enum DemoMarkerPlaces {
                   photoURL: photo("fiji,beach", lock: 5))
     ]
 
-    /// loremflickr отдаёт фото по ключевым словам, lock фиксирует конкретный
-    /// кадр, чтобы карточки не менялись между запусками (важно для промо).
+    /// loremflickr serves photos by keywords; lock pins a specific shot so the
+    /// cards don't change between launches (important for promo).
     private static func photo(_ keywords: String, lock: Int) -> URL {
         URL(string: "https://loremflickr.com/320/200/\(keywords)?lock=\(lock)")!
     }
 }
 
-/// Карточка города: фото сверху, название снизу. Ставится якорем .bottom,
-/// нижняя кромка карточки стоит на координате города.
+/// City card: photo on top, name below. Placed with anchor .bottom, the
+/// card's bottom edge sits on the city coordinate.
 struct CityCardMarker: View {
     let place: DemoPlace
 
@@ -82,11 +82,11 @@ struct CityCardMarker: View {
     }
 }
 
-/// Аватар-маркеры со случайными портретами (pravatar.cc): «толпа» на улицах
-/// Токио и Дубая попадает в кадр во время орбит кино-тура, несколько точек
-/// по миру видны на глобусе. Города аватаров намеренно не пересекаются с
-/// городами карточек (DemoMarkerPlaces). До загрузки портрета показывается
-/// номерная заглушка AvatarMarkerImageFactory.
+/// Avatar markers with random portraits (pravatar.cc): a "crowd" on the streets
+/// of Tokyo and Dubai comes into frame during the cinematic tour orbits, and a
+/// few points around the world are visible on the globe. The avatar cities
+/// deliberately do not overlap with the card cities (DemoMarkerPlaces). Until a
+/// portrait loads, the numbered AvatarMarkerImageFactory placeholder is shown.
 @MainActor
 enum DemoAvatars {
     static func populate(_ controller: ImmersiveMapAvatarsController) {
@@ -108,7 +108,7 @@ enum DemoAvatars {
             nextID += 1
         }
 
-        // Толпа вокруг улиц Токио (вид с турнтейбла кино-тура).
+        // Crowd around the streets of Tokyo (seen from the cinematic tour turntable).
         let tokyo = (lat: 35.6595, lon: 139.7005)
         add(lat: tokyo.lat + 0.0012, lon: tokyo.lon + 0.0018, image: 11, battery: 84)
         add(lat: tokyo.lat - 0.0016, lon: tokyo.lon + 0.0009, image: 12, speed: 14)
@@ -119,7 +119,7 @@ enum DemoAvatars {
         add(lat: tokyo.lat + 0.0003, lon: tokyo.lon + 0.0032, image: 17, battery: 61)
         add(lat: tokyo.lat - 0.0005, lon: tokyo.lon - 0.0034, image: 18, speed: 32)
 
-        // Толпа вокруг Дубая.
+        // Crowd around Dubai.
         let dubai = (lat: 25.1972, lon: 55.2744)
         add(lat: dubai.lat + 0.0014, lon: dubai.lon + 0.0011, image: 21, battery: 73)
         add(lat: dubai.lat - 0.0009, lon: dubai.lon + 0.0024, image: 22)
@@ -130,11 +130,11 @@ enum DemoAvatars {
         add(lat: dubai.lat + 0.0028, lon: dubai.lon + 0.0002, image: 27)
         add(lat: dubai.lat - 0.0027, lon: dubai.lon - 0.0003, image: 28, speed: 23)
 
-        // По миру: видны на глобусе в начале и конце лупа.
-        add(lat: 55.7558, lon: 37.6173, image: 31, battery: 66)    // Москва
-        add(lat: -22.9068, lon: -43.1729, image: 34, speed: 17)    // Рио
-        add(lat: 37.7749, lon: -122.4194, image: 35, battery: 39)  // Сан-Франциско
-        add(lat: 19.4326, lon: -99.1332, image: 36)                // Мехико
+        // Around the world: visible on the globe at the start and end of the loop.
+        add(lat: 55.7558, lon: 37.6173, image: 31, battery: 66)    // Moscow
+        add(lat: -22.9068, lon: -43.1729, image: 34, speed: 17)    // Rio
+        add(lat: 37.7749, lon: -122.4194, image: 35, battery: 39)  // San Francisco
+        add(lat: 19.4326, lon: -99.1332, image: 36)                // Mexico City
 
         controller.set(markers)
     }

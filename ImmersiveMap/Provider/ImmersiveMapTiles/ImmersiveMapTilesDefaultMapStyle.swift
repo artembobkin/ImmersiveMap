@@ -110,17 +110,19 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // which generalises into tile-filling polygons clipped at tile edges (abrupt
         // per-tile colour jumps). OSM landcover takes over from z10 (street detail).
         //
-        // Порядок отрисовки полигонов - по возрастанию key. Бежевый landuse
-        // (residential/industrial) опущен на key 9, а вся зелень идёт выше (11-18),
-        // иначе парк, лежащий внутри жилого/квартального полигона (leisure=park
-        // приходит как landcover grass/park), перекрывался бы бежевым и выглядел
-        // как земля. Зелень ниже воды (key 20) и дорог.
+        // Polygon draw order is by ascending key. Beige landuse
+        // (residential/industrial) is lowered to key 9 while all greenery goes
+        // above it (11-18), otherwise a park lying inside a residential/block
+        // polygon (leisure=park arrives as landcover grass/park) would be
+        // covered by beige and look like bare ground. Greenery stays below
+        // water (key 20) and roads.
         guard tileZoom >= 10 else {
             return hiddenStyle
         }
-        // Каждый цвет landcover - на своём key (иначе `styles[key]` first-wins
-        // схлопывает весь landcover тайла в цвет первого полигона, давая швы на
-        // границах тайлов). Все они выше бежевого landuse (key 9) и ниже воды (20).
+        // Each landcover color gets its own key (otherwise the first-wins
+        // `styles[key]` collapses all landcover in a tile into the first
+        // polygon's color, producing seams at tile borders). All of them sit
+        // above the beige landuse (key 9) and below water (20).
         switch cls {
         case "wood", "forest":
             return polygon(key: 11, color: configuration.layers.wood)
@@ -141,7 +143,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "sand":
             return polygon(key: 18, color: configuration.layers.sand)
         case "rock":
-            // Голая порода = цвет земли; отдельный полигон поверх базы не нужен.
+            // Bare rock = ground color; no separate polygon over the base needed.
             return hiddenStyle
         default:
             // Unknown landcover: blend into the land base rather than paint it green.
@@ -207,14 +209,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
         switch cls {
         case "residential", "suburb", "neighbourhood", "quarter", "allotments":
-            // Бежевые жилые/квартальные заливки - в самый низ (key 9), под зелень,
-            // иначе они перекрывают парки (landcover) внутри жилых полигонов.
+            // Beige residential/block fills go to the very bottom (key 9), below
+            // greenery, otherwise they cover parks (landcover) inside residential polygons.
             return polygon(key: 9, color: configuration.layers.residential)
         case "industrial", "commercial", "retail", "railway", "quarry":
             return polygon(key: 9, color: configuration.layers.industrial)
         case "cemetery", "grass", "park", "recreation_ground", "garden":
-            // Один зелёный цвет для всей городской зелени (совпадает с landcover
-            // grass), чтобы не было двухтонности на стыке слоёв.
+            // One green color for all urban greenery (matches landcover grass)
+            // to avoid a two-tone seam where the layers meet.
             return polygon(key: 15, color: configuration.layers.grass)
         default:
             // Unknown landuse: blend into the land base instead of the red fallback.
@@ -225,8 +227,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     // MARK: - Lines
 
     private func waterwayStyle(cls: String?, props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
-        // Подземные/коллекторные водотоки (brunnel=tunnel, напр. Неглинная под
-        // Александровским садом) в реальности не видны - не показываем.
+        // Underground/culverted waterways (brunnel=tunnel, e.g. the Neglinnaya
+        // under the Alexander Garden) are invisible in reality, so we hide them.
         if props["brunnel"]?.stringValue.lowercased() == "tunnel" {
             return hiddenStyle
         }
@@ -269,9 +271,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "service":
             return roadStyle(fillKey: 42, color: roads.service, width: 5.6 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
         case "path", "track":
-            // Аллеи и дорожки парков (footway/path/track). Показываем только на
-            // уличном зуме и тонкой сплошной линией - без пунктира, который раньше
-            // читался как мусор над водой/парками.
+            // Park alleys and walkways (footway/path/track). Shown only at
+            // street zoom and as a thin solid line: no dashes, which used to
+            // read as noise over water/parks.
             guard tileZoom >= 14 else {
                 return hiddenStyle
             }
@@ -338,9 +340,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func railStyle(subclass: String?, tileZoom: Int) -> FeatureStyle {
-        // Метро (railway=subway) идёт тоннелями под зданиями/парками и читается как
-        // непонятная штриховая линия - не показываем. Наземные ж/д (rail, tram,
-        // light_rail, monorail) оставляем пунктиром.
+        // Subway lines (railway=subway) run in tunnels under buildings/parks and
+        // read as a confusing dashed line, so we hide them. Surface rail (rail,
+        // tram, light_rail, monorail) stays dashed.
         if subclass == "subway" {
             return hiddenStyle
         }
@@ -385,11 +387,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         guard adminLevel <= 4 else {
             return hiddenStyle
         }
-        // Ширина линии печётся в тайловых координатах, поэтому на глобусе
-        // (низкозумные тайлы сильно растянуты) фиксированная ширина выглядит
-        // непропорционально жирной. Тоньшим границы на малых зумах и выходим на
-        // полную толщину к региональному зуму - как roadWidthScale для дорог, но
-        // с более высоким полом: границы должны оставаться заметнее дорог.
+        // Line width is baked in tile coordinates, so on the globe (low-zoom
+        // tiles are heavily stretched) a fixed width looks disproportionately
+        // fat. Thin the borders at low zooms and ramp up to full thickness by
+        // regional zoom, like roadWidthScale for roads but with a higher floor:
+        // borders must stay more prominent than roads.
         let scale = boundaryWidthScale(tileZoom: tileZoom)
         let width: Double = (adminLevel <= 2 ? 7.8 : 3.4) * scale
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
@@ -398,9 +400,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             color: configuration.layers.boundary,
             lowZoomFadeMask: 1.0,
             parseGeometryStyleData: makeDashedRoadGeometry(width: width, dashLength: 8, dashGap: 6),
-            // Границы рисуем только линиями. Некоторые фичи (индейские
-            // резервации) приходят полигонами - их площадь заливать нельзя,
-            // иначе получаются сплошные фиолетовые пятна.
+            // Borders are drawn as lines only. Some features (Native American
+            // reservations) arrive as polygons; their area must not be filled,
+            // otherwise you get solid purple blobs.
             suppressPolygonFill: true
         )
     }
@@ -447,21 +449,22 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return pointLabel(key: 73, appearance: appearance)
     }
 
-    // POI: и кружок-иконка, и подпись красятся в цвет категории заведения.
-    // Цвет идёт через LabelTextStyle.fillColor - его использует и фон иконки
-    // (PoiIconStyleUniform.backgroundColor), и заливка текста; глиф иконки белый.
-    // Ключ у всех POI один (72): runs группируются по полной идентичности стиля
-    // (вес + цвета), поэтому разные категории раскладываются в отдельные draw-runs.
+    // POI: both the icon circle and the label are tinted in the venue category
+    // color. The color flows through LabelTextStyle.fillColor, used by both the
+    // icon background (PoiIconStyleUniform.backgroundColor) and the text fill;
+    // the icon glyph is white. All POIs share one key (72): runs are grouped by
+    // full style identity (weight + colors), so different categories land in
+    // separate draw runs.
     private func poiLabelStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
-        // Появление POI выводится из бюджета и приоритетов, без абсолютных
-        // зум-рамп: лейбл виден, когда его эффективный ранг укладывается в
-        // бюджет клетки сетки, а бюджет растёт вчетверо за каждый зум
-        // оверзума - ровно как экранная площадь тайла. Решение сворачивается
-        // в статичный порог minCameraZoom = tile.z + log4(effRank / бюджет),
-        // который рантайм и коллизии применяют по зуму камеры. Классы задают
-        // не зумы, а смещение приоритета в единицах ранга, поэтому подход не
-        // зависит от maxzoom источника: смена источника сдвигает пороги
-        // автоматически через tile.z.
+        // POI appearance is derived from budget and priorities, with no
+        // absolute zoom ramps: a label is visible once its effective rank fits
+        // the grid-cell budget, and the budget quadruples with each zoom of
+        // overzoom, exactly like the tile's screen area. The decision collapses
+        // into a static threshold minCameraZoom = tile.z + log4(effRank / budget),
+        // which the runtime and collisions apply by camera zoom. Classes define
+        // a priority offset in rank units rather than zooms, so the approach
+        // does not depend on the source maxzoom: switching sources shifts the
+        // thresholds automatically via tile.z.
         let cls = props["class"]?.stringValue.lowercased()
         let subclass = props["subclass"]?.stringValue.lowercased()
         let rank = Double(parseIntValue(props["rank"]) ?? Self.poiDefaultRank)
@@ -480,22 +483,22 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return pointLabel(key: 72, appearance: appearance, minCameraZoom: minCameraZoom)
     }
 
-    /// Бюджет клетки сетки ранга на РОДНОМ зуме тайла: rank <= бюджета виден
-    /// сразу с появлением тайла, каждый зум оверзума учетверяет бюджет.
+    /// Rank grid-cell budget at the tile's NATIVE zoom: rank <= budget is
+    /// visible as soon as the tile appears; each zoom of overzoom quadruples the budget.
     private static let poiNativeCellBudget = 1.0
 
-    /// Ранг для фич без атрибута rank: середина хвоста.
+    /// Rank for features without a rank attribute: middle of the tail.
     private static let poiDefaultRank = 15
 
-    /// Потолок раскрытия: нейтральный хвост капа (rank 64) исчерпывается
-    /// ровно к tile.z + 3, смещённая в плюс инфраструктура доезжает клампом
-    /// к tile.z + 3.5. Глубже доставать из тайла уже нечего.
+    /// Reveal ceiling: the neutral tail of the cap (rank 64) is exhausted
+    /// exactly by tile.z + 3; positively offset infrastructure is clamped to
+    /// arrive by tile.z + 3.5. There is nothing left to pull from the tile deeper than that.
     private static let poiMaximumOverzoomAppearanceDelay: Float = 3.5
 
-    /// Смещения приоритета классов в единицах ранга (зум-агностичны). Якоря
-    /// уводятся в минус и видны с рождения тайла, городская ткань чуть раньше
-    /// нейтральной коммерции, декоративная зелень чуть позже, уличная
-    /// инфраструктура на ~два зума позже нейтральных.
+    /// Class priority offsets in rank units (zoom-agnostic). Anchors are
+    /// pushed negative and visible from the tile's birth, urban fabric comes
+    /// slightly before neutral commerce, decorative greenery slightly later,
+    /// street infrastructure ~two zooms later than the neutral classes.
     private static let poiMajorClasses: Set<String> = [
         "hospital", "railway", "aerodrome", "university", "college", "stadium",
         "museum", "zoo", "attraction", "harbor", "monument", "castle"
@@ -528,30 +531,30 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private func poiCategoryColor(cls: String?, subclass: String?) -> SIMD3<Float> {
         switch cls ?? subclass {
         case "restaurant", "fast_food", "food_court", "ice_cream":
-            return SIMD3<Float>(0.85, 0.40, 0.12)   // еда - оранжевый
+            return SIMD3<Float>(0.85, 0.40, 0.12)   // food: orange
         case "cafe", "bakery":
-            return SIMD3<Float>(0.58, 0.37, 0.18)   // кофе/выпечка - коричневый
+            return SIMD3<Float>(0.58, 0.37, 0.18)   // coffee/bakery: brown
         case "bar", "pub", "beer", "alcohol_shop", "nightclub", "wine":
-            return SIMD3<Float>(0.62, 0.16, 0.34)   // бар - винный
+            return SIMD3<Float>(0.62, 0.16, 0.34)   // bar: wine red
         case "shop", "grocery", "supermarket", "mall", "clothing_store", "convenience",
              "gift", "hairdresser", "hardware", "laundry", "car", "florist", "jewelry", "shoe":
-            return SIMD3<Float>(0.16, 0.44, 0.78)   // магазины - синий
+            return SIMD3<Float>(0.16, 0.44, 0.78)   // shops: blue
         case "lodging":
-            return SIMD3<Float>(0.66, 0.26, 0.60)   // отели - пурпурный
+            return SIMD3<Float>(0.66, 0.26, 0.60)   // hotels: magenta
         case "hospital", "pharmacy", "doctors", "dentist", "clinic":
-            return SIMD3<Float>(0.82, 0.22, 0.26)   // здоровье - красный
+            return SIMD3<Float>(0.82, 0.22, 0.26)   // health: red
         case "school", "college", "university", "kindergarten", "library":
-            return SIMD3<Float>(0.22, 0.46, 0.52)   // образование - бирюзовый
+            return SIMD3<Float>(0.22, 0.46, 0.52)   // education: teal
         case "museum", "art_gallery", "gallery", "attraction", "artwork", "theatre", "music", "cinema":
-            return SIMD3<Float>(0.46, 0.30, 0.66)   // культура - фиолетовый
+            return SIMD3<Float>(0.46, 0.30, 0.66)   // culture: violet
         case "park", "garden", "stadium", "pitch", "sport", "swimming", "golf", "playground", "picnic_site":
-            return SIMD3<Float>(0.22, 0.54, 0.30)   // отдых/природа - зелёный
+            return SIMD3<Float>(0.22, 0.54, 0.30)   // leisure/nature: green
         case "bus", "railway", "airport", "aerialway", "fuel", "car_rental", "parking", "harbor", "ferry_terminal":
-            return SIMD3<Float>(0.32, 0.42, 0.55)   // транспорт - сине-серый
+            return SIMD3<Float>(0.32, 0.42, 0.55)   // transport: blue-gray
         case "bank", "post", "office", "town_hall", "police", "fire_station", "government", "atm":
-            return SIMD3<Float>(0.40, 0.44, 0.52)   // офисы/госуслуги - серо-синий
+            return SIMD3<Float>(0.40, 0.44, 0.52)   // offices/public services: gray-blue
         default:
-            return configuration.labels.poi.fillColor  // прочее - тёмный по умолчанию
+            return configuration.labels.poi.fillColor  // everything else: default dark
         }
     }
 
@@ -590,11 +593,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// often blankets whole city centres (e.g. Moscow's historic core) - painting it
     /// green makes the entire city read as a park, so it is not drawn as green.
     private func parkLayerStyle(cls: String?, subclass: String?) -> FeatureStyle {
-        // Слой park - зелёные зоны. Красим зелёным явные парки/сады/заповедники
-        // (класс может быть кириллическим: национальный_парк, природно-исторический_парк,
-        // ...). Крупные охранные зоны без паркового признака (protected_area,
-        // "особо охраняемая ...", памятник природы) не показываем, чтобы не
-        // заливать карту зелёным.
+        // The park layer covers green areas. Paint explicit parks/gardens/reserves
+        // green (the class may be Cyrillic: "национальный_парк",
+        // "природно-исторический_парк", ...). Large protected areas without a park
+        // attribute (protected_area, "особо охраняемая ...", nature monuments) are
+        // hidden to avoid flooding the map with green.
         let kind = "\(cls ?? "") \(subclass ?? "")"
         let greenKeywords = ["park", "парк", "garden", "сад", "reserve", "заповедник", "nature"]
         if greenKeywords.contains(where: { kind.contains($0) }) {

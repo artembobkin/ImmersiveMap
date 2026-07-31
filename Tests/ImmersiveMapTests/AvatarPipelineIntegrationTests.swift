@@ -6,10 +6,9 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Сквозные тесты аватарного пайплайна в том порядке, в котором его гоняет
-/// AvatarsRenderer.compute(): стор презентации -> проекция с отсечением ->
-/// фейды -> солвер коллизий. Без Metal: проверяется вся CPU-цепочка на
-/// тысячах маркеров.
+/// End-to-end tests of the avatar pipeline in the order AvatarsRenderer.compute()
+/// runs it: presentation store -> projection with culling -> fades -> collision
+/// solver. No Metal: the entire CPU chain is verified on thousands of markers.
 final class AvatarPipelineIntegrationTests: XCTestCase {
     private struct SplitMix: RandomNumberGenerator {
         var state: UInt64
@@ -27,8 +26,9 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
                                                           circleBodyRadiusPx: 59.0,
                                                           bodyCenterOffsetPx: 70.0)
 
-    /// Плоский режим: куча у центра Москвы проецируется и сворачивается в
-    /// цветки, разброс по Европе отсекается вьюпортом и не доходит до солвера.
+    /// Flat mode: a pile near the center of Moscow is projected and collapses
+    /// into flowers; markers scattered across Europe are viewport-culled and
+    /// never reach the solver.
     func testFlatPipelineCullsOffscreenAndGroupsPile() throws {
         let store = AvatarPresentationStateStore()
         let image = try Self.makeTestImage()
@@ -55,8 +55,8 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
                                               version: 1),
                     time: 0)
 
-        // Камера: ортографическая проекция мира в клип, вьюпорт 800x600,
-        // видимая ширина 800 мировых единиц; пан центрирует Москву.
+        // Camera: orthographic world-to-clip projection, 800x600 viewport,
+        // visible width of 800 world units; pan centers Moscow.
         let renderMapSize = 1_000_000.0
         let moscowXNorm = (centerLongitude * .pi / 180.0 + .pi) / (2.0 * .pi)
         let moscowYNorm = ImmersiveMapProjection.yMercatorNormalized(latitude: centerLatitude * .pi / 180.0)
@@ -75,11 +75,11 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
                                           resolvedPresentation: presentation,
                                           cullMarginPx: 476.0)
 
-        // Европа за полем отсечения; куча (±0.02 deg ≈ ±111 мировых единиц)
-        // на экране целиком.
+        // Europe is beyond the cull margin; the pile (±0.02 deg ≈ ±111 world
+        // units) is fully on screen.
         XCTAssertEqual(projected.count, 2_000)
         XCTAssertTrue(projected.allSatisfy { $0.marker.id <= 2_000 })
-        // Вход солвера отсортирован по id без пересортировки.
+        // Solver input is sorted by id without re-sorting.
         XCTAssertTrue(zip(projected, projected.dropFirst()).allSatisfy { $0.marker.id < $1.marker.id })
 
         let fadeStore = AvatarVisibilityFadeStateStore()
@@ -102,8 +102,9 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
             time += 1.0 / 60.0
         }
 
-        // Куча плотнее порога группировки: часть маркеров скрыта в цветках,
-        // на экран идут лепестки и свободные кружки - на порядок меньше входа.
+        // The pile is denser than the grouping threshold: some markers hide in
+        // flowers; petals and free circles go to the screen - an order of
+        // magnitude fewer than the input.
         XCTAssertGreaterThan(layout.flowerGroups.count, 0)
         XCTAssertGreaterThan(layout.markerItems.count, 0)
         XCTAssertLessThan(layout.markerItems.count, 600)
@@ -111,8 +112,8 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(coveredByFlowers, 1_000)
     }
 
-    /// Глобус: маркер на обратной стороне шара отсекается по видимости и не
-    /// попадает в солвер, ближний остаётся.
+    /// Globe: a marker on the far side of the sphere is visibility-culled and
+    /// does not reach the solver; the near one stays.
     func testGlobePipelineCullsFarSideMarkers() throws {
         let store = AvatarPresentationStateStore()
         let image = try Self.makeTestImage()
@@ -146,7 +147,7 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
         XCTAssertEqual(projected.first?.screenPoint.visibilityAlpha ?? 0, 1.0, accuracy: 0.001)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private static func makeFlatPresentation(pan: SIMD2<Double>,
                                              renderMapSize: Double) -> ResolvedPresentationState {
@@ -189,7 +190,7 @@ final class AvatarPipelineIntegrationTests: XCTestCase {
         )
     }
 
-    /// Ортографическая проекция: мир (x, y) -> клип без перспективы.
+    /// Orthographic projection: world (x, y) -> clip with no perspective.
     private static func makeOrthographicCamera(visibleWorldWidth: Float,
                                                visibleWorldHeight: Float) -> CameraUniform {
         var matrix = matrix_identity_float4x4

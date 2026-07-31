@@ -7,9 +7,9 @@ import Metal
 final class FrameAttachmentStore {
     private let metalDevice: MTLDevice
     private let renderSampleCount: Int
-    // MSAA color и все depth-атачменты живут только внутри своего render pass
-    // (load .clear, store .dontCare/.multisampleResolve), поэтому на Apple TBDR GPU
-    // им не нужна память вне tile memory.
+    // MSAA color and all depth attachments live only within their render pass
+    // (load .clear, store .dontCare/.multisampleResolve), so on Apple TBDR GPUs
+    // they need no memory outside tile memory.
     private let transientStorageMode: MTLStorageMode
     private var colorTexture: MTLTexture?
     private var postProcessingInputTexture: MTLTexture?
@@ -22,9 +22,9 @@ final class FrameAttachmentStore {
          renderSampleCount: Int) {
         self.metalDevice = metalDevice
         self.renderSampleCount = max(1, renderSampleCount)
-        // Memoryless - это оптимизация tile memory для iOS TBDR GPU. Симулятор её не
-        // поддерживает; на нативном macOS (в т.ч. Apple Silicon) memoryless-аттачменты
-        // для этого пайплайна дают пустой рендер, поэтому там используем .private.
+        // Memoryless is a tile memory optimization for iOS TBDR GPUs. The simulator
+        // doesn't support it; on native macOS (incl. Apple Silicon) memoryless attachments
+        // produce an empty render for this pipeline, so we use .private there.
         #if targetEnvironment(simulator) || os(macOS)
         self.transientStorageMode = .private
         #else
@@ -150,8 +150,8 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// MSAA-таргет offscreen-пасса building image: живёт только внутри пасса
-    /// (clear → multisampleResolve), поэтому использует transient storage.
+    /// MSAA target of the offscreen building image pass: lives only within the pass
+    /// (clear → multisampleResolve), so it uses transient storage.
     func ensureBuildingImageColorTexture(drawSize: CGSize,
                                          pixelFormat: MTLPixelFormat) -> MTLTexture? {
         guard renderSampleCount > 1 else { return nil }
@@ -181,8 +181,8 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// Читаемое изображение зданий: resolve-текстура MSAA-пасса (или прямой
-    /// таргет без MSAA). Его world-пасс накладывает на карту с общей альфой.
+    /// Readable buildings image: the resolve texture of the MSAA pass (or the direct
+    /// target without MSAA). The world pass composites it over the map with a shared alpha.
     func ensureBuildingImageTexture(drawSize: CGSize,
                                     pixelFormat: MTLPixelFormat) -> MTLTexture? {
         let width = Int(drawSize.width)

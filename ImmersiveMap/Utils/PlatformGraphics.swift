@@ -20,8 +20,8 @@ typealias PlatformBezierPath = NSBezierPath
 typealias PlatformImage = NSImage
 
 extension NSBezierPath {
-    /// Совместимость с сигнатурой `UIBezierPath(roundedRect:cornerRadius:)`
-    /// для общего кода растеризации.
+    /// Compatibility with the `UIBezierPath(roundedRect:cornerRadius:)`
+    /// signature for shared rasterization code.
     convenience init(roundedRect rect: CGRect, cornerRadius: CGFloat) {
         self.init(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
     }
@@ -29,7 +29,7 @@ extension NSBezierPath {
 #endif
 
 enum PlatformDisplayScale {
-    /// Scale главного экрана; используется офлайн-растеризацией, у которой нет своего view/window.
+    /// Main screen scale; used by offline rasterization that has no view/window of its own.
     static var main: CGFloat {
         #if canImport(UIKit)
         return max(UIScreen.main.scale, 1.0)
@@ -39,9 +39,9 @@ enum PlatformDisplayScale {
     }
 }
 
-/// Кроссплатформенная растеризация в CGImage с top-left системой координат.
-/// На iOS повторяет `UIGraphicsImageRenderer`; на macOS настраивает текущий
-/// `NSGraphicsContext`, чтобы работали `NSBezierPath`, `NSImage.draw` и text drawing.
+/// Cross-platform rasterization into a CGImage with a top-left coordinate system.
+/// On iOS mirrors `UIGraphicsImageRenderer`; on macOS configures the current
+/// `NSGraphicsContext` so that `NSBezierPath`, `NSImage.draw`, and text drawing work.
 enum PlatformGraphicsImageRenderer {
     static func makeCGImage(size: CGSize,
                             scale: CGFloat = 1.0,

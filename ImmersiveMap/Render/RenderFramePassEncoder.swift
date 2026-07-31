@@ -4,7 +4,7 @@
 import Metal
 import QuartzCore
 
-/// Кодирует render passes одного кадра: готовит drawable, attachments, pass plan и вызывает subsystem encoders.
+/// Encodes the render passes of one frame: prepares the drawable, attachments, pass plan and invokes subsystem encoders.
 final class RenderFramePassEncoder {
     private let attachments: FrameAttachmentStore
     private let passGraph = RenderPassGraph()

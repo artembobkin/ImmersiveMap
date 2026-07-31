@@ -24,11 +24,12 @@ class TileAtlasTexture {
     }
 
     let size: Int = 4096
-    /// Уровни мипов страницы (0..6): без предфильтрации дальние слоты мерцают.
-    /// Глубина до 64:1 нужна крупным слотам (2048 px), которые тянутся до самой
-    /// линии горизонта: их последние ряды сжаты перспективой в 20-60 раз.
-    /// Уровни глубже 3 почти бесплатны (+0.5% к +33% памяти), а их отсутствие
-    /// возвращает рябь ровно в приграничную полосу горизонта.
+    /// Page mip levels (0..6): without prefiltering, distant slots shimmer.
+    /// Depth down to 64:1 is needed for large slots (2048 px) that stretch all
+    /// the way to the horizon line: their last rows are perspective-compressed
+    /// 20-60x. Levels deeper than 3 are almost free (+0.5% on top of +33%
+    /// memory), and dropping them brings the shimmer back exactly in the strip
+    /// bordering the horizon.
     static let pageMipLevelCount = 7
     private(set) var pages: [Page] = []
     var projection: matrix_float4x4
@@ -36,16 +37,16 @@ class TileAtlasTexture {
 
     private let metalDevice: MTLDevice
     private let tilePipeline: TilePipeline
-    // Фон страницы = подложка стиля, а не белый: при глубоких mip-уровнях
-    // кромка слота может подмешать фон страницы, и контрастный цвет даёт
-    // мигающую светлую линию на стыках тайлов.
+    // Page background = the style's backdrop color, not white: at deep mip
+    // levels the slot edge can blend in the page background, and a contrasting
+    // color produces a flickering light line at tile seams.
     private let pageClearColor: MTLClearColor
     private let depthStencilState: MTLDepthStencilState
     private var renderEncoder: MTLRenderCommandEncoder?
     private var activePageIndex: Int?
-    // Depth в атласе не участвует в отрисовке (compare .always, запись выключена),
-    // но нужен как атачмент, потому что TilePipeline объявляет depth32Float.
-    // Одна общая транзиентная текстура на все страницы вместо 64 МБ на страницу.
+    // Depth plays no role in atlas rendering (compare .always, writes disabled),
+    // but is needed as an attachment because TilePipeline declares depth32Float.
+    // One shared transient texture for all pages instead of 64 MB per page.
     private var sharedDepthTexture: MTLTexture?
 
     private var previousShiftX: Float? = nil
@@ -116,14 +117,15 @@ class TileAtlasTexture {
     
     func selectTilePipeline() {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder!)
-        // Клип по placeIn нужен только flat-пути: в атласе область ячейки
-        // уже ограничена scissor-ом, шейдеру передаётся отключённый клип.
+        // The placeIn clip is only needed on the flat path: in the atlas the
+        // cell area is already bounded by the scissor, so the shader gets a
+        // disabled clip.
         var localClipBounds = TileLocalClipMath.disabledBounds
         renderEncoder!.setFragmentBytes(&localClipBounds,
                                         length: MemoryLayout<SIMD4<Float>>.stride,
                                         index: 1)
-        // Дымка горизонта - экранный эффект; при растеризации в слот атласа
-        // она обязана быть выключена, иначе затуманится содержимое текстуры.
+        // Horizon haze is a screen-space effect; when rasterizing into an atlas
+        // slot it must be off, otherwise the texture contents get fogged.
         var horizonFog = HorizonFogUniform.disabled
         renderEncoder!.setFragmentBytes(&horizonFog,
                                         length: MemoryLayout<HorizonFogUniform>.stride,
@@ -217,8 +219,9 @@ class TileAtlasTexture {
         
         // Set tile data for rendering
         let buffers = metalTile.tileBuffers
-        // Пустой ground: слот уже очищен фоном страницы, метаданные размещения
-        // добавлены выше - рисовать нечего, но размещение состоялось.
+        // Empty ground: the slot is already cleared to the page background and
+        // the placement metadata was added above - nothing to draw, but the
+        // placement did happen.
         guard buffers.ground.indicesCount > 0,
               let groundIndicesBuffer = buffers.ground.indicesBuffer else {
             return true
@@ -242,8 +245,8 @@ class TileAtlasTexture {
         }
     }
 
-    /// Перегенерирует mip-уровни перерисованных страниц; вызывается после
-    /// завершения рендер-пассов страниц в том же command buffer.
+    /// Regenerates mip levels of the redrawn pages; called after the page
+    /// render passes finish, in the same command buffer.
     func generateMipmaps(commandBuffer: MTLCommandBuffer, pageIndexes: [Int]) {
         guard renderEncoder == nil else { return }
         let mippedPageIndexes = pageIndexes.filter {
@@ -286,8 +289,9 @@ class TileAtlasTexture {
                                                                        height: size,
                                                                        mipmapped: false)
         depthDescriptor.usage = [.renderTarget]
-        // Симулятор и нативный macOS не работают с memoryless depth для этого рендера
-        // в атлас (memoryless - оптимизация tile memory для iOS TBDR GPU).
+        // The simulator and native macOS don't support memoryless depth for this
+        // render into the atlas (memoryless is a tile-memory optimization for iOS
+        // TBDR GPUs).
         #if targetEnvironment(simulator) || os(macOS)
         depthDescriptor.storageMode = .private
         #else

@@ -3,12 +3,12 @@
 
 import simd
 
-/// Порядок сетевого спроса тайлов: от ближайших к центру камеры к дальним.
-/// Загрузчик и очередь парсинга сохраняют переданный порядок, поэтому именно
-/// эта сортировка определяет, какие тайлы стартуют в сеть первыми и кто
-/// первым получает парс-слот. Метрика - чебышёвское расстояние в
-/// нормализованных мировых координатах: сравнима между таргетами разных
-/// зумов (дистанционный LOD выдаёт смешанные z).
+/// Network demand order for tiles: from those closest to the camera center to the far ones.
+/// The loader and the parse queue preserve the given order, so this sort alone
+/// determines which tiles hit the network first and which one gets a parse slot
+/// first. The metric is the Chebyshev distance in normalized world
+/// coordinates: comparable across targets of different zooms
+/// (distance LOD yields mixed z).
 enum TileDemandPriorityMath {
     static func sortedByCameraProximity(_ targets: [VisibleTile],
                                         centerWorldMercator: SIMD2<Double>,

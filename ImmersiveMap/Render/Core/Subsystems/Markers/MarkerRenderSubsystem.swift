@@ -3,11 +3,11 @@
 
 import Metal
 
-/// Проецирует координаты SwiftUI-маркеров в экранные точки кадра теми же
-/// формулами, что вершинный путь рендера (GeoScreenProjectionMath).
-/// GPU-работы не выполняет: результат кладётся в
-/// `frameContext.sharedState.markerState`, и движок публикует его синхронно
-/// после успешного present того же кадра.
+/// Projects SwiftUI marker coordinates into the frame's screen points with the
+/// same formulas as the render's vertex path (GeoScreenProjectionMath).
+/// Does no GPU work: the result is stored in
+/// `frameContext.sharedState.markerState`, and the engine publishes it
+/// synchronously after a successful present of the same frame.
 final class MarkerRenderSubsystem: RenderSubsystem {
     let name: String = "Markers"
 

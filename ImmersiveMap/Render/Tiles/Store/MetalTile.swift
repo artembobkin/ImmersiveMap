@@ -4,8 +4,8 @@
 import MetalKit
 
 
-/// Иммутабелен после init: создаётся фабрикой в фоновой задаче и после
-/// публикации в кэш читается только рендером.
+/// Immutable after init: created by the factory in a background task and,
+/// once published to the cache, read only by the renderer.
 final class MetalTile: Hashable, @unchecked Sendable {
     static func == (lhs: MetalTile, rhs: MetalTile) -> Bool {
         return lhs.tile.x == rhs.tile.x && lhs.tile.z == rhs.tile.z && lhs.tile.y == rhs.tile.y

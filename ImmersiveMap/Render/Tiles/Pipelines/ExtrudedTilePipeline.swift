@@ -4,11 +4,11 @@
 import MetalKit
 
 class ExtrudedTilePipeline {
-    /// Непрозрачная геометрия зданий: solid рисует ею прямо в world-пасс,
-    /// translucent - в offscreen building image.
+    /// Opaque building geometry: solid mode draws it straight into the world pass,
+    /// translucent mode into the offscreen building image.
     let pipelineState: MTLRenderPipelineState
-    /// Наложение building image на world-пасс одним фуллскрин-треугольником
-    /// с premultiplied-блендингом.
+    /// Composites the building image onto the world pass with a single fullscreen
+    /// triangle using premultiplied blending.
     let compositePipelineState: MTLRenderPipelineState
 
     struct VertexIn {
@@ -58,7 +58,7 @@ class ExtrudedTilePipeline {
         compositeDescriptor.rasterSampleCount = sampleCount
         compositeDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
         compositeDescriptor.depthAttachmentPixelFormat = .depth32Float
-        // Premultiplied alpha: цвет building image уже умножен на покрытие силуэта.
+        // Premultiplied alpha: the building image color is already multiplied by the silhouette coverage.
         compositeDescriptor.colorAttachments[0].isBlendingEnabled = true
         compositeDescriptor.colorAttachments[0].rgbBlendOperation = .add
         compositeDescriptor.colorAttachments[0].alphaBlendOperation = .add

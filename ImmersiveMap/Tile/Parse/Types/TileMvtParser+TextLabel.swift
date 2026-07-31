@@ -12,9 +12,9 @@ extension TileMvtParser {
         let collisionPriority: Int
         let textStyle: LabelTextStyle
         let poiIcon: PoiSpriteIcon?
-        /// Минимальный зум камеры, с которого лейбл виден (0 = всегда).
+        /// Minimum camera zoom at which the label is visible (0 = always).
         let minCameraZoom: Float
-        /// Категория для дистанционных тиров детализации (см. билдер лейблов).
+        /// Category for the distance-based detail tiers (see the label builder).
         let detailCategory: VectorTileLabelDetailCategory
 
         init(text: String,

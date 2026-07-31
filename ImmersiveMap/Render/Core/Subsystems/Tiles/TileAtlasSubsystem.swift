@@ -73,10 +73,10 @@ final class TileAtlasSubsystem: RenderSubsystem {
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
 
-    // Хеш атласа фиксируется только после commit() command buffer: если кадр
-    // отброшен (нет drawable), закодированная перерисовка страниц не выполнится,
-    // и pending-хеш должен пережить кадр, чтобы следующий кадр перекодировал
-    // атлас заново - иначе шейдер сэмплит старую GPU-текстуру по новому маппингу.
+    // The atlas hash is committed only after the command buffer commit(): if the
+    // frame is dropped (no drawable), the encoded page redraw never executes,
+    // and the pending hash must survive the frame so the next frame re-encodes
+    // the atlas - otherwise the shader samples the old GPU texture with the new mapping.
     func frameCommitted() {
         globeTextureVersionTracker.commitPending()
     }
@@ -99,8 +99,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
         tilesTexture.releasePages()
     }
 
-    // Глобусный атлас нужен только spherical-режиму: после устойчивого ухода в
-    // flat его страницы выгружаются, чтобы не держать сотни МиБ мёртвых текстур.
+    // The globe atlas is only needed in spherical mode: after a stable switch to
+    // flat its pages are released so we don't hold hundreds of MiB of dead textures.
     private func releaseStalePagesIfNeeded(frameContext: FrameContext) {
         guard pageRetention.shouldReleasePages(isSpherical: frameContext.renderSurfaceMode == .spherical,
                                                hasPages: tilesTexture.pages.isEmpty == false,
@@ -192,8 +192,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
                                                    surface: frameContext.renderSurfaceMode == .spherical ? "globe" : "flat"))
     }
 
-    // Summary нужен только HUD-панели: строим лениво при включённой панели,
-    // а не на каждый rebuild плана (rebuild происходит каждый кадр движения камеры).
+    // The summary is only needed by the HUD panel: build it lazily when the panel
+    // is enabled, not on every plan rebuild (a rebuild happens every frame of camera motion).
     private func refreshDebugSummaryIfNeeded(frameContext: FrameContext) {
         guard frameContext.services.settings.debug.enableDebugPanel else {
             tileAtlasDebugSummary = nil

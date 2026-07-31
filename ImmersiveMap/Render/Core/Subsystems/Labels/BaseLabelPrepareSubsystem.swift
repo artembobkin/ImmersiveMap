@@ -48,29 +48,29 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var visibilityCycle: VisibilityCycle?
     private var latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
     private var latestActiveRoadRecordIndices: Set<Int>?
-    // У части активных рекордов ещё нет GPU placement-данных (свежий тайл,
-    // возврат из кулла): флаг держит кадры и рестарты цикла живыми, пока данные
-    // не появятся - иначе при неподвижной камере подписи таких тайлов не
-    // появились бы никогда.
+    // Some active records have no GPU placement data yet (fresh tile, return
+    // from culling): the flag keeps frames and cycle restarts alive until the
+    // data arrives - otherwise, with a stationary camera, labels of such tiles
+    // would never appear.
     private var roadPlacementDataPending = false
-    // Пары (рекорд, слот), чей placement-компьют закодирован в command buffer
-    // текущего кадра; фиксируются в стампы только после commit().
+    // (record, slot) pairs whose placement compute is encoded into the current
+    // frame's command buffer; committed to stamps only after commit().
     private var pendingPlacementStamps: [(record: RoadLabelTileRecord, slot: Int)] = []
     private var cachedBaseProjection: TilePointScreenProjectionResult = .empty
     private var cachedBaseProjectionFingerprint: Int?
     private var cachedBaseProjectionTopologyGeneration: UInt64 = 0
-    // presentationInputs дорог - чистая функция instanceKeys/instanceRetainedFlags,
-    // которые меняются только вместе с топологией: пересборка 3610 структур
-    // каждый кадр не нужна.
+    // Road presentationInputs are a pure function of instanceKeys/instanceRetainedFlags,
+    // which change only together with the topology: rebuilding 3610 structs
+    // every frame is unnecessary.
     private var cachedRoadPresentationInputs: [BaseLabelPresentationInput] = []
     private var cachedRoadPresentationInputsGeneration: UInt64?
     private var roadTargetVisibilityScratch: [Bool] = []
 
     private let roadPriorityBase: Int = 1_000_000_000
     private let debugOverlayControls: DebugOverlayControlState?
-    // Последняя подготовка дорожных инстансов цикла видимости: экранные AABB
-    // глифов для debug-рамок. Обновляется со стартом цикла, при неподвижной
-    // камере позиции остаются актуальными.
+    // Latest road-instance preparation of the visibility cycle: screen-space
+    // glyph AABBs for the debug frames. Updated when a cycle starts; with a
+    // stationary camera the positions stay valid.
     private var latestRoadPreparedInstances: [RoadPreparedInstance] = []
 
     init(baseLabelCache: BaseLabelCache,
@@ -267,10 +267,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             fadeAlphas: fadeResolution.fadeAlphas,
             cameraZoom: Float(frameContext.zoom)
         )
-        // visibilityCycle != nil: незавершённый цикл обязан удерживать кадры,
-        // иначе при статичной камере (fingerprint публикуется первым же
-        // advance) display link заснёт на середине цикла, не дойдя до
-        // road-групп.
+        // visibilityCycle != nil: an unfinished cycle must keep frames alive,
+        // otherwise with a static camera (the fingerprint is published by the
+        // very first advance) the display link would fall asleep mid-cycle,
+        // never reaching the road groups.
         let hasPendingVisibilityRefresh = collisionsEnabled &&
             (latestCameraFingerprint != publishedVisibilityCameraFingerprint ||
                 horizonReservationSignature != publishedHorizonReservationSignature ||
@@ -314,8 +314,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
-        // Стампы прошлого кадра, не дошедшие до frameCommitted (кадр отброшен
-        // без commit) - компьют не исполнился, фиксировать их нельзя.
+        // Stamps from the previous frame that never reached frameCommitted (the
+        // frame was dropped without commit) - the compute never ran, so they
+        // must not be committed.
         pendingPlacementStamps.removeAll(keepingCapacity: true)
         guard let commandBuffer = frameContext.commandBuffer else {
             return
@@ -323,9 +324,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
         let basePointCount = baseLabelCache.activeLabelSpanCount
 
-        // Дорожные рекорды собираются заранее: все point-to-screen dispatch-и
-        // кадра (базовые лейблы + пути дорог) уходят в один compute-энкодер,
-        // все placement-dispatch-и во второй, вместо пары энкодеров на рекорд.
+        // Road records are gathered up front: all point-to-screen dispatches of
+        // the frame (base labels + road paths) go into one compute encoder, all
+        // placement dispatches into a second, instead of a pair of encoders per record.
         struct RoadPathDispatch {
             let pointCount: Int
             let inputBuffer: MTLBuffer
@@ -382,9 +383,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                     collisionAabbBuffer: collisionAabbBuffer,
                     glyphCount: record.glyphCount
                 ))
-                // Стамп фиксируется только в frameCommitted(): кадр может быть
-                // отброшен после prepareGPU (нет drawable), и закодированный
-                // компьют никогда не исполнится.
+                // The stamp is committed only in frameCommitted(): the frame may
+                // be dropped after prepareGPU (no drawable), and the encoded
+                // compute would never execute.
                 pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
 
                 if index < staticBatches.count {
@@ -400,9 +401,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
-        // Энкодер 1: все point-to-screen вычисления кадра. Константы пасса
-        // (PSO, камера, screenParams, origin-буфер) привязываются один раз,
-        // dispatch-и вешают только свои буферы.
+        // Encoder 1: all point-to-screen computations of the frame. Pass
+        // constants (PSO, camera, screenParams, origin buffer) are bound once;
+        // dispatches attach only their own buffers.
         if basePointCount > 0 || roadPathDispatches.isEmpty == false,
            let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer,
                                                      label: TilePointScreenCompute.passLabel(for: frameContext)) {
@@ -435,7 +436,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             return
         }
 
-        // Энкодер 2: размещение глифов всех рекордов кадра.
+        // Encoder 2: glyph placement for all records of the frame.
         roadPlacementCalculator.run(commandBuffer: commandBuffer, dispatches: placementDispatches)
 
         frameContext.sharedState.roadLabelState.drawLabels = drawBatches
@@ -448,8 +449,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
 
-    // Command buffer кадра закоммичен - закодированный placement-компьют
-    // гарантированно исполнится, стампы данных можно фиксировать.
+    // The frame's command buffer is committed - the encoded placement compute
+    // is guaranteed to execute, so the data stamps can be committed.
     func frameCommitted() {
         for pending in pendingPlacementStamps {
             pending.record.markPlacementEncoded(slot: pending.slot)
@@ -498,13 +499,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle = hasActiveVisibilityCycle
     }
 
-    /// Рамки лейблов для debug-оверлея: коллизионные AABB со свежими экранными
-    /// позициями кадра. Спрятанные (коллизией, горизонтом лейбла, фейдом)
-    /// включаются наравне с видимыми: смысл оверлея - показать всё, что
-    /// участвует в кадре. За горизонтом проекции точка невалидна и рамки нет.
-    /// Лейблы ниже своего minCameraZoom пропускаются: коллизия их не считает,
-    /// и красный цвет должен означать «проиграл коллизию», а не «ещё не дорос
-    /// до зума». Базовые и дорожные рамки включаются раздельными тумблерами.
+    /// Label frames for the debug overlay: collision AABBs with the frame's
+    /// fresh screen positions. Hidden ones (by collision, label horizon, fade)
+    /// are included alongside visible ones: the overlay's point is to show
+    /// everything participating in the frame. Beyond the projection horizon the
+    /// point is invalid and there is no frame. Labels below their minCameraZoom
+    /// are skipped: collision doesn't consider them, and red must mean "lost
+    /// the collision", not "hasn't grown to the zoom yet". Base and road frames
+    /// are enabled by separate toggles.
     private func makeDebugBoxesState(baseProjection: TilePointScreenProjectionResult,
                                      fadeAlphas: [Float],
                                      cameraZoom: Float) -> BaseLabelDebugBoxesState {
@@ -538,8 +540,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
-        // Дорожные рамки: per-glyph AABB из последней подготовки цикла
-        // видимости, видимость по опубликованному решению коллизий инстанса.
+        // Road frames: per-glyph AABBs from the latest visibility-cycle
+        // preparation, visibility from the instance's published collision decision.
         var roadBoxes: [BaseLabelDebugBox] = []
         if controls.roadLabelBoundsEnabled {
             for instance in latestRoadPreparedInstances {
@@ -560,10 +562,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         guard baseLabelCache.activeLabelSpanCount > 0 else {
             return .empty
         }
-        // Проекция - чистая функция от камеры и топологии тайлов: fingerprint камеры
-        // покрывает все проекционные входы (центр, зум, углы, drawSize, режимы
-        // поверхности), а generation топологии меняется при любой смене
-        // snapshot/tileOriginData. При неподвижной камере пересчёт не нужен.
+        // The projection is a pure function of the camera and tile topology: the
+        // camera fingerprint covers all projection inputs (center, zoom, angles,
+        // drawSize, surface modes), and the topology generation changes on any
+        // snapshot/tileOriginData change. With a stationary camera no recompute is needed.
         if cachedBaseProjectionFingerprint == latestCameraFingerprint,
            cachedBaseProjectionTopologyGeneration == visibilityTopologyGeneration {
             return cachedBaseProjection
@@ -941,13 +943,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             return
         }
 
-        // Каденс отсчитывается от ЗАВЕРШЕНИЯ прошлого цикла и гейтит в том числе
-        // камерные рестарты: во время непрерывного жеста fingerprint (точные
-        // bitPattern) расходится с published каждый кадр, и без паузы циклы шли
-        // back-to-back - полная пересборка road-инстансов каждые ~15 кадров.
-        // Экранные позиции лейблов считает GPU покадрово; каденс задерживает
-        // только решения показать/скрыть. forceRestart (смена тайлов/проекции)
-        // остаётся немедленным - на нём держится reseed видимости.
+        // The cadence counts from the COMPLETION of the previous cycle and gates
+        // camera restarts too: during a continuous gesture the fingerprint (exact
+        // bitPatterns) diverges from published every frame, and without a pause
+        // cycles ran back-to-back - a full road-instance rebuild every ~15 frames.
+        // The GPU computes label screen positions per frame; the cadence delays
+        // only the show/hide decisions. forceRestart (tile/projection change)
+        // stays immediate - the visibility reseed depends on it.
         let cameraChanged = latestCameraFingerprint != publishedVisibilityCameraFingerprint
         let horizonReservationChanged = horizonReservationSignature != publishedHorizonReservationSignature
         let cadenceElapsed = frameContext.time - lastVisibilityCycleEndTime >= visibilityRefreshInterval
@@ -969,11 +971,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         cycle.processNextGroups(maxGroupCount: collisionGroupBudgetPerFrame)
         if Self.shouldPublishVisibilityCycle(cycle,
                                              topologyGeneration: visibilityTopologyGeneration) {
-            // Инкрементальная публикация: за кадр решения получают максимум
-            // budget групп - переносим только их, вместо аллокации и слияния
-            // полных массивов (published реseed-ится на топологию цикла ДО его
-            // создания, поэтому индексы совместимы; bounds-guard на случай
-            // рассинхронизации сохраняется).
+            // Incremental publication: per frame at most `budget` groups get
+            // decisions - only those are transferred, instead of allocating and
+            // merging full arrays (published is reseeded to the cycle's topology
+            // BEFORE the cycle is created, so the indices are compatible; the
+            // bounds-guard against desync is kept).
             cycle.drainPendingPublications(
                 base: { index, visibility in
                     guard index < publishedBaseCollisionVisibility.count else { return }
@@ -1080,8 +1082,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return groups
     }
 
-    // Выключенные кандидаты не получают групп (не занимают бюджет цикла и не
-    // аллоцируют members) - они сразу помечаются .hidden при инициализации цикла.
+    // Disabled candidates get no groups (they take no cycle budget and allocate
+    // no members) - they are marked .hidden right away at cycle initialization.
     private func makeCollisionGroups(baseCandidates: [ScreenCollisionCandidate],
                                      roadInstances: [RoadPreparedInstance]) -> (groups: [VisibilityCollisionGroup],
                                                                                 disabledBaseIndices: [Int]) {
@@ -1130,9 +1132,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         hasher.combine(Int(frameContext.drawSize.height.rounded()))
         hasher.combine(frameContext.renderSurfaceMode == .flat)
         hasher.combine(frameContext.screenSpaceProjectionMode == .flat)
-        // Проекция зависит и от globe-униформы (transition/radius/pan), которая может
-        // меняться при неизменной камере: forced-переключение режима поверхности и
-        // live-обновление presentationSettings (radius задаёт и flatRenderMapSize).
+        // The projection also depends on the globe uniform (transition/radius/pan),
+        // which can change with an unchanged camera: forced surface-mode switching
+        // and live presentationSettings updates (radius also sets flatRenderMapSize).
         let globeUniform = frameContext.globeRenderUniform
         hasher.combine(globeUniform.transition.bitPattern)
         hasher.combine(globeUniform.radius.bitPattern)
@@ -1141,13 +1143,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return hasher.finalize()
     }
 
-    // Коллизионные кандидаты дорог читаются из GPU-буферов placement-компьюта:
-    // GPU уже проецирует пути, выбирает ориентацию и пишет повёрнутые AABB
-    // глифов для отрисовки - CPU-репроекция дублировала бы ту же работу и
-    // могла расходиться с реально нарисованными глифами. Слот текущего кадра
-    // читается ДО prepareGPU и содержит данные завершённого кадра N-slots:
-    // решения видимости и так принимаются по позе старта цикла (0.2-0.45 с),
-    // лаг readback на их фоне пренебрежим.
+    // Road collision candidates are read from the placement compute's GPU
+    // buffers: the GPU already projects the paths, picks the orientation, and
+    // writes the rotated glyph AABBs for drawing - a CPU reprojection would
+    // duplicate the same work and could diverge from the actually drawn glyphs.
+    // The current frame's slot is read BEFORE prepareGPU and holds data from
+    // the completed frame N-slots back: visibility decisions are made from the
+    // cycle-start pose anyway (0.2-0.45 s), so the readback lag is negligible.
     private func prepareRoadInstances(frameContext: FrameContext,
                                       projectionIndexState: TileProjectionIndexState) -> RoadPreparation {
         guard let roadLabelCache,
@@ -1183,26 +1185,26 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 nearCameraCulledPathCount += record.entries.count
                 appendRoadRecordInstanceIndices(record: record,
                                                 into: &hiddenInstanceIndices)
-                // prepareGPU перестанет кодировать компьют рекорда, буферы
-                // заморозятся - сбрасываем стампы, чтобы после возврата не
-                // читать позиции произвольной давности.
+                // prepareGPU will stop encoding this record's compute and the
+                // buffers will freeze - reset the stamps so that after the
+                // record returns we don't read arbitrarily stale positions.
                 record.invalidatePlacementData()
                 continue
             }
 
-            // Активность рекорда управляет GPU-компьютом в prepareGPU и не
-            // зависит от readback - иначе новый рекорд никогда не получил бы
-            // данных.
+            // Record activity drives the GPU compute in prepareGPU and does not
+            // depend on readback - otherwise a new record would never receive
+            // any data.
             activeRecordIndices.insert(recordIndex)
 
             guard record.canEncodePlacements else {
                 continue
             }
 
-            // Нет данных завершённого кадра (свежий рекорд, возврат из кулла) -
-            // решения по инстансам не принимаются, published-видимость
-            // сохраняется, а pending-флаг держит кадры и рестарты цикла живыми,
-            // пока данные не появятся.
+            // No completed-frame data (fresh record, return from culling) -
+            // no instance decisions are made, the published visibility is kept,
+            // and the pending flag keeps frames and cycle restarts alive until
+            // the data arrives.
             guard record.hasPlacementData(slot: slot) else {
                 hasRecordsAwaitingPlacementData = true
                 continue
@@ -1247,11 +1249,12 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                hiddenInstanceIndices: hiddenInstanceIndices)
     }
 
-    // Кандидаты инстанса из per-glyph выходов GPU. nil - решение по инстансу не
-    // принимается: невидимый глиф (путь за камерой/короче лейбла), глиф,
-    // экстраполированный за концы пути, или превышение поворота между соседними
-    // глифами (maxGlyphTurnRadians) - те же правила, что у прежнего CPU-пути,
-    // но по углам реально нарисованных глифов.
+    // Instance candidates from the GPU's per-glyph outputs. nil - no decision
+    // is made for the instance: an invisible glyph (path behind the camera /
+    // shorter than the label), a glyph extrapolated beyond the path ends, or
+    // exceeding the turn between adjacent glyphs (maxGlyphTurnRadians) - the
+    // same rules as the old CPU path, but using the angles of the actually
+    // drawn glyphs.
     static func makeRoadInstanceCandidates(instanceKey: UInt64,
                                            secondaryPriority: Int,
                                            anchorOrdinal: UInt32,
@@ -1568,20 +1571,22 @@ final class VisibilityCycle {
     private(set) var roadInstanceVisibility: [Bool]
     private(set) var roadInstanceVisibilityResolved: [Bool]
     private var gridBuckets: [[VisibilityPlacedCandidate]]
-    // Ячейки, занятые каждым размещённым target - чтобы эвикция чистила только их,
-    // а не сканировала всю сетку.
+    // Cells occupied by each placed target - so eviction cleans only those
+    // instead of scanning the whole grid.
     private var coveredCellsByTarget: [VisibilityCollisionTarget: [CoveredCellRange]] = [:]
-    // Выключенные кандидаты публикуются .hidden только при завершении цикла:
-    // прерванный цикл (forceRestart) сохраняет им прежнюю published-видимость,
-    // как это делал бюджетный обход по группам.
+    // Disabled candidates are published as .hidden only when the cycle
+    // completes: an interrupted cycle (forceRestart) keeps their previous
+    // published visibility, just like the budgeted group traversal did.
     private let resolvedHiddenBaseIndices: [Int]
     private var didApplyResolvedHiddenBaseIndices = false
-    // Индексы, чьи решения ещё не перенесены в published-состояние: за кадр
-    // решается максимум budget групп, полное слияние массивов не нужно.
+    // Indices whose decisions have not yet been transferred to the published
+    // state: at most `budget` groups are decided per frame, so a full array
+    // merge is unnecessary.
     private var pendingPublishedBaseIndices: [Int] = []
     private var pendingPublishedRoadIndices: [Int] = []
-    // Переиспользуемые буферы processGroup/seedGroupIfUnblocked: аллокация на
-    // каждую из ~3.7k групп цикла - заметная доля malloc/free в профиле.
+    // Reusable buffers for processGroup/seedGroupIfUnblocked: allocating per
+    // each of the cycle's ~3.7k groups is a noticeable share of malloc/free in
+    // the profile.
     private var scratchCovered: [(candidate: VisibilityPlacedCandidate, cells: CoveredCellRange)] = []
     private var scratchTargetsToEvict: [VisibilityCollisionTarget] = []
 
@@ -1616,9 +1621,9 @@ final class VisibilityCycle {
         applyResolvedHiddenBaseIndicesIfComplete()
     }
 
-    /// Переносит накопленные решения цикла в published-состояние подписчика
-    /// и очищает очередь. Порядок применения повторяет порядок решений -
-    /// последняя запись по индексу побеждает, как и при полном слиянии.
+    /// Transfers the cycle's accumulated decisions into the subscriber's
+    /// published state and clears the queue. Application order mirrors the
+    /// decision order - the last write per index wins, same as a full merge.
     func drainPendingPublications(base: (Int, BaseLabelCollisionVisibility) -> Void,
                                   road: (Int, Bool) -> Void) {
         for index in pendingPublishedBaseIndices {
@@ -1697,10 +1702,11 @@ final class VisibilityCycle {
             removePlacement(of: target)
             applyRejected(target)
         }
-        // Посеянная в init цель при повторном accept уже размещена в сетке -
-        // без удаления прежнего размещения её члены дублировались бы в бакетах,
-        // удлиняя все последующие AABB-сканы (решения не меняются: дубликаты
-        // геометрически идентичны и скрыты от само-коллизий groupId).
+        // A target seeded in init is already placed in the grid on a repeated
+        // accept - without removing the previous placement its members would be
+        // duplicated in the buckets, lengthening all subsequent AABB scans
+        // (decisions don't change: the duplicates are geometrically identical
+        // and shielded from self-collisions by groupId).
         if coveredCellsByTarget[group.target] != nil {
             removePlacement(of: group.target)
         }
@@ -1773,10 +1779,10 @@ final class VisibilityCycle {
         }
     }
 
-    // Возвращает false, если найдена коллизия, которую rank не перевешивает
-    // (группа должна быть отклонена); иначе накапливает цели на эвикцию.
-    // targetsToEvict - массив с линейной дедупликацией: эвиктится обычно 0-2
-    // цели, Set на каждую группу дороже (hash + аллокация).
+    // Returns false if a collision is found that rank does not outweigh (the
+    // group must be rejected); otherwise accumulates targets for eviction.
+    // targetsToEvict is an array with linear deduplication: usually 0-2 targets
+    // get evicted, and a Set per group is more expensive (hash + allocation).
     private func collectEvictableCollisions(for candidate: VisibilityPlacedCandidate,
                                             cells: CoveredCellRange,
                                             rank: VisibilityCollisionRank,

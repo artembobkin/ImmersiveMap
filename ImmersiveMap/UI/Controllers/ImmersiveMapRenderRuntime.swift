@@ -3,8 +3,8 @@
 
 import QuartzCore
 
-/// Владеет render-loop runtime state одного map view.
-/// Оборачивает `ImmersiveMapRenderDriver`, отслеживает render activities, frame requests и renderer attachment.
+/// Owns the render-loop runtime state of a single map view.
+/// Wraps `ImmersiveMapRenderDriver`, tracks render activities, frame requests, and renderer attachment.
 final class ImmersiveMapRenderRuntime {
     private let driver: ImmersiveMapRenderDriver
 

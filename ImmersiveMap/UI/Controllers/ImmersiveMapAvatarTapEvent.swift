@@ -3,13 +3,13 @@
 
 import CoreGraphics
 
-/// Событие нажатия на avatar marker карты.
-/// Доставляется на каждый tap по маркеру независимо от selection state,
-/// в том числе повторный tap по уже выбранному маркеру.
+/// Tap event on a map avatar marker.
+/// Delivered on every tap on a marker regardless of selection state,
+/// including a repeated tap on an already selected marker.
 public struct ImmersiveMapAvatarTapEvent {
-    /// Снапшот маркера на момент нажатия.
+    /// Snapshot of the marker at the moment of the tap.
     public let marker: AvatarMarker
-    /// Точка нажатия в координатах map view.
+    /// Tap point in map view coordinates.
     public let screenPoint: CGPoint
 
     public init(marker: AvatarMarker,

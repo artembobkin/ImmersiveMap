@@ -5,8 +5,8 @@ import CoreGraphics
 import Foundation
 import QuartzCore
 
-/// Владеет time-based camera animations для одного map view.
-/// Координирует camera flights и globe pan inertia, затем синхронизирует render-loop activity.
+/// Owns time-based camera animations for a single map view.
+/// Coordinates camera flights and globe pan inertia, then synchronizes render-loop activity.
 @MainActor
 final class ImmersiveMapCameraAnimationRuntime {
     private let cameraRuntime: ImmersiveMapCameraRuntime
@@ -44,8 +44,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         refreshRenderingState()
     }
 
-    /// Ставит целевые углы (bearing + pitch) от контрола камеры, к которым фактические углы
-    /// подводятся покадрово (сглаживание). Прерывает активный camera flight — ручное управление важнее.
+    /// Sets target angles (bearing + pitch) from the camera control, toward which the actual
+    /// angles are eased per frame (smoothing). Interrupts an active camera flight, since manual control wins.
     func setCameraAngleTarget(bearing: Float,
                               pitch: Float,
                               currentTime: CFTimeInterval = CACurrentMediaTime()) {
@@ -57,8 +57,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         setPitchTarget(pitch, currentTime: currentTime)
     }
 
-    /// Принимает целевой pitch. Вместо мгновенного применения ставит цель, к которой фактический
-    /// pitch подводится покадрово (сглаживание). Если follow выключен — применяет мгновенно.
+    /// Accepts a target pitch. Instead of applying instantly, it sets a goal toward which the actual
+    /// pitch is eased per frame (smoothing). If follow is disabled, applies instantly.
     func setPitchTarget(_ pitch: Float, currentTime: CFTimeInterval = CACurrentMediaTime()) {
         let clampedTarget = min(max(0, pitch), cameraRuntime.currentMaximumPitch())
         guard cameraPitchFollow.retarget(clampedTarget, currentTime: currentTime) else {
@@ -73,8 +73,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         renderRuntime.requestFrame()
     }
 
-    /// Принимает целевой bearing. Фактический bearing подводится к цели покадрово по кратчайшему
-    /// угловому пути. Если follow выключен — применяет мгновенно.
+    /// Accepts a target bearing. The actual bearing is eased toward the goal per frame along the
+    /// shortest angular path. If follow is disabled, applies instantly.
     func setBearingTarget(_ bearing: Float, currentTime: CFTimeInterval = CACurrentMediaTime()) {
         let maximumAbsoluteBearing = cameraRuntime.currentMaximumAbsoluteBearing()
         let clampedTarget = min(max(bearing, -maximumAbsoluteBearing), maximumAbsoluteBearing)
@@ -187,7 +187,7 @@ final class ImmersiveMapCameraAnimationRuntime {
             return
         }
 
-        // Camera flight владеет всей позой камеры (включая pitch) — уступаем ему.
+        // A camera flight owns the entire camera pose (including pitch), so we yield to it.
         guard flightController.isActive == false,
               let currentPitch = cameraRuntime.currentPitch else {
             cancelCameraPitchFollow()
@@ -215,7 +215,7 @@ final class ImmersiveMapCameraAnimationRuntime {
             return
         }
 
-        // Camera flight владеет всей позой камеры (включая bearing) — уступаем ему.
+        // A camera flight owns the entire camera pose (including bearing), so we yield to it.
         guard flightController.isActive == false,
               let currentBearing = cameraRuntime.currentBearing else {
             cancelCameraBearingFollow()

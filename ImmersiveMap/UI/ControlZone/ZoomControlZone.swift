@@ -6,8 +6,8 @@
 import CoreGraphics
 import UIKit
 
-/// Владеет zoom control zone, включая drag zoom и scroll zoom gestures.
-/// Переводит движение control в camera zoom commands и сообщает состояние zoom interaction.
+/// Owns the zoom control zone, including drag zoom and scroll zoom gestures.
+/// Translates control movement into camera zoom commands and reports zoom interaction state.
 @MainActor
 final class ZoomControlZone {
     private enum Layout {

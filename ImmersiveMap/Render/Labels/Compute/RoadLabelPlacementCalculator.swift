@@ -4,7 +4,7 @@
 import Metal
 
 final class RoadLabelPlacementCalculator {
-    /// Буферы одного тайл-рекорда для dispatch-а размещения глифов.
+    /// Buffers of one tile record for a glyph-placement dispatch.
     struct RecordDispatch {
         let pathPointsBuffer: MTLBuffer
         let pathRangesBuffer: MTLBuffer
@@ -23,8 +23,8 @@ final class RoadLabelPlacementCalculator {
         self.pipeline = pipeline
     }
 
-    // Все рекорды кадра кодируются в один compute-энкодер: pipeline state
-    // ставится один раз, dispatch-и различаются только буферами и счётчиком.
+    // All records of the frame are encoded into one compute encoder: the pipeline
+    // state is set once, dispatches differ only in buffers and glyph count.
     func run(commandBuffer: MTLCommandBuffer, dispatches: [RecordDispatch]) {
         let activeDispatches = dispatches.filter { $0.glyphCount > 0 }
         guard activeDispatches.isEmpty == false else {

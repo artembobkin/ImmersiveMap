@@ -13,15 +13,15 @@ struct RenderActivityState {
     let avatarAnimationRenderingActive: Bool
 }
 
-/// События приходят и с main thread, и из фоновых задач (загрузка тайлов,
-/// ретраи), поэтому реализации обязаны быть потокобезопасными.
+/// Events arrive both from the main thread and from background tasks (tile
+/// loading, retries), so implementations must be thread-safe.
 protocol RenderFrameEventSink: AnyObject, Sendable {
     func invalidate(_ reason: RenderInvalidationReason)
     func applyActivityState(_ state: RenderActivityState)
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?)
-    /// В отличие от `updateAvatarSelectionSnapshot` (completion handler,
-    /// off-main) зовётся синхронно из render-цикла на main thread, чтобы
-    /// позиции маркеров применились в той же CA-транзакции, что и кадр.
+    /// Unlike `updateAvatarSelectionSnapshot` (completion handler, off-main),
+    /// this is called synchronously from the render loop on the main thread so
+    /// that marker positions apply in the same CA transaction as the frame.
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot)
 }

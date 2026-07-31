@@ -1,9 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Вход проекции одного маркера: внутренний id (назначается UI-runtime,
-/// публичные Identifiable-id через слой не ходят) и кешированный базис
-/// координаты.
+/// Projection input for a single marker: an internal id (assigned by the
+/// UI runtime, public Identifiable ids never cross this layer) and a cached
+/// coordinate basis.
 struct MarkerProjectionEntry: Equatable, Sendable {
     let id: UInt64
     let basis: GeoProjectionBasis
@@ -15,9 +15,9 @@ struct MarkerProjectionInput: Equatable, Sendable {
     let entries: [MarkerProjectionEntry]
 }
 
-/// Источник координат маркеров для движка кадра. Читается синхронно на
-/// main thread внутри кадра: движок однопоточный (display link в main
-/// runloop, см. ImmersiveMapRenderDriver).
+/// Source of marker coordinates for the frame engine. Read synchronously on
+/// the main thread within a frame: the engine is single-threaded (display link
+/// on the main runloop, see ImmersiveMapRenderDriver).
 protocol MarkerRenderSource: AnyObject {
     var currentMarkerProjectionInput: MarkerProjectionInput { get }
 }

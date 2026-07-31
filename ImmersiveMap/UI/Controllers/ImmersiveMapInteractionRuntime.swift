@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// Отслеживает active user-interaction sources одного map view.
-/// Обновляет render-loop interaction activity и отправляет camera interaction notifications.
+/// Tracks active user-interaction sources of a single map view.
+/// Updates render-loop interaction activity and sends camera interaction notifications.
 @MainActor
 final class ImmersiveMapInteractionRuntime {
     enum Source: Hashable {

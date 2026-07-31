@@ -79,8 +79,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var pinchZoomFactor: Double
         public var pinchZoomVelocityFactor: Double
         public var pinchZoomVelocityLimit: Double
-        /// Доля притяжения зума к точке жеста (курсор, центр pinch, двойной tap):
-        /// 1 — точка мира под курсором остаётся на месте, 0 — зум в центр экрана.
+        /// How strongly zoom is anchored to the gesture point (cursor, pinch center, double tap):
+        /// 1 — the world point under the cursor stays put, 0 — zoom toward the screen center.
         public var zoomAnchorFactor: Double
         public var dragZoomFactor: Double
         public var dragZoomVelocityFactor: Double
@@ -645,10 +645,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    /// Настройки бейджа атрибуции. Текст по умолчанию берется у провайдера тайлов:
-    /// чьи данные показываем, того и называем. Переопределять его стоит только тогда,
-    /// когда приложение показывает атрибуцию источника где-то еще (собственный экран
-    /// «О программе», кастомный оверлей) и лицензия источника это допускает.
+    /// Attribution badge settings. The default text comes from the tile provider:
+    /// we credit whoever's data we display. Overriding it makes sense only when
+    /// the app shows the source attribution elsewhere (its own "About" screen,
+    /// a custom overlay) and the source's license permits that.
     public struct AttributionSettings: Equatable, Sendable {
         public var isVisible: Bool
         public var attributionOverride: ImmersiveMapAttribution?
@@ -1066,8 +1066,8 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// Что реально показывает бейдж: переопределение приложения, а если его нет -
-    /// атрибуция текущего провайдера тайлов.
+    /// What the badge actually shows: the app override, or, when absent,
+    /// the current tile provider's attribution.
     var resolvedAttribution: ImmersiveMapAttribution {
         attribution.attributionOverride ?? tileProvider.attribution
     }

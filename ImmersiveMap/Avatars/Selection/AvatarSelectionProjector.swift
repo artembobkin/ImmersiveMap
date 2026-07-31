@@ -71,13 +71,13 @@ struct AvatarSelectionSnapshot {
 }
 
 struct AvatarSelectionProjector {
-    /// Проецирует маркеры на экран общим проектором GeoScreenProjectionMath:
-    /// та же математика, что у тайлов и SwiftUI-маркеров (волна морфа и
-    /// мягкий горизонт), иначе аватары «плывут» относительно поверхности в
-    /// середине перехода. Отбрасывает всё за пределами вьюпорта с полем
-    /// `cullMarginPx` (запас на вынос коллизиями и размер маркера) и
-    /// невидимую сторону глобуса. Тригонометрии на маркер нет - только
-    /// линейная математика от кешированного базиса координаты.
+    /// Projects markers onto the screen via the shared GeoScreenProjectionMath
+    /// projector: the same math as tiles and SwiftUI markers (morph wave and
+    /// soft horizon), otherwise avatars "swim" relative to the surface in the
+    /// middle of the transition. Discards everything outside the viewport with
+    /// a `cullMarginPx` margin (headroom for collision displacement and marker
+    /// size) and the invisible side of the globe. No per-marker trigonometry -
+    /// only linear math from the coordinate's cached basis.
     func project(markers: [PresentedAvatarMarker],
                  drawSize: CGSize,
                  cameraUniform: CameraUniform,
@@ -107,7 +107,7 @@ struct AvatarSelectionProjector {
         for presentedMarker in markers {
             let point = GeoScreenProjectionMath.project(basis: presentedMarker.projectionBasis,
                                                         constants: constants)
-            // Обратная сторона шара и точки за камерой не доходят до солвера.
+            // The far side of the globe and points behind the camera never reach the solver.
             guard point.visible != 0,
                   point.visibilityAlpha > 0.0,
                   isInsideViewport(point, screenSizeScale: presentedMarker.marker.screenSizeScale) else {
@@ -138,8 +138,8 @@ struct AvatarSelectionProjector {
         entries.reserveCapacity(markerItems.count)
 
         for markerItem in markerItems {
-            // Сжатый маркер занимает меньше места и прячет бейджи: хит-зона
-            // масштабируется тем же displayScale, что и отрисовка.
+            // A shrunken marker takes less space and hides its badges: the hit
+            // zone scales with the same displayScale as the rendering.
             let displayScale = CGFloat(max(markerItem.displayScale, 0.0))
             let badgesVisible = AvatarCollisionMath.badgeContentAlpha(displayScale: markerItem.displayScale) > 0.0
             appendEntryIfVisible(target: .marker(markerItem.marker.id),

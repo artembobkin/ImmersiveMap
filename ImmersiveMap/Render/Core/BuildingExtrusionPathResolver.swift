@@ -1,16 +1,16 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Разрешает способ отрисовки выдавленных зданий на кадр из режима, альфы и
-/// зума камеры. Единая точка решения для планировщика пассов (нужен ли
-/// offscreen building image) и subsystem'ы зданий (каким путём и с какой
-/// альфой рисовать) - оба обязаны видеть один и тот же путь в кадре.
+/// Resolves how extruded buildings are drawn this frame from the mode, alpha and
+/// camera zoom. Single decision point for the pass planner (whether the
+/// offscreen building image is needed) and the buildings subsystem (which path
+/// and which alpha to draw with): both must see the same path within a frame.
 enum BuildingExtrusionPathResolver {
     enum Path: Equatable {
-        /// Непрозрачная геометрия прямо в world-пасс.
+        /// Opaque geometry straight into the world pass.
         case solid
-        /// Непрозрачная геометрия в offscreen building image, который
-        /// world-пасс накладывает на карту с этой альфой.
+        /// Opaque geometry into the offscreen building image, which the
+        /// world pass composites over the map with this alpha.
         case composited(alpha: Float)
     }
 
@@ -23,9 +23,9 @@ enum BuildingExtrusionPathResolver {
         case .solidAtHighZoom(let startZoom, let endZoom):
             let span = max(endZoom - startZoom, Double.leastNonzeroMagnitude)
             let progress = min(max((zoom - startZoom) / span, 0.0), 1.0)
-            // Композит с альфой 1.0 визуально совпадает с прямым solid-рендером,
-            // поэтому по завершении перехода переключаемся на прямой путь и
-            // перестаём платить за offscreen-пасс - без скачка картинки.
+            // Compositing with alpha 1.0 is visually identical to direct solid
+            // rendering, so once the transition finishes we switch to the direct
+            // path and stop paying for the offscreen pass, with no visual jump.
             guard progress < 1.0 else {
                 return .solid
             }

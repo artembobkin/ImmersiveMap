@@ -6,9 +6,9 @@
 import SwiftUI
 import UIKit
 
-/// Прозрачный контейнер SwiftUI-маркеров поверх Metal-слоя. Занимает весь
-/// host view, но касания получает только контент маркеров: «пустые» точки
-/// проваливаются в карту (прецеденты: AttributionBadgeView,
+/// Transparent container for SwiftUI markers above the Metal layer. Occupies the
+/// entire host view, but only marker content receives touches: "empty" points
+/// fall through to the map (precedents: AttributionBadgeView,
 /// DebugOverlayHUDView).
 final class MarkerOverlayContainerView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -17,14 +17,14 @@ final class MarkerOverlayContainerView: UIView {
     }
 }
 
-/// Обёртка одного маркера: владеет `UIHostingController` контента и
-/// переключает интерактивность (маркер у горизонта с почти нулевой alpha
-/// не должен ловить касания).
+/// Wrapper for a single marker: owns the content's `UIHostingController` and
+/// toggles interactivity (a marker near the horizon with almost zero alpha
+/// must not catch touches).
 @MainActor
 final class MarkerOverlayItemHost {
-    /// Без parent view controller: контент маркера замкнутый лист
-    /// (navigation/presentation изнутри не поддержаны, см. docs/markers.md),
-    /// traits приходят через окно.
+    /// No parent view controller: marker content is a closed leaf
+    /// (navigation/presentation from inside is unsupported, see docs/markers.md),
+    /// traits arrive through the window.
     private let hostingController: UIHostingController<AnyView>
 
     var view: UIView {
@@ -36,7 +36,7 @@ final class MarkerOverlayItemHost {
         hostingController.view.backgroundColor = .clear
         hostingController.view.isHidden = true
         hostingController.sizingOptions = [.intrinsicContentSize]
-        // Клавиатура и safe area не должны двигать контент маркера.
+        // The keyboard and safe area must not move the marker content.
         hostingController.safeAreaRegions = []
     }
 

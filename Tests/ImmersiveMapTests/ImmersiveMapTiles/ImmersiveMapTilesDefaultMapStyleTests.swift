@@ -101,36 +101,36 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testPoiMinCameraZoomDerivesFromOverzoomBudgetAndPriorities() {
-        // Порог появления = tile.z + log4(effRank / бюджет): бюджет клетки
-        // учетверяется за зум оверзума. Абсолютных зум-рамп нет, поэтому
-        // подход переживает смену maxzoom источника.
+        // Appearance threshold = tile.z + log4(effRank / budget): the cell
+        // budget quadruples per overzoom zoom level. There are no absolute zoom
+        // ramps, so the approach survives a change of the source's maxzoom.
         let style = ImmersiveMapTilesDefaultMapStyle(
             configuration: .immersiveMapTilesDefault
         )
 
-        // Якорь (hospital): отрицательное смещение клампится в бюджет, виден
-        // с рождения тайла независимо от ранга.
+        // Anchor (hospital): the negative offset is clamped into the budget,
+        // visible from the tile's birth regardless of rank.
         let hospitalStyle = makeStyle(style, layerName: "poi", className: "hospital", rank: 20, zoom: 14)
         XCTAssertEqual(hospitalStyle.labelMinCameraZoom, 14)
 
-        // Нейтральная коммерция (shop, rank 2): log4(2) = 0.5 зума оверзума.
+        // Neutral commerce (shop, rank 2): log4(2) = 0.5 zoom of overzoom.
         let shopStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 14)
         XCTAssertEqual(shopStyle.labelMinCameraZoom, 14.5, accuracy: 0.001)
 
-        // Хвост ранга приходит позже: log4(20) ~ 2.16 зума.
+        // The rank tail arrives later: log4(20) ~ 2.16 zooms.
         let deepRankStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 20, zoom: 14)
         XCTAssertEqual(deepRankStyle.labelMinCameraZoom, 14 + log2(Float(20)) / 2, accuracy: 0.001)
 
-        // Инфраструктура (bus, rank 2): смещение +40 -> log4(42) ~ 2.7 зума.
+        // Infrastructure (bus, rank 2): offset +40 -> log4(42) ~ 2.7 zooms.
         let busStyle = makeStyle(style, layerName: "poi", className: "bus", rank: 2, zoom: 14)
         XCTAssertEqual(busStyle.labelMinCameraZoom, 14 + log2(Float(42)) / 2, accuracy: 0.001)
 
-        // Iconless POI (class "office" вне набора иконок): конфигурируемый
-        // порог безыконных (16) остаётся нижней границей.
+        // Iconless POI (class "office" outside the icon set): the configurable
+        // iconless threshold (16) remains the lower bound.
         let officeStyle = makeStyle(style, layerName: "poi", className: "office", rank: 2, zoom: 14)
         XCTAssertEqual(officeStyle.labelMinCameraZoom, 16)
 
-        // Зум-агностичность: тот же shop в тайле z13 появляется на зум раньше.
+        // Zoom agnosticism: the same shop in a z13 tile appears one zoom earlier.
         let earlierTileStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 13)
         XCTAssertEqual(earlierTileStyle.labelMinCameraZoom, 13.5, accuracy: 0.001)
     }
@@ -149,11 +149,11 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     func testBoundaryStyleSuppressesPolygonFill() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
 
-        // Границы - линейный стиль: площадную геометрию (напр. индейские
-        // резервации, приходящие полигонами) заливать нельзя.
+        // Boundaries are a line style: areal geometry (e.g. Native American
+        // reservations arriving as polygons) must not be filled.
         XCTAssertTrue(makeStyle(style, layerName: "boundary", zoom: 6).suppressPolygonFill)
 
-        // Обычные площадные слои полигоны заливают как прежде.
+        // Regular areal layers still fill polygons as before.
         XCTAssertFalse(makeStyle(style, layerName: "water", zoom: 6).suppressPolygonFill)
     }
 

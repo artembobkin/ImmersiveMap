@@ -5,9 +5,9 @@
 import CoreGraphics
 import XCTest
 
-/// Tap по avatar marker должен доставлять `ImmersiveMapAvatarTapEvent` независимо
-/// от selection: без `ImmersiveMapSelectionController`, при повторном tap по уже
-/// выбранному маркеру, и не должен срабатывать на background tap.
+/// A tap on an avatar marker must deliver `ImmersiveMapAvatarTapEvent` regardless
+/// of selection: without an `ImmersiveMapSelectionController`, on a repeated tap
+/// on an already selected marker, and it must not fire on a background tap.
 final class ImmersiveMapAvatarTapEventTests: XCTestCase {
     private let markerID: UInt64 = 7
     private let avatarTapPoint = CGPoint(x: 400, y: 300)
@@ -75,7 +75,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         XCTAssertEqual(tapEventCount, 0)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     @MainActor
     private struct Environment {
@@ -83,8 +83,8 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         let avatarsController: ImmersiveMapAvatarsController
     }
 
-    /// Собирает selection handler с одним маркером `markerID`, чья hit-зона
-    /// накрывает `avatarTapPoint` (contentsScale = 1, snapshot Y направлен вверх).
+    /// Assembles a selection handler with a single marker `markerID` whose hit zone
+    /// covers `avatarTapPoint` (contentsScale = 1, snapshot Y points up).
     @MainActor
     private func makeEnvironment() throws -> Environment {
         let avatarRuntime = ImmersiveMapAvatarRuntime()

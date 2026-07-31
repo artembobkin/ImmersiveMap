@@ -41,11 +41,11 @@ public enum CameraFlightRouteStyle: Sendable, Equatable {
 }
 
 public enum CameraFlightAltitudeStyle: Sendable, Equatable {
-    /// Зум интерполируется напрямую от стартового значения к целевому.
+    /// Zoom interpolates directly from the start value to the target.
     case direct
-    /// Кинематографическая дуга van Wijk и Nuij: камера сначала набирает
-    /// высоту (чем дальше цель, тем выше апекс, вплоть до вида глобуса),
-    /// пролетает основную дистанцию сверху и пикирует к цели.
+    /// The cinematic van Wijk and Nuij arc: the camera first gains altitude
+    /// (the farther the target, the higher the apex, up to a globe view),
+    /// covers most of the distance from above, and dives toward the target.
     case overviewFirst
 }
 

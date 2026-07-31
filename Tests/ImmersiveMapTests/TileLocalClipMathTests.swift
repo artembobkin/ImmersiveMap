@@ -6,8 +6,8 @@ import XCTest
 
 final class TileLocalClipMathTests: XCTestCase {
     func testClipBoundsMirrorsYForNorthWestChild() {
-        // Парсер флипует Y: локальный y=0 - южная кромка source-тайла,
-        // поэтому северо-западный ребёнок занимает y ∈ [2048, 4096].
+        // The parser flips Y: local y=0 is the southern edge of the source tile,
+        // so the north-west child occupies y ∈ [2048, 4096].
         let bounds = TileLocalClipMath.clipBounds(source: Tile(x: 0, y: 0, z: 0),
                                                   placeIn: Tile(x: 0, y: 0, z: 1))
         XCTAssertEqual(bounds, SIMD4<Float>(0, 2048, 2048, 4096))
@@ -26,8 +26,8 @@ final class TileLocalClipMathTests: XCTestCase {
     }
 
     func testClipBoundsOffsetSource() {
-        // Source не в начале координат: смещение placeIn считается
-        // относительно юго-западного угла source.
+        // Source is not at the origin: the placeIn offset is computed
+        // relative to the source's south-west corner.
         let bounds = TileLocalClipMath.clipBounds(source: Tile(x: 3, y: 5, z: 4),
                                                   placeIn: Tile(x: 7, y: 10, z: 5))
         XCTAssertEqual(bounds, SIMD4<Float>(2048, 2048, 4096, 4096))

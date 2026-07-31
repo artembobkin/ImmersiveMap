@@ -6,10 +6,10 @@ import CoreGraphics
 import SwiftUI
 import XCTest
 
-/// ImmersiveMapMarkerRuntime должен диффить набор маркеров по id, держать
-/// hosting-вью в контейнере в порядке коллекции и применять снапшоты
-/// проекции мутациями frame/alpha/isHidden. attach принимает обычный
-/// платформенный view: Metal-хост тестам не нужен.
+/// ImmersiveMapMarkerRuntime must diff the marker set by id, keep the
+/// hosting views in the container in collection order, and apply projection
+/// snapshots via frame/alpha/isHidden mutations. attach takes a regular
+/// platform view: the tests need no Metal host.
 @MainActor
 final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
     private let hostBounds = CGRect(x: 0, y: 0, width: 400, height: 300)
@@ -95,7 +95,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
         environment.runtime.update(content: makeContent(ids: [1]))
         let internalID = environment.runtime.currentMarkerProjectionInput.entries[0].id
 
-        // contentsScale вьюпорта по умолчанию 1: drawSize снапшота в поинтах.
+        // Default viewport contentsScale is 1: the snapshot's drawSize is in points.
         environment.runtime.apply(MarkerProjectionSnapshot(
             frameIndex: 1,
             drawSize: hostBounds.size,
@@ -149,7 +149,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
                        "С якорем .bottom нижняя середина view должна попасть в спроецированную точку")
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private struct Environment {
         let runtime: ImmersiveMapMarkerRuntime

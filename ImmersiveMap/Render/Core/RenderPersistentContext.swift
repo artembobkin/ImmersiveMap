@@ -5,8 +5,8 @@ import Metal
 import MetalKit
 import QuartzCore
 
-/// Долгоживущий контекст renderer lifecycle: собирает Metal-ресурсы, caches и renderer services,
-/// которые переиспользуются subsystem graph и frame pipeline между кадрами.
+/// Long-lived renderer lifecycle context: gathers Metal resources, caches and renderer services
+/// reused by the subsystem graph and frame pipeline across frames.
 final class RenderPersistentContext {
     // MARK: - Metal Core
 

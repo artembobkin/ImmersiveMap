@@ -4,9 +4,9 @@
 import CoreGraphics
 import QuartzCore
 
-/// Общая для UIKit/AppKit host view логика владения runtime graph и `RenderFrameEngine`:
-/// применение настроек, синхронизация контроллеров, создание и пересоздание рендерера.
-/// Платформенный view отвечает только за layer, layout, ввод и lifecycle-события.
+/// Logic shared by the UIKit/AppKit host views for owning the runtime graph and `RenderFrameEngine`:
+/// applying settings, syncing controllers, creating and recreating the renderer.
+/// The platform view is responsible only for layer, layout, input, and lifecycle events.
 @MainActor
 final class ImmersiveMapHostRuntime {
     let runtimeGraph: ImmersiveMapRuntimeGraph
@@ -43,13 +43,13 @@ final class ImmersiveMapHostRuntime {
 
     func handleMemoryPressure() {
         renderer?.handleMemoryWarning()
-        // Warning отменяет in-flight загрузки и сбрасывает demand-гейт;
-        // on-demand цикл при этом спит, и без явного кадра отменённые тайлы
-        // остаются дырами до следующего жеста - кадр перезапускает demand.
+        // The warning cancels in-flight loads and resets the demand gate;
+        // the on-demand loop is asleep at that point, and without an explicit frame
+        // the cancelled tiles stay holes until the next gesture - a frame restarts demand.
         requestFrame()
     }
 
-    /// Синхронизирует новые параметры из SwiftUI update-хука с уже созданным host view.
+    /// Syncs new parameters from the SwiftUI update hook with the already created host view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,
@@ -84,9 +84,9 @@ final class ImmersiveMapHostRuntime {
         applySettings(settings)
     }
 
-    /// Применяет новые настройки к runtime карты и через planner выбирает:
-    /// обновить существующий renderer на лету или пересоздать его для изменений,
-    /// которые затрагивают кэши, подготовленные данные или GPU-ресурсы.
+    /// Applies new settings to the map runtime and, via the planner, chooses whether
+    /// to update the existing renderer in place or recreate it for changes
+    /// that affect caches, prepared data, or GPU resources.
     func applySettings(_ settings: ImmersiveMapSettings) {
         let currentSettings = runtimeGraph.cameraRuntime.currentSettings
         guard currentSettings != settings else {
@@ -150,9 +150,9 @@ final class ImmersiveMapHostRuntime {
     }
 
     private func recreateRenderer(with settings: ImmersiveMapSettings) {
-        // Активный перелёт гасится С завершением (success == false): молча
-        // проглоченный completion вешает цепочки fly навсегда (например,
-        // камера-тур ждёт continuation, который иначе никогда не резюмится).
+        // An active fly-to is cancelled WITH completion (success == false): a silently
+        // swallowed completion hangs fly chains forever (e.g. a camera tour waits
+        // on a continuation that would otherwise never resume).
         runtimeGraph.cameraAnimationRuntime.cancelAnimations()
         let cameraPosition = runtimeGraph.cameraRuntime.cameraPositionForRendererRecreation()
         runtimeGraph.renderRuntime.detachRenderer()

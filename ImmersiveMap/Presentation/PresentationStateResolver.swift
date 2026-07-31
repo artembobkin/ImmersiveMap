@@ -56,11 +56,11 @@ struct PresentationStateResolver {
         )
     }
 
-    /// За окно перехода плоская цель морфа дорастает от `cos(широты центра)`
-    /// до полного меркаторного размера (см. `globeTransitionMapSize` в шейдере),
-    /// то есть проигрывает `log2(1/cos)` уровней видимого раздувания. Окно
-    /// растягивается на ту же величину, чтобы скорость раздувания при развороте
-    /// сферы в плоскость не зависела от широты.
+    /// Over the transition window the flat morph target grows from `cos(center latitude)`
+    /// to the full Mercator size (see `globeTransitionMapSize` in the shader),
+    /// i.e. it plays back `log2(1/cos)` levels of visible inflation. The window
+    /// is stretched by that same amount so the inflation speed while the sphere
+    /// unfurls into the plane does not depend on latitude.
     private static func automaticTransition(cameraState: ImmersiveMapCameraState,
                                             settings: ImmersiveMapSettings.PresentationSettings) -> Float {
         let from = settings.automaticTransitionStartZoom
@@ -82,15 +82,15 @@ struct PresentationStateResolver {
         }
     }
 
-    /// Доля фазы перехода, к которой геометрия морфа полностью разворачивается
-    /// в плоскость.
+    /// Fraction of the transition phase by which the morph geometry fully
+    /// unfolds into the plane.
     private static let geometryCompletionPhase: Float = 0.9
 
-    /// Transition для шейдерной геометрии (GlobeUniform): анимация разворота
-    /// завершается к `geometryCompletionPhase`, и остаток фазы глобусный путь
-    /// рендерит уже готовую плоскость - смена поверхностей на t = 1 происходит
-    /// между геометрически идентичными кадрами. Семантический transition
-    /// (fades, туман, выбор поверхности) остаётся непрерывным до 1.
+    /// Transition for shader geometry (GlobeUniform): the unfurl animation
+    /// completes by `geometryCompletionPhase`, and for the rest of the phase the
+    /// globe path renders an already finished plane, so the surface switch at
+    /// t = 1 happens between geometrically identical frames. The semantic
+    /// transition (fades, fog, surface selection) stays continuous up to 1.
     private static func geometryTransition(_ transition: Float) -> Float {
         min(1.0, transition / geometryCompletionPhase)
     }

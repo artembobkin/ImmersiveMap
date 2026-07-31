@@ -4,16 +4,16 @@
 import Foundation
 import simd
 
-/// Кешируемая тригонометрия проекции геокоординаты: sin/cos/log считаются
-/// один раз при смене координаты, пер-кадровая проекция точки остаётся
-/// линейной алгеброй (без тригонометрии на точку на кадр).
+/// Cacheable trigonometry of a geocoordinate projection: sin/cos/log are computed
+/// once when the coordinate changes, so the per-frame point projection stays
+/// linear algebra (no per-point trigonometry per frame).
 struct GeoProjectionBasis: Equatable, Sendable {
-    /// Единичный вектор точки на сфере в системе формулы глобуса
-    /// (до вращения панорамы): (cosLat*sinLon, sinLat, cosLat*cosLon).
+    /// Unit vector of the point on the sphere in the globe formula's frame
+    /// (before the pan rotation): (cosLat*sinLon, sinLat, cosLat*cosLon).
     let sphereUnit: SIMD3<Float>
-    /// (lon + pi) / 2pi, нормализованный X мировой развёртки.
+    /// (lon + pi) / 2pi, normalized X of the world unwrap.
     let normalizedWorldX: Double
-    /// Нормализованный меркаторный Y широты.
+    /// Normalized Mercator Y of the latitude.
     let mercatorYNormalized: Double
 
     init(coordinate: GeoCoordinate) {

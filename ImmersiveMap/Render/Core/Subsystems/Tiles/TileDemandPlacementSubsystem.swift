@@ -42,11 +42,11 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let visibleTiles = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
 
-        // Dirty-gate: preprocess/demand/request зависят только от покрытия
-        // (coverageVersion меняется при смене камеры/режима) и содержимого кэша
-        // тайлов (contentVersion меняется при материализации/вытеснении).
-        // Пропуск допустим только когда нет запрошенных-но-не-готовых тайлов:
-        // retry-логика загрузчика опирается на пер-кадровый request().
+        // Dirty-gate: preprocess/demand/request depend only on the coverage
+        // (coverageVersion changes when the camera/mode changes) and the tile
+        // cache contents (contentVersion changes on materialization/eviction).
+        // Skipping is allowed only when there are no requested-but-not-ready tiles:
+        // the loader's retry logic relies on the per-frame request().
         var gateHasher = Hasher()
         gateHasher.combine(visibleContent.coverageVersion)
         gateHasher.combine(tileRenderStore.cacheContentVersion)
@@ -67,9 +67,9 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                            center: center,
                                                                            renderSurfaceMode: frameContext.renderSurfaceMode,
                                                                            transition: frameContext.transition)
-        // Подложка горизонта минует препроцессор: его дистанционный фильтр
-        // считает расстояния в тайлах целевого зума и выбросил бы грубые
-        // подложечные тайлы. Спрос и размещения у неё общие с покрытием.
+        // The horizon backdrop bypasses the preprocessor: its distance filter
+        // measures distances in target-zoom tiles and would discard the coarse
+        // backdrop tiles. Its demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
         // `VisibleTile` includes `loop`, so flat-mode wrapped copies can produce
         // multiple placement targets that share the same content tile (`Tile`).
@@ -77,10 +77,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // for identical source bytes.
         let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles,
                                                                                   parentFallbackDepth: 2)
-        // Порядок спроса = приоритет сети и парсинга: ближние к камере тайлы
-        // стартуют первыми. Для хеша размещений используется стабильный
-        // `demandedSourceTiles` (сортировка по центру менялась бы при каждом
-        // сдвиге камеры и вызывала лишние ребилды) - состав списков одинаков.
+        // Demand order = network and parsing priority: tiles closest to the camera
+        // start first. The placement hash uses the stable
+        // `demandedSourceTiles` (center-based sorting would change on every
+        // camera shift and cause needless rebuilds) - both lists have the same contents.
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(preprocessedVisibleTiles,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
@@ -102,9 +102,9 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
         let placementChanged = preprocessedVisibleTilesHashTracker.stage(preprocessedVisibleTilesHash)
         if placementChanged {
-            // Подложка существует - под основным покрытием весь кадр закрашен
-            // на её зуме, и планировщик не должен подменять дыры контентом
-            // этого зума (он уже нарисован слоем ниже).
+            // A backdrop exists - beneath the main coverage the whole frame is painted
+            // at its zoom, and the planner must not fill holes with content
+            // of that zoom (it is already drawn by the layer below).
             let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: preprocessedVisibleTiles,
                                                                      readyTilesBySource: readyTilesBySource,
@@ -184,8 +184,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
-        // Контексты размещения сохраняются: trim в store защищает видимые тайлы,
-        // поэтому карта не пустеет; следующий кадр пересоберёт размещения заново.
+        // Placement contexts are kept: the store's trim protects visible tiles,
+        // so the map doesn't go blank; the next frame rebuilds placements from scratch.
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil
         placementVersion &+= 1

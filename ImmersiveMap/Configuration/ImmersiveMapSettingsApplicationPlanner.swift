@@ -33,10 +33,10 @@ public struct ImmersiveMapSettingsApplicationPlan: Equatable {
 }
 
 public enum ImmersiveMapSettingsApplicationPlanner {
-    /// Строит план применения новых настроек, отделяя live-обновления от изменений,
-    /// для которых нужно пересоздать renderer из-за кэшей, подготовленных данных или GPU-ресурсов.
-    /// Эта логика вынесена из `ImmersiveMapSettings`, потому что настройки описывают состояние,
-    /// а решение о способе применения относится к runtime-политике карты.
+    /// Builds a plan for applying new settings, separating live updates from changes
+    /// that require recreating the renderer because of caches, prepared data, or GPU resources.
+    /// This logic lives outside `ImmersiveMapSettings` because settings describe state,
+    /// while deciding how to apply them belongs to the map's runtime policy.
     public static func makePlan(from oldValue: ImmersiveMapSettings,
                                 to newValue: ImmersiveMapSettings) -> ImmersiveMapSettingsApplicationPlan {
         var changedDomains = Set<ImmersiveMapSettingsChangeDomain>()
@@ -111,8 +111,8 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
         }
-        // Бейдж меняется и когда сменился провайдер тайлов без изменения самих настроек:
-        // текст атрибуции по умолчанию принадлежит провайдеру.
+        // The badge also changes when the tile provider changed without the settings
+        // themselves changing: the default attribution text belongs to the provider.
         if oldValue.attribution != newValue.attribution
             || oldValue.resolvedAttribution != newValue.resolvedAttribution {
             mark(.attribution, actions: [.liveApply])
@@ -124,9 +124,9 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)
     }
 
-    /// Альфа и режим выдавленных зданий - покадровые uniform'ы: subsystem читает их
-    /// из `FrameContext`, они не попадают в подготовленные тайлы и GPU-ресурсы,
-    /// поэтому смена только этих полей не требует пересоздания renderer'а.
+    /// Building extrusion alpha and mode are per-frame uniforms: the subsystem reads
+    /// them from `FrameContext`, they never enter prepared tiles or GPU resources,
+    /// so changing only these fields does not require recreating the renderer.
     private static func isOnlyBuildingExtrusionChanged(from oldStyle: ImmersiveMapSettings.StyleSettings,
                                                        to newStyle: ImmersiveMapSettings.StyleSettings) -> Bool {
         var oldStyleWithNewBuildingExtrusion = oldStyle

@@ -38,7 +38,7 @@ struct TileJSONTemplateLoader: Sendable {
 /// Thread-safe holder for the resolved tile URL template. `nil` until the TileJSON
 /// document is fetched (or if it never resolves), which is the signal for the
 /// provider below to fall back to the static base-URL path.
-/// Внутренне синхронизирован: `storedTemplate` доступен только через `stateQueue`.
+/// Internally synchronized: `storedTemplate` is accessed only through `stateQueue`.
 final class TileJSONTemplateStore: @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.TileJSONTemplateStore.state")
     private var storedTemplate: String?

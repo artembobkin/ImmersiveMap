@@ -21,9 +21,9 @@ struct TextLabelPlacementInput {
 }
 
 struct TileBuffers {
-    // Буферы nil у пустых слоёв (у тайла без мостов/туннелей их большинство):
-    // заглушка минимального размера всё равно стоила бы страницу аллокации
-    // и слот в таблице ресурсов на каждый из десятков буферов тайла.
+    // Buffers are nil for empty layers (a tile without bridges/tunnels has mostly those):
+    // even a minimum-size stub would still cost an allocation page
+    // and a resource-table slot for each of the tile's dozens of buffers.
     struct GeometryLayer {
         let verticesBuffer: MTLBuffer?
         let indicesBuffer: MTLBuffer?

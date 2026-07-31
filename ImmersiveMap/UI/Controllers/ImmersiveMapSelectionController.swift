@@ -62,13 +62,13 @@ enum ImmersiveMapSelectionCommand {
     case clear
 }
 
-/// Public command/callback surface для app-driven map selection.
-/// Держит externally visible selection state синхронизированным с attached map view runtime.
+/// Public command/callback surface for app-driven map selection.
+/// Keeps the externally visible selection state in sync with the attached map view runtime.
 @MainActor
 public final class ImmersiveMapSelectionController {
     private var selectedSelection: ImmersiveMapSelection?
     private var commandHandler: ((ImmersiveMapSelectionCommand) -> Bool)?
-    /// Владелец текущей привязки (selection handler конкретного host view).
+    /// Owner of the current binding (the selection handler of a specific host view).
     private weak var handlerOwner: AnyObject?
 
     public var onSelectionChanged: ((ImmersiveMapSelectionChangeEvent) -> Void)?
@@ -97,8 +97,8 @@ public final class ImmersiveMapSelectionController {
         commandHandler = handler
     }
 
-    /// Отвязка строго по владельцу: демонтаж старого host view не должен
-    /// стирать привязку и кэш выделения, установленные новым view.
+    /// Detach strictly by owner: tearing down an old host view must not
+    /// erase the binding and selection cache installed by the new view.
     func detachHandler(ownedBy owner: AnyObject) {
         guard handlerOwner === owner else {
             return

@@ -4,8 +4,8 @@
 import Foundation
 import simd
 
-/// Чистый механизм интерполяции для camera flights.
-/// Хранит один активный flight и выдает шаги состояния камеры для заданного display-link time.
+/// Pure interpolation mechanism for camera flights.
+/// Holds one active flight and produces camera state steps for a given display-link time.
 final class CameraFlightAnimator {
     enum ResolvedRouteStyle {
         case mercatorShortestPath
@@ -22,7 +22,7 @@ final class CameraFlightAnimator {
         let targetState: ImmersiveMapCameraState
         let duration: TimeInterval
         let routeStyle: ResolvedRouteStyle
-        /// nil означает прямую интерполяцию зума (`.direct` или вырожденный маршрут).
+        /// nil means direct zoom interpolation (`.direct` or a degenerate route).
         let overviewProfile: CameraFlightMath.OverviewFlightProfile?
         let startTime: CFTimeInterval
     }
@@ -89,8 +89,9 @@ final class CameraFlightAnimator {
         let rawProgress = flight.duration > 0 ? (currentTime - flight.startTime) / flight.duration : 1
         let clampedProgress = min(max(rawProgress, 0), 1)
         let easedProgress = CameraFlightMath.easeInOutCubic(clampedProgress)
-        // Профиль связывает пан и зум: у земли центр почти стоит, основную
-        // дистанцию камера проходит на апексе, поэтому пан идёт по panProgress.
+        // The profile couples pan and zoom: near the ground the center barely
+        // moves, the camera covers most of the distance at the apex, so the pan
+        // follows panProgress.
         let overviewSample = flight.overviewProfile?.sample(atProgress: easedProgress)
         let panProgress = overviewSample?.panProgress ?? easedProgress
         let centerWorldMercator: SIMD2<Double>

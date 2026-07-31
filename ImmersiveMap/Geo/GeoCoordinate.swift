@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// Географическая координата в градусах: широта и долгота.
+/// Geographic coordinate in degrees: latitude and longitude.
 public struct GeoCoordinate: Hashable, Sendable {
     public var latitude: Double
     public var longitude: Double

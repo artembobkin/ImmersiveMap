@@ -5,15 +5,15 @@
 
 import AppKit
 
-/// Владеет жестами основного полотна карты на macOS и переводит события AppKit
-/// в команды камеры, выбора и render-loop для `ImmersiveMapNSView`.
+/// Owns the main map surface gestures on macOS and translates AppKit events
+/// into camera, selection, and render-loop commands for `ImmersiveMapNSView`.
 ///
-/// Раскладка ввода:
-/// - перетаскивание левой кнопкой - пан; с зажатой ⌥ - pitch/bearing;
-/// - перетаскивание правой кнопкой - pitch/bearing;
-/// - трекпад pinch - зум, трекпад rotate - поворот;
-/// - scroll wheel / двухпальцевый скролл - зум (обрабатывает host view через `handleScrollWheel`);
-/// - клик - выбор объекта или background tap.
+/// Input layout:
+/// - left-button drag - pan; with ⌥ held - pitch/bearing;
+/// - right-button drag - pitch/bearing;
+/// - trackpad pinch - zoom, trackpad rotate - rotation;
+/// - scroll wheel / two-finger scroll - zoom (handled by the host view via `handleScrollWheel`);
+/// - click - object selection or background tap.
 @MainActor
 final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
     private enum PanMode {
@@ -22,9 +22,9 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
     }
 
     private enum ScrollZoom {
-        /// Точный (трекпадный) скролл: полный свайп ~150pt = 1 уровень зума.
+        /// Precise (trackpad) scroll: a full swipe of ~150pt = 1 zoom level.
         static let preciseDivisor: CGFloat = 150.0
-        /// Дискретное колесо мыши: scrollingDeltaY ~10 за щелчок, ~0.33 зума на щелчок.
+        /// Discrete mouse wheel: scrollingDeltaY ~10 per click, ~0.33 zoom per click.
         static let lineDivisor: CGFloat = 30.0
     }
 
@@ -64,17 +64,17 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         return false
     }
 
-    /// Одиночный клик (selection) ждёт провала двойного клика (anchored zoom) —
-    /// AppKit-аналог UIKit `require(toFail:)`.
+    /// A single click (selection) waits for the double click (anchored zoom) to fail —
+    /// the AppKit analog of UIKit's `require(toFail:)`.
     func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
                            shouldRequireFailureOf otherGestureRecognizer: NSGestureRecognizer) -> Bool {
         gestureRecognizer === clickGesture && otherGestureRecognizer === doubleClickGesture
     }
 
-    /// Жесты карты распознаём только над «голой» поверхностью карты. Если событие
-    /// попало в интерактивный оверлей-сабвью (debug HUD, attribution badge), уступаем
-    /// его этому `NSControl` - иначе gesture recognizer перехватывает `mouseDown` и
-    /// кнопки/переключатели панели не нажимаются.
+    /// Map gestures are recognized only over the "bare" map surface. If the event
+    /// hits an interactive overlay subview (debug HUD, attribution badge), we yield
+    /// it to that `NSControl` - otherwise the gesture recognizer intercepts `mouseDown`
+    /// and the panel's buttons/toggles cannot be pressed.
     func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
                            shouldAttemptToRecognizeWith event: NSEvent) -> Bool {
         guard let mapView, let superview = mapView.superview else {
@@ -130,8 +130,8 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
     }
 
-    /// Двойной клик приближает карту на один уровень зума к точке клика:
-    /// точка мира под курсором остаётся на месте (см. `zoomAnchorFactor`).
+    /// A double click zooms the map in by one zoom level toward the click point:
+    /// the world point under the cursor stays in place (see `zoomAnchorFactor`).
     @objc private func handleDoubleClick(_ gesture: NSClickGestureRecognizer) {
         guard let mapView,
               mapView.cameraRuntime.currentCameraState() != nil else {
@@ -204,8 +204,8 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         }
     }
 
-    /// Вертикальное перетаскивание меняет pitch (вверх - больше наклона),
-    /// горизонтальное - вращает камеру.
+    /// Vertical dragging changes pitch (up - more tilt),
+    /// horizontal dragging rotates the camera.
     private func applyTilt(_ gesture: NSPanGestureRecognizer,
                            in mapView: ImmersiveMapNSView) {
         updateInteractionState(for: gesture.state,
@@ -241,8 +241,8 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
 
         updateInteractionState(for: gesture.state,
                                source: .mapRotation)
-        // AppKit считает положительным вращение против часовой (y-вверх);
-        // UIKit - по часовой. Инвертируем, чтобы карта вращалась за пальцами.
+        // AppKit treats counterclockwise rotation as positive (y-up);
+        // UIKit - clockwise. Invert so the map rotates with the fingers.
         let rotation = -gesture.rotation
         let settings = mapView.cameraRuntime.currentSettings.camera
         mapView.cameraRuntime.rotateCameraYaw(delta: Float(rotation) * settings.rotationGestureSensitivity)
@@ -296,7 +296,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
             return
         }
 
-        // Дискретное колесо мыши: одиночные события без фаз.
+        // Discrete mouse wheel: single events without phases.
         mapView.cameraAnimationRuntime.cancelAnimations()
         let divisor = event.hasPreciseScrollingDeltas ? ScrollZoom.preciseDivisor : ScrollZoom.lineDivisor
         applyScrollZoom(deltaY: event.scrollingDeltaY,
@@ -313,7 +313,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
             return
         }
 
-        // Колесо/скролл «вверх» приближает карту.
+        // Wheel/scroll "up" zooms the map in.
         mapView.cameraRuntime.zoomCamera(delta: Double(deltaY / divisor),
                                          anchorPoint: anchorPoint)
     }

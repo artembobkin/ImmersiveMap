@@ -10,9 +10,9 @@ import CoreGraphics
 import Metal
 import simd
 
-/// Общие compute-пайплайны point-to-screen: один набор PSO на все инстансы
-/// `TilePointScreenCompute` кадра, чтобы объединённый энкодер не перебиндивал
-/// одинаковый pipeline state между dispatch-ами разных владельцев буферов.
+/// Shared point-to-screen compute pipelines: one set of PSOs for all
+/// `TilePointScreenCompute` instances in a frame, so the combined encoder does
+/// not rebind an identical pipeline state between dispatches of different buffer owners.
 final class TilePointScreenPipelines {
     let flat: MTLComputePipelineState
     let globe: MTLComputePipelineState
@@ -71,8 +71,8 @@ final class TilePointScreenCompute {
         outputBufferStore.ensureCapacity(slot: slot, count: max(1, count))
     }
 
-    /// Лейбл общего compute-энкодера, в который кадр кодирует все
-    /// point-to-screen dispatch-и (базовые лейблы + дорожные рекорды).
+    /// Label of the shared compute encoder into which the frame encodes all
+    /// point-to-screen dispatches (base labels + road records).
     static func passLabel(for frameContext: FrameContext) -> String {
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
@@ -82,10 +82,10 @@ final class TilePointScreenCompute {
         }
     }
 
-    /// Привязывает константное на кадр состояние объединённого пасса: PSO,
-    /// камеру, параметры экрана и (для flat) буфер origin-ов тайлов. Dispatch-и
-    /// после этого вешают только свои буферы. Возвращает false, если пасс
-    /// невозможен (flat-режим без origin-буфера).
+    /// Binds the per-frame constant state of the combined pass: PSO, camera,
+    /// screen params and (for flat) the tile-origins buffer. Dispatches after
+    /// this attach only their own buffers. Returns false if the pass is
+    /// impossible (flat mode without an origin buffer).
     static func beginPass(encoder: MTLComputeCommandEncoder,
                           frameContext: FrameContext,
                           pipelines: TilePointScreenPipelines,
@@ -125,8 +125,8 @@ final class TilePointScreenCompute {
                        outputBuffer: outputBuffer(slot: frameContext.frameSlotIndex, count: pointCount))
     }
 
-    // Кодирует один dispatch в пасс, начатый `beginPass`: только пер-рекордные
-    // буферы и счётчик, константы кадра уже привязаны.
+    // Encodes one dispatch into the pass started by `beginPass`: only the
+    // per-record buffers and count; the frame constants are already bound.
     func encodeDispatch(encoder: MTLComputeCommandEncoder,
                         frameContext: FrameContext,
                         pointCount: Int,

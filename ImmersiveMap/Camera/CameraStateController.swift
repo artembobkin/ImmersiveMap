@@ -41,19 +41,19 @@ class CameraStateController {
         cameraState.pitch = min(max(0, cameraState.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
     }
 
-    /// Горизонтальная широтная компенсация пана включается по мере приближения:
-    /// ниже start её нет, выше end — полная.
+    /// The horizontal latitude pan compensation ramps in as the camera zooms in:
+    /// below start there is none, above end it is full.
     private static let horizontalPanCompensationStartZoom = 2.5
     private static let horizontalPanCompensationEndZoom = 5.0
 
-    /// Сдвигает центр карты на дельту жеста. `transition` — фаза глобус→плоскость
-    /// (0 — глобус, 1 — плоскость): на сфере меркаторная дельта делится на
-    /// `cos(широты)`, чтобы угловая скорость пана не падала у полюсов.
+    /// Shifts the map center by the gesture delta. `transition` is the globe-to-flat
+    /// phase (0 = globe, 1 = flat): on the sphere the mercator delta is divided by
+    /// `cos(latitude)` so the angular pan speed does not drop near the poles.
     ///
-    /// По вертикали компенсация полная на любом зуме. По горизонтали у полюса
-    /// свайп — это вращение вокруг оси взгляда: на низких зумах (виден весь
-    /// глобус) полная компенсация превращает его в неуправляемое кручение,
-    /// поэтому горизонтальный множитель вводится плавно по зуму.
+    /// Vertically the compensation is full at any zoom. Horizontally, near a pole
+    /// a swipe is a rotation around the view axis: at low zooms (the whole globe
+    /// is visible) full compensation turns it into uncontrollable spinning,
+    /// so the horizontal factor is ramped in smoothly by zoom.
     func pan(deltaX: Double, deltaY: Double, transition: Float) {
         let yaw = Double(cameraState.bearing)
         let startForward = SIMD2<Double>(0, 1)

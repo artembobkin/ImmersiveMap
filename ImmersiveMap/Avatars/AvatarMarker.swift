@@ -53,9 +53,9 @@ public enum AvatarClusterPolicy: Equatable, Hashable, Sendable {
     case event
 }
 
-/// Bubble-счётчик у маркера: показывает число объединённых аватаров.
-/// Ставится автоматически на merged-маркеры (`ImmersiveMapAvatarsController.merge`),
-/// но может задаваться и вручную. Значения выше 999 рисуются как «999+».
+/// Bubble counter on a marker: shows the number of merged avatars.
+/// Set automatically on merged markers (`ImmersiveMapAvatarsController.merge`),
+/// but can also be assigned manually. Values above 999 render as "999+".
 public struct AvatarCountBadge: Equatable, Hashable, Sendable {
     public let count: Int
 
@@ -128,12 +128,12 @@ public struct AvatarMarker: Sendable {
         self.clusterPolicy = clusterPolicy
     }
 
-    /// Быстрая сборка аватара с картинкой из сети.
+    /// Convenience avatar builder with a network-loaded image.
     ///
-    /// Координаты задаются как широта/долгота, картинка грузится по `imageURL`
-    /// (до загрузки показывается `placeholder` либо встроенная заглушка).
-    /// `batteryPercent`/`speedKilometersPerHour` опциональны: `nil` означает, что
-    /// соответствующий бейдж не рисуется.
+    /// Coordinates are given as latitude/longitude, the image is loaded from `imageURL`
+    /// (until it loads, `placeholder` or the built-in stub is shown).
+    /// `batteryPercent`/`speedKilometersPerHour` are optional: `nil` means the
+    /// corresponding badge is not drawn.
     public init(id: UInt64,
                 latitude: Double,
                 longitude: Double,
@@ -158,12 +158,12 @@ public struct AvatarMarker: Sendable {
                   clusterPolicy: clusterPolicy)
     }
 
-    /// Быстрая сборка аватара с готовой (локальной) картинкой.
+    /// Convenience avatar builder with a ready (local) image.
     ///
-    /// Симметрична сетевому инициализатору, но принимает уже нарисованный
-    /// `CGImage` - например результат `AvatarMarkerImageFactory.number(_:)`.
-    /// `batteryPercent`/`speedKilometersPerHour` опциональны: `nil` означает, что
-    /// соответствующий бейдж не рисуется.
+    /// Symmetric to the network initializer, but takes an already rendered
+    /// `CGImage` - e.g. the result of `AvatarMarkerImageFactory.number(_:)`.
+    /// `batteryPercent`/`speedKilometersPerHour` are optional: `nil` means the
+    /// corresponding badge is not drawn.
     public init(id: UInt64,
                 latitude: Double,
                 longitude: Double,

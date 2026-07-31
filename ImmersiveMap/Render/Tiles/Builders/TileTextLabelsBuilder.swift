@@ -9,10 +9,10 @@ final class TileTextLabelsBuilder {
         let style: LabelTextStyle
         let textVertices: [LabelVertex]
         let iconVertices: [LabelVertex]
-        /// Категория для тировой политики (см. `tierRepresentation`).
+        /// Category for the tier policy (see `tierRepresentation`).
         let detailCategory: VectorTileLabelDetailCategory
-        /// Икон-only представление для деградации в среднем тире: иконка в
-        /// начале координат и её квадратный бокс. Пусто у лейблов без иконки.
+        /// Icon-only representation for degradation in the middle tier: the icon at
+        /// the origin and its square box. Empty for labels without an icon.
         let iconOnlyVertices: [LabelVertex]
         let iconOnlySizePx: SIMD2<Float>
 
@@ -115,22 +115,22 @@ final class TileTextLabelsBuilder {
         )
     }
 
-    /// Представление лейбла в тире детализации.
+    /// Representation of a label in a detail tier.
     private enum TierRepresentation {
         case full
         case iconOnly
         case dropped
     }
 
-    /// POI с классовым зумом появления не глубже этого порога считается
-    /// «якорным» (больница, вокзал, парк): в среднем тире он сохраняет текст.
+    /// A POI whose class appearance zoom is no deeper than this threshold counts as
+    /// "anchor" (hospital, train station, park): in the middle tier it keeps its text.
     private static let majorPoiMaximumMinCameraZoom: Float = 14.5
 
-    /// Тировая политика детализации:
-    /// full - всё как есть; reduced - якорные подписи и крупные POI целиком,
-    /// остальные иконочные POI деградируют до иконки без текста (маленький
-    /// коллизионный бокс), безыконная мелочь и номера домов выпадают;
-    /// minimal - только горстка самых важных якорных подписей, даль без POI.
+    /// Detail tier policy:
+    /// full - everything as is; reduced - anchor labels and major POIs in full,
+    /// the remaining icon POIs degrade to an icon without text (small
+    /// collision box), iconless minor labels and house numbers drop out;
+    /// minimal - only a handful of the most important anchor labels, the distance has no POIs.
     private static func tierRepresentation(for builtLabel: BuiltBaseLabel,
                                            tier: BaseLabelDetailTier) -> TierRepresentation {
         switch tier {
@@ -155,10 +155,10 @@ final class TileTextLabelsBuilder {
 
     private static func makeTextLabelSet(from builtLabels: [BuiltBaseLabel],
                                          tier: BaseLabelDetailTier) -> PreparedTileCPU.TextLabelSet {
-        // Абсолютные бюджеты тайла: плотный тайл отдаёт не больше бюджета,
-        // разреженный - всё своё. Лейблы уже отсортированы по приоритету
-        // коллизий, поэтому бюджет забирают самые важные (внутри POI порядок
-        // совпадает с локальным рангом - расход равномерен по тайлу).
+        // Absolute per-tile budgets: a dense tile yields no more than the budget,
+        // a sparse one yields everything it has. Labels are already sorted by collision
+        // priority, so the budget goes to the most important ones (within POIs the order
+        // matches the local rank - spending is even across the tile).
         var anchorBudget = BaseLabelDetailTier.anchorLabelBudget(tier: tier)
         var poiBudget = BaseLabelDetailTier.poiLabelBudget(tier: tier)
         var retainedLabels: [(label: BuiltBaseLabel, representation: TierRepresentation)] = []
@@ -229,7 +229,7 @@ final class TileTextLabelsBuilder {
                                             poiIconRuns: poiIconRuns)
     }
 
-    /// Расход абсолютного бюджета: `nil` - без ограничения, 0 - исчерпан.
+    /// Absolute budget spend: `nil` - no limit, 0 - exhausted.
     private static func consumeBudget(_ budget: inout Int?) -> Bool {
         guard let remaining = budget else {
             return true
@@ -241,8 +241,8 @@ final class TileTextLabelsBuilder {
         return true
     }
 
-    /// Плейсмент икон-only представления: тот же анкер и приоритеты, но
-    /// коллизионный бокс равен квадрату иконки, а не связке иконка+текст.
+    /// Placement of the icon-only representation: same anchor and priorities, but
+    /// the collision box equals the icon's square, not the icon+text pair.
     private static func iconOnlyPlacementInput(for builtLabel: BuiltBaseLabel) -> TextLabelPlacementInput {
         let meta = builtLabel.placementInput.placementMeta
         return TextLabelPlacementInput(
@@ -255,17 +255,17 @@ final class TileTextLabelsBuilder {
         )
     }
 
-    /// Идентичность гомогенного glyph/icon-run: всё, что применяет код отрисовки лейблов
-    /// на этапе энкодинга - атлас-текстура (через `weight`) и uniform-цвета fill/stroke.
-    /// `sizePx` намеренно исключён: он уже запечён в геометрию вершин и на отрисовке
-    /// повторно не применяется, поэтому лейблы, отличающиеся только размером, остаются
-    /// в одном run.
+    /// Identity of a homogeneous glyph/icon run: everything the label drawing code
+    /// applies at encoding time - the atlas texture (via `weight`) and the uniform fill/stroke colors.
+    /// `sizePx` is deliberately excluded: it is already baked into the vertex geometry and is not
+    /// re-applied at draw time, so labels differing only in size stay
+    /// in the same run.
     ///
-    /// Группировка по этой идентичности (а не только по `style.key`) держит каждый run
-    /// самосогласованным, даже когда провайдер переиспользует один `key` для нескольких
-    /// оформлений - например, OpenMapTiles/OSM кладут bold-города и thin-посёлки под
-    /// `key = 70`. Смешивание весов в run с одной привязанной текстурой заставляло глифы,
-    /// построенные по другому атласу, сэмплиться из неверной области = мусор вместо букв.
+    /// Grouping by this identity (rather than by `style.key` alone) keeps each run
+    /// self-consistent even when the provider reuses one `key` for several
+    /// stylings - e.g. OpenMapTiles/OSM put bold cities and thin villages under
+    /// `key = 70`. Mixing weights in a run with a single bound texture made glyphs
+    /// built against a different atlas sample from the wrong region = garbage instead of letters.
     private struct LabelRunStyleIdentity: Hashable {
         let key: Int
         let weight: LabelFontWeight
@@ -281,9 +281,9 @@ final class TileTextLabelsBuilder {
             self.strokeWidthPx = style.strokeWidthPx
         }
 
-        /// Детерминированный порядок отрисовки: сначала по `key` (совпадает с прежним
-        /// `styleByKey.keys.sorted()`, когда ключи уникальны), затем по остальным полям,
-        /// чтобы совпавшие ключи разбивались в стабильную последовательность.
+        /// Deterministic draw order: first by `key` (matches the previous
+        /// `styleByKey.keys.sorted()` when keys are unique), then by the remaining fields
+        /// so that equal keys break into a stable sequence.
         static func orderedBefore(_ lhs: LabelRunStyleIdentity, _ rhs: LabelRunStyleIdentity) -> Bool {
             if lhs.key != rhs.key { return lhs.key < rhs.key }
             if lhs.weight.rawValue != rhs.weight.rawValue { return lhs.weight.rawValue < rhs.weight.rawValue }

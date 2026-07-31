@@ -12,12 +12,13 @@ import AppKit
 typealias MarkerOverlayPlatformView = NSView
 #endif
 
-/// Владеет SwiftUI-маркерами на стороне UI: диффит набор из `.markers(...)`
-/// по id, держит hosting-вью в контейнере поверх Metal-слоя, отдаёт движку
-/// кадра координаты (`MarkerRenderSource`) и применяет пер-кадровые снапшоты
-/// проекции, мутируя только frame/alpha/isHidden (без инвалидации SwiftUI
-/// на частоте кадров). Движок читает источник и публикует снапшот синхронно
-/// на main thread внутри кадра, поэтому оба конца остаются на MainActor.
+/// Owns SwiftUI markers on the UI side: diffs the set from `.markers(...)`
+/// by id, keeps hosting views in a container above the Metal layer, feeds the
+/// frame engine the coordinates (`MarkerRenderSource`), and applies per-frame
+/// projection snapshots, mutating only frame/alpha/isHidden (no SwiftUI
+/// invalidation at frame rate). The engine reads the source and publishes the
+/// snapshot synchronously on the main thread within the frame, so both ends
+/// stay on the MainActor.
 @MainActor
 final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
     private struct Entry {
@@ -46,14 +47,14 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
         self.renderRuntime = renderRuntime
     }
 
-    /// Host view, в который лениво вставляется контейнер маркеров.
-    /// Тип параметра платформенный (не ImmersiveMapHostView), чтобы тесты
-    /// работали с обычным view без Metal-хоста.
+    /// Host view into which the marker container is inserted lazily.
+    /// The parameter type is the platform view (not ImmersiveMapHostView) so
+    /// tests can work with a plain view without a Metal host.
     func attach(hostView: MarkerOverlayPlatformView) {
         self.hostView = hostView
     }
 
-    /// Контейнер для исключения жестов карты: nil, пока маркеров не было.
+    /// Container used to exclude map gestures: nil until there have been markers.
     var markerContainerViewIfLoaded: MarkerOverlayPlatformView? {
         container
     }
@@ -78,7 +79,7 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
         var sizesChanged = false
 
         for item in items {
-            // Дубликат id в коллекции: первый выигрывает, как в ForEach.
+            // Duplicate id in the collection: the first one wins, as in ForEach.
             guard seenIDs.insert(item.id).inserted else {
                 continue
             }
@@ -129,8 +130,8 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
             return
         }
 
-        // Смена размера или якоря пересчитывается локально по последнему
-        // снапшоту, новым координатам нужен свежий кадр проекции.
+        // A size or anchor change is recomputed locally from the last snapshot,
+        // while new coordinates need a fresh projection frame.
         if anchorChanged || sizesChanged, let lastSnapshot {
             applySnapshotToViews(lastSnapshot)
         }
@@ -141,8 +142,8 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
 
     // MARK: - Frame projection
 
-    /// Зовётся движком синхронно внутри кадра (см. ImmersiveMapRenderEventSink):
-    /// позиции попадают в ту же CA-транзакцию, что и present кадра.
+    /// Called by the engine synchronously within the frame (see ImmersiveMapRenderEventSink):
+    /// positions land in the same CA transaction as the frame's present.
     func apply(_ snapshot: MarkerProjectionSnapshot) {
         guard entriesByID.isEmpty == false else {
             return
@@ -166,8 +167,8 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
         }
 
         let container = MarkerOverlayContainerView(frame: hostView.bounds)
-        // Ниже attribution badge, control zones и debug HUD: маркеры это
-        // контент карты, а не системный оверлей.
+        // Below the attribution badge, control zones, and debug HUD: markers are
+        // map content, not a system overlay.
         #if canImport(UIKit)
         hostView.insertSubview(container, at: 0)
         #elseif os(macOS)
@@ -177,7 +178,7 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
         return container
     }
 
-    /// Z-порядок и hit-test следуют порядку коллекции: последний элемент сверху.
+    /// Z-order and hit-testing follow the collection order: the last element is on top.
     private func reorderSubviews() {
         guard let container else {
             return
@@ -218,7 +219,7 @@ final class ImmersiveMapMarkerRuntime: @preconcurrency MarkerRenderSource {
         let contentsScale = viewportRuntime.contentsScale
         for entry in entriesByID.values {
             guard let projected = projectedByInternalID[entry.internalID] else {
-                // Нет в снапшоте: за горизонтом глобуса или позади камеры.
+                // Not in the snapshot: beyond the globe horizon or behind the camera.
                 entry.host.hide()
                 continue
             }

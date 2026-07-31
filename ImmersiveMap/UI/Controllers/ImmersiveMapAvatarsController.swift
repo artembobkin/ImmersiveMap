@@ -17,18 +17,18 @@ public struct AvatarsSnapshot {
     public let version: UInt64
 }
 
-/// Public thread-safe owner для avatar markers, которые передает app code.
-/// Собирает marker mutations в snapshots для renderer и selection runtime.
-/// Потокобезопасен (`@unchecked Sendable`): всё мутабельное состояние
-/// сериализовано `lock`, маркеры можно обновлять с любого потока.
+/// Public thread-safe owner of the avatar markers supplied by app code.
+/// Collects marker mutations into snapshots for the renderer and selection runtime.
+/// Thread-safe (`@unchecked Sendable`): all mutable state is serialized by
+/// `lock`, so markers can be updated from any thread.
 public final class ImmersiveMapAvatarsController: @unchecked Sendable {
-    /// Группа объединённых маркеров: участники скрыты с карты, вместо них
-    /// рисуется один merged-маркер с усреднённым гео, bubble-счётчиком и
-    /// циклической сменой картинки участников.
+    /// A group of merged markers: the members are hidden from the map, and a
+    /// single merged marker is drawn instead with averaged geo, a bubble counter,
+    /// and a cycling image of the members.
     private struct MergedAvatarGroup {
         var memberIDs: [UInt64]
-        /// Хранит внешний вид merged-маркера (isSelected, borderColor, ...);
-        /// координата и картинка вычисляются из участников.
+        /// Holds the merged marker's appearance (isSelected, borderColor, ...);
+        /// the coordinate and image are computed from the members.
         var template: AvatarMarker
         var imageCycleInterval: TimeInterval
         var imageCycleIndex: Int = 0
@@ -65,7 +65,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         upsert(markers)
     }
 
-    /// Полностью заменяет контент карты; все merged-группы распускаются.
+    /// Fully replaces the map content; all merged groups are dissolved.
     public func set(_ markers: [AvatarMarker]) {
         lock.lock()
         dissolveAllMergedGroupsLocked()
@@ -98,16 +98,16 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         notifyChanged()
     }
 
-    /// Объединяет существующие маркеры в один merged-маркер `mergedID`:
-    /// участники скрываются с карты, вместо них рисуется общий маркер с
-    /// усреднённым гео участников (живым: `move` участника сдвигает среднее),
-    /// bubble-счётчиком количества и картинкой, циклически меняющейся между
-    /// участниками каждые `imageCycleInterval` секунд (0 выключает цикл).
+    /// Merges existing markers into a single merged marker `mergedID`:
+    /// the members are hidden from the map, and a shared marker is drawn instead
+    /// with the members' averaged geo (live: a member's `move` shifts the
+    /// average), a bubble counter of the member count, and an image that cycles
+    /// between members every `imageCycleInterval` seconds (0 disables the cycle).
     ///
-    /// Участники остаются в контроллере: их можно двигать и обновлять, а
-    /// `unmerge(mergedID:)` возвращает их на карту. Повторный `merge` с тем же
-    /// `mergedID` заменяет состав группы. `mergedID` не должен совпадать с id
-    /// обычного маркера. Маркер, уже состоящий в другой группе, игнорируется.
+    /// The members stay in the controller: they can be moved and updated, and
+    /// `unmerge(mergedID:)` returns them to the map. Calling `merge` again with
+    /// the same `mergedID` replaces the group membership. `mergedID` must not
+    /// collide with a regular marker id. A marker already in another group is ignored.
     public func merge(ids: [UInt64],
                       mergedID: UInt64,
                       imageCycleInterval: TimeInterval = 3.0) {
@@ -140,7 +140,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         mergedGroupsById[mergedID] = MergedAvatarGroup(memberIDs: memberIDs,
                                                        template: template,
                                                        imageCycleInterval: imageCycleInterval)
-        // Участники уходят с карты как самостоятельные маркеры.
+        // The members leave the map as standalone markers.
         removedIds.formUnion(memberIDs)
         removedIds.remove(mergedID)
         imageUpdateIds.insert(mergedID)
@@ -150,8 +150,8 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         notifyChanged()
     }
 
-    /// Распускает merged-маркер: участники возвращаются на карту на свои
-    /// актуальные координаты.
+    /// Dissolves a merged marker: the members return to the map at their
+    /// current coordinates.
     public func unmerge(mergedID: UInt64) {
         lock.lock()
         guard let group = mergedGroupsById.removeValue(forKey: mergedID) else {
@@ -167,7 +167,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         notifyChanged()
     }
 
-    /// Состав merged-маркера в порядке цикла картинок; nil, если группы нет.
+    /// Membership of a merged marker in image-cycle order; nil if the group does not exist.
     public func mergedMemberIDs(mergedID: UInt64) -> [UInt64]? {
         lock.lock()
         defer { lock.unlock() }
@@ -205,8 +205,8 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
                        borderColor: SIMD4<Float>? = nil,
                        isSelected: Bool? = nil) {
         lock.lock()
-        // У merged-маркера обновляется template: картинкой владеет цикл
-        // участников, поэтому image для группы игнорируется.
+        // For a merged marker the template is updated: the member cycle owns the
+        // image, so image is ignored for a group.
         if var group = mergedGroupsById[id] {
             if let borderColor {
                 group.template.borderColor = borderColor
@@ -270,9 +270,9 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
     }
 #endif
 
-    /// Удаляет маркеры. Для id merged-маркера удаляется вся группа вместе с
-    /// участниками; удаление участника исключает его из группы (опустевшая
-    /// группа распускается).
+    /// Removes markers. For a merged marker id the whole group is removed along
+    /// with its members; removing a member excludes it from its group (an emptied
+    /// group is dissolved).
     public func remove(ids: [UInt64]) {
         lock.lock()
         for id in ids {
@@ -348,7 +348,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         return snapshot
     }
 
-    /// Видимые маркеры: обычные без участников групп, плюс merged-маркеры.
+    /// Visible markers: regular ones excluding group members, plus merged markers.
     private func visibleMarkersLocked() -> [AvatarMarker] {
         var mergedMemberIDs = Set<UInt64>()
         for group in mergedGroupsById.values {
@@ -368,8 +368,8 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         return markers
     }
 
-    /// Merged-маркер группы: усреднённое гео участников, картинка текущего
-    /// шага цикла и bubble-счётчик; внешний вид (selection, рамка) из template.
+    /// The group's merged marker: averaged member geo, the image of the current
+    /// cycle step, and a bubble counter; appearance (selection, border) from the template.
     private func makeMergedMarkerLocked(mergedID: UInt64) -> AvatarMarker? {
         guard let group = mergedGroupsById[mergedID] else {
             return nil
@@ -391,8 +391,8 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         return merged
     }
 
-    /// Среднее гео по единичным векторам на сфере: корректно у антимеридиана
-    /// и полюсов, в отличие от арифметического среднего широт/долгот.
+    /// Average geo over unit vectors on the sphere: correct near the antimeridian
+    /// and the poles, unlike an arithmetic mean of latitudes/longitudes.
     static func averageCoordinate(of coordinates: [GeoCoordinate]) -> GeoCoordinate {
         guard coordinates.count > 1 else {
             return coordinates.first ?? GeoCoordinate(latitude: 0, longitude: 0)
@@ -420,7 +420,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
                              longitude: longitude * 180.0 / .pi)
     }
 
-    /// Шаг цикла картинок merged-маркера; дергается таймером группы.
+    /// One step of a merged marker's image cycle; driven by the group's timer.
     func advanceMergedImageCycle(mergedID: UInt64) {
         lock.lock()
         guard var group = mergedGroupsById[mergedID],
@@ -466,9 +466,9 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Чистит хендлер только если им всё ещё владеет `owner`: демонтаж
-    /// старого host view не должен отвязывать контроллер от нового view,
-    /// который уже перепривязал его к себе.
+    /// Clears the handler only if `owner` still owns it: tearing down an old
+    /// host view must not detach the controller from a new view that has
+    /// already rebound it to itself.
     func clearChangeHandler(ownedBy owner: AnyObject) {
         lock.lock()
         if changeHandlerOwner === owner {

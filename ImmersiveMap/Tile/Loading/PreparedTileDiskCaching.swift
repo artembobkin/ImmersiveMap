@@ -40,8 +40,8 @@ struct PreparedTileCacheIdentity {
 /// All cache instances that target the same root share a serial utility queue
 /// and one root-wide index. This prevents two map views from racing atomic
 /// replacements/pruning and avoids rescanning every namespace after each save.
-/// Внутренне синхронизирован: реестр под `registryLock`, всё остальное состояние
-/// мутируется только на последовательной `queue`.
+/// Internally synchronized: the registry is guarded by `registryLock`, all other
+/// state is mutated only on the serial `queue`.
 private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private struct Policy {
         var byteQuota: Int64

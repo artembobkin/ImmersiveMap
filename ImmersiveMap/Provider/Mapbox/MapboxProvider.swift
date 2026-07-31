@@ -35,7 +35,7 @@ public struct MapboxTileProvider: ImmersiveMapTileProvider {
         Self.defaultMaximumTileZoomLevel
     }
 
-    /// Mapbox требует показывать свой копирайт и копирайт OpenStreetMap рядом с картой.
+    /// Mapbox requires showing its copyright and the OpenStreetMap copyright next to the map.
     public var attribution: ImmersiveMapAttribution {
         ImmersiveMapAttribution(
             title: "© Mapbox © OpenStreetMap",

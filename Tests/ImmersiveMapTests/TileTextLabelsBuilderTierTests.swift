@@ -7,8 +7,8 @@ import XCTest
 
 final class TileTextLabelsBuilderTierTests: XCTestCase {
     func testTierPolicyKeepsAnchorsDegradesMinorPoiAndDropsFarPoi() {
-        // 2 якоря, крупный POI (рампа 13), мелкий иконочный POI (рампа 16),
-        // мелкий безыконный POI и номер дома.
+        // 2 anchors, a major POI (ramp 13), a minor icon POI (ramp 16),
+        // a minor iconless POI and a house number.
         let anchorA = makeBuiltLabel(index: 0, key: 1)
         let anchorB = makeBuiltLabel(index: 1, key: 1)
         let majorPoi = makeBuiltLabel(index: 2,
@@ -34,9 +34,9 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
 
         XCTAssertEqual(result.full.placementInputs.count, 6)
 
-        // Reduced: якоря и крупный POI целиком, мелкий иконочный деградирует
-        // до иконки (коллизионный бокс равен квадрату иконки), безыконный и
-        // номер дома выпадают.
+        // Reduced: anchors and the major POI in full, the minor icon POI
+        // degrades to an icon (its collision box equals the icon square), the
+        // iconless one and the house number drop out.
         XCTAssertEqual(result.reduced.placementInputs.map { $0.placementMeta.key },
                        [UInt64(1), UInt64(2), UInt64(3), UInt64(4)])
         let degraded = result.reduced.placementInputs[3]
@@ -46,15 +46,15 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
         let reducedIconIndices = Set(result.reduced.poiIconRuns.flatMap { $0.localIconVertices }.map { Int($0.labelIndex) })
         XCTAssertTrue(reducedIconIndices.contains(3), "Икон-only лейбл обязан нести вершины иконки")
 
-        // Minimal: только якоря в пределах бюджета, никаких POI и номеров домов.
+        // Minimal: only anchors within the budget, no POIs or house numbers.
         XCTAssertEqual(result.minimal.placementInputs.map { $0.placementMeta.key },
                        [UInt64(1), UInt64(2)])
     }
 
     func testAbsoluteBudgetsCapDenseTiles() {
-        // Плотный тайл: 20 якорей и 15 мелких иконочных POI. Бюджеты
-        // абсолютные: средний тир берёт верх каждой группы, дальний - только
-        // горстку якорей.
+        // Dense tile: 20 anchors and 15 minor icon POIs. The budgets are
+        // absolute: the middle tier takes the top of each group, the far one -
+        // only a handful of anchors.
         let anchors = (0..<20).map { makeBuiltLabel(index: $0, key: 1) }
         let pois = (20..<35).map {
             makeBuiltLabel(index: $0,

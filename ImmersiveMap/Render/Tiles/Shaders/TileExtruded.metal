@@ -55,9 +55,10 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     return out;
 }
 
-// localClipBounds: (minX, minY, maxX, maxY) в локальных координатах source-тайла.
-// Retained-подмена рисует здания source целиком - фрагменты вне слота placeIn
-// отбрасываются, иначе здания родителя перекрывали бы соседние точные тайлы.
+// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
+// A retained substitution draws the source's buildings in full - fragments outside
+// the placeIn slot are discarded, otherwise the parent's buildings would cover
+// neighboring exact tiles.
 static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBounds) {
     return localPosition.x < localClipBounds.x || localPosition.y < localClipBounds.y ||
            localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
@@ -86,9 +87,10 @@ static inline float3 extrudedLitColor(VertexOut in,
     return ambient + diffuse + specular;
 }
 
-// Геометрия зданий всегда рисуется непрозрачно с обычным depth-тестом и MSAA:
-// в solid-режиме - прямо в world-пасс, в translucent - в offscreen building
-// image, который world-пасс затем накладывает на карту с общей альфой.
+// Building geometry is always drawn opaque with a regular depth test and MSAA:
+// in solid mode - directly into the world pass, in translucent - into the
+// offscreen building image, which the world pass then composites over the map
+// with a shared alpha.
 fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                            constant Camera& camera [[buffer(1)]],
                                            constant ExtrudedLight& light [[buffer(2)]],
@@ -111,11 +113,12 @@ vertex ExtrudedCompositeVertexOut tileExtrudedCompositeVertexShader(uint vertexI
     return out;
 }
 
-// Наложение building image на карту. Внутри изображения здания непрозрачны,
-// но MSAA-resolve прозрачного фона оставляет в альфе покрытие силуэта, а цвет -
-// премультиплицированным этим покрытием. Умножение на глобальную альфу и
-// premultiplied-блендинг (one / oneMinusSourceAlpha) тонируют каждый пиксель
-// карты ровно один раз - сколько бы поверхностей зданий ни перекрывалось.
+// Compositing the building image over the map. Inside the image the buildings
+// are opaque, but the MSAA resolve of the transparent background leaves the
+// silhouette coverage in alpha, with the color premultiplied by that coverage.
+// Multiplying by the global alpha and premultiplied blending
+// (one / oneMinusSourceAlpha) tint every map pixel exactly once - no matter
+// how many building surfaces overlap.
 fragment float4 tileExtrudedCompositeFragmentShader(ExtrudedCompositeVertexOut in [[stage_in]],
                                                     texture2d<float, access::read> buildingImage [[texture(0)]],
                                                     constant float& alpha [[buffer(0)]]) {

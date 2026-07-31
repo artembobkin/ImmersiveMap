@@ -28,9 +28,9 @@ extension VectorTileLabelProviderProfile {
         []
     }
 
-    /// Категория тира по имени слоя: покрывает схемы OpenMapTiles (`poi`) и
-    /// Mapbox Streets (`poi_label`), остальные точечные слои считаются
-    /// якорными подписями.
+    /// Tier category by layer name: covers the OpenMapTiles (`poi`) and
+    /// Mapbox Streets (`poi_label`) schemas, all other point layers count as
+    /// anchor labels.
     func detailCategory(layerName: String) -> VectorTileLabelDetailCategory {
         if isHouseNumberLayer(layerName) {
             return .housenumber

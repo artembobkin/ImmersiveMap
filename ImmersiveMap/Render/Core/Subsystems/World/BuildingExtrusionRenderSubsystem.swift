@@ -3,12 +3,12 @@
 
 import Metal
 
-/// Рисует выдавленные здания flat-режима. Solid-путь: непрозрачная геометрия
-/// прямо в world-пасс. Composited-путь (translucent и зум-переход
-/// solidAtHighZoom): та же непрозрачная геометрия уходит в offscreen building
-/// image (слой `.buildingImage`), а в world-пассе изображение накладывается на
-/// карту одним фуллскрин-блендом с альфой кадра - каждый пиксель тонируется
-/// ровно один раз, без швов между поверхностями.
+/// Draws the extruded buildings of flat mode. Solid path: opaque geometry
+/// straight into the world pass. Composited path (translucent and the
+/// solidAtHighZoom zoom transition): the same opaque geometry goes into the
+/// offscreen building image (the `.buildingImage` layer), and in the world pass
+/// the image is composited over the map with a single fullscreen blend using the
+/// frame alpha, so each pixel is tinted exactly once, with no seams between surfaces.
 final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     let name: String = "BuildingExtrusion"
 
@@ -36,9 +36,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             return
         }
 
-        // Режим и альфа читаются из настроек кадра: их смена применяется
-        // на лету, без пересоздания renderer'а (см. planner). Путь на кадр
-        // резолвится так же, как в RenderPassGraph.plan.
+        // Mode and alpha are read from the frame settings: changing them applies
+        // on the fly, without recreating the renderer (see planner). The per-frame
+        // path is resolved the same way as in RenderPassGraph.plan.
         let style = frameContext.services.settings.style
         let path = BuildingExtrusionPathResolver.resolve(style: style, zoom: frameContext.zoom)
         switch layer {

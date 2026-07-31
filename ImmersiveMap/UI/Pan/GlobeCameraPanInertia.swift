@@ -9,8 +9,8 @@
 import CoreGraphics
 import Foundation
 
-/// Симулирует post-pan inertia для движения globe camera.
-/// Хранит decay state и возвращает translations для каждого frame, пока движение не остановится.
+/// Simulates post-pan inertia for globe camera movement.
+/// Holds decay state and returns translations for each frame until the motion stops.
 final class GlobeCameraPanInertia {
     struct Step {
         let translation: CGPoint

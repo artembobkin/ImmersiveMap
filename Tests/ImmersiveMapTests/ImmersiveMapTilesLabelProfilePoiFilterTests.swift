@@ -4,8 +4,8 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Жёсткие фильтры poi-слоя профиля OpenMapTiles: уличная фурнитура и хвост
-/// локального ранга не становятся подписями вовсе.
+/// Hard filters of the OpenMapTiles profile's poi layer: street furniture and
+/// the local-rank tail never become labels at all.
 final class ImmersiveMapTilesLabelProfilePoiFilterTests: XCTestCase {
     private let profile = ImmersiveMapTilesVectorTileLabelProviderProfile(settings: .default)
 

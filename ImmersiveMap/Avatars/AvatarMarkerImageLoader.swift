@@ -50,8 +50,8 @@ public enum AvatarMarkerImageLoader {
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
                 return nil
             }
-            // Рисуем в системе координат «сверху вниз», как в основном пайплайне
-            // (makeBGRAData flipVertically), иначе заглушка попадает в текстуру перевёрнутой.
+            // Draw in a top-down coordinate system, like the main pipeline
+            // (makeBGRAData flipVertically), otherwise the placeholder ends up flipped in the texture.
             context.translateBy(x: 0, y: CGFloat(size))
             context.scaleBy(x: 1, y: -1)
             context.setFillColor(CGColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1.0))

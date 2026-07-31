@@ -6,8 +6,8 @@ using namespace metal;
 #include "../../Shaders/Screen/ScreenCommon.h"
 #include "AvatarCommon.h"
 
-// Пороги проявления согласованы с AvatarCollisionMath.displacedMorph*:
-// луч появляется вместе с превращением сдвинутого маркера в кружок.
+// Reveal thresholds match AvatarCollisionMath.displacedMorph*:
+// the beam appears together with the displaced marker morphing into a circle.
 constant float kDisplacedRevealStartPx = 2.0;
 constant float kDisplacedRevealEndPx = 10.0;
 
@@ -18,13 +18,13 @@ static inline float beamReveal(float displacementLength) {
 struct BeamVertexOut {
     float4 position [[position]];
     float alpha;
-    /// 0 у геоточки, 1 у кружка: луч затухает при приближении к геоточке.
+    /// 0 at the geo point, 1 at the circle: the beam fades as it nears the geo point.
     float taper;
 };
 
-// Конус от геоточки к сдвинутому кружку: вершина на якоре, основание - две
-// касательные точки окружности тела («от края до края»). Рисуется только у
-// кружочков: несдвинутый маркер имеет нулевое смещение и конус скрыт.
+// Cone from the geo point to the displaced circle: apex at the anchor, base at
+// the two tangent points of the body circle ("edge to edge"). Drawn only for
+// circles: an undisplaced marker has zero offset and the cone is hidden.
 vertex BeamVertexOut avatarBeamVertex(uint vid [[vertex_id]],
                                       uint iid [[instance_id]],
                                       constant float4x4& screenMatrix [[buffer(0)]],
@@ -77,8 +77,8 @@ vertex BeamVertexOut avatarBeamVertex(uint vid [[vertex_id]],
 
 fragment float4 avatarBeamFragment(BeamVertexOut in [[stage_in]],
                                    constant float4& beamColor [[buffer(0)]]) {
-    // Кубическое затухание к геоточке: у кружка луч плотный, к фактической
-    // геоточке растворяется задолго до вершины конуса.
+    // Cubic falloff toward the geo point: the beam is dense at the circle and
+    // dissolves well before the cone apex at the actual geo point.
     float taper = in.taper * in.taper * in.taper;
     return float4(beamColor.rgb, beamColor.a * in.alpha * taper);
 }

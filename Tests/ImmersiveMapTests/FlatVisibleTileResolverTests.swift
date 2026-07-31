@@ -6,11 +6,11 @@ import simd
 import XCTest
 
 final class FlatVisibleTileResolverTests: XCTestCase {
-    // MARK: - Эквивалентность сканлайна и эталонной пер-тайловой проверки
+    // MARK: - Equivalence of the scanline and the reference per-tile check
 
-    /// На случайных позах камеры итоговое покрытие (после препроцессора)
-    /// нового сканлайн-резолвера совпадает с эталонным brute-force перебором
-    /// полного bbox полигона без клампа по дистанции.
+    /// Across random camera poses the final coverage (after the preprocessor)
+    /// of the new scanline resolver matches the reference brute-force sweep
+    /// of the full polygon bbox without the distance clamp.
     func testResolveMatchesBruteForceReferenceAcrossRandomPoses() {
         var random = SplitMix64(seed: 0x1AB5_5EED)
         let preprocessor = VisibleTilesPreprocessor()
@@ -55,8 +55,8 @@ final class FlatVisibleTileResolverTests: XCTestCase {
         }
     }
 
-    /// Сырой выход резолвера в пределах радиуса клампа тоже совпадает
-    /// с эталоном (кламп может отбрасывать только тайлы дальше радиуса).
+    /// The resolver's raw output within the clamp radius also matches
+    /// the reference (the clamp may only drop tiles beyond the radius).
     func testResolveMatchesBruteForceWithinClampRadius() {
         var random = SplitMix64(seed: 0xDEAD_BEEF)
         for _ in 0..<40 {
@@ -94,9 +94,9 @@ final class FlatVisibleTileResolverTests: XCTestCase {
         }
     }
 
-    /// Поза со скриншота бага: z14, pitch 75°, широкий вьюпорт. Раньше bbox
-    /// полигона давал миллионы кандидатов и кадр на секунды; теперь выход
-    /// ограничен радиусом клампа, а перечисление - сканлайн.
+    /// Pose from the bug screenshot: z14, pitch 75°, wide viewport. Previously the
+    /// polygon bbox produced millions of candidates and a multi-second frame; now the output
+    /// is bounded by the clamp radius and enumeration is a scanline.
     func testHighPitchPoseStaysBoundedAndFast() {
         let targetZoom = 14
         let flatRenderState = FlatRenderState(pan: SIMD2<Double>(0.083, -0.42),
@@ -127,7 +127,7 @@ final class FlatVisibleTileResolverTests: XCTestCase {
         }
     }
 
-    // MARK: - Эталонная реализация (пер-тайловые полигон-тесты до оптимизации)
+    // MARK: - Reference implementation (per-tile polygon tests before the optimization)
 
     private static func bruteForceVisibleTiles(polygon: CoveragePolygon,
                                                targetZoom: Int,
@@ -266,10 +266,10 @@ final class FlatVisibleTileResolverTests: XCTestCase {
         return false
     }
 
-    // MARK: - Построение позы
+    // MARK: - Pose construction
 
-    /// Перспективная камера, смотрящая на начало render-пространства
-    /// (плоскость z=0) с заданным наклоном и азимутом.
+    /// A perspective camera looking at the origin of render space
+    /// (the z=0 plane) with the given tilt and bearing.
     private static func makeCameraMatrix(pitch: Float,
                                          bearing: Float,
                                          distance: Float,
@@ -285,8 +285,8 @@ final class FlatVisibleTileResolverTests: XCTestCase {
         return projection * view
     }
 
-    /// Тайловый индекс центра: камера в тестах смотрит на начало
-    /// render-пространства, обратное преобразование - как в candidateRange.
+    /// Tile index of the center: the camera in tests looks at the origin
+    /// of render space, the inverse transform matches candidateRange.
     private static func makeCenter(targetZoom: Int, flatRenderState: FlatRenderState) -> Center {
         let tilesCount = 1 << targetZoom
         let mapSize = flatRenderState.renderMapSize
@@ -301,7 +301,7 @@ final class FlatVisibleTileResolverTests: XCTestCase {
     }
 }
 
-/// Детерминированный генератор для воспроизводимых property-тестов.
+/// Deterministic generator for reproducible property tests.
 private struct SplitMix64: RandomNumberGenerator {
     private var state: UInt64
 

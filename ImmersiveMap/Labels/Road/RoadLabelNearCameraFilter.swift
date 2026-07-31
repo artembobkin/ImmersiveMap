@@ -3,27 +3,27 @@
 
 import simd
 
-/// Решает, достоин ли тайл дорожных подписей, по его ВИДИМОЙ экранной площади:
-/// четырёхугольник тайла клипится в однородных координатах по near-плоскости и
-/// границам вьюпорта, и метрики считаются по тому, что реально на экране.
-/// Поэтому ближний тайл, уходящий углами за камеру, оценивается честно своей
-/// огромной видимой частью, а не вырожденной проекцией углов.
+/// Decides whether a tile deserves road labels based on its VISIBLE screen area:
+/// the tile quad is clipped in homogeneous coordinates against the near plane and
+/// the viewport bounds, and metrics are computed from what is actually on screen.
+/// So a near tile whose corners go behind the camera is judged fairly by its
+/// huge visible part rather than by a degenerate projection of its corners.
 enum RoadLabelNearCameraFilter {
-    /// Минимальная видимая площадь: меньше эквивалента квадрата 300x300 px -
-    /// тайл занимает слишком мало экрана, чтобы его дорожные подписи читались.
+    /// Minimum visible area: below the equivalent of a 300x300 px square the
+    /// tile occupies too little of the screen for its road labels to be readable.
     private static let minimumVisibleAreaPx: Float = 300 * 300
 
-    /// Минимальная видимая площадь НА ЭКВИВАЛЕНТ ТАЙЛА ЦЕЛЕВОГО ЗУМА
-    /// (видимая площадь / 4^недозум). Грубый родитель дальней полосы может
-    /// занимать пол-экрана, но мир в нём ужат в 4^N раз, и подписи вдоль его
-    /// дорог вырождены. Нормировка зум-агностична и переживает смену maxzoom
-    /// источника.
+    /// Minimum visible area PER TARGET-ZOOM TILE EQUIVALENT
+    /// (visible area / 4^underzoom). A coarse parent of a distant strip may
+    /// take half the screen, but the world inside it is compressed 4^N times
+    /// and labels along its roads are degenerate. The normalization is
+    /// zoom-agnostic and survives a change of the source maxzoom.
     private static let minimumVisibleAreaPerNativeTilePx: Float = 200 * 200
 
-    /// Минимальный коэффициент сжатия видимого полигона (площадь / квадрат
-    /// длинного ребра): сплюснутая перспективой лента отклоняется независимо
-    /// от площади. Калибровка: квадрат сверху 1.0, ближний тайл при
-    /// максимальном наклоне ~0.1-0.15, лента у горизонта 0.02-0.05.
+    /// Minimum compression ratio of the visible polygon (area / long edge
+    /// squared): a perspective-flattened ribbon is rejected regardless of
+    /// area. Calibration: a top-down square is 1.0, a near tile at maximum
+    /// tilt ~0.1-0.15, a ribbon at the horizon 0.02-0.05.
     private static let minimumProjectedCompressionRatio: Float = 0.07
 
     static func shouldKeepTile(clipCorners: [SIMD4<Float>],
@@ -72,9 +72,9 @@ enum RoadLabelNearCameraFilter {
         ]
     }
 
-    /// Sutherland-Hodgman в однородных координатах: сначала near-плоскость
-    /// (w > 0, точки за камерой отсекаются до перспективного деления), затем
-    /// четыре границы NDC-вьюпорта.
+    /// Sutherland-Hodgman in homogeneous coordinates: first the near plane
+    /// (w > 0, points behind the camera are clipped before the perspective
+    /// divide), then the four NDC viewport bounds.
     private static func clipToViewport(polygon: [SIMD4<Float>]) -> [SIMD4<Float>] {
         let planes: [(SIMD4<Float>) -> Float] = [
             { $0.w - 1e-4 },

@@ -4,8 +4,8 @@
 import Foundation
 import QuartzCore
 
-/// Управляет state machine перелета камеры: запуском `CameraFlightAnimator`,
-/// target position, completion callback и пошаговым применением animated camera state.
+/// Drives the camera flight state machine: starting the `CameraFlightAnimator`,
+/// the target position, the completion callback and the stepwise application of animated camera state.
 @MainActor
 final class ImmersiveMapCameraFlightController {
     private let cameraRuntime: ImmersiveMapCameraRuntime

@@ -5,7 +5,7 @@ import XCTest
 
 final class AvatarRendererFrameBufferIsolationTests: XCTestCase {
     func testAvatarPerFrameRenderBuffersUseFrameSlots() throws {
-        // cwd на iOS-симуляторе указывает в песочницу; корень пакета выводим из пути этого файла.
+        // cwd on the iOS simulator points into the sandbox; derive the package root from this file's path.
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()

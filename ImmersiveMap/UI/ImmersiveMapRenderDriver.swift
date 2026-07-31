@@ -4,14 +4,14 @@
 import Foundation
 import QuartzCore
 
-/// Создает `CADisplayLink` для драйвера: на iOS линк общесистемный,
-/// на macOS его выдает `NSView` и он привязан к дисплею окна host view.
+/// Creates the `CADisplayLink` for the driver: on iOS the link is system-wide,
+/// on macOS it is vended by `NSView` and tied to the host view window's display.
 typealias DisplayLinkFactory = (_ target: Any, _ selector: Selector) -> CADisplayLink
 
-/// Управляет циклом отрисовки карты на уровне view: держит `CADisplayLink`,
-/// включает или приостанавливает его по состоянию `RenderLoopPacing`,
-/// и запускает `RenderFrameEngine.render(to:)`.
-/// Не владеет `RenderFrameEngine` и не управляет настройками рендера.
+/// Manages the map's render loop at the view level: holds the `CADisplayLink`,
+/// enables or pauses it based on `RenderLoopPacing` state,
+/// and invokes `RenderFrameEngine.render(to:)`.
+/// Does not own `RenderFrameEngine` and does not manage render settings.
 final class ImmersiveMapRenderDriver: NSObject {
     typealias Activity = RenderLoopPacing.Activity
 
@@ -50,7 +50,7 @@ final class ImmersiveMapRenderDriver: NSObject {
         renderer = nil
     }
 
-    /// Применяет новые настройки частоты/непрерывности отрисовки к уже запущенному display link.
+    /// Applies new frame-rate/continuity settings to an already running display link.
     func updateRenderLoopSettings(_ settings: ImmersiveMapSettings.RenderLoopSettings) {
         performOnMain {
             self.updatePacing {
@@ -121,7 +121,7 @@ final class ImmersiveMapRenderDriver: NSObject {
         #if canImport(UIKit)
         displayLink?.preferredFramesPerSecond = pacing.targetFramesPerSecond
         #else
-        // На macOS у CADisplayLink нет preferredFramesPerSecond - только range API.
+        // On macOS CADisplayLink has no preferredFramesPerSecond - only the range API.
         let targetFramesPerSecond = pacing.targetFramesPerSecond
         if targetFramesPerSecond > 0 {
             displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFramesPerSecond),
@@ -150,8 +150,8 @@ protocol ImmersiveMapRenderDriverFrameDelegate: AnyObject {
                              currentTime: CFTimeInterval)
 }
 
-/// Weak proxy target для `CADisplayLink`.
-/// Не дает display link удерживать render driver или frame delegate.
+/// Weak proxy target for `CADisplayLink`.
+/// Keeps the display link from retaining the render driver or frame delegate.
 private final class WeakDisplayLinkTarget: NSObject {
     private weak var driver: ImmersiveMapRenderDriver?
     private weak var frameDelegate: ImmersiveMapRenderDriverFrameDelegate?
@@ -162,7 +162,7 @@ private final class WeakDisplayLinkTarget: NSObject {
         self.frameDelegate = frameDelegate
     }
 
-    // @MainActor: display link добавляется в main runloop, тик всегда на main.
+    // @MainActor: the display link is added to the main runloop, the tick is always on main.
     @MainActor @objc func displayLinkDidFire(_ displayLink: CADisplayLink) {
         guard let driver else { return }
 

@@ -75,10 +75,10 @@ struct AvatarAtlasSlot {
     let uvRect: SIMD4<Float>
 }
 
-/// Атлас аватарных картинок. Слоты ключуются идентичностью CGImage, а не id
-/// маркера: тысячи маркеров с общими картинками делят один слот. При
-/// переполнении вытесняется наименее недавно использованный слот, не
-/// задействованный в текущем кадре, - атлас работает как кеш видимой сцены.
+/// Atlas of avatar images. Slots are keyed by CGImage identity rather than
+/// marker id: thousands of markers sharing images share one slot. On overflow
+/// the least recently used slot not touched by the current frame is evicted -
+/// the atlas works as a cache of the visible scene.
 final class AvatarTextureAtlas {
     private struct SlotState {
         var slot: AvatarAtlasSlot
@@ -121,13 +121,13 @@ final class AvatarTextureAtlas {
         return cellsPerSide * cellsPerSide * pagesMax
     }
 
-    /// Отметка начала кадра: использование слотов трекается покадрово, слоты
-    /// текущего кадра не вытесняются.
+    /// Frame-start mark: slot usage is tracked per frame, and slots used by
+    /// the current frame are never evicted.
     func beginFrame(_ frameIndex: UInt64) {
         currentFrame = frameIndex
     }
 
-    /// Слот уже загруженной картинки; помечает использование в текущем кадре.
+    /// Slot of an already-uploaded image; marks it as used this frame.
     func slot(for image: CGImage) -> AvatarAtlasSlot? {
         let key = ObjectIdentifier(image)
         guard var state = slotsByImage[key] else {
@@ -140,8 +140,8 @@ final class AvatarTextureAtlas {
         return state.slot
     }
 
-    /// Загружает картинку в свободный слот (или вытесняет LRU) и возвращает
-    /// его; nil - атлас целиком занят картинками текущего кадра.
+    /// Uploads the image into a free slot (or evicts the LRU one) and returns
+    /// it; nil means the atlas is fully occupied by this frame's images.
     func uploadImage(_ image: CGImage) -> AvatarAtlasSlot? {
         let key = ObjectIdentifier(image)
         if let existing = slotsByImage[key] {
@@ -460,8 +460,8 @@ private enum AvatarCountBadgeAtlasKey: Hashable {
     case overflow
 }
 
-/// Атлас круглых bubble-счётчиков merged-маркеров: белый круг с числом
-/// объединённых аватаров, значения выше 999 рисуются как «999+».
+/// Atlas of round bubble counters for merged markers: a white circle with the
+/// number of merged avatars; values above 999 are drawn as "999+".
 final class AvatarCountBadgeAtlas {
     static let maximumCount = 999
 
@@ -564,7 +564,7 @@ final class AvatarCountBadgeAtlas {
                 textValue = "\(Self.maximumCount)+"
             }
 
-            // Трёхзначные значения ужимаются, чтобы не вылезать из круга.
+            // Three-digit values are squeezed so they don't spill out of the circle.
             let baseFontSize = size.height * 0.44
             let fontScale: CGFloat = textValue.count <= 2 ? 1.0 : (textValue.count == 3 ? 0.82 : 0.66)
             let font = PlatformFont.monospacedDigitSystemFont(ofSize: baseFontSize * fontScale,

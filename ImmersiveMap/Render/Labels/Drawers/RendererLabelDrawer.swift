@@ -7,11 +7,11 @@ import simd
 final class RendererLabelDrawer {
     private init() {}
 
-    // Кэш реально привязанного состояния энкодера. Слоты аргументов Metal живут
-    // на уровне encoder и переживают смену pipeline state, поэтому повторный
-    // set того же значения в тот же слот можно пропускать: у лейблов почти все
-    // style-run'ы одного батча делят текстуру шрифта и label shift, и без кэша
-    // GPU Frame Capture помечал десятки таких вызовов как redundant binding.
+    // Cache of the encoder state actually bound. Metal argument slots live
+    // at the encoder level and survive pipeline state changes, so re-setting
+    // the same value into the same slot can be skipped: for labels almost all
+    // style runs of a batch share the font texture and label shift, and without the cache
+    // GPU Frame Capture flagged dozens of such calls as redundant binding.
     private struct EncoderBindings {
         var isPoiPipelineBound = false
         var fragmentTexture: ObjectIdentifier?
@@ -94,7 +94,7 @@ final class RendererLabelDrawer {
         renderEncoder.setRenderPipelineState(textRenderer.roadLabelPipelineState)
         var screenMatrixValue = screenMatrix
         renderEncoder.setVertexBytes(&screenMatrixValue, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
-        // Одинаковы для всех дорожных лейблов - привязываются один раз на пасс.
+        // Identical for all road labels - bound once per pass.
         var glyphShift: simd_int1 = 0
         renderEncoder.setVertexBytes(&glyphShift, length: MemoryLayout<simd_int1>.stride, index: 5)
         var screenOffset = SIMD2<Float>(repeating: 0.0)

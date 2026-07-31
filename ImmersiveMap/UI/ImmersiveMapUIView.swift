@@ -7,18 +7,18 @@ import Metal
 import QuartzCore
 import UIKit
 
-/// UIKit/Metal host view для ImmersiveMap.
-/// Владеет `CAMetalLayer`, UIKit lifecycle, layout и мостом обновлений из SwiftUI;
-/// состояние и поведение отдельных функций живут в `ImmersiveMapHostRuntime`
-/// и его `ImmersiveMapRuntimeGraph`.
+/// UIKit/Metal host view for ImmersiveMap.
+/// Owns the `CAMetalLayer`, UIKit lifecycle, layout, and the bridge for updates
+/// from SwiftUI; per-feature state and behavior live in `ImmersiveMapHostRuntime`
+/// and its `ImmersiveMapRuntimeGraph`.
 public class ImmersiveMapUIView: UIView {
     public override class var layerClass: AnyClass { return CAMetalLayer.self }
 
     // MARK: - Rendering
 
     private var hostRuntime: ImmersiveMapHostRuntime!
-    // nonisolated(unsafe): пишется один раз на main, в nonisolated deinit только
-    // снимается с NotificationCenter (removeObserver потокобезопасен).
+    // nonisolated(unsafe): written once on main; the nonisolated deinit only
+    // removes it from NotificationCenter (removeObserver is thread-safe).
     nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     var metalLayer: CAMetalLayer {
@@ -134,7 +134,7 @@ public class ImmersiveMapUIView: UIView {
 
     // MARK: - Updates
 
-    /// Синхронизирует новые параметры из SwiftUI `updateUIView` с уже созданным UIKit/Metal view.
+    /// Synchronizes fresh parameters from SwiftUI `updateUIView` with the already created UIKit/Metal view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 cameraController: ImmersiveMapCameraController?,

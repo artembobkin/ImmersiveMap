@@ -5,8 +5,8 @@
 
 import AppKit
 
-/// Рендерит компактный attribution overlay (AppKit).
-/// Владеет только labels, styling и layout badge; состояние карты остается в surrounding runtimes.
+/// Renders a compact attribution overlay (AppKit).
+/// Owns only the badge labels, styling and layout; map state stays in the surrounding runtimes.
 final class AttributionBadgeView: NSView {
     private enum Layout {
         static let containerInset: CGFloat = 12
@@ -56,7 +56,7 @@ final class AttributionBadgeView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Без ссылки бейдж прозрачен для кликов - они уходят карте.
+    /// Without a link the badge is click-transparent - clicks go to the map.
     public override func hitTest(_ point: NSPoint) -> NSView? {
         guard linkURL != nil else {
             return nil
@@ -65,7 +65,7 @@ final class AttributionBadgeView: NSView {
         return super.hitTest(point)
     }
 
-    /// Пустая атрибуция прячет бейдж целиком: рисовать пустую плашку незачем.
+    /// Empty attribution hides the badge entirely: no point drawing an empty plate.
     func apply(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
         isHidden = isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL

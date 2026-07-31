@@ -3,9 +3,9 @@
 
 import SwiftUI
 
-/// Один SwiftUI-маркер после eager-вычисления ViewBuilder в body:
-/// публичный Identifiable-id, координата и стёртый контент.
-/// Не Sendable (AnyView): живёт только на MainActor и ходит по цепочке
+/// One SwiftUI marker after eager ViewBuilder evaluation in body:
+/// the public Identifiable id, the coordinate, and the type-erased content.
+/// Not Sendable (AnyView): lives only on the MainActor and travels along the chain
 /// representable -> host view -> host runtime -> marker runtime.
 struct MarkerViewItem {
     let id: AnyHashable
@@ -13,8 +13,8 @@ struct MarkerViewItem {
     let content: AnyView
 }
 
-/// Полный набор маркеров одного вызова `.markers(...)`: повторный вызов
-/// заменяет предыдущий набор целиком.
+/// The full marker set of one `.markers(...)` call: a repeated call
+/// replaces the previous set entirely.
 struct MarkerViewContent {
     let anchor: UnitPoint
     let items: [MarkerViewItem]

@@ -4,15 +4,16 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Широтный LOD препроцессора: на глобусе приполярные меркаторные тайлы
-/// подменяются более грубыми родителями (тайл у полюса в `cos(широты)` раз
-/// меньше экваторного), на плоской карте и при переходе к ней подмены нет.
+/// The preprocessor's latitude LOD: on the globe, near-polar mercator tiles are
+/// replaced with coarser parents (a tile near a pole is `cos(latitude)` times
+/// smaller than an equatorial one); on the flat map and during the transition
+/// to it there is no replacement.
 final class VisibleTilesPreprocessorLatitudeLodTests: XCTestCase {
     private let preprocessor = VisibleTilesPreprocessor()
 
     func testGlobePolarRowIsCoarsenedOnSphere() {
-        // Ряд z4/y0: ближайший к экватору край на широте ~82.7°,
-        // log2(1/cos) ≈ 2.97 → понижение на 2 уровня.
+        // Row z4/y0: the edge nearest the equator is at latitude ~82.7°,
+        // log2(1/cos) ≈ 2.97 → a drop of 2 levels.
         let polarRow = (0..<16).map { VisibleTile(x: $0, y: 0, z: 4) }
         let center = Center(tileX: 8.0, tileY: 0.5)
 
@@ -63,8 +64,8 @@ final class VisibleTilesPreprocessorLatitudeLodTests: XCTestCase {
     }
 
     func testMixedLatitudeCoverageHasNoOverlap() {
-        // Полный столбец от полюса до полюса: границы зон понижения не должны
-        // давать пересекающееся покрытие.
+        // A full column from pole to pole: the drop-zone boundaries must not
+        // produce overlapping coverage.
         let column = (0..<16).map { VisibleTile(x: 8, y: $0, z: 4) }
         let center = Center(tileX: 8.5, tileY: 8.0)
 

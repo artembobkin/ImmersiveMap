@@ -6,11 +6,11 @@ import Foundation
 import simd
 
 struct TileAtlasPlacementPlanner {
-    /// Кап анизотропии слота: слот обслуживает растянутую ось экранного следа,
-    /// но не более чем в 4 раза детальнее сжатой оси. Чистый `max` давал полосе
-    /// у горизонта гигантский слот (рябь при минификации и раздутый бюджет
-    /// страниц), чистый `min` делал пиксельным ближний тайл, растянутый на весь
-    /// экран по ширине.
+    /// Slot anisotropy cap: the slot serves the stretched axis of the screen
+    /// footprint, but no more than 4x more detailed than the compressed axis.
+    /// A pure `max` gave a strip at the horizon a giant slot (minification
+    /// shimmer and a bloated page budget); a pure `min` made a near tile
+    /// stretched across the full screen width pixelated.
     static let maximumSlotAnisotropy: Float = 4.0
 
     let pageSizePx: Int
@@ -559,9 +559,9 @@ private struct GlobeFootprintProjectionConstants {
         self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
         self.rotationMatrix = GlobeFootprintProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
                                                                                panLongitude: panLongitude)
-        // Зеркало globeVisibilityHorizonThreshold из GlobeVisibility.h:
-        // непрерывное ослабление в масштабе геометрии вместо ступеньки на
-        // t = 0.8, которую давал огромный -1e6.
+        // Mirror of globeVisibilityHorizonThreshold from GlobeVisibility.h:
+        // continuous relaxation on the geometry scale instead of the step at
+        // t = 0.8 that the huge -1e6 used to produce.
         let horizonFade = GlobeFootprintProjectionConstants.smoothstep(edge0: 0.0,
                                                                    edge1: 0.95,
                                                                    x: globe.transition)
@@ -616,9 +616,9 @@ private struct GlobeFootprintProjectionConstants {
         return t * t * (3.0 - 2.0 * t)
     }
 
-    /// Зеркало `globeTransitionLocalPhase` из GlobeTransitionProjection.h:
-    /// волна разворота, ближняя к центру взгляда область встаёт в плоскость
-    /// первой, дальние углы - последними. Менять только синхронно с шейдером.
+    /// Mirror of `globeTransitionLocalPhase` from GlobeTransitionProjection.h:
+    /// the unfurl wave; the area nearest the view center flattens into the
+    /// plane first, the far corners last. Change only in sync with the shader.
     static func transitionLocalPhase(_ transition: Float, frontDot: Float) -> Float {
         let spread: Float = 0.6
         let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi

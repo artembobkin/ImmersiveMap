@@ -13,7 +13,7 @@ final class AvatarTextureAtlasTests: XCTestCase {
         device = try XCTUnwrap(MTLCreateSystemDefaultDevice(), "Metal device unavailable")
     }
 
-    /// Маркеры с одной и той же картинкой делят один слот атласа.
+    /// Markers with the same image share one atlas slot.
     func testMarkersSharingImageShareOneSlot() throws {
         let atlas = AvatarTextureAtlas(device: device, atlasSize: 128, cellSize: 64, pagesMax: 1)
         let image = try Self.makeImage(gray: 0x80)
@@ -23,15 +23,15 @@ final class AvatarTextureAtlasTests: XCTestCase {
         let second = try XCTUnwrap(atlas.slot(for: image))
         XCTAssertEqual(first.uvRect, second.uvRect)
         XCTAssertEqual(first.pageIndex, second.pageIndex)
-        // Повторная загрузка той же картинки не занимает новый слот.
+        // Re-uploading the same image does not take a new slot.
         let reuploaded = try XCTUnwrap(atlas.uploadImage(image))
         XCTAssertEqual(reuploaded.uvRect, first.uvRect)
     }
 
-    /// Переполненный атлас вытесняет слот картинки, не использованной в
-    /// текущем кадре, и не трогает слоты текущего кадра.
+    /// An overflowing atlas evicts the slot of an image not used in
+    /// the current frame and doesn't touch the current frame's slots.
     func testLRUEvictionPrefersImagesUnusedThisFrame() throws {
-        // 2x2 слота.
+        // 2x2 slots.
         let atlas = AvatarTextureAtlas(device: device, atlasSize: 128, cellSize: 64, pagesMax: 1)
         XCTAssertEqual(atlas.slotCapacity, 4)
         let images = try (0..<5).map { try Self.makeImage(gray: UInt8(0x10 * ($0 + 1))) }
@@ -41,12 +41,12 @@ final class AvatarTextureAtlasTests: XCTestCase {
             XCTAssertNotNil(atlas.uploadImage(images[index]), "image \(index)")
         }
 
-        // Кадр 2: используются картинки 1..3, картинка 0 не трогается.
+        // Frame 2: images 1..3 are used, image 0 is untouched.
         atlas.beginFrame(2)
         for index in 1..<4 {
             XCTAssertNotNil(atlas.slot(for: images[index]))
         }
-        // Пятая картинка вытесняет нулевую (последнее использование - кадр 1).
+        // The fifth image evicts image zero (last used in frame 1).
         XCTAssertNotNil(atlas.uploadImage(images[4]))
         XCTAssertNil(atlas.slot(for: images[0]), "вытеснена")
         for index in 1..<5 {
@@ -54,7 +54,7 @@ final class AvatarTextureAtlasTests: XCTestCase {
         }
     }
 
-    /// Атлас, целиком занятый картинками текущего кадра, не вытесняет их.
+    /// An atlas fully occupied by the current frame's images does not evict them.
     func testFullAtlasOfCurrentFrameImagesRefusesUpload() throws {
         let atlas = AvatarTextureAtlas(device: device, atlasSize: 128, cellSize: 64, pagesMax: 1)
         let images = try (0..<5).map { try Self.makeImage(gray: UInt8(0x20 * ($0 + 1))) }

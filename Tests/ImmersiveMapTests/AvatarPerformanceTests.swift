@@ -6,20 +6,20 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Замеры пер-кадровой стоимости аватарного пайплайна на больших объёмах
-/// (цель - 30 000 маркеров). Тесты печатают тайминги в стиле `[PERF] ...` и
-/// проверяют только очень свободные лимиты: смысл - сравнение до/после
-/// оптимизаций через `swift test -c release --filter AvatarPerformanceTests`.
+/// Measurements of the per-frame cost of the avatar pipeline at large scale
+/// (target: 30 000 markers). The tests print `[PERF] ...`-style timings and
+/// assert only very loose limits: the point is before/after comparison of
+/// optimizations via `swift test -c release --filter AvatarPerformanceTests`.
 final class AvatarPerformanceTests: XCTestCase {
     private static let geometry = AvatarCollisionGeometry(markerSizePx: 128.0,
                                                           bodyRadiusPx: 64.0,
                                                           circleBodyRadiusPx: 59.0,
                                                           bodyCenterOffsetPx: 70.0)
 
-    // MARK: - Сценарии солвера
+    // MARK: - Solver scenarios
 
-    /// Мировой зум: весь город слетелся в одну кучу - критический путь
-    /// группировки (все 30k в одной компоненте, один цветок).
+    /// World zoom: the whole city collapsed into one pile, the critical path
+    /// of grouping (all 30k in one component, a single flower).
     func testSolverPile30k() throws {
         let markers = try Self.makePile(count: 30_000,
                                         center: SIMD2(800, 500),
@@ -27,8 +27,9 @@ final class AvatarPerformanceTests: XCTestCase {
         Self.measureSolver(label: "solver.pile30k", markers: markers, frames: 4)
     }
 
-    /// Средний зум: маркеры разбросаны по 4K-экрану плотнее порога касания,
-    /// но реже порога группировки - худший случай свободных кружков.
+    /// Medium zoom: markers scattered over a 4K screen denser than the touch
+    /// threshold but sparser than the grouping threshold, the worst case for
+    /// free circles.
     func testSolverSpread2k() throws {
         let markers = try Self.makeSpread(count: 2_000,
                                           size: SIMD2(3840, 2160),
@@ -36,8 +37,8 @@ final class AvatarPerformanceTests: XCTestCase {
         Self.measureSolver(label: "solver.spread2k", markers: markers, frames: 8)
     }
 
-    /// Смешанная сцена: 200 «домов» по ~50 человек на FHD-экране - много
-    /// цветков + свободные кружки между ними.
+    /// Mixed scene: 200 "houses" of ~50 people each on an FHD screen, many
+    /// flowers plus free circles between them.
     func testSolverClusters10k() throws {
         let markers = try Self.makeClusters(total: 10_000,
                                             clusterCount: 200,
@@ -46,10 +47,10 @@ final class AvatarPerformanceTests: XCTestCase {
         Self.measureSolver(label: "solver.clusters10k", markers: markers, frames: 4)
     }
 
-    // MARK: - Стор презентации
+    // MARK: - Presentation store
 
-    /// Статичные 30k маркеров: пер-кадровая цена выдачи presented-списка
-    /// (без мутаций и анимаций - самый частый случай).
+    /// Static 30k markers: the per-frame cost of producing the presented list
+    /// (no mutations or animations, the most common case).
     func testPresentationStore30kStatic() throws {
         let store = AvatarPresentationStateStore()
         let image = try Self.sharedImage()
@@ -77,7 +78,7 @@ final class AvatarPerformanceTests: XCTestCase {
         Self.report(label: "presentationStore.static30k", stats: stats)
     }
 
-    // MARK: - Прогон солвера
+    // MARK: - Solver run
 
     private static func measureSolver(label: String,
                                       markers: [AvatarProjectedMarker],
@@ -86,12 +87,12 @@ final class AvatarPerformanceTests: XCTestCase {
         let config = Self.makeConfig()
         var time: TimeInterval = 0
 
-        // Холодный кадр: включает первичную раскладку и создание состояний.
+        // Cold frame: includes the initial layout and creating the states.
         let coldStart = DispatchTime.now().uptimeNanoseconds
         _ = solver.solve(projectedMarkers: markers, geometry: geometry, config: config, time: time)
         let coldMs = Double(DispatchTime.now().uptimeNanoseconds - coldStart) / 1e6
 
-        // Прогрев до установившегося состояния.
+        // Warm up to a steady state.
         for _ in 0..<12 {
             time += 1.0 / 60.0
             _ = solver.solve(projectedMarkers: markers, geometry: geometry, config: config, time: time)
@@ -104,7 +105,7 @@ final class AvatarPerformanceTests: XCTestCase {
         report(label: label, stats: stats, coldMs: coldMs)
     }
 
-    // MARK: - Генерация сцен (детерминированный LCG)
+    // MARK: - Scene generation (deterministic LCG)
 
     private struct SplitMix: RandomNumberGenerator {
         var state: UInt64
@@ -163,7 +164,7 @@ final class AvatarPerformanceTests: XCTestCase {
         }
     }
 
-    // MARK: - Замер и отчёт
+    // MARK: - Measurement and reporting
 
     private struct FrameStats {
         let minMs: Double
@@ -193,7 +194,7 @@ final class AvatarPerformanceTests: XCTestCase {
         FileHandle.standardError.write(Data((line + "\n").utf8))
     }
 
-    // MARK: - Хелперы входа
+    // MARK: - Input helpers
 
     private static func makeConfig() -> ImmersiveMapSettings.AvatarSettings {
         var config = ImmersiveMapSettings.default.avatars

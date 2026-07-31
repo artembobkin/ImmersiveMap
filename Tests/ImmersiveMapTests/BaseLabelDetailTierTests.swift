@@ -15,8 +15,8 @@ final class BaseLabelDetailTierTests: XCTestCase {
     }
 
     func testTierBudgetsAreAbsoluteAndShrinkWithDistance() {
-        // Абсолютные бюджеты: плотный тайл отдаёт ровно бюджет, разреженный
-        // всё своё, поэтому экранная плотность не зависит от плотности данных.
+        // Absolute budgets: a dense tile yields exactly the budget, a sparse one
+        // yields all it has, so screen density does not depend on data density.
         XCTAssertNil(BaseLabelDetailTier.anchorLabelBudget(tier: .full))
         XCTAssertNil(BaseLabelDetailTier.poiLabelBudget(tier: .full))
 

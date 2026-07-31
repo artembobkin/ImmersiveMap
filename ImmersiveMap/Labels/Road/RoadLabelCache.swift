@@ -39,9 +39,9 @@ final class RoadLabelTileRecord {
     let instanceKeys: [UInt64]
     private(set) var instanceRetainedFlags: [UInt8]
     let instanceLabelSizes: [SIMD2<Float>]
-    // Глифы инстанса лежат в glyphInputs непрерывно (порядок построения
-    // makeTileRecord) - диапазоны позволяют читать коллизионные AABB инстанса
-    // из GPU-буферов без CPU-репроекции.
+    // An instance's glyphs are contiguous in glyphInputs (makeTileRecord build
+    // order): the ranges make it possible to read an instance's collision AABBs
+    // from GPU buffers without CPU reprojection.
     let instanceGlyphRanges: [Range<Int>]
     let instanceAnchorOrdinals: [UInt32]
     private(set) var instanceSourcePriorities: [Int]
@@ -57,10 +57,10 @@ final class RoadLabelTileRecord {
     let glyphInputsBuffer: MTLBuffer?
     let collisionInputsBuffer: MTLBuffer?
 
-    // Слоты, в которые хотя бы раз кодировался placement-компьют этого рекорда:
-    // до первого прохода GPU slot-буферы содержат мусор и читать их нельзя.
-    // Переиспользование слота кадром N означает завершение кадра N-slots -
-    // прочитанные данные всегда с завершённого кадра той же раскладки глифов.
+    // Slots into which this record's placement compute has been encoded at least
+    // once: before the first GPU pass the slot buffers contain garbage and must
+    // not be read. Reuse of a slot by frame N implies frame N-slots has completed,
+    // so read data always comes from a completed frame of the same glyph layout.
     private var placementEncodedSlots: [Bool]
 
     private let visibleTileIndexBufferStore: DynamicMetalBuffer<UInt32>
@@ -185,10 +185,10 @@ final class RoadLabelTileRecord {
         placementEncodedSlots[slot] = true
     }
 
-    // Рекорд выпал из активных (near-camera кулл): prepareGPU перестаёт
-    // кодировать его компьют, slot-буферы замораживаются. Сброс стампов не даёт
-    // первому циклу после возврата читать позиции произвольной давности -
-    // решения откладываются до свежих данных (механика pending-ретриггера).
+    // The record fell out of the active set (near-camera cull): prepareGPU stops
+    // encoding its compute and the slot buffers freeze. Resetting the stamps keeps
+    // the first cycle after returning from reading positions of arbitrary age:
+    // decisions are deferred until fresh data (the pending re-trigger mechanism).
     func invalidatePlacementData() {
         for index in placementEncodedSlots.indices {
             placementEncodedSlots[index] = false
@@ -199,9 +199,9 @@ final class RoadLabelTileRecord {
         placementEncodedSlots.indices.contains(slot) && placementEncodedSlots[slot]
     }
 
-    // Рекорд пригоден для placement-компьюта (зеркалит guard prepareGPU):
-    // ожидать данных от рекорда, который никогда не будет закодирован
-    // (отказ аллокации MTLBuffer), нельзя - pending завис бы навсегда.
+    // The record is eligible for the placement compute (mirrors the prepareGPU
+    // guard): waiting for data from a record that will never be encoded
+    // (MTLBuffer allocation failure) is not allowed, since pending would hang forever.
     var canEncodePlacements: Bool {
         pathPointCount > 0 && glyphCount > 0
             && pathInputsBuffer != nil && pathRangesBuffer != nil
@@ -264,9 +264,9 @@ final class RoadLabelCache {
         orderedTileRecords.flatMap(\.entries)
     }
 
-    // Материализовано: состав меняется только в synchronize/evict, а читается
-    // это свойство в нескольких горячих точках каждого кадра - computed-версия
-    // делала dictionary-lookup на тайл и аллоцировала массив на каждое обращение.
+    // Materialized: membership changes only in synchronize/evict while this
+    // property is read at several hot spots every frame. The computed version
+    // did a dictionary lookup per tile and allocated an array on every access.
     private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 
     init(metalDevice: MTLDevice,

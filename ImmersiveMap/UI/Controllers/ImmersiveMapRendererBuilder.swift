@@ -3,8 +3,8 @@
 
 import QuartzCore
 
-/// Собирает `RenderFrameEngine` из текущего runtime graph.
-/// Создает render camera и связывает renderer dependencies, не раскрывая детали сборки во view.
+/// Assembles a `RenderFrameEngine` from the current runtime graph.
+/// Creates the render camera and wires renderer dependencies without exposing assembly details to the view.
 @MainActor
 final class ImmersiveMapRendererBuilder {
     private let cameraRuntime: ImmersiveMapCameraRuntime

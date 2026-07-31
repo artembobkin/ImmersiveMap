@@ -112,9 +112,10 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(buffers.stylesBuffer, offset: 0, index: 2)
         renderEncoder.setVertexBuffer(buffers.overviewStyleMaskBuffer, offset: 0, index: 4)
 
-        // Retained-подмена рисует source-тайл целиком по его origin: фрагменты
-        // вне слота placeIn отбрасываются в шейдере, иначе контент родителя
-        // перекрывал бы соседние точные тайлы во всех слоях (дороги, фоны).
+        // A retained substitution draws the source tile in full at its origin:
+        // fragments outside the placeIn slot are discarded in the shader,
+        // otherwise the parent's content would cover neighboring exact tiles
+        // in every layer (roads, backgrounds).
         var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
         renderEncoder.setFragmentBytes(&localClipBounds,
                                        length: MemoryLayout<SIMD4<Float>>.stride,

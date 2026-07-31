@@ -4,8 +4,8 @@
 import CoreGraphics
 import QuartzCore
 
-/// Владеет viewport metrics, которые нужны rendering и hit-testing.
-/// Синхронизирует `CAMetalLayer` frame/drawable size и отдает scale/renderability.
+/// Owns the viewport metrics needed by rendering and hit-testing.
+/// Synchronizes the `CAMetalLayer` frame/drawable size and exposes scale/renderability.
 final class ImmersiveMapViewportRuntime {
     private(set) var bounds: CGRect = .zero
     private(set) var contentsScale: CGFloat = 1
@@ -24,7 +24,7 @@ final class ImmersiveMapViewportRuntime {
         #if canImport(UIKit)
         layer.frame = bounds
         #else
-        // На macOS metal layer является backing layer NSView - его frame ведет AppKit.
+        // On macOS the metal layer is the NSView's backing layer, AppKit drives its frame.
         #endif
 
         let nextDrawableSize = CGSize(width: bounds.width * contentsScale,

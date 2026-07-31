@@ -4,11 +4,11 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Перспективный дистанционный LOD препроцессора. Сфера (крутизна 1.5):
-/// 0-2 exact, 3 → z-1, 4-5 → z-2, 6-8 → z-3, 9+ → z-4, за дистанцией 15
-/// кламп предпочтения к зуму подложки z3. Плоскость (крутизна 3.0): 3 → z-2,
-/// 4 → z-3, 5+ → z-4, за дистанцией 10 кольцо выбрасывается целиком: его
-/// область закрашена z3-подложкой горизонта.
+/// Perspective distance LOD of the preprocessor. Sphere (steepness 1.5):
+/// 0-2 exact, 3 → z-1, 4-5 → z-2, 6-8 → z-3, 9+ → z-4, beyond distance 15
+/// the preference clamps to the z3 backdrop zoom. Flat (steepness 3.0): 3 → z-2,
+/// 4 → z-3, 5+ → z-4, beyond distance 10 the ring is dropped entirely: its
+/// area is painted by the z3 horizon backdrop.
 final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
     private let preprocessor = VisibleTilesPreprocessor()
 
@@ -33,9 +33,9 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         }
     }
 
-    /// Сферическая лесенка остаётся на крутизне 1.5: глобусный визуал
-    /// подбирался отдельно и плоское ужесточение его не трогает.
-    /// Тайлы ряда y=31 прилегают к экватору, широтный drop равен нулю.
+    /// The spherical ladder stays at steepness 1.5: the globe visuals were
+    /// tuned separately and the flat tightening does not touch them.
+    /// Row y=31 tiles sit next to the equator, so the latitude drop is zero.
     func testSphericalLadderKeepsGentlerSteepness() {
         let casesByDistance: [(distance: Int, expectedZoom: Int)] = [
             (3, 5),
@@ -56,10 +56,10 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         }
     }
 
-    /// В плоском режиме за радиусом 10 кольцо не размещается вовсе: его
-    /// область закрашена сплошной z3-подложкой горизонта, а размещение
-    /// z3-предка либо дублировало бы подложку, либо эскалировало бы к мелким
-    /// векторным тайлам поверх ближнего покрытия.
+    /// In flat mode, beyond radius 10 the ring is not placed at all: its area
+    /// is painted by the solid z3 horizon backdrop, and placing a z3 ancestor
+    /// would either duplicate the backdrop or escalate to fine vector tiles
+    /// on top of the near coverage.
     func testFlatFarRingIsHandedToBackdrop() {
         let cases: [(x: Int, expectedZooms: [Int], note: String)] = [
             (8, [5], "внутри порога работает лесенка (z-4 на дистанции 8)"),
@@ -79,11 +79,11 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         }
     }
 
-    /// Сценарий наклонной камеры: ближний блок точных тайлов плюс дальнее
-    /// кольцо. Раньше z3-предок дальнего тайла перекрывался с ближним
-    /// покрытием, и жадный выбор эскалировал кольцо до свободных предков
-    /// z4-z8: даль превращалась в десятки настоящих векторных тайлов. Теперь
-    /// кольцо выбрасывается, в выводе остаётся только ближнее покрытие.
+    /// Tilted camera scenario: a near block of exact tiles plus a far ring.
+    /// Previously the far tile's z3 ancestor overlapped the near coverage,
+    /// and the greedy selection escalated the ring to free ancestors
+    /// z4-z8: the distance turned into dozens of real vector tiles. Now
+    /// the ring is dropped and only the near coverage remains in the output.
     func testFlatFarRingDoesNotEscalateOverNearCoverage() {
         var nearBlock: [VisibleTile] = []
         for x in 0...2 {
@@ -107,9 +107,9 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
                        "Ожидалось только ближнее точное покрытие, получено: \(output.map { "z\($0.z)/\($0.x)/\($0.y)" })")
     }
 
-    /// Без подложки кольцо выбрасывать нельзя: на целевых зумах не глубже z3
-    /// подложка не собирается (`TileCulling` требует targetZoom > z3), и
-    /// врапнутая мировая копия за порогом осталась бы дырой.
+    /// Without a backdrop the ring must not be dropped: at target zooms no
+    /// deeper than z3 the backdrop is not built (`TileCulling` requires
+    /// targetZoom > z3), and a wrapped world copy beyond the threshold would be left as a hole.
     func testFlatFarRingWithoutBackdropKeepsCoverage() {
         let wrappedTile = VisibleTile(x: 7, y: 4, z: 3, loop: 1)
 
@@ -134,9 +134,9 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
     }
 
     func testFarFieldCollapsesManyTilesIntoFewCoarseParents() {
-        // Полоса 7x5 = 35 тайлов на дистанциях 9-15: часть до порога (9-10)
-        // схлопывается лесенкой в горстку грубых родителей, часть за порогом
-        // (11-15) отдаётся подложке и в вывод не попадает.
+        // A 7x5 band = 35 tiles at distances 9-15: the part before the threshold (9-10)
+        // collapses via the ladder into a handful of coarse parents, the part beyond
+        // the threshold (11-15) is handed to the backdrop and never reaches the output.
         var farBand: [VisibleTile] = []
         for x in 9...15 {
             for y in 8...12 {

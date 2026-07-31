@@ -5,9 +5,9 @@
 import SwiftUI
 
 extension View {
-    /// Модификатор применяется всегда, а включённость панели передаётся
-    /// параметром: тип дерева body не зависит от `isEnabled`, поэтому тоггл
-    /// контролов не пересоздаёт платформенный map view (identity стабильна).
+    /// The modifier is always applied and the panel's enabled state is passed
+    /// as a parameter: the body tree type doesn't depend on `isEnabled`, so toggling
+    /// the controls doesn't recreate the platform map view (identity is stable).
     func immersiveMapCameraControlsOverlay(isEnabled: Bool,
                                            camera: ImmersiveMapCameraController?,
                                            initialCameraPosition: ImmersiveMapCameraPosition = ImmersiveMapCameraPosition(latitudeDegrees: 0,
@@ -171,9 +171,9 @@ public struct ImmersiveMapCameraControlPanel: View {
         )
         .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 8)
         .onChange(of: cameraPosition) { _ in
-            // Во время скраба камера сглаженно догоняет цель — ползунок держим на цели (draft),
-            // иначе follow-лаг камеры дёргал бы thumb назад на каждый кадр. Синк с фактическим
-            // углом возобновляем после отпускания.
+            // While scrubbing, the camera smoothly catches up to the target — keep the slider on the target (draft),
+            // otherwise the camera's follow lag would jerk the thumb back every frame. Sync with the actual
+            // angle resumes after release.
             guard isScrubbing == false else {
                 return
             }

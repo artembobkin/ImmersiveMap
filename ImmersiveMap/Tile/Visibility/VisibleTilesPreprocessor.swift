@@ -18,23 +18,23 @@ import Foundation
 /// - The preprocessor never creates tiles outside source ancestry:
 ///   each selected tile is the input tile itself or one of its parents.
 final class VisibleTilesPreprocessor {
-    /// Радиус дистанционного фильтра (Чебышёв, в тайлах целевого зума).
-    /// На него же опирается кламп кандидатов в `FlatVisibleTileResolver`:
-    /// перечислять тайлы дальше этого радиуса бессмысленно - фильтр их выбросит.
+    /// Distance-filter radius (Chebyshev, in tiles of the target zoom).
+    /// The candidate clamp in `FlatVisibleTileResolver` relies on it too:
+    /// enumerating tiles beyond this radius is pointless - the filter drops them.
     ///
-    /// Радиус определяет видимую дальность сферического представления: туман
-    /// обязан насыщаться до кромки покрытия (`HorizonFogUniform`), поэтому
-    /// короткий радиус буквально приближает горизонт. В плоском режиме даль
-    /// радиусом не ограничена: за `farRingRelativeDistance` покрытие целиком
-    /// отдано сплошной z3-подложке горизонта (`TileCulling.resolveFlatBackdropTiles`).
+    /// The radius defines the visible range of the spherical presentation: fog
+    /// must saturate at the coverage edge (`HorizonFogUniform`), so a short
+    /// radius literally pulls the horizon closer. In flat mode the far range is
+    /// not limited by the radius: beyond `farRingRelativeDistance` the coverage
+    /// is fully handed to the solid z3 horizon backdrop (`TileCulling.resolveFlatBackdropTiles`).
     static let defaultMaxVisibleRelativeDistance = 40
 
-    /// За этой дистанцией даль перестаёт быть честным покрытием целевой лесенки.
-    /// Сфера: предпочтение падает на абсолютный зум подложки
-    /// (`TileCulling.flatBackdropZoomLevel`), тайлы z3 в пиннинге мирового
-    /// покрытия. Плоскость: кольцо выбрасывается ещё на стадии инпутов
-    /// (`isFarRingHandedToBackdrop`), порог короче, даль агрессивно отдаётся
-    /// подложке, чтобы срезать количество векторных тайлов.
+    /// Beyond this distance the far range stops being honest coverage of the
+    /// target ladder. Sphere: preference falls to the backdrop's absolute zoom
+    /// (`TileCulling.flatBackdropZoomLevel`), z3 tiles are in the world-coverage
+    /// pinning. Flat: the ring is dropped already at the input stage
+    /// (`isFarRingHandedToBackdrop`), the threshold is shorter, the far range is
+    /// aggressively handed to the backdrop to cut the vector tile count.
     private static func farRingRelativeDistance(for renderSurfaceMode: ViewMode) -> Int {
         renderSurfaceMode == .flat ? 10 : 15
     }
@@ -54,8 +54,8 @@ final class VisibleTilesPreprocessor {
     /// 3) non-overlapping coverage selection,
     /// 4) deterministic output sort.
     ///
-    /// `transition` — фаза глобус→плоскость (0 — глобус, 1 — плоскость):
-    /// управляет широтным LOD на сфере.
+    /// `transition` is the globe-to-flat phase (0 = globe, 1 = flat):
+    /// it drives the latitude LOD on the sphere.
     func preprocess(visibleTiles: [VisibleTile],
                     center: Center,
                     renderSurfaceMode: ViewMode,
@@ -278,28 +278,28 @@ final class VisibleTilesPreprocessor {
         }
     }
 
-    /// Крутизна дистанционного LOD: 1.0 - честная перспектива (уровень на
-    /// удвоение дистанции), выше - агрессивнее огрубление дали. Детализация
-    /// у горизонта всё равно только мерцает при минификации, а тайлов на её
-    /// покрытие уходит кратно больше. В плоском режиме крутизна выше: даль
-    /// целиком декоративна, приоритет за количеством тайлов.
+    /// Distance LOD steepness: 1.0 - honest perspective (one level per
+    /// distance doubling), higher - more aggressive coarsening of the far range.
+    /// Detail near the horizon only shimmers under minification anyway, while
+    /// covering it costs many times more tiles. In flat mode the steepness is
+    /// higher: the far range is purely decorative, tile count takes priority.
     private static func distanceLodSteepness(for renderSurfaceMode: ViewMode) -> Double {
         renderSurfaceMode == .flat ? 3.0 : 1.5
     }
 
-    /// Кап суммарного дистанционного понижения: глубже z-4 даль не падает.
+    /// Cap on the total distance drop: the far range never falls below z-4.
     private static let maximumDistanceDrop = 4
 
-    /// Плоское дальнее кольцо принадлежит подложке: за порогом
-    /// `farRingRelativeDistance` тайл не размещается вовсе, его область уже
-    /// закрашена сплошным z3-покрытием следа фрустума
-    /// (`TileCulling.resolveFlatBackdropTiles`, рисуется под основным
-    /// покрытием). Размещать z3-предка в основном наборе нельзя: он
-    /// продублировал бы подложку двойной отрисовкой, а при перекрытии с
-    /// ближним покрытием жадный выбор эскалировал бы его к свободному мелкому
-    /// предку, и кольцо превращалось бы в настоящие векторные тайлы z5-z9.
-    /// Без подложки (целевой зум не глубже z3) кольцо остаётся обычным
-    /// покрытием, иначе врапнутые мировые копии остались бы дырами.
+    /// The flat far ring belongs to the backdrop: beyond the
+    /// `farRingRelativeDistance` threshold the tile is not placed at all, its
+    /// area is already painted by the solid z3 coverage of the frustum footprint
+    /// (`TileCulling.resolveFlatBackdropTiles`, drawn beneath the main
+    /// coverage). Placing a z3 ancestor in the main set is not allowed: it
+    /// would duplicate the backdrop with double drawing, and when overlapping
+    /// the near coverage the greedy selection would escalate it to a free finer
+    /// ancestor, turning the ring into real z5-z9 vector tiles.
+    /// Without a backdrop (target zoom no deeper than z3) the ring stays regular
+    /// coverage, otherwise wrapped world copies would remain holes.
     private func isFarRingHandedToBackdrop(_ visibleTile: VisibleTile,
                                            distance: Int,
                                            renderSurfaceMode: ViewMode) -> Bool {
@@ -310,16 +310,16 @@ final class VisibleTilesPreprocessor {
 
     /// Maps relative distance and latitude coarsening to preferred demand zoom.
     ///
-    /// Экранный размер тайла в перспективе падает как 1/дистанция; лесенка
-    /// идёт от точного радиуса 2. Сфера (крутизна 1.5): дистанция 3 → z-1,
-    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4, за порогом кольца кламп к z3.
-    /// Плоскость (крутизна 3.0): 3 → z-2, 4 → z-3, 5+ → z-4, дальнее кольцо
-    /// сюда не доходит (выброшено в `isFarRingHandedToBackdrop`), кламп
-    /// срабатывает только для мелких целевых зумов, где он ничего не меняет.
+    /// A tile's on-screen size in perspective falls as 1/distance; the ladder
+    /// starts from the exact radius of 2. Sphere (steepness 1.5): distance 3 → z-1,
+    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4, beyond the ring threshold clamp to z3.
+    /// Flat (steepness 3.0): 3 → z-2, 4 → z-3, 5+ → z-4, the far ring never
+    /// reaches here (dropped in `isFarRingHandedToBackdrop`), the clamp
+    /// only fires for shallow target zooms where it changes nothing.
     ///
-    /// `latitudeDrop` добавляется к дистанционному понижению: оба эффекта
-    /// (перспектива и меркаторное сжатие) уменьшают экранный размер тайла
-    /// независимо.
+    /// `latitudeDrop` is added to the distance drop: both effects
+    /// (perspective and mercator compression) shrink a tile's on-screen size
+    /// independently.
     private func preferredZoom(for visibleTile: VisibleTile,
                                distance: Int,
                                latitudeDrop: Int,
@@ -342,10 +342,11 @@ final class VisibleTilesPreprocessor {
         return min(Self.maximumDistanceDrop, steepenedDrop)
     }
 
-    /// На сфере меркаторный тайл у полюса меньше экваторного в `cos(широты)` раз,
-    /// поэтому приполярные тайлы понижаются на `log2(1/cos)` уровней: плотность
-    /// покрытия на экран выравнивается с экваториальной. Широта берётся по краю
-    /// тайла, ближайшему к экватору, — консервативная оценка сжатия.
+    /// On the sphere a mercator tile near a pole is `cos(latitude)` times smaller
+    /// than an equatorial one, so near-polar tiles are lowered by `log2(1/cos)`
+    /// levels: on-screen coverage density is equalized with the equator. The
+    /// latitude is taken at the tile edge nearest the equator - a conservative
+    /// estimate of the compression.
     private func latitudeCoarseningDrop(for visibleTile: VisibleTile,
                                         renderSurfaceMode: ViewMode,
                                         transition: Float) -> Int {

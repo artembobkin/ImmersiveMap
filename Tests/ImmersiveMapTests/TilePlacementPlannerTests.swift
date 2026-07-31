@@ -140,8 +140,8 @@ final class TilePlacementPlannerTests: XCTestCase {
             previousContext: previousContext
         )
 
-        // Один прежний ребёнок закрывает четверть таргета - целиком регион
-        // может показать только удерживаемый предок.
+        // A single previous child covers a quarter of the target, so only the
+        // retained ancestor can show the region in full.
         XCTAssertEqual(context.tilePlacements.count, 1)
         guard let placement = context.tilePlacements.first else {
             return
@@ -152,9 +152,9 @@ final class TilePlacementPlannerTests: XCTestCase {
     }
 
     func testBuildPlacementsCoverageIgnoresNestedSourcesOnZoomOut() throws {
-        // 3 ребёнка z6 (75% площади) + 4 тайла z7, вложенных в первого ребёнка:
-        // сумма долей без учёта вложенности дала бы ровно 1.0, но реальное
-        // объединение - 75%, и целиком регион закрывает только предок.
+        // 3 z6 children (75% of the area) + 4 z7 tiles nested inside the first
+        // child: the sum of shares ignoring nesting would come to exactly 1.0,
+        // but the real union is 75%, and only the ancestor covers the whole region.
         let ancestorTile = Tile(x: 2, y: 1, z: 2)
         let targetTile = Tile(x: 17, y: 11, z: 5)
         let childTiles = [
@@ -195,9 +195,10 @@ final class TilePlacementPlannerTests: XCTestCase {
     }
 
     func testBuildPlacementsPrefersUnclippedRetainedSourceOverClippedPartialCarries() throws {
-        // Source == таргет удержан из прошлого контекста, но размещён в двух
-        // клипнутых дочерних слотах - реально закрашена лишь половина таргета.
-        // Полное покрытие даёт bestFullReplacement тем же тайлом без клипа.
+        // Source == target is retained from the previous context but placed in
+        // two clipped child slots, so only half of the target is actually
+        // painted. Full coverage comes from bestFullReplacement with the same
+        // tile unclipped.
         let targetTile = Tile(x: 17, y: 11, z: 5)
         let childA = Tile(x: 34, y: 22, z: 6)
         let childB = Tile(x: 35, y: 22, z: 6)
@@ -224,8 +225,8 @@ final class TilePlacementPlannerTests: XCTestCase {
     }
 
     func testBuildPlacementsPrefersDetailedRetainedCoveringSourceOverCoarserReadyParent() throws {
-        // «чётко → мыло»: удерживаемый детальный source не должен уступать
-        // только что материализовавшемуся более грубому родителю из кэша.
+        // "Sharp → blur": a retained detailed source must not lose to a coarser
+        // parent that has just materialized from the cache.
         let retainedTile = Tile(x: 17, y: 11, z: 5)
         let readyParentTile = Tile(x: 4, y: 2, z: 3)
         let targetTile = Tile(x: 34, y: 22, z: 6)
@@ -304,8 +305,8 @@ final class TilePlacementPlannerTests: XCTestCase {
             backdropZoomLevel: 3
         )
 
-        // Подложка того же зума уже нарисована слоем ниже: частичная деталь
-        // лучше, чем сплошная копия подложки поверх неё.
+        // A backdrop of the same zoom is already drawn a layer below: partial
+        // detail is better than a solid copy of the backdrop on top of it.
         XCTAssertEqual(context.tilePlacements.count, 1)
         XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, childTile)
         XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
@@ -334,7 +335,7 @@ final class TilePlacementPlannerTests: XCTestCase {
             backdropZoomLevel: 3
         )
 
-        // Родитель детальнее подложки по-прежнему выигрывает у дырявой детали.
+        // A parent more detailed than the backdrop still wins over holey detail.
         XCTAssertEqual(context.tilePlacements.count, 1)
         XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, readyParentTile)
         XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
@@ -356,14 +357,14 @@ final class TilePlacementPlannerTests: XCTestCase {
             backdropZoomLevel: 3
         )
 
-        // Совсем без контента: рисовать копию подложки поверх подложки незачем.
+        // No content at all: no point drawing a copy of the backdrop over the backdrop.
         XCTAssertTrue(context.tilePlacements.isEmpty)
     }
 
     func testBuildPlacementsBackdropLevelRetainedSourceDoesNotPoisonPartialCoverage() throws {
-        // Регресс зум-аута: слот, упавший в подложечный зум в прошлом кадре,
-        // не считается покрытием (source вне таргета) и не должен через
-        // bestFullReplacement снова затирать детальные partial-слоты.
+        // Zoom-out regression: a slot that fell to backdrop zoom in the previous
+        // frame does not count as coverage (source outside the target) and must
+        // not clobber detailed partial slots again via bestFullReplacement.
         let backdropTile = Tile(x: 4, y: 2, z: 3)
         let detailedChildTiles = [
             Tile(x: 34, y: 22, z: 6),

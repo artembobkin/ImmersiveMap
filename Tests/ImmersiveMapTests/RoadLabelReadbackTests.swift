@@ -35,8 +35,8 @@ final class RoadLabelReadbackTests: XCTestCase {
     }
 
     func testMakeRoadInstanceCandidatesRejectsInstanceWithInvisibleGlyph() {
-        // «Всё или ничего», как у прежнего CPU-пути: невидимый глиф
-        // (путь за камерой или короче лейбла) отменяет решение по инстансу.
+        // "All or nothing", like the previous CPU path: an invisible glyph
+        // (path behind the camera or shorter than the label) cancels the instance decision.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: 0),
             Self.makePlacement(position: .zero, angle: 0, visible: 0)
@@ -52,8 +52,8 @@ final class RoadLabelReadbackTests: XCTestCase {
     }
 
     func testMakeRoadInstanceCandidatesRejectsExtrapolatedGlyph() {
-        // Глиф, экстраполированный за конец пути, рисуется шейдером, но
-        // прежний CPU-путь такие инстансы не показывал - решение не принимается.
+        // A glyph extrapolated past the end of the path is drawn by the shader,
+        // but the previous CPU path did not show such instances - no decision is made.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: 0),
             Self.makePlacement(position: SIMD2<Float>(30, 40), angle: 0, extrapolated: 1)
@@ -69,8 +69,8 @@ final class RoadLabelReadbackTests: XCTestCase {
     }
 
     func testMakeRoadInstanceCandidatesRejectsSharpGlyphTurn() {
-        // Гейт maxGlyphTurnRadians по углам реально нарисованных глифов:
-        // резкий излом между соседними глифами скрывает инстанс.
+        // The maxGlyphTurnRadians gate over the angles of actually drawn glyphs:
+        // a sharp bend between adjacent glyphs hides the instance.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: 0),
             Self.makePlacement(position: SIMD2<Float>(30, 40), angle: 1.2)
@@ -91,8 +91,8 @@ final class RoadLabelReadbackTests: XCTestCase {
     }
 
     func testMakeRoadInstanceCandidatesNormalizesAngleWrapAroundPi() {
-        // Углы ±π - это один и тот же разворот (reverse добавляет π):
-        // дельта через нормализацию мала, инстанс не должен отбрасываться.
+        // Angles of ±π are the same turn (reverse adds π): after normalization
+        // the delta is small, the instance must not be rejected.
         let placements = [
             Self.makePlacement(position: SIMD2<Float>(10, 20), angle: .pi - 0.05),
             Self.makePlacement(position: SIMD2<Float>(30, 40), angle: -.pi + 0.05)

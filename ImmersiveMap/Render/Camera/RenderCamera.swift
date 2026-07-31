@@ -19,12 +19,12 @@ class RenderCamera {
     init() {}
 
     func recalculateProjection(aspect: Float) {
-        // Far-плоскость должна быть много дальше видимой земли: на плоской карте
-        // с наклоном линия среза far и есть видимый «горизонт», и при far = 20
-        // она прыгала на ~13 px при каждом пересечении целого зума (рендерный
-        // масштаб мира удваивается, а срез остаётся на тех же 20 единицах).
-        // При far = 200 срез лежит в пределах ~пикселя от линии схода, чьё
-        // положение от зума не зависит.
+        // The far plane must be much farther than the visible ground: on the flat map
+        // with tilt, the far clip line is the visible "horizon", and with far = 20
+        // it jumped ~13 px at every integer zoom crossing (the render world
+        // scale doubles while the clip stays at the same 20 units).
+        // With far = 200 the clip lies within ~a pixel of the vanishing line, whose
+        // position does not depend on zoom.
         self.projection = Matrix.perspectiveMatrix(fovRadians: Float.pi / 4, aspect: aspect, near: 0.01, far: 200.0)
         recalculateMatrix()
     }

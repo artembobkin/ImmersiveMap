@@ -19,8 +19,8 @@ struct TilePlacementState {
                                           renderedTilesCount: 0)
 
     let placeTilesContext: PlaceTilesContext
-    /// Размещения подложки горизонта плоского режима: рисуются под основным
-    /// покрытием и не участвуют в лейблах/проекциях. На глобусе пусто.
+    /// Placements of the flat-mode horizon backdrop: drawn under the main
+    /// coverage and excluded from labels/projections. Empty on the globe.
     let backdropPlaceTilesContext: PlaceTilesContext
     let tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext
     let placementVersion: UInt64

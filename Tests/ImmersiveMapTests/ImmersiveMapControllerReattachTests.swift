@@ -5,10 +5,10 @@
 import CoreGraphics
 import XCTest
 
-/// SwiftUI сначала создаёт новый representable, затем демонтирует старый.
-/// Отвязка контроллеров (камера, аватары, selection) обязана быть строго по
-/// владельцу: демонтаж устаревшего host view не должен стирать привязку,
-/// которую уже установил новый view для того же контроллера.
+/// SwiftUI first creates the new representable, then dismantles the old one.
+/// Controller detachment (camera, avatars, selection) must be strictly by
+/// owner: dismantling a stale host view must not erase the attachment the new
+/// view has already established for the same controller.
 @MainActor
 final class ImmersiveMapControllerReattachTests: XCTestCase {
     private final class Owner {}
@@ -27,7 +27,7 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
                                                                       longitudeDegrees: -30,
                                                                       zoom: 1.7))
 
-        // Демонтаж старого view приходит после привязки нового.
+        // The old view's dismantle arrives after the new one attaches.
         camera.detachRuntime(owner: oldOwner)
 
         camera.jump(to: ImmersiveMapCameraPosition(latitudeDegrees: 35.6595,
@@ -128,7 +128,7 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         XCTAssertNil(selection.currentSelection())
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private static func makeTestImage() throws -> CGImage {
         let bytesPerRow = 4

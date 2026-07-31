@@ -10,7 +10,7 @@ final class CameraPitchFollowTests: XCTestCase {
     }
 
     func testSteppedPitchHalvesGapAfterOneHalfLife() {
-        // За один half-life гэп до цели должен уменьшиться ровно вдвое.
+        // After one half-life the gap to the target must shrink exactly by half.
         let next = CameraPitchFollowMath.steppedPitch(current: 0,
                                                       target: 1,
                                                       deltaTime: 0.06,
@@ -25,7 +25,7 @@ final class CameraPitchFollowTests: XCTestCase {
         var pitch: Float = 0
         var time: CFTimeInterval = 0
         var didFinish = false
-        for _ in 0..<600 { // до 10 c при 60 fps — с запасом
+        for _ in 0..<600 { // up to 10 s at 60 fps — with headroom
             time += 1.0 / 60.0
             let step = follow.advance(currentPitch: pitch, currentTime: time)
             pitch = step.pitch
@@ -41,9 +41,9 @@ final class CameraPitchFollowTests: XCTestCase {
     }
 
     func testFollowStepIsFrameRateIndependent() {
-        // Экспоненциальная модель мультипликативна: остаток гэпа зависит только от суммарного
-        // прошедшего времени, а не от числа кадров. Значит 60 fps и 240 fps к одному моменту
-        // времени дают один и тот же pitch — это и есть устранение зависимости от частоты событий.
+        // The exponential model is multiplicative: the remaining gap depends only on the total
+        // elapsed time, not on the number of frames. Hence 60 fps and 240 fps yield the same
+        // pitch at the same point in time — which is exactly the removal of event-rate dependence.
         func pitch(afterSeconds seconds: CFTimeInterval, stepsPerSecond: Int) -> Float {
             let follow = CameraPitchFollow(configuration: enabledConfiguration())
             follow.retarget(1.0, currentTime: 0)
@@ -66,12 +66,12 @@ final class CameraPitchFollowTests: XCTestCase {
     }
 
     func testFollowStopsWhenPitchSaturatedAtCeiling() {
-        // Если фактический pitch уперся в потолок (setCameraPitch клампит и значение не меняется),
-        // а цель выше — follow обязан остановиться, иначе display link крутится бесконечно.
+        // If the actual pitch hits the ceiling (setCameraPitch clamps and the value stops changing)
+        // while the target is higher — follow must stop, otherwise the display link spins forever.
         let follow = CameraPitchFollow(configuration: enabledConfiguration())
         follow.retarget(2.0, currentTime: 0)
 
-        let saturatedPitch: Float = 1.0 // потолок; каждый кадр возвращаем одно и то же значение
+        let saturatedPitch: Float = 1.0 // the ceiling; every frame we return the same value
         var time: CFTimeInterval = 0
         var becameInactive = false
         for _ in 0..<10 {
@@ -88,7 +88,7 @@ final class CameraPitchFollowTests: XCTestCase {
     }
 
     func testDisabledFollowAppliesInstantly() {
-        // При выключенной настройке retarget возвращает false — вызывающий применяет pitch мгновенно.
+        // With the setting disabled, retarget returns false — the caller applies pitch instantly.
         let follow = CameraPitchFollow(configuration: CameraPitchFollow.Configuration(isEnabled: false,
                                                                                       halfLife: 0.06))
         XCTAssertFalse(follow.retarget(1.0, currentTime: 0))
@@ -105,7 +105,7 @@ final class CameraPitchFollowTests: XCTestCase {
             time += 1.0 / 60.0
             pitch = follow.advance(currentPitch: pitch, currentTime: time).pitch
         }
-        // Смена цели на лету не должна ронять follow и не должна телепортировать pitch.
+        // Changing the target mid-flight must neither break the follow nor teleport the pitch.
         follow.retarget(0.2, currentTime: time)
         XCTAssertTrue(follow.active)
 

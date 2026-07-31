@@ -67,8 +67,8 @@ final class DebugOverlayHUDView: UIView {
     private var selectedTab: SelectedTab = .stats
     private var tileTraceSnapshot = TileTraceRecorderSnapshot(isRecording: false, fileURL: nil)
     private var baseLabelTraceSnapshot = BaseLabelTraceRecorderSnapshot(isRecording: false, fileURL: nil)
-    /// Верхний safe-area inset host view: панель не заходит под статус-бар/вырез,
-    /// иначе шеврон сворачивания попадает в непрожимаемую зону.
+    /// The host view's top safe-area inset: the panel stays clear of the status
+    /// bar/notch, otherwise the collapse chevron lands in an untappable zone.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
             guard safeAreaTopInset != oldValue else { return }
@@ -488,9 +488,9 @@ final class DebugOverlayHUDView: UIView {
         updateContentVisibility()
     }
 
-    /// Не даёт панели уехать под статус-бар/вырез: верх контейнера прижимается
-    /// к safe area. Внутренние элементы позиционируются относительно контейнера,
-    /// поэтому сдвиг origin переносит их целиком.
+    /// Keeps the panel from sliding under the status bar/notch: the container's
+    /// top is pinned to the safe area. Inner elements are positioned relative to
+    /// the container, so shifting the origin moves them as a whole.
     private func containerFrameClampedToSafeArea(_ frame: CGRect) -> CGRect {
         var clamped = frame
         let minimumY = safeAreaTopInset + Layout.contentInset

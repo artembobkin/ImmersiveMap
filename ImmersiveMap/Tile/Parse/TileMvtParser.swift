@@ -675,9 +675,9 @@ class TileMvtParser {
                     // none defineded style
                     continue
                 }
-                // Линейный стиль (граница), пришедший площадной геометрией, не
-                // заливаем - иначе, например, индейские резервации в слое
-                // `boundary` рисуются сплошными полигонами.
+                // A line style (boundary) that arrived as area geometry is not
+                // filled - otherwise, for example, Indian reservations in the
+                // `boundary` layer are drawn as solid polygons.
                 if feature.type == .polygon, style.suppressPolygonFill {
                     continue
                 }

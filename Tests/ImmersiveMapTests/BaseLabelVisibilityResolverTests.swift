@@ -83,14 +83,14 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
             BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isRetained: 0, isValid: true, minCameraZoom: 0)
         ]
 
-        // Камера на z14: лейбл с порогом 16 скрыт, лейбл без порога виден.
+        // Camera at z14: the label with threshold 16 is hidden, the one without a threshold is visible.
         let atZoom14 = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                     collisionVisibility: [.visible, .visible],
                                                                     horizonVisibility: [true, true],
                                                                     cameraZoom: 14)
         XCTAssertEqual(atZoom14, [false, true])
 
-        // Камера на z16: порог достигнут - виден и iconless-лейбл.
+        // Camera at z16: the threshold is reached - the iconless label is visible too.
         let atZoom16 = BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
                                                                     collisionVisibility: [.visible, .visible],
                                                                     horizonVisibility: [true, true],
@@ -205,7 +205,7 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                               visibilityAlpha: 1)
         ]
 
-        // Ниже порога и полностью невидим - место в коллизиях не резервирует.
+        // Below the threshold and fully invisible - reserves no collision space.
         let suppressed = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                          screenPoints: screenPoints,
                                                                          horizonVisibility: [true],
@@ -214,7 +214,7 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                          cameraZoom: 14)
         XCTAssertFalse(suppressed[0].isEnabled)
 
-        // Тот же лейбл ещё затухает (alpha > 0) - продолжает удерживать место.
+        // The same label is still fading (alpha > 0) - keeps holding its space.
         let fading = BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: baseCandidates,
                                                                      screenPoints: screenPoints,
                                                                      horizonVisibility: [true],

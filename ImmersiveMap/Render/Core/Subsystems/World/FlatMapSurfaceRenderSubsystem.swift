@@ -34,8 +34,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: frameContext.services.settings.scene.mapClearColor)
 
-        // Подложка горизонта рисуется первой: основное покрытие ложится поверх
-        // (painter's order), а за его краем земля закрашена до самого горизонта.
+        // The horizon backdrop is drawn first: the main coverage lands on top
+        // (painter's order), and beyond its edge the ground is painted all the
+        // way to the horizon.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,

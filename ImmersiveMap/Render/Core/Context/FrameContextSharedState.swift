@@ -26,19 +26,19 @@ struct BaseLabelState {
     var hasActiveVisibilityCycle: Bool
 }
 
-/// Дебажная рамка одного базового лейбла в экранных пикселях: коллизионный
-/// AABB и текущая видимость (спрятанные коллизией/горизонтом лейблы тоже
-/// участвуют в кадре и должны быть видны в оверлее).
+/// Debug frame of one base label in screen pixels: the collision AABB and the
+/// current visibility (labels hidden by collision/horizon still participate in
+/// the frame and must show up in the overlay).
 struct BaseLabelDebugBox {
     let center: SIMD2<Float>
     let halfSize: SIMD2<Float>
     let isVisible: Bool
 }
 
-/// Снимок рамок лейблов для debug-оверлея. Заполняется только при включённом
-/// тумблере HUD, иначе пуст и ничего не стоит. Дорожные рамки идут отдельным
-/// списком (по глифу на рамку): они участвуют в том же коллизионном решателе,
-/// но рисуются своим цветом, чтобы отличаться от базовых.
+/// Snapshot of label frames for the debug overlay. Populated only when the
+/// HUD toggle is on, otherwise empty and free. Road frames go in a separate
+/// list (one frame per glyph): they take part in the same collision solver
+/// but are drawn in their own color to stand apart from the base ones.
 struct BaseLabelDebugBoxesState {
     nonisolated(unsafe) static let empty = BaseLabelDebugBoxesState(boxes: [], roadBoxes: [])
 
@@ -81,8 +81,8 @@ struct AvatarState {
 struct MarkerFrameState {
     static let empty = MarkerFrameState(snapshot: nil)
 
-    /// nil: маркеров нет, публиковать нечего. Пустой снапшот: маркеры есть,
-    /// но все скрыты, и UI обязан спрятать view.
+    /// nil: no markers, nothing to publish. Empty snapshot: markers exist,
+    /// but all are hidden, and the UI must hide the views.
     var snapshot: MarkerProjectionSnapshot?
 }
 

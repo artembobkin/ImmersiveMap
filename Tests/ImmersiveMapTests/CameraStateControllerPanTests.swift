@@ -5,11 +5,11 @@
 import simd
 import XCTest
 
-/// Пан на глобусе должен сохранять угловую скорость на любой широте: меркаторная
-/// дельта компенсируется на `cos(широты)`. Вертикальная компенсация полная на
-/// любом зуме; горизонтальная включается по зуму (на низких зумах виден весь
-/// глобус, и компенсированный горизонтальный свайп крутил бы его волчком).
-/// На плоской карте (transition = 1) дельта от широты не зависит.
+/// Panning the globe must preserve angular speed at any latitude: the mercator
+/// delta is compensated by `cos(latitude)`. Vertical compensation is full at
+/// any zoom; horizontal ramps in by zoom (at low zooms the whole globe is
+/// visible, and a compensated horizontal swipe would spin it like a top).
+/// On the flat map (transition = 1) the delta does not depend on latitude.
 final class CameraStateControllerPanTests: XCTestCase {
     private func panDelta(latitudeDegrees: Double,
                           zoom: Double,
@@ -29,7 +29,7 @@ final class CameraStateControllerPanTests: XCTestCase {
         let equator = panDelta(latitudeDegrees: 0, zoom: 5.5, transition: 0)
         let lat60 = panDelta(latitudeDegrees: 60, zoom: 5.5, transition: 0)
 
-        // cos(60°) = 0.5: на широте 60° меркаторная дельта вдвое больше экваторной.
+        // cos(60°) = 0.5: at latitude 60° the mercator delta is twice the equatorial one.
         XCTAssertEqual(lat60.x / equator.x, 2.0, accuracy: 1e-6)
         XCTAssertEqual(lat60.y / equator.y, 2.0, accuracy: 1e-6)
     }
@@ -38,8 +38,8 @@ final class CameraStateControllerPanTests: XCTestCase {
         let equator = panDelta(latitudeDegrees: 0, zoom: 1.5, transition: 0)
         let lat60 = panDelta(latitudeDegrees: 60, zoom: 1.5, transition: 0)
 
-        // Обзорный зум: вертикаль компенсируется, горизонталь крутит глобус
-        // с той же угловой скоростью, что и на экваторе.
+        // Overview zoom: the vertical is compensated, the horizontal spins the globe
+        // at the same angular speed as at the equator.
         XCTAssertEqual(lat60.x / equator.x, 1.0, accuracy: 1e-6)
         XCTAssertEqual(lat60.y / equator.y, 2.0, accuracy: 1e-6)
     }
@@ -66,7 +66,7 @@ final class CameraStateControllerPanTests: XCTestCase {
         XCTAssertTrue(nearLimit.y.isFinite)
     }
 
-    /// Угловая дельта широты от маленького вертикального пана на глобусе.
+    /// Angular latitude delta from a small vertical pan on the globe.
     private func angularLatitudeDelta(latitudeDegrees: Double) -> Double {
         let controller = CameraStateController(settings: ImmersiveMapSettings.default.camera)
         controller.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: latitudeDegrees,

@@ -5,8 +5,8 @@
 
 import AppKit
 
-/// AppKit-порт debug HUD. Геометрия и тексты совпадают с UIKit-версией:
-/// view flipped, layout ручной, контент собирает `DebugOverlayHUDTextComposer`.
+/// AppKit port of the debug HUD. Geometry and texts match the UIKit version:
+/// the view is flipped, layout is manual, content is composed by `DebugOverlayHUDTextComposer`.
 final class DebugOverlayHUDView: NSView {
     private enum SelectedTab: Int {
         case stats = 0
@@ -71,7 +71,7 @@ final class DebugOverlayHUDView: NSView {
     private var isPanelEnabled = false
     private var isCollapsed = false
     private var selectedTab: SelectedTab = .stats
-    /// Верхний safe-area inset host view; на macOS с обычным заголовком окна это 0.
+    /// The host view's top safe-area inset; on macOS with a regular window title bar this is 0.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
             guard safeAreaTopInset != oldValue else { return }
@@ -198,7 +198,7 @@ final class DebugOverlayHUDView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Public API (совпадает с UIKit-версией)
+    // MARK: - Public API (matches the UIKit version)
 
     func apply(snapshot: DebugOverlayHUDSnapshot?) {
         guard self.snapshot != snapshot else {
@@ -238,7 +238,7 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
-    /// Клики вне панели уходят карте.
+    /// Clicks outside the panel go to the map.
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard isHidden == false, let superview else {
             return nil
@@ -491,8 +491,8 @@ final class DebugOverlayHUDView: NSView {
         updateContentVisibility()
     }
 
-    /// Прижимает верх панели к safe area. Внутренние элементы позиционируются
-    /// относительно контейнера, поэтому сдвиг origin переносит их целиком.
+    /// Pins the panel top to the safe area. Inner elements are positioned
+    /// relative to the container, so shifting the origin moves them wholesale.
     private func containerFrameClampedToSafeArea(_ frame: CGRect) -> CGRect {
         var clamped = frame
         let minimumY = safeAreaTopInset + Layout.contentInset
@@ -809,7 +809,7 @@ final class DebugOverlayHUDView: NSView {
     }
 }
 
-/// Пустой flipped-контейнер: subview-раскладка сверху вниз, как в UIKit.
+/// Empty flipped container: subviews lay out top-down, as in UIKit.
 private final class DebugOverlayFlippedView: NSView {
     override var isFlipped: Bool { true }
 }

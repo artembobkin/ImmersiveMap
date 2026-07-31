@@ -19,10 +19,10 @@ struct VisibleContentState {
     let centerWorldMercator: SIMD2<Double>
     let center: Center
     let visibleTiles: [VisibleTile]
-    /// Подложка горизонта плоского режима: несколько очень грубых тайлов,
-    /// покрывающих след фрустума без радиусного клампа, - красят землю до
-    /// настоящего горизонта, чтобы край покрытия не «дорисовывался» при смене
-    /// целевого зума. Лейблы из них не извлекаются. На глобусе пусто.
+    /// Flat-mode horizon backdrop: a few very coarse tiles
+    /// covering the frustum footprint without the radius clamp - they paint the ground up to
+    /// the true horizon so the coverage edge isn't "drawn in" when the target
+    /// zoom changes. Labels are not extracted from them. Empty on the globe.
     let backdropTiles: [VisibleTile]
     let tileZoomLevel: Int
     let coverageVersion: UInt64

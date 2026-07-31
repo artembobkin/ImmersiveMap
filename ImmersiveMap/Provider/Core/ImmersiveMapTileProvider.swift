@@ -10,16 +10,16 @@ public protocol ImmersiveMapTileProvider: Sendable {
     var tileSource: ImmersiveMapTileSource { get }
     var maximumTileZoomLevel: Int? { get }
 
-    /// Атрибуция источника данных этих тайлов. Показывается бейджем карты, пока
-    /// приложение не переопределит ее через `attributionSettings`.
+    /// Attribution of the data source behind these tiles. Shown as the map badge
+    /// until the app overrides it via `attributionSettings`.
     var attribution: ImmersiveMapAttribution { get }
 }
 
 public extension ImmersiveMapTileProvider {
-    /// Провайдер, не объявивший атрибуцию, не получает ее от движка: пустой бейдж
-    /// честнее, чем чужие данные под брендом рендерера. Если источник требует
-    /// атрибуции (OSM и большинство открытых данных - требуют), задать ее обязан
-    /// автор провайдера.
+    /// A provider that declares no attribution gets none from the engine: an empty
+    /// badge is more honest than someone else's data under the renderer's brand.
+    /// If the source requires attribution (OSM and most open data do), the
+    /// provider's author is responsible for setting it.
     var attribution: ImmersiveMapAttribution { .none }
 }
 
@@ -79,9 +79,9 @@ public struct VectorTileProvider: ImmersiveMapTileProvider {
     public let maximumTileZoomLevel: Int?
     public let attribution: ImmersiveMapAttribution
 
-    /// - Parameter attribution: атрибуция источника тайлов. Для данных OpenStreetMap
-    ///   и других открытых данных она обязательна по лицензии, готовое значение для
-    ///   чистого OSM - `.openStreetMap`.
+    /// - Parameter attribution: attribution of the tile source. For OpenStreetMap
+    ///   data and other open data it is required by license; the ready-made value
+    ///   for pure OSM is `.openStreetMap`.
     public init(id: String,
                 cacheNamespace: String? = nil,
                 tileSource: ImmersiveMapTileSource,

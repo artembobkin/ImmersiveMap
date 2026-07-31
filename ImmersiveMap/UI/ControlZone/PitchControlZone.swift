@@ -6,8 +6,8 @@
 import CoreGraphics
 import UIKit
 
-/// Владеет pitch control zone и ее pan gesture.
-/// Переводит vertical drag в изменение camera pitch и сообщает состояние control interaction.
+/// Owns the pitch control zone and its pan gesture.
+/// Translates vertical drag into camera pitch changes and reports control interaction state.
 @MainActor
 final class PitchControlZone {
     private enum Layout {

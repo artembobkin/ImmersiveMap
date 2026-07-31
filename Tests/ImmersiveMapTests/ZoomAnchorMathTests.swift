@@ -6,9 +6,9 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Anchored zoom должен держать мировую точку под курсором на месте: проверяем
-/// инвариант полной рендер-проекцией (PresentationStateResolver + RenderCamera)
-/// до и после компенсации центра из `ZoomAnchorMath`.
+/// Anchored zoom must keep the world point under the cursor in place: we verify
+/// the invariant with the full render projection (PresentationStateResolver + RenderCamera)
+/// before and after the center compensation from `ZoomAnchorMath`.
 final class ZoomAnchorMathTests: XCTestCase {
     private let viewport = CGSize(width: 800, height: 600)
     private let presentationSettings = ImmersiveMapSettings.default.presentation
@@ -44,8 +44,8 @@ final class ZoomAnchorMathTests: XCTestCase {
         var stateAfter = stateBefore
         stateAfter.zoom = 2.6
 
-        // Точка недалеко от центра экрана: линейное приближение сферы точное
-        // только вблизи центра.
+        // A point not far from the screen center: the sphere's linear approximation is accurate
+        // only near the center.
         let pointLatitude = 12.0
         let pointLongitude = 23.0
         let anchor = try XCTUnwrap(projectToScreen(latitude: pointLatitude,
@@ -105,10 +105,10 @@ final class ZoomAnchorMathTests: XCTestCase {
         XCTAssertEqual(center, state.centerWorldMercator)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
-    /// Инвариант для плоской фазы: гео-точка, спроецированная в anchor до зума,
-    /// после anchored-зума проецируется в ту же экранную точку.
+    /// Invariant for the flat phase: a geo point projected into the anchor before the zoom
+    /// projects to the same screen point after the anchored zoom.
     private func assertFlatAnchorInvariant(zoomBefore: Double,
                                            zoomAfter: Double,
                                            bearing: Float,
@@ -176,9 +176,9 @@ final class ZoomAnchorMathTests: XCTestCase {
                                        pitch: 0)
     }
 
-    /// Проецирует гео-точку в экранные координаты view (top-left origin, points)
-    /// теми же формулами, что рендер: flat-мир либо сфера глобуса (transition 0)
-    /// + перспективная камера RenderCamera/RenderCameraPoseResolver.
+    /// Projects a geo point into view screen coordinates (top-left origin, points)
+    /// with the same formulas as the renderer: the flat world or the globe sphere (transition 0)
+    /// + the RenderCamera/RenderCameraPoseResolver perspective camera.
     private func projectToScreen(latitude: Double,
                                  longitude: Double,
                                  cameraState: ImmersiveMapCameraState) -> CGPoint? {
@@ -204,7 +204,7 @@ final class ZoomAnchorMathTests: XCTestCase {
             worldPosition = SIMD3<Float>(flatPosition.x, flatPosition.y, 0)
         case .globe:
             guard presentation.presentationState.transition == 0 else {
-                // Морфинг сферы в плоскость в тестовой проекции не воспроизводится.
+                // The sphere-to-plane morph is not reproduced in the test projection.
                 return nil
             }
             worldPosition = sphereWorldPosition(latitudeRadians: latitudeRadians,
@@ -222,8 +222,8 @@ final class ZoomAnchorMathTests: XCTestCase {
                        y: (1.0 - (Double(ndc.y) * 0.5 + 0.5)) * viewport.height)
     }
 
-    /// Сферическая позиция точки глобуса: формулы `GlobeProjectionConstants`
-    /// из AvatarSelectionProjector при transition 0.
+    /// Spherical position of a globe point: the `GlobeProjectionConstants` formulas
+    /// from AvatarSelectionProjector at transition 0.
     private func sphereWorldPosition(latitudeRadians: Double,
                                      longitudeRadians: Double,
                                      globeRenderState: GlobeRenderState) -> SIMD3<Float> {

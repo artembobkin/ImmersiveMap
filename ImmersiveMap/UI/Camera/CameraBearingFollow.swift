@@ -3,9 +3,9 @@
 
 import Foundation
 
-/// Time-based follower для camera bearing: контрол задает целевой угол мгновенно, а фактический
-/// bearing каждый кадр экспоненциально подводится к цели по кратчайшему угловому пути (half-life).
-/// Убирает дёрганье вращения от неравномерной частоты событий слайдера/жеста.
+/// Time-based follower for camera bearing: the control sets the target angle instantly, while the
+/// actual bearing converges to it exponentially every frame along the shortest angular path (half-life).
+/// Removes rotation jerkiness caused by the uneven event rate of the slider/gesture.
 final class CameraBearingFollow {
     struct Configuration {
         fileprivate let isEnabled: Bool
@@ -46,8 +46,8 @@ final class CameraBearingFollow {
         return isActive
     }
 
-    /// Задает новую цель. Возвращает false, если follow выключен настройкой — тогда вызывающий
-    /// должен применить bearing мгновенно (legacy-поведение без сглаживания).
+    /// Sets a new target. Returns false if follow is disabled by settings, in which case the caller
+    /// must apply the bearing instantly (legacy behavior without smoothing).
     @discardableResult
     func retarget(_ bearing: Float, currentTime: CFTimeInterval) -> Bool {
         guard configuration.isEnabled else {

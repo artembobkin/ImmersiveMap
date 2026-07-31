@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// Хранит причины, по которым цикл отрисовки должен продолжаться.
-/// Выбирает частоту кадров и pause-state для `CADisplayLink` на основе активности render loop.
+/// Keeps the reasons why the render loop must keep running.
+/// Picks the frame rate and pause state for the `CADisplayLink` based on render loop activity.
 final class RenderLoopPacing {
     enum Activity: String, CaseIterable {
         case interaction = "interaction"

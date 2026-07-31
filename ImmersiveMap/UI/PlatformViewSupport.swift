@@ -4,8 +4,8 @@
 #if canImport(UIKit)
 import UIKit
 
-/// Платформенный host view карты: UIKit на iOS, AppKit на macOS.
-/// Общие runtime-файлы ссылаются на этот typealias, а не на конкретный класс.
+/// The map's platform host view: UIKit on iOS, AppKit on macOS.
+/// Shared runtime files reference this typealias, not the concrete class.
 typealias ImmersiveMapHostView = ImmersiveMapUIView
 typealias PlatformEdgeInsets = UIEdgeInsets
 #elseif canImport(AppKit)

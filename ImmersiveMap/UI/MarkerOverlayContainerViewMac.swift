@@ -6,14 +6,14 @@
 import AppKit
 import SwiftUI
 
-/// Прозрачный контейнер SwiftUI-маркеров поверх Metal-слоя. Занимает весь
-/// host view, но клики получает только контент маркеров: «пустые» точки
-/// проваливаются в карту, и `MapGestureControllerMac` через `hitTest`
-/// автоматически подавляет жесты карты над интерактивным маркером
-/// (прецеденты: AttributionBadgeView, DebugOverlayHUDView).
+/// Transparent container for SwiftUI markers above the Metal layer. Occupies
+/// the whole host view, but only marker content receives clicks: "empty"
+/// points fall through to the map, and `MapGestureControllerMac` uses
+/// `hitTest` to automatically suppress map gestures over an interactive
+/// marker (precedents: AttributionBadgeView, DebugOverlayHUDView).
 final class MarkerOverlayContainerView: NSView {
-    /// Top-left origin, как у flipped `ImmersiveMapNSView`: математика
-    /// раскладки маркеров едина с UIKit.
+    /// Top-left origin, like the flipped `ImmersiveMapNSView`: marker layout
+    /// math is shared with UIKit.
     override var isFlipped: Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -22,8 +22,8 @@ final class MarkerOverlayContainerView: NSView {
     }
 }
 
-/// Обёртка одного маркера: владеет `NSHostingView` контента и переключает
-/// интерактивность через hitTest (у NSView нет isUserInteractionEnabled).
+/// Wrapper of a single marker: owns the content's `NSHostingView` and toggles
+/// interactivity via hitTest (NSView has no isUserInteractionEnabled).
 @MainActor
 final class MarkerOverlayItemHost {
     private final class ItemView: NSView {
@@ -49,7 +49,7 @@ final class MarkerOverlayItemHost {
         hostingView = NSHostingView(rootView: content)
         hostingView.sizingOptions = [.intrinsicContentSize]
         itemView = ItemView(frame: .zero)
-        // alphaValue требует слоя, host view и так layer-backed.
+        // alphaValue requires a layer; the host view is layer-backed anyway.
         itemView.wantsLayer = true
         itemView.isHidden = true
         hostingView.autoresizingMask = [.width, .height]

@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// Владеет avatar controller, подключенным к одному map view runtime.
-/// Связывает avatar mutations с selection/render runtimes и отдает avatar data в renderer.
+/// Owns the avatar controller attached to a single map view runtime.
+/// Bridges avatar mutations to the selection/render runtimes and feeds avatar data to the renderer.
 @MainActor
 final class ImmersiveMapAvatarRuntime: @preconcurrency AvatarRenderSource {
     private weak var controller: ImmersiveMapAvatarsController?

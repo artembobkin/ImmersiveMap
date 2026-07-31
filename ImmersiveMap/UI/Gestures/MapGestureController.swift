@@ -5,10 +5,10 @@
 
 import UIKit
 
-/// Владеет жестами основного полотна карты и переводит события UIKit в команды
-/// камеры, выбора и render-loop для `ImmersiveMapUIView`.
-/// Control-zone жестами не управляет, но отдает `panGesture`, чтобы зоны могли
-/// настроить приоритет распознавания через `require(toFail:)`.
+/// Owns the main map canvas gestures and translates UIKit events into camera,
+/// selection, and render-loop commands for `ImmersiveMapUIView`.
+/// Does not manage control-zone gestures, but exposes `panGesture` so zones can
+/// set up recognition priority via `require(toFail:)`.
 final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
     private enum InteractionGestureKind {
         case pan
@@ -60,10 +60,10 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         return false
     }
 
-    /// Касание, начавшееся на интерактивном SwiftUI-маркере, целиком уходит
-    /// его контенту: жесты карты (pan/pinch/rotation/tap/doubleTap) такое
-    /// касание не получают. Распознаватели висят на host view и без этого
-    /// фильтра видели бы касания всех subviews.
+    /// A touch that starts on an interactive SwiftUI marker goes entirely to
+    /// its content: the map gestures (pan/pinch/rotation/tap/doubleTap) never
+    /// receive such a touch. The recognizers are attached to the host view and
+    /// without this filter would see touches on all subviews.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldReceive touch: UITouch) -> Bool {
         guard let mapView,
@@ -106,8 +106,8 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
     }
 
-    /// Двойной tap приближает карту на один уровень зума к точке tap:
-    /// точка мира под пальцем остаётся на месте (см. `zoomAnchorFactor`).
+    /// Double tap zooms the map in by one zoom level toward the tap point:
+    /// the world point under the finger stays put (see `zoomAnchorFactor`).
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         guard let mapView,
               mapView.cameraRuntime.currentCameraState() != nil else {

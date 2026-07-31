@@ -87,8 +87,8 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
 
     float3 sphereWorldPosition = globeSphereWorldPosition(lat, lon, globe, rotation);
     float3 flatWorldPosition = globeFlatWorldPosition(lat, lon, globe, mapSize, panMercatorY);
-    // Та же волна разворота, что в вершиннике поверхности: проекции лейблов
-    // и футпринтов обязаны сидеть на фактической морф-геометрии.
+    // The same unfurl wave as in the surface vertex shader: label and
+    // footprint projections must sit on the actual morph geometry.
     float frontDot = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6);
     float localTransition = globeTransitionLocalPhase(globe.transition, frontDot);
     float3 worldPosition = mix(sphereWorldPosition, flatWorldPosition, localTransition);
@@ -100,13 +100,13 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
 }
 
 static inline float globeVisibilityHorizonThreshold(constant Globe& globe) {
-    // Порог ослабляется непрерывно по всему морфу и в масштабе геометрии.
-    // Прежний mix(R², -1e6, smoothstep(0.8, 0.95, t)) из-за огромного -1e6
-    // проваливался ниже минимально возможного dot уже при fade ≈ 0.0003 -
-    // фактически ступенька ровно на t = 0.8: загоризонтная геометрия
-    // вспыхивала одним кадром. -4R² ниже минимума dot любой точки сферы,
-    // так что к t = 0.95 каллинг полностью выключен, как и раньше, но путь
-    // к этому - плавный.
+    // The threshold relaxes continuously across the whole morph and at geometry scale.
+    // The previous mix(R², -1e6, smoothstep(0.8, 0.95, t)), due to the huge -1e6,
+    // dropped below the minimum possible dot already at fade ≈ 0.0003 -
+    // effectively a step exactly at t = 0.8: beyond-horizon geometry
+    // flashed in for a single frame. -4R² is below the minimum dot of any point on the sphere,
+    // so by t = 0.95 culling is fully off, as before, but the path
+    // there is smooth.
     float horizonFade = smoothstep(0.0, 0.95, globe.transition);
     float radiusSquared = globe.radius * globe.radius;
     return mix(radiusSquared, -4.0 * radiusSquared, horizonFade);

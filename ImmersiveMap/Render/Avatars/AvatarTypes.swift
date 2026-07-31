@@ -179,14 +179,14 @@ struct AvatarBatteryBadgeStyle {
     }
 }
 
-/// Круглый bubble-счётчик merged-маркера: сидит на правом верхнем крае тела
-/// и выступает над ним.
+/// Round bubble counter of a merged marker: sits on the top-right edge of the body
+/// and protrudes above it.
 struct AvatarCountBadgeStyle {
     static let sizeRatio: Float = 0.40
     static let minimumSizePx: Float = 46.0
-    /// Смещение центра bubble внутрь от правого края тела, в долях диаметра.
+    /// Offset of the bubble center inward from the body's right edge, as a fraction of the diameter.
     static let horizontalInsetRatio: Float = 0.18
-    /// Смещение центра bubble вниз от верха тела, в долях диаметра.
+    /// Offset of the bubble center down from the top of the body, as a fraction of the diameter.
     static let verticalInsetRatio: Float = 0.15
 
     let gpu: AvatarCountBadgeStyleGPU

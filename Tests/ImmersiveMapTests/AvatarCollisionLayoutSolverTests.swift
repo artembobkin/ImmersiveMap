@@ -7,14 +7,14 @@ import simd
 import XCTest
 
 final class AvatarCollisionLayoutSolverTests: XCTestCase {
-    /// Тестовая геометрия: тело пина радиуса 50, видимый кружок 46, центр
-    /// тела на 55px выше якоря.
+    /// Test geometry: pin body of radius 50, visible circle 46, body center
+    /// 55px above the anchor.
     private static let geometry = AvatarCollisionGeometry(markerSizePx: 100.0,
                                                           bodyRadiusPx: 50.0,
                                                           circleBodyRadiusPx: 46.0,
                                                           bodyCenterOffsetPx: 55.0)
 
-    // MARK: - Расталкивание и форма
+    // MARK: - Displacement and shape
 
     func testLoneMarkerStaysAtAnchorAsFullSizedPin() throws {
         let solver = AvatarCollisionLayoutSolver()
@@ -43,8 +43,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                 markers: markers,
                                                 config: config)
 
-        // Три и более вплотную: доминанта нет, все показываются кружочками
-        // заметно меньше пина, в пределах [compressedScale, displacedCircleScale].
+        // Three or more packed tight: no dominant, all show as circles
+        // noticeably smaller than a pin, within [compressedScale, displacedCircleScale].
         for item in layout.markerItems {
             XCTAssertEqual(item.morph, 1.0, accuracy: 0.01)
             XCTAssertLessThanOrEqual(item.displayScale, AvatarCollisionMath.displacedCircleScale + 0.001)
@@ -54,8 +54,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testPairKeepsDominantPinAndYieldsCircle() throws {
-        // Пара касающихся маркеров: один сохраняет обычную форму на месте,
-        // второй превращается в кружок и отодвигается.
+        // A pair of touching markers: one keeps its normal shape in place,
+        // the other turns into a circle and moves away.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = [
@@ -78,8 +78,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testYieldingCircleTouchesDominantWithoutGap() throws {
-        // Щель между маркерами недопустима: уступивший кружок прилегает к
-        // доминанту вплотную (по видимым радиусам тел, зазор < 1.5px).
+        // A gap between markers is not allowed: the yielding circle sits flush
+        // against the dominant (by visible body radii, gap < 1.5px).
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = [
@@ -99,14 +99,15 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testPinReactsOnlyToActualCircleBodyNotFullSizeGhost() throws {
-        // Кейс с зум-аутом: сосед уже уступил доминанту и стал кружком.
-        // Третий маркер, чьё полное тело пересекло бы ПОЛНОЕ тело соседа, но
-        // не его фактический кружок, обязан остаться пином на месте - кружок
-        // не «давит» с дистанции своего бывшего полного радиуса.
-        // Колонна из двух компонентов: пара {1, 2} (доминант + уступающий
-        // кружок, уезжающий вниз) и отдельный id3, чьё якорное тело не
-        // касается якорного тела id2. В прогоне A полное тело сдвинутого id2
-        // упирается в id3, но фактический кружок id2 до него не достаёт.
+        // Zoom-out case: a neighbor has already yielded to the dominant and
+        // become a circle. A third marker whose full body would intersect the
+        // neighbor's FULL body, but not its actual circle, must stay a pin in
+        // place: the circle does not "push" from the distance of its former
+        // full radius.
+        // A column of two components: pair {1, 2} (dominant + yielding circle
+        // sliding down) and a separate id3 whose anchored body does not touch
+        // id2's anchored body. In pass A the full body of the displaced id2
+        // presses into id3, but id2's actual circle does not reach it.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = [
@@ -123,7 +124,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         let bystander = try XCTUnwrap(layout.markerItems.first { $0.marker.id == 3 })
         XCTAssertEqual(dominant.morph, 0.0)
         XCTAssertEqual(yielded.morph, 1.0, accuracy: 0.01)
-        // Свидетель не тронут: полный пин ровно на своей геоточке.
+        // The witness is untouched: a full pin exactly on its geo point.
         XCTAssertEqual(bystander.morph, 0.0, accuracy: 0.05)
         XCTAssertEqual(bystander.displayScale, 1.0, accuracy: 0.01)
         XCTAssertEqual(bystander.screenPoint.position, SIMD2(400, 505))
@@ -131,8 +132,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testThreeCloseMarkersAllBecomeCircles() throws {
-        // Требование: три аватара вплотную показываются кружочками все, без
-        // «основного» пина с ромашкой вокруг.
+        // Requirement: three avatars packed tight all show as circles, with no
+        // "primary" pin with a daisy around it.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = try (1...3).map { id in
@@ -152,9 +153,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testMarkersDoNotReactBeforeBodiesTouch() throws {
-        // Физичность: пока полноразмерные тела не касаются, никто не сжимается
-        // и не сдвигается. Тела радиуса 50 с центрами выше якорей на 55:
-        // дистанция якорей 101 оставляет зазор в 1px.
+        // Physicality: until full-size bodies touch, nobody compresses or
+        // moves. Bodies of radius 50 with centers 55 above the anchors:
+        // an anchor distance of 101 leaves a 1px gap.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = [
@@ -173,8 +174,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testCrowdCompressesCirclesDownToLimitOnly() throws {
-        // Толпа с зажатым maxOffsetPx: кружки сжимаются по-разному, но не
-        // ниже лимита compressedScale.
+        // A crowd with a clamped maxOffsetPx: circles compress by different
+        // amounts, but never below the compressedScale limit.
         var config = Self.makeConfig()
         config.maxOffsetPx = 60.0
         let solver = AvatarCollisionLayoutSolver()
@@ -196,8 +197,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testMixedPinAndCircleBodiesDoNotOverlap() throws {
-        // Выбранный полноразмерный пин против сдвинутых кружков: тела смещены
-        // от якорей по-разному, солвер обязан разводить именно центры тел.
+        // A selected full-size pin against displaced circles: bodies are offset
+        // from their anchors differently; the solver must separate the body centers themselves.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = try (1...6).map { id in
@@ -248,8 +249,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                        config: Self.makeConfig(),
                                        time: &time)
 
-        // Доминант id 1 исчез: уступавший кружок id 2 возвращается на свою
-        // геоточку и снова становится полноразмерным пином.
+        // Dominant id 1 disappeared: the yielding circle id 2 returns to its
+        // geo point and becomes a full-size pin again.
         let layout = try Self.solveUntilSettled(solver: solver,
                                                 markers: [try Self.makeProjected(id: 2, position: SIMD2(410, 300))],
                                                 config: Self.makeConfig(),
@@ -272,7 +273,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                 markers: markers,
                                                 config: config)
 
-        // maxOffsetPx ограничивает вынос тела: сравниваются центры тел.
+        // maxOffsetPx limits body displacement: body centers are compared.
         for item in layout.markerItems {
             let displacedCenter = Self.bodyCenter(of: item)
             let restingCenter = item.anchorScreenPoint.position
@@ -339,10 +340,10 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testBorderlineContactSettlesWithoutSizeOscillation() throws {
-        // Парадоксальная зона: полноразмерным телам места чуть не хватает, а
-        // кружкам хватает с запасом. Раньше радиус узла зависел от сглаженного
-        // морфа, и маркер бесконечно дёргался пин <-> кружок. Цели решаются
-        // двухпрогонной схемой и обязаны сходиться к неподвижной точке.
+        // The paradoxical zone: full-size bodies barely lack room while
+        // circles fit with margin. Previously the node radius depended on the
+        // smoothed morph and the marker jittered pin <-> circle forever. The
+        // targets are solved by a two-pass scheme and must converge to a fixed point.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         let markers = [
@@ -372,9 +373,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testTransientFramesNeverShowBodyOverlaps() throws {
-        // Резкая перестройка (анкеры телепортируются вплотную): сглаживание
-        // отстаёт от целей, но финальный проход обязан разрешать наложения
-        // отображаемых тел в КАЖДОМ кадре, а не только после сходимости.
+        // An abrupt rearrangement (anchors teleport right next to each other):
+        // smoothing lags behind the targets, but the final pass must resolve
+        // overlaps of the displayed bodies in EVERY frame, not only after convergence.
         let config = Self.makeConfig()
         let solver = AvatarCollisionLayoutSolver()
         var time: TimeInterval = 0
@@ -416,8 +417,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
             ($0.marker.id, $0.screenPoint.position - $0.anchorScreenPoint.position)
         })
 
-        // Телепорт анкеров (аналог перескока через шов wrap-а мира): смещения
-        // хранятся относительно якоря и не должны всплеснуть.
+        // Anchor teleport (analogous to jumping across the world wrap seam):
+        // offsets are stored relative to the anchor and must not spike.
         time += 1.0 / 60.0
         let jumped = solver.solve(projectedMarkers: [
                                       try Self.makeProjected(id: 1, position: SIMD2(5400, 300)),
@@ -434,7 +435,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         }
     }
 
-    // MARK: - Цветок-кластер
+    // MARK: - Flower cluster
 
     func testEventPolicyPairFormsTwoPetalFlower() throws {
         let solver = AvatarCollisionLayoutSolver()
@@ -473,10 +474,10 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         let group = try XCTUnwrap(layout.flowerGroups.first)
         XCTAssertEqual(group.memberIDs.count, 12)
         XCTAssertEqual(group.visibleMemberIDs.count, AvatarCollisionMath.maxFlowerPetals)
-        // Не вместившиеся участники не показываются вовсе.
+        // Members that do not fit are not shown at all.
         XCTAssertEqual(layout.markerItems.count, AvatarCollisionMath.maxFlowerPetals)
 
-        // Лепестки стоят на кольце цветка кружками минимального масштаба.
+        // Petals stand on the flower ring as circles at minimum scale.
         let petalBodyRadius = Self.geometry.circleBodyRadiusPx * config.compressedScale
         let ringRadius = AvatarCollisionMath.flowerRingRadius(petalBodyRadius: petalBodyRadius,
                                                               petalCount: AvatarCollisionMath.maxFlowerPetals)
@@ -489,9 +490,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testPetalsHoldSlotsUnderCrowdPressure() throws {
-        // Плотная толпа вокруг цветка: финальная коррекция не должна
-        // выталкивать лепестки из слотов (лепестки неподвижны, уступают
-        // только свободные кружки).
+        // A dense crowd around the flower: the final correction must not
+        // push petals out of their slots (petals are immovable; only free
+        // circles yield).
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
@@ -520,8 +521,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testTenPiledMarkersFormFlowerWithDefaultSettings() throws {
-        // Куча заметно больше дефолтного порога сворачивается в цветок, а не
-        // в хаотичную кучу свободных кружков; лишние участники скрываются.
+        // A pile noticeably larger than the default threshold collapses into a
+        // flower rather than a chaotic heap of free circles; extra members are hidden.
         var config = ImmersiveMapSettings.default.avatars
         config.smoothing = 0.35
         let solver = AvatarCollisionLayoutSolver()
@@ -541,8 +542,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testDefaultGroupingBoundaryIsFiveMarkers() throws {
-        // Дефолтная граница группировки: куча из пяти сворачивается в цветок,
-        // четыре вплотную остаются свободными кружками без кластера.
+        // Default grouping boundary: a pile of five collapses into a flower;
+        // four packed tight remain free circles with no cluster.
         var config = ImmersiveMapSettings.default.avatars
         config.smoothing = 0.35
         XCTAssertEqual(config.groupingThreshold, 5)
@@ -575,7 +576,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         config.groupingThreshold = 1
         let solver = AvatarCollisionLayoutSolver()
         var time: TimeInterval = 0
-        // enterR = 35, exitR = 45.5 при markerSizePx = 100.
+        // enterR = 35, exitR = 45.5 at markerSizePx = 100.
 
         func solveOnce(distance: Float) throws -> AvatarCollisionLayout {
             time += 1.0 / 60.0
@@ -614,7 +615,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         XCTAssertEqual(layout.flowerGroups.count, 1)
         let group = try XCTUnwrap(layout.flowerGroups.first)
         XCTAssertEqual(group.memberIDs, [2, 3, 5])
-        // Выбранный участник гарантированно среди видимых лепестков и первым.
+        // The selected member is guaranteed among visible petals and comes first.
         XCTAssertEqual(group.visibleMemberIDs.first, 5)
         XCTAssertEqual(layout.markerItems.count, 3)
     }
@@ -623,9 +624,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
-        // Тройка образует цветок с центроидом в (400, 300.67). Сосед id 8
-        // фактически касается ближайшего лепестка; сосед id 9 попадает лишь в
-        // невидимый описанный круг кольца и трогаться не должен.
+        // The trio forms a flower with the centroid at (400, 300.67). Neighbor
+        // id 8 actually touches the nearest petal; neighbor id 9 only falls
+        // inside the ring's invisible circumscribed circle and must not be touched.
         let markers = [
             try Self.makeProjected(id: 1, position: SIMD2(398, 300)),
             try Self.makeProjected(id: 2, position: SIMD2(402, 300)),
@@ -640,13 +641,13 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         XCTAssertEqual(layout.flowerGroups.count, 1)
         let group = try XCTUnwrap(layout.flowerGroups.first)
         XCTAssertEqual(group.memberIDs, [1, 2, 3])
-        // Кластер стоит на центроиде своих якорей: соседи его не сдвигают.
+        // The cluster stands on the centroid of its anchors: neighbors do not move it.
         XCTAssertLessThan(simd_length(group.center - SIMD2(400.0, 300.6666)), 0.01)
-        // Касающийся лепестка сосед уступает: сдвинут и превращён в кружок.
+        // The neighbor touching a petal yields: displaced and turned into a circle.
         let touching = try XCTUnwrap(layout.markerItems.first { $0.marker.id == 8 })
         XCTAssertGreaterThan(simd_length(touching.screenPoint.position - touching.anchorScreenPoint.position), 5.0)
         XCTAssertGreaterThan(touching.morph, 0.5)
-        // Сосед в зоне описанного круга, но вне лепестков - нетронутый пин.
+        // The neighbor inside the circumscribed circle but away from the petals: an untouched pin.
         let bystander = try XCTUnwrap(layout.markerItems.first { $0.marker.id == 9 })
         XCTAssertEqual(bystander.screenPoint.position, SIMD2(475, 380))
         XCTAssertEqual(bystander.morph, 0.0, accuracy: 0.05)
@@ -654,8 +655,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testOverlappingFlowersMergeIntoOne() throws {
-        // Два цветка неподвижны и не могут уступить друг другу: пересечение
-        // колец разрешается слиянием в один цветок.
+        // Two flowers are immovable and cannot yield to each other: ring
+        // overlap is resolved by merging into a single flower.
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
@@ -678,9 +679,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testSelectedTouchingFlowerJoinsItAsPetal() throws {
-        // Якорь выбранного вне радиуса группировки, но его неподвижное тело
-        // касается кольца цветка: конфликт двух жёстких тел разрешается
-        // включением выбранного в цветок первым лепестком.
+        // The selected marker's anchor is outside the grouping radius, but its
+        // immovable body touches the flower ring: the conflict of two rigid
+        // bodies is resolved by including the selected one in the flower as the first petal.
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
@@ -702,8 +703,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testMarkerAnchoredInsideRingIsAbsorbed() throws {
-        // Якорь маркера внутри кольца цветка: пружина вечно тянула бы его в
-        // цветок, поэтому он поглощается кучей.
+        // The marker's anchor is inside the flower ring: the spring would pull
+        // it into the flower forever, so it is absorbed by the pile.
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
@@ -736,7 +737,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                time: &time)
         XCTAssertEqual(piled.markerItems.count, AvatarCollisionMath.maxFlowerPetals)
 
-        // Разлёт анкеров: цветок распадается, скрытые участники возвращаются.
+        // Anchors fly apart: the flower disbands, hidden members return.
         let spreadMarkers = try (1...9).map { id in
             try Self.makeProjected(id: UInt64(id),
                                    position: SIMD2(Float(id) * 400.0, 300))
@@ -749,13 +750,13 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         XCTAssertEqual(spread.markerItems.count, 9)
     }
 
-    // MARK: - Локальность кластеров
+    // MARK: - Cluster locality
 
     func testSprawlingChainSplitsIntoLocalFlowers() throws {
-        // Цепочка маркеров через пол-экрана связана попарно, но кластер обязан
-        // быть локальным: компонента-переросток режется мировой сеткой, и
-        // якорь каждого участника остаётся рядом со своим кольцом (раньше
-        // цепочка сворачивалась в один цветок с конусами через весь экран).
+        // A marker chain spanning half the screen is pairwise connected, but a
+        // cluster must be local: an overgrown component is cut by the world
+        // grid, and each member's anchor stays near its ring (previously the
+        // chain collapsed into one flower with cones across the whole screen).
         var config = Self.makeConfig()
         config.groupingThreshold = 3
         let solver = AvatarCollisionLayoutSolver()
@@ -783,9 +784,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testWorldGridSplitIsStableUnderPan(){
-        // Пан сдвигает экранные позиции при неизменных мировых: состав
-        // разрезанных кластеров не должен пересобираться (сетка привязана
-        // к миру, а не к экрану).
+        // Panning shifts screen positions while world positions stay fixed:
+        // the composition of the cut clusters must not be rebuilt (the grid is
+        // anchored to the world, not the screen).
         var config = Self.makeConfig()
         config.groupingThreshold = 3
 
@@ -812,9 +813,9 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
     }
 
     func testUnmergeableIntersectingRingsSeparateWithoutOverlap() throws {
-        // Плотная пятёрка и длинная цепочка рядом: их кольца пересекаются, но
-        // слияние запрещено лимитом компактности. Кольца разводятся - уступает
-        // меньший состав, лепестки двух цветков не накладываются.
+        // A dense five and a long chain nearby: their rings intersect, but
+        // merging is forbidden by the compactness limit. The rings are pushed
+        // apart: the smaller group yields, petals of the two flowers do not overlap.
         var config = Self.makeConfig()
         config.groupingThreshold = 2
         let solver = AvatarCollisionLayoutSolver()
@@ -834,17 +835,17 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         XCTAssertEqual(layout.flowerGroups.count, 2, "Кластеры слились, хотя лимит компактности должен запрещать")
         let small = try XCTUnwrap(layout.flowerGroups.first { $0.memberIDs.count == 5 })
         let large = try XCTUnwrap(layout.flowerGroups.first { $0.memberIDs.count == 9 })
-        // Большой стоит на центроиде своих якорей, маленький уступил.
+        // The large one stands on the centroid of its anchors; the small one yielded.
         XCTAssertLessThan(simd_length(large.center - SIMD2<Float>(450.0, 435.0)), 1.0)
         XCTAssertGreaterThan(simd_length(small.center - SIMD2<Float>(401.5, 300.0)), 1.0)
         try Self.assertNoBodyOverlaps(layout: layout, config: config, tolerance: 1.5)
     }
 
     func testDenseMosaicOfFlowersHasNoPetalOverlaps() throws {
-        // Сплошное плотное поле: разрез даёт мозаику соседних цветков, чьим
-        // кольцам не хватает площади. Лепестки разных кластеров обязаны
-        // разводиться финальной коррекцией - наложение лепесток-лепесток
-        // (оба «неподвижные») раньше замерзало навсегда.
+        // A solid dense field: the cut yields a mosaic of adjacent flowers
+        // whose rings lack area. Petals of different clusters must be pushed
+        // apart by the final correction: a petal-petal overlap (both
+        // "immovable") used to freeze forever.
         var config = Self.makeConfig()
         config.groupingThreshold = 5
         let solver = AvatarCollisionLayoutSolver()
@@ -868,7 +869,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         try Self.assertNoBodyOverlaps(layout: layout, config: config, tolerance: 1.5)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private static func makeConfig() -> ImmersiveMapSettings.AvatarSettings {
         var config = ImmersiveMapSettings.default.avatars
@@ -916,8 +917,8 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         return layout
     }
 
-    /// Проверяет отсутствие визуальных пересечений: сравниваются центры и
-    /// радиусы фактических (сжатых) тел.
+    /// Verifies the absence of visual overlaps: centers and radii of the
+    /// actual (compressed) bodies are compared.
     private static func assertNoBodyOverlaps(layout: AvatarCollisionLayout,
                                              config: ImmersiveMapSettings.AvatarSettings,
                                              tolerance: Float = 1.0,

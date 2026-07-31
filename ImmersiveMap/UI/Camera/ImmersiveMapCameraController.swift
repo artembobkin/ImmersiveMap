@@ -10,16 +10,16 @@ enum ImmersiveMapCameraCommand {
     case setAngleTarget(bearing: Float, pitch: Float)
 }
 
-/// Public command/callback surface для app-driven camera control.
-/// Копит команды до подключения к view и хранит latest camera position для callers.
+/// Public command/callback surface for app-driven camera control.
+/// Accumulates commands until attached to a view and keeps the latest camera position for callers.
 public final class ImmersiveMapCameraController {
     private let lock = NSLock()
     private var currentPosition: ImmersiveMapCameraPosition?
     private var currentSnapshot: ImmersiveMapCameraSnapshot?
     private var pendingCommands: [ImmersiveMapCameraCommand] = []
     private var commandHandler: ((ImmersiveMapCameraCommand) -> Void)?
-    /// Владелец текущей привязки (camera runtime конкретного host view).
-    /// Читается и пишется только на main (см. performOnMain).
+    /// Owner of the current attachment (the camera runtime of a specific host view).
+    /// Read and written only on main (see performOnMain).
     private weak var runtimeOwner: AnyObject?
 
     public var onMapBackgroundTap: (() -> Void)?
@@ -27,8 +27,8 @@ public final class ImmersiveMapCameraController {
     public var onCameraPositionChanged: ((ImmersiveMapCameraPosition) -> Void)?
     public var onCameraSnapshotChanged: ((ImmersiveMapCameraSnapshot) -> Void)?
 
-    /// Внутренние подписчики начала пользовательского жеста (например, камера-тур).
-    /// Отдельный список, чтобы не конфликтовать с публичным `onUserInteractionBegan`.
+    /// Internal subscribers to the start of a user gesture (e.g. the camera tour).
+    /// A separate list so as not to conflict with the public `onUserInteractionBegan`.
     @MainActor private var userInteractionObservers: [UUID: () -> Void] = [:]
 
     public init() {}
@@ -48,8 +48,8 @@ public final class ImmersiveMapCameraController {
         enqueue(.cancelFlight)
     }
 
-    /// Плавно ведет углы камеры (bearing/pitch, в радианах) к цели — для интерактивных контролов.
-    /// В отличие от `jump`, фактические углы подводятся к цели покадрово (сглаживание).
+    /// Smoothly steers the camera angles (bearing/pitch, in radians) toward the target, for interactive controls.
+    /// Unlike `jump`, the actual angles approach the target frame by frame (smoothing).
     func setCameraAngleTarget(bearingRadians: Float, pitchRadians: Float) {
         enqueue(.setAngleTarget(bearing: bearingRadians, pitch: pitchRadians))
     }
@@ -66,8 +66,8 @@ public final class ImmersiveMapCameraController {
         return currentSnapshot
     }
 
-    /// Привязывает контроллер к runtime карты и реиграет накопленные команды.
-    /// `owner` запоминается, чтобы отвязка была строго по владельцу.
+    /// Attaches the controller to the map runtime and replays the accumulated commands.
+    /// `owner` is remembered so detaching is strictly owner-scoped.
     func attachRuntime(owner: AnyObject,
                        commandHandler: @escaping (ImmersiveMapCameraCommand) -> Void) {
         performOnMain {
@@ -79,10 +79,10 @@ public final class ImmersiveMapCameraController {
         }
     }
 
-    /// Отвязывает контроллер только если им всё ещё владеет `owner`.
-    /// SwiftUI сначала создаёт новый host view, затем демонтирует старый:
-    /// демонтаж старого не должен стирать привязку и кэши, которые уже
-    /// установил новый view для того же контроллера.
+    /// Detaches the controller only if `owner` still owns it.
+    /// SwiftUI first creates the new host view and then dismantles the old one:
+    /// dismantling the old view must not wipe the attachment and caches that
+    /// the new view has already installed for the same controller.
     func detachRuntime(owner: AnyObject) {
         performOnMain {
             guard self.runtimeOwner === owner else {

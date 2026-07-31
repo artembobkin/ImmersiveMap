@@ -7,8 +7,8 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
     func testAvatarFragmentMorphsBetweenMarkerSDFAndBodyCircle() throws {
         let source = try shaderSource(named: "AvatarRender.metal")
 
-        // Форма всегда стартует с MTSDF-пина и морфится в аналитический круг
-        // тела по per-instance morph; маски ниже читают только смешанный SDF.
+        // The shape always starts from the MTSDF pin and morphs into the
+        // analytic body circle by per-instance morph; the masks below read only the blended SDF.
         XCTAssertTrue(source.contains("decodeSignedDistanceTexels"))
         XCTAssertTrue(source.contains("sdfTexture.sample"))
         XCTAssertTrue(source.contains("float circleDistanceTexels"))
@@ -41,9 +41,9 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
     func testBeamShaderStartsAtTrueAnchorAndFollowsCompression() throws {
         let source = try shaderSource(named: "AvatarBeam.metal")
 
-        // Конус с вершиной в истинной геоточке и основанием на касательных
-        // точках кружка («от края до края»); проявление - по длине смещения
-        // якоря, поэтому луч есть только у сдвинутых кружочков.
+        // A cone with the apex at the true geo point and the base at the
+        // circle's tangent points ("edge to edge"); it fades in by the anchor
+        // offset length, so only displaced circles get the ray.
         XCTAssertTrue(source.contains("float2 anchor = point.position;"))
         XCTAssertTrue(source.contains("style.markerCenterOffsetPx * offset.scale"))
         XCTAssertTrue(source.contains("style.markerBodyHalfMinPx * offset.scale"))
@@ -51,9 +51,9 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
         XCTAssertTrue(source.contains("float2 tangentRight"))
         XCTAssertTrue(source.contains("* point.visibilityAlpha"))
         XCTAssertTrue(source.contains("beamReveal(length(offset.value))"))
-        // Луч затухает при приближении к фактической геоточке.
+        // The ray fades out as it approaches the actual geo point.
         XCTAssertTrue(source.contains("float taper = in.taper * in.taper * in.taper;"))
-        // Точек-якорей на геопозициях нет: только конус.
+        // No anchor dots at the geo positions: the cone only.
         XCTAssertFalse(source.contains("avatarAnchorDotVertex"))
     }
 

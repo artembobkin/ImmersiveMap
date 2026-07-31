@@ -5,18 +5,18 @@ import CoreGraphics
 import SwiftUI
 import simd
 
-/// Чистая математика раскладки hosting-вью маркеров: конверсия
-/// drawable-пикселей проекции в поинты view и позиционирование по якорю.
+/// Pure layout math for marker hosting views: converting projection
+/// drawable pixels to view points and anchor-based positioning.
 enum MarkerOverlayLayoutMath {
-    /// Ниже этой alpha маркер у горизонта глобуса считается неинтерактивным.
-    /// Семантика как у `AvatarVisibilityFadeStateStore.activeAlphaThreshold`:
-    /// любой видимый маркер интерактивен.
+    /// Below this alpha a marker near the globe horizon counts as non-interactive.
+    /// Same semantics as `AvatarVisibilityFadeStateStore.activeAlphaThreshold`:
+    /// any visible marker is interactive.
     static let interactionAlphaThreshold: CGFloat = 0.0001
 
-    /// Проекция отдаёт drawable-пиксели с origin снизу слева и y вверх,
-    /// view-слой живёт в поинтах с origin сверху слева (NSView flipped):
+    /// The projection yields drawable pixels with a bottom-left origin and y up,
+    /// while the view layer lives in points with a top-left origin (NSView flipped):
     /// x = px / scale, y = (drawSize.height - py) / scale.
-    /// Инверсия конверсии из `ImmersiveMapSelectionHandler.avatarHitTarget`.
+    /// Inverse of the conversion in `ImmersiveMapSelectionHandler.avatarHitTarget`.
     static func pointFromPixel(_ positionPx: SIMD2<Float>,
                                drawSize: CGSize,
                                contentsScale: CGFloat) -> CGPoint {
@@ -27,8 +27,8 @@ enum MarkerOverlayLayoutMath {
                        y: (drawSize.height - CGFloat(positionPx.y)) / contentsScale)
     }
 
-    /// Кадрирует маркер так, чтобы точка `anchor` его bounds попала в
-    /// спроецированную точку: origin = point - anchor * size.
+    /// Frames the marker so the `anchor` point of its bounds lands on the
+    /// projected point: origin = point - anchor * size.
     static func frame(anchorPoint: CGPoint,
                       size: CGSize,
                       anchor: UnitPoint) -> CGRect {

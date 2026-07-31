@@ -3,20 +3,20 @@
 
 import simd
 
-/// Дымка у горизонта плоского представления; раскладка зеркалит `HorizonFog`
-/// в RenderUniforms.h.
+/// Haze at the horizon of the flat presentation; the layout mirrors `HorizonFog`
+/// in RenderUniforms.h.
 ///
-/// Дистанции измеряются в высотах глаза над плоскостью: туман начинается на
-/// `startEyeHeights` (angular ≈ atan(1/12) ≈ 4.8° ниже линии схода) и
-/// насыщается к `endEyeHeights` (≈ 0.2°). Благодаря этому полоса тумана
-/// геометрически приклеена к линии схода при любом зуме и наклоне - смена
-/// рендерного масштаба на целых зумах её не сдвигает, скачки исключены по
-/// построению. При взгляде сверху вся видимая земля ближе `startEyeHeights`
-/// высот, и карта остаётся чистой.
+/// Distances are measured in eye heights above the plane: the fog starts at
+/// `startEyeHeights` (angular ≈ atan(1/12) ≈ 4.8° below the vanishing line) and
+/// saturates by `endEyeHeights` (≈ 0.2°). This keeps the fog band geometrically
+/// glued to the vanishing line at any zoom and tilt: the render-scale change at
+/// integer zooms does not move it, so jumps are ruled out by construction.
+/// When looking straight down, all visible ground is closer than
+/// `startEyeHeights` heights and the map stays clean.
 ///
-/// `strength` равен фазе перехода глобус→плоскость: на чистом глобусе тумана
-/// нет, во время морфа он проявляется плавно, и к моменту смены поверхностей
-/// обе стороны затуманены одинаково - шов линии горизонта скрыт.
+/// `strength` equals the globe→flat transition phase: no fog on the pure globe,
+/// it fades in smoothly during the morph, and by the surface switch both sides
+/// are fogged identically, hiding the horizon-line seam.
 struct HorizonFogUniform {
     var color: SIMD3<Float>
     var eye: SIMD3<Float>
@@ -26,14 +26,14 @@ struct HorizonFogUniform {
     var _padding: Float = 0
 
     static let defaultStartEyeHeights: Float = 12
-    /// Полная непрозрачность обязана наступать ДО ближайшей возможной кромки
-    /// тайлового покрытия, иначе при смене поверхностей за ней вспыхивает
-    /// подложка. Кромка = радиус покрытия (40 тайлов целевого зума ×
-    /// 2π·globeRadiusScale ≈ 35.2 render-единицы) на максимальной высоте глаза
-    /// 0.25 → минимум ≈ 140 высот. 120 даёт запас; angular это ≈ atan(1/120) ≈
-    /// 0.48° ниже линии схода - тонкая кайма у самого горизонта. При изменении
-    /// `VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance` или
-    /// `globeRadiusScale` пересчитать.
+    /// Full opacity must be reached BEFORE the nearest possible edge of the
+    /// tile coverage, otherwise the backdrop flashes beyond it during the
+    /// surface switch. Edge = coverage radius (40 tiles of the target zoom ×
+    /// 2π·globeRadiusScale ≈ 35.2 render units) at the maximum eye height
+    /// 0.25 → minimum ≈ 140 heights. 120 leaves margin; angular that is
+    /// ≈ atan(1/120) ≈ 0.48° below the vanishing line, a thin rim right at the
+    /// horizon. Recompute if `VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance`
+    /// or `globeRadiusScale` changes.
     static let defaultEndEyeHeights: Float = 120
 
     static let disabled = HorizonFogUniform(color: .zero,

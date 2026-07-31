@@ -5,8 +5,8 @@
 import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
-    /// Встроенные тайлы это планета OpenFreeMap в схеме OpenMapTiles, то есть данные
-    /// OpenStreetMap под ODbL. Бейдж обязан называть источник, а не движок.
+    /// The built-in tiles are the OpenFreeMap planet in the OpenMapTiles schema,
+    /// i.e. OpenStreetMap data under ODbL. The badge must name the source, not the engine.
     func testDefaultAttributionCreditsOpenStreetMapAndNotTheEngine() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
@@ -28,8 +28,8 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertTrue(attribution.title.contains("OpenStreetMap"))
     }
 
-    /// Кастомный провайдер, не объявивший источник, не получает чужую атрибуцию от
-    /// движка: пустой бейдж честнее выдуманного копирайта.
+    /// A custom provider that declares no source gets no third-party attribution
+    /// from the engine: an empty badge is more honest than a made-up copyright.
     func testCustomProviderWithoutAttributionResolvesToEmpty() {
         let provider = VectorTileProvider(id: "custom",
                                           tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!,
@@ -50,8 +50,8 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertEqual(settings.resolvedAttribution, override)
     }
 
-    /// Смена провайдера меняет текст бейджа, даже если сами `AttributionSettings`
-    /// остались прежними, поэтому планировщик обязан пометить домен атрибуции.
+    /// Changing the provider changes the badge text even if the `AttributionSettings`
+    /// themselves stayed the same, so the planner must mark the attribution domain.
     func testProviderChangeMarksAttributionForLiveApply() {
         let oldSettings = ImmersiveMapSettings.default
         let newSettings = oldSettings

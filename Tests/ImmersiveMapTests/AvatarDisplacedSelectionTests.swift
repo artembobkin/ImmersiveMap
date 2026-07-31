@@ -6,8 +6,8 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Hit-test аватаров должен следовать за смещённым коллизиями пузырём, а не за
-/// истинной геоточкой, и сжиматься вместе с маркером.
+/// The avatar hit-test must follow the collision-displaced bubble, not the
+/// true geo point, and shrink together with the marker.
 final class AvatarDisplacedSelectionTests: XCTestCase {
     private let markerSizePx: Float = 100.0
 
@@ -44,7 +44,7 @@ final class AvatarDisplacedSelectionTests: XCTestCase {
                      "Сжатый маркер занимает меньше места: широкая хит-зона должна сжаться")
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private func makeSnapshot(items: [AvatarCollisionMarkerItem]) throws -> AvatarSelectionSnapshot {
         let projector = AvatarSelectionProjector()

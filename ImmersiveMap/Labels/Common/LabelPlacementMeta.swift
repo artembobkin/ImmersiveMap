@@ -6,8 +6,8 @@ struct LabelPlacementMeta {
     let sortKey: Int
     let collisionPriority: Int
     let labelSizePx: SIMD2<Float>
-    /// Минимальный зум КАМЕРЫ, с которого лейбл виден. 0 = виден всегда.
-    /// Решается в рантайме (по `frameContext.zoom`), а не по `tile.z`, поэтому
-    /// работает и при overzoom (когда tile.z упёрт в maxzoom источника).
+    /// Minimum CAMERA zoom at which the label is visible. 0 = always visible.
+    /// Resolved at runtime (via `frameContext.zoom`), not via `tile.z`, so it
+    /// also works under overzoom (when tile.z is capped at the source's maxzoom).
     let minCameraZoom: Float
 }

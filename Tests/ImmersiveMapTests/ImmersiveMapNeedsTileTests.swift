@@ -295,8 +295,8 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let firstPrepared = await pipeline.waitUntilPrepared(firstTile)
         XCTAssertTrue(firstPrepared)
 
-        // Сетевой слот освободился сразу после download: второй тайл начинает
-        // скачиваться, пока первый ещё парсится.
+        // The network slot freed up right after download: the second tile starts
+        // downloading while the first is still parsing.
         let secondStarted = await pipeline.waitUntilStarted(secondTile)
         XCTAssertTrue(secondStarted)
 
@@ -327,8 +327,8 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let firstPrepared = await pipeline.waitUntilPrepared(firstTile)
         XCTAssertTrue(firstPrepared)
 
-        // Единственный CPU-слот занят первым тайлом: второй скачан, но его
-        // парсинг ждёт в очереди CPU-стадий.
+        // The single CPU slot is occupied by the first tile: the second is downloaded, but its
+        // parsing waits in the CPU-stage queue.
         pipeline.completeDownload(secondTile, result: .success(Data([2]), etag: nil))
         try? await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertFalse(pipeline.hasPrepared(secondTile))
@@ -338,7 +338,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(firstMaterialized)
         pipeline.completeMaterialize(firstTile, result: true)
 
-        // CPU-слот освободился: отложенная CPU-стадия второго тайла стартует.
+        // The CPU slot freed up: the second tile's deferred CPU stage starts.
         let secondPrepared = await pipeline.waitUntilPrepared(secondTile)
         XCTAssertTrue(secondPrepared)
         pipeline.completePrepare(secondTile)
@@ -358,19 +358,19 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let nearTile = Tile(x: 2, y: 1, z: 4)
         let farTile = Tile(x: 3, y: 1, z: 4)
 
-        // Порядок request() = приоритет: occupying, потом near, потом far.
+        // request() order = priority: occupying, then near, then far.
         loader.request(tiles: [occupyingTile, nearTile, farTile])
         for tile in [occupyingTile, nearTile, farTile] {
             let started = await pipeline.waitUntilStarted(tile)
             XCTAssertTrue(started)
         }
 
-        // Первый тайл занимает единственный CPU-слот.
+        // The first tile occupies the single CPU slot.
         pipeline.completeDownload(occupyingTile, result: .success(Data([1]), etag: nil))
         let occupyingPrepared = await pipeline.waitUntilPrepared(occupyingTile)
         XCTAssertTrue(occupyingPrepared)
 
-        // Дальний тайл скачался РАНЬШЕ ближнего: в FIFO он бы парсился первым.
+        // The far tile downloaded BEFORE the near one: in FIFO it would parse first.
         pipeline.completeDownload(farTile, result: .success(Data([3]), etag: nil))
         try? await Task.sleep(nanoseconds: 50_000_000)
         pipeline.completeDownload(nearTile, result: .success(Data([2]), etag: nil))
@@ -381,7 +381,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(occupyingMaterialized)
         pipeline.completeMaterialize(occupyingTile, result: true)
 
-        // Слот освободился: парсится ближний (приоритет спроса), не дальний.
+        // The slot freed up: the near tile parses (demand priority), not the far one.
         let nearPrepared = await pipeline.waitUntilPrepared(nearTile)
         XCTAssertTrue(nearPrepared)
         XCTAssertFalse(pipeline.hasPrepared(farTile))
@@ -575,18 +575,18 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(firstStarted)
         XCTAssertTrue(secondStarted)
 
-        // Первый тайл падает в T+0: окно T+0.5, будильник взведён на него.
+        // The first tile fails at T+0: its window is T+0.5, the alarm is armed for it.
         pipeline.completeDownload(firstTile, result: .failure(.network))
         let didScheduleFirst = await wakeScheduler.waitUntilScheduledCount(1)
         XCTAssertTrue(didScheduleFirst)
 
-        // Второй падает в T+0.4: его окно T+0.9 поглощено более ранним deadline.
+        // The second fails at T+0.4: its T+0.9 window is absorbed by the earlier deadline.
         now = Date(timeIntervalSince1970: 1000.4)
         pipeline.completeDownload(secondTile, result: .failure(.network))
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        // Будильник срабатывает в T+0.6: окно первого тайла уже истекло и не
-        // должно маскировать будущее окно второго - перевзвод на T+0.9.
+        // The alarm fires at T+0.6: the first tile's window has already expired and must not
+        // mask the second's future window - re-arm for T+0.9.
         now = Date(timeIntervalSince1970: 1000.6)
         wakeScheduler.scheduledWakes[0].workItem.perform()
 

@@ -61,10 +61,10 @@ final class AvatarsRenderer {
     private var hasVisibleBeams: Bool = false
     private var hasAppliedMarkers: Bool = false
     private var frameCounter: UInt64 = 0
-    /// Не долитые из-за кадрового бюджета картинки: нужен ещё кадр.
+    /// Images not fully uploaded due to the per-frame budget: another frame is needed.
     private var hasPendingAtlasUploads: Bool = false
-    /// Лимит растеризаций в атлас на кадр: остальные маркеры появятся в
-    /// следующих кадрах, зато кадр не проседает на пачке новых картинок.
+    /// Per-frame limit on atlas rasterizations: the remaining markers appear in
+    /// subsequent frames, but the frame doesn't stall on a batch of new images.
     private static let atlasUploadsPerFrameLimit = 24
     private(set) var hasActiveAnimations: Bool = false
     private(set) var selectionSnapshot: AvatarSelectionSnapshot = .empty
@@ -183,8 +183,8 @@ final class AvatarsRenderer {
     }
 
     private func apply(snapshot: AvatarsSnapshot, time: TimeInterval) {
-        // Картинки грузятся в атлас лениво по видимости (rebuildFrameBuffers):
-        // атлас ключуется идентичностью картинки и вытесняет LRU-слоты сам.
+        // Images are uploaded to the atlas lazily by visibility (rebuildFrameBuffers):
+        // the atlas is keyed by image identity and evicts LRU slots on its own.
         presentationStateStore.apply(snapshot: snapshot, time: time)
         hasAppliedMarkers = snapshot.markers.isEmpty == false
     }
@@ -306,7 +306,7 @@ final class AvatarsRenderer {
         hasVisibleBeams = false
         hasPendingAtlasUploads = false
 
-        // Пустая сцена не инициализирует ленивые атласы.
+        // An empty scene does not initialize the lazy atlases.
         guard layout.markerItems.isEmpty == false else {
             avatarCount = 0
             ensureFrameBufferCapacity(instanceCount: 0, frameSlotIndex: frameSlotIndex)
@@ -322,15 +322,15 @@ final class AvatarsRenderer {
             var slot = avatarAtlas.slot(for: item.marker.image)
             if slot == nil {
                 if uploadBudget > 0 {
-                    // uploadImage возвращает nil, только если атлас целиком
-                    // занят картинками текущего кадра - новые кадры не помогут.
+                    // uploadImage returns nil only when the atlas is entirely
+                    // occupied by this frame's images, so more frames won't help.
                     slot = avatarAtlas.uploadImage(item.marker.image)
                     if slot != nil {
                         uploadBudget -= 1
                     }
                 } else {
-                    // Кадровый бюджет растеризаций исчерпан: маркер догрузится
-                    // в следующих кадрах, нужен ещё один прогон.
+                    // The per-frame rasterization budget is exhausted: the marker
+                    // will finish uploading in subsequent frames, one more pass is needed.
                     hasPendingAtlasUploads = true
                 }
             }
@@ -342,8 +342,8 @@ final class AvatarsRenderer {
                                           squashScale: item.squashScale,
                                           displayScale: item.displayScale,
                                           morph: item.morph))
-            // Бейджи есть только у пина, стоящего на геоточке: у сдвинутого
-            // кружка они гаснут вместе с морфом.
+            // Only the pin standing on its geo point has badges: on a displaced
+            // circle they fade out together with the morph.
             let badgeContentAlpha = AvatarCollisionMath.badgeContentAlpha(displayScale: item.displayScale)
                 * (1.0 - item.morph)
             let badgeInstance = makeBatteryBadgeInstance(marker: item.marker,
@@ -360,9 +360,9 @@ final class AvatarsRenderer {
             hasVisibleCountBadges = hasVisibleCountBadges || (countBadgeInstance.flags & 1) != 0
             screenPoints.append(item.screenPoint)
 
-            // Конус рисуется от истинной геоточки к сдвинутому кружку; альфа
-            // якоря берётся с итоговой видимостью маркера, чтобы луч гас
-            // вместе с ним.
+            // The cone is drawn from the true geo point to the displaced circle;
+            // the anchor alpha uses the marker's final visibility so the beam
+            // fades out together with it.
             var beamAnchor = item.anchorScreenPoint
             beamAnchor.visibilityAlpha = item.screenPoint.visibilityAlpha
             beamAnchors.append(beamAnchor)
@@ -416,12 +416,12 @@ final class AvatarsRenderer {
                  time: TimeInterval,
                  commandBuffer: MTLCommandBuffer,
                  frameSlotIndex: Int) {
-        // Presented-список берётся напрямую из стора и не удерживается между
-        // кадрами: стор обновляет кеш на месте, удержание вызвало бы COW-копию
-        // всех маркеров каждый анимируемый кадр.
+        // The presented list is taken straight from the store and not retained
+        // between frames: the store updates its cache in place, and retaining it
+        // would trigger a COW copy of all markers every animated frame.
         let presentedMarkers = presentationStateStore.presentedEntries(at: time)
-        // Поле отсечения: максимальный вынос коллизиями плюс двойной размер
-        // маркера (тело, кольцо цветка, конус к геоточке).
+        // Cull margin: the maximum collision displacement plus twice the marker
+        // size (body, flower ring, cone to the geo point).
         let cullMarginPx = config.maxOffsetPx + collisionGeometry.markerSizePx * 2.0
         let rawProjectedMarkers = selectionProjector.project(markers: presentedMarkers,
                                                              drawSize: drawSize,
@@ -517,8 +517,8 @@ final class AvatarsRenderer {
         }
     }
 
-    /// Лучи и точки-якоря рисуются до пузырей: от истинной геоточки к
-    /// смещённому маркеру, одним инстансом на маркер.
+    /// Beams and anchor dots are drawn before the bubbles: from the true geo
+    /// point to the displaced marker, one instance per marker.
     private func drawBeams(renderEncoder: MTLRenderCommandEncoder,
                            matrix: inout matrix_float4x4,
                            frameSlotIndex: Int) {

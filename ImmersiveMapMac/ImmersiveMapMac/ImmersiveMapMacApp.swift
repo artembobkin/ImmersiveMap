@@ -13,10 +13,10 @@ struct ImmersiveMapMacApp: App {
     }
 }
 
-/// Демо-сцена: глобус с SwiftUI-карточками городов и аватар-маркерами плюс
-/// зацикленный кино-тур (глобус, наклонный морф в плоскость, улицы Токио,
-/// перелёт в Дубай и обратно). Тур запускается кнопкой или клавишей R,
-/// останавливается повторным R, Esc или любым жестом по карте.
+/// Demo scene: a globe with SwiftUI city cards and avatar markers plus a
+/// looped cinematic tour (globe, tilted morph into the plane, Tokyo streets,
+/// a flight to Dubai and back). The tour starts with the button or the R key,
+/// and stops with R again, Esc, or any gesture on the map.
 private struct MapScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var avatarsController = ImmersiveMapAvatarsController()
@@ -35,9 +35,9 @@ private struct MapScreen: View {
                 }
                 .enableCameraUIControls(showChrome)
                 .avatarSettings(size: .px128)
-                // Кино-тур гоняет глобус и два города по лупу: расширенный
-                // memory-кэш GPU-ready тайлов (1 GiB вместо 256 MiB), чтобы
-                // между витками тайлы не вытеснялись и не перезаливались.
+                // The cinematic tour loops the globe and two cities: an enlarged
+                // memory cache of GPU-ready tiles (1 GiB instead of 256 MiB) so
+                // tiles are not evicted and re-uploaded between laps.
                 .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
                 .ignoresSafeArea()
 
@@ -46,8 +46,7 @@ private struct MapScreen: View {
                     .padding(16)
             }
 
-            // Скрытые горячие клавиши: R запускает и останавливает тур,
-            // Esc останавливает.
+            // Hidden hotkeys: R starts and stops the tour, Esc stops it.
             hotkeys
         }
         .task {
@@ -95,9 +94,9 @@ private struct MapScreen: View {
         let tour = tour ?? ImmersiveMapCameraTourController(camera: camera)
         self.tour = tour
         isTourRunning = true
-        // Скрытие контролов не пересоздаёт платформенный map view (identity
-        // body стабильна) и настройки карты не меняет, поэтому тур можно
-        // запускать сразу, без ожидания коммита SwiftUI.
+        // Hiding the controls does not recreate the platform map view (the
+        // body identity is stable) and does not change the map settings, so
+        // the tour can start immediately without waiting for a SwiftUI commit.
         showChrome = false
         tour.start(shots: CinematicStoryboard.makeShots(),
                    establish: CinematicStoryboard.overview,

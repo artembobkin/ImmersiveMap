@@ -3,7 +3,7 @@
 
 import simd
 
-/// Синхронизирует semantic camera state с render camera: eye/up vectors, matrices и frustum.
+/// Synchronizes semantic camera state with the render camera: eye/up vectors, matrices, and frustum.
 final class RenderCameraPoseResolver {
     private var needsUpdate = true
 

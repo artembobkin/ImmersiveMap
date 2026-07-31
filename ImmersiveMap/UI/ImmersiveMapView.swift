@@ -30,10 +30,10 @@ public struct ImmersiveMapView: View {
         self.selectionController = selectionController
     }
 
-    /// Дерево body стабильно по identity при любом сочетании модификаторов:
-    /// переключение `enableCameraUIControls` не должно менять тип дерева,
-    /// иначе SwiftUI уничтожает и пересоздаёт весь платформенный map view
-    /// (рендерер, кэши, привязки контроллеров).
+    /// The body tree is identity-stable under any combination of modifiers:
+    /// toggling `enableCameraUIControls` must not change the tree type,
+    /// otherwise SwiftUI destroys and recreates the entire platform map view
+    /// (renderer, caches, controller bindings).
     public var body: some View {
         ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
@@ -180,22 +180,22 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Вызывает `action` на каждое нажатие по avatar marker.
-    /// Работает без ``ImmersiveMapSelectionController``: событие приходит и когда
-    /// selection не используется, и повторно при tap по уже выбранному маркеру.
+    /// Calls `action` on every tap on an avatar marker.
+    /// Works without ``ImmersiveMapSelectionController``: the event arrives even
+    /// when selection is not used, and again on a tap on an already selected marker.
     func onAvatarTap(_ action: @escaping (ImmersiveMapAvatarTapEvent) -> Void) -> ImmersiveMapView {
         var view = self
         view.avatarTapAction = action
         return view
     }
 
-    /// Декларативные SwiftUI-маркеры, привязанные к геокоординатам.
-    /// Контент репозиционируется каждый отрендеренный кадр (flat, глобус и
-    /// морф между ними), за горизонтом глобуса маркер гаснет по alpha.
-    /// Касания внутри маркера обрабатывает сам контент (Button, onTapGesture),
-    /// касания мимо маркеров получает карта. Повторный вызов заменяет
-    /// предыдущий набор целиком. Z-порядок равен порядку коллекции:
-    /// последний элемент сверху.
+    /// Declarative SwiftUI markers bound to geo coordinates.
+    /// The content is repositioned on every rendered frame (flat, globe and
+    /// the morph between them); beyond the globe's horizon the marker fades
+    /// out by alpha. Touches inside a marker are handled by the content itself
+    /// (Button, onTapGesture); touches outside the markers go to the map.
+    /// A repeated call replaces the previous set entirely. Z-order equals the
+    /// collection order: the last element is on top.
     func markers<Items: RandomAccessCollection, Content: View>(
         _ items: Items,
         coordinate: (Items.Element) -> GeoCoordinate,
@@ -317,10 +317,10 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Режим отображения выдавленных 3D-зданий в flat-презентации:
-    /// `.translucent` - полупрозрачные (по умолчанию), `.solid` - непрозрачные,
-    /// `.solidAtHighZoom` - плавный переход от полупрозрачных к непрозрачным
-    /// в диапазоне зумов (по умолчанию 17...18).
+    /// Display mode for extruded 3D buildings in the flat presentation:
+    /// `.translucent` - semi-transparent (default), `.solid` - opaque,
+    /// `.solidAtHighZoom` - smooth transition from semi-transparent to opaque
+    /// over a zoom range (default 17...18).
     public func buildingExtrusionMode(_ mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.buildingExtrusionMode(mode)

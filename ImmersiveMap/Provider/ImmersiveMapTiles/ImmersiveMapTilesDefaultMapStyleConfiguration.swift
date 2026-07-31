@@ -53,11 +53,11 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     /// Zoom thresholds that decide whether a label class is drawn at all (as
     /// opposed to `LabelStyles`, which only decides how a drawn label looks).
     public struct LabelVisibility: Equatable, Sendable {
-        /// Минимальный tile-zoom, с которого рисуются POI без иконки (офисы,
-        /// компании и прочие категории вне набора распознаваемых иконок). POI с
-        /// иконкой рисуются с обычного порога, поэтому на обзорных зумах остаются
-        /// только иконочные POI, а плотная россыпь текстовых подписей включается
-        /// глубже.
+        /// Minimum tile zoom from which icon-less POIs (offices, companies, and
+        /// other categories outside the set of recognized icons) are drawn. POIs
+        /// with an icon draw from the regular threshold, so overview zooms keep
+        /// only icon POIs while the dense scatter of text-only labels kicks in
+        /// deeper.
         public var poiIconlessMinimumZoom: Int
 
         public init(poiIconlessMinimumZoom: Int = 16) {

@@ -3,10 +3,10 @@
 
 import Foundation
 
-/// Stateless-математика time-normalized сглаживания camera bearing к целевому значению.
-/// В отличие от pitch, bearing цикличен: доводка идет по кратчайшему угловому пути (через 180°),
-/// а гэп затухает экспоненциально по half-life, поэтому шаг на кадр зависит от времени, а не от
-/// неравномерной частоты событий слайдера/жеста.
+/// Stateless math for time-normalized smoothing of camera bearing toward a target value.
+/// Unlike pitch, bearing is cyclic: the settle follows the shortest angular path (through 180°),
+/// and the gap decays exponentially by half-life, so the per-frame step depends on time rather
+/// than on the uneven event rate of the slider/gesture.
 enum CameraBearingFollowMath {
     static let maximumDeltaTime: CFTimeInterval = 0.05
     static let snapThreshold: Float = 0.0003
@@ -20,7 +20,7 @@ enum CameraBearingFollowMath {
         return min(max(0, deltaTime), maximumDeltaTime)
     }
 
-    /// Кратчайшая угловая разница target-current, приведенная к [-pi, pi].
+    /// Shortest angular difference target-current, normalized to [-pi, pi].
     static func shortestDelta(current: Float, target: Float) -> Float {
         let twoPi = Float.pi * 2
         var delta = (target - current).truncatingRemainder(dividingBy: twoPi)
@@ -32,7 +32,7 @@ enum CameraBearingFollowMath {
         return delta
     }
 
-    /// Новый bearing на кадр: остаток кратчайшего гэпа до цели домножается на half-life factor.
+    /// New bearing per frame: the remaining shortest gap to the target is multiplied by the half-life factor.
     static func steppedBearing(current: Float,
                                target: Float,
                                deltaTime: CFTimeInterval,
@@ -46,8 +46,8 @@ enum CameraBearingFollowMath {
         abs(shortestDelta(current: current, target: target)) <= snapThreshold
     }
 
-    /// true, если bearing застрял (уперся в constraint у предела): прогресса между кадрами нет,
-    /// но цель не достигнута — follow надо остановить, а не крутить display link бесконечно.
+    /// true if the bearing is stuck (hit a constraint at its limit): no progress between frames,
+    /// yet the target is not reached — the follow must stop instead of spinning the display link forever.
     static func isStalled(current: Float, previous: Float, target: Float) -> Bool {
         abs(shortestDelta(current: previous, target: current)) <= progressThreshold
             && abs(shortestDelta(current: current, target: target)) > snapThreshold

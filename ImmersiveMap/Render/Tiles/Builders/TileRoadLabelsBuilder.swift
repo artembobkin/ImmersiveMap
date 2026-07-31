@@ -54,14 +54,14 @@ final class TileRoadLabelsBuilder {
             if labelStyle == nil {
                 labelStyle = roadLabel.textStyle
             }
-            // Все дорожные глифы тайла рисуются одним draw-call'ом с единственной
-            // привязанной атлас-текстурой - её выбирает `labelStyle.weight` (стиль
-            // первого лейбла). Геометрию каждого лейбла строим тем же весом: bold и
-            // thin атласы имеют разные UV для одного кодпоинта, поэтому глиф,
-            // собранный по другому атласу, сэмплился бы из неверной области = мусор
-            // (тот же класс бага, что чинился у base-лейблов). `sizePx` при этом
-            // остаётся пер-лейбловым - масштаб безопасно варьируется, он запекается
-            // в геометрию вместе со своими анкор-габаритами.
+            // All road glyphs of a tile are drawn in one draw call with a single
+            // bound atlas texture - chosen by `labelStyle.weight` (the style of
+            // the first label). Each label's geometry is built with that same weight:
+            // bold and thin atlases have different UVs for the same codepoint, so a
+            // glyph built against the other atlas would sample the wrong region = garbage
+            // (the same class of bug that was fixed for base labels). `sizePx` stays
+            // per-label though - scale varies safely, it is baked into the geometry
+            // together with its anchor extents.
             let atlasWeight = labelStyle?.weight ?? roadLabel.textStyle.weight
             assert(roadLabel.textStyle.weight == atlasWeight,
                    "Road labels in one tile must share a font weight: the tile binds a single atlas texture per draw.")

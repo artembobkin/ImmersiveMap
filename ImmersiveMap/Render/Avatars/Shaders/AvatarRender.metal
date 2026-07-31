@@ -96,8 +96,8 @@ fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
     float encodedDistance = mtsdfSample.a;
     float markerDistanceTexels = decodeSignedDistanceTexels(encodedDistance, sdfParams);
     float2 sdfTextureSize = float2(float(sdfTexture.get_width()), float(sdfTexture.get_height()));
-    // Морф пин -> круг: аналитический SDF круга тела (без хвостика) в тех же
-    // текселях, что и семпл MTSDF, поэтому маски ниже не меняются.
+    // Pin -> circle morph: an analytic SDF of the body circle (without the tail)
+    // in the same texels as the MTSDF sample, so the masks below stay unchanged.
     float2 circleCenter = float2(0.5, (style.pointerHeightPx + style.bodySizePx.y * 0.5) / max(style.totalSizePx.y, 1.0));
     float circleRadiusTexels = 0.5 * min(style.bodySizePx.x, style.bodySizePx.y) / max(style.totalSizePx.x, 1.0) * sdfTextureSize.x;
     float circleDistanceTexels = length((in.uvLocal - circleCenter) * sdfTextureSize) - circleRadiusTexels;
@@ -116,9 +116,10 @@ fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
                                  shapeDistanceTexels);
     imageMask *= interiorMask;
 
-    // Картинку центрируем по центру тела/круга (circleCenter), а не по центру
-    // всего квада: снизу у маркера хвостик-указатель высотой pointerHeightPx,
-    // из-за него центр квада ниже центра тела и картинка съезжала вниз.
+    // The image is centered on the body/circle center (circleCenter), not on the
+    // center of the whole quad: the marker has a pointer tail of height
+    // pointerHeightPx at the bottom, which pushes the quad center below the body
+    // center and used to make the image drift downward.
     float2 insetUv = float2(style.contentInsetPx) / max(style.totalSizePx, float2(1.0));
     float2 bodyHalfUv = 0.5 * style.bodySizePx / max(style.totalSizePx, float2(1.0));
     float2 contentHalfUv = max(bodyHalfUv - insetUv, float2(0.0001));

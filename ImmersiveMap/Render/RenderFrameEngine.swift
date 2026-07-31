@@ -6,7 +6,7 @@ import Metal
 import MetalKit
 import QuartzCore
 
-/// Владеет Metal frame pipeline карты: ресурсами, subsystem graph, frame attachments и render-loop workflow.
+/// Owns the map's Metal frame pipeline: resources, subsystem graph, frame attachments, and the render-loop workflow.
 final class RenderFrameEngine {
     // MARK: - Dependencies
 
@@ -146,9 +146,9 @@ final class RenderFrameEngine {
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations))
-        // Синхронно и в том же кадре: позиции SwiftUI-маркеров должны попасть
-        // в ту же CA-транзакцию, что и present этого кадра. При didSchedule ==
-        // false экран показывает старый кадр, и публиковать нечего.
+        // Synchronously and within the same frame: SwiftUI marker positions must
+        // land in the same CA transaction as this frame's present. When didSchedule
+        // == false the screen shows the old frame and there is nothing to publish.
         if didSchedule, let markerProjectionSnapshot = frameContext.sharedState.markerState.snapshot {
             eventSink.updateMarkerProjectionSnapshot(markerProjectionSnapshot)
         }
@@ -251,9 +251,9 @@ final class RenderFrameEngine {
         guard let tileLoadingStatusReporter = persistentContext.tileLoadingStatusReporter else {
             return
         }
-        // Подложка горизонта не входит в placeTileTrackingState (лейблы и
-        // проекционный индекс её не видят), но на экране она есть: без неё
-        // HUD выглядит так, будто z3-фолбэка нет вовсе.
+        // The horizon backdrop is not part of placeTileTrackingState (labels and
+        // the projection index never see it), yet it is on screen: without it the
+        // HUD looks as if the z3 fallback does not exist at all.
         let backdropPlacements = frameContext.sharedState.tilePlacementState.backdropPlaceTilesContext.tilePlacements
         let displayedTiles = (frameContext.sharedState.placeTileTrackingState.placeTiles + backdropPlacements)
             .map(\.metalTile.tile)

@@ -4,18 +4,18 @@
 import CoreGraphics
 import simd
 
-/// Единый CPU-проектор геокоординаты в экранную точку drawable (пиксели,
-/// origin снизу слева, y вверх), согласованный с вершинным путём рендера:
-/// GlobeVisibility.h::globeProjectLatLon и
+/// Unified CPU projector of a geo coordinate into a drawable screen point
+/// (pixels, origin bottom-left, y up), consistent with the render vertex path:
+/// GlobeVisibility.h::globeProjectLatLon and
 /// GlobeTransitionProjection.h::globeTransitionLocalPhase.
-/// Менять только синхронно с шейдерами.
+/// Change only in sync with the shaders.
 enum GeoScreenProjectionMath {
 
-    /// Полуширина полосы сглаживания горизонта в нормированном dot-пространстве.
+    /// Half-width of the horizon smoothing band in normalized dot space.
     static let horizonFadeBandWidth: Float = 0.03
 
-    /// Пер-кадровые константы: считаются один раз на кадр,
-    /// `project(basis:constants:)` остаётся линейной алгеброй на точку.
+    /// Per-frame constants: computed once per frame, so
+    /// `project(basis:constants:)` stays per-point linear algebra.
     struct FrameConstants {
         let mode: ScreenSpaceProjectionMode
         let viewport: SIMD2<Float>
@@ -40,8 +40,8 @@ enum GeoScreenProjectionMath {
             self.globe = globe
             let panLatitude = globe.panY * Float(ImmersiveMapProjection.maxMercatorLatitude)
             let panLongitude = globe.panX * Float.pi
-            // Зеркало globeTransitionMapSize: плоская цель морфа растёт от
-            // cos(широты центра) до полного меркаторного размера.
+            // Mirror of globeTransitionMapSize: the flat morph target grows from
+            // cos(center latitude) up to the full Mercator size.
             let distortion = cos(panLatitude)
             let mapSizeScale = (1.0 - globe.transition) * distortion + globe.transition
             globeMapSize = 2.0 * .pi * globe.radius * mapSizeScale
@@ -82,9 +82,9 @@ enum GeoScreenProjectionMath {
         }
     }
 
-    /// Зеркало globeTransitionLocalPhase из GlobeTransitionProjection.h:
-    /// волна разворота сферы, ближняя к центру взгляда область встаёт в
-    /// плоскость первой, дальние углы последними.
+    /// Mirror of globeTransitionLocalPhase from GlobeTransitionProjection.h:
+    /// the sphere unfurl wave, the area nearest the view center settles into
+    /// the plane first, the far corners last.
     static func transitionLocalPhase(_ transition: Float, frontDot: Float) -> Float {
         let spread: Float = 0.6
         let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
@@ -101,27 +101,26 @@ enum GeoScreenProjectionMath {
         }
     }
 
-    /// Мягкий горизонт: точка за краем шара гаснет в полосе
-    /// ±`horizonFadeBandWidth` вместо ступеньки, alpha годится как
-    /// коэффициент прозрачности.
+    /// Soft horizon: a point beyond the globe's edge fades out within a
+    /// ±`horizonFadeBandWidth` band instead of a hard step; the alpha is
+    /// usable as an opacity coefficient.
     ///
-    /// Порог для морфнутой позиции ослабляется по ЛОКАЛЬНОЙ фазе волны
-    /// разворота этой точки (`transitionLocalPhase`), а не по глобальному
-    /// transition, как в GlobeVisibility.h: точка на ещё сферической части
-    /// (локальная фаза 0) обязана проходить строгий сферический тест, иначе
-    /// обратная сторона шара просачивается в середине морфа. У тайлов такую
-    /// утечку прячет depth-тест, у оверлея (SwiftUI-маркеры, аватары)
-    /// глубины нет.
+    /// The threshold for the morphed position is relaxed by this point's LOCAL
+    /// unfurl-wave phase (`transitionLocalPhase`), not by the global transition
+    /// as in GlobeVisibility.h: a point on the still-spherical part (local
+    /// phase 0) must pass the strict spherical test, otherwise the back side
+    /// of the globe leaks through mid-morph. For tiles this leak is hidden by
+    /// the depth test; the overlay (SwiftUI markers, avatars) has no depth.
     ///
-    /// Дополнительный гейт по СФЕРИЧЕСКОЙ позиции: пока морф не завершён,
-    /// точка сильно из-за горизонта сферы остаётся скрытой, даже когда её
-    /// локальная фаза уже развернула позицию к плоскости. Иначе дальние
-    /// маркеры «пролетают» сквозь вьюпорт по пути к своим плоским местам:
-    /// тайлы этот транзит не показывают (дальнее покрытие не рисуется), и
-    /// маркер на несколько кадров повисает над пустым океаном. Запас
-    /// `unfurlVisibilityMarginRadians` за сферическим горизонтом оставляет
-    /// видимыми точки, которые разворот легитимно приносит в кадр (при
-    /// сильном наклоне видимая дальность плоскости больше сферической).
+    /// An additional gate on the SPHERICAL position: while the morph is not
+    /// finished, a point far past the sphere's horizon stays hidden even when
+    /// its local phase has already unfurled the position toward the plane.
+    /// Otherwise far markers "fly" through the viewport on the way to their
+    /// flat spots: tiles do not show that transit (far coverage is not drawn),
+    /// and the marker hangs over empty ocean for several frames. The
+    /// `unfurlVisibilityMarginRadians` margin past the spherical horizon keeps
+    /// visible the points that the unfurl legitimately brings into frame (at
+    /// strong tilt the visible range of the plane exceeds the spherical one).
     static let unfurlVisibilityMarginRadians: Float = 0.5
 
     static func globeVisibility(worldPosition: SIMD3<Float>,

@@ -70,13 +70,13 @@ struct FeatureStyle {
     let labelTextStyle: LabelTextStyle?
     let roadLabelTextStyle: LabelTextStyle?
     let roadDecorationKind: TileMvtParser.RoadDecorationKind
-    /// Минимальный зум КАМЕРЫ для точечного лейбла этой фичи (0 = виден всегда).
-    /// Едет с лейблом до рантайма, где сравнивается с текущим зумом камеры.
+    /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
+    /// Travels with the label to runtime, where it is compared against the current camera zoom.
     let labelMinCameraZoom: Float
-    /// Линейный стиль (например граница) не должен заливать площадную
-    /// геометрию: некоторые фичи слоя приходят полигонами (индейские
-    /// резервации в `boundary`), и заливать их цветом линии неверно. Парсер
-    /// пропускает polygon-геометрию таких фич, оставляя только линии.
+    /// A line style (e.g. a border) must not fill areal geometry: some layer
+    /// features arrive as polygons (Native American reservations in `boundary`),
+    /// and filling them with the line color is wrong. The parser skips the
+    /// polygon geometry of such features, keeping only the lines.
     let suppressPolygonFill: Bool
 
     init(

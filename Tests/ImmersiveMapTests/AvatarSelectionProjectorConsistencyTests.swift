@@ -6,10 +6,10 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Аватары обязаны проецироваться той же математикой, что тайлы и
-/// SwiftUI-маркеры (GeoScreenProjectionMath). Регресс: со старым равномерным
-/// лерпом без волны морфа аватар Москвы «плыл» по экрану и вылетал за него
-/// при камере над Дубаем с большим наклоном в середине морфа.
+/// Avatars must be projected with the same math as tiles and SwiftUI markers
+/// (GeoScreenProjectionMath). Regression: with the old uniform lerp without
+/// the morph wave, the Moscow avatar "drifted" across the screen and flew off
+/// it with the camera over Dubai at high tilt mid-morph.
 final class AvatarSelectionProjectorConsistencyTests: XCTestCase {
     private let drawSize = CGSize(width: 1800, height: 900)
     private let presentationSettings = ImmersiveMapSettings.default.presentation
@@ -85,7 +85,7 @@ final class AvatarSelectionProjectorConsistencyTests: XCTestCase {
         }
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private func makeCameraState(latitude: Double,
                                  longitude: Double,

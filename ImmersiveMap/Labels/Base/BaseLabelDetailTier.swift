@@ -14,11 +14,11 @@ enum BaseLabelDetailTier: UInt8, CaseIterable, Equatable {
         return .minimal
     }
 
-    /// Абсолютный бюджет якорных подписей (места, вода, пики) на тайл в тире.
-    /// Абсолютные числа выравнивают экранную плотность: плотный тайл отдаёт
-    /// ровно бюджет, разреженный - всё своё, и границы тайлов не дают швов.
-    /// Порядок расходования - приоритет коллизий, поэтому бюджет забирают
-    /// самые важные фичи. `nil` - без ограничения.
+    /// Absolute budget of anchor labels (places, water, peaks) per tile in the tier.
+    /// Absolute numbers equalize on-screen density: a dense tile yields exactly
+    /// the budget, a sparse one yields everything it has, and tile borders show
+    /// no seams. Spending order is collision priority, so the budget goes to
+    /// the most important features. `nil` - no limit.
     static func anchorLabelBudget(tier: BaseLabelDetailTier) -> Int? {
         switch tier {
         case .full:
@@ -30,11 +30,11 @@ enum BaseLabelDetailTier: UInt8, CaseIterable, Equatable {
         }
     }
 
-    /// Абсолютный бюджет POI на тайл в тире: в среднем тире тайл отдаёт лишь
-    /// горстку лучших по рангу заведений (крупные целиком, мелочь иконками),
-    /// в дальнем POI не живут вовсе. Внутри POI приоритет коллизий совпадает
-    /// с локальным рангом OpenMapTiles, поэтому бюджет распределяется по
-    /// тайлу равномерно, а не из одного угла.
+    /// Absolute POI budget per tile in the tier: in the middle tier a tile yields
+    /// only a handful of the best-ranked venues (large ones in full, small ones
+    /// as icons), in the far tier POI do not live at all. Within POI the collision
+    /// priority matches the local OpenMapTiles rank, so the budget spreads evenly
+    /// across the tile instead of from one corner.
     static func poiLabelBudget(tier: BaseLabelDetailTier) -> Int? {
         switch tier {
         case .full:
@@ -52,10 +52,10 @@ enum BaseLabelDetailTier: UInt8, CaseIterable, Equatable {
                                             renderSurfaceMode: renderSurfaceMode)
     }
 
-    /// Дистанция от центра вида до ближайшей точки тайла-владельца, в тайлах
-    /// ЗУМА ВИДА. Считать в единицах зума вида принципиально: грубый родитель
-    /// дальней полосы в собственных единицах «рядом» с центром и получал бы
-    /// ближний тир со всем своим набором лейблов без бюджета.
+    /// Distance from the view center to the nearest point of the owning tile,
+    /// in tiles of the VIEW ZOOM. Measuring in view-zoom units is essential: a
+    /// coarse parent of the far band would be "near" the center in its own units
+    /// and would get the near tier with its full label set and no budget.
     static func relativeDistance(tile: VisibleTile,
                                  center: Center,
                                  centerZoom: Int,

@@ -4,9 +4,9 @@
 import Foundation
 import ImmersiveMap
 
-/// Раскадровка демо-ролика: глобус, облёт, морфинг в город, орбита, луп.
+/// Demo reel storyboard: globe, flyover, morph into a city, orbit, loop.
 enum CinematicStoryboard {
-    /// Точка отправления и точка возврата лупа (глобус целиком).
+    /// Departure point and loop return point (the whole globe).
     static let overview = ImmersiveMapCameraPosition(
         latitudeDegrees: 25,
         longitudeDegrees: -30,
@@ -15,14 +15,14 @@ enum CinematicStoryboard {
         pitch: 0.08
     )
 
-    // Герои кадров: плотная застройка, узнаваемые силуэты.
+    // The shots' heroes: dense buildings, recognizable silhouettes.
     private static let tokyo = (lat: 35.6595, lon: 139.7005)
     private static let dubai = (lat: 25.1972, lon: 55.2744)
 
     static func makeShots() -> [ImmersiveMapCameraTourShot] {
         var shots: [ImmersiveMapCameraTourShot] = []
 
-        // 1. Разворот по большой дуге к Токио: глобус заметно вращается.
+        // 1. A great-circle sweep toward Tokyo: the globe visibly rotates.
         shots.append(ImmersiveMapCameraTourShot(
             position: ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                  longitudeDegrees: tokyo.lon,
@@ -31,14 +31,14 @@ enum CinematicStoryboard {
             holdAfter: 0.5
         ))
 
-        // Окно морфа глобус <-> плоскость на широте Токио: z6.0..z7.3
-        // (automaticTransitionStartZoom 6.0, span 1.0 плюс широтная добавка
-        // log2(1/cos(35.7°)) ~= 0.3). Чтобы морфинг был виден под большим
-        // tilt, наклон набирается ДО окна, а само окно пересекается медленным
-        // отдельным перелётом с постоянным pitch.
+        // The globe <-> plane morph window at Tokyo's latitude: z6.0..z7.3
+        // (automaticTransitionStartZoom 6.0, span 1.0 plus the latitude addition
+        // log2(1/cos(35.7°)) ~= 0.3). For the morph to be visible under heavy
+        // tilt, the tilt is gained BEFORE the window, and the window itself is crossed
+        // by a slow separate flight with a constant pitch.
 
-        // 2. Наклон ещё на глобусе, чуть ниже окна морфа: 1.28 рад (~73°),
-        // почти максимум камеры (75°).
+        // 2. Tilt while still on the globe, just below the morph window: 1.28 rad (~73°),
+        // almost the camera maximum (75°).
         let tokyoPreTilt = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                       longitudeDegrees: tokyo.lon,
                                                       zoom: 5.6, bearing: 0.25, pitch: 1.28)
@@ -48,9 +48,9 @@ enum CinematicStoryboard {
             holdAfter: 0.2
         ))
 
-        // 3. Медленный проход сквозь всё окно морфа под полным наклоном:
-        // глобус разворачивается в плоскость прямо в перспективе
-        // (ключевой кадр промо).
+        // 3. A slow pass through the entire morph window under full tilt:
+        // the globe unfurls into a plane right in perspective
+        // (the promo's key shot).
         let tokyoMorphIn = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                       longitudeDegrees: tokyo.lon,
                                                       zoom: 7.6, bearing: 0.45, pitch: 1.28)
@@ -60,7 +60,7 @@ enum CinematicStoryboard {
             holdAfter: 0.4
         ))
 
-        // 4. Пикирование на улицы: поднимаются здания.
+        // 4. Diving down to the streets: buildings rise up.
         let tokyoStreet = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                      longitudeDegrees: tokyo.lon,
                                                      zoom: 16.7, bearing: 0.55, pitch: 1.02)
@@ -70,11 +70,11 @@ enum CinematicStoryboard {
             holdAfter: 0.7
         ))
 
-        // 5. Turntable вокруг застройки Токио.
+        // 5. Turntable around Tokyo's buildings.
         shots.append(contentsOf: orbit(base: tokyoStreet, segments: 3, perSegmentDuration: 2.3))
 
-        // 6. Подъём из улиц обратно к верхней кромке окна морфа, наклон
-        // сохраняется.
+        // 6. Climb out of the streets back to the top edge of the morph window, tilt
+        // is preserved.
         let tokyoPullUp = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                      longitudeDegrees: tokyo.lon,
                                                      zoom: 7.6, bearing: -0.35, pitch: 1.28)
@@ -84,8 +84,8 @@ enum CinematicStoryboard {
             holdAfter: 0.2
         ))
 
-        // 7. Медленный обратный морф: плоскость складывается в глобус под
-        // тем же наклоном.
+        // 7. A slow reverse morph: the plane folds back into the globe under
+        // the same tilt.
         let tokyoMorphOut = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                        longitudeDegrees: tokyo.lon,
                                                        zoom: 5.6, bearing: -0.55, pitch: 1.28)
@@ -95,9 +95,9 @@ enum CinematicStoryboard {
             holdAfter: 0.4
         ))
 
-        // 8. Дальний перелёт с отъездом на глобус и новым пикированием в Дубай.
-        // Pitch интерполируется от наклонного отъезда: у апекса дуги его
-        // прижмут констрейнты малого зума, на подлёте наклон вернётся.
+        // 8. A long flight pulling out to the globe and a new dive into Dubai.
+        // Pitch interpolates from the tilted pull-out: at the arc's apex the
+        // low-zoom constraints will clamp it, and on approach the tilt returns.
         let dubaiStreet = ImmersiveMapCameraPosition(latitudeDegrees: dubai.lat,
                                                      longitudeDegrees: dubai.lon,
                                                      zoom: 16.4, bearing: -0.35, pitch: 1.0)
@@ -107,10 +107,10 @@ enum CinematicStoryboard {
             holdAfter: 0.7
         ))
 
-        // 9. Turntable вокруг Дубая.
+        // 9. Turntable around Dubai.
         shots.append(contentsOf: orbit(base: dubaiStreet, segments: 3, perSegmentDuration: 2.3))
 
-        // 10. Возврат на глобус в точку отправления: бесшовный шов лупа.
+        // 10. Return to the globe at the departure point: a seamless loop seam.
         shots.append(ImmersiveMapCameraTourShot(
             position: overview,
             options: CameraFlightOptions(duration: 4.6, routeStyle: .greatCircle, altitudeStyle: .overviewFirst),
@@ -120,8 +120,8 @@ enum CinematicStoryboard {
         return shots
     }
 
-    /// Разбивает полный оборот на равные сегменты (меньше 180 градусов каждый,
-    /// чтобы перелёт крутил в нужную сторону), давая круговой облёт точки.
+    /// Splits a full revolution into equal segments (each under 180 degrees
+    /// so the flight turns the intended way), giving a circular flyaround of a point.
     private static func orbit(base: ImmersiveMapCameraPosition,
                               segments: Int,
                               perSegmentDuration: TimeInterval) -> [ImmersiveMapCameraTourShot] {

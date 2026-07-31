@@ -3,9 +3,9 @@
 
 import Foundation
 
-/// Time-based follower для camera pitch: жест задает целевой угол мгновенно, а фактический pitch
-/// каждый кадр экспоненциально подводится к цели по half-life. Убирает дёрганье наклона от
-/// неравномерной частоты touch-событий: шаг на кадр нормируется по времени, а не по числу событий.
+/// Time-based follower for camera pitch: the gesture sets the target angle instantly, while the
+/// actual pitch converges to it exponentially each frame using a half-life. Removes tilt jerkiness
+/// caused by uneven touch-event rates: the per-frame step is normalized by time, not by event count.
 final class CameraPitchFollow {
     struct Configuration {
         fileprivate let isEnabled: Bool
@@ -46,8 +46,8 @@ final class CameraPitchFollow {
         return isActive
     }
 
-    /// Задает новую цель. Возвращает false, если follow выключен настройкой — тогда вызывающий
-    /// должен применить pitch мгновенно (legacy-поведение без сглаживания).
+    /// Sets a new target. Returns false if follow is disabled by the setting — in that case the
+    /// caller must apply the pitch instantly (legacy behavior without smoothing).
     @discardableResult
     func retarget(_ pitch: Float, currentTime: CFTimeInterval) -> Bool {
         guard configuration.isEnabled else {

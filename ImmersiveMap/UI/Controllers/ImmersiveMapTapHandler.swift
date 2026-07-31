@@ -4,9 +4,9 @@
 import CoreGraphics
 import Foundation
 
-/// Владеет обработкой tap-событий карты.
-/// Отвечает за отсечение tap по control zones, selection hit-test и уведомление
-/// camera API о background tap.
+/// Owns map tap event handling.
+/// Responsible for rejecting taps over control zones, the selection hit-test, and notifying
+/// the camera API about background taps.
 @MainActor
 final class ImmersiveMapTapHandler {
     private let controlsRuntime: ImmersiveMapControlsRuntime

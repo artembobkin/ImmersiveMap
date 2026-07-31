@@ -5,11 +5,11 @@
 //  AtlasSampling.h
 //  ImmersiveMap
 //
-//  Общее ядро семплинга атласа тайлов для глобусного и плоского путей.
-//  Здесь собраны решения, выстраданные отладкой швов (см. историю в
-//  Globe.metal): явный LOD вместо аппаратного, инсет кромки слота ровно в
-//  полтекселя уровня ceil(lod) и допуск покрытия, масштабируемый экранной
-//  производной. Менять эти формулы только синхронно для обоих путей.
+//  Shared tile-atlas sampling core for the globe and flat paths.
+//  This collects the decisions hard-won while debugging seams (see the history
+//  in Globe.metal): explicit LOD instead of hardware LOD, a slot-edge inset of
+//  exactly half a texel of the ceil(lod) level, and a coverage tolerance scaled
+//  by the screen derivative. Change these formulas only in sync for both paths.
 
 #include <metal_stdlib>
 using namespace metal;
@@ -17,8 +17,8 @@ using namespace metal;
 #ifndef ATLAS_SAMPLING
 #define ATLAS_SAMPLING
 
-/// Максимальный mip-уровень страниц атласа; синхронизирован с
-/// `TileAtlasTexture.pageMipLevelCount` (уровни 0..6).
+/// Maximum mip level of the atlas pages; kept in sync with
+/// `TileAtlasTexture.pageMipLevelCount` (levels 0..6).
 constant float kAtlasMaxMipLevel = 6.0;
 
 struct AtlasTileBounds {
@@ -28,7 +28,7 @@ struct AtlasTileBounds {
     float vMax;
 };
 
-/// Границы слота тайла в UV страницы из данных размещения (`TileData`).
+/// Tile slot bounds in page UV from the placement data (`TileData`).
 static inline AtlasTileBounds atlasTileBounds(float posU,
                                               float posV,
                                               float lastPos,
@@ -42,23 +42,23 @@ static inline AtlasTileBounds atlasTileBounds(float posU,
 }
 
 struct AtlasSampleCoords {
-    /// Клампнутые координаты выборки (инсет от кромки слота).
+    /// Clamped sampling coordinates (inset from the slot edge).
     float2 uv;
-    /// Явный LOD для `sample(..., level(lod))`.
+    /// Explicit LOD for `sample(..., level(lod))`.
     float lod;
-    /// Фрагмент за пределами допуска покрытия тайла - дискардить.
+    /// Fragment outside the tile coverage tolerance, discard it.
     bool outsideCoverage;
 };
 
-/// Полный расчёт координат выборки атласа для фрагмента.
+/// Full atlas sample coordinate computation for a fragment.
 ///
-/// - Допуск покрытия: интерполяция и MSAA у кромки дро-колла выступают за
-///   границы тайла примерно на пиксель; при сильной минификации пиксель - это
-///   десятки текселей, поэтому допуск не меньше ~полутора экранных пикселей
-///   в UV-единицах (константа в текселях рассыпала дальние швы в точки).
-/// - LOD задаётся явно: уровни выборки известны точно (floor/ceil), и инсет
-///   в полтекселя уровня ceil - минимальный, при котором трилинейный фетч
-///   гарантированно не дотягивается до соседнего слота.
+/// - Coverage tolerance: interpolation and MSAA at the draw-call edge overshoot
+///   the tile bounds by about a pixel; under strong minification a pixel is
+///   tens of texels, so the tolerance is at least ~1.5 screen pixels in UV
+///   units (a constant in texels crumbled distant seams into dots).
+/// - LOD is set explicitly: the sampled levels are known exactly (floor/ceil),
+///   and the half-texel inset of the ceil level is the minimum at which a
+///   trilinear fetch is guaranteed not to reach into the neighboring slot.
 static inline AtlasSampleCoords atlasSampleCoords(float2 uv,
                                                   AtlasTileBounds bounds,
                                                   float halfTexel) {

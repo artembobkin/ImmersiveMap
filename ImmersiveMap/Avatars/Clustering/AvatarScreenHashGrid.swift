@@ -9,26 +9,26 @@
 import Foundation
 import simd
 
-/// Равномерная хеш-сетка по экранным позициям: broad-phase для солвера
-/// коллизий и группировки. Любая пара точек на дистанции <= cellSize
-/// гарантированно оказывается в соседних (3x3) ячейках, поэтому при
-/// cellSize >= максимальной дистанции взаимодействия перебор соседей полон.
-/// Раскладка компактная (counting sort): внутри ячейки индексы возрастают,
-/// обход детерминирован и не зависит от порядка хеш-таблицы. Соседние ячейки
-/// каждого слота вычислены заранее - горячие запросы по точкам сетки не
-/// хешируют координаты вовсе.
+/// Uniform hash grid over screen positions: the broad phase for the collision
+/// and grouping solver. Any pair of points within distance <= cellSize is
+/// guaranteed to land in adjacent (3x3) cells, so with
+/// cellSize >= the maximum interaction distance the neighbor sweep is complete.
+/// The layout is compact (counting sort): indices ascend within a cell, and
+/// traversal is deterministic, independent of hash-table ordering. Neighbor
+/// cells of every slot are precomputed, so hot queries by grid points never
+/// hash coordinates at all.
 struct AvatarScreenHashGrid {
     let cellSize: Float
     private let inverseCellSize: Float
     private var slotByCellKey: [Int64: Int]
-    /// Смещения ячеек в entries: ячейка slot занимает starts[slot]..<starts[slot+1].
+    /// Cell offsets into entries: cell slot occupies starts[slot]..<starts[slot+1].
     private var starts: [Int]
-    /// Индексы точек, сгруппированные по ячейкам, внутри ячейки по возрастанию.
+    /// Point indices grouped by cell, ascending within each cell.
     private var entries: [Int]
-    /// Слот ячейки каждой точки.
+    /// Cell slot of each point.
     private var slotForPoint: [Int]
-    /// До 9 слотов непустых соседних ячеек (включая свою) на каждый слот,
-    /// плоско по 9; -1 - соседняя ячейка пуста.
+    /// Up to 9 slots of non-empty neighbor cells (including the cell itself) per
+    /// slot, flat in groups of 9; -1 means the neighbor cell is empty.
     private var neighborSlots: [Int32]
 
     init(positions: [SIMD2<Float>], cellSize: Float) {
@@ -92,22 +92,22 @@ struct AvatarScreenHashGrid {
         self.neighborSlots = neighborSlots
     }
 
-    /// Число ячеек сетки.
+    /// Number of grid cells.
     var cellCount: Int {
         starts.count - 1
     }
 
-    /// Слот ячейки, содержащей точку сетки с данным индексом.
+    /// Slot of the cell containing the grid point with the given index.
     func cellSlot(ofPointAt index: Int) -> Int {
         slotForPoint[index]
     }
 
-    /// Индексы точек ячейки слота.
+    /// Point indices of the cell at the given slot.
     func entries(inCellSlot slot: Int) -> ArraySlice<Int> {
         entries[starts[slot]..<starts[slot + 1]]
     }
 
-    /// Слоты всех ячеек с населением не меньше порога.
+    /// Slots of all cells whose population is at least the threshold.
     func cellSlots(withPopulationAtLeast threshold: Int) -> [Int] {
         var slots: [Int] = []
         for slot in 0..<cellCount where starts[slot + 1] - starts[slot] >= threshold {
@@ -116,7 +116,7 @@ struct AvatarScreenHashGrid {
         return slots
     }
 
-    /// Обходит слоты непустых соседних ячеек слота (включая его самого).
+    /// Iterates the slots of the non-empty neighbor cells of a slot (including itself).
     func forEachNeighborSlot(of slot: Int, _ body: (Int) -> Void) {
         let base = slot * 9
         for offset in 0..<9 {
@@ -126,13 +126,13 @@ struct AvatarScreenHashGrid {
         }
     }
 
-    /// Число точек в ячейке, содержащей точку сетки с данным индексом.
+    /// Number of points in the cell containing the grid point with the given index.
     func cellPopulation(ofPointAt index: Int) -> Int {
         let slot = slotForPoint[index]
         return starts[slot + 1] - starts[slot]
     }
 
-    /// Число точек в ячейке, содержащей произвольную позицию (0, если пуста).
+    /// Number of points in the cell containing an arbitrary position (0 if empty).
     func cellPopulation(at position: SIMD2<Float>) -> Int {
         guard let slot = slotByCellKey[Self.cellKey(position: position,
                                                     inverseCellSize: inverseCellSize)] else {
@@ -141,14 +141,14 @@ struct AvatarScreenHashGrid {
         return starts[slot + 1] - starts[slot]
     }
 
-    /// Индексы точек ячейки, содержащей точку сетки с данным индексом.
+    /// Point indices of the cell containing the grid point with the given index.
     func cellEntries(ofPointAt index: Int) -> ArraySlice<Int> {
         let slot = slotForPoint[index]
         return entries[starts[slot]..<starts[slot + 1]]
     }
 
-    /// Обходит 3x3 окрестность точки сетки: тело получает слайс каждой
-    /// непустой соседней ячейки (включая свою) и признак «это своя ячейка».
+    /// Iterates the 3x3 neighborhood of a grid point: the body receives a slice of
+    /// each non-empty neighbor cell (including its own) and an "is own cell" flag.
     func forEachNeighborCell(ofPointAt index: Int,
                              _ body: (ArraySlice<Int>, _ isOwnCell: Bool) -> Void) {
         let slot = slotForPoint[index]
@@ -161,9 +161,10 @@ struct AvatarScreenHashGrid {
         }
     }
 
-    /// Собирает соседей точки сетки из 3x3 окрестности с индексом строго
-    /// больше заданного, по возрастанию. Буфер очищается внутри; порядок
-    /// фиксирован, что делает обход пар (i, j > i) побитово воспроизводимым.
+    /// Collects neighbors of a grid point from the 3x3 neighborhood whose index is
+    /// strictly greater than the given one, in ascending order. The buffer is
+    /// cleared inside; the fixed ordering makes the (i, j > i) pair traversal
+    /// bitwise reproducible.
     func collectNeighbors(ofPointAt index: Int,
                           greaterThan minIndex: Int,
                           into buffer: inout [Int]) {
@@ -176,10 +177,10 @@ struct AvatarScreenHashGrid {
         buffer.sort()
     }
 
-    /// Собирает кандидатов вокруг произвольной позиции (3x3 окрестность).
-    /// Для запросов точками, не входящими в сетку. Порядок - фиксированный
-    /// обход ячеек (детерминирован), но не отсортирован по индексу: все
-    /// вызывающие сворачивают кандидатов коммутативно (max/min/union).
+    /// Collects candidates around an arbitrary position (3x3 neighborhood).
+    /// For queries with points that are not part of the grid. The order is a fixed
+    /// cell traversal (deterministic) but not sorted by index: all callers fold
+    /// the candidates commutatively (max/min/union).
     func collectCandidates(around position: SIMD2<Float>,
                            into buffer: inout [Int]) {
         buffer.removeAll(keepingCapacity: true)
@@ -210,10 +211,10 @@ struct AvatarScreenHashGrid {
     }
 }
 
-/// Система непересекающихся множеств с итеративным find (рекурсивный вариант
-/// переполнял стек на цепочках в десятки тысяч элементов) и сжатием путей.
-/// Инвариант: корень компоненты - минимальный индекс, поэтому состав групп
-/// детерминирован и упорядочен по наименьшему участнику.
+/// Disjoint-set structure with an iterative find (the recursive variant
+/// overflowed the stack on chains of tens of thousands of elements) and path
+/// compression. Invariant: a component's root is its minimum index, so group
+/// membership is deterministic and ordered by the smallest member.
 struct AvatarDisjointSet {
     private var parent: [Int]
 

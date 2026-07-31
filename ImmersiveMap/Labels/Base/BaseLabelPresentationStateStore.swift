@@ -24,7 +24,7 @@ struct BaseLabelPresentationInput {
     let duplicate: UInt8
     let isRetained: UInt8
     let isValid: Bool
-    /// Минимальный зум камеры, с которого лейбл виден (0 = всегда).
+    /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
 }
 
@@ -93,8 +93,8 @@ final class BaseLabelPresentationStateStore {
             }
         }
 
-        // Скан устаревших записей нужен только когда этим кадром увидены не все:
-        // при стабильной топологии (обычный кадр) он пропускается целиком.
+        // Scanning for stale entries is only needed when not all of them were seen this frame:
+        // with a stable topology (a regular frame) it is skipped entirely.
         if seenEntryCount < entries.count {
             hasActiveAnimations = fadeOutMissingEntries(currentTime: time,
                                                         frameIndex: frameIndex,
@@ -136,9 +136,9 @@ final class BaseLabelPresentationStateStore {
                               frameIndex: UInt64,
                               fadeInSeconds: TimeInterval,
                               fadeOutSeconds: TimeInterval) -> (alpha: Float, isActive: Bool, firstTouchThisFrame: Bool) {
-        // Один modify-доступ к словарю вместо get+put (два хеш-лукапа на
-        // инстанс на кадр). lastSeenFrameIndex дефолта смещён на -1, чтобы
-        // свежесозданная запись считалась первым касанием кадра.
+        // A single modify access to the dictionary instead of get+put (two hash
+        // lookups per instance per frame). The default's lastSeenFrameIndex is offset
+        // by -1 so a freshly created entry counts as the frame's first touch.
         Self.resolveEntry(&entries[labelKey, default: Entry(currentAlpha: 0,
                                                             targetAlpha: 0,
                                                             lastUpdateTime: time,

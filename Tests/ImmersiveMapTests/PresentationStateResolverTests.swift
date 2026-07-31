@@ -33,8 +33,8 @@ final class PresentationStateResolverTests: XCTestCase {
         XCTAssertEqual(resolvedPresentation.transition, 1.0)
     }
 
-    /// У полюса окно перехода растянуто на log2(1/cos(широты)) уровней: на зуме,
-    /// где экватор уже плоский, высокие широты ещё в середине морфа.
+    /// Near the pole the transition window is stretched by log2(1/cos(latitude)) levels: at a zoom
+    /// where the equator is already flat, high latitudes are still mid-morph.
     func testTransitionWindowIsStretchedNearPole() {
         let resolver = MapPresentationStateController(settings: .default)
         let polarCenter = ImmersiveMapProjection.worldMercator(latitude: 83.0 * .pi / 180.0,
@@ -46,7 +46,7 @@ final class PresentationStateResolverTests: XCTestCase {
 
         let midTransition = resolver.resolve(cameraState: midTransitionState)
 
-        // cos(83°) ≈ 0.122: окно ≈ 1 + 3.04 уровня, на z7 пройдена лишь четверть.
+        // cos(83°) ≈ 0.122: window ≈ 1 + 3.04 levels, at z7 only a quarter is covered.
         XCTAssertEqual(midTransition.renderSurfaceMode, .spherical)
         XCTAssertGreaterThan(midTransition.transition, 0.0)
         XCTAssertLessThan(midTransition.transition, 0.5)
@@ -76,10 +76,10 @@ final class PresentationStateResolverTests: XCTestCase {
         XCTAssertEqual(Set(transitions).count, transitions.count, "Ступени перехода не должны слипаться")
     }
 
-    /// Геометрия морфа завершает разворот к 90% фазы: последнюю десятую часть
-    /// глобусный путь рендерит готовую плоскость, а свап поверхностей на t = 1
-    /// происходит между геометрически идентичными кадрами. Семантический
-    /// transition при этом продолжает расти до 1.
+    /// The morph geometry finishes unfurling by 90% of the phase: for the final tenth
+    /// the globe path renders a finished plane, and the surface swap at t = 1
+    /// happens between geometrically identical frames. The semantic
+    /// transition still keeps growing to 1.
     func testMorphGeometryCompletesBeforeSurfaceSwap() {
         let resolver = MapPresentationStateController(settings: .default)
         let lateMorphState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),

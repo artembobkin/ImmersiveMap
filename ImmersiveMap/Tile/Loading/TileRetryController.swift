@@ -3,14 +3,14 @@
 
 import Foundation
 
-// Бизнес-назначение:
-// Централизованно управляет окнами повторных попыток загрузки тайлов,
-// чтобы карта не создавала request-storm при постоянных ошибках.
-// Контроллер хранит per-tile backoff и глобальный cooldown (например для auth/rate-limit),
-// а также дает единое решение: можно ли прямо сейчас снова запрашивать конкретный тайл.
-// Глобальный cooldown нужен как аварийный предохранитель при системных сбоях:
-// при 401/403 (проблема авторизации) и 429 (перегрузка/rate-limit) он временно
-// притормаживает весь поток tile-запросов, чтобы не бомбить API каждым тайлом отдельно.
+// Business purpose:
+// Centrally manages tile-download retry windows so the map does not create a
+// request storm under persistent errors.
+// The controller keeps per-tile backoff and a global cooldown (e.g. for auth/rate-limit),
+// and provides a single decision: whether a specific tile may be requested again right now.
+// The global cooldown is an emergency fuse for systemic failures:
+// on 401/403 (authorization problem) and 429 (overload/rate-limit) it temporarily
+// throttles the whole tile-request stream instead of hammering the API tile by tile.
 enum TileRetryFailureReason {
     case download(TileDownloader.DownloadFailure)
     case parseFailed
@@ -53,15 +53,15 @@ final class TileRetryController {
     private let policy: Policy
     private let nowProvider: () -> Date
 
-    // Создает контроллер retry-политики с источником текущего времени
-    // (в проде - реальное время, в тестах - управляемые часы).
+    // Creates a retry-policy controller with a current-time source
+    // (real time in production, a controllable clock in tests).
     init(policy: Policy, now: @escaping () -> Date = Date.init) {
         self.policy = policy
         self.nowProvider = now
     }
 
-    // Возвращает, нужно ли сейчас блокировать запрос конкретного тайла
-    // с учетом глобального cooldown и индивидуального backoff этого тайла.
+    // Returns whether the request for a specific tile must be blocked right now,
+    // considering the global cooldown and the tile's individual backoff.
     func shouldBlock(tile: Tile) -> Bool {
         let now = nowProvider()
         clearExpiredGlobalBlockIfNeeded(now: now)
@@ -75,14 +75,14 @@ final class TileRetryController {
         return false
     }
 
-    // Фиксирует успешную загрузку/парс тайла и сбрасывает его retry-state.
+    // Records a successful tile download/parse and clears its retry state.
     func registerSuccess(for tile: Tile) {
         retryStateByTile.removeValue(forKey: tile)
         clearExpiredGlobalBlockIfNeeded(now: nowProvider())
     }
 
-    // Регистрирует неуспешную попытку тайла, рассчитывает следующий retry window
-    // и при необходимости расширяет глобальный cooldown.
+    // Registers a failed tile attempt, computes the next retry window,
+    // and extends the global cooldown if needed.
     func registerFailure(for tile: Tile, reason: TileRetryFailureReason) {
         let now = nowProvider()
         let failureCount = retryStateByTile[tile]?.failureCount ?? 0
@@ -100,14 +100,14 @@ final class TileRetryController {
         }
     }
 
-    // Ближайший БУДУЩИЙ момент, когда хотя бы один заблокированный тайл снова
-    // станет доступен для запроса. Нужен планировщику, чтобы разбудить on-demand
-    // рендер-цикл к истечению backoff-окна: сам контроллер пассивен и таймеров
-    // не держит. Уже истёкшие окна не учитываются: их тайлы разблокированы и
-    // будут ретраены ближайшим кадром, а истёкшая запись (она живёт до
-    // registerSuccess/retainOnly) не должна маскировать будущие окна других
-    // тайлов. При активном глобальном cooldown возвращает его границу -
-    // раньше неё не разблокируется ни один тайл.
+    // The nearest FUTURE moment when at least one blocked tile becomes
+    // requestable again. Needed by the scheduler to wake the on-demand render
+    // loop at backoff-window expiry: the controller itself is passive and holds
+    // no timers. Already expired windows are ignored: their tiles are unblocked
+    // and will be retried on the next frame, and an expired record (it lives
+    // until registerSuccess/retainOnly) must not mask future windows of other
+    // tiles. With an active global cooldown, returns its boundary -
+    // no tile unblocks before it.
     func earliestNextRetryDate() -> Date? {
         let now = nowProvider()
         clearExpiredGlobalBlockIfNeeded(now: now)
@@ -118,27 +118,27 @@ final class TileRetryController {
         return retryStateByTile.values.map(\.nextRetryAt).filter { $0 > now }.min()
     }
 
-    // Оставляет retry-state только для актуального набора тайлов, чтобы
-    // не держать устаревшее состояние для тайлов вне текущего интереса.
+    // Keeps retry state only for the current tile set, so stale state
+    // for tiles outside the current interest is not retained.
     func retainOnly(tiles: Set<Tile>) {
         retryStateByTile = retryStateByTile.filter { tiles.contains($0.key) }
         clearExpiredGlobalBlockIfNeeded(now: nowProvider())
     }
 
-    // Полностью очищает retry-state (тайловый и глобальный cooldown).
+    // Fully clears retry state (per-tile and global cooldown).
     func reset() {
         retryStateByTile.removeAll()
         globalRetryBlockedUntil = nil
     }
 
-    // Снимает глобальную блокировку, если ее срок уже истек.
+    // Lifts the global block if its deadline has already passed.
     private func clearExpiredGlobalBlockIfNeeded(now: Date) {
         if let blockedUntil = globalRetryBlockedUntil, blockedUntil <= now {
             globalRetryBlockedUntil = nil
         }
     }
 
-    // Выбирает задержку retry для конкретной причины ошибки.
+    // Picks the retry delay for a specific failure reason.
     private func retryDelay(for reason: TileRetryFailureReason, failureCount: Int) -> TimeInterval {
         switch reason {
         case .parseFailed:
@@ -161,8 +161,8 @@ final class TileRetryController {
         }
     }
 
-    // Возвращает задержку глобального cooldown для "глобальных" ошибок
-    // (например auth/rate-limit), либо nil если нужен только per-tile backoff.
+    // Returns the global cooldown delay for "global" errors
+    // (e.g. auth/rate-limit), or nil if only per-tile backoff is needed.
     private func globalRetryDelay(for reason: TileRetryFailureReason) -> TimeInterval? {
         switch reason {
         case .parseFailed:
@@ -179,7 +179,7 @@ final class TileRetryController {
         }
     }
 
-    // Экспоненциальный backoff для временных/сетевых ошибок.
+    // Exponential backoff for transient/network errors.
     private func exponentialBackoff(failureCount: Int) -> TimeInterval {
         let exponent = min(failureCount, policy.maxExponent)
         let delay = policy.baseBackoff * pow(2.0, Double(exponent))

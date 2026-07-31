@@ -9,38 +9,38 @@
 import Foundation
 import simd
 
-/// Стейтлес-математика Zenly-подобного размещения аватаров: коэффициент
-/// сглаживания, давление плотности анкеров, цели сжатия и запасные направления
-/// разведения для совпадающих центров.
+/// Stateless math for Zenly-style avatar placement: smoothing factor,
+/// anchor density pressure, compression targets, and fallback separation
+/// directions for coincident centers.
 enum AvatarCollisionMath {
-    /// Смещение считается сошедшимся, когда до цели меньше этого порога.
+    /// The offset is considered converged when it is closer to the target than this threshold.
     static let offsetSnapEpsilonPx: Float = 0.5
-    /// Масштаб/морф считаются сошедшимися при такой близости к цели.
+    /// Scale/morph are considered converged at this proximity to the target.
     static let scaleSnapEpsilon: Float = 0.01
-    /// Доля размера маркера: радиус слипания анкеров для overflow-группировки.
+    /// Fraction of marker size: anchor sticking radius for overflow grouping.
     static let groupingRadiusScale: Float = 0.35
-    /// Расширение радиуса слипания для уже сгруппированных маркеров (гистерезис).
+    /// Sticking-radius expansion for already grouped markers (hysteresis).
     static let groupingHysteresisRatio: Float = 1.3
-    /// Длительность кроссфейда маркеры <-> кластер-иконка.
+    /// Crossfade duration for markers <-> cluster icon.
     static let clusterCrossfadeSeconds: Float = 0.25
-    /// Ограничение кадрового шага времени: защита от прыжков после пауз.
+    /// Cap on the per-frame time step: guards against jumps after pauses.
     static let maxFrameDeltaSeconds: TimeInterval = 0.25
-    /// Масштаб сжатия, ниже которого бейджи полностью скрыты.
+    /// Compression scale below which badges are fully hidden.
     static let badgeFadeStartScale: Float = 0.8
-    /// Масштаб сжатия, начиная с которого бейджи полностью видимы.
+    /// Compression scale at and above which badges are fully visible.
     static let badgeFadeEndScale: Float = 0.95
-    /// Доля радиуса тела: детерминированный стартовый джиттер узлов. Ломает
-    /// вырожденные конфигурации (коллинеарные якоря разводились бы строго
-    /// вдоль одной линии и никогда не раскрывались бы веером).
+    /// Fraction of body radius: deterministic starting jitter of nodes. Breaks
+    /// degenerate configurations (collinear anchors would separate strictly
+    /// along a single line and never fan out).
     static let startJitterScale: Float = 0.05
-    /// Решённое смещение меньше этого порога считается нулевым: гасит след
-    /// стартового джиттера у одиночных маркеров.
+    /// A solved offset below this threshold is treated as zero: cancels the
+    /// starting-jitter residue on solitary markers.
     static let restSnapRadiusPx: Float = 1.5
-    /// Соль для направления стартового джиттера.
+    /// Salt for the starting-jitter direction.
     static let startJitterSalt: UInt64 = 0x517cc1b727220a95
 
-    /// Доля пути к цели за кадр для экспоненциального сглаживания,
-    /// нормированная к длительности кадра (не зависит от fps).
+    /// Fraction of the path toward the target per frame for exponential smoothing,
+    /// normalized to the frame duration (fps-independent).
     static func smoothingFactor(smoothing: Float, deltaSeconds: TimeInterval) -> Float {
         let clamped = simd_clamp(smoothing, 0.0, 1.0)
         guard deltaSeconds > 0 else {
@@ -49,8 +49,8 @@ enum AvatarCollisionMath {
         return 1.0 - pow(1.0 - clamped, Float(deltaSeconds * 60.0))
     }
 
-    /// Детерминированное направление разведения пары узлов, когда их центры
-    /// совпадают и нормаль столкновения не определена.
+    /// Deterministic separation direction for a pair of nodes whose centers
+    /// coincide and whose collision normal is undefined.
     static func stableUnitDirection(idA: UInt64, idB: UInt64) -> SIMD2<Float> {
         var hash: UInt64 = 0xcbf29ce484222325
         for id in [min(idA, idB), max(idA, idB)] {
@@ -65,31 +65,32 @@ enum AvatarCollisionMath {
         return SIMD2<Float>(cos(angle), sin(angle))
     }
 
-    /// Базовый масштаб сдвинутого кружка: кружок всегда заметно меньше пина.
-    /// При тесноте кружок сжимается дальше, но не ниже compressedScale.
+    /// Base scale of a displaced circle: the circle is always noticeably smaller than the pin.
+    /// Under crowding the circle shrinks further, but never below compressedScale.
     static let displacedCircleScale: Float = 0.7
 
-    /// Глубина взаимного проникновения тел, при которой касание считается
-    /// полным для статической проверки формы.
+    /// Mutual body penetration depth at which the touch counts as full
+    /// for the static shape check.
     static let staticTouchDepthPx: Float = 8.0
 
-    /// Морф по фактическому касанию: полное тело маркера на якоре против
-    /// фактических (уже уменьшенных) тел соседей. Пока видимого касания нет,
-    /// маркер не реагирует - сосед-кружок не «давит» с дистанции.
+    /// Morph based on actual touch: the full marker body at its anchor versus
+    /// the actual (already shrunken) bodies of neighbors. While there is no
+    /// visible touch, the marker does not react - a neighbor circle does not
+    /// "push" from a distance.
     static func staticTouchMorph(overlapDepth: Float) -> Float {
         smoothstep(edge0: 0.0, edge1: staticTouchDepthPx, x: overlapDepth)
     }
 
-    /// Верхняя граница масштаба по форме: пин - полный размер, сдвинутый
-    /// кружок - не больше displacedCircleScale.
+    /// Shape-based scale upper bound: a pin - full size, a displaced
+    /// circle - no more than displacedCircleScale.
     static func scaleCap(morph: Float) -> Float {
         1.0 + (displacedCircleScale - 1.0) * simd_clamp(morph, 0.0, 1.0)
     }
 
-    /// Масштаб, при котором пара тел перестаёт пересекаться на данной
-    /// дистанции; сжатие вынужденное, распределяется на оба тела поровну.
-    /// `otherIsRigid` - сосед не сжимается (выбранный или цветок): вся
-    /// нехватка места ложится на текущий маркер.
+    /// The scale at which a pair of bodies stops intersecting at the given
+    /// distance; the compression is forced and split evenly between both bodies.
+    /// `otherIsRigid` - the neighbor does not shrink (selected or a flower):
+    /// the entire shortfall of space falls on the current marker.
     static func requiredScale(distance: Float,
                               bodyRadius: Float,
                               otherBodyRadius: Float,
@@ -108,16 +109,16 @@ enum AvatarCollisionMath {
         return simd_clamp(scale, 0.0, 1.0)
     }
 
-    /// Максимум лепестков цветка-кластера; не вместившиеся участники скрыты.
+    /// Maximum petals in a cluster flower; members that do not fit are hidden.
     static let maxFlowerPetals = 7
 
-    /// Кластер обязан быть локальным: разброс экранных якорей его участников
-    /// не превышает этот множитель от размера маркера. Компоненты-переростки
-    /// (перколяция цепочек группировки на плотном поле) режутся мировой
-    /// сеткой, а слияния колец, нарушающие лимит, запрещаются.
+    /// A cluster must be local: the spread of its members' screen anchors
+    /// must not exceed this multiple of the marker size. Oversized components
+    /// (percolation of grouping chains on a dense field) are cut by the world
+    /// grid, and ring merges that would violate the limit are forbidden.
     static let flowerCompactnessLimitScale: Float = 2.5
 
-    /// Радиус кольца слотов цветка: соседние лепестки касаются друг друга.
+    /// Radius of the flower slot ring: adjacent petals touch each other.
     static func flowerRingRadius(petalBodyRadius: Float, petalCount: Int) -> Float {
         guard petalCount > 1 else {
             return 0.0
@@ -125,7 +126,7 @@ enum AvatarCollisionMath {
         return petalBodyRadius / sin(.pi / Float(petalCount))
     }
 
-    /// Позиция лепестка на кольце цветка; первый лепесток сверху.
+    /// Petal position on the flower ring; the first petal is at the top.
     static func flowerPetalOffset(index: Int, petalCount: Int, ringRadius: Float) -> SIMD2<Float> {
         guard petalCount > 0 else {
             return .zero
@@ -134,18 +135,19 @@ enum AvatarCollisionMath {
         return SIMD2<Float>(cos(angle), sin(angle)) * ringRadius
     }
 
-    /// Смещение, с которого сдвинутый маркер начинает превращаться в кружок.
+    /// Offset at which a displaced marker starts turning into a circle.
     static let displacedMorphStartPx: Float = 2.0
-    /// Смещение, при котором маркер полностью превращается в кружок с лучом.
+    /// Offset at which the marker fully turns into a circle with a beam.
     static let displacedMorphEndPx: Float = 10.0
 
-    /// Морф формы пин -> круг: форму пина маркер имеет только стоя ровно на
-    /// своей геоточке; любой сдвинутый соседями маркер становится кружком.
+    /// Pin -> circle shape morph: a marker keeps the pin shape only while
+    /// standing exactly on its geo point; any marker displaced by neighbors
+    /// becomes a circle.
     static func displacedMorph(offsetLength: Float) -> Float {
         smoothstep(edge0: displacedMorphStartPx, edge1: displacedMorphEndPx, x: offsetLength)
     }
 
-    /// Альфа бейджей: при сжатии маркера бейджи плавно скрываются.
+    /// Badge alpha: as the marker compresses, badges fade out smoothly.
     static func badgeContentAlpha(displayScale: Float) -> Float {
         smoothstep(edge0: badgeFadeStartScale, edge1: badgeFadeEndScale, x: displayScale)
     }

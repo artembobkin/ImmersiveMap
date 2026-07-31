@@ -6,9 +6,9 @@ import CoreGraphics
 import UIKit
 #endif
 
-/// Владеет persistent map overlay controls одного map view.
-/// На touch-платформах создает pitch/zoom control zones; attribution badge
-/// существует на всех платформах. Раскладывает контролы и предоставляет hit-testing.
+/// Owns the persistent map overlay controls of one map view.
+/// Creates pitch/zoom control zones on touch platforms; the attribution badge
+/// exists on all platforms. Lays out the controls and provides hit-testing.
 @MainActor
 final class ImmersiveMapControlsRuntime {
     #if canImport(UIKit)

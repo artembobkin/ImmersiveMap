@@ -4,8 +4,8 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Swift-структуры инстансов зеркалируются вручную в AvatarCommon.h - страйды
-/// и смещения полей закреплены, чтобы рассинхрон ловился без компиляции Metal.
+/// The Swift instance structs are mirrored by hand in AvatarCommon.h - strides
+/// and field offsets are pinned so a desync is caught without compiling Metal.
 final class AvatarGPUStructLayoutTests: XCTestCase {
     func testAvatarInstanceLayoutMatchesMetalMirror() throws {
         XCTAssertEqual(MemoryLayout<AvatarInstanceGPU>.stride, 64)

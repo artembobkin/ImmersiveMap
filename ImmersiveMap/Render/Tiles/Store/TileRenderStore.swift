@@ -4,8 +4,8 @@
 import Foundation
 import MetalKit
 
-/// Потокобезопасен (`@unchecked Sendable`): ссылки назначаются при wiring до
-/// старта загрузок, `memoryMetalTile` мутируется только на main actor.
+/// Thread-safe (`@unchecked Sendable`): references are assigned during wiring
+/// before loads start, `memoryMetalTile` is mutated only on the main actor.
 final class TileRenderStore: @unchecked Sendable {
     struct TileRequestResult {
         let readyTilesBySource: [Tile: MetalTile?]
@@ -66,9 +66,9 @@ final class TileRenderStore: @unchecked Sendable {
                                              preparedTileCacheIdentity: preparedTileCacheIdentity,
                                              tileTraceRecorder: tileTraceRecorder,
                                              tileLoadingStatusReporter: tileLoadingStatusReporter)
-        // Истечение backoff-окна будит on-demand рендер: кадр заново выполнит
-        // requestTiles и ретраит провалившиеся тайлы. Без этого дыра после
-        // ошибки загрузки висит до следующего жеста камеры.
+        // Backoff-window expiry wakes the on-demand renderer: the frame reruns
+        // requestTiles and retries the failed tiles. Without this, a hole left
+        // by a load failure hangs until the next camera gesture.
         mapNeedsTile!.onRetryWindowExpired = { [weak self] in
             self?.eventSink?.invalidate(.tileRetryDue)
         }
@@ -78,8 +78,8 @@ final class TileRenderStore: @unchecked Sendable {
         return memoryMetalTile.getTile(forKey: tile)
     }
 
-    // Версия содержимого кэша тайлов: меняется при материализации/вытеснении.
-    // Вместе с coverageVersion образует ключ dirty-гейта demand-конвейера.
+    // Tile cache content version: changes on materialization/eviction.
+    // Together with coverageVersion it forms the demand pipeline's dirty-gate key.
     var cacheContentVersion: UInt64 {
         memoryMetalTile.contentVersion
     }
@@ -158,8 +158,9 @@ final class TileRenderStore: @unchecked Sendable {
 
     func handleMemoryWarning() {
         mapNeedsTile?.cancelAll()
-        // Trim вместо полной очистки: видимые (защищённые) тайлы остаются в кэше,
-        // карта не пустеет и не перекачивает весь экран заново.
+        // Trim instead of a full clear: visible (protected) tiles stay in the
+        // cache, so the map does not go blank and does not redownload the
+        // whole screen.
         memoryMetalTile.trim(toFractionOfLimit: 0.25)
     }
 

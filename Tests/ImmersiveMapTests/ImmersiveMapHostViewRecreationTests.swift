@@ -9,9 +9,9 @@ import QuartzCore
 import XCTest
 @testable import ImmersiveMap
 
-/// Интеграция на реальном host view (нужен собранный Metal, поэтому
-/// в `swift test` тесты скипаются, под xcodebuild выполняются целиком):
-/// пересоздание host view и рендерера не должны ломать команды камеры.
+/// Integration on a real host view (requires compiled Metal, so the tests
+/// skip under `swift test` and run fully under xcodebuild):
+/// recreating the host view and the renderer must not break camera commands.
 final class ImmersiveMapHostViewRecreationTests: XCTestCase {
     private let overview = ImmersiveMapCameraPosition(latitudeDegrees: 25,
                                                       longitudeDegrees: -30,
@@ -20,8 +20,8 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
                                                    longitudeDegrees: 139.7005,
                                                    zoom: 4.0)
 
-    /// Порядок SwiftUI при смене identity: сначала makeNSView нового view,
-    /// затем dismantle старого. Камера обязана остаться привязанной к новому.
+    /// SwiftUI's order on identity change: first makeNSView of the new view,
+    /// then dismantle of the old one. The camera must stay bound to the new one.
     @MainActor
     func testNewHostViewKeepsCameraAttachedWhenOldViewDismantlesAfter() throws {
         try skipUnlessMetalAvailable()
@@ -49,9 +49,9 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
         XCTAssertEqual(position.latitudeDegrees, tokyo.latitudeDegrees, accuracy: 0.01)
     }
 
-    /// Пересоздание рендерера (тоггл debug-панели) завершает активный перелёт
-    /// с success == false вместо молчаливого проглатывания completion, и
-    /// следующий перелёт после пересоздания работает.
+    /// Recreating the renderer (debug panel toggle) finishes the active flight
+    /// with success == false instead of silently swallowing the completion, and
+    /// the next flight after recreation works.
     @MainActor
     func testRendererRecreationCompletesActiveFlightAndKeepsFlyWorking() throws {
         try skipUnlessMetalAvailable()
@@ -87,7 +87,7 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
         XCTAssertEqual(secondCompleted, true)
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     @MainActor
     private func makeHostView(camera: ImmersiveMapCameraController) -> ImmersiveMapNSView {

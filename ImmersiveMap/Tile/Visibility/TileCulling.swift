@@ -4,10 +4,10 @@
 import simd
 
 class TileCulling {
-    /// Зум подложки горизонта плоского режима: весь мир на этом зуме - 64
-    /// генерализованных тайла, след фрустума покрывают 1-4 из них, и все они
-    /// попадают в пиннинг мирового покрытия (z <= 3) - после прогрева подложка
-    /// не стоит ничего.
+    /// Zoom of the flat-mode horizon backdrop: at this zoom the whole world is
+    /// 64 generalized tiles, the frustum footprint is covered by 1-4 of them,
+    /// and all of them fall into the world-coverage pinning (z <= 3) - after
+    /// warm-up the backdrop costs nothing.
     static let flatBackdropZoomLevel = 3
 
     private let globeVisibleTileResolver: any GlobeVisibleTileResolving
@@ -60,10 +60,10 @@ class TileCulling {
                                    coverageVersion: coverageVersion)
     }
 
-    /// Подложка перечисляется тем же flat-резолвером на фиксированном грубом
-    /// зуме: на нём радиусный кламп (15 тайлов) шире мира, так что след
-    /// фрустума покрывается целиком - до самого горизонта. Порядок
-    /// детерминированный для стабильности хешей размещений.
+    /// The backdrop is enumerated by the same flat resolver at a fixed coarse
+    /// zoom: there the radius clamp (15 tiles) is wider than the world, so the
+    /// frustum footprint is covered entirely - all the way to the horizon. The
+    /// order is deterministic to keep placement hashes stable.
     private func resolveFlatBackdropTiles(centerWorldMercator: SIMD2<Double>,
                                           targetZoom: Int,
                                           flatRenderState: FlatRenderState,

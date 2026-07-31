@@ -315,9 +315,9 @@ class TextRenderer {
             return nil
         }
         let textureLoader = MTKTextureLoader(device: device)
-        // .private: атлас статичен, CPU-доступ после загрузки не нужен. Loader
-        // заливает данные через staging-блит, и у текстуры не остаётся теневой
-        // CPU-копии (managed/shared держали бы её всё время жизни).
+        // .private: the atlas is static, no CPU access is needed after upload. The
+        // loader fills the data via a staging blit, and the texture keeps no shadow
+        // CPU copy (managed/shared would hold one for its entire lifetime).
         let options: [MTKTextureLoader.Option: Any] = [
             .SRGB: false,
             .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)

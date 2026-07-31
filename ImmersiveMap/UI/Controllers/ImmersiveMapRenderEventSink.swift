@@ -3,11 +3,11 @@
 
 import Foundation
 
-/// Принимает события renderer-пайплайна и передает их владельцам runtime-состояния карты.
-/// Не владеет renderer и не принимает решений о кадре; только связывает render events
-/// с `ImmersiveMapRenderRuntime` и selection runtime.
-/// Потокобезопасен: weak-ссылки записываются только в init, адресаты сами
-/// потокобезопасны либо получают события через hop на main actor.
+/// Receives renderer-pipeline events and forwards them to the owners of the map's runtime state.
+/// Does not own the renderer and makes no frame decisions; it only connects render events
+/// to `ImmersiveMapRenderRuntime` and the selection runtime.
+/// Thread-safe: weak references are written only in init; the recipients are
+/// themselves thread-safe or receive events via a hop to the main actor.
 final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendable {
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
@@ -43,9 +43,9 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     }
 
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {
-        // Единственный вызов: RenderFrameEngine.renderFrame на main thread
-        // (display link в main runloop). Без hop: снапшот должен примениться
-        // в той же CA-транзакции, что и present этого кадра.
+        // The only caller: RenderFrameEngine.renderFrame on the main thread
+        // (display link in the main runloop). No hop: the snapshot must apply
+        // in the same CA transaction as this frame's present.
         MainActor.assumeIsolated {
             markerRuntime?.apply(snapshot)
         }

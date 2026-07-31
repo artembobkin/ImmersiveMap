@@ -6,7 +6,7 @@ import simd
 import XCTest
 
 final class CameraFlightOverviewProfileTests: XCTestCase {
-    // Токио -> Дубай из демо-раскадровки: примерно четверть мира по долготе.
+    // Tokyo -> Dubai from the demo storyboard: roughly a quarter of the world in longitude.
     private let tokyo = ImmersiveMapProjection.worldMercator(latitude: 35.6595 * .pi / 180,
                                                              longitude: 139.7005 * .pi / 180)
     private let dubai = ImmersiveMapProjection.worldMercator(latitude: 25.1972 * .pi / 180,
@@ -34,13 +34,13 @@ final class CameraFlightOverviewProfileTests: XCTestCase {
         let apexZoom = (0...100)
             .map { profile.sample(atProgress: Double($0) / 100).zoom }
             .min() ?? .infinity
-        // Межконтинентальный перелёт обязан подняться до вида глобуса.
+        // An intercontinental flight must climb to the globe view.
         XCTAssertLessThan(apexZoom, 4)
         XCTAssertGreaterThanOrEqual(apexZoom, 0)
     }
 
     func testShortFlightArcsModestly() throws {
-        // Соседние кварталы: около 400 м, дуга не должна улетать на глобус.
+        // Neighboring blocks: about 400 m, the arc must not fly off to the globe.
         let profile = try XCTUnwrap(
             CameraFlightMath.OverviewFlightProfile.make(startZoom: 16.5,
                                                         targetZoom: 16.5,
@@ -65,8 +65,8 @@ final class CameraFlightOverviewProfileTests: XCTestCase {
 
     func testPanCrawlsNearGroundAndCruisesAtApex() throws {
         let profile = try XCTUnwrap(makeCityToCityProfile())
-        // На первой десятой пути (у земли) центр почти не двигается,
-        // середина перелёта (апекс) покрывает основную дистанцию.
+        // During the first tenth of the path (near the ground) the center barely
+        // moves; the middle of the flight (the apex) covers most of the distance.
         let nearGround = profile.sample(atProgress: 0.1).panProgress
         let beforeMiddle = profile.sample(atProgress: 0.35).panProgress
         let afterMiddle = profile.sample(atProgress: 0.65).panProgress
@@ -81,8 +81,8 @@ final class CameraFlightOverviewProfileTests: XCTestCase {
     }
 
     func testRouteDistancesAgreeInScale() {
-        // Обе метрики в нормализованных мировых единицах: для экваториальных
-        // точек без наклона дуга и mercator-путь близки по длине.
+        // Both metrics are in normalized world units: for equatorial points
+        // without tilt the arc and the mercator path are close in length.
         let a = ImmersiveMapProjection.worldMercator(latitude: 0, longitude: 0)
         let b = ImmersiveMapProjection.worldMercator(latitude: 0, longitude: .pi / 2)
         let mercator = CameraFlightMath.mercatorRouteDistance(from: a, to: b)

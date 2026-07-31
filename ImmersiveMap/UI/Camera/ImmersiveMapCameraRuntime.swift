@@ -5,8 +5,8 @@ import CoreGraphics
 import Foundation
 import simd
 
-/// Владеет mutable camera state одного map view.
-/// Оборачивает `FrameCameraStateResolver`, применяет camera changes, хранит settings и запрашивает frames.
+/// Owns the mutable camera state of one map view.
+/// Wraps `FrameCameraStateResolver`, applies camera changes, stores settings and requests frames.
 @MainActor
 final class ImmersiveMapCameraRuntime {
     private let initialCameraPosition: ImmersiveMapCameraPosition?
@@ -254,9 +254,9 @@ final class ImmersiveMapCameraRuntime {
         renderRuntime.requestFrame()
     }
 
-    /// Целевая позиция для анимированного anchored-зума (двойной tap/click):
-    /// зум меняется на `zoomDelta`, центр смещается так, чтобы точка мира под
-    /// `anchorPoint` осталась на месте (с учётом `zoomAnchorFactor`).
+    /// Target position for an animated anchored zoom (double tap/click):
+    /// zoom changes by `zoomDelta`, the center shifts so that the world point
+    /// under `anchorPoint` stays put (subject to `zoomAnchorFactor`).
     func anchoredZoomTargetPosition(zoomDelta: Double,
                                     anchorPoint: CGPoint) -> ImmersiveMapCameraPosition? {
         guard let stateBefore = renderCamera?.currentCameraState() else {
@@ -271,8 +271,8 @@ final class ImmersiveMapCameraRuntime {
         return stateAfter.cameraPosition()
     }
 
-    /// Сдвигает центр карты после уже применённого зума так, чтобы точка мира под
-    /// `anchorPoint` осталась под ним (доля `zoomAnchorFactor`).
+    /// Shifts the map center after an already-applied zoom so that the world point
+    /// under `anchorPoint` stays under it (by the `zoomAnchorFactor` fraction).
     private func applyZoomAnchorCompensation(stateBefore: ImmersiveMapCameraState?,
                                              anchorPoint: CGPoint?) {
         guard let stateBefore,

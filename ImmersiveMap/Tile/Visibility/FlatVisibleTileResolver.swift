@@ -53,11 +53,11 @@ enum FlatVisibleTileResolver {
         return visibleTiles
     }
 
-    // Сканлайн по строкам кандидатов: полигон покрытия выпуклый, поэтому его
-    // пересечение с горизонтальной полосой строки - один интервал по x, и все
-    // тайлы строки в этом интервале пересекают полигон, остальные - нет.
-    // Заменяет пер-тайловые полигон-тесты (O(кандидаты × рёбра) с аллокациями
-    // на каждый тест) на O(строки × рёбра) без аллокаций.
+    // Scanline over candidate rows: the coverage polygon is convex, so its
+    // intersection with a row's horizontal band is a single x interval, and
+    // all tiles of the row inside that interval intersect the polygon while
+    // the rest do not. Replaces per-tile polygon tests (O(candidates × edges)
+    // with allocations per test) with O(rows × edges) and no allocations.
     private static func insertRowTiles(into visibleTiles: inout Set<VisibleTile>,
                                        coveragePolygon: CoveragePolygon,
                                        candidateRange: TileCandidateRange,
@@ -95,8 +95,8 @@ enum FlatVisibleTileResolver {
         }
     }
 
-    // Internal для тестов: property-тесты сверяют сканлайн с эталонной
-    // пер-тайловой проверкой на том же полигоне.
+    // Internal for tests: property tests compare the scanline against the
+    // reference per-tile check on the same polygon.
     static func makeCoveragePolygon(cameraMatrix: matrix_float4x4?) -> CoveragePolygon? {
         guard let cameraMatrix else {
             return nil
@@ -244,11 +244,12 @@ enum FlatVisibleTileResolver {
         let minRowFromBottom = Int(floor((Double(coverageBounds.minY) - yOffset - padding) / tileSize))
         let maxRowFromBottom = Int(floor((Double(coverageBounds.maxY) - yOffset + padding) / tileSize))
 
-        // Кламп радиусом дистанционного фильтра препроцессора: всё дальше
-        // maxRelativeDistance от центра он выбрасывает, а bbox полигона,
-        // вытянутого к горизонту при большом наклоне камеры, накрывает
-        // миллионы тайлов-кандидатов. Центр переводится в систему текущей
-        // мировой копии (`loop`), как в VisibleTileRelativeDistance.
+        // Clamp by the preprocessor's distance-filter radius: it discards
+        // everything farther than maxRelativeDistance from the center, while
+        // the bbox of a polygon stretched toward the horizon at a large camera
+        // tilt covers millions of candidate tiles. The center is converted
+        // into the current world copy's frame (`loop`), as in
+        // VisibleTileRelativeDistance.
         let centerTileX = Int(center.tileX) - Int(loop) * tilesCount
         let centerTileY = Int(center.tileY)
 
@@ -310,10 +311,10 @@ struct CoveragePolygon {
         bounds = CoverageBounds(minX: minX, maxX: maxX, minY: minY, maxY: maxY)
     }
 
-    // Интервал x пересечения выпуклого полигона с горизонтальной полосой.
-    // Полигон ∩ полоса - выпуклая область; экстремумы её x достигаются в
-    // вершинах полигона внутри полосы либо в точках пересечения рёбер с
-    // границами полосы - перебора внутренних точек не требуется.
+    // The x interval of a convex polygon's intersection with a horizontal band.
+    // Polygon ∩ band is a convex region; its x extrema are attained at polygon
+    // vertices inside the band or at edge intersections with the band
+    // boundaries, so no interior points need to be enumerated.
     func horizontalSlabXRange(slabMinY: Float, slabMaxY: Float) -> ClosedRange<Float>? {
         var lowestX = Float.greatestFiniteMagnitude
         var highestX = -Float.greatestFiniteMagnitude

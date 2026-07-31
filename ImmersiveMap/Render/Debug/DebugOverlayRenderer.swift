@@ -191,11 +191,11 @@ final class DebugOverlayRenderer {
         }
     }
 
-    /// Рамки всех лейблов кадра в экранных координатах: видимые и спрятанные
-    /// (коллизией, горизонтом лейбла или фейдом). Базовые лейблы зелёные и
-    /// красные, дорожные (по глифу на рамку) голубые и оранжевые: они
-    /// участвуют в том же коллизионном решателе. Даёт визуальную оценку
-    /// общего количества лейблов, участвующих в кадре.
+    /// Frames of all labels in the frame in screen coordinates: visible and
+    /// hidden (by collision, label horizon or fade). Base labels are green and
+    /// red, road labels (one glyph per frame) cyan and orange: they take part
+    /// in the same collision solver. Gives a visual estimate of the total
+    /// number of labels participating in the frame.
     func drawLabelBoundsOverlay(renderEncoder: MTLRenderCommandEncoder,
                                 polygonPipeline: PolygonsPipeline,
                                 frameContext: FrameContext,
@@ -472,9 +472,9 @@ final class DebugOverlayRenderer {
                                      tileSlotIndex: 0))
     }
 
-    /// Возле сингулярности проекции (clip.w -> 0+) аффинные оси водяного знака взрываются,
-    /// и один глиф размазывается на весь экран. Якорь отбрасывается, если оси невалидны,
-    /// экранный размер текста запределен или текст целиком вне вьюпорта.
+    /// Near the projection singularity (clip.w -> 0+) the watermark's affine axes blow up
+    /// and a single glyph smears across the whole screen. The anchor is discarded if the
+    /// axes are invalid, the on-screen text size is extreme, or the text is entirely outside the viewport.
     static func makeTileWatermarkScreenPlacement(center: SIMD2<Float>,
                                                  xUnitPoint: SIMD2<Float>,
                                                  yUnitPoint: SIMD2<Float>,
@@ -707,8 +707,8 @@ final class DebugOverlayRenderer {
         }
         guard acceptedAnchorUVs.isEmpty == false else { return }
 
-        // Каждая вершина глифа проецируется точно: аффинная экстраполяция от якоря
-        // при наклоне камеры «поднимала» текст из плоскости карты на камеру.
+        // Each glyph vertex is projected exactly: affine extrapolation from the anchor
+        // used to "lift" the text out of the map plane toward the camera when tilted.
         tileWatermarkVertexInputsScratch.removeAll(keepingCapacity: true)
         tileWatermarkVertexInputsScratch.reserveCapacity(acceptedAnchorUVs.count * metrics.vertices.count)
         let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),

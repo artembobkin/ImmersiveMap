@@ -5,9 +5,9 @@
 import CoreGraphics
 import XCTest
 
-/// Merged-маркеры: `merge` скрывает участников и показывает один маркер с
-/// усреднённым гео, счётчиком и циклической сменой картинки участников;
-/// `unmerge` возвращает участников на карту.
+/// Merged markers: `merge` hides the members and shows a single marker with
+/// averaged geo, a counter, and a cycling rotation of member images;
+/// `unmerge` returns the members to the map.
 final class AvatarMergedMarkersTests: XCTestCase {
     private let mergedID: UInt64 = 100
 
@@ -163,7 +163,7 @@ final class AvatarMergedMarkersTests: XCTestCase {
         XCTAssertEqual(controller.mergedMemberIDs(mergedID: mergedID), [1, 2])
     }
 
-    // MARK: - Хелперы
+    // MARK: - Helpers
 
     private func makeMergedController(imageA: CGImage? = nil,
                                       imageB: CGImage? = nil) throws -> ImmersiveMapAvatarsController {

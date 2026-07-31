@@ -3,20 +3,21 @@
 
 import Foundation
 
-/// Гистерезис выгрузки страниц глобусного атласа. Страницы (86 МиБ каждая при
-/// 4096 px с мипами) нужны только spherical-режиму, но освобождать их сразу на
-/// границе глобус/плоскость нельзя: осцилляция зума вокруг порога перехода
-/// пересоздавала бы сотни МиБ текстур каждые несколько кадров. Страницы
-/// отпускаются после устойчивого пребывания в flat; возврат на глобус стоит
-/// одной перерисовки страниц по актуальному плану атласа.
+/// Hysteresis for releasing globe atlas pages. The pages (86 MiB each at
+/// 4096 px with mips) are needed only by spherical mode, but freeing them right
+/// at the globe/flat boundary is not an option: zoom oscillation around the
+/// transition threshold would recreate hundreds of MiB of textures every few
+/// frames. Pages are released after a sustained stay in flat; returning to the
+/// globe costs one repaint of the pages against the current atlas plan.
 struct TileAtlasPageRetention {
-    /// Секунды flat-рендера, после которых страницы атласа выгружаются.
+    /// Seconds of flat rendering after which the atlas pages are released.
     static let releaseDelay: TimeInterval = 5
 
     private var lastSphericalTime: TimeInterval?
 
-    /// Вызывается раз в кадр. Возвращает true ровно один раз, когда страницы
-    /// пора выгрузить: карта дольше `releaseDelay` в flat, а страницы ещё живы.
+    /// Called once per frame. Returns true exactly once, when the pages are due
+    /// for release: the map has been flat longer than `releaseDelay` and the
+    /// pages are still alive.
     mutating func shouldReleasePages(isSpherical: Bool,
                                      hasPages: Bool,
                                      time: TimeInterval) -> Bool {
@@ -29,8 +30,9 @@ struct TileAtlasPageRetention {
             return false
         }
         guard let lastSphericalTime else {
-            // Страницы есть, а глобусного кадра ещё не видели: отсчёт с текущего
-            // кадра, чтобы не выгружать по «бесконечно давнему» глобусу.
+            // Pages exist but no spherical frame has been seen yet: start counting
+            // from the current frame to avoid releasing based on an "infinitely
+            // old" globe.
             self.lastSphericalTime = time
             return false
         }
