@@ -22,9 +22,9 @@ final class AttributionBadgeView: NSView {
 
     override var isFlipped: Bool { true }
 
-    convenience init(settings: ImmersiveMapSettings.AttributionSettings) {
+    convenience init(attribution: ImmersiveMapAttribution, isVisible: Bool) {
         self.init(frame: .zero)
-        apply(settings)
+        apply(attribution, isVisible: isVisible)
     }
 
     override init(frame frameRect: NSRect) {
@@ -65,11 +65,12 @@ final class AttributionBadgeView: NSView {
         return super.hitTest(point)
     }
 
-    func apply(_ settings: ImmersiveMapSettings.AttributionSettings) {
-        isHidden = settings.isVisible == false
-        linkURL = settings.linkURL
-        titleLabel.stringValue = settings.title
-        copyrightLabel.stringValue = settings.copyright
+    /// Пустая атрибуция прячет бейдж целиком: рисовать пустую плашку незачем.
+    func apply(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
+        isHidden = isVisible == false || attribution.isEmpty
+        linkURL = attribution.linkURL
+        titleLabel.stringValue = attribution.title
+        copyrightLabel.stringValue = attribution.copyright
         needsLayout = true
     }
 

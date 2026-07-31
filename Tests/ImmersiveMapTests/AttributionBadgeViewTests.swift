@@ -10,9 +10,19 @@ import XCTest
 @MainActor
 final class AttributionBadgeViewTests: XCTestCase {
     func testDefaultAttributionBadgeIsInteractive() {
-        let view = AttributionBadgeView(settings: ImmersiveMapSettings.default.attribution)
+        let settings = ImmersiveMapSettings.default
+        let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
+                                        isVisible: settings.attribution.isVisible)
 
         XCTAssertTrue(view.isUserInteractionEnabled)
+        XCTAssertFalse(view.isHidden)
+    }
+
+    func testEmptyAttributionHidesBadge() {
+        let view = AttributionBadgeView(attribution: .none, isVisible: true)
+
+        XCTAssertTrue(view.isHidden)
+        XCTAssertFalse(view.isUserInteractionEnabled)
     }
 }
 

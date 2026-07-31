@@ -32,6 +32,7 @@ public protocol ImmersiveMapTileProvider {
     var configurationFingerprint: UInt64 { get }
     var tileSource: ImmersiveMapTileSource { get }
     var maximumTileZoomLevel: Int? { get }
+    var attribution: ImmersiveMapAttribution { get }
 }
 ```
 
@@ -40,6 +41,7 @@ public protocol ImmersiveMapTileProvider {
 - `configurationFingerprint` - an FNV-1a fingerprint of the provider configuration. **This is important:** the fingerprint drives disk-cache identity, so any change to provider config that changes the produced tiles must change the fingerprint. Otherwise stale tiles are served from disk.
 - `tileSource` - describes the tile URLs / scheme.
 - `maximumTileZoomLevel` - optional cap on requested zoom.
+- `attribution` - what the attribution badge shows while this provider is active. Defaults to `.none`, which renders no badge at all.
 
 The built-in `ImmersiveMapTilesProvider` and `MapboxTileProvider` are concrete examples worth reading.
 
@@ -53,4 +55,26 @@ MVT layers differ between providers (Mapbox Streets vs OpenMapTiles). Provider-s
 
 ## Attribution
 
-Tile provider terms and attribution are the responsibility of the app developer. Make sure your app satisfies the license and attribution requirements of whatever tile source you point at.
+The attribution badge takes its text from the active tile provider, so a provider is the right place to declare who owns the data it fetches. The engine never substitutes its own name: a provider that declares nothing renders no badge.
+
+Most open data carries a licence obligation. OpenStreetMap under ODbL requires visible credit, and so do OpenMapTiles and every commercial provider. Declare it:
+
+```swift
+let provider = VectorTileProvider(
+    id: "my-tiles",
+    tileSource: .immersiveMapTiles(tileBaseURL: myTileURL, apiKey: nil),
+    attribution: .openStreetMap
+)
+```
+
+Or spell it out for a mixed or custom dataset:
+
+```swift
+attribution: ImmersiveMapAttribution(
+    title: "© OpenStreetMap contributors",
+    copyright: "My Company basemap",
+    linkURL: URL(string: "https://www.openstreetmap.org/copyright")
+)
+```
+
+An app can override the badge text with `attributionSettings(.init(attributionOverride:))` or hide it with `attributionSettings(.init(isVisible: false))`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence.

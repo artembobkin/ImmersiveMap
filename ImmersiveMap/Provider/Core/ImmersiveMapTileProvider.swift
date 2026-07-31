@@ -9,6 +9,18 @@ public protocol ImmersiveMapTileProvider: Sendable {
     var configurationFingerprint: UInt64 { get }
     var tileSource: ImmersiveMapTileSource { get }
     var maximumTileZoomLevel: Int? { get }
+
+    /// Атрибуция источника данных этих тайлов. Показывается бейджем карты, пока
+    /// приложение не переопределит ее через `attributionSettings`.
+    var attribution: ImmersiveMapAttribution { get }
+}
+
+public extension ImmersiveMapTileProvider {
+    /// Провайдер, не объявивший атрибуцию, не получает ее от движка: пустой бейдж
+    /// честнее, чем чужие данные под брендом рендерера. Если источник требует
+    /// атрибуции (OSM и большинство открытых данных - требуют), задать ее обязан
+    /// автор провайдера.
+    var attribution: ImmersiveMapAttribution { .none }
 }
 
 protocol ImmersiveMapTileProviderRuntime: Sendable {
@@ -21,6 +33,7 @@ public struct AnyImmersiveMapTileProvider: Equatable, Sendable {
     public let configurationFingerprint: UInt64
     public let tileSource: ImmersiveMapTileSource
     public let maximumTileZoomLevel: Int?
+    public let attribution: ImmersiveMapAttribution
 
     private let labelProviderProfileFactory: @Sendable (ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
 
@@ -30,6 +43,7 @@ public struct AnyImmersiveMapTileProvider: Equatable, Sendable {
         self.configurationFingerprint = provider.configurationFingerprint
         self.tileSource = provider.tileSource
         self.maximumTileZoomLevel = provider.maximumTileZoomLevel
+        self.attribution = provider.attribution
 
         if let runtimeProvider = provider as? ImmersiveMapTileProviderRuntime {
             self.labelProviderProfileFactory = runtimeProvider.makeLabelProviderProfile
@@ -48,6 +62,7 @@ public struct AnyImmersiveMapTileProvider: Equatable, Sendable {
             && lhs.configurationFingerprint == rhs.configurationFingerprint
             && lhs.tileSource == rhs.tileSource
             && lhs.maximumTileZoomLevel == rhs.maximumTileZoomLevel
+            && lhs.attribution == rhs.attribution
     }
 
     func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
@@ -62,18 +77,24 @@ public struct VectorTileProvider: ImmersiveMapTileProvider {
     public let tileSource: ImmersiveMapTileSource
     public let labelProfile: ImmersiveMapVectorTileLabelProfile
     public let maximumTileZoomLevel: Int?
+    public let attribution: ImmersiveMapAttribution
 
+    /// - Parameter attribution: атрибуция источника тайлов. Для данных OpenStreetMap
+    ///   и других открытых данных она обязательна по лицензии, готовое значение для
+    ///   чистого OSM - `.openStreetMap`.
     public init(id: String,
                 cacheNamespace: String? = nil,
                 tileSource: ImmersiveMapTileSource,
                 labelProfile: ImmersiveMapVectorTileLabelProfile = .generic,
                 maximumTileZoomLevel: Int? = nil,
+                attribution: ImmersiveMapAttribution = .none,
                 configurationFingerprint: UInt64? = nil) {
         self.id = id
         self.cacheNamespace = cacheNamespace ?? id
         self.tileSource = tileSource
         self.labelProfile = labelProfile
         self.maximumTileZoomLevel = maximumTileZoomLevel
+        self.attribution = attribution
         self.configurationFingerprint = configurationFingerprint
             ?? Self.makeFingerprint(id: id,
                                     cacheNamespace: cacheNamespace ?? id,

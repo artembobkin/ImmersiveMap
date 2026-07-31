@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Foundation
+
 public struct MapboxTileProvider: ImmersiveMapTileProvider {
     public static let defaultTilesetID = "mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2"
     public static let defaultMaximumTileZoomLevel = 20
@@ -31,6 +33,15 @@ public struct MapboxTileProvider: ImmersiveMapTileProvider {
 
     public var maximumTileZoomLevel: Int? {
         Self.defaultMaximumTileZoomLevel
+    }
+
+    /// Mapbox требует показывать свой копирайт и копирайт OpenStreetMap рядом с картой.
+    public var attribution: ImmersiveMapAttribution {
+        ImmersiveMapAttribution(
+            title: "© Mapbox © OpenStreetMap",
+            copyright: "Improve this map",
+            linkURL: URL(string: "https://www.mapbox.com/about/maps/")
+        )
     }
 
     public init(accessToken: String?,

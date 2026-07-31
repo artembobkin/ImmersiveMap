@@ -20,9 +20,9 @@ final class AttributionBadgeView: UIView {
     private let copyrightLabel = UILabel()
     private var linkURL: URL?
 
-    convenience init(settings: ImmersiveMapSettings.AttributionSettings) {
+    convenience init(attribution: ImmersiveMapAttribution, isVisible: Bool) {
         self.init(frame: .zero)
-        apply(settings)
+        apply(attribution, isVisible: isVisible)
     }
 
     override init(frame: CGRect) {
@@ -56,13 +56,14 @@ final class AttributionBadgeView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func apply(_ settings: ImmersiveMapSettings.AttributionSettings) {
-        isHidden = settings.isVisible == false
-        linkURL = settings.linkURL
-        isUserInteractionEnabled = settings.linkURL != nil
-        accessibilityTraits = settings.linkURL == nil ? [] : [.link]
-        titleLabel.text = settings.title
-        copyrightLabel.text = settings.copyright
+    /// Пустая атрибуция прячет бейдж целиком: рисовать пустую плашку незачем.
+    func apply(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
+        isHidden = isVisible == false || attribution.isEmpty
+        linkURL = attribution.linkURL
+        isUserInteractionEnabled = attribution.linkURL != nil
+        accessibilityTraits = attribution.linkURL == nil ? [] : [.link]
+        titleLabel.text = attribution.title
+        copyrightLabel.text = attribution.copyright
         setNeedsLayout()
     }
 

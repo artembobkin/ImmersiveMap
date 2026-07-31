@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [Unreleased]
+
+### Fixed
+
+- Attribution now credits the data source instead of the engine. The badge previously showed "Immersive map, © 2025-2026 ImmersiveMap contributors" over OpenStreetMap data, which satisfies neither ODbL nor the OpenMapTiles and Mapbox terms. Attribution is now a property of the tile provider (`ImmersiveMapTileProvider.attribution`): the built-in tiles credit OpenStreetMap, OpenFreeMap and OpenMapTiles, `MapboxTileProvider` credits Mapbox and OpenStreetMap, and a provider that declares no attribution renders no badge at all instead of borrowing someone else's name.
+
+### Changed
+
+- `ImmersiveMapSettings.AttributionSettings` no longer carries `title`, `copyright` and `linkURL`. It keeps `isVisible` plus an optional `attributionOverride`, and the resolved text comes from the active tile provider unless the app overrides it. `VectorTileProvider` gained an `attribution` parameter (`.none` by default, with `.openStreetMap` provided for plain OSM sources). Switching tile providers now updates the badge live.
+- README documents where the default tiles come from (an OpenMapTiles-schema planet assembled from OpenFreeMap data, i.e. OpenStreetMap data under ODbL), how to point the engine at your own MVT source, and how attribution is resolved. Status wording that described the package as unfinished was dropped in favour of a feature list.
+
 ## [0.4.1] - 2026-07-30
 
 ### Changed

@@ -111,7 +111,10 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
         }
-        if oldValue.attribution != newValue.attribution {
+        // Бейдж меняется и когда сменился провайдер тайлов без изменения самих настроек:
+        // текст атрибуции по умолчанию принадлежит провайдеру.
+        if oldValue.attribution != newValue.attribution
+            || oldValue.resolvedAttribution != newValue.resolvedAttribution {
             mark(.attribution, actions: [.liveApply])
         }
         if oldValue.postProcessing != newValue.postProcessing {

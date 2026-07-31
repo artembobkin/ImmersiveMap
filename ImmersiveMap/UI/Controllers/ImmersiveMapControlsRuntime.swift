@@ -25,13 +25,15 @@ final class ImmersiveMapControlsRuntime {
                                                  mapPanGesture: mapPanGesture)
         self.zoomControlZone = ZoomControlZone(mapView: mapView,
                                                mapPanGesture: mapPanGesture)
-        self.attributionBadge = AttributionBadgeView(settings: settings.attribution)
+        self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
+                                                     isVisible: settings.attribution.isVisible)
         mapView.addSubview(attributionBadge)
     }
     #else
     init(mapView: ImmersiveMapHostView,
          settings: ImmersiveMapSettings) {
-        self.attributionBadge = AttributionBadgeView(settings: settings.attribution)
+        self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
+                                                     isVisible: settings.attribution.isVisible)
         mapView.addSubview(attributionBadge)
     }
     #endif
@@ -54,8 +56,8 @@ final class ImmersiveMapControlsRuntime {
         #endif
     }
 
-    func applyAttributionSettings(_ settings: ImmersiveMapSettings.AttributionSettings) {
-        attributionBadge.apply(settings)
+    func applyAttribution(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
+        attributionBadge.apply(attribution, isVisible: isVisible)
     }
 
     func syncPitch(cameraPosition: ImmersiveMapCameraPosition?,

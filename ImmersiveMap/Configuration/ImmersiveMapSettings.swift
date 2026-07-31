@@ -645,20 +645,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// Настройки бейджа атрибуции. Текст по умолчанию берется у провайдера тайлов:
+    /// чьи данные показываем, того и называем. Переопределять его стоит только тогда,
+    /// когда приложение показывает атрибуцию источника где-то еще (собственный экран
+    /// «О программе», кастомный оверлей) и лицензия источника это допускает.
     public struct AttributionSettings: Equatable, Sendable {
         public var isVisible: Bool
-        public var title: String
-        public var copyright: String
-        public var linkURL: URL?
+        public var attributionOverride: ImmersiveMapAttribution?
 
         public init(isVisible: Bool = true,
-                    title: String = "Immersive map",
-                    copyright: String = "© 2025-2026 ImmersiveMap contributors",
-                    linkURL: URL? = URL(string: "https://github.com/artembobkin/ImmersiveMap")) {
+                    attributionOverride: ImmersiveMapAttribution? = nil) {
             self.isVisible = isVisible
-            self.title = title
-            self.copyright = copyright
-            self.linkURL = linkURL
+            self.attributionOverride = attributionOverride
         }
     }
 
@@ -1066,6 +1064,12 @@ public extension ImmersiveMapSettings {
         var settings = self
         settings.attribution = attribution
         return settings
+    }
+
+    /// Что реально показывает бейдж: переопределение приложения, а если его нет -
+    /// атрибуция текущего провайдера тайлов.
+    var resolvedAttribution: ImmersiveMapAttribution {
+        attribution.attributionOverride ?? tileProvider.attribution
     }
 
     func postProcessingSettings(_ postProcessing: PostProcessingSettings) -> ImmersiveMapSettings {

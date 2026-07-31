@@ -279,10 +279,10 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let scene = ImmersiveMapSettings.default.scene
         let style = ImmersiveMapSettings.default.style
         let avatars = ImmersiveMapSettings.default.avatars
-        let attribution = ImmersiveMapSettings.AttributionSettings(isVisible: false,
-                                                                   title: "Tiles",
-                                                                   copyright: "Copyright",
-                                                                   linkURL: nil)
+        let attribution = ImmersiveMapSettings.AttributionSettings(
+            isVisible: false,
+            attributionOverride: ImmersiveMapAttribution(title: "Tiles", copyright: "Copyright")
+        )
         let postProcessing = ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true)
         let debug = ImmersiveMapSettings.DebugSettings(enableDebugPanel: true,
                                                        coordinateScale: 1,

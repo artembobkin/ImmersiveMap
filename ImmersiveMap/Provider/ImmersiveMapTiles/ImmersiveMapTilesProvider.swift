@@ -51,6 +51,17 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
         Self.defaultMaximumTileZoomLevel
     }
 
+    /// The hosted service serves an OpenFreeMap planet build in the OpenMapTiles
+    /// schema, which is OpenStreetMap data under ODbL. Naming all three is a licence
+    /// requirement, not decoration, so this is what the badge shows out of the box.
+    public var attribution: ImmersiveMapAttribution {
+        ImmersiveMapAttribution(
+            title: "© OpenStreetMap contributors",
+            copyright: "OpenFreeMap © OpenMapTiles",
+            linkURL: URL(string: "https://www.openstreetmap.org/copyright")
+        )
+    }
+
     /// - Parameters:
     ///   - tileBaseURL: base of the tile endpoint, e.g. `http://host:8080/tiles`.
     ///     The loader appends `/{z}/{x}/{y}.mvt`. Defaults to the hosted service.
