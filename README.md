@@ -86,6 +86,23 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | Offline maps | Planned |
 | 3D Tiles | Planned |
 
+## App size
+
+Measured from a Release archive of the iOS demo app (`ImmersiveMapIOS`, arm64, unsigned). That demo is 25 lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
+
+| Part | Size |
+|---|---|
+| **App bundle, total** | **6.7 MB** |
+| Binary (engine, SwiftEarcut, SwiftProtobuf) | 3.9 MB |
+| Resources | 2.8 MB |
+| ├ MSDF font atlases, two weights | 2.2 MB |
+| ├ Compiled Metal library | 276 KB |
+| └ Glyph metrics | 192 KB |
+
+Most of the resource weight is the bundled Noto Sans MSDF atlases that draw every label on the map. If your app only needs a subset of scripts, regenerate smaller atlases with `Tools/TextAtlas/generate_text_atlas.sh`.
+
+The App Store download size is lower than the archive size, since the store compresses and thins the bundle.
+
 ## Example Apps
 
 The repository includes two host apps that reference the package locally:
@@ -135,7 +152,7 @@ You can restyle or relocate the badge, and hide it with `attributionSettings(.in
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit. Its own API, so adopting it means writing the map layer against ImmersiveMap.
 - Apple platforms only. Requires Metal.
 - Offline maps and 3D tiles are not implemented yet.
-- Published performance numbers are not available yet, measurement is in progress.
+- App size is measured (see [App size](#app-size)), frame time and memory numbers are not published yet.
 - Maintained by one person. Issues and integration questions are answered quickly, but plan accordingly.
 
 ## Contributing
