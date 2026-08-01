@@ -44,7 +44,8 @@ let package = Package(
                 "Tile/README.md",
                 "UI/README.md",
                 "Utils/README.md",
-                "VectorTileAdaptation/README.md"
+                "VectorTileAdaptation/README.md",
+                "VideoExport/README.md"
             ],
             resources: [
                 .process("Render/Avatars/Resources/avatar_marker_sdf.json"),

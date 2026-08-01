@@ -8,6 +8,10 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Added
+
+- `ImmersiveMapTourVideoRecorder`: exports a camera tour to a QuickTime video file. Attach it with `.tourVideoRecorder(_:)` on `ImmersiveMapView` and call `export(shots:establish:configuration:to:)` with the same `ImmersiveMapCameraTourShot` list a live tour uses. The tour is rendered offline into a second, headless render engine at an exact fixed timestep: every frame waits for its tiles (with a configurable timeout), a pre-roll settles label and avatar fades before the first frame, and the on-screen map stays interactive throughout. Avatar markers render from a detached copy of the avatar state taken at export start (renderer snapshots are consumed destructively, so two engines cannot share one controller), and SwiftUI markers are rasterized once and composited onto each frame at their projected positions with the live overlay's anchor and horizon-fade semantics; both can be excluded via `includesAvatars` / `includesMarkers`, and `markerScale` controls marker rasterization density. Output defaults to HEVC 1920×1080 at 60 fps in `.mov` with BT.709 tagging; codec (`.hevc`/`.h264`), resolution, frame rate, and bit rate are configurable via `ImmersiveMapVideoExportConfiguration`. Progress is reported through `onProgress`, `cancel()` deletes the partial file. The attribution badge is host-view chrome and is not part of the exported frames. See `Documentation/docs/tour-video-export.md`.
+
 ### Fixed
 
 - Attribution now credits the data source instead of the engine. The badge previously showed "Immersive map, © 2025-2026 ImmersiveMap contributors" over OpenStreetMap data, which satisfies neither ODbL nor the OpenMapTiles and Mapbox terms. Attribution is now a property of the tile provider (`ImmersiveMapTileProvider.attribution`): the built-in tiles credit OpenStreetMap, OpenFreeMap and OpenMapTiles, `MapboxTileProvider` credits Mapbox and OpenStreetMap, and a provider that declares no attribution renders no badge at all instead of borrowing someone else's name.

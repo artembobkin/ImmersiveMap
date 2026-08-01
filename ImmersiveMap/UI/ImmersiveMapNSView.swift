@@ -200,14 +200,16 @@ public class ImmersiveMapNSView: NSView {
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 markerContent: MarkerViewContent?,
-                cameraPosition: ImmersiveMapCameraPosition?) {
+                cameraPosition: ImmersiveMapCameraPosition?,
+                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
                            markerContent: markerContent,
-                           cameraPosition: cameraPosition)
+                           cameraPosition: cameraPosition,
+                           tourVideoRecorder: tourVideoRecorder)
     }
 
     func dismantle() {

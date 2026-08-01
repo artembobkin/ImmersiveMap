@@ -13,6 +13,10 @@ final class ImmersiveMapHostRuntime {
     private(set) var renderer: RenderFrameEngine?
     private let metalLayer: CAMetalLayer
     private let requestsLayout: () -> Void
+    private weak var attachedTourVideoRecorder: ImmersiveMapTourVideoRecorder?
+    /// Kept for the tour video recorder: the export rasterizes the current
+    /// marker views into the video.
+    private var currentMarkerContent: MarkerViewContent?
 
     init(mapView: ImmersiveMapHostView,
          layer: CAMetalLayer,
@@ -56,17 +60,20 @@ final class ImmersiveMapHostRuntime {
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 markerContent: MarkerViewContent?,
-                cameraPosition: ImmersiveMapCameraPosition?) {
+                cameraPosition: ImmersiveMapCameraPosition?,
+                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction)
+        syncTourVideoRecorder(tourVideoRecorder)
         updateMarkerContent(markerContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
     }
 
     func updateMarkerContent(_ markerContent: MarkerViewContent?) {
+        currentMarkerContent = markerContent
         runtimeGraph.markerRuntime.update(content: markerContent)
     }
 
@@ -75,6 +82,7 @@ final class ImmersiveMapHostRuntime {
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil)
+        syncTourVideoRecorder(nil)
         updateMarkerContent(nil)
     }
 
@@ -136,6 +144,30 @@ final class ImmersiveMapHostRuntime {
                                                         commandHandler: runtimeGraph.cameraCommandHandler)
         }
         runtimeGraph.selectionHandler.syncController(newSelectionController)
+    }
+
+    /// Attaches the tour video recorder with owner-scoped semantics matching
+    /// the other controllers: a stale host view's detach never clears the
+    /// binding a newer host view has installed.
+    func syncTourVideoRecorder(_ newRecorder: ImmersiveMapTourVideoRecorder?) {
+        guard attachedTourVideoRecorder !== newRecorder else {
+            return
+        }
+        attachedTourVideoRecorder?.detachRuntime(owner: self)
+        attachedTourVideoRecorder = newRecorder
+        guard let newRecorder else {
+            return
+        }
+        let runtimeGraph = runtimeGraph
+        newRecorder.attachRuntime(
+            owner: self,
+            context: ImmersiveMapVideoExportAttachContext(
+                currentSettings: { runtimeGraph.cameraRuntime.currentSettings },
+                currentCameraPosition: { runtimeGraph.cameraRuntime.currentCameraPosition() },
+                currentAvatarsController: { runtimeGraph.avatarRuntime.currentAvatarController },
+                currentMarkerContent: { [weak self] in self?.currentMarkerContent }
+            )
+        )
     }
 
     private func createRenderer(settings: ImmersiveMapSettings,

@@ -26,7 +26,6 @@ struct FrameContext {
     let visibleContent: VisibleContentState
     let qualityTier: RenderQualityTier
     let commandBuffer: MTLCommandBuffer?
-    let drawable: CAMetalDrawable?
     let services: FrameContextServices
     let sharedState: FrameContextSharedState
     let diagnostics: FrameDiagnostics
@@ -89,7 +88,6 @@ struct FrameContext {
          cameraEye: SIMD3<Float>,
          qualityTier: RenderQualityTier,
          commandBuffer: MTLCommandBuffer?,
-         drawable: CAMetalDrawable?,
          services: FrameContextServices,
          mapCameraState: ImmersiveMapCameraState = .default,
          resolvedPresentation: ResolvedPresentationState? = nil,
@@ -112,7 +110,6 @@ struct FrameContext {
         self.visibleContent = visibleContent
         self.qualityTier = qualityTier
         self.commandBuffer = commandBuffer
-        self.drawable = drawable
         self.services = services
         self.sharedState = sharedState
         self.diagnostics = diagnostics

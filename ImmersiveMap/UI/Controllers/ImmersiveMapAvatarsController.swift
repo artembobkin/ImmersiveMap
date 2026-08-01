@@ -484,6 +484,25 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Detached copy for the offline video export. Snapshots are consumed
+    /// destructively (`consumeSnapshot`), so one controller cannot feed two
+    /// engines — the live engine and an export engine would steal diffs from
+    /// each other. The copy carries the current markers and merged groups with
+    /// a pending full snapshot, so the export renderer's first consume uploads
+    /// everything; it has no change handler and no image-cycle timers, keeping
+    /// the export deterministic and isolated from later live mutations.
+    func makeDetachedCopyForExport() -> ImmersiveMapAvatarsController {
+        let copy = ImmersiveMapAvatarsController(imageLoader: imageLoader)
+        lock.lock()
+        copy.markersById = markersById
+        copy.mergedGroupsById = mergedGroupsById
+        copy.version = version
+        copy.imageUpdateIds = Set(markersById.keys).union(mergedGroupsById.keys)
+        copy.hasChanges = true
+        lock.unlock()
+        return copy
+    }
+
     private func markChangedLocked() {
         version &+= 1
         hasChanges = true

@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import ImmersiveMap
 
 @main
@@ -16,12 +18,17 @@ struct ImmersiveMapMacApp: App {
 /// Demo scene: a globe with SwiftUI city cards and avatar markers plus a
 /// looped cinematic tour (globe, tilted morph into the plane, Tokyo streets,
 /// a flight to Dubai and back). The tour starts with the button or the R key,
-/// and stops with R again, Esc, or any gesture on the map.
+/// and stops with R again, Esc, or any gesture on the map. "Export Video"
+/// renders one lap of the same tour offline into a QuickTime file while the
+/// on-screen map stays interactive.
 private struct MapScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var avatarsController = ImmersiveMapAvatarsController()
     @State private var tour: ImmersiveMapCameraTourController?
+    @State private var videoRecorder = ImmersiveMapTourVideoRecorder()
     @State private var isTourRunning = false
+    @State private var isExportingVideo = false
+    @State private var videoExportFraction: Double = 0
     @State private var showChrome = true
 
     var body: some View {
@@ -35,6 +42,7 @@ private struct MapScreen: View {
                 }
                 .enableCameraUIControls(showChrome)
                 .avatarSettings(size: .px128)
+                .tourVideoRecorder(videoRecorder)
                 // The cinematic tour loops the globe and two cities: an enlarged
                 // memory cache of GPU-ready tiles (1 GiB instead of 256 MiB) so
                 // tiles are not evicted and re-uploaded between laps.
@@ -63,6 +71,22 @@ private struct MapScreen: View {
                       systemImage: isTourRunning ? "stop.circle.fill" : "play.circle.fill")
             }
             .keyboardShortcut("r", modifiers: [])
+
+            if isExportingVideo {
+                ProgressView(value: videoExportFraction)
+                    .frame(width: 120)
+                Button {
+                    videoRecorder.cancel()
+                } label: {
+                    Label("Cancel Export", systemImage: "xmark.circle.fill")
+                }
+            } else {
+                Button {
+                    exportTourVideo()
+                } label: {
+                    Label("Export Video", systemImage: "film.circle.fill")
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -108,5 +132,37 @@ private struct MapScreen: View {
 
     private func stopTour() {
         tour?.stop()
+    }
+
+    /// Renders one lap of the storyboard offline (1080p60 HEVC by default)
+    /// while the on-screen map stays fully interactive.
+    private func exportTourVideo() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.quickTimeMovie]
+        panel.nameFieldStringValue = "ImmersiveMapTour.mov"
+        panel.directoryURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        isExportingVideo = true
+        videoExportFraction = 0
+        videoRecorder.onProgress = { progress in
+            videoExportFraction = progress.fractionCompleted
+        }
+        Task {
+            defer {
+                isExportingVideo = false
+            }
+            do {
+                try await videoRecorder.export(shots: CinematicStoryboard.makeShots(),
+                                               establish: CinematicStoryboard.overview,
+                                               to: url)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                print("Tour video export failed: \(error)")
+                NSSound.beep()
+            }
+        }
     }
 }

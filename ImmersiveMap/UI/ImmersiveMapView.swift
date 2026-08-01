@@ -17,6 +17,7 @@ public struct ImmersiveMapView: View {
     private var selectionController: ImmersiveMapSelectionController?
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     private var markerContent: MarkerViewContent?
+    private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public init(settings: ImmersiveMapSettings = .default,
                 avatarsController: ImmersiveMapAvatarsController? = nil,
@@ -41,7 +42,8 @@ public struct ImmersiveMapView: View {
                                         cameraController: cameraController,
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
-                                        markerContent: markerContent)
+                                        markerContent: markerContent,
+                                        tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
                 isEnabled: (cameraUIControls?.isEnabled ?? false) && cameraController != nil,
                 camera: cameraController,
@@ -60,6 +62,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let markerContent: MarkerViewContent?
+    let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeUIView(context: Context) -> ImmersiveMapUIView {
         let uiView = ImmersiveMapUIView(frame: .zero,
@@ -80,7 +83,8 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       markerContent: markerContent,
-                      cameraPosition: cameraPosition)
+                      cameraPosition: cameraPosition,
+                      tourVideoRecorder: tourVideoRecorder)
     }
 
     public static func dismantleUIView(_ uiView: ImmersiveMapUIView, coordinator: ()) {
@@ -96,6 +100,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let markerContent: MarkerViewContent?
+    let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeNSView(context: Context) -> ImmersiveMapNSView {
         let nsView = ImmersiveMapNSView(frame: .zero,
@@ -116,7 +121,8 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       markerContent: markerContent,
-                      cameraPosition: cameraPosition)
+                      cameraPosition: cameraPosition,
+                      tourVideoRecorder: tourVideoRecorder)
     }
 
     public static func dismantleNSView(_ nsView: ImmersiveMapNSView, coordinator: ()) {
@@ -177,6 +183,15 @@ public extension ImmersiveMapView {
     func selection(_ controller: ImmersiveMapSelectionController?) -> ImmersiveMapView {
         var view = self
         view.selectionController = controller
+        return view
+    }
+
+    /// Attaches a tour video recorder to this map. The recorder exports camera
+    /// tours offline using the map's current configuration (tile provider,
+    /// style, labels, avatars); see ``ImmersiveMapTourVideoRecorder``.
+    func tourVideoRecorder(_ recorder: ImmersiveMapTourVideoRecorder?) -> ImmersiveMapView {
+        var view = self
+        view.tourVideoRecorder = recorder
         return view
     }
 

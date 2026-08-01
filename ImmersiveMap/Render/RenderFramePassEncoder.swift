@@ -4,7 +4,7 @@
 import Metal
 import QuartzCore
 
-/// Encodes the render passes of one frame: prepares the drawable, attachments, pass plan and invokes subsystem encoders.
+/// Encodes the render passes of one frame: acquires the render target, prepares attachments and the pass plan, and invokes subsystem encoders.
 final class RenderFramePassEncoder {
     private let attachments: FrameAttachmentStore
     private let passGraph = RenderPassGraph()
@@ -17,14 +17,16 @@ final class RenderFramePassEncoder {
     }
 
     func encode(frameContext: FrameContext,
-                layer: CAMetalLayer,
-                settings: ImmersiveMapSettings) -> CAMetalDrawable? {
+                acquireTarget: () -> FrameRenderTarget?,
+                settings: ImmersiveMapSettings) -> FrameRenderTarget? {
         guard let commandBuffer = frameContext.commandBuffer else {
             frameContext.services.diagnostics.recordSkipReason(.missingCommandBuffer)
             return nil
         }
 
-        guard let drawable = layer.nextDrawable() else {
+        // Acquired here — after the command-buffer guard — to preserve the live
+        // path's drawable-acquisition timing exactly.
+        guard let target = acquireTarget() else {
             frameContext.services.diagnostics.recordSkipReason(.missingDrawable)
             return nil
         }
@@ -35,13 +37,13 @@ final class RenderFramePassEncoder {
         let passNodes = passGraph.plan(frameContext: frameContext,
                                        settings: settings,
                                        attachments: attachments,
-                                       drawable: drawable,
+                                       target: target,
                                        renderGraph: renderGraph)
 
         for passNode in passNodes {
             guard let descriptor = passNode.descriptorProvider.makeRenderPassDescriptor(frameContext: frameContext,
                                                                                        attachments: attachments,
-                                                                                       drawable: drawable),
+                                                                                       target: target),
                   let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
                 continue
             }
@@ -60,7 +62,7 @@ final class RenderFramePassEncoder {
                                                      duration: CACurrentMediaTime() - passStart)
         }
 
-        return drawable
+        return target
     }
 
     private func recordDisabledLayerSkips(settings: ImmersiveMapSettings,

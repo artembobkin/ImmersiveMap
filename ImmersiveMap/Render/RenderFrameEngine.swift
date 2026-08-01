@@ -27,7 +27,7 @@ final class RenderFrameEngine {
 
     private let attachments: FrameAttachmentStore
     private let inFlightFramePool = InFlightFramePool(slotsCount: InFlightFramePool.inFlightFramesCount)
-    private var timeline = RenderFrameTimeline()
+    private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
 
     private(set) var currentDiagnostics: FrameDiagnostics?
@@ -44,7 +44,8 @@ final class RenderFrameEngine {
          presentationStateResolver: MapPresentationStateController,
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
-         baseLabelTraceRecorder: BaseLabelTraceRecorder) {
+         baseLabelTraceRecorder: BaseLabelTraceRecorder,
+         clock: RenderFrameClock = RenderFrameWallClock()) {
         let persistentContext = RenderPersistentContext(layer: layer,
                                                         avatarSource: avatarSource,
                                                         markerSource: markerSource,
@@ -68,6 +69,7 @@ final class RenderFrameEngine {
 
         self.settings = settings
         self.debugOverlayControls = debugOverlayControls
+        self.clock = clock
         self.persistentContext = persistentContext
         self.renderCamera = renderCamera
         self.presentationStateResolver = presentationStateResolver
@@ -88,7 +90,30 @@ final class RenderFrameEngine {
             return false
         }
 
-        let didSchedule = renderFrame(on: layer, frameSlotIndex: frameSlotIndex)
+        let didSchedule = renderFrame(drawSize: layer.drawableSize,
+                                      frameSlotIndex: frameSlotIndex,
+                                      acquireTarget: { layer.nextDrawable().map { FrameRenderTarget(drawable: $0) } },
+                                      onGPUComplete: nil)
+        if didSchedule == false {
+            inFlightFramePool.release(slot: frameSlotIndex)
+        }
+        return didSchedule
+    }
+
+    /// Renders one frame into a caller-supplied offscreen texture. Used by the
+    /// offline video export; nothing is presented. `onGPUComplete` fires on the
+    /// Metal completion thread only when this call returned `true`.
+    @discardableResult
+    func render(offscreen request: RenderFrameOffscreenRequest) -> Bool {
+        guard let frameSlotIndex = inFlightFramePool.tryAcquire() else {
+            recordSkippedFrame(reason: .inFlightSlotsExhausted)
+            return false
+        }
+
+        let didSchedule = renderFrame(drawSize: request.drawSize,
+                                      frameSlotIndex: frameSlotIndex,
+                                      acquireTarget: { FrameRenderTarget(texture: request.texture) },
+                                      onGPUComplete: request.onGPUComplete)
         if didSchedule == false {
             inFlightFramePool.release(slot: frameSlotIndex)
         }
@@ -113,9 +138,12 @@ final class RenderFrameEngine {
 
     // MARK: - Frame Workflow
 
-    private func renderFrame(on layer: CAMetalLayer, frameSlotIndex: Int) -> Bool {
+    private func renderFrame(drawSize: CGSize,
+                             frameSlotIndex: Int,
+                             acquireTarget: () -> FrameRenderTarget?,
+                             onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
         let collectStart = CACurrentMediaTime()
-        guard let frameContext = collectInput(layer: layer, frameSlotIndex: frameSlotIndex) else {
+        guard let frameContext = collectInput(drawSize: drawSize, frameSlotIndex: frameSlotIndex) else {
             return false
         }
         frameContext.diagnostics.recordStage(.collectInput, duration: CACurrentMediaTime() - collectStart)
@@ -128,15 +156,16 @@ final class RenderFrameEngine {
             prepareGPU(frameContext: frameContext)
         }
         let encodeStart = CACurrentMediaTime()
-        let drawable = passEncoder.encode(frameContext: frameContext,
-                                          layer: layer,
-                                          settings: settings)
+        let target = passEncoder.encode(frameContext: frameContext,
+                                        acquireTarget: acquireTarget,
+                                        settings: settings)
         frameContext.diagnostics.recordStage(.encodePasses, duration: CACurrentMediaTime() - encodeStart)
 
         let presentStart = CACurrentMediaTime()
         let didSchedule = presentFrame(frameContext: frameContext,
-                                       drawable: drawable,
-                                       frameSlotIndex: frameSlotIndex)
+                                       target: target,
+                                       frameSlotIndex: frameSlotIndex,
+                                       onGPUComplete: onGPUComplete)
         frameContext.diagnostics.recordStage(.presentFrame, duration: CACurrentMediaTime() - presentStart)
 
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
@@ -158,12 +187,12 @@ final class RenderFrameEngine {
         return didSchedule
     }
 
-    private func collectInput(layer: CAMetalLayer, frameSlotIndex: Int) -> FrameContext? {
-        let frameTick = timeline.nextFrame()
+    private func collectInput(drawSize: CGSize, frameSlotIndex: Int) -> FrameContext? {
+        let frameTick = clock.nextFrameTick()
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameTime: frameTick.time)
-        let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: Date())
+        let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: clock.currentDate())
 
-        guard let cameraFrameState = renderCamera.makeFrameState(drawSize: layer.drawableSize,
+        guard let cameraFrameState = renderCamera.makeFrameState(drawSize: drawSize,
                                                                  diagnostics: diagnostics) else {
             currentDiagnostics = diagnostics
             return nil
@@ -192,7 +221,6 @@ final class RenderFrameEngine {
                             cameraEye: cameraFrameState.cameraEye,
                             qualityTier: cameraFrameState.qualityTier,
                             commandBuffer: commandBuffer,
-                            drawable: nil,
                             services: services,
                             mapCameraState: cameraFrameState.mapCameraState,
                             resolvedPresentation: resolvedPresentation,
@@ -261,19 +289,23 @@ final class RenderFrameEngine {
     }
 
     private func presentFrame(frameContext: FrameContext,
-                              drawable: CAMetalDrawable?,
-                              frameSlotIndex: Int) -> Bool {
+                              target: FrameRenderTarget?,
+                              frameSlotIndex: Int,
+                              onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
         guard let commandBuffer = frameContext.commandBuffer,
-              let drawable else {
+              let target else {
             return false
         }
 
         let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
-        commandBuffer.addCompletedHandler { [weak self] _ in
+        commandBuffer.addCompletedHandler { [weak self] completedBuffer in
             self?.inFlightFramePool.release(slot: frameSlotIndex)
             self?.eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
+            onGPUComplete?(completedBuffer.error == nil)
         }
-        commandBuffer.present(drawable)
+        if let drawable = target.drawable {
+            commandBuffer.present(drawable)
+        }
         commandBuffer.commit()
         renderGraph.frameCommitted()
         return true
@@ -282,7 +314,7 @@ final class RenderFrameEngine {
     // MARK: - Diagnostics
 
     private func recordSkippedFrame(reason: RenderSkipReason) {
-        let frameTick = timeline.nextFrame()
+        let frameTick = clock.nextFrameTick()
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameTime: frameTick.time)
         diagnostics.recordSkipReason(reason)
         diagnostics.recordStage(.collectInput, duration: 0)

@@ -14,7 +14,7 @@ enum RenderPassName: String, CaseIterable {
 protocol RenderPassDescriptorProvider: AnyObject {
     func makeRenderPassDescriptor(frameContext: FrameContext,
                                   attachments: FrameAttachmentStore,
-                                  drawable: CAMetalDrawable?) -> MTLRenderPassDescriptor?
+                                  target: FrameRenderTarget?) -> MTLRenderPassDescriptor?
 }
 
 struct RenderPassNode {
