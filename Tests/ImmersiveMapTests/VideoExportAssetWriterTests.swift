@@ -41,24 +41,12 @@ final class VideoExportAssetWriterTests: XCTestCase {
         try await writer.finish()
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration)
-        XCTAssertEqual(duration.seconds, 4.0 / 60.0, accuracy: 0.5 / 60.0)
-
-        let tracks = try await asset.loadTracks(withMediaType: .video)
-        XCTAssertEqual(tracks.count, 1)
-        let naturalSize = try await tracks[0].load(.naturalSize)
-        XCTAssertEqual(naturalSize, CGSize(width: 64, height: 64))
-
-        let formatDescriptions = try await tracks[0].load(.formatDescriptions)
-        XCTAssertEqual(formatDescriptions.count, 1)
-        let codecType = CMFormatDescriptionGetMediaSubType(formatDescriptions[0])
-        XCTAssertEqual(codecType, kCMVideoCodecType_H264)
-        let colorPrimaries = CMFormatDescriptionGetExtension(
-            formatDescriptions[0],
-            extensionKey: kCMFormatDescriptionExtension_ColorPrimaries
-        ) as? String
-        XCTAssertEqual(colorPrimaries, kCMFormatDescriptionColorPrimaries_ITU_R_709_2 as String)
+        let summary = try await ExportedVideoProbe.summary(url: url)
+        XCTAssertEqual(summary.durationSeconds, 4.0 / 60.0, accuracy: 0.5 / 60.0)
+        XCTAssertEqual(summary.videoTrackCount, 1)
+        XCTAssertEqual(summary.naturalSize, CGSize(width: 64, height: 64))
+        XCTAssertEqual(summary.codec, kCMVideoCodecType_H264)
+        XCTAssertEqual(summary.colorPrimaries, kCMFormatDescriptionColorPrimaries_ITU_R_709_2 as String)
     }
 
     func testWriterReplacesExistingFile() async throws {
@@ -77,9 +65,8 @@ final class VideoExportAssetWriterTests: XCTestCase {
         try await writer.append(pixelBuffer, frameIndex: 0)
         try await writer.finish()
 
-        let asset = AVURLAsset(url: url)
-        let tracks = try await asset.loadTracks(withMediaType: .video)
-        XCTAssertEqual(tracks.count, 1)
+        let summary = try await ExportedVideoProbe.summary(url: url)
+        XCTAssertEqual(summary.videoTrackCount, 1)
     }
 
     func testCancelDeletesPartialFile() async throws {

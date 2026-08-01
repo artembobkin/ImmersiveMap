@@ -71,17 +71,11 @@ final class TourVideoExportEndToEndTests: XCTestCase {
         XCTAssertEqual(lastProgress?.framesCompleted, 9)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration)
-        XCTAssertEqual(duration.seconds, 9.0 / 30.0, accuracy: 1.0 / 30.0)
-
-        let tracks = try await asset.loadTracks(withMediaType: .video)
-        XCTAssertEqual(tracks.count, 1)
-        let naturalSize = try await tracks[0].load(.naturalSize)
-        XCTAssertEqual(naturalSize, CGSize(width: 128, height: 128))
-        let formatDescriptions = try await tracks[0].load(.formatDescriptions)
-        let codecType = CMFormatDescriptionGetMediaSubType(try XCTUnwrap(formatDescriptions.first))
-        XCTAssertEqual(codecType, kCMVideoCodecType_HEVC)
+        let summary = try await ExportedVideoProbe.summary(url: url)
+        XCTAssertEqual(summary.durationSeconds, 9.0 / 30.0, accuracy: 1.0 / 30.0)
+        XCTAssertEqual(summary.videoTrackCount, 1)
+        XCTAssertEqual(summary.naturalSize, CGSize(width: 128, height: 128))
+        XCTAssertEqual(summary.codec, kCMVideoCodecType_HEVC)
     }
 
     /// Exports the same single-frame scene twice — once with an avatar and a
