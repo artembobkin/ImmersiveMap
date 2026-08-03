@@ -7,6 +7,9 @@ import MetalKit
 /// constant-color submeshes share it, untextured ones bind `whiteTexture`.
 class SceneModelPipeline {
     let pipelineState: MTLRenderPipelineState
+    /// Depth-only replay into the shadow map: no color attachments and no
+    /// fragment function, the rasterizer writes bare depth.
+    let shadowPipelineState: MTLRenderPipelineState
     let baseColorSampler: MTLSamplerState
     let whiteTexture: MTLTexture
 
@@ -41,6 +44,14 @@ class SceneModelPipeline {
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
+        let shadowDescriptor = MTLRenderPipelineDescriptor()
+        shadowDescriptor.vertexFunction = library.makeFunction(name: "sceneModelShadowVertexShader")
+        shadowDescriptor.fragmentFunction = nil
+        shadowDescriptor.vertexDescriptor = vertexDescriptor
+        shadowDescriptor.rasterSampleCount = 1
+        shadowDescriptor.depthAttachmentPixelFormat = .depth32Float
+        self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
         samplerDescriptor.magFilter = .linear
@@ -65,5 +76,9 @@ class SceneModelPipeline {
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+
+    func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(shadowPipelineState)
     }
 }

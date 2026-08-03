@@ -37,6 +37,11 @@ class TileAtlasTexture {
 
     private let metalDevice: MTLDevice
     private let tilePipeline: TilePipeline
+    // The tile fragment shader statically references the shadow map; the atlas
+    // rasterizes world-agnostic texture content, so it always binds the 1x1
+    // fallback with a disabled uniform (validation requires the binding even
+    // though the strength guard skips sampling).
+    private let shadowFallbackTexture: MTLTexture
     // Page background = the style's backdrop color, not white: at deep mip
     // levels the slot edge can blend in the page background, and a contrasting
     // color produces a flickering light line at tile seams.
@@ -55,9 +60,11 @@ class TileAtlasTexture {
     
     init(metalDevice: MTLDevice,
          tilePipeline: TilePipeline,
+         shadowFallbackTexture: MTLTexture,
          mapBaseColors: ImmersiveMapBaseColors) {
         self.metalDevice = metalDevice
         self.tilePipeline = tilePipeline
+        self.shadowFallbackTexture = shadowFallbackTexture
         let backgroundColor = mapBaseColors.getTileBgColor()
         self.pageClearColor = MTLClearColor(red: Double(backgroundColor.x),
                                             green: Double(backgroundColor.y),
@@ -130,6 +137,13 @@ class TileAtlasTexture {
         renderEncoder!.setFragmentBytes(&horizonFog,
                                         length: MemoryLayout<HorizonFogUniform>.stride,
                                         index: 2)
+        // Shadows are a flat-world effect and must not bake into the atlas:
+        // disabled uniform + fallback texture (the binding itself is mandatory).
+        var shadowUniform = ShadowUniform.disabled
+        renderEncoder!.setFragmentBytes(&shadowUniform,
+                                        length: MemoryLayout<ShadowUniform>.stride,
+                                        index: 3)
+        renderEncoder!.setFragmentTexture(shadowFallbackTexture, index: 0)
     }
     
     func endEncoding() {

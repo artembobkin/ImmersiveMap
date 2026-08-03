@@ -373,6 +373,29 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// World-space direction pointing towards the static sun
+    /// (+X east, +Y north, +Z up). Defines where buildings and scene models
+    /// cast their shadows.
+    public func sceneLight(direction: SIMD3<Float>) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.sceneLight(direction: direction)
+        return view
+    }
+
+    /// Directional shadows cast by buildings and scene models in the flat
+    /// presentation.
+    public func shadowSettings(_ shadows: ImmersiveMapSettings.ShadowSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.shadowSettings(shadows)
+        return view
+    }
+
+    public func shadows(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.shadows(isEnabled: isEnabled)
+        return view
+    }
+
     public func styleSettings(_ style: ImmersiveMapSettings.StyleSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.styleSettings(style)

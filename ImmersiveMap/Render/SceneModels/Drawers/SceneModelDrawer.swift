@@ -12,13 +12,6 @@ struct SceneModelDrawItem {
 }
 
 enum SceneModelDrawer {
-    /// Swift mirror of `SceneModelLight` in SceneModel.metal.
-    struct SceneModelLightUniform {
-        var direction: SIMD4<Float>
-        var color: SIMD4<Float>
-        var intensities: SIMD4<Float>
-    }
-
     /// Swift mirror of `SceneModelMaterial` in SceneModel.metal.
     struct SceneModelMaterialUniform {
         var baseColor: SIMD4<Float>
@@ -27,6 +20,7 @@ enum SceneModelDrawer {
     /// Opaque model geometry with depth test and depth write in the world pass.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
+                     shadowBinding: ShadowReceiverBinding,
                      items: [SceneModelDrawItem],
                      pipeline: SceneModelPipeline,
                      extrudedDepthState: MTLDepthStencilState,
@@ -40,15 +34,10 @@ enum SceneModelDrawer {
         renderEncoder.setFrontFacing(.counterClockwise)
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
-        // Same fixed world-space light as the building extrusion, so models and
-        // buildings shade consistently.
-        let lightDirection = simd_normalize(SIMD3<Float>(-0.4, -0.6, 1.0))
-        var lightUniform = SceneModelLightUniform(direction: SIMD4<Float>(lightDirection, 0.0),
-                                                  color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-                                                  intensities: SIMD4<Float>(0.35, 0.65, 0.2, 24.0))
-        renderEncoder.setFragmentBytes(&lightUniform, length: MemoryLayout<SceneModelLightUniform>.stride, index: 2)
+        var shadowUniformValue = shadowBinding.uniform
+        renderEncoder.setFragmentBytes(&shadowUniformValue, length: MemoryLayout<ShadowUniform>.stride, index: 4)
+        renderEncoder.setFragmentTexture(shadowBinding.texture, index: 1)
         renderEncoder.setFragmentSamplerState(pipeline.baseColorSampler, index: 0)
 
         for item in items {
@@ -92,5 +81,52 @@ enum SceneModelDrawer {
         renderEncoder.setCullMode(.none)
         renderEncoder.setFrontFacing(.clockwise)
         renderEncoder.setDepthStencilState(depthDisabledState)
+    }
+
+    /// Depth-only replay of the meshes from the light's orthographic cameras
+    /// into the two halves of the shadow atlas: no materials, no textures,
+    /// cull `.none` (winding does not matter without color output). No encoder
+    /// depth bias — the receiver-side bias computed by ShadowFrameStateResolver
+    /// covers both caster kinds.
+    static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
+                                  lightProjectionViews: [matrix_float4x4],
+                                  mapResolution: Int,
+                                  items: [SceneModelDrawItem],
+                                  pipeline: SceneModelPipeline,
+                                  extrudedDepthState: MTLDepthStencilState) {
+        guard items.isEmpty == false else { return }
+
+        pipeline.selectShadowPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setDepthStencilState(extrudedDepthState)
+        renderEncoder.setDepthClipMode(.clamp)
+
+        for (cascadeIndex, lightProjectionView) in lightProjectionViews.enumerated() {
+            ShadowCascadeAtlas.selectCascade(renderEncoder: renderEncoder,
+                                             cascadeIndex: cascadeIndex,
+                                             mapResolution: mapResolution)
+            var cameraUniformValue = CameraUniform(matrix: lightProjectionView, eye: .zero, padding: 0)
+            renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
+
+            for item in items {
+                for (meshIndex, mesh) in item.mesh.meshes.enumerated() {
+                    var modelMatrix = item.modelMatrix * item.mesh.localTransforms[meshIndex]
+                    renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 2)
+
+                    guard let vertexBuffer = mesh.vertexBuffers.first else { continue }
+                    renderEncoder.setVertexBuffer(vertexBuffer.buffer, offset: vertexBuffer.offset, index: 0)
+
+                    for submesh in mesh.submeshes {
+                        renderEncoder.drawIndexedPrimitives(type: submesh.primitiveType,
+                                                            indexCount: submesh.indexCount,
+                                                            indexType: submesh.indexType,
+                                                            indexBuffer: submesh.indexBuffer.buffer,
+                                                            indexBufferOffset: submesh.indexBuffer.offset)
+                    }
+                }
+            }
+        }
+
+        renderEncoder.setDepthClipMode(.clip)
     }
 }

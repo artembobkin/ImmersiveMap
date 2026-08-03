@@ -22,12 +22,6 @@ struct SceneModelVertexOut {
     float2 uv;
 };
 
-struct SceneModelLight {
-    float4 direction;
-    float4 color;
-    float4 intensities; // x: ambient, y: diffuse, z: specular, w: shininess
-};
-
 struct SceneModelMaterial {
     float4 baseColor;
 };
@@ -48,29 +42,25 @@ vertex SceneModelVertexOut sceneModelVertexShader(SceneModelVertexIn vertexIn [[
     return out;
 }
 
-// Phong identical to the building extrusion (TileExtruded.metal) so models and
-// buildings share one light: ambient + lambert + specular gated on diffuse.
+// Depth-only vertex of the shadow map pass; the pipeline has no fragment
+// function, the rasterizer writes bare depth.
+vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_in]],
+                                           constant Camera& lightCamera [[buffer(1)]],
+                                           constant float4x4& modelMatrix [[buffer(2)]]) {
+    return lightCamera.matrix * (modelMatrix * float4(vertexIn.position, 1.0));
+}
+
+// No analytic lighting model, matching the building extrusion
+// (TileExtruded.metal): the base color darkens only where the shadow map says
+// the static sun is occluded — faces away from the sun are occluded by their
+// own mesh in the map and come out shadowed like any cast shadow.
 fragment float4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
-                                         constant Camera& camera [[buffer(1)]],
-                                         constant SceneModelLight& light [[buffer(2)]],
                                          constant SceneModelMaterial& material [[buffer(3)]],
+                                         constant Shadow& shadow [[buffer(4)]],
                                          texture2d<float> baseColorTexture [[texture(0)]],
+                                         depth2d<float> shadowMap [[texture(1)]],
                                          sampler baseColorSampler [[sampler(0)]]) {
     float4 base = baseColorTexture.sample(baseColorSampler, in.uv) * material.baseColor;
-    float3 normal = normalize(in.worldNormal);
-    float3 lightDirection = normalize(light.direction.xyz);
-    float3 viewDirection = normalize(camera.eye - in.worldPosition);
-
-    float diffuseFactor = max(dot(normal, lightDirection), 0.0);
-    float3 reflectDirection = reflect(-lightDirection, normal);
-    float specularFactor = diffuseFactor > 0.0
-        ? pow(max(dot(viewDirection, reflectDirection), 0.0), light.intensities.w)
-        : 0.0;
-
-    float3 lightColor = light.color.rgb;
-    float3 ambient = base.rgb * light.intensities.x * lightColor;
-    float3 diffuse = base.rgb * light.intensities.y * diffuseFactor * lightColor;
-    float3 specular = lightColor * light.intensities.z * specularFactor;
-
-    return float4(ambient + diffuse + specular, 1.0);
+    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal);
+    return float4(base.rgb * shadowFactor, 1.0);
 }

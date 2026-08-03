@@ -67,6 +67,9 @@ final class RenderFrameEngine {
                                                               },
                                                               buildingImageTextureProvider: { [attachments] in
                                                                   attachments.currentBuildingImageTexture
+                                                              },
+                                                              shadowMapTextureProvider: { [attachments] in
+                                                                  attachments.currentShadowMapTexture
                                                               })
 
         self.settings = settings
@@ -214,6 +217,14 @@ final class RenderFrameEngine {
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
                                                         diagnostics: diagnostics)
+        let shadowFrameState = ShadowFrameStateResolver.resolve(
+            renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
+            cameraEye: cameraFrameState.cameraEye,
+            centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+            flatRenderPan: resolvedPresentation.flatRenderState.pan,
+            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
+            scene: settings.scene
+        )
 
         return FrameContext(frameIndex: frameTick.index,
                             frameSlotIndex: frameSlotIndex,
@@ -229,6 +240,7 @@ final class RenderFrameEngine {
                             mapCameraState: cameraFrameState.mapCameraState,
                             resolvedPresentation: resolvedPresentation,
                             visibleContent: visibleContent,
+                            shadowFrameState: shadowFrameState,
                             diagnostics: diagnostics)
     }
 

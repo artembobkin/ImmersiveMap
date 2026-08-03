@@ -26,12 +26,6 @@ struct Style {
     float4 color;
 };
 
-struct ExtrudedLight {
-    float4 direction;
-    float4 color;
-    float4 intensities; // x: ambient, y: diffuse, z: specular, w: shininess
-};
-
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
@@ -64,42 +58,54 @@ static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBoun
            localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
 }
 
-static inline float3 extrudedLitColor(VertexOut in,
-                                      constant Camera& camera,
-                                      constant ExtrudedLight& light) {
-    float3 normal = normalize(in.worldNormal);
-    float3 lightDir = normalize(light.direction.xyz);
-    float3 viewDir = normalize(camera.eye - in.worldPosition);
-
-    float diffuseFactor = max(dot(normal, lightDir), 0.0);
-    float3 reflectDir = reflect(-lightDir, normal);
-    float specularFactor = diffuseFactor > 0.0
-        ? pow(max(dot(viewDir, reflectDir), 0.0), light.intensities.w)
-        : 0.0;
-
-    float3 lightColor = light.color.rgb;
-    float3 baseColor = in.color.rgb;
-
-    float3 ambient = baseColor * light.intensities.x * lightColor;
-    float3 diffuse = baseColor * light.intensities.y * diffuseFactor * lightColor;
-    float3 specular = lightColor * light.intensities.z * specularFactor;
-
-    return ambient + diffuse + specular;
-}
-
+// No analytic lighting model: faces keep their flat base color and darken
+// only where the shadow map says the static sun is occluded. Walls turned
+// away from the sun are occluded by their own building in the map, so they
+// come out shadowed exactly like cast shadows — one consistent system.
 // Building geometry is always drawn opaque with a regular depth test and MSAA:
 // in solid mode - directly into the world pass, in translucent - into the
 // offscreen building image, which the world pass then composites over the map
 // with a shared alpha.
 fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
-                                           constant Camera& camera [[buffer(1)]],
-                                           constant ExtrudedLight& light [[buffer(2)]],
-                                           constant float4& localClipBounds [[buffer(4)]]) {
+                                           constant float4& localClipBounds [[buffer(4)]],
+                                           constant Shadow& shadow [[buffer(5)]],
+                                           depth2d<float> shadowMap [[texture(0)]]) {
+    // Derivatives (inside sampleShadowFactor) must precede the divergent
+    // discard — MSL leaves them undefined in a quad after any lane discards.
+    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal);
     if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
         discard_fragment();
     }
 
-    return float4(extrudedLitColor(in, camera, light), 1.0);
+    return float4(in.color.rgb * shadowFactor, 1.0);
+}
+
+// Depth-only path of the shadow map pass: the light's orthographic camera
+// arrives in the Camera slot, everything else matches the main draw so both
+// replay the same per-tile buffers and model matrices.
+struct ExtrudedShadowVertexOut {
+    float4 position [[position]];
+    float2 localPosition;
+};
+
+vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
+                                                              constant Camera& lightCamera [[buffer(1)]],
+                                                              constant float4x4& modelMatrix [[buffer(3)]]) {
+    float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
+    ExtrudedShadowVertexOut out;
+    out.position = lightCamera.matrix * worldPosition;
+    out.localPosition = vertexIn.position.xy;
+    return out;
+}
+
+// The fragment stage exists solely to replicate the placeIn clip of the main
+// path: without it a retained parent's buildings would cast shadows over
+// neighboring exact tiles.
+fragment void tileExtrudedShadowFragmentShader(ExtrudedShadowVertexOut in [[stage_in]],
+                                               constant float4& localClipBounds [[buffer(4)]]) {
+    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
+        discard_fragment();
+    }
 }
 
 struct ExtrudedCompositeVertexOut {

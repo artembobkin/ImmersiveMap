@@ -9,13 +9,6 @@ import XCTest
 /// the canonical vertex layout produced by SceneModelAssetLoader: a drifted
 /// stride or offset would silently corrupt every draw.
 final class SceneModelGPUStructLayoutTests: XCTestCase {
-    func testLightUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelLightUniform>.stride, 48)
-        XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelLightUniform>.offset(of: \.direction), 0)
-        XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelLightUniform>.offset(of: \.color), 16)
-        XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelLightUniform>.offset(of: \.intensities), 32)
-    }
-
     func testMaterialUniformMatchesMetalLayout() {
         XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelMaterialUniform>.stride, 16)
         XCTAssertEqual(MemoryLayout<SceneModelDrawer.SceneModelMaterialUniform>.offset(of: \.baseColor), 0)

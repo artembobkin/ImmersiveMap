@@ -8,7 +8,8 @@ enum RenderGraphFactory {
                                  settings: ImmersiveMapSettings,
                                  debugOverlayControls: DebugOverlayControlState,
                                  postProcessingInputTextureProvider: @escaping () -> MTLTexture?,
-                                 buildingImageTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
+                                 buildingImageTextureProvider: @escaping () -> MTLTexture?,
+                                 shadowMapTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
                                                                         tileTraceRecorder: context.tileTraceRecorder)
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
@@ -34,14 +35,20 @@ enum RenderGraphFactory {
                                                             meshStore: context.sceneModelMeshStore,
                                                             pipeline: context.sceneModelPipeline,
                                                             extrudedDepthState: context.extrudedDepthState,
-                                                            depthDisabledState: context.depthDisabledState)
+                                                            depthDisabledState: context.depthDisabledState,
+                                                            shadowMapTextureProvider: shadowMapTextureProvider,
+                                                            shadowFallbackTexture: context.shadowFallbackTexture)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
-                                                                    debugOverlayControls: debugOverlayControls)
+                                                                    debugOverlayControls: debugOverlayControls,
+                                                                    shadowMapTextureProvider: shadowMapTextureProvider,
+                                                                    shadowFallbackTexture: context.shadowFallbackTexture)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingImageTextureProvider: buildingImageTextureProvider,
                                                                           extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
-                                                                          depthDisabledState: context.depthDisabledState)
+                                                                          depthDisabledState: context.depthDisabledState,
+                                                                          shadowMapTextureProvider: shadowMapTextureProvider,
+                                                                          shadowFallbackTexture: context.shadowFallbackTexture)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)

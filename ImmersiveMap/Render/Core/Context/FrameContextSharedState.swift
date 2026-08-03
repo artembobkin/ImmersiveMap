@@ -79,9 +79,13 @@ struct AvatarState {
 }
 
 struct SceneModelFrameState {
-    static let empty = SceneModelFrameState(hasActiveAnimations: false)
+    static let empty = SceneModelFrameState(hasActiveAnimations: false,
+                                            hasShadowCasters: false)
 
     var hasActiveAnimations: Bool
+    /// At least one model survived light-frustum culling this frame; feeds the
+    /// shadow-pass gate together with the building-caster check.
+    var hasShadowCasters: Bool
 }
 
 struct MarkerFrameState {

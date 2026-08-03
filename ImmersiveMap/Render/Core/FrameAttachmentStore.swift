@@ -17,6 +17,7 @@ final class FrameAttachmentStore {
     private var overlayDepthTexture: MTLTexture?
     private var buildingImageColorTexture: MTLTexture?
     private var buildingImageTexture: MTLTexture?
+    private var shadowMapTexture: MTLTexture?
 
     init(metalDevice: MTLDevice,
          renderSampleCount: Int) {
@@ -34,6 +35,10 @@ final class FrameAttachmentStore {
 
     var currentBuildingImageTexture: MTLTexture? {
         buildingImageTexture
+    }
+
+    var currentShadowMapTexture: MTLTexture? {
+        shadowMapTexture
     }
 
     var currentPostProcessingInputTexture: MTLTexture? {
@@ -208,6 +213,32 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
+    /// Depth of the directional-light pass — a 2:1 atlas (near cascade in the
+    /// left half, far in the right) sampled later by the world and
+    /// buildingImage passes: unlike the transient depth attachments it must
+    /// survive its pass (`.store`) and be readable, so it is always `.private`
+    /// with `.shaderRead` — never memoryless.
+    func ensureShadowMapTexture(resolution: Int) -> MTLTexture? {
+        guard resolution > 0 else { return nil }
+
+        if let shadowMapTexture,
+           shadowMapTexture.width == resolution * 2,
+           shadowMapTexture.height == resolution {
+            return shadowMapTexture
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+                                                                  width: resolution * 2,
+                                                                  height: resolution,
+                                                                  mipmapped: false)
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .private
+        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
+        newTexture?.label = RenderResourceName.shadowMapTexture.rawValue
+        shadowMapTexture = newTexture
+        return newTexture
+    }
+
     func reset() {
         colorTexture = nil
         postProcessingInputTexture = nil
@@ -215,5 +246,6 @@ final class FrameAttachmentStore {
         overlayDepthTexture = nil
         buildingImageColorTexture = nil
         buildingImageTexture = nil
+        shadowMapTexture = nil
     }
 }

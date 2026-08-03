@@ -10,6 +10,10 @@ class ExtrudedTilePipeline {
     /// Composites the building image onto the world pass with a single fullscreen
     /// triangle using premultiplied blending.
     let compositePipelineState: MTLRenderPipelineState
+    /// Depth-only replay of the same geometry from the light's camera into the
+    /// shadow map. No color attachments; the fragment stage only replicates the
+    /// placeIn clip discard.
+    let shadowPipelineState: MTLRenderPipelineState
 
     struct VertexIn {
         let position: SIMD3<Float>
@@ -67,8 +71,16 @@ class ExtrudedTilePipeline {
         compositeDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         compositeDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
+        let shadowDescriptor = MTLRenderPipelineDescriptor()
+        shadowDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedShadowVertexShader")
+        shadowDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedShadowFragmentShader")
+        shadowDescriptor.vertexDescriptor = vertexDescriptor
+        shadowDescriptor.rasterSampleCount = 1
+        shadowDescriptor.depthAttachmentPixelFormat = .depth32Float
+
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         self.compositePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeDescriptor)
+        self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
@@ -77,5 +89,9 @@ class ExtrudedTilePipeline {
 
     func selectCompositePipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(compositePipelineState)
+    }
+
+    func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(shadowPipelineState)
     }
 }

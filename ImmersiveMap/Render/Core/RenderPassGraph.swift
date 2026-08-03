@@ -9,7 +9,7 @@ final class RenderPassGraph {
         switch layer {
         case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion, .sceneModels:
             return true
-        case .buildingImage, .postProcessing, .labels, .avatars, .debugOverlay:
+        case .shadowCasters, .buildingImage, .postProcessing, .labels, .avatars, .debugOverlay:
             return false
         }
     }
@@ -18,9 +18,30 @@ final class RenderPassGraph {
         switch layer {
         case .labels, .avatars, .debugOverlay:
             return true
-        case .buildingImage, .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
-             .sceneModels, .postProcessing:
+        case .shadowCasters, .buildingImage, .starfield, .globeSurface, .globeCap, .flatMapSurface,
+             .buildingExtrusion, .sceneModels, .postProcessing:
             return false
+        }
+    }
+
+    /// Depth-only pass of the directional light. Ignores the drawable target:
+    /// the shadow map is a fixed-resolution offscreen depth texture that must
+    /// be stored for sampling by the buildingImage and world passes.
+    private final class ShadowMapDescriptorProvider: RenderPassDescriptorProvider {
+        func makeRenderPassDescriptor(frameContext: FrameContext,
+                                      attachments: FrameAttachmentStore,
+                                      target _: FrameRenderTarget?) -> MTLRenderPassDescriptor? {
+            guard let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
+                  let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) else {
+                return nil
+            }
+
+            let descriptor = MTLRenderPassDescriptor()
+            descriptor.depthAttachment.texture = shadowMapTexture
+            descriptor.depthAttachment.loadAction = .clear
+            descriptor.depthAttachment.storeAction = .store
+            descriptor.depthAttachment.clearDepth = 1.0
+            return descriptor
         }
     }
 
@@ -179,6 +200,17 @@ final class RenderPassGraph {
             .map(\.layer)
 
         var nodes: [RenderPassNode] = []
+        // The shadow map goes first: both the buildingImage pass and the world
+        // pass sample it. The gate skips the pass entirely when shadows are off
+        // or the frame has no casters, and the receivers then bind the fallback
+        // texture with a disabled uniform (same resolver on both sides).
+        if let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
+           let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) {
+            resourceRegistry.setTexture(shadowMapTexture, named: .shadowMapTexture)
+            nodes.append(RenderPassNode(name: .shadowMap,
+                                        descriptorProvider: ShadowMapDescriptorProvider(),
+                                        layers: [.shadowCasters]))
+        }
         // The offscreen building image is needed only when buildings composite over
         // the map translucently (translucent, or the solidAtHighZoom zoom
         // transition): they render into it opaquely (depth test, MSAA), and the

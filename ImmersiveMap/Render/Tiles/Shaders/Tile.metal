@@ -58,7 +58,13 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
                                    constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                    constant float4& localClipBounds [[buffer(1)]],
-                                   constant HorizonFog& horizonFog [[buffer(2)]]) {
+                                   constant HorizonFog& horizonFog [[buffer(2)]],
+                                   constant Shadow& shadow [[buffer(3)]],
+                                   depth2d<float> shadowMap [[texture(0)]]) {
+    // The shadow factor comes first: it evaluates screen-space derivatives,
+    // which are undefined in any 2x2 quad after a divergent discard (MSL
+    // spec), so the clip discard must not precede it.
+    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
         discard_fragment();
@@ -73,6 +79,11 @@ fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
         fade = overviewFade.overviewAlpha;
     }
     color.a *= fade;
+    // Shadow before fog: fog wins at distance, so the shadow-coverage edge
+    // dissolves into the haze instead of cutting a visible line. Zero normal
+    // (passed above): the ground always faces the sun and keeps its tight
+    // contact (no normal-offset shift).
+    color.rgb *= shadowFactor;
     color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }

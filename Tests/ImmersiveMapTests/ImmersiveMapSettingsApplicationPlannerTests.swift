@@ -41,6 +41,29 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertFalse(plan.requiresRendererRecreation)
     }
 
+    func testSceneLightDirectionChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.sceneLight(direction: SIMD3<Float>(0.5, -0.3, 1.0))
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.scene])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
+    func testShadowSettingsChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        var newSettings = oldSettings.shadows(isEnabled: false)
+        newSettings.scene.shadows.mapResolution = 1024
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.scene])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
     func testPostProcessingFXAAChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings

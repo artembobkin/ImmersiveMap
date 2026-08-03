@@ -4,6 +4,26 @@
 import MetalKit
 
 class Matrix {
+    /// Orthographic projection with Metal depth convention: view-space
+    /// `z = -near` maps to NDC 0 and `z = -far` to NDC 1.
+    ///
+    /// The legacy `orthographicMatrix` below is GL-convention (NDC depth
+    /// [-1, 1]); its callers only rasterize `z = 0` content so the difference
+    /// never shows there, but geometry spanning a depth range (the shadow map)
+    /// would lose the near half of the volume to Metal's [0, 1] clip.
+    static func metalOrthographicMatrix(left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) -> matrix_float4x4 {
+        let rml = right - left
+        let tmb = top - bottom
+        let fmn = far - near
+
+        return matrix_float4x4(
+            SIMD4<Float>(2.0 / rml, 0.0, 0.0, 0.0),
+            SIMD4<Float>(0.0, 2.0 / tmb, 0.0, 0.0),
+            SIMD4<Float>(0.0, 0.0, -1.0 / fmn, 0.0),
+            SIMD4<Float>(-(right + left) / rml, -(top + bottom) / tmb, -near / fmn, 1.0)
+        )
+    }
+
     static func orthographicMatrix(left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) -> matrix_float4x4 {
         let rml = right - left
         let tmb = top - bottom

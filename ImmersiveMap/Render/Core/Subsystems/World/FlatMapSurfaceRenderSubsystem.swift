@@ -9,13 +9,19 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let tilePipeline: TilePipeline
     private let separateRoadRenderingMinimumZoom: Int
     private let debugOverlayControls: DebugOverlayControlState
+    private let shadowMapTextureProvider: () -> MTLTexture?
+    private let shadowFallbackTexture: MTLTexture
 
     init(tilePipeline: TilePipeline,
          separateRoadRenderingMinimumZoom: Int,
-         debugOverlayControls: DebugOverlayControlState) {
+         debugOverlayControls: DebugOverlayControlState,
+         shadowMapTextureProvider: @escaping () -> MTLTexture?,
+         shadowFallbackTexture: MTLTexture) {
         self.tilePipeline = tilePipeline
         self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
+        self.shadowMapTextureProvider = shadowMapTextureProvider
+        self.shadowFallbackTexture = shadowFallbackTexture
     }
 
     func update(frameContext _: FrameContext) {}
@@ -33,10 +39,14 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: frameContext.services.settings.scene.mapClearColor)
+        let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
+                                                          shadowMapTexture: shadowMapTextureProvider(),
+                                                          fallbackTexture: shadowFallbackTexture)
 
         // The horizon backdrop is drawn first: the main coverage lands on top
         // (painter's order), and beyond its edge the ground is painted all the
-        // way to the horizon.
+        // way to the horizon. The backdrop binds the same shadow state: it lies
+        // outside the fitted shadow map, so the UV guard keeps it lit.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -44,6 +54,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   horizonFog: horizonFog,
+                                  shadowBinding: shadowBinding,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
@@ -53,6 +64,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   horizonFog: horizonFog,
+                                  shadowBinding: shadowBinding,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled)
     }

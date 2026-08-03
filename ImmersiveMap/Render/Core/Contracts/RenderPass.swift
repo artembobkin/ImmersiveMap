@@ -9,6 +9,7 @@
 import Foundation
 
 enum RenderLayer: String, CaseIterable {
+    case shadowCasters
     case buildingImage
     case starfield
     case globeSurface

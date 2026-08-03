@@ -16,15 +16,21 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     private let extrudedTilePipeline: ExtrudedTilePipeline
     private let extrudedDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
+    private let shadowMapTextureProvider: () -> MTLTexture?
+    private let shadowFallbackTexture: MTLTexture
 
     init(buildingImageTextureProvider: @escaping () -> MTLTexture?,
          extrudedTilePipeline: ExtrudedTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
-         depthDisabledState: MTLDepthStencilState) {
+         depthDisabledState: MTLDepthStencilState,
+         shadowMapTextureProvider: @escaping () -> MTLTexture?,
+         shadowFallbackTexture: MTLTexture) {
         self.buildingImageTextureProvider = buildingImageTextureProvider
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
         self.depthDisabledState = depthDisabledState
+        self.shadowMapTextureProvider = shadowMapTextureProvider
+        self.shadowFallbackTexture = shadowFallbackTexture
     }
 
     func update(frameContext _: FrameContext) {}
@@ -33,6 +39,19 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard frameContext.renderSurfaceMode == .flat else {
+            return
+        }
+
+        if layer == .shadowCasters {
+            guard let shadowState = frameContext.shadowFrameState else { return }
+            BuildingExtrusionDrawer.drawShadowCasters(
+                renderEncoder: encoder,
+                lightProjectionViews: shadowState.lightProjectionViews,
+                mapResolution: shadowState.mapResolution,
+                placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
+                flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                extrudedTilePipeline: extrudedTilePipeline,
+                extrudedDepthState: extrudedDepthState)
             return
         }
 
@@ -67,8 +86,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     func evict() {}
 
     private func drawBuildings(encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
+        let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
+                                                          shadowMapTexture: shadowMapTextureProvider(),
+                                                          fallbackTexture: shadowFallbackTexture)
         BuildingExtrusionDrawer.drawBuildings(renderEncoder: encoder,
                                               cameraUniform: frameContext.cameraUniform,
+                                              shadowBinding: shadowBinding,
                                               placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               extrudedTilePipeline: extrudedTilePipeline,

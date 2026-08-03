@@ -30,6 +30,12 @@ final class RenderPersistentContext {
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
+    /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
+    /// shaders reference the texture statically and Metal validation requires a
+    /// bound depth texture even though strength = 0 skips the sampling branch.
+    /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
+    /// clears this 1x1 texture to 1.0 ("lit everywhere") at init.
+    let shadowFallbackTexture: MTLTexture
 
     // MARK: - Tile and Label Resources
 
@@ -76,6 +82,7 @@ final class RenderPersistentContext {
         self.extrudedDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.depthDisabledState = metal.device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
+        self.shadowFallbackTexture = Self.makeShadowFallbackTexture(metalContext: metal)
 
         let mapBaseColors = providerRuntime.mapBaseColors
 
@@ -105,6 +112,7 @@ final class RenderPersistentContext {
         self.poiSpriteAtlas = PoiSpriteAtlas(device: metal.device)
         self.tilesTexture = TileAtlasTexture(metalDevice: metal.device,
                                               tilePipeline: globeTileTexturePipeline,
+                                              shadowFallbackTexture: shadowFallbackTexture,
                                               mapBaseColors: mapBaseColors)
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,
                                                metalDevice: metal.device,
@@ -139,6 +147,31 @@ final class RenderPersistentContext {
 
     func applySettings(_ settings: ImmersiveMapSettings) {
         debugOverlayRenderer.apply(settings: settings.debug)
+    }
+
+    // MARK: - Shadow Fallback
+
+    private static func makeShadowFallbackTexture(metalContext: RenderMetalContext) -> MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+                                                                  width: 1,
+                                                                  height: 1,
+                                                                  mipmapped: false)
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .private
+        let texture = metalContext.device.makeTexture(descriptor: descriptor)!
+        texture.label = "ShadowFallbackTexture"
+
+        let passDescriptor = MTLRenderPassDescriptor()
+        passDescriptor.depthAttachment.texture = texture
+        passDescriptor.depthAttachment.loadAction = .clear
+        passDescriptor.depthAttachment.storeAction = .store
+        passDescriptor.depthAttachment.clearDepth = 1.0
+        if let commandBuffer = metalContext.makeCommandBuffer(),
+           let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) {
+            encoder.endEncoding()
+            commandBuffer.commit()
+        }
+        return texture
     }
 
     // MARK: - Depth States

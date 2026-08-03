@@ -537,20 +537,66 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// The static sun of the flat presentation: its direction defines where
+    /// buildings and scene models cast their shadow-map shadows (there is no
+    /// analytic surface shading — faces darken only via the shadow map).
+    public struct SceneLightSettings: Equatable, Sendable {
+        /// World-space direction pointing **towards** the light in the flat
+        /// basis (+X east, +Y north, +Z up). Normalized before use.
+        public var direction: SIMD3<Float>
+
+        public init(direction: SIMD3<Float> = SIMD3<Float>(-0.4, -0.6, 1.0)) {
+            self.direction = direction
+        }
+    }
+
+    /// Directional shadows cast by extruded buildings and scene models onto
+    /// the flat map, other buildings and models. Flat presentation only.
+    public struct ShadowSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// Shadow darkening amount. Expected range: `0...1`.
+        public var strength: Float
+        /// Square shadow map side in pixels. Clamped to `256...4096` at render time.
+        public var mapResolution: Int
+        /// Far-cascade coverage radius measured in multiples of the camera
+        /// distance — a quantity independent of pitch and bearing, so tilting
+        /// or rotating the camera never changes shadow coverage or sharpness.
+        /// Beyond the radius shadows fade out. The far cascade is stretched
+        /// over it, so its texel density scales inversely; the near (crisp)
+        /// cascade always covers 2 camera distances.
+        public var coverageCameraDistances: Float
+
+        public init(isEnabled: Bool = true,
+                    strength: Float = 0.5,
+                    mapResolution: Int = 2048,
+                    coverageCameraDistances: Float = 16.0) {
+            self.isEnabled = isEnabled
+            self.strength = strength
+            self.mapResolution = mapResolution
+            self.coverageCameraDistances = coverageCameraDistances
+        }
+    }
+
     public struct SceneSettings: Equatable, Sendable {
         public var mapClearColor: SIMD4<Double>
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
         public var earth: EarthSceneSettings
+        public var light: SceneLightSettings
+        public var shadows: ShadowSettings
 
         public init(mapClearColor: SIMD4<Double>,
                     space: SpaceSettings,
                     starfield: StarfieldSettings,
-                    earth: EarthSceneSettings = EarthSceneSettings()) {
+                    earth: EarthSceneSettings = EarthSceneSettings(),
+                    light: SceneLightSettings = SceneLightSettings(),
+                    shadows: ShadowSettings = ShadowSettings()) {
             self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
             self.earth = earth
+            self.light = light
+            self.shadows = shadows
         }
     }
 
@@ -992,6 +1038,24 @@ public extension ImmersiveMapSettings {
     func earthScene(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.earth.isEnabled = isEnabled
+        return settings
+    }
+
+    func sceneLight(direction: SIMD3<Float>) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.light.direction = direction
+        return settings
+    }
+
+    func shadowSettings(_ shadows: ShadowSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.shadows = shadows
+        return settings
+    }
+
+    func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.shadows.isEnabled = isEnabled
         return settings
     }
 

@@ -5,17 +5,12 @@ import Metal
 import simd
 
 enum BuildingExtrusionDrawer {
-    private struct ExtrudedLightUniform {
-        var direction: SIMD4<Float>
-        var color: SIMD4<Float>
-        var intensities: SIMD4<Float>
-    }
-
     /// Opaque building geometry with depth test and depth write:
     /// solid mode draws it straight into the world pass, translucent into the
     /// offscreen building image.
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
+                              shadowBinding: ShadowReceiverBinding,
                               placeTilesContext: PlaceTilesContext,
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
@@ -27,21 +22,50 @@ enum BuildingExtrusionDrawer {
         extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
-        let lightDirection = simd_normalize(SIMD3<Float>(-0.4, -0.6, 1.0))
-        var lightUniform = ExtrudedLightUniform(
-            direction: SIMD4<Float>(lightDirection, 0.0),
-            color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-            intensities: SIMD4<Float>(0.35, 0.65, 0.2, 24.0)
-        )
-        renderEncoder.setFragmentBytes(&lightUniform, length: MemoryLayout<ExtrudedLightUniform>.stride, index: 2)
+        var shadowUniformValue = shadowBinding.uniform
+        renderEncoder.setFragmentBytes(&shadowUniformValue, length: MemoryLayout<ShadowUniform>.stride, index: 5)
+        renderEncoder.setFragmentTexture(shadowBinding.texture, index: 0)
         drawExtrudedGeometry(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              flatRenderState: flatRenderState)
 
         renderEncoder.setCullMode(.none)
         renderEncoder.setDepthStencilState(depthDisabledState)
+    }
+
+    /// Same geometry replayed depth-only from the light's orthographic
+    /// cameras into the two halves of the shadow atlas (viewport + scissor per
+    /// cascade). Cull `.none`: winding juggling is pointless in a depth-only
+    /// pass, and drawing both faces partially covers the wall quads missing on
+    /// tile boundaries. No encoder depth bias — the receiver-side bias is
+    /// computed per frame from the actual texel footprint
+    /// (ShadowFrameStateResolver), which keeps shadows attached to building
+    /// bases. Depth clamp (pancaking) keeps casters taller than the fitted
+    /// near plane instead of clipping them away.
+    static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
+                                  lightProjectionViews: [matrix_float4x4],
+                                  mapResolution: Int,
+                                  placeTilesContext: PlaceTilesContext,
+                                  flatRenderState: FlatRenderState,
+                                  extrudedTilePipeline: ExtrudedTilePipeline,
+                                  extrudedDepthState: MTLDepthStencilState) {
+        renderEncoder.setCullMode(.none)
+        extrudedTilePipeline.selectShadowPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setDepthStencilState(extrudedDepthState)
+        renderEncoder.setDepthClipMode(.clamp)
+        for (cascadeIndex, lightProjectionView) in lightProjectionViews.enumerated() {
+            ShadowCascadeAtlas.selectCascade(renderEncoder: renderEncoder,
+                                             cascadeIndex: cascadeIndex,
+                                             mapResolution: mapResolution)
+            var cameraUniformValue = CameraUniform(matrix: lightProjectionView, eye: .zero, padding: 0)
+            renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
+            drawExtrudedGeometry(renderEncoder: renderEncoder,
+                                 placeTilesContext: placeTilesContext,
+                                 flatRenderState: flatRenderState,
+                                 usesBackFaceCulling: false)
+        }
+        renderEncoder.setDepthClipMode(.clip)
     }
 
     /// Composites the building image over the world pass with a shared alpha:
@@ -64,8 +88,9 @@ enum BuildingExtrusionDrawer {
 
     private static func drawExtrudedGeometry(renderEncoder: MTLRenderCommandEncoder,
                                              placeTilesContext: PlaceTilesContext,
-                                             flatRenderState: FlatRenderState) {
-        var isBackCullingEnabled = true
+                                             flatRenderState: FlatRenderState,
+                                             usesBackFaceCulling: Bool = true) {
+        var isBackCullingEnabled = usesBackFaceCulling
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -98,7 +123,7 @@ enum BuildingExtrusionDrawer {
             // For clipped placements we also draw the inner walls, giving a dark
             // cut instead of a hole.
             let isClipped = localClipBounds != TileLocalClipMath.disabledBounds
-            if isClipped == isBackCullingEnabled {
+            if usesBackFaceCulling, isClipped == isBackCullingEnabled {
                 isBackCullingEnabled = !isClipped
                 renderEncoder.setCullMode(isBackCullingEnabled ? .back : .none)
             }

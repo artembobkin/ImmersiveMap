@@ -18,6 +18,7 @@ enum FlatMapSurfaceDrawer {
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
                      horizonFog: HorizonFogUniform,
+                     shadowBinding: ShadowReceiverBinding,
                      tilePipeline: TilePipeline,
                      isWireframeEnabled: Bool) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -31,6 +32,7 @@ enum FlatMapSurfaceDrawer {
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse)
         )
         var horizonFogValue = horizonFog
+        var shadowUniformValue = shadowBinding.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&overviewFadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
@@ -38,6 +40,10 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&horizonFogValue,
                                        length: MemoryLayout<HorizonFogUniform>.stride,
                                        index: 2)
+        renderEncoder.setFragmentBytes(&shadowUniformValue,
+                                       length: MemoryLayout<ShadowUniform>.stride,
+                                       index: 3)
+        renderEncoder.setFragmentTexture(shadowBinding.texture, index: 0)
 
         let usesSeparateRoadRendering = cameraZoom >= Double(separateRoadRenderingMinimumZoom)
 
