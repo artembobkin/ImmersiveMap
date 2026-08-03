@@ -59,8 +59,8 @@ struct SunVisualState {
 // to the cascade's half of the 2:1 shadow atlas: xy = atlas UV, z = depth.
 struct ShadowCascade {
     float4x4 worldToShadowTexture;
-    // Poisson kernel radius in atlas UV per axis; zero = single bilinear tap
-    // (the crisp near cascade).
+    // Reserved (kept for layout stability); the tent PCF filter footprint is
+    // fixed at 3x3 texels.
     float2 kernelRadiusUV;
     float depthBias;
     // Cap for the receiver-plane depth gradient (normalized depth per UV).
@@ -78,7 +78,7 @@ struct ShadowCascade {
 
 // Directional shadow sampling parameters; the layout mirrors ShadowUniform.swift.
 struct Shadow {
-    ShadowCascade cascades[2]; // [near (crisp), far (soft)]
+    ShadowCascade cascades[3]; // [near, middle, far]
     float3 eye;
     float strength;
     float fadeStartDistance;
@@ -91,10 +91,10 @@ struct Shadow {
 
 // Receiver-plane depth gradient dz/duv from screen-space derivatives
 // (Isidoro). Must run in uniform control flow, before any divergent early-out.
-// The clamp value is expressed for the u axis; one atlas-V spans half the
-// world of one atlas-U (the cascade half is square but covers 0.5 of u and
-// 1.0 of v), so the same slope cap on v is half the u value.
-static inline float2 shadowReceiverGradient(float3 uvz, float gradientClamp) {
+// The clamp value is expressed for the u axis; the same world slope maps to a
+// v gradient scaled by the atlas texel aspect (texels are square in world),
+// so the v clamp scales by texelSizeUV.x / texelSizeUV.y.
+static inline float2 shadowReceiverGradient(constant ShadowCascade& cascade, float3 uvz) {
     float2 duvdx = dfdx(uvz.xy);
     float2 duvdy = dfdy(uvz.xy);
     float dzdx = dfdx(uvz.z);
@@ -105,7 +105,8 @@ static inline float2 shadowReceiverGradient(float3 uvz, float gradientClamp) {
         dzduv = float2(duvdy.y * dzdx - duvdx.y * dzdy,
                        duvdx.x * dzdy - duvdy.x * dzdx) / det;
     }
-    float2 axisClamp = float2(gradientClamp, gradientClamp * 0.5);
+    float aspect = cascade.texelSizeUV.x / max(cascade.texelSizeUV.y, 1e-9);
+    float2 axisClamp = cascade.gradientClamp * float2(1.0, aspect);
     return clamp(dzduv, -axisClamp, axisClamp);
 }
 
@@ -115,11 +116,14 @@ static inline bool shadowCascadeContains(constant ShadowCascade& cascade, float3
            uvz.z >= 0.0 && uvz.z <= 1.0;
 }
 
-// One cascade's visibility. Zero kernel radius = a single hardware-bilinear
-// compare: the crisp ~1-texel edge of the near cascade. Otherwise a 12-tap
-// Poisson PCF; every tap is compared against the receiver-plane depth
-// predicted from the gradient, so flat surfaces (roofs, ground) need almost
-// no constant bias — no acne striping and no contact detachment.
+// One cascade's visibility: Castaño's 3x3 tent PCF (The Witness) — four
+// hardware-bilinear compares with computed weights reconstruct a C1 tent
+// kernel. A plain bilinear tap is exact along the shadow-grid axes but
+// staircases on diagonal edges (the far shadow boundary cast by roof edges is
+// almost always diagonal to the grid); the tent gives the same ~2-texel crisp
+// ramp in EVERY orientation. Every tap is compared against the receiver-plane
+// depth predicted from the gradient, so flat surfaces (roofs, ground) need
+// almost no constant bias — no acne striping and no contact detachment.
 static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
                                             depth2d<float> shadowMap,
                                             float3 uvz,
@@ -139,27 +143,38 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
                               + abs(dzduv.y) * cascade.texelSizeUV.y);
     float bias = cascade.depthBias + slopeBias;
 
-    if (cascade.kernelRadiusUV.x <= 0.0) {
-        return shadowMap.sample_compare(shadowSampler, uvz.xy, uvz.z - bias);
-    }
+    // Tent weights/offsets in texel space (atlas texels are non-square:
+    // u spans half the texture, so all conversions go through texelSizeUV).
+    float2 texelCoords = uvz.xy / cascade.texelSizeUV;
+    float2 base = floor(texelCoords + 0.5);
+    float s = texelCoords.x + 0.5 - base.x;
+    float t = texelCoords.y + 0.5 - base.y;
+    float2 baseUV = (base - 0.5) * cascade.texelSizeUV;
 
-    constexpr float2 poissonTaps[12] = {
-        float2(-0.326, -0.406), float2(-0.840, -0.074),
-        float2(-0.696, 0.457), float2(-0.203, 0.621),
-        float2(0.962, -0.195), float2(0.473, -0.480),
-        float2(0.519, 0.767), float2(0.185, -0.893),
-        float2(0.507, 0.064), float2(0.896, 0.412),
-        float2(-0.322, -0.933), float2(-0.792, -0.598)
-    };
+    float uw0 = 3.0 - 2.0 * s;
+    float uw1 = 1.0 + 2.0 * s;
+    float u0 = (2.0 - s) / uw0 - 1.0;
+    float u1 = s / uw1 + 1.0;
+    float vw0 = 3.0 - 2.0 * t;
+    float vw1 = 1.0 + 2.0 * t;
+    float v0 = (2.0 - t) / vw0 - 1.0;
+    float v1 = t / vw1 + 1.0;
+
     float visibility = 0.0;
-    for (int i = 0; i < 12; ++i) {
-        float2 offset = poissonTaps[i] * cascade.kernelRadiusUV;
-        float planeDepth = uvz.z + dot(dzduv, offset);
-        visibility += shadowMap.sample_compare(shadowSampler,
-                                               uvz.xy + offset,
-                                               planeDepth - bias);
-    }
-    return visibility * (1.0 / 12.0);
+    float2 tapUV;
+    tapUV = baseUV + float2(u0, v0) * cascade.texelSizeUV;
+    visibility += uw0 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV,
+        uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
+    tapUV = baseUV + float2(u1, v0) * cascade.texelSizeUV;
+    visibility += uw1 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV,
+        uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
+    tapUV = baseUV + float2(u0, v1) * cascade.texelSizeUV;
+    visibility += uw0 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV,
+        uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
+    tapUV = baseUV + float2(u1, v1) * cascade.texelSizeUV;
+    visibility += uw1 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV,
+        uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
+    return visibility * (1.0 / 16.0);
 }
 
 // Shadow visibility factor in [1 - strength, 1]; 1 = fully lit.
@@ -209,30 +224,32 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         ? smoothstep(0.125, 0.25, dot(normal, shadow.lightDirection))
         : 1.0;
 
-    float3 positionNear = worldPos + normal * shadow.cascades[0].normalOffsetWorld;
-    float3 positionFar = worldPos + normal * shadow.cascades[1].normalOffsetWorld;
-    float4 projectedNear = shadow.cascades[0].worldToShadowTexture * float4(positionNear, 1.0);
-    float4 projectedFar = shadow.cascades[1].worldToShadowTexture * float4(positionFar, 1.0);
-    float3 uvzNear = projectedNear.xyz / projectedNear.w;
-    float3 uvzFar = projectedFar.xyz / projectedFar.w;
-    float2 gradientNear = shadowReceiverGradient(uvzNear, shadow.cascades[0].gradientClamp);
-    float2 gradientFar = shadowReceiverGradient(uvzFar, shadow.cascades[1].gradientClamp);
+    // All cascade projections and their derivatives are evaluated before any
+    // divergent selection (uniform control flow).
+    float3 uvzs[3];
+    float2 gradients[3];
+    for (int i = 0; i < 3; ++i) {
+        float3 position = worldPos + normal * shadow.cascades[i].normalOffsetWorld;
+        float4 projected = shadow.cascades[i].worldToShadowTexture * float4(position, 1.0);
+        uvzs[i] = projected.xyz / projected.w;
+        gradients[i] = shadowReceiverGradient(shadow.cascades[i], uvzs[i]);
+    }
 
     if (shadow.strength <= 0.0) {
         return 1.0;
     }
 
-    float visibility = 1.0;
-    if (geometricVisibility <= 0.0) {
-        visibility = 0.0;
-    } else if (shadowCascadeContains(shadow.cascades[0], uvzNear)) {
-        visibility = geometricVisibility
-            * shadowCascadeVisibility(shadow.cascades[0], shadowMap, uvzNear, gradientNear);
-    } else if (shadowCascadeContains(shadow.cascades[1], uvzFar)) {
-        visibility = geometricVisibility
-            * shadowCascadeVisibility(shadow.cascades[1], shadowMap, uvzFar, gradientFar);
+    float visibility = geometricVisibility;
+    if (geometricVisibility > 0.0) {
+        for (int i = 0; i < 3; ++i) {
+            if (shadowCascadeContains(shadow.cascades[i], uvzs[i])) {
+                visibility = geometricVisibility
+                    * shadowCascadeVisibility(shadow.cascades[i], shadowMap, uvzs[i], gradients[i]);
+                break;
+            }
+        }
     } else {
-        visibility = geometricVisibility;
+        visibility = 0.0;
     }
 
     float distanceToEye = length(worldPos - shadow.eye);

@@ -11,8 +11,8 @@ import simd
 /// offset, v flipped for Metal's top-left origin), z the comparison depth.
 struct ShadowCascadeUniform {
     var worldToShadowTexture: matrix_float4x4
-    /// Poisson kernel radius in atlas UV units per axis (u is half-width).
-    /// Zero means a single hardware-bilinear tap — the crisp-edge cascade.
+    /// Reserved (kept for layout stability); the tent PCF footprint is a
+    /// fixed 3x3 texels.
     var kernelRadiusUV: SIMD2<Float>
     /// Receiver-side comparison bias in normalized shadow depth.
     var depthBias: Float
@@ -49,12 +49,19 @@ struct ShadowCascadeUniform {
 /// Per-frame shadow sampling parameters; the layout mirrors `Shadow` in
 /// RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 struct ShadowUniform {
-    /// Near cascade: a tight pose-invariant disc around the look-at point,
-    /// sampled with a single bilinear tap — crisp contact shadows.
+    /// Near cascade: a tight pose-invariant disc around the look-at point —
+    /// crisp contact shadows (~sub-meter texels at street zooms).
     var cascadeNear: ShadowCascadeUniform
-    /// Far cascade: the full coverage disc, sampled with a softened kernel —
-    /// distant shadows where a coarse texel is small on screen.
+    /// Middle cascade: where most visible shadows land at a tilted camera —
+    /// meter-scale texels keep diagonal edges straight.
+    var cascadeMiddle: ShadowCascadeUniform
+    /// Far cascade: the full coverage disc — distant shadows where a coarse
+    /// texel is small on screen and the eye-distance fade takes over.
     var cascadeFar: ShadowCascadeUniform
+
+    var cascades: [ShadowCascadeUniform] {
+        [cascadeNear, cascadeMiddle, cascadeFar]
+    }
     /// Camera eye in world space, for the distance fade (same convention as
     /// `HorizonFogUniform`).
     var eye: SIMD3<Float>
@@ -71,6 +78,7 @@ struct ShadowUniform {
     /// Bound when the shadow pass is skipped: the strength guard in
     /// `sampleShadowFactor` returns 1.0 before touching the texture.
     static let disabled = ShadowUniform(cascadeNear: .disabled,
+                                        cascadeMiddle: .disabled,
                                         cascadeFar: .disabled,
                                         eye: .zero,
                                         strength: 0,

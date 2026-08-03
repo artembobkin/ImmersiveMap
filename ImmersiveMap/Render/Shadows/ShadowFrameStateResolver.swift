@@ -35,15 +35,18 @@ enum ShadowFrameStateResolver {
     /// dropped: near-horizontal light produces quasi-infinite shadows the
     /// cascade maps cannot represent.
     static let minimumLightDirectionZ: Float = 0.05
-    /// Near cascade disc radius in camera distances: the crisp zone. Kept
-    /// tight — its window quantizes to half the extent of a 2.0 radius, which
-    /// doubles texel density (and edge sharpness) right around the camera.
+    /// Cascade disc radii in camera distances. Near is the crisp contact
+    /// zone; middle covers where most visible shadows land at a tilted
+    /// camera (far-cascade texels there would visibly wobble diagonal
+    /// edges); far is the coverage/fade zone.
     static let nearCascadeRadiusCameraDistances: Float = 1.0
-    /// Caster-height caps per cascade. The near cap is deliberately modest —
-    /// it directly inflates the near window (and its texel): receivers above
-    /// it simply fall through to the far cascade in the sampling chain, and
+    static let middleCascadeRadiusCameraDistances: Float = 3.0
+    /// Caster-height caps per cascade. The tighter caps on the closer
+    /// cascades keep their windows (and texels) small: receivers above a cap
+    /// simply fall through to the next cascade in the sampling chain, and
     /// taller casters are pancaked onto the near plane by the depth clamp.
     static let nearCascadeMaxCasterHeightMeters = 300.0
+    static let middleCascadeMaxCasterHeightMeters = 500.0
     static let farCascadeMaxCasterHeightMeters = 1000.0
     /// Constant receiver bias measured in shadow-map texels of depth slope.
     /// The receiver-plane bias in `sampleShadowFactor` predicts each tap's own
@@ -69,12 +72,8 @@ enum ShadowFrameStateResolver {
     /// delete their received shadows. Acne beyond the cap is handled by the
     /// slope-proportional per-tap bias instead.
     static let normalOffsetMetersCap = 2.5
-    /// Kernel radii in cascade texels. The near cascade uses a sub-texel
-    /// Poisson spread: wide enough to melt the 1-texel staircase of a bare
-    /// bilinear tap into a straight edge, narrow enough (~1.5 texels of
-    /// transition, about a meter at street zooms) to still read as crisp.
-    static let nearKernelRadiusTexels: Float = 0.75
-    static let farKernelRadiusTexels: Float = 2.5
+    // (The PCF filter is a fixed 3x3 Castaño tent in the shader — an
+    // orientation-independent ~2-texel edge; no per-cascade kernel radius.)
     /// Sampling-rectangle inset per cascade, in texels: keeps kernel taps from
     /// bleeding across the atlas seam or the window border.
     static let uvInsetTexels: Float = 4.0
@@ -83,7 +82,6 @@ enum ShadowFrameStateResolver {
     private struct CascadeSpec {
         let radius: Float
         let maxCasterHeight: Float
-        let kernelRadiusTexels: Float
         let atlasIndex: Int
     }
 
@@ -131,15 +129,17 @@ enum ShadowFrameStateResolver {
         // every shadow would fade to nothing while the pass still runs.
         let farRadius = max(scene.shadows.coverageCameraDistances, 2.0) * cameraDistance
         let nearRadius = min(nearCascadeRadiusCameraDistances * cameraDistance, farRadius)
+        let middleRadius = min(middleCascadeRadiusCameraDistances * cameraDistance, farRadius)
         let specs = [
             CascadeSpec(radius: nearRadius,
                         maxCasterHeight: Float(nearCascadeMaxCasterHeightMeters * unitsPerMeter),
-                        kernelRadiusTexels: nearKernelRadiusTexels,
                         atlasIndex: 0),
+            CascadeSpec(radius: middleRadius,
+                        maxCasterHeight: Float(middleCascadeMaxCasterHeightMeters * unitsPerMeter),
+                        atlasIndex: 1),
             CascadeSpec(radius: farRadius,
                         maxCasterHeight: Float(farCascadeMaxCasterHeightMeters * unitsPerMeter),
-                        kernelRadiusTexels: farKernelRadiusTexels,
-                        atlasIndex: 1)
+                        atlasIndex: 2)
         ]
 
         var lightProjectionViews: [matrix_float4x4] = []
@@ -160,7 +160,8 @@ enum ShadowFrameStateResolver {
 
         let strength = min(max(scene.shadows.strength, 0), 1)
         let uniform = ShadowUniform(cascadeNear: cascadeUniforms[0],
-                                    cascadeFar: cascadeUniforms[1],
+                                    cascadeMiddle: cascadeUniforms[1],
+                                    cascadeFar: cascadeUniforms[2],
                                     eye: cameraEye,
                                     strength: strength,
                                     fadeStartDistance: farRadius * 0.75,
@@ -226,17 +227,20 @@ enum ShadowFrameStateResolver {
             return nil
         }
 
-        // Square power-of-two window: the raw extent varies smoothly with the
+        // Square quantized window: the raw extent varies smoothly with the
         // zoom fraction, and letting the texel size follow it makes shadow
-        // edges crawl. Quantizing keeps the grid constant between rare
-        // doubling steps, and integer-zoom re-normalization scales it exactly
-        // ×2 — grid lines stay glued to the map content.
+        // edges crawl. Quantizing in √2 steps keeps the grid constant between
+        // rare re-anchor steps while capping the density overshoot at 1.41×
+        // (a plain pow2 wastes up to 2×), and integer-zoom re-normalization
+        // scales it exactly ×2 (two √2 steps) — grid lines stay glued to the
+        // map content.
         // Margin: 2 × 4-texel uv inset + 1 texel for the half-texel center
         // snap on each axis, so the disc rim always stays inside the inset
-        // sampling rectangle even when pow2 lands exactly on the needed size.
+        // sampling rectangle even when quantization lands exactly on the
+        // needed size.
         let neededExtent = max(maxX - minX, maxY - minY) * (1.0 + 10.0 / Float(mapResolution))
         guard neededExtent > 0, neededExtent.isFinite else { return nil }
-        let extent = pow(2.0, ceil(log2(neededExtent)))
+        let extent = pow(2.0, ceil(log2(neededExtent) * 2.0) / 2.0)
         let texelWorldSize = extent / Float(mapResolution)
 
         // Snap the window center to whole texels in pan-anchored space (see
@@ -272,12 +276,14 @@ enum ShadowFrameStateResolver {
                                                              far: far)
         let lightProjectionView = lightProjection * lightView
 
-        // NDC → atlas half `atlasIndex`: u = 0.25x + 0.25 + 0.5·index (the
-        // half spans 0.5 of the atlas U), v = -0.5y + 0.5 (Metal texture
-        // origin is top-left), z passes through as the comparison depth.
-        let uOffset = 0.25 + 0.5 * Float(spec.atlasIndex)
+        // NDC → atlas slot `atlasIndex` of `cascadeCount`: the slot spans
+        // 1/count of the atlas U, so u = x·(0.5/count) + (index + 0.5)/count;
+        // v = -0.5y + 0.5 (Metal texture origin is top-left); z passes
+        // through as the comparison depth.
+        let slotWidth = 1.0 / Float(ShadowCascadeAtlas.cascadeCount)
+        let uOffset = (Float(spec.atlasIndex) + 0.5) * slotWidth
         let uvBias = matrix_float4x4(
-            SIMD4<Float>(0.25, 0.0, 0.0, 0.0),
+            SIMD4<Float>(0.5 * slotWidth, 0.0, 0.0, 0.0),
             SIMD4<Float>(0.0, -0.5, 0.0, 0.0),
             SIMD4<Float>(0.0, 0.0, 1.0, 0.0),
             SIMD4<Float>(uOffset, 0.5, 0.0, 1.0)
@@ -293,17 +299,20 @@ enum ShadowFrameStateResolver {
         let depthBias = (receiverBiasTexels * min(steepestSlope, 2.0) + receiverBiasFloorTexels)
             * texelWorldSize / depthWindow
         // Anything above the cap is a derivative artifact. Units: normalized
-        // depth per atlas U (u spans extent over 0.5 of the texture, ×2).
-        let gradientClamp = gradientClampMaxSlope * 2.0 * extent / depthWindow
+        // depth per atlas U: the window extent maps to `0.5 · slotWidth` of
+        // the atlas U axis, so one full U spans extent / (0.5 · slotWidth)
+        // world units.
+        let worldPerAtlasU = extent / (0.5 * slotWidth)
+        let gradientClamp = gradientClampMaxSlope * worldPerAtlasU / depthWindow
 
-        let texelUV = SIMD2<Float>(0.5 / Float(mapResolution), 1.0 / Float(mapResolution))
+        let texelUV = SIMD2<Float>(slotWidth / Float(mapResolution), 1.0 / Float(mapResolution))
         let inset = uvInsetTexels * texelUV
-        let uvMinimum = SIMD2<Float>(0.5 * Float(spec.atlasIndex), 0) + inset
-        let uvMaximum = SIMD2<Float>(0.5 * Float(spec.atlasIndex) + 0.5, 1) - inset
+        let uvMinimum = SIMD2<Float>(slotWidth * Float(spec.atlasIndex), 0) + inset
+        let uvMaximum = SIMD2<Float>(slotWidth * Float(spec.atlasIndex + 1), 1) - inset
         let normalOffsetWorld = min(normalOffsetTexels * texelWorldSize,
                                     Float(normalOffsetMetersCap * unitsPerMeter))
         let uniform = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
-                                           kernelRadiusUV: spec.kernelRadiusTexels * texelUV,
+                                           kernelRadiusUV: .zero,
                                            depthBias: depthBias,
                                            gradientClamp: gradientClamp,
                                            uvMinimum: uvMinimum,

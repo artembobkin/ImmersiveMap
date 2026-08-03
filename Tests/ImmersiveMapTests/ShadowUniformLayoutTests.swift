@@ -22,14 +22,15 @@ final class ShadowUniformLayoutTests: XCTestCase {
     }
 
     func testShadowUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 272)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 384)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeNear), 0)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeFar), 112)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.eye), 224)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.strength), 240)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeStartDistance), 244)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeEndDistance), 248)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 256)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeMiddle), 112)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeFar), 224)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.eye), 336)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.strength), 352)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeStartDistance), 356)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeEndDistance), 360)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 368)
     }
 
     func testDisabledUniformHasZeroStrengthAndEmptyRects() {

@@ -60,6 +60,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     func testDiscReceiversAndCastersStayInsideCascadeVolumes() {
         var random = SplitMix64ShadowTests(seed: 0x5AD0_11FE)
         let caps = [ShadowFrameStateResolver.nearCascadeMaxCasterHeightMeters,
+                    ShadowFrameStateResolver.middleCascadeMaxCasterHeightMeters,
                     ShadowFrameStateResolver.farCascadeMaxCasterHeightMeters]
 
         for iteration in 0..<30 {
@@ -80,11 +81,12 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
             let cameraDistance = simd_length(eye)
             let radii = [ShadowFrameStateResolver.nearCascadeRadiusCameraDistances * cameraDistance,
+                         ShadowFrameStateResolver.middleCascadeRadiusCameraDistances * cameraDistance,
                          scene.shadows.coverageCameraDistances * cameraDistance]
             let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
                                                                           renderMapSize: Self.renderMapSize)
             let tolerance: Float = 1e-3
-            for cascadeIndex in 0..<2 {
+            for cascadeIndex in 0..<3 {
                 let maxCasterHeight = Float(caps[cascadeIndex] * unitsPerMeter)
                 let matrix = state.lightProjectionViews[cascadeIndex]
                 for pointIndex in 0..<8 {
@@ -116,9 +118,9 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let poses: [(Float, Float)] = [(40 * .pi / 180, 0.7), (70 * .pi / 180, 2.1), (10 * .pi / 180, 4.0)]
         for (pitch, bearing) in poses {
             let state = try XCTUnwrap(Self.resolve(eye: Self.makeEye(pitch: pitch, bearing: bearing, distance: 0.8)))
-            for cascadeIndex in 0..<2 {
-                let expected = cascadeIndex == 0 ? reference.shadowUniform.cascadeNear : reference.shadowUniform.cascadeFar
-                let actual = cascadeIndex == 0 ? state.shadowUniform.cascadeNear : state.shadowUniform.cascadeFar
+            for cascadeIndex in 0..<3 {
+                let expected = reference.shadowUniform.cascades[cascadeIndex]
+                let actual = state.shadowUniform.cascades[cascadeIndex]
                 for column in 0..<4 {
                     XCTAssertEqual(simd_distance(expected.worldToShadowTexture[column],
                                                  actual.worldToShadowTexture[column]), 0, accuracy: 1e-5,
@@ -146,17 +148,17 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
         let contentShift = SIMD2<Double>((pan2.x - pan1.x) * halfMapSize,
                                          -(pan2.y - pan1.y) * halfMapSize)
-        // Atlas texel counts: u spans two cascade halves.
-        let texelsU = Float(state1.mapResolution * 2)
+        // Atlas texel counts: u spans all cascade slots.
+        let texelsU = Float(state1.mapResolution * ShadowCascadeAtlas.cascadeCount)
         let texelsV = Float(state1.mapResolution)
         let probes: [SIMD3<Float>] = [
             SIMD3<Float>(0.05, -0.1, 0),
             SIMD3<Float>(-0.12, 0.07, 0.001),
             SIMD3<Float>(0, 0, 0)
         ]
-        let cascades1 = [state1.shadowUniform.cascadeNear, state1.shadowUniform.cascadeFar]
-        let cascades2 = [state2.shadowUniform.cascadeNear, state2.shadowUniform.cascadeFar]
-        for cascadeIndex in 0..<2 {
+        let cascades1 = state1.shadowUniform.cascades
+        let cascades2 = state2.shadowUniform.cascades
+        for cascadeIndex in 0..<3 {
             for w1 in probes {
                 let w2 = SIMD3<Float>(w1.x + Float(contentShift.x),
                                       w1.y + Float(contentShift.y),
@@ -181,8 +183,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         scene.shadows.mapResolution = 4096
         let fine = try XCTUnwrap(Self.resolve(scene: scene))
 
-        for (coarseCascade, fineCascade) in [(coarse.shadowUniform.cascadeNear, fine.shadowUniform.cascadeNear),
-                                             (coarse.shadowUniform.cascadeFar, fine.shadowUniform.cascadeFar)] {
+        for (coarseCascade, fineCascade) in zip(coarse.shadowUniform.cascades, fine.shadowUniform.cascades) {
             XCTAssertGreaterThan(coarseCascade.depthBias, 0)
             XCTAssertGreaterThan(fineCascade.depthBias, 0)
             XCTAssertEqual(coarseCascade.depthBias / fineCascade.depthBias, 4.0, accuracy: 0.2)
@@ -191,56 +192,42 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         }
     }
 
-    /// Near cascade uses a sub-texel anti-staircase spread, far the wide
-    /// Poisson radius — both in atlas-UV units (u is a half of the texture).
-    func testKernelRadiiPerCascade() throws {
-        let state = try XCTUnwrap(Self.resolve())
-        let resolution = Float(state.mapResolution)
-
-        let nearExpected = ShadowFrameStateResolver.nearKernelRadiusTexels
-        XCTAssertEqual(state.shadowUniform.cascadeNear.kernelRadiusUV.x, nearExpected * 0.5 / resolution, accuracy: 1e-9)
-        XCTAssertEqual(state.shadowUniform.cascadeNear.kernelRadiusUV.y, nearExpected / resolution, accuracy: 1e-9)
-
-        let farExpected = ShadowFrameStateResolver.farKernelRadiusTexels
-        XCTAssertEqual(state.shadowUniform.cascadeFar.kernelRadiusUV.x, farExpected * 0.5 / resolution, accuracy: 1e-9)
-        XCTAssertEqual(state.shadowUniform.cascadeFar.kernelRadiusUV.y, farExpected / resolution, accuracy: 1e-9)
-    }
-
     /// Normal offsets are texel-driven but meter-capped (an uncapped far
     /// offset reaches 10+ meters and would push wall receivers past their real
     /// occluders), and each cascade publishes its texel size for the per-tap
     /// slope bias.
     func testNormalOffsetIsTexelDrivenButMeterCapped() throws {
         let state = try XCTUnwrap(Self.resolve())
-        let near = state.shadowUniform.cascadeNear
-        let far = state.shadowUniform.cascadeFar
+        let cascades = state.shadowUniform.cascades
         let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
                                                                      renderMapSize: Self.renderMapSize)
         let cap = Float(ShadowFrameStateResolver.normalOffsetMetersCap * unitsPerMeter)
-
-        XCTAssertGreaterThan(near.normalOffsetWorld, 0)
-        XCTAssertGreaterThanOrEqual(far.normalOffsetWorld, near.normalOffsetWorld)
-        XCTAssertLessThanOrEqual(near.normalOffsetWorld, cap * 1.0001)
-        XCTAssertLessThanOrEqual(far.normalOffsetWorld, cap * 1.0001)
-
-        let expectedTexelUV = SIMD2<Float>(0.5 / Float(state.mapResolution),
+        let expectedTexelUV = SIMD2<Float>(1.0 / Float(state.mapResolution * ShadowCascadeAtlas.cascadeCount),
                                            1.0 / Float(state.mapResolution))
-        XCTAssertEqual(near.texelSizeUV, expectedTexelUV)
-        XCTAssertEqual(far.texelSizeUV, expectedTexelUV)
-        XCTAssertGreaterThan(near.gradientClamp, 0)
-        XCTAssertGreaterThan(far.gradientClamp, 0)
+
+        for (index, cascade) in cascades.enumerated() {
+            XCTAssertGreaterThan(cascade.normalOffsetWorld, 0, "cascade \(index)")
+            XCTAssertLessThanOrEqual(cascade.normalOffsetWorld, cap * 1.0001, "cascade \(index)")
+            XCTAssertEqual(cascade.texelSizeUV.x, expectedTexelUV.x, accuracy: 1e-9, "cascade \(index)")
+            XCTAssertEqual(cascade.texelSizeUV.y, expectedTexelUV.y, accuracy: 1e-9, "cascade \(index)")
+            XCTAssertGreaterThan(cascade.gradientClamp, 0, "cascade \(index)")
+            if index > 0 {
+                XCTAssertGreaterThanOrEqual(cascade.normalOffsetWorld,
+                                            cascades[index - 1].normalOffsetWorld,
+                                            "cascade \(index)")
+            }
+        }
     }
 
     func testAtlasRectsAndFadeFollowCameraDistance() throws {
         let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: 0.8)
         let state = try XCTUnwrap(Self.resolve(eye: eye))
 
-        let near = state.shadowUniform.cascadeNear
-        let far = state.shadowUniform.cascadeFar
-        XCTAssertGreaterThan(near.uvMinimum.x, 0)
-        XCTAssertLessThan(near.uvMaximum.x, 0.5)
-        XCTAssertGreaterThan(far.uvMinimum.x, 0.5)
-        XCTAssertLessThan(far.uvMaximum.x, 1.0)
+        let slotWidth = 1.0 / Float(ShadowCascadeAtlas.cascadeCount)
+        for (index, cascade) in state.shadowUniform.cascades.enumerated() {
+            XCTAssertGreaterThan(cascade.uvMinimum.x, slotWidth * Float(index), "cascade \(index)")
+            XCTAssertLessThan(cascade.uvMaximum.x, slotWidth * Float(index + 1), "cascade \(index)")
+        }
 
         let expectedRadius = ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances * simd_length(eye)
         XCTAssertEqual(state.shadowUniform.fadeEndDistance, expectedRadius, accuracy: expectedRadius * 1e-5)
