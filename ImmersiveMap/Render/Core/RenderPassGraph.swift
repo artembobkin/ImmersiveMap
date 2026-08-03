@@ -7,7 +7,7 @@ import QuartzCore
 final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
-        case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion:
+        case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion, .sceneModels:
             return true
         case .buildingImage, .postProcessing, .labels, .avatars, .debugOverlay:
             return false
@@ -19,7 +19,7 @@ final class RenderPassGraph {
         case .labels, .avatars, .debugOverlay:
             return true
         case .buildingImage, .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
-             .postProcessing:
+             .sceneModels, .postProcessing:
             return false
         }
     }

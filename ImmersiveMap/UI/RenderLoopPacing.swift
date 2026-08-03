@@ -12,13 +12,15 @@ final class RenderLoopPacing {
         case labelVisibilityCycle = "label visibility cycle"
         case cameraAnimation = "camera animation"
         case avatarAnimation = "avatar animation"
+        case sceneModelAnimation = "scene model animation"
 
         var usesInteractionFrameRate: Bool {
             switch self {
             case .interaction,
                  .labelVisibilityCycle,
                  .cameraAnimation,
-                 .avatarAnimation:
+                 .avatarAnimation,
+                 .sceneModelAnimation:
                 return true
             case .labelFade:
                 return false
@@ -104,6 +106,8 @@ private extension RenderInvalidationReason {
             return "tile available"
         case .tileRetryDue:
             return "tile retry due"
+        case .sceneModelAssetLoaded:
+            return "scene model asset loaded"
         case .externalStateChanged:
             return "external state changed"
         }

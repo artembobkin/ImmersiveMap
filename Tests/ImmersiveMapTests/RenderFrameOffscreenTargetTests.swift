@@ -18,6 +18,10 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
     }
 
+    private final class StubSceneModelSource: SceneModelRenderSource {
+        var currentSceneModelsController: ImmersiveMapSceneModelsController? { nil }
+    }
+
     @MainActor
     func testOffscreenRenderSchedulesCompletesAndWritesPixels() async throws {
         guard let probeDevice = MTLCreateSystemDefaultDevice() else {
@@ -39,6 +43,7 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         let engine = RenderFrameEngine(layer: layer,
                                        avatarSource: StubAvatarSource(),
                                        markerSource: StubMarkerSource(),
+                                       sceneModelSource: StubSceneModelSource(),
                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                        settings: settings,
                                        renderCamera: renderCamera,

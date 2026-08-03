@@ -39,6 +39,7 @@ let package = Package(
                 "Presentation/README.md",
                 "Proto/README.md",
                 "Render/README.md",
+                "SceneModels/README.md",
                 "Starfield/README.md",
                 "Text/README.md",
                 "Tile/README.md",
@@ -60,6 +61,7 @@ let package = Package(
                 .process("Render/Shaders/Starfield"),
                 .process("Render/Compute/TilePoints/Shaders/TilePointToScreen.metal"),
                 .process("Render/Debug/Shaders"),
+                .process("Render/SceneModels/Shaders"),
                 .process("Render/Shaders/Shared/GeoMath.metal"),
                 .process("Render/Tiles/Shaders"),
                 .copy("Proto/vector_tile.proto")

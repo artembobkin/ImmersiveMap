@@ -56,6 +56,7 @@ final class ImmersiveMapHostRuntime {
     /// Syncs new parameters from the SwiftUI update hook with the already created host view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
+                sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -64,6 +65,7 @@ final class ImmersiveMapHostRuntime {
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
+                        sceneModelsController: sceneModelsController,
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction)
@@ -79,6 +81,7 @@ final class ImmersiveMapHostRuntime {
 
     func dismantle() {
         syncControllers(avatarsController: nil,
+                        sceneModelsController: nil,
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil)
@@ -122,13 +125,16 @@ final class ImmersiveMapHostRuntime {
     }
 
     func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
+                         sceneModelsController newSceneModelsController: ImmersiveMapSceneModelsController? = nil,
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
                          avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
         runtimeGraph.selectionHandler.setAvatarTapAction(newAvatarTapAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
+        let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
         guard shouldUpdateAvatarsController
+            || shouldUpdateSceneModelsController
             || shouldUpdateCameraController else {
             runtimeGraph.selectionHandler.syncController(newSelectionController)
             return
@@ -138,6 +144,10 @@ final class ImmersiveMapHostRuntime {
             runtimeGraph.avatarRuntime.attachController(newAvatarsController,
                                                         selectionHandler: runtimeGraph.selectionHandler,
                                                         renderRuntime: runtimeGraph.renderRuntime)
+        }
+        if shouldUpdateSceneModelsController {
+            runtimeGraph.sceneModelRuntime.attachController(newSceneModelsController,
+                                                            renderRuntime: runtimeGraph.renderRuntime)
         }
         if shouldUpdateCameraController {
             runtimeGraph.cameraRuntime.attachController(newCameraController,
@@ -178,6 +188,7 @@ final class ImmersiveMapHostRuntime {
         self.renderer = renderer
         runtimeGraph.renderRuntime.attachRenderer(renderer)
         runtimeGraph.avatarRuntime.markSnapshotDirty()
+        runtimeGraph.sceneModelRuntime.markSnapshotDirty()
         requestFrame()
     }
 
@@ -199,6 +210,7 @@ final class ImmersiveMapHostRuntime {
         Task { @MainActor in
             detachedGraph.cameraAnimationRuntime.reset()
             detachedGraph.avatarRuntime.detachController()
+            detachedGraph.sceneModelRuntime.detachController()
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()

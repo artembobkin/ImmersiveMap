@@ -37,6 +37,7 @@ final class RenderFrameEngine {
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
+         sceneModelSource: SceneModelRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          settings: ImmersiveMapSettings = .default,
          debugOverlayControls: DebugOverlayControlState = DebugOverlayControlState(),
@@ -49,6 +50,7 @@ final class RenderFrameEngine {
         let persistentContext = RenderPersistentContext(layer: layer,
                                                         avatarSource: avatarSource,
                                                         markerSource: markerSource,
+                                                        sceneModelSource: sceneModelSource,
                                                         providerRuntime: providerRuntime,
                                                         config: settings,
                                                         eventSink: eventSink,
@@ -172,9 +174,11 @@ final class RenderFrameEngine {
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
         let hasActiveLabelVisibilityCycle = frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
+        let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
-                                                         avatarAnimationRenderingActive: hasActiveAvatarAnimations))
+                                                         avatarAnimationRenderingActive: hasActiveAvatarAnimations,
+                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations))
         // Synchronously and within the same frame: SwiftUI marker positions must
         // land in the same CA transaction as this frame's present. When didSchedule
         // == false the screen shows the old frame and there is nothing to publish.

@@ -11,6 +11,17 @@ import simd
 enum ImmersiveMapProjection {
     static let maxMercatorLatitude = 2.0 * atan(exp(Double.pi)) - (Double.pi * 0.5)
 
+    /// Equatorial Earth circumference in meters (WGS84).
+    static let earthCircumferenceMeters = 40_075_016.686
+
+    /// Render units per ground meter on the flat WebMercator map at the given
+    /// latitude: the full `renderMapSize` spans the equatorial circumference,
+    /// and Mercator stretches ground distances by 1/cos(latitude).
+    static func worldUnitsPerMeter(latitudeRadians: Double, renderMapSize: Double) -> Double {
+        let clampedLatitude = min(max(-maxMercatorLatitude, latitudeRadians), maxMercatorLatitude)
+        return renderMapSize / (earthCircumferenceMeters * cos(clampedLatitude))
+    }
+
     static func wrapNormalizedWorldX(_ x: Double) -> Double {
         var wrapped = x.truncatingRemainder(dividingBy: 1.0)
         if wrapped < 0 {

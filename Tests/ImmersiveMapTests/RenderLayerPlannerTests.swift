@@ -16,6 +16,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .flatMapSurface,
             .buildingExtrusion,
+            .sceneModels,
             .labels,
             .avatars,
             .debugOverlay
@@ -35,11 +36,12 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .flatMapSurface,
             .buildingExtrusion,
+            .sceneModels,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .buildingExtrusion])
+        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .buildingExtrusion, .sceneModels])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
@@ -57,6 +59,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .starfield,
             .globeSurface,
             .globeCap,
+            .sceneModels,
             .labels,
             .avatars,
             .debugOverlay
@@ -77,11 +80,12 @@ final class RenderLayerPlannerTests: XCTestCase {
             .starfield,
             .globeSurface,
             .globeCap,
+            .sceneModels,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap, .sceneModels])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)

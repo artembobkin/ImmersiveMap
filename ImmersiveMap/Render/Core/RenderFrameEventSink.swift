@@ -4,6 +4,7 @@
 enum RenderInvalidationReason {
     case tileAvailable
     case tileRetryDue
+    case sceneModelAssetLoaded
     case externalStateChanged
 }
 
@@ -11,6 +12,7 @@ struct RenderActivityState {
     let labelFadeRenderingActive: Bool
     let labelVisibilityCycleRenderingActive: Bool
     let avatarAnimationRenderingActive: Bool
+    let sceneModelAnimationRenderingActive: Bool
 }
 
 /// Events arrive both from the main thread and from background tasks (tile

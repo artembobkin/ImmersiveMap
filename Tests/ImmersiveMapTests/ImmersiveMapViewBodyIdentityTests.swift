@@ -28,4 +28,15 @@ final class ImmersiveMapViewBodyIdentityTests: XCTestCase {
         XCTAssertFalse(enabledType.contains("_ConditionalContent"),
                        "Ветвление по типу на верхнем уровне body ломает identity host view")
     }
+
+    func testBodyTypeDoesNotDependOnSceneModelsModifier() {
+        let withModelsType = String(describing: type(of: ImmersiveMapView()
+            .sceneModels(ImmersiveMapSceneModelsController())
+            .body))
+        let plainType = String(describing: type(of: ImmersiveMapView().body))
+
+        XCTAssertEqual(withModelsType, plainType)
+        XCTAssertFalse(withModelsType.contains("_ConditionalContent"),
+                       "Ветвление по типу на верхнем уровне body ломает identity host view")
+    }
 }

@@ -78,6 +78,12 @@ struct AvatarState {
     var selectionSnapshot: AvatarSelectionSnapshot
 }
 
+struct SceneModelFrameState {
+    static let empty = SceneModelFrameState(hasActiveAnimations: false)
+
+    var hasActiveAnimations: Bool
+}
+
 struct MarkerFrameState {
     static let empty = MarkerFrameState(snapshot: nil)
 
@@ -95,5 +101,6 @@ final class FrameContextSharedState {
     var baseLabelDebugBoxesState: BaseLabelDebugBoxesState = .empty
     var roadLabelState: RoadLabelState = .empty
     var avatarState: AvatarState = .empty
+    var sceneModelState: SceneModelFrameState = .empty
     var markerState: MarkerFrameState = .empty
 }

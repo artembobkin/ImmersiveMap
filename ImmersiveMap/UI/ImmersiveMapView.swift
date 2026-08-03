@@ -12,6 +12,7 @@ public struct ImmersiveMapView: View {
     var settings: ImmersiveMapSettings
     private var cameraPosition: ImmersiveMapCameraPosition?
     private var avatarsController: ImmersiveMapAvatarsController?
+    private var sceneModelsController: ImmersiveMapSceneModelsController?
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
     private var selectionController: ImmersiveMapSelectionController?
@@ -38,6 +39,7 @@ public struct ImmersiveMapView: View {
     public var body: some View {
         ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
+                                        sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -57,6 +59,7 @@ public struct ImmersiveMapView: View {
 private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
+    let sceneModelsController: ImmersiveMapSceneModelsController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -68,6 +71,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
         let uiView = ImmersiveMapUIView(frame: .zero,
                                         settings: settings,
                                         avatarsController: avatarsController,
+                                        sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -79,6 +83,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     public func updateUIView(_ uiView: ImmersiveMapUIView, context: Context) {
         uiView.update(settings: settings,
                       avatarsController: avatarsController,
+                      sceneModelsController: sceneModelsController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -95,6 +100,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
 private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
+    let sceneModelsController: ImmersiveMapSceneModelsController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -106,6 +112,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
         let nsView = ImmersiveMapNSView(frame: .zero,
                                         settings: settings,
                                         avatarsController: avatarsController,
+                                        sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -117,6 +124,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     public func updateNSView(_ nsView: ImmersiveMapNSView, context: Context) {
         nsView.update(settings: settings,
                       avatarsController: avatarsController,
+                      sceneModelsController: sceneModelsController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -136,6 +144,16 @@ public extension ImmersiveMapView {
     func avatars(_ controller: ImmersiveMapAvatarsController?) -> ImmersiveMapView {
         var view = self
         view.avatarsController = controller
+        return view
+    }
+
+    /// Attaches 3D scene models anchored at geo coordinates. Models render
+    /// inside the map world pass (with depth: hidden behind the globe horizon
+    /// and, in solid building mode, behind buildings) in flat, globe, and the
+    /// morph between them. See ``ImmersiveMapSceneModelsController``.
+    func sceneModels(_ controller: ImmersiveMapSceneModelsController?) -> ImmersiveMapView {
+        var view = self
+        view.sceneModelsController = controller
         return view
     }
 

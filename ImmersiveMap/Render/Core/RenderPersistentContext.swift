@@ -40,6 +40,12 @@ final class RenderPersistentContext {
     let baseLabelCache: BaseLabelCache
     let roadLabelCache: RoadLabelCache
 
+    // MARK: - Scene Model Resources
+
+    let sceneModelSource: SceneModelRenderSource
+    let sceneModelMeshStore: SceneModelMeshStore
+    let sceneModelPipeline: SceneModelPipeline
+
     // MARK: - Avatar and Debug Resources
 
     let avatarSource: AvatarRenderSource
@@ -55,6 +61,7 @@ final class RenderPersistentContext {
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
+         sceneModelSource: SceneModelRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -109,6 +116,14 @@ final class RenderPersistentContext {
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
         self.roadLabelCache = RoadLabelCache(metalDevice: metal.device,
                                              textRenderer: textRenderer)
+
+        self.sceneModelSource = sceneModelSource
+        self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)
+        self.sceneModelMeshStore.eventSink = eventSink
+        self.sceneModelPipeline = SceneModelPipeline(metalDevice: metal.device,
+                                                     layer: layer,
+                                                     library: metal.library,
+                                                     sampleCount: metal.renderSampleCount)
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource

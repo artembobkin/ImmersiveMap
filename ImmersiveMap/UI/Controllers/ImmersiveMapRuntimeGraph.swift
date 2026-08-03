@@ -12,6 +12,7 @@ final class ImmersiveMapRuntimeGraph {
     let viewportRuntime: ImmersiveMapViewportRuntime
     let avatarRuntime: ImmersiveMapAvatarRuntime
     let markerRuntime: ImmersiveMapMarkerRuntime
+    let sceneModelRuntime: ImmersiveMapSceneModelRuntime
     let controlsRuntime: ImmersiveMapControlsRuntime
     let cameraRuntime: ImmersiveMapCameraRuntime
     let interactionRuntime: ImmersiveMapInteractionRuntime
@@ -31,6 +32,7 @@ final class ImmersiveMapRuntimeGraph {
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: settings.renderLoop)
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let avatarRuntime = ImmersiveMapAvatarRuntime()
+        let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
         let markerRuntime = ImmersiveMapMarkerRuntime(viewportRuntime: viewportRuntime,
                                                       renderRuntime: renderRuntime)
         markerRuntime.attach(hostView: mapView)
@@ -75,6 +77,7 @@ final class ImmersiveMapRuntimeGraph {
         let rendererBuilder = ImmersiveMapRendererBuilder(cameraRuntime: cameraRuntime,
                                                           avatarRuntime: avatarRuntime,
                                                           markerRuntime: markerRuntime,
+                                                          sceneModelRuntime: sceneModelRuntime,
                                                           renderRuntime: renderRuntime,
                                                           selectionHandler: selectionHandler,
                                                           debugOverlayControls: debugOverlayControls,
@@ -91,6 +94,7 @@ final class ImmersiveMapRuntimeGraph {
         self.viewportRuntime = viewportRuntime
         self.avatarRuntime = avatarRuntime
         self.markerRuntime = markerRuntime
+        self.sceneModelRuntime = sceneModelRuntime
         self.controlsRuntime = controlsRuntime
         self.cameraRuntime = cameraRuntime
         self.interactionRuntime = interactionRuntime

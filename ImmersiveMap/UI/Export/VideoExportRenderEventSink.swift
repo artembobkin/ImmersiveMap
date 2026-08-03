@@ -15,7 +15,8 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     private var pendingInvalidation = false
     private var latestActivityState = RenderActivityState(labelFadeRenderingActive: false,
                                                           labelVisibilityCycleRenderingActive: false,
-                                                          avatarAnimationRenderingActive: false)
+                                                          avatarAnimationRenderingActive: false,
+                                                          sceneModelAnimationRenderingActive: false)
     private var latestMarkerProjectionSnapshot: MarkerProjectionSnapshot?
 
     /// Latest per-frame activity flags published by the engine.

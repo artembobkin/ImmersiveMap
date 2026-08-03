@@ -73,6 +73,7 @@ public class ImmersiveMapNSView: NSView {
     init(frame: NSRect,
          settings: ImmersiveMapSettings,
          avatarsController: ImmersiveMapAvatarsController?,
+         sceneModelsController: ImmersiveMapSceneModelsController? = nil,
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
          selectionController: ImmersiveMapSelectionController?,
@@ -82,6 +83,7 @@ public class ImmersiveMapNSView: NSView {
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
         hostRuntime.syncControllers(avatarsController: avatarsController,
+                                    sceneModelsController: sceneModelsController,
                                     cameraController: cameraController,
                                     selectionController: selectionController,
                                     avatarTapAction: avatarTapAction)
@@ -196,6 +198,7 @@ public class ImmersiveMapNSView: NSView {
     /// Syncs new parameters from the SwiftUI `updateNSView` hook with the already created AppKit/Metal view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
+                sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -204,6 +207,7 @@ public class ImmersiveMapNSView: NSView {
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
+                           sceneModelsController: sceneModelsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,

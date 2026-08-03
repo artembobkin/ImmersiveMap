@@ -26,6 +26,14 @@ final class ImmersiveMapVideoExportRuntime {
         }
     }
 
+    /// Scene models are excluded from video export in v1: their meshes load
+    /// asynchronously in the export engine, which would pop them in mid-video.
+    private final class VideoExportSceneModelSource: SceneModelRenderSource {
+        var currentSceneModelsController: ImmersiveMapSceneModelsController? {
+            nil
+        }
+    }
+
     /// SwiftUI marker views are platform overlays above the Metal layer and
     /// never draw in Metal. The engine still projects their coordinates every
     /// frame from this input, and the export compositor draws the rasterized
@@ -97,6 +105,7 @@ final class ImmersiveMapVideoExportRuntime {
         self.engine = RenderFrameEngine(layer: metalLayer,
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
+                                        sceneModelSource: VideoExportSceneModelSource(),
                                         providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                         settings: settings,
                                         debugOverlayControls: DebugOverlayControlState(),

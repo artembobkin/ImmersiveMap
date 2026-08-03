@@ -15,6 +15,7 @@ enum RenderLayer: String, CaseIterable {
     case globeCap
     case flatMapSurface
     case buildingExtrusion
+    case sceneModels
     case postProcessing
     case labels
     case avatars
@@ -51,9 +52,9 @@ struct RenderLayerPlanner {
     static func plan(availability: RenderPassAvailability) -> [RenderLayerPlanItem] {
         let worldLayers: [RenderLayer] = switch availability.renderSurfaceMode {
         case .flat:
-            [.flatMapSurface, .buildingExtrusion]
+            [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            [.starfield, .globeSurface, .globeCap]
+            [.starfield, .globeSurface, .globeCap, .sceneModels]
         }
 
         return worldLayers.map { layer in

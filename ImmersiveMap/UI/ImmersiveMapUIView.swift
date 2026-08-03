@@ -73,6 +73,7 @@ public class ImmersiveMapUIView: UIView {
     init(frame: CGRect,
          settings: ImmersiveMapSettings,
          avatarsController: ImmersiveMapAvatarsController?,
+         sceneModelsController: ImmersiveMapSceneModelsController? = nil,
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
          selectionController: ImmersiveMapSelectionController?,
@@ -82,6 +83,7 @@ public class ImmersiveMapUIView: UIView {
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
         hostRuntime.syncControllers(avatarsController: avatarsController,
+                                    sceneModelsController: sceneModelsController,
                                     cameraController: cameraController,
                                     selectionController: selectionController,
                                     avatarTapAction: avatarTapAction)
@@ -137,6 +139,7 @@ public class ImmersiveMapUIView: UIView {
     /// Synchronizes fresh parameters from SwiftUI `updateUIView` with the already created UIKit/Metal view.
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
+                sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -145,6 +148,7 @@ public class ImmersiveMapUIView: UIView {
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
+                           sceneModelsController: sceneModelsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
