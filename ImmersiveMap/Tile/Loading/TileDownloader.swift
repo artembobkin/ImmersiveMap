@@ -2,8 +2,59 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import os
+
+/// Throttles the rate-limit warning to one line per interval, process wide.
+///
+/// A blocked viewport is about thirty tiles refused at once, and every one of
+/// them carries the same news. Logged per tile it is noise the developer
+/// scrolls past; logged once it is the answer to "why is my map full of holes".
+/// Process wide rather than per downloader because the quota belongs to the
+/// app's key, not to whichever downloader happened to notice first.
+/// `@unchecked Sendable` because the lock is the synchronisation the compiler
+/// cannot see: the state is private and every path to it goes through `lock`.
+final class TileRateLimitNotice: @unchecked Sendable {
+    static let shared = TileRateLimitNotice()
+    static let interval: TimeInterval = 60
+
+    private let lock = NSLock()
+    private var lastLoggedAt: Date?
+
+    func shouldLog(now: Date = Date()) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if let last = lastLoggedAt, now.timeIntervalSince(last) < Self.interval {
+            return false
+        }
+        lastLoggedAt = now
+        return true
+    }
+
+    /// Test hook: the throttle is process wide, so a test that did not clear it
+    /// would be decided by whichever test happened to run first.
+    func reset() {
+        lock.lock()
+        lastLoggedAt = nil
+        lock.unlock()
+    }
+}
 
 class TileDownloader {
+    private static let logger = Logger(subsystem: "ImmersiveMap", category: "Tiles")
+
+    /// The sentence to show comes from the tile service, not from here. This
+    /// engine is MIT and ships compiled inside someone else's app, so its
+    /// wording is frozen the day they release; the service is a config reload
+    /// away. The fallback covers an endpoint that sends nothing useful.
+    static func rateLimitMessage(responseBody: Data) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: responseBody) as? [String: Any],
+           let message = object["message"] as? String,
+           message.isEmpty == false {
+            return "ImmersiveMap: tile requests are being rate limited. \(message)"
+        }
+        return "ImmersiveMap: tile requests are being rate limited (HTTP 429), so tiles will be missing until the limit clears."
+    }
+
     enum DownloadFailure: Equatable, Sendable {
         case missingAuthorizationToken
         case nonHTTPResponse
@@ -155,6 +206,14 @@ class TileDownloader {
                 case 429:
                     let retryAfterHeader = httpResponse.value(forHTTPHeaderField: "Retry-After")
                     let retryAfter = retryAfterHeader.flatMap(TimeInterval.init)
+                    // Warned about outside DEBUG on purpose: running out of tile
+                    // quota is not a bug to catch at the desk, it is a thing that
+                    // starts happening once real users arrive. os.Logger keeps it
+                    // out of stdout, so it costs a release build nothing.
+                    if TileRateLimitNotice.shared.shouldLog() {
+                        let message = Self.rateLimitMessage(responseBody: data)
+                        Self.logger.warning("\(message, privacy: .public)")
+                    }
                     return .failure(.rateLimited(retryAfter: retryAfter))
                 case 500...599:
                     return .failure(.server(statusCode: statusCode))
