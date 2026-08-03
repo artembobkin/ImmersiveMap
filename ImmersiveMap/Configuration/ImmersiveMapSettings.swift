@@ -901,6 +901,19 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// Overrides the tile authorization with an API key, leaving the rest of the
+    /// provider (endpoints, zoom coverage, cache identity) untouched.
+    ///
+    /// The header form is deliberate: a query parameter is part of a URL, so a
+    /// CDN would keep a separate copy of every tile for every key, while the
+    /// tiles themselves are identical for everyone.
+    func apiKey(_ apiKey: String) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.network.authorizationToken = apiKey
+        settings.tiles.network.authorizationMode = .bearerHeader
+        return settings
+    }
+
     func mapStyle<S: ImmersiveMapMapStyle>(_ mapStyle: S) -> ImmersiveMapSettings {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }

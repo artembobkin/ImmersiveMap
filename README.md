@@ -55,6 +55,16 @@ struct ContentView: View {
 
 ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required (see [Where the map data comes from](Documentation/docs/map-data.md)). The same SwiftUI code runs natively on iOS (UIKit host) and macOS (AppKit host): `ImmersiveMapView` bridges to the platform view internally.
 
+The built-in provider serves a shared, rate-limited public pool. For your own throughput, add a key from [immersivemap.dev/account](https://immersivemap.dev/account):
+
+```swift
+ImmersiveMapView()
+    .apiKey("im_…")
+    // camera and other modifiers...
+```
+
+The key is sent as an `Authorization: Bearer` header, so tiles stay on one shared CDN cache entry instead of one copy per key. It applies to whichever provider is configured, and may be written before or after `tileProvider`.
+
 To use Mapbox vector tiles instead, attach a provider and style:
 
 ```swift

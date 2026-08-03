@@ -65,7 +65,9 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     /// - Parameters:
     ///   - tileBaseURL: base of the tile endpoint, e.g. `http://host:8080/tiles`.
     ///     The loader appends `/{z}/{x}/{y}.mvt`. Defaults to the hosted service.
-    ///   - apiKey: optional API key, sent as `?key=`.
+    ///   - apiKey: optional API key from https://immersivemap.dev/account, sent
+    ///     as an `Authorization: Bearer` header. Most apps set this with the
+    ///     `apiKey(_:)` view modifier instead of constructing a provider.
     public init(tileBaseURL: URL = ImmersiveMapTilesProvider.defaultTileBaseURL, apiKey: String? = nil) {
         self.tileBaseURL = tileBaseURL
         self.apiKey = apiKey
