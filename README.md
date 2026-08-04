@@ -126,8 +126,6 @@ Both demo apps render the built-in tile provider out of the box, so they run wit
 
 Nothing there is required to get started: the default provider renders out of the box with no token and no account, on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you off that shared pool onto your own throughput, with usage visible in the dashboard.
 
-The tiles are OpenStreetMap-based and served from `tiles.immersivemap.dev`. Any other MVT source, including Mapbox, plugs in through a tile provider instead. Data sources, licensing, and the attribution badge are covered in [the map data guide](Documentation/docs/map-data.md).
-
 ## Attribution
 
 The map shows a small attribution badge — "© OpenStreetMap © OpenMapTiles" with the built-in tiles — because map data licenses require visible credit. The badge is restylable (size, position, text color) and can be replaced with your own credit elsewhere in the app; the details — including what exactly has to be credited, where it has to appear, and what stays your app's responsibility — are in [ATTRIBUTION.md](ATTRIBUTION.md).
