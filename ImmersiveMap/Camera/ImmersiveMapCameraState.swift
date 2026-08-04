@@ -38,7 +38,7 @@ struct ImmersiveMapCameraState {
         let longitudeRadians = (cameraPosition.longitudeDegrees / 180.0) * Double.pi
         let centerWorldMercator = ImmersiveMapProjection.worldMercator(latitude: latitudeRadians,
                                                               longitude: longitudeRadians)
-        let clampedZoom = min(max(0, cameraPosition.zoom), cameraSettings.maximumZoom)
+        let clampedZoom = cameraSettings.clampZoom(cameraPosition.zoom)
         self.init(centerWorldMercator: centerWorldMercator,
                   zoom: clampedZoom,
                   bearing: cameraPosition.bearing,

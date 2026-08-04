@@ -37,7 +37,7 @@ class CameraStateController {
 
     func apply(settings: ImmersiveMapSettings.CameraSettings) {
         self.settings = settings
-        cameraState.zoom = min(max(0, cameraState.zoom), settings.maximumZoom)
+        cameraState.zoom = settings.clampZoom(cameraState.zoom)
         cameraState.pitch = min(max(0, cameraState.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
     }
 
@@ -207,7 +207,7 @@ class CameraStateController {
         let longitudeRadians = (cameraPosition.longitudeDegrees / 180.0) * Double.pi
         cameraState.centerWorldMercator = ImmersiveMapProjection.worldMercator(latitude: latitudeRadians,
                                                                       longitude: longitudeRadians)
-        cameraState.zoom = min(max(0, cameraPosition.zoom), settings.maximumZoom)
+        cameraState.zoom = settings.clampZoom(cameraPosition.zoom)
         cameraState.bearing = cameraPosition.bearing
         cameraState.pitch = min(max(0, cameraPosition.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
     }
@@ -217,7 +217,7 @@ class CameraStateController {
     }
 
     func setCameraState(_ cameraState: ImmersiveMapCameraState) {
-        let clampedZoom = min(max(0, cameraState.zoom), settings.maximumZoom)
+        let clampedZoom = settings.clampZoom(cameraState.zoom)
         self.cameraState = ImmersiveMapCameraState(centerWorldMercator: cameraState.centerWorldMercator,
                                           zoom: clampedZoom,
                                           bearing: cameraState.bearing,
@@ -230,6 +230,6 @@ class CameraStateController {
         }
 
         cameraState.zoom += delta
-        cameraState.zoom = min(max(0, cameraState.zoom), settings.maximumZoom)
+        cameraState.zoom = settings.clampZoom(cameraState.zoom)
     }
 }

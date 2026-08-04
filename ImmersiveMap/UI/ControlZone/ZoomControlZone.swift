@@ -6,8 +6,10 @@
 import CoreGraphics
 import UIKit
 
-/// Owns the zoom control zone, including drag zoom and scroll zoom gestures.
-/// Translates control movement into camera zoom commands and reports zoom interaction state.
+/// Owns the drag zoom zone in the bottom trailing corner: a vertical drag inside
+/// it changes camera zoom instead of panning the map.
+/// Opt-in through `cameraSettings.controlZones`; pointer scroll zoom lives in
+/// ``ScrollZoomGesture`` and is unaffected by it.
 @MainActor
 final class ZoomControlZone {
     private enum Layout {
@@ -16,21 +18,25 @@ final class ZoomControlZone {
         static let trailingInset: CGFloat = 0
     }
 
+    /// While disabled the hit surface is hidden and its gesture is off, so a drag
+    /// in the corner pans the map exactly like a drag anywhere else.
+    var isEnabled: Bool {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            applyEnabledState()
+        }
+    }
+
     private weak var mapView: ImmersiveMapUIView?
     private let view = ControlZoneView()
     private let panGesture: UIPanGestureRecognizer
-    private let scrollGesture: UIPanGestureRecognizer
 
     init(mapView: ImmersiveMapUIView,
-         mapPanGesture: UIPanGestureRecognizer) {
+         mapPanGesture: UIPanGestureRecognizer,
+         isEnabled: Bool) {
         self.mapView = mapView
         self.panGesture = UIPanGestureRecognizer()
-        self.scrollGesture = UIPanGestureRecognizer()
-
-        scrollGesture.addTarget(self, action: #selector(handleScrollZoom(_:)))
-        scrollGesture.allowedTouchTypes = []
-        scrollGesture.allowedScrollTypesMask = .all
-        mapView.addGestureRecognizer(scrollGesture)
+        self.isEnabled = isEnabled
 
         view.accessibilityIdentifier = "ImmersiveMapUIView.zoomControlZone"
         mapView.addSubview(view)
@@ -39,6 +45,7 @@ final class ZoomControlZone {
         panGesture.maximumNumberOfTouches = 1
         view.addGestureRecognizer(panGesture)
         mapPanGesture.require(toFail: panGesture)
+        applyEnabledState()
     }
 
     func layout(in bounds: CGRect) {
@@ -51,38 +58,12 @@ final class ZoomControlZone {
     }
 
     func contains(_ point: CGPoint) -> Bool {
-        view.frame.contains(point)
+        isEnabled && view.frame.contains(point)
     }
 
-    @objc private func handleScrollZoom(_ gesture: UIPanGestureRecognizer) {
-        guard let mapView,
-              mapView.cameraRuntime.currentCameraState() != nil else {
-            return
-        }
-
-        switch gesture.state {
-        case .began:
-            gesture.setTranslation(.zero, in: mapView)
-            setScrollInteractionActive(true)
-        case .changed:
-            let settings = mapView.cameraRuntime.currentSettings
-            let translation = gesture.translation(in: mapView)
-            let velocity = gesture.velocity(in: mapView)
-            let delta = -ZoomControlMath.zoomDelta(forVerticalTranslation: translation.y,
-                                                   velocityY: velocity.y,
-                                                   interactionHeight: Layout.size.height,
-                                                   zoomFactor: settings.camera.dragZoomFactor,
-                                                   velocityFactor: settings.camera.dragZoomVelocityFactor,
-                                                   velocityLimit: settings.camera.dragZoomVelocityLimit)
-            mapView.cameraRuntime.zoomCamera(delta: delta)
-            gesture.setTranslation(.zero, in: mapView)
-        case .ended, .cancelled, .failed:
-            setScrollInteractionActive(false)
-        case .possible:
-            break
-        @unknown default:
-            setScrollInteractionActive(false)
-        }
+    private func applyEnabledState() {
+        view.isHidden = isEnabled == false
+        panGesture.isEnabled = isEnabled
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -126,19 +107,6 @@ final class ZoomControlZone {
         mapView.interactionRuntime.setActive(isActive,
                                              source: .zoomControl,
                                              notifiesUserInteractionBegan: false,
-                                             requestsFrameOnStart: true)
-    }
-
-    private func setScrollInteractionActive(_ isActive: Bool) {
-        guard let mapView else { return }
-
-        if isActive {
-            mapView.cameraAnimationRuntime.cancelAnimations()
-        }
-
-        mapView.interactionRuntime.setActive(isActive,
-                                             source: .scrollZoom,
-                                             notifiesUserInteractionBegan: true,
                                              requestsFrameOnStart: true)
     }
 }

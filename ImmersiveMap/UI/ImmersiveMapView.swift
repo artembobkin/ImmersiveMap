@@ -208,6 +208,48 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Restricts the zoom levels the camera can reach. Gestures, zoom commands
+    /// and camera flights are all clamped to the range, so a minimum above the
+    /// globe-to-flat transition keeps the map flat for good.
+    ///
+    ///     ImmersiveMapView()
+    ///         .zoomRange(minimum: 3, maximum: 18)
+    ///
+    /// An omitted bound is left as configured.
+    func zoomRange(minimum: Double? = nil, maximum: Double? = nil) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        if let minimum {
+            camera.minimumZoom = minimum
+        }
+        if let maximum {
+            camera.maximumZoom = maximum
+        }
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
+    /// Turns on the invisible one-thumb camera drag zones in the bottom corners:
+    /// dragging in the bottom leading corner tilts the camera, dragging in the
+    /// bottom trailing one zooms. Both are off by default, because a zone
+    /// captures drags that would otherwise pan the map and nothing on screen
+    /// announces it.
+    ///
+    ///     ImmersiveMapView()
+    ///         .cameraControlZones()            // both zones
+    ///         .cameraControlZones(pitch: false) // zoom only
+    ///
+    /// Touch platforms only; the modifier is accepted and ignored on macOS.
+    /// Pointer scroll zoom (trackpad, mouse wheel) is independent of these zones.
+    func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.controlZones = ImmersiveMapSettings.CameraSettings.ControlZoneSettings(isPitchZoneEnabled: pitch,
+                                                                                      isZoomZoneEnabled: zoom)
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
     func selection(_ controller: ImmersiveMapSelectionController?) -> ImmersiveMapView {
         var view = self
         view.selectionController = controller

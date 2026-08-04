@@ -6,8 +6,9 @@
 import CoreGraphics
 import UIKit
 
-/// Owns the pitch control zone and its pan gesture.
-/// Translates vertical drag into camera pitch changes and reports control interaction state.
+/// Owns the pitch control zone in the bottom leading corner: a vertical drag
+/// inside it tilts the camera instead of panning the map.
+/// Opt-in through `cameraSettings.controlZones`.
 @MainActor
 final class PitchControlZone {
     private enum Layout {
@@ -16,15 +17,26 @@ final class PitchControlZone {
         static let leadingInset: CGFloat = 0
     }
 
+    /// While disabled the hit surface is hidden and its gesture is off, so a drag
+    /// in the corner pans the map exactly like a drag anywhere else.
+    var isEnabled: Bool {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            applyEnabledState()
+        }
+    }
+
     private weak var mapView: ImmersiveMapUIView?
     private let view = ControlZoneView()
     private let panGesture: UIPanGestureRecognizer
     private var controlValue: Float = 0
 
     init(mapView: ImmersiveMapUIView,
-         mapPanGesture: UIPanGestureRecognizer) {
+         mapPanGesture: UIPanGestureRecognizer,
+         isEnabled: Bool) {
         self.mapView = mapView
         self.panGesture = UIPanGestureRecognizer()
+        self.isEnabled = isEnabled
         view.accessibilityIdentifier = "ImmersiveMapUIView.pitchControlZone"
         mapView.addSubview(view)
 
@@ -32,6 +44,7 @@ final class PitchControlZone {
         panGesture.maximumNumberOfTouches = 1
         view.addGestureRecognizer(panGesture)
         mapPanGesture.require(toFail: panGesture)
+        applyEnabledState()
     }
 
     func layout(in bounds: CGRect) {
@@ -44,7 +57,12 @@ final class PitchControlZone {
     }
 
     func contains(_ point: CGPoint) -> Bool {
-        view.frame.contains(point)
+        isEnabled && view.frame.contains(point)
+    }
+
+    private func applyEnabledState() {
+        view.isHidden = isEnabled == false
+        panGesture.isEnabled = isEnabled
     }
 
     func syncValue(cameraPosition: ImmersiveMapCameraPosition?,

@@ -264,7 +264,7 @@ final class ImmersiveMapCameraRuntime {
         }
 
         var stateAfter = stateBefore
-        stateAfter.zoom = min(max(0, stateBefore.zoom + zoomDelta), settings.camera.maximumZoom)
+        stateAfter.zoom = settings.camera.clampZoom(stateBefore.zoom + zoomDelta)
         stateAfter.centerWorldMercator = anchorCompensatedCenter(stateBefore: stateBefore,
                                                                  stateAfter: stateAfter,
                                                                  anchorPoint: anchorPoint)

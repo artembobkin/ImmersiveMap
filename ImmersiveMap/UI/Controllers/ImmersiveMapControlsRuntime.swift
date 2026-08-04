@@ -7,13 +7,15 @@ import UIKit
 #endif
 
 /// Owns the persistent map overlay controls of one map view.
-/// Creates pitch/zoom control zones on touch platforms; the attribution badge
-/// exists on all platforms. Lays out the controls and provides hit-testing.
+/// Creates the opt-in pitch/zoom control zones and pointer scroll zoom on touch
+/// platforms; the attribution badge exists on all platforms. Lays out the
+/// controls and provides hit-testing.
 @MainActor
 final class ImmersiveMapControlsRuntime {
     #if canImport(UIKit)
     private let pitchControlZone: PitchControlZone
     private let zoomControlZone: ZoomControlZone
+    private let scrollZoomGesture: ScrollZoomGesture
     #endif
     private let attributionBadge: AttributionBadgeView
 
@@ -21,10 +23,14 @@ final class ImmersiveMapControlsRuntime {
     init(mapView: ImmersiveMapHostView,
          mapPanGesture: UIPanGestureRecognizer,
          settings: ImmersiveMapSettings) {
+        let controlZones = settings.camera.controlZones
         self.pitchControlZone = PitchControlZone(mapView: mapView,
-                                                 mapPanGesture: mapPanGesture)
+                                                 mapPanGesture: mapPanGesture,
+                                                 isEnabled: controlZones.isPitchZoneEnabled)
         self.zoomControlZone = ZoomControlZone(mapView: mapView,
-                                               mapPanGesture: mapPanGesture)
+                                               mapPanGesture: mapPanGesture,
+                                               isEnabled: controlZones.isZoomZoneEnabled)
+        self.scrollZoomGesture = ScrollZoomGesture(mapView: mapView)
         self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                                      isVisible: settings.attribution.isVisible)
         mapView.addSubview(attributionBadge)
@@ -58,6 +64,13 @@ final class ImmersiveMapControlsRuntime {
 
     func applyAttribution(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
         attributionBadge.apply(attribution, isVisible: isVisible)
+    }
+
+    func applyControlZones(_ controlZones: ImmersiveMapSettings.CameraSettings.ControlZoneSettings) {
+        #if canImport(UIKit)
+        pitchControlZone.isEnabled = controlZones.isPitchZoneEnabled
+        zoomControlZone.isEnabled = controlZones.isZoomZoneEnabled
+        #endif
     }
 
     func syncPitch(cameraPosition: ImmersiveMapCameraPosition?,

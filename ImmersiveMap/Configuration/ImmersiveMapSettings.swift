@@ -61,7 +61,28 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct CameraSettings: Equatable, Sendable {
+        /// The invisible drag zones in the bottom corners that let one thumb drive
+        /// the camera: pitch in the bottom leading corner, zoom in the bottom
+        /// trailing one. Both are off by default — a zone captures drags that
+        /// would otherwise pan the map, and nothing on screen announces it, so an
+        /// app opts in only when it wants one-handed camera control.
+        /// Touch platforms only; ignored on macOS.
+        public struct ControlZoneSettings: Equatable, Sendable {
+            public var isPitchZoneEnabled: Bool
+            public var isZoomZoneEnabled: Bool
+
+            public init(isPitchZoneEnabled: Bool = false,
+                        isZoomZoneEnabled: Bool = false) {
+                self.isPitchZoneEnabled = isPitchZoneEnabled
+                self.isZoomZoneEnabled = isZoomZoneEnabled
+            }
+        }
+
         public var maximumPitch: Float
+        /// The lowest zoom the camera can reach. Gestures, zoom commands and
+        /// camera flights are all clamped to it, so raising it keeps the map from
+        /// ever showing the whole globe.
+        public var minimumZoom: Double
         public var maximumZoom: Double
         public var focusedMarkerZoom: Double
         public var globeMinimumAbsoluteBearing: Float
@@ -95,8 +116,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var pitchFollowHalfLife: Double
         public var bearingFollowEnabled: Bool
         public var bearingFollowHalfLife: Double
+        public var controlZones: ControlZoneSettings
 
         public init(maximumPitch: Float,
+                    minimumZoom: Double = 0,
                     maximumZoom: Double,
                     focusedMarkerZoom: Double,
                     globeMinimumAbsoluteBearing: Float,
@@ -127,8 +150,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     pitchFollowEnabled: Bool = true,
                     pitchFollowHalfLife: Double = 0.06,
                     bearingFollowEnabled: Bool = true,
-                    bearingFollowHalfLife: Double = 0.06) {
+                    bearingFollowHalfLife: Double = 0.06,
+                    controlZones: ControlZoneSettings = ControlZoneSettings()) {
             self.maximumPitch = maximumPitch
+            self.minimumZoom = minimumZoom
             self.maximumZoom = maximumZoom
             self.focusedMarkerZoom = focusedMarkerZoom
             self.globeMinimumAbsoluteBearing = globeMinimumAbsoluteBearing
@@ -160,6 +185,19 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.pitchFollowHalfLife = pitchFollowHalfLife
             self.bearingFollowEnabled = bearingFollowEnabled
             self.bearingFollowHalfLife = bearingFollowHalfLife
+            self.controlZones = controlZones
+        }
+
+        /// Clamps a zoom level to the configured range. Negative minimums are
+        /// treated as zero (the whole world already fits at zoom 0), and an
+        /// inverted range collapses to `maximumZoom`.
+        func clampZoom(_ zoom: Double) -> Double {
+            let lowerBound = max(minimumZoom, 0)
+            guard lowerBound <= maximumZoom else {
+                return maximumZoom
+            }
+
+            return min(max(zoom, lowerBound), maximumZoom)
         }
 
         func pitchExtension(at zoom: Double) -> Float {
@@ -809,6 +847,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                        interactionFramesPerSecond: 60,
                                        labelFadeFramesPerSecond: 30),
         camera: CameraSettings(maximumPitch: Float.pi * 5.0 / 12.0,
+                               minimumZoom: 0.0,
                                maximumZoom: 20.0,
                                focusedMarkerZoom: 15.25,
                                globeMinimumAbsoluteBearing: Float.pi / 12.0,
