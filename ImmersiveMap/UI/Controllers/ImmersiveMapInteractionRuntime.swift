@@ -52,4 +52,17 @@ final class ImmersiveMapInteractionRuntime {
             renderRuntime.requestFrame()
         }
     }
+
+    /// Clears every active source when the view parks in the reuse pool.
+    /// A gesture interrupted by the view leaving the window never delivers its
+    /// end event (raw macOS scroll phases especially), and a source stuck
+    /// active would keep the render loop hot and cancel the adopting screen's
+    /// first camera flight.
+    func resetForParking() {
+        guard activeSources.isEmpty == false else {
+            return
+        }
+        activeSources.removeAll()
+        renderRuntime.setInteractionRenderingActive(false)
+    }
 }

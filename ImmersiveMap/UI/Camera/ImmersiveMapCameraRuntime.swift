@@ -41,6 +41,15 @@ final class ImmersiveMapCameraRuntime {
         controller === cameraController
     }
 
+    /// Forgets the last SwiftUI-declared camera position when the view parks
+    /// for reuse. The dedup against `appliedCameraPosition` exists so live
+    /// `updateUIView` calls do not re-snap the camera, but it must not survive
+    /// adoption: a new screen declaring the same position as the previous one
+    /// expects the camera to actually move there.
+    func clearAppliedCameraPositionForReuse() {
+        appliedCameraPosition = nil
+    }
+
     func updateSettings(_ settings: ImmersiveMapSettings,
                         notifiesCameraPositionChanged: Bool = true) {
         self.settings = settings

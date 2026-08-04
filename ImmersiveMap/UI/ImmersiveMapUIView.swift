@@ -161,9 +161,63 @@ public class ImmersiveMapUIView: UIView {
         hostRuntime.dismantle()
     }
 
+    /// Dismantle driven by SwiftUI teardown: detaches app-owned state and, when
+    /// view reuse is enabled, parks this view for the next `ImmersiveMapView`
+    /// to adopt warm instead of releasing the renderer.
+    func dismantleForReuse() {
+        let viewReuse = cameraRuntime.currentSettings.viewReuse
+        // Animations are cancelled BEFORE the controllers detach: a flight
+        // completion fired after detach would queue any follow-up command in
+        // the app's controller and replay it onto the next screen.
+        cameraAnimationRuntime.cancelAnimations()
+        dismantle()
+        guard viewReuse.isEnabled else {
+            return
+        }
+        // A parked view must idle. Interaction sources stuck by an interrupted
+        // gesture are cleared, the declared camera position is forgotten (the
+        // adopting screen's declaration must re-apply even when equal), and
+        // the render loop is gated off so the display link stays paused no
+        // matter what invalidations arrive.
+        interactionRuntime.resetForParking()
+        cameraRuntime.clearAppliedCameraPositionForReuse()
+        renderRuntime.setParked(true)
+        ImmersiveMapHostViewPool.shared.park(self, timeToLive: viewReuse.parkedTimeToLive)
+    }
+
+    /// Rewires an adopted (previously parked) view for a new `ImmersiveMapView`:
+    /// the regular update path reconciles settings and controllers, so adoption
+    /// behaves like an update of a live view rather than a fresh build.
+    func prepareForAdoption(settings: ImmersiveMapSettings,
+                            avatarsController: ImmersiveMapAvatarsController?,
+                            sceneModelsController: ImmersiveMapSceneModelsController?,
+                            cameraPosition: ImmersiveMapCameraPosition?,
+                            cameraController: ImmersiveMapCameraController?,
+                            selectionController: ImmersiveMapSelectionController?,
+                            avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                            markerContent: MarkerViewContent?) {
+        hostRuntime.update(settings: settings,
+                           avatarsController: avatarsController,
+                           sceneModelsController: sceneModelsController,
+                           cameraController: cameraController,
+                           selectionController: selectionController,
+                           avatarTapAction: avatarTapAction,
+                           markerContent: markerContent,
+                           cameraPosition: cameraPosition)
+        renderRuntime.setParked(false)
+        setNeedsLayout()
+        requestFrame()
+    }
+
     func requestFrame() {
         hostRuntime.requestFrame()
     }
+
+    #if DEBUG
+    var hostRuntimeForTesting: ImmersiveMapHostRuntime {
+        hostRuntime
+    }
+    #endif
 
     func setEarthSceneEnabledFromDebugOverlay(_ isEnabled: Bool) {
         hostRuntime.setEarthSceneEnabled(isEnabled)

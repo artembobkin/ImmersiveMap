@@ -78,6 +78,20 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeUIView(context: Context) -> ImmersiveMapUIView {
+        // Adopt a parked view when reuse is on: renderer, tile cache and atlas
+        // pages come back warm, and the update path reconciles the settings.
+        if settings.viewReuse.isEnabled,
+           let adopted = ImmersiveMapHostViewPool.shared.adopt() {
+            adopted.prepareForAdoption(settings: settings,
+                                       avatarsController: avatarsController,
+                                       sceneModelsController: sceneModelsController,
+                                       cameraPosition: cameraPosition,
+                                       cameraController: cameraController,
+                                       selectionController: selectionController,
+                                       avatarTapAction: avatarTapAction,
+                                       markerContent: markerContent)
+            return adopted
+        }
         let uiView = ImmersiveMapUIView(frame: .zero,
                                         settings: settings,
                                         avatarsController: avatarsController,
@@ -103,7 +117,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     }
 
     public static func dismantleUIView(_ uiView: ImmersiveMapUIView, coordinator: ()) {
-        uiView.dismantle()
+        uiView.dismantleForReuse()
     }
 }
 #elseif canImport(AppKit)
@@ -119,6 +133,20 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeNSView(context: Context) -> ImmersiveMapNSView {
+        // Adopt a parked view when reuse is on: renderer, tile cache and atlas
+        // pages come back warm, and the update path reconciles the settings.
+        if settings.viewReuse.isEnabled,
+           let adopted = ImmersiveMapHostViewPool.shared.adopt() {
+            adopted.prepareForAdoption(settings: settings,
+                                       avatarsController: avatarsController,
+                                       sceneModelsController: sceneModelsController,
+                                       cameraPosition: cameraPosition,
+                                       cameraController: cameraController,
+                                       selectionController: selectionController,
+                                       avatarTapAction: avatarTapAction,
+                                       markerContent: markerContent)
+            return adopted
+        }
         let nsView = ImmersiveMapNSView(frame: .zero,
                                         settings: settings,
                                         avatarsController: avatarsController,
@@ -144,7 +172,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     }
 
     public static func dismantleNSView(_ nsView: ImmersiveMapNSView, coordinator: ()) {
-        nsView.dismantle()
+        nsView.dismantleForReuse()
     }
 }
 #endif
@@ -226,6 +254,23 @@ public extension ImmersiveMapView {
             camera.maximumZoom = maximum
         }
         view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
+    /// Controls reuse of dismantled map views (on by default). When the screen
+    /// with this map goes away, the platform view — renderer, GPU tile cache,
+    /// atlas pages — is parked briefly and the next `ImmersiveMapView` adopts
+    /// it warm, so switching between map screens skips the first-frame rebuild.
+    /// An adopted view keeps its previous camera unless this view provides an
+    /// explicit camera position or an attached camera controller.
+    ///
+    ///     ImmersiveMapView()
+    ///         .viewReuse(false)   // always build a fresh renderer
+    func viewReuse(_ isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        var viewReuse = view.settings.viewReuse
+        viewReuse.isEnabled = isEnabled
+        view.settings = view.settings.viewReuseSettings(viewReuse)
         return view
     }
 

@@ -77,7 +77,21 @@ final class ImmersiveMapRenderDriver: NSObject {
         }
     }
 
+    /// Parks/unparks the render loop for the view-reuse pool: while parked the
+    /// display link is paused no matter what work is pending.
+    func setParked(_ parked: Bool) {
+        performOnMain {
+            self.updatePacing {
+                self.pacing.setParked(parked)
+            }
+        }
+    }
+
     func stop() {
+        // Full teardown (host-runtime deinit / pool drop): the engine is being
+        // discarded with the driver — stop its tile loader and cut late event
+        // deliveries before the reference is dropped.
+        renderer?.prepareForDiscard()
         displayLink?.invalidate()
         displayLink = nil
         displayLinkTarget = nil

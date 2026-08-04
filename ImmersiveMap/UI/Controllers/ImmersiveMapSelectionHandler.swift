@@ -20,6 +20,13 @@ final class ImmersiveMapSelectionHandler {
     private weak var selectionController: ImmersiveMapSelectionController?
     private var currentSelection: ImmersiveMapSelection?
     private var avatarSelectionSnapshot: AvatarSelectionSnapshot = .empty
+
+    /// A recreated renderer restarts frame indices at zero; the monotonic
+    /// guard in `updateAvatarSelectionSnapshot` would reject every snapshot it
+    /// produces and freeze hit-testing on the previous renderer's layout.
+    func resetAvatarSelectionSnapshotForRendererRecreation() {
+        avatarSelectionSnapshot = .empty
+    }
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
 
     init(avatarRuntime: ImmersiveMapAvatarRuntime,

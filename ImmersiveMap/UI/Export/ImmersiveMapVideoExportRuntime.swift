@@ -131,6 +131,10 @@ final class ImmersiveMapVideoExportRuntime {
 
     func run(shots: [ImmersiveMapCameraTourShot],
              progress: @escaping (ImmersiveMapVideoExportProgress) -> Void) async throws {
+        // The runtime lives for exactly one export; on any exit the engine is
+        // discarded — stop its tile loader and cut late event deliveries so an
+        // orphaned load cannot delete valid disk entries or push stale state.
+        defer { engine.prepareForDiscard() }
         let driver = TourVideoTimelineDriver(shots: shots,
                                              initialPosition: initialPosition,
                                              settings: settings,

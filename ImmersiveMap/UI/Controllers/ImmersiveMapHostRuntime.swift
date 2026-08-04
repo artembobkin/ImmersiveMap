@@ -199,9 +199,11 @@ final class ImmersiveMapHostRuntime {
         // on a continuation that would otherwise never resume).
         runtimeGraph.cameraAnimationRuntime.cancelAnimations()
         let cameraPosition = runtimeGraph.cameraRuntime.cameraPositionForRendererRecreation()
+        renderer?.prepareForDiscard()
         runtimeGraph.renderRuntime.detachRenderer()
         renderer = nil
         runtimeGraph.cameraRuntime.clearRenderCamera()
+        runtimeGraph.selectionHandler.resetAvatarSelectionSnapshotForRendererRecreation()
         createRenderer(settings: settings,
                        cameraPosition: cameraPosition)
     }

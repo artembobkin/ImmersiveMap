@@ -43,5 +43,9 @@ extension ImmersiveMapHostView {
     func setAvatarSelectionSnapshotForTesting(_ snapshot: AvatarSelectionSnapshot) {
         selectionHandler.updateAvatarSelectionSnapshot(snapshot)
     }
+
+    var rendererForTesting: RenderFrameEngine? {
+        hostRuntimeForTesting.renderer
+    }
 }
 #endif

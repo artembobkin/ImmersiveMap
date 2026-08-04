@@ -31,6 +31,11 @@ final class RenderLoopPacing {
     private var configuration: ImmersiveMapSettings.RenderLoopSettings
     private var requestedFrameReason: RenderInvalidationReason?
     private var activeRenderingActivities: Set<Activity> = []
+    // A view parked in the reuse pool has nothing to present into: rendering
+    // is fully gated off regardless of pending requests or activities, which
+    // pauses the display link. Requests and activities keep accumulating and
+    // take effect again on adoption.
+    private var isParked = false
 
     init(configuration: ImmersiveMapSettings.RenderLoopSettings) {
         self.configuration = configuration
@@ -41,9 +46,16 @@ final class RenderLoopPacing {
     }
 
     var needsFrameRendering: Bool {
-        configuration.forceContinuousRendering
+        guard isParked == false else {
+            return false
+        }
+        return configuration.forceContinuousRendering
             || requestedFrameReason != nil
             || activeRenderingActivities.isEmpty == false
+    }
+
+    func setParked(_ parked: Bool) {
+        isParked = parked
     }
 
     var isCameraAnimationRenderingActive: Bool {
