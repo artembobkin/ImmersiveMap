@@ -566,7 +566,11 @@ public extension ImmersiveMapView {
 
     /// Declares that the app shows the data credit itself (its own overlay, an
     /// about screen), so hiding the badge stops logging the attribution
-    /// warning. The license obligation stays with the app.
+    /// warning. The license obligation stays with the app: the credit has to
+    /// stay visible on or next to the map, on every screen that shows one.
+    ///
+    /// What each provider requires and where it has to appear:
+    /// https://github.com/artembobkin/ImmersiveMap/blob/main/ATTRIBUTION.md
     public func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionProvidedExternally(isProvidedExternally)

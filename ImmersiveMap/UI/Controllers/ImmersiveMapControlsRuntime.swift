@@ -61,7 +61,9 @@ final class ImmersiveMapControlsRuntime {
         ImmersiveMap: the attribution badge is hidden or empty, but map data licenses \
         (ODbL for OpenStreetMap data) require visible attribution near the map. Show the \
         data credit in your app, or make the badge visible. If your app already shows the \
-        credit, declare it with .attributionProvidedExternally() to silence this warning.
+        credit, declare it with .attributionProvidedExternally() to silence this warning. \
+        What has to be credited and where it has to appear: \
+        https://github.com/artembobkin/ImmersiveMap/blob/main/ATTRIBUTION.md
         """)
     }
 

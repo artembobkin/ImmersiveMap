@@ -41,4 +41,4 @@ ImmersiveMapView()
     .attributionProvidedExternally()   // silences the hidden-attribution warning
 ```
 
-The full badge API — sizes, positions, colors, overrides and the warning semantics — is covered in [the attribution guide](attribution.md).
+The licence obligations in full — what each provider requires, where the credit has to appear, what stays your app's responsibility — and the whole badge API, are covered in [ATTRIBUTION.md](../../ATTRIBUTION.md).
