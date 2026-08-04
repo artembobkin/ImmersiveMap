@@ -239,22 +239,51 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         return 1.0;
     }
 
-    float visibility = geometricVisibility;
+    float mapVisibility = 1.0;
     if (geometricVisibility > 0.0) {
         for (int i = 0; i < 3; ++i) {
             if (shadowCascadeContains(shadow.cascades[i], uvzs[i])) {
-                visibility = geometricVisibility
-                    * shadowCascadeVisibility(shadow.cascades[i], shadowMap, uvzs[i], gradients[i]);
+                float cascadeVisibility = shadowCascadeVisibility(shadow.cascades[i], shadowMap,
+                                                                  uvzs[i], gradients[i]);
+                // Cross-fade to the next cascade near this window's edge.
+                // The cascade windows are anchored at the camera's look-at
+                // point, so panning drives content through them: with a hard
+                // containment switch the sharp-to-coarse texel boundary sweeps
+                // across facades and reads as the shadow edge crawling along
+                // the wall during fast movement. Blending over a few texels
+                // turns that traveling seam into a gradual, invisible change.
+                float2 uv = uvzs[i].xy;
+                float2 distanceToMin = uv - shadow.cascades[i].uvMinimum;
+                float2 distanceToMax = shadow.cascades[i].uvMaximum - uv;
+                float edgeDistance = min(min(distanceToMin.x, distanceToMin.y),
+                                         min(distanceToMax.x, distanceToMax.y));
+                float blendBand = 8.0 * max(shadow.cascades[i].texelSizeUV.x,
+                                            shadow.cascades[i].texelSizeUV.y);
+                if (i + 1 < 3 && edgeDistance < blendBand
+                    && shadowCascadeContains(shadow.cascades[i + 1], uvzs[i + 1])) {
+                    float nextVisibility = shadowCascadeVisibility(shadow.cascades[i + 1], shadowMap,
+                                                                   uvzs[i + 1], gradients[i + 1]);
+                    cascadeVisibility = mix(nextVisibility, cascadeVisibility,
+                                            saturate(edgeDistance / blendBand));
+                }
+                mapVisibility = cascadeVisibility;
                 break;
             }
         }
-    } else {
-        visibility = 0.0;
     }
+
+    // A geometrically self-shadowed wall is lit by the sky, so it darkens to
+    // only a fraction of the shadow strength; occluded spots the shadow map
+    // finds (cast shadows) keep the full strength. The two components blend
+    // smoothly across the N·L transition band.
+    const float selfShadowStrengthFraction = 0.35;
+    float selfShadowAmount = (1.0 - geometricVisibility) * selfShadowStrengthFraction;
+    float castShadowAmount = geometricVisibility * (1.0 - mapVisibility);
+    float shadowAmount = min(1.0, selfShadowAmount + castShadowAmount);
 
     float distanceToEye = length(worldPos - shadow.eye);
     float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
-    return 1.0 - (1.0 - visibility) * shadow.strength * fade;
+    return 1.0 - shadowAmount * shadow.strength * fade;
 }
 
 // Haze at the horizon of the flat presentation; the layout mirrors

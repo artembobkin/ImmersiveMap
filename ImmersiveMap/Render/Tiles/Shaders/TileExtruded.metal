@@ -58,6 +58,45 @@ static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBoun
            localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
 }
 
+// Depth cues without an analytic lighting model (the shading contract stays
+// "flat base color + shadow map"): two subtle tonal terms multiply the base
+// color so that faces separate where flat shading would merge them.
+// - Hemisphere term: roofs keep the base color, walls darken slightly, and
+//   the sun-facing side of a wall is a touch lighter than the far side, so
+//   the edge between two differently oriented walls is always visible.
+// - Vertical gradient: walls darken toward the ground, faking the ambient
+//   occlusion of street canyons and visually grounding the buildings
+//   (short buildings also read slightly darker than tall ones).
+// Both are tonal cues, not lighting: they never exceed 1 and compose with
+// the shadow factor and the geometric self-shadow untouched.
+constant float kWallShadeBase = 0.94;
+constant float kWallShadeSunSwing = 0.03;
+constant float kBaseDarkening = 0.90;
+constant float kGradientRampMeters = 30.0;
+
+static inline float extrudedDepthCueShade(float3 worldNormal,
+                                          float heightMeters,
+                                          float3 lightDirection) {
+    float upness = saturate(worldNormal.z);
+
+    float sunSide = 0.0;
+    float2 horizontalNormal = worldNormal.xy;
+    float2 horizontalSun = lightDirection.xy;
+    float normalLength = length(horizontalNormal);
+    float sunLength = length(horizontalSun);
+    // Degenerate cases (roof fragments, shadows disabled with the vertical
+    // placeholder sun) fall back to the neutral wall tone.
+    if (normalLength > 1e-4 && sunLength > 1e-4) {
+        sunSide = dot(horizontalNormal / normalLength, horizontalSun / sunLength);
+    }
+    float wallShade = kWallShadeBase + kWallShadeSunSwing * sunSide;
+    float orientationShade = mix(wallShade, 1.0, upness);
+
+    float gradient = mix(kBaseDarkening, 1.0,
+                         smoothstep(0.0, kGradientRampMeters, heightMeters));
+    return orientationShade * gradient;
+}
+
 // No analytic lighting model: faces keep their flat base color and darken
 // only where the shadow map says the static sun is occluded. Walls turned
 // away from the sun are occluded by their own building in the map, so they
@@ -69,6 +108,7 @@ static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBoun
 fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                            constant float4& localClipBounds [[buffer(4)]],
                                            constant Shadow& shadow [[buffer(5)]],
+                                           constant float& metersToWorldZ [[buffer(6)]],
                                            depth2d<float> shadowMap [[texture(0)]]) {
     // Derivatives (inside sampleShadowFactor) must precede the divergent
     // discard — MSL leaves them undefined in a quad after any lane discards.
@@ -77,7 +117,14 @@ fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
         discard_fragment();
     }
 
-    return float4(in.color.rgb * shadowFactor, 1.0);
+    float heightMeters = in.worldPosition.z / max(metersToWorldZ, 1e-9);
+    float depthCueShade = extrudedDepthCueShade(in.worldNormal, heightMeters, shadow.lightDirection);
+    // The cues fade out with the shadow factor: a self-shadowed or cast-shadowed
+    // face keeps the pure shadow color instead of stacking darkening on
+    // darkening (dark x dark reads unnatural). With shadows disabled the
+    // factor is 1 and the cues apply fully.
+    float appliedCue = mix(1.0, depthCueShade, shadowFactor);
+    return float4(in.color.rgb * appliedCue * shadowFactor, 1.0);
 }
 
 // Depth-only path of the shadow map pass: the light's orthographic camera

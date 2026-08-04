@@ -26,6 +26,17 @@ enum BuildingExtrusionDrawer {
         var shadowUniformValue = shadowBinding.uniform
         renderEncoder.setFragmentBytes(&shadowUniformValue, length: MemoryLayout<ShadowUniform>.stride, index: 5)
         renderEncoder.setFragmentTexture(shadowBinding.texture, index: 0)
+
+        // World-units-per-meter along z for the depth-cue vertical gradient.
+        // Local vertex z = meters * 2^(tileZoom - anchorZoom) and the model
+        // matrix scales by renderMapSize / (4096 * 2^tileZoom), so the tile
+        // zoom cancels and one per-frame constant serves every tile (assumes
+        // the default style extrusionAnchorZoom of 16; a style with a custom
+        // anchor shifts the gradient proportionally, which is only a tonal
+        // cue).
+        var metersToWorldZ = Float(flatRenderState.renderMapSize / (4096.0 * 65536.0))
+        renderEncoder.setFragmentBytes(&metersToWorldZ, length: MemoryLayout<Float>.stride, index: 6)
+
         drawExtrudedGeometry(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              flatRenderState: flatRenderState)
