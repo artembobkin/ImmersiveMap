@@ -20,7 +20,7 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         self.tileRenderStore = tileRenderStore
     }
 
-    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileCPU? {
+    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: matchingETag)
     }
 
@@ -45,17 +45,22 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         return await tileRenderStore.prepareTile(tile: tile, data: data)
     }
 
-    func materialize(preparedTile: PreparedTileCPU) async -> Bool {
+    func materialize(preparedTile: PreparedTileCPU, awaitingRevalidation: Bool) async -> Bool {
         guard let tileRenderStore else {
             return false
         }
-        return await tileRenderStore.materializePreparedTile(preparedTile)
+        return await tileRenderStore.materializePreparedTile(preparedTile,
+                                                             awaitingRevalidation: awaitingRevalidation)
+    }
+
+    func markRevalidated(tile: Tile) async {
+        await tileRenderStore?.markTileRevalidated(tile)
     }
 
     func parse(tile: Tile, data: Data) async -> Bool {
         guard let result = await prepare(tile: tile, data: data) else {
             return false
         }
-        return await materialize(preparedTile: result.preparedTile)
+        return await materialize(preparedTile: result.preparedTile, awaitingRevalidation: false)
     }
 }

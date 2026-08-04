@@ -34,8 +34,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity)
-        XCTAssertEqual(decoded.tile, tile)
-        assertTextLabelSet(decoded.textLabels.full, equals: preparedTile.textLabels.full)
+        XCTAssertEqual(decoded.preparedTile.tile, tile)
+        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: preparedTile.textLabels.full)
     }
 
     func testPreparedTileCodecReadsLegacyUncompressedPropertyList() throws {
@@ -52,7 +52,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
                                                        expectedSourceETag: "legacy-etag")
-        XCTAssertEqual(decoded.tile, tile)
+        XCTAssertEqual(decoded.preparedTile.tile, tile)
     }
 
     func testPreparedTileCodecRejectsCorruptedCompressedEnvelope() throws {
@@ -163,8 +163,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity)
-        XCTAssertEqual(decoded.tile, tile)
-        assertTextLabelSet(decoded.textLabels.full, equals: preparedTile.textLabels.full)
+        XCTAssertEqual(decoded.preparedTile.tile, tile)
+        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: preparedTile.textLabels.full)
     }
 
     func testPreparedTileDiskCacheSerializesSaveBeforeFollowingRead() async throws {
@@ -185,7 +185,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                sourceETag: "ordered-etag")
         let loaded = await cache.requestPreparedDiskCached(tile: tile, matchingETag: "ordered-etag")
 
-        XCTAssertEqual(loaded?.tile, tile)
+        XCTAssertEqual(loaded?.preparedTile.tile, tile)
         let storedData = try Data(contentsOf: cache.cachePathFor(tile: tile))
         XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(storedData))
     }
@@ -275,7 +275,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity)
 
-        XCTAssertEqual(decoded.tile, tile)
+        XCTAssertEqual(decoded.preparedTile.tile, tile)
     }
 
     func testPreparedTileCodecRoundTripsTextLabelDetailTiers() throws {
@@ -292,9 +292,9 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity)
 
-        assertTextLabelSet(decoded.textLabels.full, equals: textLabels.full)
-        assertTextLabelSet(decoded.textLabels.reduced, equals: textLabels.reduced)
-        assertTextLabelSet(decoded.textLabels.minimal, equals: textLabels.minimal)
+        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: textLabels.full)
+        assertTextLabelSet(decoded.preparedTile.textLabels.reduced, equals: textLabels.reduced)
+        assertTextLabelSet(decoded.preparedTile.textLabels.minimal, equals: textLabels.minimal)
     }
 
     func testPreparedTileCodecRejectsMismatchedLabelLanguageMetadata() throws {
@@ -327,7 +327,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
                                                        expectedSourceETag: "etag-A")
-        XCTAssertEqual(matched.tile, tile)
+        XCTAssertEqual(matched.preparedTile.tile, tile)
 
         // Different ETag (server content changed at the same URL) -> rejected.
         XCTAssertThrowsError(
@@ -344,7 +344,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
                                                        expectedSourceETag: nil)
-        XCTAssertEqual(anyETag.tile, tile)
+        XCTAssertEqual(anyETag.preparedTile.tile, tile)
     }
 
     func testPreparedTileCodecRejectsMismatchedTextRevisionMetadata() throws {

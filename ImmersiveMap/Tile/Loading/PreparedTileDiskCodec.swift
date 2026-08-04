@@ -750,7 +750,7 @@ enum PreparedTileDiskCodec {
     static func decode(data: Data,
                        expectedTile: Tile,
                        cacheIdentity: PreparedTileCacheIdentity,
-                       expectedSourceETag: String? = nil) throws -> PreparedTileCPU {
+                       expectedSourceETag: String? = nil) throws -> PreparedTileDiskCacheHit {
         let payload = try PreparedTileDiskEnvelope.decode(data: data)
         let decoder = PropertyListDecoder()
         let entry: Entry
@@ -779,7 +779,7 @@ enum PreparedTileDiskCodec {
             throw PreparedTileDiskCodecError.invalidMetadata
         }
 
-        return PreparedTileCPU(
+        let preparedTile = PreparedTileCPU(
             tile: expectedTile,
             ground: try GeometryLayerValue(vertices: entry.groundVertices,
                                            vertexCount: entry.groundVertexCount,
@@ -842,6 +842,8 @@ enum PreparedTileDiskCodec {
                 anchors: entry.roadAnchors.map { $0.runtimeValue() }
             )
         )
+        return PreparedTileDiskCacheHit(preparedTile: preparedTile,
+                                        sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)
     }
 
     private static func encodePODArray<T>(_ values: [T]) -> Data {

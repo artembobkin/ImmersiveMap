@@ -11,6 +11,11 @@ import MetalKit
 // a network stage (download) and a CPU stage (prepared cache/parse/materialize),
 // separate Tasks with independent concurrency limits so that a slow network
 // does not occupy parse slots and long parsing does not block download starts.
+// The network stage is disk-first: while the download is in flight, the
+// freshest prepared entry (any ETag) is served from disk so a warm cache
+// paints without waiting for the network round-trip; the download result then
+// acts as revalidation — a matching ETag confirms the served content, a
+// mismatch re-parses the fresh bytes and swaps the tile in place.
 // Decisions about when a tile request is temporarily blocked after errors are
 // delegated to `TileRetryController` (per-tile backoff + global cooldown).
 /// Thread-safe (`@unchecked Sendable`): the loader's mutable state is
@@ -41,6 +46,20 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         let tile: Tile
         let generation: UInt64
         let downloadResult: TileDownloader.DownloadResult
+        let wasServedFromDiskFirst: Bool
+    }
+
+    // Result of the disk-first serve that runs while the download is in flight.
+    private enum DiskFirstServe {
+        case notServed
+        // The prepared entry is materialized and visible; `etag` is the raw-tile
+        // ETag it was parsed from (nil when the server sent none at save time).
+        case served(etag: String?)
+
+        var didServe: Bool {
+            if case .served = self { return true }
+            return false
+        }
     }
 
     private var ongoingTasks: [Tile: OngoingTask] = [:]
@@ -190,22 +209,84 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     }
 
     // Network stage: downloads the tile and frees the network slot right after
-    // the download, without waiting for parsing. The continuation (prepared
-    // cache/parse/materialize) goes to a separate CPU task with its own concurrency limit.
+    // the download, without waiting for parsing. While the download is in
+    // flight the freshest prepared entry is served from disk (disk-first), so
+    // the download result only revalidates it: a confirmed or unreachable tile
+    // ends here, everything else continues to a separate CPU task with its own
+    // concurrency limit (prepared cache/parse/materialize).
     private func runNetworkStage(tile: Tile, generation: UInt64) async {
+        // The serve runs concurrently with the download, but the slot is
+        // released on download completion alone: disk decode contends on the
+        // shared serial cache queue, and holding a network slot for it would
+        // throttle downloads of the tiles that actually need the network.
+        // The serve is awaited before the result is processed, so a stale
+        // serve can never land after the fresh swap.
+        async let pendingServe = serveFromPreparedDiskFirst(tile: tile, generation: generation)
         let downloadResult = await downloadStage(tile: tile, generation: generation)
         let isCurrent = releaseNetworkSlot(tile: tile, generation: generation)
+        let diskFirstServe = await pendingServe
 
         var isCPUStageScheduled = false
         if isCurrent, let downloadResult, Task.isCancelled == false {
-            isCPUStageScheduled = scheduleCPUStage(tile: tile,
-                                                   generation: generation,
-                                                   downloadResult: downloadResult)
+            if let confirmedSource = revalidatedSource(downloadResult: downloadResult,
+                                                       diskFirstServe: diskFirstServe) {
+                // The served content is resolved: either proven current or
+                // knowingly accepted offline. Until this point the render store
+                // keeps re-requesting the tile, which is what heals a
+                // revalidation lost to cancellation or a parse failure.
+                await loadPipeline.markRevalidated(tile: tile)
+                _ = markLoadSucceeded(tile: tile, generation: generation, source: confirmedSource)
+            } else {
+                isCPUStageScheduled = scheduleCPUStage(tile: tile,
+                                                       generation: generation,
+                                                       downloadResult: downloadResult,
+                                                       wasServedFromDiskFirst: diskFirstServe.didServe)
+            }
         }
         if isCPUStageScheduled == false {
             Task { @MainActor in
                 self.finishLoading(tile: tile, generation: generation)
             }
+        }
+    }
+
+    // Disk-first serve: materializes the freshest prepared entry for the tile
+    // (any ETag) so a warm disk cache paints before the network answers.
+    private func serveFromPreparedDiskFirst(tile: Tile, generation: UInt64) async -> DiskFirstServe {
+        if Task.isCancelled {
+            return .notServed
+        }
+        guard let hit = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil) else {
+            return .notServed
+        }
+        guard await materializePreparedTile(hit.preparedTile,
+                                            expectedTile: tile,
+                                            generation: generation,
+                                            awaitingRevalidation: true) else {
+            return .notServed
+        }
+        return .served(etag: hit.sourceETag)
+    }
+
+    // Decides whether the download result merely confirms what the disk-first
+    // serve already put on screen. Returns the success source when no CPU work
+    // is needed: a matching ETag proves the served entry is current, and a
+    // failed download cannot improve on the served content. Everything else
+    // (ETag mismatch, an entry or a response without an ETag, no served tile)
+    // must go through the CPU stage.
+    private func revalidatedSource(downloadResult: TileDownloader.DownloadResult,
+                                   diskFirstServe: DiskFirstServe) -> String? {
+        guard case let .served(servedETag) = diskFirstServe else {
+            return nil
+        }
+        switch downloadResult {
+        case let .success(_, etag):
+            if let etag, etag == servedETag {
+                return "prepared_disk"
+            }
+            return nil
+        case .failure:
+            return "prepared_disk_offline"
         }
     }
 
@@ -269,18 +350,23 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     // queues the downloaded tile. Returns false if the tile is already stale.
     private func scheduleCPUStage(tile: Tile,
                                   generation: UInt64,
-                                  downloadResult: TileDownloader.DownloadResult) -> Bool {
+                                  downloadResult: TileDownloader.DownloadResult,
+                                  wasServedFromDiskFirst: Bool) -> Bool {
         stateQueue.sync {
             guard ongoingTasks[tile]?.generation == generation,
                   ongoingTasks[tile]?.stage == .cpuQueued else {
                 return false
             }
             if cpuInFlightCount < maxConcurrentPrepares {
-                startCPUStageLocked(tile: tile, generation: generation, downloadResult: downloadResult)
+                startCPUStageLocked(tile: tile,
+                                    generation: generation,
+                                    downloadResult: downloadResult,
+                                    wasServedFromDiskFirst: wasServedFromDiskFirst)
             } else {
                 queuedCPUWork.append(QueuedCPUWork(tile: tile,
                                                    generation: generation,
-                                                   downloadResult: downloadResult))
+                                                   downloadResult: downloadResult,
+                                                   wasServedFromDiskFirst: wasServedFromDiskFirst))
             }
             return true
         }
@@ -290,12 +376,16 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     // Must be called only from within `stateQueue`.
     private func startCPUStageLocked(tile: Tile,
                                      generation: UInt64,
-                                     downloadResult: TileDownloader.DownloadResult) {
+                                     downloadResult: TileDownloader.DownloadResult,
+                                     wasServedFromDiskFirst: Bool) {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         cpuInFlightCount += 1
         ongoingTasks[tile]?.stage = .cpu
         let task = Task(priority: .utility) {
-            await self.runCPUStage(tile: tile, generation: generation, downloadResult: downloadResult)
+            await self.runCPUStage(tile: tile,
+                                   generation: generation,
+                                   downloadResult: downloadResult,
+                                   wasServedFromDiskFirst: wasServedFromDiskFirst)
         }
         // The tile's current Task is swapped: cancelAll must cancel the live
         // stage; the network task has already finished by this point.
@@ -304,8 +394,12 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
 
     private func runCPUStage(tile: Tile,
                              generation: UInt64,
-                             downloadResult: TileDownloader.DownloadResult) async {
-        await processDownloadResult(tile: tile, generation: generation, downloadResult: downloadResult)
+                             downloadResult: TileDownloader.DownloadResult,
+                             wasServedFromDiskFirst: Bool) async {
+        await processDownloadResult(tile: tile,
+                                    generation: generation,
+                                    downloadResult: downloadResult,
+                                    wasServedFromDiskFirst: wasServedFromDiskFirst)
         releaseCPUSlot(tile: tile, generation: generation)
         Task { @MainActor in
             self.finishLoading(tile: tile, generation: generation)
@@ -342,7 +436,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             let work = queuedCPUWork.remove(at: bestIndex)
             startCPUStageLocked(tile: work.tile,
                                 generation: work.generation,
-                                downloadResult: work.downloadResult)
+                                downloadResult: work.downloadResult,
+                                wasServedFromDiskFirst: work.wasServedFromDiskFirst)
         }
     }
 
@@ -352,13 +447,18 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     }
 
     // CPU stage: prepared cache by ETag -> parse -> materialize -> save.
-    // The prepared cache is keyed by the raw tile's ETag, so we learn the
-    // current ETag from the network stage and only then decide whether to
-    // reuse the parsed tile or parse from scratch. Honors task cancellation at
-    // every step and updates the retry state based on the outcome.
+    // The prepared cache is keyed by the raw tile's ETag: the network stage
+    // learned the current ETag, and the disk-first serve (if any) has already
+    // been judged against it — this stage only runs when fresh content must be
+    // produced (or the serve missed). Honors task cancellation at every step
+    // and updates the retry state based on the outcome.
+    // `wasServedFromDiskFirst` guards the disk entry that is currently on
+    // screen: a failure to produce fresher content must not delete the best
+    // content we have.
     private func processDownloadResult(tile: Tile,
                                        generation: UInt64,
-                                       downloadResult: TileDownloader.DownloadResult) async {
+                                       downloadResult: TileDownloader.DownloadResult,
+                                       wasServedFromDiskFirst: Bool) async {
         if Task.isCancelled {
             return
         }
@@ -374,7 +474,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 if Task.isCancelled {
                     return
                 }
-                if await materializePreparedTile(cached,
+                if await materializePreparedTile(cached.preparedTile,
                                                  expectedTile: tile,
                                                  generation: generation) {
                     guard markLoadSucceeded(tile: tile,
@@ -401,7 +501,9 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 if Task.isCancelled {
                     return
                 }
-                loadPipeline.removePreparedFromDisk(tile: tile)
+                if wasServedFromDiskFirst == false {
+                    loadPipeline.removePreparedFromDisk(tile: tile)
+                }
                 markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
                 return
             }
@@ -429,17 +531,20 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                     return
                 }
             } else {
-                loadPipeline.removePreparedFromDisk(tile: tile)
+                if wasServedFromDiskFirst == false {
+                    loadPipeline.removePreparedFromDisk(tile: tile)
+                }
                 markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
             }
         case let .failure(downloadFailure):
-            // Offline / server error: render any cached prepared tile for this
-            // coordinate, regardless of ETag, so a warm cache still shows content
-            // without the network. materializePreparedTile returns false on
+            // Offline / server error with no disk-first serve on screen (a serve
+            // would have ended the load in the network stage). Retry the disk
+            // read once more: a transient materialize failure during the serve
+            // may still resolve here. materializePreparedTile returns false on
             // cancellation; a cancelled or superseded load must not mutate the
             // replacement task's retry state.
             if let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil),
-               await materializePreparedTile(cached,
+               await materializePreparedTile(cached.preparedTile,
                                              expectedTile: tile,
                                              generation: generation) {
                 guard markLoadSucceeded(tile: tile,
@@ -491,7 +596,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
 
     private func materializePreparedTile(_ preparedTile: PreparedTileCPU,
                                          expectedTile: Tile,
-                                         generation: UInt64) async -> Bool {
+                                         generation: UInt64,
+                                         awaitingRevalidation: Bool = false) async -> Bool {
         if Task.isCancelled {
             return false
         }
@@ -503,7 +609,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         }) else {
             return false
         }
-        let isMaterialized = await loadPipeline.materialize(preparedTile: preparedTile)
+        let isMaterialized = await loadPipeline.materialize(preparedTile: preparedTile,
+                                                            awaitingRevalidation: awaitingRevalidation)
         if Task.isCancelled {
             return false
         }

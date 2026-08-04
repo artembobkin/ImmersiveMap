@@ -594,6 +594,205 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(didRearm)
         XCTAssertEqual(wakeScheduler.scheduledWakes[1].delay, 0.3, accuracy: 0.001)
     }
+
+    // MARK: - Disk-first serve and revalidation
+
+    func testNetworkSlotFreesWhileDiskFirstServeIsStillRunning() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline(suspendsDiskReads: true)
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let servedTile = Tile(x: 1, y: 1, z: 4)
+        let coldTile = Tile(x: 2, y: 1, z: 4)
+        pipeline.setDiskEntry(servedTile, etag: "A")
+
+        loader.request(tiles: [servedTile, coldTile])
+        let downloadStarted = await pipeline.waitUntilStarted(servedTile)
+        XCTAssertTrue(downloadStarted)
+        let diskReadStarted = await pipeline.waitUntilDiskReadStarted(servedTile)
+        XCTAssertTrue(diskReadStarted)
+
+        // The download finishes while the disk serve is still suspended: the
+        // network slot must recycle immediately, without waiting for the serve.
+        pipeline.completeDownload(servedTile, result: .success(Data([1]), etag: "A"))
+        let coldStarted = await pipeline.waitUntilStarted(coldTile)
+        XCTAssertTrue(coldStarted)
+
+        pipeline.completeDiskRead(servedTile)
+        let served = await pipeline.waitUntilMaterialized(servedTile)
+        XCTAssertTrue(served)
+        pipeline.completeMaterialize(servedTile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertTrue(pipeline.hasRevalidated(servedTile))
+
+        pipeline.completeDownload(coldTile, result: .failure(.network))
+    }
+
+    func testWarmDiskServesTileWhileDownloadIsStillInFlight() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let downloadStarted = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(downloadStarted)
+
+        // The tile materializes from disk before the download is completed.
+        let materializedEarly = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(materializedEarly)
+        XCTAssertEqual(pipeline.materializeFlagHistory(for: tile), [true])
+        pipeline.completeMaterialize(tile, result: true)
+
+        pipeline.completeDownload(tile, result: .success(Data([1]), etag: "A"))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // A matching ETag confirms the served content: no parse, no second
+        // materialize, the disk entry stays, and the serve is resolved so the
+        // render store stops re-requesting the tile.
+        XCTAssertFalse(pipeline.hasPrepared(tile))
+        XCTAssertEqual(pipeline.materializeCount(for: tile), 1)
+        XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
+        XCTAssertTrue(pipeline.hasRevalidated(tile))
+    }
+
+    func testRevalidationMismatchReparsesFreshBytesAndSwapsTile() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let downloadStarted = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(downloadStarted)
+        let servedFromDisk = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(servedFromDisk)
+        pipeline.completeMaterialize(tile, result: true)
+
+        // The server has newer content under a different ETag.
+        pipeline.completeDownload(tile, result: .success(Data([2]), etag: "B"))
+        let reparsed = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(reparsed)
+        pipeline.completePrepare(tile)
+        let swapped = await pipeline.waitUntilMaterializeCount(2, for: tile)
+        XCTAssertTrue(swapped)
+        pipeline.completeMaterialize(tile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(pipeline.savedETag(for: tile), .some("B"))
+        // The serve was flagged as awaiting revalidation; the swap cleared it.
+        XCTAssertEqual(pipeline.materializeFlagHistory(for: tile), [true, false])
+        XCTAssertFalse(pipeline.hasRevalidated(tile))
+    }
+
+    func testNetworkFailureAfterDiskFirstServeIsASuccessNotAFailure() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           retryWakeScheduler: wakeScheduler.schedule)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let downloadStarted = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(downloadStarted)
+        let servedFromDisk = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(servedFromDisk)
+        pipeline.completeMaterialize(tile, result: true)
+
+        pipeline.completeDownload(tile, result: .failure(.network))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // The served content stands: no retry backoff is armed, nothing parsed,
+        // and the serve is resolved (accepted as offline content).
+        XCTAssertTrue(wakeScheduler.scheduledWakes.isEmpty)
+        XCTAssertFalse(pipeline.hasPrepared(tile))
+        XCTAssertEqual(pipeline.materializeCount(for: tile), 1)
+        XCTAssertTrue(pipeline.hasRevalidated(tile))
+    }
+
+    func testParseFailureAfterDiskFirstServeKeepsTheDiskEntry() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let downloadStarted = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(downloadStarted)
+        let servedFromDisk = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(servedFromDisk)
+        pipeline.completeMaterialize(tile, result: true)
+
+        pipeline.completeDownload(tile, result: .success(Data([2]), etag: "B"))
+        let reparsed = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(reparsed)
+        pipeline.completePrepareFailing(tile)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Fresh bytes failed to parse, but the entry on screen is the best
+        // content we have — it must not be deleted, and the serve must stay
+        // unresolved so the render store keeps the tile requestable.
+        XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
+        XCTAssertFalse(pipeline.hasRevalidated(tile))
+        XCTAssertEqual(pipeline.materializeFlagHistory(for: tile), [true])
+    }
+
+    func testParseFailureWithoutDiskFirstServeStillRemovesTheDiskEntry() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        let didStart = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(didStart)
+        pipeline.completeDownload(tile, result: .success(Data([1]), etag: nil))
+        let didPrepare = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(didPrepare)
+        pipeline.completePrepareFailing(tile)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(pipeline.hasRemovedFromDisk(tile))
+    }
+
+    func testServedEntryWithoutETagIsReplacedByFreshParse() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        // An entry saved from a response without an ETag cannot be revalidated.
+        pipeline.setDiskEntry(tile, etag: nil)
+
+        loader.request(tiles: [tile])
+        let downloadStarted = await pipeline.waitUntilStarted(tile)
+        XCTAssertTrue(downloadStarted)
+        let servedFromDisk = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(servedFromDisk)
+        pipeline.completeMaterialize(tile, result: true)
+
+        pipeline.completeDownload(tile, result: .success(Data([2]), etag: "C"))
+        let reparsed = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(reparsed)
+        pipeline.completePrepare(tile)
+        let swapped = await pipeline.waitUntilMaterializeCount(2, for: tile)
+        XCTAssertTrue(swapped)
+        pipeline.completeMaterialize(tile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(pipeline.savedETag(for: tile), .some("C"))
+    }
 }
 
 private final class RecordingRetryWakeScheduler {
@@ -630,24 +829,115 @@ private final class RecordingRetryWakeScheduler {
 
 private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sendable {
     private let suspendsSaves: Bool
+    private let suspendsDiskReads: Bool
     private let lock = NSLock()
+    private var diskReadStartedTiles: Set<Tile> = []
+    private var diskReadContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
     private var startedTiles: Set<Tile> = []
     private var startCounts: [Tile: Int] = [:]
     private var canceledTiles: Set<Tile> = []
     private var preparedTiles: Set<Tile> = []
     private var materializedTiles: Set<Tile> = []
+    private var materializeCounts: [Tile: Int] = [:]
+    private var materializeFlags: [Tile: [Bool]] = [:]
+    private var revalidatedTiles: Set<Tile> = []
     private var saveStartedTiles: Set<Tile> = []
+    private var savedETags: [Tile: String?] = [:]
+    private var removedFromDiskTiles: Set<Tile> = []
+    private var diskEntries: [Tile: String?] = [:]
     private var downloadContinuations: [Tile: CheckedContinuation<TileDownloader.DownloadResult, Never>] = [:]
     private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
     private var materializeContinuations: [Tile: CheckedContinuation<Bool, Never>] = [:]
     private var saveContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
 
-    init(suspendsSaves: Bool = false) {
+    init(suspendsSaves: Bool = false, suspendsDiskReads: Bool = false) {
         self.suspendsSaves = suspendsSaves
+        self.suspendsDiskReads = suspendsDiskReads
     }
 
-    func requestPreparedDiskCached(tile _: Tile, matchingETag _: String?) async -> PreparedTileCPU? {
-        nil
+    // Registers a prepared-tile entry "on disk": `etag` is the stored source
+    // ETag (nil models an entry saved from a server response without one).
+    func setDiskEntry(_ tile: Tile, etag: String?) {
+        lock.lock()
+        diskEntries[tile] = etag
+        lock.unlock()
+    }
+
+    func hasRemovedFromDisk(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return removedFromDiskTiles.contains(tile)
+    }
+
+    func savedETag(for tile: Tile) -> String?? {
+        lock.lock()
+        defer { lock.unlock() }
+        return savedETags[tile]
+    }
+
+    func materializeCount(for tile: Tile) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return materializeCounts[tile, default: 0]
+    }
+
+    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
+        if suspendsDiskReads, hasDiskEntry(tile) {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                recordDiskReadStarted(tile: tile, continuation: continuation)
+            }
+        }
+        return diskEntryHit(tile: tile, matchingETag: matchingETag)
+    }
+
+    private func hasDiskEntry(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return diskEntries[tile] != nil
+    }
+
+    private func recordDiskReadStarted(tile: Tile, continuation: CheckedContinuation<Void, Never>) {
+        lock.lock()
+        diskReadStartedTiles.insert(tile)
+        diskReadContinuations[tile] = continuation
+        lock.unlock()
+    }
+
+    func completeDiskRead(_ tile: Tile) {
+        let continuation: CheckedContinuation<Void, Never>?
+        lock.lock()
+        continuation = diskReadContinuations.removeValue(forKey: tile)
+        lock.unlock()
+        continuation?.resume()
+    }
+
+    func hasDiskReadStarted(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return diskReadStartedTiles.contains(tile)
+    }
+
+    func waitUntilDiskReadStarted(_ tile: Tile) async -> Bool {
+        for _ in 0..<100 {
+            if hasDiskReadStarted(tile) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
+
+    private func diskEntryHit(tile: Tile, matchingETag: String?) -> PreparedTileDiskCacheHit? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let storedETag = diskEntries[tile] else {
+            return nil
+        }
+        if let matchingETag, matchingETag != storedETag {
+            return nil
+        }
+        return PreparedTileDiskCacheHit(preparedTile: Self.makePreparedTile(tile: tile),
+                                        sourceETag: storedETag)
     }
 
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
@@ -662,7 +952,8 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
 
     func savePreparedOnDisk(tile: Tile,
                             preparedTile _: PreparedTileCPU,
-                            sourceETag _: String?) async {
+                            sourceETag: String?) async {
+        recordSavedETag(tile: tile, sourceETag: sourceETag)
         guard suspendsSaves else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             lock.lock()
@@ -672,7 +963,17 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         }
     }
 
-    func removePreparedFromDisk(tile _: Tile) {}
+    func removePreparedFromDisk(tile: Tile) {
+        lock.lock()
+        removedFromDiskTiles.insert(tile)
+        lock.unlock()
+    }
+
+    private func recordSavedETag(tile: Tile, sourceETag: String?) {
+        lock.lock()
+        savedETags[tile] = sourceETag
+        lock.unlock()
+    }
 
     func prepare(tile: Tile, data _: Data) async -> PreparedTileLoadResult? {
         await withCheckedContinuation { continuation in
@@ -680,10 +981,39 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         }
     }
 
-    func materialize(preparedTile: PreparedTileCPU) async -> Bool {
-        await withCheckedContinuation { continuation in
+    func materialize(preparedTile: PreparedTileCPU, awaitingRevalidation: Bool) async -> Bool {
+        recordMaterializeFlag(tile: preparedTile.tile, awaitingRevalidation: awaitingRevalidation)
+        return await withCheckedContinuation { continuation in
             recordMaterializeStarted(tile: preparedTile.tile, continuation: continuation)
         }
+    }
+
+    func markRevalidated(tile: Tile) async {
+        recordRevalidated(tile: tile)
+    }
+
+    private func recordRevalidated(tile: Tile) {
+        lock.lock()
+        revalidatedTiles.insert(tile)
+        lock.unlock()
+    }
+
+    private func recordMaterializeFlag(tile: Tile, awaitingRevalidation: Bool) {
+        lock.lock()
+        materializeFlags[tile, default: []].append(awaitingRevalidation)
+        lock.unlock()
+    }
+
+    func hasRevalidated(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return revalidatedTiles.contains(tile)
+    }
+
+    func materializeFlagHistory(for tile: Tile) -> [Bool] {
+        lock.lock()
+        defer { lock.unlock() }
+        return materializeFlags[tile, default: []]
     }
 
     func parse(tile _: Tile, data _: Data) async -> Bool {
@@ -743,6 +1073,14 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
                                                                parseLayerTimings: timings))
     }
 
+    func completePrepareFailing(_ tile: Tile) {
+        let continuation: CheckedContinuation<PreparedTileLoadResult?, Never>?
+        lock.lock()
+        continuation = prepareContinuations.removeValue(forKey: tile)
+        lock.unlock()
+        continuation?.resume(returning: nil)
+    }
+
     func completeMaterialize(_ tile: Tile, result: Bool) {
         let continuation: CheckedContinuation<Bool, Never>?
         lock.lock()
@@ -799,6 +1137,16 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         return false
     }
 
+    func waitUntilMaterializeCount(_ count: Int, for tile: Tile) async -> Bool {
+        for _ in 0..<100 {
+            if materializeCount(for: tile) >= count {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
+
     func waitUntilMaterialized(_ tile: Tile) async -> Bool {
         for _ in 0..<100 {
             if hasMaterialized(tile) {
@@ -836,6 +1184,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     ) {
         lock.lock()
         materializedTiles.insert(tile)
+        materializeCounts[tile, default: 0] += 1
         materializeContinuations[tile] = continuation
         lock.unlock()
     }

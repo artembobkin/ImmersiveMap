@@ -402,32 +402,44 @@ final class PreparedTileDiskCaching {
 
     /// Loads the cached prepared tile. When `matchingETag` is non-nil the entry is
     /// returned only if it was derived from that exact raw-tile ETag (content-fresh
-    /// reuse); nil accepts any cached entry regardless of ETag (offline fallback).
-    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileCPU? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<PreparedTileCPU?, Never>) in
+    /// reuse); nil accepts any cached entry regardless of ETag (disk-first serve
+    /// and offline fallback), and the hit carries the entry's own source ETag so
+    /// the caller can revalidate it later.
+    ///
+    /// Only the file read runs on the shared serial IO queue; the decode
+    /// (decompression + property-list decoding) runs on the caller's task, so
+    /// concurrent tile loads decode in parallel instead of queueing behind each
+    /// other and behind saves.
+    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
+        let cachePath = cachePathFor(tile: tile)
+        let data = await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
             ioCoordinator.enqueue { [self] in
-                let cachePath = cachePathFor(tile: tile)
                 guard let data = ioCoordinator.readFile(at: cachePath) else {
                     continuation.resume(returning: nil)
                     return
                 }
-
-                do {
-                    let preparedTile = try PreparedTileDiskCodec.decode(data: data,
-                                                                        expectedTile: tile,
-                                                                        cacheIdentity: cacheIdentity,
-                                                                        expectedSourceETag: matchingETag)
-                    ioCoordinator.markAccessed(cachePath)
-                    continuation.resume(returning: preparedTile)
-                } catch PreparedTileDiskCodecError.invalidMetadata {
-                    // Identity/ETag mismatches are benign. Keep the entry for an
-                    // offline fallback and let a fresh parse atomically replace it.
-                    continuation.resume(returning: nil)
-                } catch {
-                    ioCoordinator.removeFile(at: cachePath)
-                    continuation.resume(returning: nil)
-                }
+                ioCoordinator.markAccessed(cachePath)
+                continuation.resume(returning: data)
             }
+        }
+        guard let data else {
+            return nil
+        }
+
+        do {
+            return try PreparedTileDiskCodec.decode(data: data,
+                                                    expectedTile: tile,
+                                                    cacheIdentity: cacheIdentity,
+                                                    expectedSourceETag: matchingETag)
+        } catch PreparedTileDiskCodecError.invalidMetadata {
+            // Identity/ETag mismatches are benign. Keep the entry for an
+            // offline fallback and let a fresh parse atomically replace it.
+            return nil
+        } catch {
+            ioCoordinator.enqueue { [self] in
+                ioCoordinator.removeFile(at: cachePath)
+            }
+            return nil
         }
     }
 
@@ -437,15 +449,27 @@ final class PreparedTileDiskCaching {
         guard preparedTile.tile == tile else {
             return
         }
+        // Encode + compress on the caller's task, mirroring the decode change:
+        // the shared serial queue carries only the file write, so disk-first
+        // serves are not delayed behind multi-megabyte encodes of unrelated
+        // saves.
+        let data: Data
+        do {
+            data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                    cacheIdentity: cacheIdentity,
+                                                    sourceETag: sourceETag ?? "",
+                                                    compressionEnabled: compressionEnabled)
+        } catch {
+#if DEBUG
+            print("Failed to encode prepared tile \(tile): \(error)")
+#endif
+            return
+        }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             ioCoordinator.enqueue { [self] in
                 defer { continuation.resume() }
                 let cachePath = cachePathFor(tile: tile)
                 do {
-                    let data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                                cacheIdentity: cacheIdentity,
-                                                                sourceETag: sourceETag ?? "",
-                                                                compressionEnabled: compressionEnabled)
                     try ioCoordinator.writeFile(data, to: cachePath)
                 } catch {
 #if DEBUG
