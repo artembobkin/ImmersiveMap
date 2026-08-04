@@ -12,7 +12,7 @@ A map engine draws tiles, it does not produce them. Here is exactly what you are
 
 Map data carries licence obligations, and the most common one, ODbL for OpenStreetMap data, requires visible credit in your app.
 
-The engine handles this for you: **the attribution badge takes its text from the active tile provider**, so the built-in tiles credit OpenStreetMap, OpenFreeMap and OpenMapTiles. Each provider carries the credit its own data requires, and only while that provider is active. You do not have to write anything.
+The engine handles this for you: **the attribution badge takes its text from the active tile provider**, so the built-in tiles show the one-line credit "© OpenStreetMap © OpenMapTiles" linking to the full license story. Each provider carries the credit its own data requires, and only while that provider is active. You do not have to write anything.
 
 If you build a custom `VectorTileProvider`, declare its attribution, because the engine will not invent one for you:
 
@@ -24,4 +24,21 @@ VectorTileProvider(
 )
 ```
 
-You can restyle or relocate the badge, and hide it with `attributionSettings(.init(isVisible: false))`, but only if your app credits the data source somewhere else. Hiding required attribution outright breaks the data licence, and that is on the app, not on the engine.
+The badge is adjustable without touching the credit itself:
+
+```swift
+ImmersiveMapView()
+    .attributionSettings(size: .large,             // .small / .regular / .large
+                         position: .topLeading,    // four corners plus .bottomCenter / .topCenter
+                         textColor: SIMD4<Float>(1, 1, 1, 1))
+```
+
+You can also hide it with `.attributionSettings(isVisible: false)`, but only if your app credits the data source somewhere else — hiding required attribution outright breaks the data licence, and that is on the app, not on the engine. A map that starts with a hidden (or empty) badge logs a one-time console warning as a reminder. Once your app does show the credit on its own, declare it:
+
+```swift
+ImmersiveMapView()
+    .attributionSettings(isVisible: false)
+    .attributionProvidedExternally()   // silences the hidden-attribution warning
+```
+
+The full badge API — sizes, positions, colors, overrides and the warning semantics — is covered in [the attribution guide](attribution.md).

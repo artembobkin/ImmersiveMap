@@ -753,12 +753,50 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// the app shows the source attribution elsewhere (its own "About" screen,
     /// a custom overlay) and the source's license permits that.
     public struct AttributionSettings: Equatable, Sendable {
+        /// Badge size preset. Scales fonts, paddings, corner radius and the
+        /// maximum badge width coherently; the concrete metrics live in the
+        /// UI layer.
+        public enum Size: String, CaseIterable, Equatable, Sendable {
+            case small
+            case regular
+            case large
+        }
+
+        /// Where the badge sits inside the map view, inset by the safe area.
+        /// Leading/trailing follow the view's layout direction.
+        public enum Position: String, CaseIterable, Equatable, Sendable {
+            case bottomTrailing
+            case bottomLeading
+            case topTrailing
+            case topLeading
+            case bottomCenter
+            case topCenter
+        }
+
         public var isVisible: Bool
+        public var size: Size
+        public var position: Position
+        /// Badge text color as RGBA in `0...1` (same convention as
+        /// `AvatarSettings.borderColor`); `nil` keeps the default white.
+        /// The copyright line renders at 76% of the given alpha.
+        public var textColor: SIMD4<Float>?
+        /// The app declares that it shows the data credit itself (its own
+        /// overlay, an about screen). Suppresses the hidden-attribution
+        /// warning; it does not change what the badge draws.
+        public var isProvidedExternally: Bool
         public var attributionOverride: ImmersiveMapAttribution?
 
         public init(isVisible: Bool = true,
+                    size: Size = .regular,
+                    position: Position = .bottomTrailing,
+                    textColor: SIMD4<Float>? = nil,
+                    isProvidedExternally: Bool = false,
                     attributionOverride: ImmersiveMapAttribution? = nil) {
             self.isVisible = isVisible
+            self.size = size
+            self.position = position
+            self.textColor = textColor
+            self.isProvidedExternally = isProvidedExternally
             self.attributionOverride = attributionOverride
         }
     }
@@ -1207,6 +1245,43 @@ public extension ImmersiveMapSettings {
     func attributionSettings(_ attribution: AttributionSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.attribution = attribution
+        return settings
+    }
+
+    /// Restyles the attribution badge without replacing the whole settings
+    /// value: `nil` leaves a field unchanged. Because of that, `textColor`
+    /// cannot be reset to the default here — pass a full `AttributionSettings`
+    /// to `attributionSettings(_:)` instead.
+    func attributionSettings(isVisible: Bool? = nil,
+                             size: AttributionSettings.Size? = nil,
+                             position: AttributionSettings.Position? = nil,
+                             textColor: SIMD4<Float>? = nil,
+                             isProvidedExternally: Bool? = nil) -> ImmersiveMapSettings {
+        var attribution = self.attribution
+        if let isVisible {
+            attribution.isVisible = isVisible
+        }
+        if let size {
+            attribution.size = size
+        }
+        if let position {
+            attribution.position = position
+        }
+        if let textColor {
+            attribution.textColor = textColor
+        }
+        if let isProvidedExternally {
+            attribution.isProvidedExternally = isProvidedExternally
+        }
+        return attributionSettings(attribution)
+    }
+
+    /// Declares that the app shows the data credit itself, so hiding the badge
+    /// stops logging the attribution warning. The license obligation stays
+    /// with the app.
+    func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.attribution.isProvidedExternally = isProvidedExternally
         return settings
     }
 

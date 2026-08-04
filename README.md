@@ -131,7 +131,23 @@ Both demo apps render the built-in tile provider out of the box, so they run wit
 
 ## Where the map data comes from
 
-The default provider renders out of the box with no token or account, using OpenStreetMap-based tiles served at `tiles.immersivemap.dev`. Any other MVT source, including Mapbox, plugs in through a tile provider. Data sources, licensing, and the attribution badge are covered in [Where the map data comes from](Documentation/docs/map-data.md).
+[**immersivemap.dev**](https://immersivemap.dev) is the home of this project. It runs the vector tile service the engine renders by default, and hosts the account dashboard where you create API keys and watch your tile usage.
+
+Nothing there is required to get started: the default provider renders out of the box with no token and no account, on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you off that shared pool onto your own throughput, with usage visible in the dashboard.
+
+The tiles are OpenStreetMap-based and served from `tiles.immersivemap.dev`. Any other MVT source, including Mapbox, plugs in through a tile provider instead. Data sources, licensing, and the attribution badge are covered in [the map data guide](Documentation/docs/map-data.md).
+
+## Attribution
+
+The map shows a small attribution badge — "© OpenStreetMap © OpenMapTiles" with the built-in tiles — because map data licenses require visible credit. The badge is restylable (size, position, text color) and can be replaced with your own credit elsewhere in the app; the details are in [the attribution guide](Documentation/docs/attribution.md).
+
+Crediting ImmersiveMap itself is **not** required — the license is MIT and nothing here changes that. But if the engine is useful in your app, a line like this on an about or credits screen is genuinely appreciated:
+
+```text
+Maps powered by ImmersiveMap — immersivemap.dev
+```
+
+And if you ship something built with ImmersiveMap, [say hello in Discussions](https://github.com/artembobkin/ImmersiveMap/discussions) — knowing where the engine ends up is what keeps it moving.
 
 ## Known Limitations
 

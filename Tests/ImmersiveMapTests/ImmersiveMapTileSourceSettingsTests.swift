@@ -281,6 +281,10 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let avatars = ImmersiveMapSettings.default.avatars
         let attribution = ImmersiveMapSettings.AttributionSettings(
             isVisible: false,
+            size: .large,
+            position: .topLeading,
+            textColor: SIMD4<Float>(1, 0, 0, 1),
+            isProvidedExternally: true,
             attributionOverride: ImmersiveMapAttribution(title: "Tiles", copyright: "Copyright")
         )
         let postProcessing = ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true)

@@ -77,4 +77,6 @@ attribution: ImmersiveMapAttribution(
 )
 ```
 
-An app can override the badge text with `attributionSettings(.init(attributionOverride:))` or hide it with `attributionSettings(.init(isVisible: false))`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence.
+`title` is the badge's first line; an empty `copyright` renders a one-line badge, a non-empty one adds a second, smaller line.
+
+An app can override the badge text with `attributionSettings(.init(attributionOverride:))` or hide it with `attributionSettings(isVisible: false)`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence. A map that starts with a hidden or empty badge logs a one-time console warning; an app that shows the credit itself declares that with `.attributionProvidedExternally()`.

@@ -52,12 +52,14 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     }
 
     /// The hosted service serves an OpenFreeMap planet build in the OpenMapTiles
-    /// schema, which is OpenStreetMap data under ODbL. Naming all three is a licence
-    /// requirement, not decoration, so this is what the badge shows out of the box.
+    /// schema, which is OpenStreetMap data under ODbL. The one-line credit names
+    /// the data (OpenStreetMap, per ODbL) and the schema (OpenMapTiles, per its
+    /// attribution terms); the link carries the full story. OpenFreeMap asks for
+    /// no credit of its own.
     public var attribution: ImmersiveMapAttribution {
         ImmersiveMapAttribution(
-            title: "© OpenStreetMap contributors",
-            copyright: "OpenFreeMap © OpenMapTiles",
+            title: "© OpenStreetMap © OpenMapTiles",
+            copyright: "",
             linkURL: URL(string: "https://www.openstreetmap.org/copyright")
         )
     }

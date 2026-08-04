@@ -543,6 +543,36 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Restyles the attribution badge without replacing the whole settings
+    /// value: `nil` leaves a field unchanged. Because of that, `textColor`
+    /// cannot be reset to the default here — pass a full `AttributionSettings`
+    /// to `attributionSettings(_:)` instead.
+    ///
+    ///     ImmersiveMapView()
+    ///         .attributionSettings(size: .large, position: .topLeading)
+    public func attributionSettings(isVisible: Bool? = nil,
+                                    size: ImmersiveMapSettings.AttributionSettings.Size? = nil,
+                                    position: ImmersiveMapSettings.AttributionSettings.Position? = nil,
+                                    textColor: SIMD4<Float>? = nil,
+                                    isProvidedExternally: Bool? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.attributionSettings(isVisible: isVisible,
+                                                          size: size,
+                                                          position: position,
+                                                          textColor: textColor,
+                                                          isProvidedExternally: isProvidedExternally)
+        return view
+    }
+
+    /// Declares that the app shows the data credit itself (its own overlay, an
+    /// about screen), so hiding the badge stops logging the attribution
+    /// warning. The license obligation stays with the app.
+    public func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.attributionProvidedExternally(isProvidedExternally)
+        return view
+    }
+
     public func postProcessingSettings(_ postProcessing: ImmersiveMapSettings.PostProcessingSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.postProcessingSettings(postProcessing)

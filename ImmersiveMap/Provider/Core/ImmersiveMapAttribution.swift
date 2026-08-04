@@ -14,7 +14,7 @@ public struct ImmersiveMapAttribution: Equatable, Sendable {
     /// First line of the badge: the tile source.
     public var title: String
 
-    /// Second line of the badge: data copyrights.
+    /// Optional second line of the badge; empty renders a one-line badge.
     public var copyright: String
 
     /// Where a tap on the badge leads. Usually the data source's license page.
@@ -37,8 +37,8 @@ public struct ImmersiveMapAttribution: Equatable, Sendable {
 
     /// Minimal attribution for OpenStreetMap data (ODbL).
     public static let openStreetMap = ImmersiveMapAttribution(
-        title: "© OpenStreetMap",
-        copyright: "OpenStreetMap contributors",
+        title: "© OpenStreetMap contributors",
+        copyright: "",
         linkURL: URL(string: "https://www.openstreetmap.org/copyright")
     )
 }

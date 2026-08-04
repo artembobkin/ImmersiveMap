@@ -6,41 +6,33 @@
 import AppKit
 
 /// Renders a compact attribution overlay (AppKit).
-/// Owns only the badge labels, styling and layout; map state stays in the surrounding runtimes.
+/// Owns only the badge labels, styling and layout; map state stays in the
+/// surrounding runtimes. Size, position and text color come from
+/// `AttributionSettings`; the geometry lives in `AttributionBadgeLayoutMath`.
 final class AttributionBadgeView: NSView {
-    private enum Layout {
-        static let containerInset: CGFloat = 12
-        static let horizontalInset: CGFloat = 10
-        static let verticalInset: CGFloat = 7
-        static let interLabelSpacing: CGFloat = 2
-        static let maximumWidth: CGFloat = 240
-    }
-
     private let titleLabel = NSTextField(labelWithString: "")
     private let copyrightLabel = NSTextField(labelWithString: "")
     private var linkURL: URL?
+    private var metrics = AttributionBadgeLayoutMath.metrics(for: .regular)
+    private var position = ImmersiveMapSettings.AttributionSettings.Position.bottomTrailing
 
     override var isFlipped: Bool { true }
 
-    convenience init(attribution: ImmersiveMapAttribution, isVisible: Bool) {
+    convenience init(attribution: ImmersiveMapAttribution,
+                     settings: ImmersiveMapSettings.AttributionSettings) {
         self.init(frame: .zero)
-        apply(attribution, isVisible: isVisible)
+        apply(attribution, settings: settings)
     }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.56).cgColor
-        layer?.cornerRadius = 8
         layer?.masksToBounds = true
 
-        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = .white
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
-        copyrightLabel.font = .systemFont(ofSize: 10, weight: .regular)
-        copyrightLabel.textColor = NSColor.white.withAlphaComponent(0.76)
         copyrightLabel.lineBreakMode = .byTruncatingTail
         copyrightLabel.maximumNumberOfLines = 1
 
@@ -66,12 +58,34 @@ final class AttributionBadgeView: NSView {
     }
 
     /// Empty attribution hides the badge entirely: no point drawing an empty plate.
-    func apply(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
-        isHidden = isVisible == false || attribution.isEmpty
+    /// An empty copyright collapses the second line: the field must be hidden,
+    /// not just emptied - an empty NSTextField still measures a nonzero size.
+    func apply(_ attribution: ImmersiveMapAttribution,
+               settings: ImmersiveMapSettings.AttributionSettings) {
+        metrics = AttributionBadgeLayoutMath.metrics(for: settings.size)
+        position = settings.position
+        isHidden = settings.isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL
         titleLabel.stringValue = attribution.title
         copyrightLabel.stringValue = attribution.copyright
+        copyrightLabel.isHidden = attribution.copyright.isEmpty
+        titleLabel.font = .systemFont(ofSize: metrics.titleFontSize, weight: .semibold)
+        copyrightLabel.font = .systemFont(ofSize: metrics.copyrightFontSize, weight: .regular)
+        layer?.cornerRadius = metrics.cornerRadius
+        applyTextColor(settings.textColor)
         needsLayout = true
+    }
+
+    private func applyTextColor(_ textColor: SIMD4<Float>?) {
+        let color = textColor ?? SIMD4<Float>(1, 1, 1, 1)
+        titleLabel.textColor = NSColor(red: CGFloat(color.x),
+                                       green: CGFloat(color.y),
+                                       blue: CGFloat(color.z),
+                                       alpha: CGFloat(color.w))
+        copyrightLabel.textColor = NSColor(red: CGFloat(color.x),
+                                           green: CGFloat(color.y),
+                                           blue: CGFloat(color.z),
+                                           alpha: CGFloat(color.w) * 0.76)
     }
 
     @objc private func handleClick() {
@@ -83,14 +97,18 @@ final class AttributionBadgeView: NSView {
     }
 
     func layout(in bounds: CGRect, safeAreaInsets: NSEdgeInsets) {
-        let availableWidth = max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - Layout.containerInset * 2)
+        let availableWidth = AttributionBadgeLayoutMath.availableWidth(bounds: bounds,
+                                                                       safeAreaInsets: safeAreaInsets,
+                                                                       metrics: metrics)
         let badgeSize = badgeSizeThatFits(CGSize(width: availableWidth,
                                                  height: bounds.height))
-        frame = CGRect(
-            x: bounds.width - safeAreaInsets.right - Layout.containerInset - badgeSize.width,
-            y: bounds.height - safeAreaInsets.bottom - Layout.containerInset - badgeSize.height,
-            width: badgeSize.width,
-            height: badgeSize.height
+        frame = AttributionBadgeLayoutMath.badgeFrame(
+            badgeSize: badgeSize,
+            position: position,
+            bounds: bounds,
+            safeAreaInsets: safeAreaInsets,
+            metrics: metrics,
+            isRightToLeft: userInterfaceLayoutDirection == .rightToLeft
         )
     }
 
@@ -99,38 +117,33 @@ final class AttributionBadgeView: NSView {
             return .zero
         }
 
-        let maximumTextWidth = min(Layout.maximumWidth, size.width) - Layout.horizontalInset * 2
+        let maximumTextWidth = min(metrics.maximumWidth, size.width) - metrics.horizontalInset * 2
         let constrainedSize = CGSize(width: max(0, maximumTextWidth), height: .greatestFiniteMagnitude)
         let titleSize = titleLabel.sizeThatFits(constrainedSize)
-        let copyrightSize = copyrightLabel.sizeThatFits(constrainedSize)
-        let textWidth = max(min(titleSize.width, constrainedSize.width),
-                            min(copyrightSize.width, constrainedSize.width))
-        let width = min(size.width, ceil(textWidth + Layout.horizontalInset * 2))
-        let height = ceil(titleSize.height
-                          + copyrightSize.height
-                          + Layout.interLabelSpacing
-                          + Layout.verticalInset * 2)
+        let copyrightSize = copyrightLabel.isHidden ? .zero : copyrightLabel.sizeThatFits(constrainedSize)
 
-        return CGSize(width: width, height: height)
+        return AttributionBadgeLayoutMath.badgeSize(titleSize: titleSize,
+                                                    copyrightSize: copyrightSize,
+                                                    metrics: metrics,
+                                                    boundingWidth: size.width)
     }
 
     override func layout() {
         super.layout()
 
-        let textFrame = bounds.insetBy(dx: Layout.horizontalInset, dy: Layout.verticalInset)
-        let titleHeight = titleLabel.sizeThatFits(CGSize(width: textFrame.width,
-                                                         height: .greatestFiniteMagnitude)).height
-        let copyrightHeight = copyrightLabel.sizeThatFits(CGSize(width: textFrame.width,
-                                                                 height: .greatestFiniteMagnitude)).height
+        let textWidth = bounds.insetBy(dx: metrics.horizontalInset, dy: metrics.verticalInset).width
+        let constrainedSize = CGSize(width: textWidth, height: .greatestFiniteMagnitude)
+        let titleHeight = titleLabel.sizeThatFits(constrainedSize).height
+        let copyrightHeight = copyrightLabel.isHidden
+            ? 0
+            : copyrightLabel.sizeThatFits(constrainedSize).height
 
-        titleLabel.frame = CGRect(x: textFrame.minX,
-                                  y: textFrame.minY,
-                                  width: textFrame.width,
-                                  height: titleHeight)
-        copyrightLabel.frame = CGRect(x: textFrame.minX,
-                                      y: titleLabel.frame.maxY + Layout.interLabelSpacing,
-                                      width: textFrame.width,
-                                      height: copyrightHeight)
+        let frames = AttributionBadgeLayoutMath.labelFrames(badgeBounds: bounds,
+                                                            titleHeight: titleHeight,
+                                                            copyrightHeight: copyrightHeight,
+                                                            metrics: metrics)
+        titleLabel.frame = frames.title
+        copyrightLabel.frame = frames.copyright
     }
 }
 

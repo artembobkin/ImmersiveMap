@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import CoreGraphics
+import os
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -32,17 +33,37 @@ final class ImmersiveMapControlsRuntime {
                                                isEnabled: controlZones.isZoomZoneEnabled)
         self.scrollZoomGesture = ScrollZoomGesture(mapView: mapView)
         self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
-                                                     isVisible: settings.attribution.isVisible)
+                                                     settings: settings.attribution)
         mapView.addSubview(attributionBadge)
+        Self.warnIfAttributionHidden(settings: settings)
     }
     #else
     init(mapView: ImmersiveMapHostView,
          settings: ImmersiveMapSettings) {
         self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
-                                                     isVisible: settings.attribution.isVisible)
+                                                     settings: settings.attribution)
         mapView.addSubview(attributionBadge)
+        Self.warnIfAttributionHidden(settings: settings)
     }
     #endif
+
+    private static let logger = Logger(subsystem: "ImmersiveMap", category: "Attribution")
+
+    /// The app hid the badge (or emptied the attribution) at map startup and
+    /// did not declare its own credit: remind once per process that the data
+    /// license still requires visible attribution near the map.
+    private static func warnIfAttributionHidden(settings: ImmersiveMapSettings) {
+        guard AttributionHiddenNotice.isWarningWarranted(for: settings),
+              AttributionHiddenNotice.shared.shouldLog() else {
+            return
+        }
+        logger.warning("""
+        ImmersiveMap: the attribution badge is hidden or empty, but map data licenses \
+        (ODbL for OpenStreetMap data) require visible attribution near the map. Show the \
+        data credit in your app, or make the badge visible. If your app already shows the \
+        credit, declare it with .attributionProvidedExternally() to silence this warning.
+        """)
+    }
 
     func layout(in bounds: CGRect,
                 safeAreaInsets: PlatformEdgeInsets) {
@@ -62,8 +83,9 @@ final class ImmersiveMapControlsRuntime {
         #endif
     }
 
-    func applyAttribution(_ attribution: ImmersiveMapAttribution, isVisible: Bool) {
-        attributionBadge.apply(attribution, isVisible: isVisible)
+    func applyAttribution(_ attribution: ImmersiveMapAttribution,
+                          settings: ImmersiveMapSettings.AttributionSettings) {
+        attributionBadge.apply(attribution, settings: settings)
     }
 
     func applyControlZones(_ controlZones: ImmersiveMapSettings.CameraSettings.ControlZoneSettings) {
