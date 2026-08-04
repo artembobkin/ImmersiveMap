@@ -84,8 +84,6 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |
 | Camera flights and scripted tours | Available |
 | Disk / memory tile cache | Available |
-| Offline maps | Planned |
-| 3D Tiles | Planned |
 
 ## App size
 
@@ -141,7 +139,6 @@ And if you ship something built with ImmersiveMap, [say hello in Discussions](ht
 ## Known Limitations
 
 - Apple platforms only. Requires Metal.
-- Offline maps and 3D tiles are not implemented yet.
 - App size is measured (see [App size](#app-size)), frame time and memory numbers are not published yet.
 - Maintained by one person. Issues and integration questions are answered quickly, but plan accordingly.
 
@@ -159,7 +156,7 @@ ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE).
 
 I am available for consulting and custom ImmersiveMap integrations.
 
-To get in touch, start a [discussion](https://github.com/artembobkin/ImmersiveMap/discussions).
+To get in touch, start a [discussion](https://github.com/artembobkin/ImmersiveMap/discussions), or write to me in the chat at [immersivemap.dev/account](https://immersivemap.dev/account/).
 
 ## Screenshots
 
