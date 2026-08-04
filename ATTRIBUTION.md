@@ -1,8 +1,23 @@
 # Attribution
 
-Map data carries license obligations. The most common one — ODbL for OpenStreetMap data — requires visible credit in your app. ImmersiveMap handles that with a small badge over the map; this guide covers what the credit has to say, where it has to appear, what the engine does for you, and what stays with your app.
+**In one line: the map data credit has to stay visible wherever the map is.** Not on a Settings page, not one tap away — on the map or right next to it.
 
-This is a practical summary written by the project, not legal advice. The authoritative texts are linked at the bottom.
+The engine does it for you. A plain map is already compliant:
+
+```swift
+ImmersiveMapView()                                  // badge shown, nothing to do
+
+ImmersiveMapView()                                  // move it, resize it, recolor it
+    .attributionSettings(size: .small, position: .topLeading)
+
+ImmersiveMapView()                                  // draw the credit yourself instead
+    .attributionSettings(isVisible: false)
+    .attributionProvidedExternally()
+```
+
+That is the whole API. With the built-in tiles the credit reads **© OpenStreetMap © OpenMapTiles**; if you draw it yourself, that is the text to show, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
+
+The rest of this page is the detail: what each tile source requires, why the placement rule is what it is, and who carries the obligation. It is a practical summary written by the project, not legal advice — the authoritative texts are linked at the bottom.
 
 ## What has to be shown
 
