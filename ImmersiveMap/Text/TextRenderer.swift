@@ -153,7 +153,6 @@ class TextRenderer {
     private var device: MTLDevice!
     var texture: MTLTexture!
     var thinTexture: MTLTexture!
-    private var commandQueue: MTLCommandQueue!
     private var bundle: Bundle!
     var atlasData: AtlasData!
     var thinAtlasData: AtlasData!
@@ -174,7 +173,6 @@ class TextRenderer {
         self.device = device
         self.library = library
         self.sampleCount = sampleCount
-        self.commandQueue = device.makeCommandQueue()!
         self.bundle = .module
         
         loadAtlasTexture()

@@ -50,16 +50,11 @@ final class StarfieldRenderer {
     private var cachedProjection: matrix_float4x4?
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
-         library: MTLLibrary,
-         sampleCount: Int = 1,
+         pipeline: StarfieldPipeline,
          spaceColor: SIMD4<Double>,
          transitionTargetColor: SIMD4<Double>,
          config: ImmersiveMapSettings.StarfieldSettings) {
-        pipeline = StarfieldPipeline(metalDevice: metalDevice,
-                                     layer: layer,
-                                     library: library,
-                                     sampleCount: sampleCount)
+        self.pipeline = pipeline
         self.config = config
         backgroundParams = Self.makeBackgroundParams(spaceColor: spaceColor,
                                                      transitionTargetColor: transitionTargetColor)

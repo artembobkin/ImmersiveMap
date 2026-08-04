@@ -5,21 +5,22 @@ import Metal
 import MetalKit
 
 enum RendererSetup {
-    static func buildMetal(layer: CAMetalLayer) -> RenderMetalContext {
-        guard let metalDevice = MTLCreateSystemDefaultDevice() else {
-            fatalError("Metal не поддерживается на этом устройстве")
-        }
-        layer.device = metalDevice
-        layer.pixelFormat = .bgra8Unorm
-        guard let queue = metalDevice.makeCommandQueue() else {
+    /// The per-view half of the Metal bootstrap: stamps the shared device and
+    /// color format onto this view's layer and creates the view's own command
+    /// queue. Device, library and sample count come from the process-wide
+    /// shared resources.
+    @MainActor
+    static func buildMetal(layer: CAMetalLayer,
+                           sharedResources: SharedRenderResources) -> RenderMetalContext {
+        layer.device = sharedResources.device
+        layer.pixelFormat = sharedResources.colorPixelFormat
+        guard let queue = sharedResources.device.makeCommandQueue() else {
             fatalError("Не удалось создать command queue")
         }
-        let bundle = Bundle.module
-        let library = makeLibrary(metalDevice: metalDevice, bundle: bundle)
-        return RenderMetalContext(device: metalDevice,
+        return RenderMetalContext(device: sharedResources.device,
                                   commandQueue: queue,
-                                  library: library,
-                                  renderSampleCount: preferredRenderSampleCount(metalDevice: metalDevice))
+                                  library: sharedResources.library,
+                                  renderSampleCount: sharedResources.renderSampleCount)
     }
 
     static func preferredRenderSampleCount(metalDevice: MTLDevice) -> Int {

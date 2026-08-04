@@ -26,7 +26,7 @@ class ExtrudedTilePipeline {
     }
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
         let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
@@ -53,14 +53,14 @@ class ExtrudedTilePipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
-        pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
 
         let compositeDescriptor = MTLRenderPipelineDescriptor()
         compositeDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedCompositeVertexShader")
         compositeDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedCompositeFragmentShader")
         compositeDescriptor.rasterSampleCount = sampleCount
-        compositeDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        compositeDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         compositeDescriptor.depthAttachmentPixelFormat = .depth32Float
         // Premultiplied alpha: the building image color is already multiplied by the silhouette coverage.
         compositeDescriptor.colorAttachments[0].isBlendingEnabled = true

@@ -19,7 +19,8 @@ enum RenderGraphFactory {
                                                            roadLabelCache: context.roadLabelCache,
                                                            baseLabelTraceRecorder: context.baseLabelTraceRecorder,
                                                            metalDevice: context.metalContext.device,
-                                                           library: context.metalContext.library,
+                                                           screenComputePipelines: context.tilePointScreenPipelines,
+                                                           roadPlacementPipeline: context.roadLabelPlacementPipeline,
                                                            settings: settings.labels,
                                                            debugOverlayControls: debugOverlayControls)
         let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,

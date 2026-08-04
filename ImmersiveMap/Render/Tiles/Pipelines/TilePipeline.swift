@@ -15,7 +15,7 @@ class TilePipeline {
     }
     
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
         let vertexFunction = library.makeFunction(name: "tileVertexShader")
@@ -39,7 +39,7 @@ class TilePipeline {
         pipelineDescriptor.rasterSampleCount = sampleCount
         
         
-        pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add

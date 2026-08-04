@@ -77,19 +77,18 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
          roadLabelCache: RoadLabelCache? = nil,
          baseLabelTraceRecorder: BaseLabelTraceRecorder = BaseLabelTraceRecorder(),
          metalDevice: MTLDevice,
-         library: MTLLibrary,
+         screenComputePipelines: TilePointScreenPipelines,
+         roadPlacementPipeline: RoadLabelPlacementPipeline,
          settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels,
          debugOverlayControls: DebugOverlayControlState? = nil) {
         self.baseLabelCache = baseLabelCache
         self.roadLabelCache = roadLabelCache
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.debugOverlayControls = debugOverlayControls
-        let screenComputePipelines = TilePointScreenPipelines(metalDevice: metalDevice, library: library)
         self.screenComputePipelines = screenComputePipelines
         self.baseScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
         self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
-        self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: RoadLabelPlacementPipeline(metalDevice: metalDevice,
-                                                                                                         library: library))
+        self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: roadPlacementPipeline)
         self.roadRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                          slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                          options: [.storageModeShared])
@@ -100,62 +99,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.fadeOutSeconds = settings.base.fadeOutSeconds
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
         self.collisionGridCellSizePx = max(8.0, settings.base.gridCellSizePx)
-    }
-
-    convenience init(baseLabelCache: BaseLabelCache,
-                     roadLabelCache: RoadLabelCache? = nil,
-                     metalDevice: MTLDevice,
-                     settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels) {
-        let bundle = Bundle.module
-        let library = RendererSetup.makeLibrary(metalDevice: metalDevice, bundle: bundle)
-        self.init(baseLabelCache: baseLabelCache,
-                  roadLabelCache: roadLabelCache,
-                  metalDevice: metalDevice,
-                  library: library,
-                  settings: settings)
-    }
-
-    convenience init(baseLabelCache: BaseLabelCache,
-                     roadLabelCache: RoadLabelCache? = nil,
-                     metalDevice: MTLDevice,
-                     library: MTLLibrary,
-                     gridCellSizePx: Float,
-                     fadeInSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeInSeconds,
-                     fadeOutSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeOutSeconds,
-                     roadGridCellSizePx: Float = ImmersiveMapSettings.default.labels.road.gridCellSizePx,
-                     maxGlyphTurnRadians: Float = ImmersiveMapSettings.default.labels.road.maxGlyphTurnRadians) {
-        var settings = ImmersiveMapSettings.default.labels
-        settings.base.gridCellSizePx = gridCellSizePx
-        settings.base.fadeInSeconds = fadeInSeconds
-        settings.base.fadeOutSeconds = fadeOutSeconds
-        settings.road.gridCellSizePx = roadGridCellSizePx
-        settings.road.maxGlyphTurnRadians = maxGlyphTurnRadians
-        self.init(baseLabelCache: baseLabelCache,
-                  roadLabelCache: roadLabelCache,
-                  metalDevice: metalDevice,
-                  library: library,
-                  settings: settings)
-    }
-
-    convenience init(baseLabelCache: BaseLabelCache,
-                     roadLabelCache: RoadLabelCache? = nil,
-                     metalDevice: MTLDevice,
-                     gridCellSizePx: Float,
-                     fadeInSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeInSeconds,
-                     fadeOutSeconds: TimeInterval = ImmersiveMapSettings.default.labels.base.fadeOutSeconds,
-                     roadGridCellSizePx: Float = ImmersiveMapSettings.default.labels.road.gridCellSizePx,
-                     maxGlyphTurnRadians: Float = ImmersiveMapSettings.default.labels.road.maxGlyphTurnRadians) {
-        let bundle = Bundle.module
-        let library = RendererSetup.makeLibrary(metalDevice: metalDevice, bundle: bundle)
-        self.init(baseLabelCache: baseLabelCache,
-                  roadLabelCache: roadLabelCache,
-                  metalDevice: metalDevice,
-                  library: library,
-                  gridCellSizePx: gridCellSizePx,
-                  fadeInSeconds: fadeInSeconds,
-                  fadeOutSeconds: fadeOutSeconds,
-                  roadGridCellSizePx: roadGridCellSizePx,
-                  maxGlyphTurnRadians: maxGlyphTurnRadians)
     }
 
     func update(frameContext: FrameContext) {

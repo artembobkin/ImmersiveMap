@@ -72,32 +72,56 @@ final class AvatarsRenderer {
     private var fadeInSeconds: TimeInterval { ImmersiveMapSettings.default.labels.base.fadeInSeconds }
     private var fadeOutSeconds: TimeInterval { ImmersiveMapSettings.default.labels.base.fadeOutSeconds }
 
+    /// The device-only avatar drawing resources: five pipeline states and the
+    /// marker SDF texture/metrics. One set serves every map view in the
+    /// process; everything mutable stays in the per-view renderer.
+    struct SharedResources {
+        let avatarPipeline: AvatarPipeline
+        let beamPipeline: AvatarBeamPipeline
+        let batteryBadgePipeline: AvatarBatteryBadgePipeline
+        let speedBadgePipeline: AvatarSpeedBadgePipeline
+        let countBadgePipeline: AvatarCountBadgePipeline
+        let markerSDF: AvatarMarkerSDFResource
+
+        static func make(metalDevice: MTLDevice,
+                         pixelFormat: MTLPixelFormat,
+                         library: MTLLibrary,
+                         sampleCount: Int = 1) -> SharedResources {
+            SharedResources(
+                avatarPipeline: AvatarPipeline(metalDevice: metalDevice,
+                                               pixelFormat: pixelFormat,
+                                               library: library,
+                                               sampleCount: sampleCount),
+                beamPipeline: AvatarBeamPipeline(metalDevice: metalDevice,
+                                                 pixelFormat: pixelFormat,
+                                                 library: library,
+                                                 sampleCount: sampleCount),
+                batteryBadgePipeline: AvatarBatteryBadgePipeline(metalDevice: metalDevice,
+                                                                 pixelFormat: pixelFormat,
+                                                                 library: library,
+                                                                 sampleCount: sampleCount),
+                speedBadgePipeline: AvatarSpeedBadgePipeline(metalDevice: metalDevice,
+                                                             pixelFormat: pixelFormat,
+                                                             library: library,
+                                                             sampleCount: sampleCount),
+                countBadgePipeline: AvatarCountBadgePipeline(metalDevice: metalDevice,
+                                                             pixelFormat: pixelFormat,
+                                                             library: library,
+                                                             sampleCount: sampleCount),
+                markerSDF: try! AvatarMarkerSDFResource(device: metalDevice)
+            )
+        }
+    }
+
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
-         library: MTLLibrary,
-         sampleCount: Int = 1,
+         sharedResources: SharedResources,
          config: ImmersiveMapSettings.AvatarSettings) {
         self.config = config
-        self.avatarPipeline = AvatarPipeline(metalDevice: metalDevice,
-                                             layer: layer,
-                                             library: library,
-                                             sampleCount: sampleCount)
-        self.beamPipeline = AvatarBeamPipeline(metalDevice: metalDevice,
-                                               layer: layer,
-                                               library: library,
-                                               sampleCount: sampleCount)
-        self.batteryBadgePipeline = AvatarBatteryBadgePipeline(metalDevice: metalDevice,
-                                                               layer: layer,
-                                                               library: library,
-                                                               sampleCount: sampleCount)
-        self.speedBadgePipeline = AvatarSpeedBadgePipeline(metalDevice: metalDevice,
-                                                           layer: layer,
-                                                           library: library,
-                                                           sampleCount: sampleCount)
-        self.countBadgePipeline = AvatarCountBadgePipeline(metalDevice: metalDevice,
-                                                           layer: layer,
-                                                           library: library,
-                                                           sampleCount: sampleCount)
+        self.avatarPipeline = sharedResources.avatarPipeline
+        self.beamPipeline = sharedResources.beamPipeline
+        self.batteryBadgePipeline = sharedResources.batteryBadgePipeline
+        self.speedBadgePipeline = sharedResources.speedBadgePipeline
+        self.countBadgePipeline = sharedResources.countBadgePipeline
         self.instanceBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                   slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                   options: [.storageModeShared])
@@ -126,7 +150,7 @@ final class AvatarsRenderer {
                                cellSize: config.size.rawValue,
                                pagesMax: config.atlasPagesMax)
         }
-        let markerSDF = try! AvatarMarkerSDFResource(device: metalDevice)
+        let markerSDF = sharedResources.markerSDF
         self.markerSDF = markerSDF
         let markerSizePx = Float(config.size.rawValue) * config.sizeScale
         let markerStyle = AvatarMarkerStyle(sizePx: markerSizePx,

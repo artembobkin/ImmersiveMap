@@ -14,7 +14,7 @@ class SceneModelPipeline {
     let whiteTexture: MTLTexture
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
         let vertexFunction = library.makeFunction(name: "sceneModelVertexShader")
@@ -39,7 +39,7 @@ class SceneModelPipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
-        pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)

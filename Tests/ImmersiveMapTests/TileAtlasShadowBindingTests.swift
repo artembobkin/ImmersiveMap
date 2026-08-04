@@ -23,9 +23,8 @@ final class TileAtlasShadowBindingTests: XCTestCase {
             throw XCTSkip("Command queue is unavailable")
         }
 
-        let layer = CAMetalLayer()
         let tilePipeline = TilePipeline(metalDevice: device,
-                                        layer: layer,
+                                        pixelFormat: .bgra8Unorm,
                                         library: library,
                                         sampleCount: 1)
 

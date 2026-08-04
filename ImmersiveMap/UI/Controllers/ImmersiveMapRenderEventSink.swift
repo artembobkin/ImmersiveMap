@@ -13,6 +13,9 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
     private weak var markerRuntime: ImmersiveMapMarkerRuntime?
     private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore
+    // Written and read on the main actor only (invalidateDelivery from the
+    // teardown paths, the guard inside the delivery hop).
+    nonisolated(unsafe) private var isDeliveryInvalidated = false
 
     init(renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
@@ -32,8 +35,21 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
         renderRuntime?.applyRenderActivityState(state)
     }
 
+    /// Cuts snapshot delivery when the engine feeding this sink is discarded.
+    /// An in-flight frame's GPU completion can land after a renderer
+    /// recreation; its snapshot carries the OLD engine's high frame index and
+    /// would win the monotonic guard against the successor's reset state.
+    /// Call on the main thread (every discard path — recreation, pool drop,
+    /// export teardown — runs there).
+    func invalidateDelivery() {
+        isDeliveryInvalidated = true
+    }
+
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {
-        Task { @MainActor [weak selectionHandler] in
+        Task { @MainActor [weak selectionHandler, self] in
+            guard self.isDeliveryInvalidated == false else {
+                return
+            }
             selectionHandler?.updateAvatarSelectionSnapshot(snapshot)
         }
     }

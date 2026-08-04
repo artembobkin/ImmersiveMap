@@ -15,12 +15,12 @@ final class FXAAPipeline {
     private let pipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary) {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.vertexFunction = library.makeFunction(name: "postProcessingVertexShader")
         descriptor.fragmentFunction = library.makeFunction(name: "fxaaFragmentShader")
-        descriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        descriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
     }
 

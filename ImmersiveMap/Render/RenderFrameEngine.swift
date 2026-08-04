@@ -11,6 +11,12 @@ final class RenderFrameEngine {
     // MARK: - Dependencies
 
     private let persistentContext: RenderPersistentContext
+
+    #if DEBUG
+    var persistentContextForTesting: RenderPersistentContext {
+        persistentContext
+    }
+    #endif
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
     private let renderGraph: RenderGraph
@@ -34,6 +40,10 @@ final class RenderFrameEngine {
 
     // MARK: - Initialization
 
+    /// `@MainActor`: renderer creation resolves the process-wide
+    /// ``SharedRenderResources``, and every production and test creation path
+    /// already runs on the main actor.
+    @MainActor
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
@@ -132,6 +142,17 @@ final class RenderFrameEngine {
         presentationStateResolver.applySettings(settings)
         persistentContext.applySettings(settings)
         self.settings = settings
+    }
+
+    // MARK: - Teardown
+
+    /// Called when this engine is being discarded while the process lives on
+    /// (renderer recreation, view-reuse pool drop, export teardown): stops the
+    /// tile loader and cuts late event deliveries from in-flight GPU frames,
+    /// which would otherwise resurrect state a successor has just reset.
+    func prepareForDiscard() {
+        persistentContext.tileRenderStore.cancelLoading()
+        (eventSink as? ImmersiveMapRenderEventSink)?.invalidateDelivery()
     }
 
     // MARK: - Memory

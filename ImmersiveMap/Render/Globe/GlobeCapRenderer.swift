@@ -25,55 +25,73 @@ final class GlobeCapRenderer {
     private let fallbackTexture: MTLTexture
     private let palette: GlobeCapPalette
 
-    init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
-         library: MTLLibrary,
-         sampleCount: Int = 1,
+    /// The style-independent half of the renderer: the pipeline, the polar cap
+    /// grids and the fallback texture are pure functions of the device, so one
+    /// set serves every map view in the process. Only the palette bakes style
+    /// colors and stays per instance.
+    struct SharedResources {
+        let pipeline: GlobeCapPipeline
+        let northCapBuffers: MapSurfaceGridBuffers
+        let southCapBuffers: MapSurfaceGridBuffers
+        let fallbackTexture: MTLTexture
+
+        static func make(metalDevice: MTLDevice,
+                         pixelFormat: MTLPixelFormat,
+                         library: MTLLibrary,
+                         sampleCount: Int,
+                         maxLatitude: Double,
+                         stacks: Int = 12,
+                         slices: Int = 48) -> SharedResources {
+            let maxLatitude = Float(maxLatitude)
+            let northCap = CapGeometry.createCapGrid(stacks: stacks,
+                                                     slices: slices,
+                                                     isNorth: true,
+                                                     maxLatitude: maxLatitude)
+            let southCap = CapGeometry.createCapGrid(stacks: stacks,
+                                                     slices: slices,
+                                                     isNorth: false,
+                                                     maxLatitude: maxLatitude)
+            return SharedResources(
+                pipeline: GlobeCapPipeline(metalDevice: metalDevice,
+                                           pixelFormat: pixelFormat,
+                                           library: library,
+                                           sampleCount: sampleCount),
+                northCapBuffers: MapSurfaceGridBuffers(
+                    verticesBuffer: metalDevice.makeBuffer(
+                        bytes: northCap.vertices,
+                        length: MemoryLayout<CapGeometry.Vertex>.stride * northCap.vertices.count
+                    )!,
+                    indicesBuffer: metalDevice.makeBuffer(
+                        bytes: northCap.indices,
+                        length: MemoryLayout<UInt32>.stride * northCap.indices.count
+                    )!,
+                    indicesCount: northCap.indices.count
+                ),
+                southCapBuffers: MapSurfaceGridBuffers(
+                    verticesBuffer: metalDevice.makeBuffer(
+                        bytes: southCap.vertices,
+                        length: MemoryLayout<CapGeometry.Vertex>.stride * southCap.vertices.count
+                    )!,
+                    indicesBuffer: metalDevice.makeBuffer(
+                        bytes: southCap.indices,
+                        length: MemoryLayout<UInt32>.stride * southCap.indices.count
+                    )!,
+                    indicesCount: southCap.indices.count
+                ),
+                fallbackTexture: GlobeCapRenderer.makeFallbackTexture(metalDevice: metalDevice)
+            )
+        }
+    }
+
+    init(sharedResources: SharedResources,
          maxLatitude: Double,
-         mapBaseColors: ImmersiveMapBaseColors,
-         stacks: Int = 12,
-         slices: Int = 48) {
-        pipeline = GlobeCapPipeline(metalDevice: metalDevice,
-                                    layer: layer,
-                                    library: library,
-                                    sampleCount: sampleCount)
-        fallbackTexture = Self.makeFallbackTexture(metalDevice: metalDevice)
-
-        let maxLatitude = Float(maxLatitude)
-        let northCap = CapGeometry.createCapGrid(stacks: stacks,
-                                                 slices: slices,
-                                                 isNorth: true,
-                                                 maxLatitude: maxLatitude)
-        let southCap = CapGeometry.createCapGrid(stacks: stacks,
-                                                 slices: slices,
-                                                 isNorth: false,
-                                                 maxLatitude: maxLatitude)
-
-        northCapBuffers = MapSurfaceGridBuffers(
-            verticesBuffer: metalDevice.makeBuffer(
-                bytes: northCap.vertices,
-                length: MemoryLayout<CapGeometry.Vertex>.stride * northCap.vertices.count
-            )!,
-            indicesBuffer: metalDevice.makeBuffer(
-                bytes: northCap.indices,
-                length: MemoryLayout<UInt32>.stride * northCap.indices.count
-            )!,
-            indicesCount: northCap.indices.count
-        )
-        southCapBuffers = MapSurfaceGridBuffers(
-            verticesBuffer: metalDevice.makeBuffer(
-                bytes: southCap.vertices,
-                length: MemoryLayout<CapGeometry.Vertex>.stride * southCap.vertices.count
-            )!,
-            indicesBuffer: metalDevice.makeBuffer(
-                bytes: southCap.indices,
-                length: MemoryLayout<UInt32>.stride * southCap.indices.count
-            )!,
-            indicesCount: southCap.indices.count
-        )
-
+         mapBaseColors: ImmersiveMapBaseColors) {
+        pipeline = sharedResources.pipeline
+        northCapBuffers = sharedResources.northCapBuffers
+        southCapBuffers = sharedResources.southCapBuffers
+        fallbackTexture = sharedResources.fallbackTexture
         palette = Self.makePalette(mapBaseColors: mapBaseColors,
-                                   maxLatitude: maxLatitude)
+                                   maxLatitude: Float(maxLatitude))
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,

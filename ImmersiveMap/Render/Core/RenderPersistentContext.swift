@@ -7,6 +7,9 @@ import QuartzCore
 
 /// Long-lived renderer lifecycle context: gathers Metal resources, caches and renderer services
 /// reused by the subsystem graph and frame pipeline across frames.
+/// Immutable GPU resources (library, pipelines, atlases, static geometry) come
+/// from the process-wide ``SharedRenderResources`` and are only referenced
+/// here; everything mutable is created per renderer.
 final class RenderPersistentContext {
     // MARK: - Metal Core
 
@@ -20,6 +23,8 @@ final class RenderPersistentContext {
     let extrudedTilePipeline: ExtrudedTilePipeline
     let globePipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
+    let tilePointScreenPipelines: TilePointScreenPipelines
+    let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
 
     // MARK: - Scene Resources
 
@@ -64,6 +69,7 @@ final class RenderPersistentContext {
 
     // MARK: - Initialization
 
+    @MainActor
     init(layer: CAMetalLayer,
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
@@ -73,43 +79,45 @@ final class RenderPersistentContext {
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
          baseLabelTraceRecorder: BaseLabelTraceRecorder) {
-        let metal = RendererSetup.buildMetal(layer: layer)
+        let shared = SharedRenderResources.shared()
+        let metal = RendererSetup.buildMetal(layer: layer, sharedResources: shared)
         self.metalContext = metal
         self.tileTraceRecorder = tileTraceRecorder
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.tileLoadingStatusReporter = config.debug.enableDebugPanel ? TileLoadingStatusReporter() : nil
 
-        self.extrudedDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
-        self.globeCapDepthState = metal.device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
-        self.depthDisabledState = metal.device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
-        self.shadowFallbackTexture = Self.makeShadowFallbackTexture(metalContext: metal)
+        self.extrudedDepthState = shared.extrudedDepthState
+        self.globeCapDepthState = shared.globeCapDepthState
+        self.depthDisabledState = shared.depthDisabledState
+        self.shadowFallbackTexture = shared.shadowFallbackTexture
 
         let mapBaseColors = providerRuntime.mapBaseColors
 
-        let pipelineFactory = RenderPipelineFactory(metalContext: metal,
-                                                    layer: layer,
-                                                    config: config)
-        let pipelines = pipelineFactory.makeRenderPipelines()
-        self.polygonPipeline = pipelines.polygonPipeline
-        self.tilePipeline = pipelines.tilePipeline
-        self.globeTileTexturePipeline = pipelines.globeTileTexturePipeline
-        self.extrudedTilePipeline = pipelines.extrudedTilePipeline
-        self.globePipeline = pipelines.globePipeline
-        self.fxaaPipeline = pipelines.fxaaPipeline
-        self.starfieldRenderer = pipelines.starfieldRenderer
+        self.polygonPipeline = shared.polygonPipeline
+        self.tilePipeline = shared.tilePipeline
+        self.globeTileTexturePipeline = shared.globeTileTexturePipeline
+        self.extrudedTilePipeline = shared.extrudedTilePipeline
+        self.globePipeline = shared.globePipeline
+        self.fxaaPipeline = shared.fxaaPipeline
+        self.tilePointScreenPipelines = shared.tilePointScreenPipelines
+        self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline
+        // The starfield renderer bakes scene colors and star-generation
+        // settings, so it stays per renderer; only its pipelines are shared.
+        self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,
+                                                   pipeline: shared.starfieldPipeline,
+                                                   spaceColor: config.scene.space.clearColor,
+                                                   transitionTargetColor: config.scene.mapClearColor,
+                                                   config: config.scene.starfield)
 
-        self.mapSurfaceGridBuffers = RendererSetup.makeMapSurfaceGridBuffers(metalDevice: metal.device)
+        self.mapSurfaceGridBuffers = shared.mapSurfaceGridBuffers
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
-        self.globeCapRenderer = GlobeCapRenderer(metalDevice: metal.device,
-                                                 layer: layer,
-                                                 library: metal.library,
-                                                 sampleCount: metal.renderSampleCount,
+        // The cap palette bakes style colors; grids, pipeline and fallback
+        // texture come from the shared set.
+        self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  mapBaseColors: mapBaseColors)
-        self.textRenderer = TextRenderer(device: metal.device,
-                                         library: metal.library,
-                                         sampleCount: 1)
-        self.poiSpriteAtlas = PoiSpriteAtlas(device: metal.device)
+        self.textRenderer = shared.textRenderer
+        self.poiSpriteAtlas = shared.poiSpriteAtlas
         self.tilesTexture = TileAtlasTexture(metalDevice: metal.device,
                                               tilePipeline: globeTileTexturePipeline,
                                               shadowFallbackTexture: shadowFallbackTexture,
@@ -128,17 +136,12 @@ final class RenderPersistentContext {
         self.sceneModelSource = sceneModelSource
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)
         self.sceneModelMeshStore.eventSink = eventSink
-        self.sceneModelPipeline = SceneModelPipeline(metalDevice: metal.device,
-                                                     layer: layer,
-                                                     library: metal.library,
-                                                     sampleCount: metal.renderSampleCount)
+        self.sceneModelPipeline = shared.sceneModelPipeline
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource
         self.avatarsRenderer = AvatarsRenderer(metalDevice: metal.device,
-                                               layer: layer,
-                                               library: metal.library,
-                                               sampleCount: 1,
+                                               sharedResources: shared.avatars,
                                                config: config.avatars)
         self.debugOverlayRenderer = DebugOverlayRenderer(metalDevice: metal.device, settings: config.debug)
     }
@@ -149,51 +152,4 @@ final class RenderPersistentContext {
         debugOverlayRenderer.apply(settings: settings.debug)
     }
 
-    // MARK: - Shadow Fallback
-
-    private static func makeShadowFallbackTexture(metalContext: RenderMetalContext) -> MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
-                                                                  width: 1,
-                                                                  height: 1,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .private
-        let texture = metalContext.device.makeTexture(descriptor: descriptor)!
-        texture.label = "ShadowFallbackTexture"
-
-        let passDescriptor = MTLRenderPassDescriptor()
-        passDescriptor.depthAttachment.texture = texture
-        passDescriptor.depthAttachment.loadAction = .clear
-        passDescriptor.depthAttachment.storeAction = .store
-        passDescriptor.depthAttachment.clearDepth = 1.0
-        if let commandBuffer = metalContext.makeCommandBuffer(),
-           let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) {
-            encoder.endEncoding()
-            commandBuffer.commit()
-        }
-        return texture
-    }
-
-    // MARK: - Depth States
-
-    private static func makeSceneDepthDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .lessEqual
-        descriptor.isDepthWriteEnabled = true
-        return descriptor
-    }
-
-    private static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .lessEqual
-        descriptor.isDepthWriteEnabled = false
-        return descriptor
-    }
-
-    private static func makeDepthDisabledDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .always
-        descriptor.isDepthWriteEnabled = false
-        return descriptor
-    }
 }

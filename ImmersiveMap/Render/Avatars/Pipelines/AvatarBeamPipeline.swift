@@ -10,11 +10,11 @@ final class AvatarBeamPipeline {
     let beamPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
         self.beamPipelineState = Self.makePipelineState(metalDevice: metalDevice,
-                                                        layer: layer,
+                                                        pixelFormat: pixelFormat,
                                                         library: library,
                                                         sampleCount: sampleCount,
                                                         vertexFunctionName: "avatarBeamVertex",
@@ -26,7 +26,7 @@ final class AvatarBeamPipeline {
     }
 
     private static func makePipelineState(metalDevice: MTLDevice,
-                                          layer: CAMetalLayer,
+                                          pixelFormat: MTLPixelFormat,
                                           library: MTLLibrary,
                                           sampleCount: Int,
                                           vertexFunctionName: String,
@@ -38,7 +38,7 @@ final class AvatarBeamPipeline {
         pipelineDescriptor.vertexFunction = vertexFunction
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.rasterSampleCount = sampleCount
-        pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add

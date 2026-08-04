@@ -18,7 +18,7 @@ final class StarfieldPipeline {
     let sunPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
-         layer: CAMetalLayer,
+         pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
         let backgroundVertexFunction = library.makeFunction(name: "starfieldBackgroundVertexShader")
@@ -54,7 +54,7 @@ final class StarfieldPipeline {
         backgroundDescriptor.vertexFunction = backgroundVertexFunction
         backgroundDescriptor.fragmentFunction = backgroundFragmentFunction
         backgroundDescriptor.rasterSampleCount = sampleCount
-        backgroundDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        backgroundDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         backgroundDescriptor.depthAttachmentPixelFormat = .depth32Float
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
@@ -62,7 +62,7 @@ final class StarfieldPipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
-        pipelineDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
@@ -76,7 +76,7 @@ final class StarfieldPipeline {
         sunDescriptor.vertexFunction = sunVertexFunction
         sunDescriptor.fragmentFunction = sunFragmentFunction
         sunDescriptor.rasterSampleCount = sampleCount
-        sunDescriptor.colorAttachments[0].pixelFormat = layer.pixelFormat
+        sunDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         sunDescriptor.depthAttachmentPixelFormat = .depth32Float
         sunDescriptor.colorAttachments[0].isBlendingEnabled = true
         sunDescriptor.colorAttachments[0].rgbBlendOperation = .add
