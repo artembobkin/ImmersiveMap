@@ -8,14 +8,33 @@
 // Compliant as is: the badge is on and credits the active tile source.
 ImmersiveMapView()
 
-// Restyle it (size, corner, color). The credit text stays.
+// Restyle it. Every parameter is optional; nil leaves that field unchanged.
 ImmersiveMapView()
-    .attributionSettings(size: .small, position: .topLeading)
+    .attributionSettings(
+        isVisible: true,                        // false hides the badge
+        size: .small,                           // .small | .regular (default) | .large
+        position: .topLeading,                  // .bottomTrailing (default) | .bottomLeading
+                                                // .topTrailing | .topLeading
+                                                // .bottomCenter | .topCenter
+        textColor: SIMD4<Float>(1, 1, 1, 1),    // RGBA 0...1, nil keeps white
+        isProvidedExternally: false             // true when your UI shows the credit
+    )
 
 // Or hide it and draw the credit in your own UI, on the same screen.
 ImmersiveMapView()
     .attributionSettings(isVisible: false)
     .attributionProvidedExternally()
+
+// Full value, the only way to reset textColor or replace the credit text.
+ImmersiveMapView()
+    .attributionSettings(ImmersiveMapSettings.AttributionSettings(
+        isVisible: true,
+        size: .regular,
+        position: .bottomTrailing,
+        textColor: nil,
+        isProvidedExternally: false,
+        attributionOverride: nil                // ImmersiveMapAttribution(title:copyright:linkURL:)
+    ))
 ```
 
 With the built-in tiles the credit reads **© OpenStreetMap © OpenMapTiles**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
