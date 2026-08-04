@@ -140,7 +140,6 @@ And if you ship something built with ImmersiveMap, [say hello in Discussions](ht
 
 ## Known Limitations
 
-- Not a drop-in replacement for Mapbox, MapLibre, or MapKit. Its own API, so adopting it means writing the map layer against ImmersiveMap.
 - Apple platforms only. Requires Metal.
 - Offline maps and 3D tiles are not implemented yet.
 - App size is measured (see [App size](#app-size)), frame time and memory numbers are not published yet.
