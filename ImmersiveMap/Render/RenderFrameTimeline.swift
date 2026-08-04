@@ -10,7 +10,7 @@ import Foundation
 /// scripted clock so scene time follows the export timeline instead of real time.
 protocol RenderFrameClock: AnyObject {
     /// Produces the next frame tick. Implementations must increment the frame
-    /// index on every call — per-frame bookkeeping (fade tracking, the resource
+    /// index on every call: per-frame bookkeeping (fade tracking, the resource
     /// registry) relies on unique, monotonically growing indices.
     func nextFrameTick() -> RenderFrameTick
     /// The date associated with the frame being built.

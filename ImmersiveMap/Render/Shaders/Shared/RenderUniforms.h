@@ -116,14 +116,14 @@ static inline bool shadowCascadeContains(constant ShadowCascade& cascade, float3
            uvz.z >= 0.0 && uvz.z <= 1.0;
 }
 
-// One cascade's visibility: Castaño's 3x3 tent PCF (The Witness) — four
+// One cascade's visibility: Castaño's 3x3 tent PCF (The Witness): four
 // hardware-bilinear compares with computed weights reconstruct a C1 tent
 // kernel. A plain bilinear tap is exact along the shadow-grid axes but
 // staircases on diagonal edges (the far shadow boundary cast by roof edges is
 // almost always diagonal to the grid); the tent gives the same ~2-texel crisp
 // ramp in EVERY orientation. Every tap is compared against the receiver-plane
 // depth predicted from the gradient, so flat surfaces (roofs, ground) need
-// almost no constant bias — no acne striping and no contact detachment.
+// almost no constant bias: no acne striping and no contact detachment.
 static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
                                             depth2d<float> shadowMap,
                                             float3 uvz,
@@ -135,7 +135,7 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
                                     compare_func::less_equal);
     // The receiver-plane term corrects each tap CENTER, but a hardware
     // bilinear compare shares one reference across four texels whose stored
-    // depths differ by up to a texel of receiver slope — on steep receivers
+    // depths differ by up to a texel of receiver slope; on steep receivers
     // (oblique walls, roofs under a low sun) that alone stripes. Cover the
     // within-tap footprint with a slope-proportional bias from the actual
     // gradient.
@@ -182,7 +182,7 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
 // `surfaceNormal` is the receiver's (unnormalized) world normal, or zero for
 // receivers without one (the ground plane, which always faces the sun). For
 // normal-bearing receivers three defenses compose:
-//  * the normal is flipped towards the camera first (two-sided test) — map
+//  * the normal is flipped towards the camera first (two-sided test), because map
 //    data contains inverted-winding buildings that render fine as opaque
 //    boxes but carry inward normals;
 //  * geometric self-shadow: a face turned away from the sun is in shadow by
@@ -191,12 +191,12 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
 //    sub-texel and unreliable;
 //  * normal-offset sampling: the sample point shifts off the surface along
 //    the normal by ~1.5 cascade texels, so a lit face cannot stripe against
-//    its own quantized depth record, while real occluders — meters away —
+//    its own quantized depth record, while real occluders (meters away)
 //    still shadow it.
 //
 // Cascade selection by containment: the near (crisp) cascade wins wherever
 // its window covers the point, the far cascade picks up the rest, and
-// anything outside both is lit — the horizon backdrop stays clean by
+// anything outside both is lit, so the horizon backdrop stays clean by
 // construction, and the eye-distance fade hides the far coverage edge.
 //
 // Must be called from uniform control flow (derivatives): callers multiply
@@ -218,7 +218,7 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
     normal *= hasNormal;
     // Hard lower cutoff aligned with the gradient clamp: a wall with
     // N·L < 0.125 has depth slope above what the clamped receiver-plane can
-    // represent (slope 8 at N·L = 1/sqrt(65)), so it never reaches the map —
+    // represent (slope 8 at N·L = 1/sqrt(65)), so it never reaches the map,
     // it is declared geometrically self-shadowed instead of striping.
     float geometricVisibility = hasNormal > 0.0
         ? smoothstep(0.125, 0.25, dot(normal, shadow.lightDirection))

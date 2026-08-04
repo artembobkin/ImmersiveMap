@@ -63,7 +63,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct CameraSettings: Equatable, Sendable {
         /// The invisible drag zones in the bottom corners that let one thumb drive
         /// the camera: pitch in the bottom leading corner, zoom in the bottom
-        /// trailing one. Both are off by default — a zone captures drags that
+        /// trailing one. Both are off by default, because a zone captures drags that
         /// would otherwise pan the map, and nothing on screen announces it, so an
         /// app opts in only when it wants one-handed camera control.
         /// Touch platforms only; ignored on macOS.
@@ -101,7 +101,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var pinchZoomVelocityFactor: Double
         public var pinchZoomVelocityLimit: Double
         /// How strongly zoom is anchored to the gesture point (cursor, pinch center, double tap):
-        /// 1 — the world point under the cursor stays put, 0 — zoom toward the screen center.
+        /// 1 keeps the world point under the cursor put, 0 zooms toward the screen center.
         public var zoomAnchorFactor: Double
         public var dragZoomFactor: Double
         public var dragZoomVelocityFactor: Double
@@ -235,8 +235,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     /// Reuse of dismantled map views. When a SwiftUI screen with an
-    /// `ImmersiveMapView` goes away, its platform view — renderer, GPU tile
-    /// cache, atlas pages — is parked for `parkedTimeToLive` seconds instead of
+    /// `ImmersiveMapView` goes away, its platform view (renderer, GPU tile
+    /// cache, atlas pages) is parked for `parkedTimeToLive` seconds instead of
     /// being destroyed, and the next `ImmersiveMapView` adopts it warm. New
     /// settings are reconciled on adoption through the regular settings-apply
     /// path, so adopting with a different configuration is safe. An adopted
@@ -596,7 +596,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     /// The static sun of the flat presentation: its direction defines where
     /// buildings and scene models cast their shadow-map shadows (there is no
-    /// analytic surface shading — faces darken only via the shadow map).
+    /// analytic surface shading; faces darken only via the shadow map).
     public struct SceneLightSettings: Equatable, Sendable {
         /// World-space direction pointing **towards** the light in the flat
         /// basis (+X east, +Y north, +Z up). Normalized before use.
@@ -616,7 +616,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// Square shadow map side in pixels. Clamped to `256...4096` at render time.
         public var mapResolution: Int
         /// Far-cascade coverage radius measured in multiples of the camera
-        /// distance — a quantity independent of pitch and bearing, so tilting
+        /// distance, a quantity independent of pitch and bearing, so tilting
         /// or rotating the camera never changes shadow coverage or sharpness.
         /// Beyond the radius shadows fade out. The far cascade is stretched
         /// over it, so its texel density scales inversely; the near (crisp)
@@ -1250,7 +1250,7 @@ public extension ImmersiveMapSettings {
 
     /// Restyles the attribution badge without replacing the whole settings
     /// value: `nil` leaves a field unchanged. Because of that, `textColor`
-    /// cannot be reset to the default here — pass a full `AttributionSettings`
+    /// cannot be reset to the default here; pass a full `AttributionSettings`
     /// to `attributionSettings(_:)` instead.
     func attributionSettings(isVisible: Bool? = nil,
                              size: AttributionSettings.Size? = nil,

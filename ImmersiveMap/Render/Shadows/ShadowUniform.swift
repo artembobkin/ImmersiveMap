@@ -49,13 +49,13 @@ struct ShadowCascadeUniform {
 /// Per-frame shadow sampling parameters; the layout mirrors `Shadow` in
 /// RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 struct ShadowUniform {
-    /// Near cascade: a tight pose-invariant disc around the look-at point —
+    /// Near cascade: a tight pose-invariant disc around the look-at point for
     /// crisp contact shadows (~sub-meter texels at street zooms).
     var cascadeNear: ShadowCascadeUniform
-    /// Middle cascade: where most visible shadows land at a tilted camera —
+    /// Middle cascade: where most visible shadows land at a tilted camera, so
     /// meter-scale texels keep diagonal edges straight.
     var cascadeMiddle: ShadowCascadeUniform
-    /// Far cascade: the full coverage disc — distant shadows where a coarse
+    /// Far cascade: the full coverage disc for distant shadows, where a coarse
     /// texel is small on screen and the eye-distance fade takes over.
     var cascadeFar: ShadowCascadeUniform
 
@@ -72,7 +72,7 @@ struct ShadowUniform {
     var _padding: Float = 0
     /// Normalized direction towards the static sun: receivers with normals use
     /// it for the geometric self-shadow test (a face turned away from the sun
-    /// is in shadow by definition — no map lookup can get that wrong).
+    /// is in shadow by definition: no map lookup can get that wrong).
     var lightDirection: SIMD3<Float>
 
     /// Bound when the shadow pass is skipped: the strength guard in

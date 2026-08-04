@@ -57,7 +57,7 @@ final class ImmersiveMapAPIKeyTests: XCTestCase {
 
     /// Attaching a provider rewrites the whole authorization block, so a key set
     /// beforehand would be dropped if the view applied it eagerly. The view
-    /// resolves it at render time instead — this pins that both orders agree.
+    /// resolves it at render time instead; this pins that both orders agree.
     func testViewModifierOrderDoesNotMatter() {
         let provider = ImmersiveMapTilesProvider()
         let keyFirst = ImmersiveMapView()

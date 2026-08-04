@@ -64,7 +64,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         return false
     }
 
-    /// A single click (selection) waits for the double click (anchored zoom) to fail —
+    /// A single click (selection) waits for the double click (anchored zoom) to fail:
     /// the AppKit analog of UIKit's `require(toFail:)`.
     func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
                            shouldRequireFailureOf otherGestureRecognizer: NSGestureRecognizer) -> Bool {

@@ -85,7 +85,7 @@ final class CameraZoomRangeTests: XCTestCase {
     }
 
     /// Camera flights arc out to an overview before diving in, and every flight
-    /// frame lands here — so this is what keeps a long `fly(to:)` from dipping
+    /// frame lands here, so this is what keeps a long `fly(to:)` from dipping
     /// below the range mid-air.
     func testSetCameraStateClampsToMinimum() {
         let controller = CameraStateController(settings: cameraSettings(minimumZoom: 4))

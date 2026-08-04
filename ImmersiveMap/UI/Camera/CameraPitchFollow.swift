@@ -46,7 +46,7 @@ final class CameraPitchFollow {
         return isActive
     }
 
-    /// Sets a new target. Returns false if follow is disabled by the setting — in that case the
+    /// Sets a new target. Returns false if follow is disabled by the setting; in that case the
     /// caller must apply the pitch instantly (legacy behavior without smoothing).
     @discardableResult
     func retarget(_ pitch: Float, currentTime: CFTimeInterval) -> Bool {

@@ -5,8 +5,8 @@
 import XCTest
 
 /// A parked view has nothing to present into: pacing must gate off every
-/// rendering reason — pending one-shot requests, activities, even
-/// forceContinuousRendering — and hand them back on adoption.
+/// rendering reason (pending one-shot requests, activities, even
+/// forceContinuousRendering) and hand them back on adoption.
 final class RenderLoopPacingParkedTests: XCTestCase {
     func testParkedPacingPausesDespitePendingWork() {
         let pacing = RenderLoopPacing(configuration: ImmersiveMapSettings.default.renderLoop)

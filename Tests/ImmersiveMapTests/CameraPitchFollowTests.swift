@@ -25,7 +25,7 @@ final class CameraPitchFollowTests: XCTestCase {
         var pitch: Float = 0
         var time: CFTimeInterval = 0
         var didFinish = false
-        for _ in 0..<600 { // up to 10 s at 60 fps — with headroom
+        for _ in 0..<600 { // up to 10 s at 60 fps, with headroom
             time += 1.0 / 60.0
             let step = follow.advance(currentPitch: pitch, currentTime: time)
             pitch = step.pitch
@@ -43,7 +43,7 @@ final class CameraPitchFollowTests: XCTestCase {
     func testFollowStepIsFrameRateIndependent() {
         // The exponential model is multiplicative: the remaining gap depends only on the total
         // elapsed time, not on the number of frames. Hence 60 fps and 240 fps yield the same
-        // pitch at the same point in time — which is exactly the removal of event-rate dependence.
+        // pitch at the same point in time, which is exactly the removal of event-rate dependence.
         func pitch(afterSeconds seconds: CFTimeInterval, stepsPerSecond: Int) -> Float {
             let follow = CameraPitchFollow(configuration: enabledConfiguration())
             follow.retarget(1.0, currentTime: 0)
@@ -67,7 +67,7 @@ final class CameraPitchFollowTests: XCTestCase {
 
     func testFollowStopsWhenPitchSaturatedAtCeiling() {
         // If the actual pitch hits the ceiling (setCameraPitch clamps and the value stops changing)
-        // while the target is higher — follow must stop, otherwise the display link spins forever.
+        // while the target is higher: follow must stop, otherwise the display link spins forever.
         let follow = CameraPitchFollow(configuration: enabledConfiguration())
         follow.retarget(2.0, currentTime: 0)
 
@@ -88,7 +88,7 @@ final class CameraPitchFollowTests: XCTestCase {
     }
 
     func testDisabledFollowAppliesInstantly() {
-        // With the setting disabled, retarget returns false — the caller applies pitch instantly.
+        // With the setting disabled, retarget returns false and the caller applies pitch instantly.
         let follow = CameraPitchFollow(configuration: CameraPitchFollow.Configuration(isEnabled: false,
                                                                                       halfLife: 0.06))
         XCTAssertFalse(follow.retarget(1.0, currentTime: 0))

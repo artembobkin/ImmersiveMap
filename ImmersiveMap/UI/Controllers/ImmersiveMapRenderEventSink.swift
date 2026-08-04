@@ -39,8 +39,8 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     /// An in-flight frame's GPU completion can land after a renderer
     /// recreation; its snapshot carries the OLD engine's high frame index and
     /// would win the monotonic guard against the successor's reset state.
-    /// Call on the main thread (every discard path — recreation, pool drop,
-    /// export teardown — runs there).
+    /// Call on the main thread (every discard path runs there: recreation,
+    /// pool drop, export teardown).
     func invalidateDelivery() {
         isDeliveryInvalidated = true
     }

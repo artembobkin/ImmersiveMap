@@ -1,6 +1,6 @@
 # 3D scene models
 
-Anchor 3D models (USDZ or OBJ) to geographic coordinates with the `.sceneModels(...)` modifier and `ImmersiveMapSceneModelsController`. Models render inside the map world pass — with real depth, MSAA, and the same light as extruded buildings — in flat mode, on the globe, and through the globe-to-flat morph: a model sticks to the surface, tilts with the sphere, scales with zoom, and disappears behind the globe horizon.
+Anchor 3D models (USDZ or OBJ) to geographic coordinates with the `.sceneModels(...)` modifier and `ImmersiveMapSceneModelsController`. Models render inside the map world pass (with real depth, MSAA, and the same light as extruded buildings) in flat mode, on the globe, and through the globe-to-flat morph: a model sticks to the surface, tilts with the sphere, scales with zoom, and disappears behind the globe horizon.
 
 ```swift
 struct MapScreen: View {
@@ -41,16 +41,16 @@ public struct ImmersiveMapSceneModel: Identifiable, Equatable, Sendable {
 
 | Parameter | Meaning |
 |---|---|
-| `source` | `Source(url:)` with a local file URL, or `Source(resource:withExtension:in:)` for a bundle asset. Models sharing a source share one loaded mesh. Remote URLs are not supported — download to a file first. |
+| `source` | `Source(url:)` with a local file URL, or `Source(resource:withExtension:in:)` for a bundle asset. Models sharing a source share one loaded mesh. Remote URLs are not supported, download to a file first. |
 | `coordinate` | Geographic anchor in degrees. The model's asset-space origin lands on this point of the map surface. |
-| `altitudeMeters` | Lifts the model along the local up vector (sphere normal on the globe, +Z in flat mode) — e.g. an airplane at cruising altitude. |
+| `altitudeMeters` | Lifts the model along the local up vector (sphere normal on the globe, +Z in flat mode), e.g. an airplane at cruising altitude. |
 | `headingDegrees` / `pitchDegrees` / `rollDegrees` | Orientation in the local tangent frame. At zero the asset's −Z faces north and +Y points up (the USD Y-up convention is converted automatically). |
 | `scale` | Multiplier over real-world meters. Model I/O does not expose the USD stage `metersPerUnit`, so one asset unit is presented as one meter. |
-| `fitDiameterMeters` | Uniformly rescales the asset so the largest extent of its bounding box spans this many meters (applied before `scale`) — the easy way to place an arbitrary asset at a sensible size. |
+| `fitDiameterMeters` | Uniformly rescales the asset so the largest extent of its bounding box spans this many meters (applied before `scale`), the easy way to place an arbitrary asset at a sensible size. |
 
 ## Sizing
 
-Models are sized in real-world meters with the Web-Mercator convention: on the flat map a model inflates by `1/cos(latitude)` together with the surrounding geometry, on the globe it keeps true scale, and through the morph the two blend continuously. Sizes re-normalize with zoom automatically — a 10-meter model is subpixel at low zoom by design; use `fitDiameterMeters` for landmark-scale content that should read from far away.
+Models are sized in real-world meters with the Web-Mercator convention: on the flat map a model inflates by `1/cos(latitude)` together with the surrounding geometry, on the globe it keeps true scale, and through the morph the two blend continuously. Sizes re-normalize with zoom automatically: a 10-meter model is subpixel at low zoom by design; use `fitDiameterMeters` for landmark-scale content that should read from far away.
 
 ## Controller
 
@@ -70,7 +70,7 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
 
 The controller is thread-safe and can be mutated from any thread. Rendering stays on-demand: an idle map with idle models costs nothing; every mutation renders exactly the frames it needs.
 
-- `move` animates along a great circle with a duration derived from the distance (snappy for short hops, capped for jumps) — the same feel as avatar movement.
+- `move` animates along a great circle with a duration derived from the distance (snappy for short hops, capped for jumps), the same feel as avatar movement.
 - `setOrientation` / `setScale` / `setAltitude` ease over `duration` (default 0.3 s); orientation interpolates as a shortest-arc quaternion. Pass `duration: 0` to snap.
 - `upsert` / `set` replace descriptors without transform animation; coordinate changes of surviving ids still glide.
 
@@ -78,7 +78,7 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 
 Assets load asynchronously off the main thread via Model I/O (`MDLAsset` → `MTKMesh`); the map renders the model on the first frame after the mesh is ready. Failed loads retry up to 3 times with a growing cooldown. Loaded meshes live in a memory cache (~128 MB) keyed by source URL: models currently on the map are protected from eviction, everything else is dropped under memory pressure and reloads on demand.
 
-Materials: the base color of each submesh is used — either its texture or its constant color — lit by the same fixed light as extruded buildings (ambient + diffuse + specular). Skeletal/USD animations are not played; meshes are static, movement comes from the controller API.
+Materials: the base color of each submesh is used (either its texture or its constant color), lit by the same fixed light as extruded buildings (ambient + diffuse + specular). Skeletal/USD animations are not played; meshes are static, movement comes from the controller API.
 
 ## Limitations
 

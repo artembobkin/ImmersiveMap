@@ -1,6 +1,6 @@
 # Tour video export
 
-Export a camera tour as a video file with `ImmersiveMapTourVideoRecorder`. The recorder takes the same shot list you would give `ImmersiveMapCameraTourController`, renders it offline into a second, headless render engine, and writes a QuickTime (`.mov`) file — HEVC at 1920×1080, 60 fps by default. Every frame waits for its tiles before it is captured, the timestep is exact, and the on-screen map stays fully interactive while the export runs.
+Export a camera tour as a video file with `ImmersiveMapTourVideoRecorder`. The recorder takes the same shot list you would give `ImmersiveMapCameraTourController`, renders it offline into a second, headless render engine, and writes a QuickTime (`.mov`) file: HEVC at 1920×1080, 60 fps by default. Every frame waits for its tiles before it is captured, the timestep is exact, and the on-screen map stays fully interactive while the export runs.
 
 ```swift
 struct MapScreen: View {
@@ -24,7 +24,7 @@ struct MapScreen: View {
 }
 ```
 
-Attach the recorder with `.tourVideoRecorder(_:)` before exporting — that is how it picks up the map's current configuration (tile provider, map style, label settings, avatars). Calling `export` on an unattached recorder throws `ImmersiveMapVideoExportError.notAttached`.
+Attach the recorder with `.tourVideoRecorder(_:)` before exporting, because that is how it picks up the map's current configuration (tile provider, map style, label settings, avatars). Calling `export` on an unattached recorder throws `ImmersiveMapVideoExportError.notAttached`.
 
 ## Configuration
 
@@ -57,18 +57,18 @@ Progress arrives on the main thread via `onProgress` as `ImmersiveMapVideoExport
 
 The export never records the screen. It builds a second, headless `RenderFrameEngine` from a snapshot of the view's settings and replays the tour deterministically:
 
-- Tour time advances in exact `1/fps` steps. Camera flights are pure functions of that timeline — the same easing, routes (including `.automatic` great-circle resolution), overview arcs, and exact-target snaps as the live tour controller.
+- Tour time advances in exact `1/fps` steps. Camera flights are pure functions of that timeline: the same easing, routes (including `.automatic` great-circle resolution), overview arcs, and exact-target snaps as the live tour controller.
 - Before the first frame the exporter renders a discarded pre-roll until tiles, label fades, and the label visibility cycle settle, so frame 0 is fully composed.
 - Each captured frame renders, and if tiles for the new viewport are still loading, waits for them (up to `tileReadinessTimeout`) and re-renders with scene time held, so no tile pop-in is captured mid-fade.
 - Frames render straight into `CVPixelBuffer`-backed Metal textures (zero copy) and are encoded by `AVAssetWriter` with BT.709 color tagging.
-- Avatar markers render in Metal like on screen, from a detached copy of the avatar state (snapshots are consumed destructively, so the live and export engines cannot share one controller). SwiftUI markers cannot render in Metal — the live map hosts them as platform views above the map — so the export rasterizes each marker view once and composites the images onto finished frames at the exact projected positions, with the same anchor and horizon-fade alpha as the live overlay.
+- Avatar markers render in Metal like on screen, from a detached copy of the avatar state (snapshots are consumed destructively, so the live and export engines cannot share one controller). SwiftUI markers cannot render in Metal (the live map hosts them as platform views above the map), so the export rasterizes each marker view once and composites the images onto finished frames at the exact projected positions, with the same anchor and horizon-fade alpha as the live overlay.
 
-Because rendering is offline, the export can run faster or slower than real time depending on hardware and network, and a settings change or gesture on the live map does not affect it. The export starts from `establish` when given, otherwise from the map's current camera position. `loop` and `stopOnUserInteraction` semantics of the live tour do not apply — an export is one finite pass.
+Because rendering is offline, the export can run faster or slower than real time depending on hardware and network, and a settings change or gesture on the live map does not affect it. The export starts from `establish` when given, otherwise from the map's current camera position. `loop` and `stopOnUserInteraction` semantics of the live tour do not apply: an export is one finite pass.
 
 ## Limitations
 
 - The attribution badge and the debug HUD are host-view chrome and do not appear in the exported video. **If you publish exported footage, add the required data attribution yourself** (see `Documentation/docs/map-data.md`).
-- Avatars and SwiftUI markers are captured as of export start (`includesAvatars` / `includesMarkers`): later live mutations — moved avatars, changed marker sets, stateful marker view updates — are not reflected in a running export. Interactive marker states (e.g. a pressed button) are not captured either; markers are rasterized in their idle appearance.
+- Avatars and SwiftUI markers are captured as of export start (`includesAvatars` / `includesMarkers`): later live mutations (moved avatars, changed marker sets, stateful marker view updates) are not reflected in a running export. Interactive marker states (e.g. a pressed button) are not captured either; markers are rasterized in their idle appearance.
 - Remote avatar images have no readiness signal; images already shown on the live map are typically warm in the shared cache. Merged-avatar image cycling is frozen during the export for determinism.
 - The export engine is a full second engine: expect additional GPU and cache memory for the duration of the export. Disk tile caches are shared with the live map, so a tour the map has already played exports without re-downloading.
 - Label and symbol sizes are defined in pixels by the map style, so their apparent size scales with the chosen output resolution: a 4K export shows relatively smaller labels than a 1080p export. Pick the resolution accordingly (and raise `markerScale` for 4K).

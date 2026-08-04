@@ -30,7 +30,7 @@ final class AttributionHiddenNoticeTests: XCTestCase {
         XCTAssertTrue(AttributionHiddenNotice.isWarningWarranted(for: settings))
     }
 
-    /// A provider that declares no attribution leaves the badge empty — that
+    /// A provider that declares no attribution leaves the badge empty, and that
     /// is as invisible as hiding it.
     func testEmptyProviderAttributionWarrantsWarning() {
         let provider = VectorTileProvider(id: "custom",

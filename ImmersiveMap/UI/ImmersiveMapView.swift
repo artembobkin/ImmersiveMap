@@ -258,8 +258,8 @@ public extension ImmersiveMapView {
     }
 
     /// Controls reuse of dismantled map views (on by default). When the screen
-    /// with this map goes away, the platform view — renderer, GPU tile cache,
-    /// atlas pages — is parked briefly and the next `ImmersiveMapView` adopts
+    /// with this map goes away, the platform view (renderer, GPU tile cache,
+    /// atlas pages) is parked briefly and the next `ImmersiveMapView` adopts
     /// it warm, so switching between map screens skips the first-frame rebuild.
     /// An adopted view keeps its previous camera unless this view provides an
     /// explicit camera position or an attached camera controller.
@@ -365,7 +365,7 @@ public extension ImmersiveMapView {
     /// Authorises tile requests with an API key.
     ///
     /// Get one at https://immersivemap.dev/account. Without a key the map still
-    /// renders — the hosted service keeps a shared, rate-limited public pool —
+    /// renders on the hosted service's shared, rate-limited public pool,
     /// so a key buys your own budget rather than access.
     ///
     ///     ImmersiveMapView()
@@ -545,7 +545,7 @@ public extension ImmersiveMapView {
 
     /// Restyles the attribution badge without replacing the whole settings
     /// value: `nil` leaves a field unchanged. Because of that, `textColor`
-    /// cannot be reset to the default here — pass a full `AttributionSettings`
+    /// cannot be reset to the default here; pass a full `AttributionSettings`
     /// to `attributionSettings(_:)` instead.
     ///
     ///     ImmersiveMapView()

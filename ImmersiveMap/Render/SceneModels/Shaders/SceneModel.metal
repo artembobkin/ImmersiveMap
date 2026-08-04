@@ -52,7 +52,7 @@ vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_i
 
 // No analytic lighting model, matching the building extrusion
 // (TileExtruded.metal): the base color darkens only where the shadow map says
-// the static sun is occluded — faces away from the sun are occluded by their
+// the static sun is occluded: faces away from the sun are occluded by their
 // own mesh in the map and come out shadowed like any cast shadow.
 fragment float4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
                                          constant SceneModelMaterial& material [[buffer(3)]],

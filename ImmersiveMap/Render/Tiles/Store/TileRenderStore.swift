@@ -107,7 +107,7 @@ final class TileRenderStore: @unchecked Sendable {
                 readyTilesCount += 1
                 // A disk-first serve renders before it is revalidated. Demand is
                 // miss-driven, so a served tile must stay requestable until some
-                // load confirms or replaces it — otherwise a cancelled or failed
+                // load confirms or replaces it, otherwise a cancelled or failed
                 // revalidation would pin stale content for as long as the tile
                 // stays cached. The loader dedups in-flight tiles itself.
                 if tilesAwaitingRevalidation.contains(tile) {
@@ -179,7 +179,7 @@ final class TileRenderStore: @unchecked Sendable {
     func markTileRevalidated(_ tile: Tile) async {
         await MainActor.run {
             // A superseded load (cancelAll + re-request) must not clear the
-            // flag its successor has just set — the successor's revalidation
+            // flag its successor has just set: the successor's revalidation
             // is still owed.
             guard Task.isCancelled == false else {
                 return

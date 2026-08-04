@@ -8,7 +8,7 @@ import XCTest
 
 /// Regression for a startup crash: `tileFragmentShader` statically references
 /// the shadow map, and the atlas rasterization path (`TileAtlasTexture.draw`)
-/// must bind the fallback texture + disabled uniform — a missing binding
+/// must bind the fallback texture + disabled uniform, because a missing binding
 /// aborts the process under Metal API validation on the first drawn tile.
 /// This encodes a real atlas draw with non-empty ground geometry end-to-end.
 final class TileAtlasShadowBindingTests: XCTestCase {

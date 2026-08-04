@@ -24,7 +24,7 @@ final class RenderFramePassEncoder {
             return nil
         }
 
-        // Acquired here — after the command-buffer guard — to preserve the live
+        // Acquired here, after the command-buffer guard, to preserve the live
         // path's drawable-acquisition timing exactly.
         guard let target = acquireTarget() else {
             frameContext.services.diagnostics.recordSkipReason(.missingDrawable)

@@ -213,11 +213,11 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// Depth of the directional-light pass — an N:1 cascade atlas
+    /// Depth of the directional-light pass, an N:1 cascade atlas
     /// (near → far, left to right) sampled later by the world and
     /// buildingImage passes: unlike the transient depth attachments it must
     /// survive its pass (`.store`) and be readable, so it is always `.private`
-    /// with `.shaderRead` — never memoryless.
+    /// with `.shaderRead`, never memoryless.
     func ensureShadowMapTexture(resolution: Int) -> MTLTexture? {
         guard resolution > 0 else { return nil }
 

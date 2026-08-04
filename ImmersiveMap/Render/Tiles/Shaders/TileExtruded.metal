@@ -100,7 +100,7 @@ static inline float extrudedDepthCueShade(float3 worldNormal,
 // No analytic lighting model: faces keep their flat base color and darken
 // only where the shadow map says the static sun is occluded. Walls turned
 // away from the sun are occluded by their own building in the map, so they
-// come out shadowed exactly like cast shadows — one consistent system.
+// come out shadowed exactly like cast shadows: one consistent system.
 // Building geometry is always drawn opaque with a regular depth test and MSAA:
 // in solid mode - directly into the world pass, in translucent - into the
 // offscreen building image, which the world pass then composites over the map
@@ -111,7 +111,7 @@ fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                            constant float& metersToWorldZ [[buffer(6)]],
                                            depth2d<float> shadowMap [[texture(0)]]) {
     // Derivatives (inside sampleShadowFactor) must precede the divergent
-    // discard — MSL leaves them undefined in a quad after any lane discards.
+    // discard, because MSL leaves them undefined in a quad after any lane discards.
     float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal);
     if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
         discard_fragment();

@@ -21,7 +21,7 @@ final class RenderFrameScriptedClock: RenderFrameClock {
     }
 
     /// Moves scene time to `time`. Never call with a value earlier than the
-    /// previously set one — the export timeline is monotonic.
+    /// previously set one: the export timeline is monotonic.
     func setTime(_ time: TimeInterval) {
         currentTime = time
     }

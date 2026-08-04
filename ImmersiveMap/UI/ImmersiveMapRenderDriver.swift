@@ -89,7 +89,7 @@ final class ImmersiveMapRenderDriver: NSObject {
 
     func stop() {
         // Full teardown (host-runtime deinit / pool drop): the engine is being
-        // discarded with the driver — stop its tile loader and cut late event
+        // discarded with the driver: stop its tile loader and cut late event
         // deliveries before the reference is dropped.
         renderer?.prepareForDiscard()
         displayLink?.invalidate()

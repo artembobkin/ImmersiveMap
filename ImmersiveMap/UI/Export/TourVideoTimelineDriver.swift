@@ -6,8 +6,8 @@ import Foundation
 /// Deterministic re-implementation of the camera tour for offline export.
 ///
 /// `ImmersiveMapCameraTourController` chains real-time flights over the wall
-/// clock; this driver replays the same shot semantics — establish jump, one
-/// flight per shot, exact-target snap on arrival, hold after each shot — as a
+/// clock; this driver replays the same shot semantics (establish jump, one
+/// flight per shot, exact-target snap on arrival, hold after each shot) as a
 /// pure function of export-timeline time, stepped frame by frame.
 ///
 /// Timing is precomputable because every flight lands snapped exactly on its

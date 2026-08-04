@@ -126,15 +126,15 @@ Nothing there is required to get started: the default provider renders out of th
 
 ## Attribution
 
-The map shows a small attribution badge — "© OpenStreetMap © OpenMapTiles" with the built-in tiles — because map data licenses require visible credit. The badge is restylable (size, position, text color) and can be replaced with your own credit elsewhere in the app; the details — including what exactly has to be credited, where it has to appear, and what stays your app's responsibility — are in [ATTRIBUTION.md](ATTRIBUTION.md).
+The map shows a small attribution badge ("© OpenStreetMap © OpenMapTiles" with the built-in tiles) because map data licenses require visible credit. The badge is restylable (size, position, text color) and can be replaced with your own credit elsewhere in the app. The details, including what exactly has to be credited, where it has to appear, and what stays your app's responsibility, are in [ATTRIBUTION.md](ATTRIBUTION.md).
 
-Crediting ImmersiveMap itself is **not** required — the license is MIT and nothing here changes that. But if the engine is useful in your app, a line like this on an about or credits screen is genuinely appreciated:
+Crediting ImmersiveMap itself is **not** required: the license is MIT and nothing here changes that. But if the engine is useful in your app, a line like this on an about or credits screen is genuinely appreciated:
 
 ```text
-Maps powered by ImmersiveMap — immersivemap.dev
+Maps powered by ImmersiveMap (immersivemap.dev)
 ```
 
-And if you ship something built with ImmersiveMap, [say hello in Discussions](https://github.com/artembobkin/ImmersiveMap/discussions) — knowing where the engine ends up is what keeps it moving.
+And if you ship something built with ImmersiveMap, [say hello in Discussions](https://github.com/artembobkin/ImmersiveMap/discussions). Knowing where the engine ends up is what keeps it moving.
 
 ## Known Limitations
 

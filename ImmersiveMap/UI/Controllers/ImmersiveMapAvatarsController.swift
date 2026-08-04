@@ -486,7 +486,7 @@ public final class ImmersiveMapAvatarsController: @unchecked Sendable {
 
     /// Detached copy for the offline video export. Snapshots are consumed
     /// destructively (`consumeSnapshot`), so one controller cannot feed two
-    /// engines — the live engine and an export engine would steal diffs from
+    /// engines: the live engine and an export engine would steal diffs from
     /// each other. The copy carries the current markers and merged groups with
     /// a pending full snapshot, so the export renderer's first consume uploads
     /// everything; it has no change handler and no image-cycle timers, keeping

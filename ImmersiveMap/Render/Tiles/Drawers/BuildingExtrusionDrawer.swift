@@ -49,7 +49,7 @@ enum BuildingExtrusionDrawer {
     /// cameras into the two halves of the shadow atlas (viewport + scissor per
     /// cascade). Cull `.none`: winding juggling is pointless in a depth-only
     /// pass, and drawing both faces partially covers the wall quads missing on
-    /// tile boundaries. No encoder depth bias — the receiver-side bias is
+    /// tile boundaries. No encoder depth bias: the receiver-side bias is
     /// computed per frame from the actual texel footprint
     /// (ShadowFrameStateResolver), which keeps shadows attached to building
     /// bases. Depth clamp (pancaking) keeps casters taller than the fitted

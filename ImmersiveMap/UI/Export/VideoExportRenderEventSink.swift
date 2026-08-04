@@ -24,7 +24,7 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
         lock.withLock { latestActivityState }
     }
 
-    /// Latest marker projection published by the engine — the positions the
+    /// Latest marker projection published by the engine, the positions the
     /// export compositor draws SwiftUI markers at.
     var markerProjectionSnapshot: MarkerProjectionSnapshot? {
         lock.withLock { latestMarkerProjectionSnapshot }

@@ -7,7 +7,7 @@ import UIKit
 #endif
 
 /// Parks the platform host view of a dismantled `ImmersiveMapView` so the next
-/// map view can adopt it warm — renderer, GPU tile cache, atlas pages, gesture
+/// map view can adopt it warm: renderer, GPU tile cache, atlas pages, gesture
 /// wiring and the Metal layer all survive the screen change instead of being
 /// rebuilt from scratch.
 ///
@@ -29,7 +29,7 @@ final class ImmersiveMapHostViewPool {
     #if canImport(UIKit)
     // Tracked via notifications (UIApplication.shared is unavailable in app
     // extensions): a view parked while the app is already backgrounded would
-    // sit under jetsam pressure for the whole stay — the drain has already
+    // sit under jetsam pressure for the whole stay: the drain has already
     // fired and the TTL task is suspended with the process.
     private var isAppInBackground = false
     #endif

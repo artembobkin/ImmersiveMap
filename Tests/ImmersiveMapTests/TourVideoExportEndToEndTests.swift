@@ -78,8 +78,8 @@ final class TourVideoExportEndToEndTests: XCTestCase {
         XCTAssertEqual(summary.codec, kCMVideoCodecType_HEVC)
     }
 
-    /// Exports the same single-frame scene twice — once with an avatar and a
-    /// SwiftUI marker included, once with both excluded — and asserts the
+    /// Exports the same single-frame scene twice (once with an avatar and a
+    /// SwiftUI marker included, once with both excluded) and asserts the
     /// decoded frames differ, proving the overlays actually reach the video.
     @MainActor
     func testMarkersAndAvatarsAppearInExportedFrames() async throws {
@@ -104,7 +104,7 @@ final class TourVideoExportEndToEndTests: XCTestCase {
 
         let avatarsController = ImmersiveMapAvatarsController()
         avatarsController.add(AvatarMarker(id: 1, coordinate: coordinate, image: makeSolidImage()))
-        // The live engine has already drained the diff — the regression this
+        // The live engine has already drained the diff: the regression this
         // feature fixes.
         _ = avatarsController.consumeSnapshot()
 

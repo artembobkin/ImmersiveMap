@@ -99,7 +99,7 @@ On the globe a marker rides the surface, including the unfurl wave of the globe-
 | Interactivity | Full SwiftUI (buttons, gestures) | `onAvatarTap` event |
 | API style | Declarative `.markers(...)` | `ImmersiveMapAvatarsController` |
 
-Rule of thumb: rich, interactive, few — SwiftUI markers; uniform, numerous, live-moving — avatars.
+Rule of thumb: rich, interactive and few means SwiftUI markers; uniform, numerous and live-moving means avatars.
 
 ## Limitations
 

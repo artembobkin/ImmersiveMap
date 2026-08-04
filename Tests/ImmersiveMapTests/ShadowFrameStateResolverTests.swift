@@ -111,7 +111,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     }
 
     /// The whole point of disc fitting: with the camera distance fixed, pitch
-    /// and bearing must not change the cascades at all — same matrices, same
+    /// and bearing must not change the cascades at all: same matrices, same
     /// bias, same kernel. Only `eye` (the fade origin) differs.
     func testCascadesAreInvariantToPitchAndBearing() throws {
         let reference = try XCTUnwrap(Self.resolve(eye: Self.makeEye(pitch: 0.01, bearing: 0, distance: 0.8)))
@@ -135,7 +135,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     /// The texel grid must stay glued to map content while the camera pans:
     /// content translates by `(Δpan.x, -Δpan.y) · mapSize/2`, and after the
     /// pan-anchored snap the same content point may land in a different texel
-    /// *index*, but its position *inside* a texel must not change — otherwise
+    /// *index*, but its position *inside* a texel must not change, otherwise
     /// shadow edges crawl during movement.
     func testTexelGridStaysGluedToContentAcrossPan() throws {
         let eye = Self.makeEye(pitch: 40 * .pi / 180, bearing: 0.7, distance: 0.8)

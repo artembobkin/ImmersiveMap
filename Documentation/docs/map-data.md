@@ -33,7 +33,7 @@ ImmersiveMapView()
                          textColor: SIMD4<Float>(1, 1, 1, 1))
 ```
 
-You can also hide it with `.attributionSettings(isVisible: false)`, but only if your app credits the data source somewhere else — hiding required attribution outright breaks the data licence, and that is on the app, not on the engine. A map that starts with a hidden (or empty) badge logs a one-time console warning as a reminder. Once your app does show the credit on its own, declare it:
+You can also hide it with `.attributionSettings(isVisible: false)`, but only if your app credits the data source somewhere else. Hiding required attribution outright breaks the data licence, and that is on the app, not on the engine. A map that starts with a hidden (or empty) badge logs a one-time console warning as a reminder. Once your app does show the credit on its own, declare it:
 
 ```swift
 ImmersiveMapView()
@@ -41,4 +41,4 @@ ImmersiveMapView()
     .attributionProvidedExternally()   // silences the hidden-attribution warning
 ```
 
-The licence obligations in full — what each provider requires, where the credit has to appear, what stays your app's responsibility — and the whole badge API, are covered in [ATTRIBUTION.md](../../ATTRIBUTION.md).
+The licence obligations in full (what each provider requires, where the credit has to appear, what stays your app's responsibility) and the whole badge API are covered in [ATTRIBUTION.md](../../ATTRIBUTION.md).

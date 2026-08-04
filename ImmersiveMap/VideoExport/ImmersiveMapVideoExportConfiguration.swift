@@ -10,11 +10,11 @@ import Foundation
 /// supported codecs natively.
 public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
     public enum Codec: Sendable, Equatable {
-        /// HEVC (H.265) — what Apple devices record by default. Smaller files
+        /// HEVC (H.265): what Apple devices record by default. Smaller files
         /// at equal quality; slightly less universal outside the Apple
         /// ecosystem.
         case hevc
-        /// H.264 — maximum compatibility, larger files.
+        /// H.264: maximum compatibility, larger files.
         case h264
     }
 

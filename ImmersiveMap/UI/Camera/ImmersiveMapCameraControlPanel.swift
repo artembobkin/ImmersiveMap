@@ -171,7 +171,7 @@ public struct ImmersiveMapCameraControlPanel: View {
         )
         .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 8)
         .onChange(of: cameraPosition) { _ in
-            // While scrubbing, the camera smoothly catches up to the target — keep the slider on the target (draft),
+            // While scrubbing, the camera smoothly catches up to the target, so keep the slider on the target (draft),
             // otherwise the camera's follow lag would jerk the thumb back every frame. Sync with the actual
             // angle resumes after release.
             guard isScrubbing == false else {

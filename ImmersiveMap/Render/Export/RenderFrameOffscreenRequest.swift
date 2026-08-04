@@ -14,6 +14,6 @@ struct RenderFrameOffscreenRequest {
     let drawSize: CGSize
     /// Invoked on the Metal completion thread after the frame's GPU work
     /// finished (`true` on success). Fires only when the render call returned
-    /// `true` — a skipped frame never schedules GPU work.
+    /// `true`: a skipped frame never schedules GPU work.
     let onGPUComplete: @Sendable (Bool) -> Void
 }

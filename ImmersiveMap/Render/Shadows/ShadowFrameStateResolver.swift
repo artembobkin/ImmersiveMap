@@ -8,11 +8,11 @@ import simd
 /// `RenderFrameEngine.collectInput`.
 ///
 /// Both cascades are fitted to **pose-invariant discs** centered at the flat
-/// world origin — the camera's look-at point (`RenderCameraPoseResolver` orbits
+/// world origin, the camera's look-at point (`RenderCameraPoseResolver` orbits
 /// the origin). Disc radii are multiples of the camera distance `|eye|`, which
 /// does not depend on pitch or bearing, so tilting or rotating the camera
-/// changes nothing about the shadow windows: texel world size — and therefore
-/// edge sharpness — stays constant. The price is fitting a full disc instead
+/// changes nothing about the shadow windows: texel world size, and therefore
+/// edge sharpness, stays constant. The price is fitting a full disc instead
 /// of the camera frustum's footprint; the near cascade keeps density where it
 /// matters, the far cascade covers the rest coarsely.
 ///
@@ -24,7 +24,7 @@ import simd
 /// moves: window sizes are power-of-two-quantized (integer-zoom
 /// re-normalization scales them exactly in step with the world) and window
 /// centers snap to whole texels in *pan-anchored* coordinates. Snapping in raw
-/// world space would be wrong — `flatRenderState.pan` re-centers the world
+/// world space would be wrong: `flatRenderState.pan` re-centers the world
 /// around the camera every frame, so map content translates by
 /// `(pan.x, -pan.y) · mapSize/2` and the grid must translate with it. That
 /// snap mixes a camera-local center with a world-sized pan offset, so it is
@@ -51,7 +51,7 @@ enum ShadowFrameStateResolver {
     /// Constant receiver bias measured in shadow-map texels of depth slope.
     /// The receiver-plane bias in `sampleShadowFactor` predicts each tap's own
     /// plane depth, so the constant part only needs to cover storage
-    /// quantization and derivative error — keeping it small keeps shadows
+    /// quantization and derivative error; keeping it small keeps shadows
     /// attached to building bases (any bias shrinks contact by ~its world size).
     static let receiverBiasTexels: Float = 0.5
     /// Floor for the bias at near-vertical light (horizontal slope → 0),
@@ -60,7 +60,7 @@ enum ShadowFrameStateResolver {
     /// Cap (in surface-slope units, depth per world unit of light-space XY)
     /// for the receiver-plane gradient. It must admit the steepest *lit* wall:
     /// the geometric self-shadow threshold (N·L = 0.15) lets through walls
-    /// with depth slope up to cot(asin(0.15)) ≈ 6.6 — an under-clamped
+    /// with depth slope up to cot(asin(0.15)) ≈ 6.6, an under-clamped
     /// gradient mispredicts their plane and stripes them with acne. 8 covers
     /// that with margin while still bounding garbage silhouette derivatives.
     static let gradientClampMaxSlope: Float = 8.0
@@ -72,7 +72,7 @@ enum ShadowFrameStateResolver {
     /// delete their received shadows. Acne beyond the cap is handled by the
     /// slope-proportional per-tap bias instead.
     static let normalOffsetMetersCap = 2.5
-    // (The PCF filter is a fixed 3x3 Castaño tent in the shader — an
+    // (The PCF filter is a fixed 3x3 Castaño tent in the shader, an
     // orientation-independent ~2-texel edge; no per-cascade kernel radius.)
     /// Sampling-rectangle inset per cascade, in texels: keeps kernel taps from
     /// bleeding across the atlas seam or the window border.
@@ -125,7 +125,7 @@ enum ShadowFrameStateResolver {
         let lightView = Matrix.lookAt(eye: lightDirection, center: .zero, up: up)
 
         // Floor 2: at coverage 1 the fade band [0.75R, R] would end exactly at
-        // the camera distance, and no visible ground is ever closer than that —
+        // the camera distance, and no visible ground is ever closer than that,
         // every shadow would fade to nothing while the pass still runs.
         let farRadius = max(scene.shadows.coverageCameraDistances, 2.0) * cameraDistance
         let nearRadius = min(nearCascadeRadiusCameraDistances * cameraDistance, farRadius)
@@ -186,7 +186,7 @@ enum ShadowFrameStateResolver {
         }
 
         // Receiver volume samples: the disc boundary (8 fixed directions PLUS
-        // the two exact depth-extreme azimuths ±L.xy — the fixed grid can miss
+        // the two exact depth-extreme azimuths ±L.xy: the fixed grid can miss
         // the true disc depth extremum by up to (1-cos 22.5°)·|L.xy|·R, which
         // would cut long shadows with a hard line inside the fade zone) and
         // the center, at the ground and lifted to the caster-height cap. The
@@ -232,7 +232,7 @@ enum ShadowFrameStateResolver {
         // edges crawl. Quantizing in √2 steps keeps the grid constant between
         // rare re-anchor steps while capping the density overshoot at 1.41×
         // (a plain pow2 wastes up to 2×), and integer-zoom re-normalization
-        // scales it exactly ×2 (two √2 steps) — grid lines stay glued to the
+        // scales it exactly ×2 (two √2 steps), so grid lines stay glued to the
         // map content.
         // Margin: 2 × 4-texel uv inset + 1 texel for the half-texel center
         // snap on each axis, so the disc rim always stays inside the inset

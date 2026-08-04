@@ -20,7 +20,7 @@ final class VideoExportMarkerCompositorMathTests: XCTestCase {
 
     func testBottomAnchorPutsTheImageAboveThePoint() {
         // .bottom: the bottom edge of the marker touches the point, the image
-        // extends upward — in y-up space the rect starts at the point.
+        // extends upward: in y-up space the rect starts at the point.
         let rect = VideoExportMarkerCompositorMath.rectPx(anchorPointPx: point,
                                                           sizePx: sizePx,
                                                           anchor: .bottom)

@@ -740,7 +740,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Fresh bytes failed to parse, but the entry on screen is the best
-        // content we have — it must not be deleted, and the serve must stay
+        // content we have: it must not be deleted, and the serve must stay
         // unresolved so the render store keeps the tile requestable.
         XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
         XCTAssertFalse(pipeline.hasRevalidated(tile))

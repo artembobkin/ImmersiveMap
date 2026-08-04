@@ -47,7 +47,7 @@ enum CameraBearingFollowMath {
     }
 
     /// true if the bearing is stuck (hit a constraint at its limit): no progress between frames,
-    /// yet the target is not reached — the follow must stop instead of spinning the display link forever.
+    /// yet the target is not reached; the follow must stop instead of spinning the display link forever.
     static func isStalled(current: Float, previous: Float, target: Float) -> Bool {
         abs(shortestDelta(current: previous, target: current)) <= progressThreshold
             && abs(shortestDelta(current: current, target: target)) > snapThreshold

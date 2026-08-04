@@ -10,9 +10,9 @@ import MetalKit
 /// shader library load, ~26 pipeline states, the MSDF text atlases (two PNG
 /// decodes + uploads and two JSON metric decodes), the POI sprite
 /// rasterization, and the procedural sphere/cap geometry. None of it depends
-/// on anything that varies between views — the device is the system singleton,
+/// on anything that varies between views: the device is the system singleton,
 /// the color format is always `bgra8Unorm` and the MSAA sample count is a pure
-/// function of the device — so one set serves the whole process and a second
+/// function of the device, so one set serves the whole process and a second
 /// map view (or a settings-driven renderer recreation) skips the entire cost.
 ///
 /// Everything held here is immutable after creation and is safe to read from
@@ -23,7 +23,7 @@ import MetalKit
 /// Deliberate trade-offs of process-lifetime caching:
 /// - The set stays resident after the last map view goes away (the decoded
 ///   text atlases dominate at ~2×17 MB of private textures). That is the
-///   point — the next view starts warm — but apps where the map is a rarely
+///   point (the next view starts warm), but apps where the map is a rarely
 ///   visited screen pay the residency; a release-when-idle hook can be added
 ///   if that ever matters in practice.
 /// - The device is resolved once. If the system default device can change

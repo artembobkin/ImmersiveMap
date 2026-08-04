@@ -39,7 +39,7 @@ final class VideoExportAssetWriter {
                 AVVideoExpectedSourceFrameRateKey: configuration.framesPerSecond,
                 AVVideoMaxKeyFrameIntervalKey: configuration.framesPerSecond * 2
             ],
-            // Tag the stream as BT.709 — the standard for SDR video — so
+            // Tag the stream as BT.709, the standard for SDR video, so
             // players reproduce the map's colors consistently.
             AVVideoColorPropertiesKey: [
                 AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,

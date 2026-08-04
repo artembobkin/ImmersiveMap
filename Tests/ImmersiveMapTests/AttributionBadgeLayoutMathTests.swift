@@ -5,7 +5,7 @@
 import XCTest
 
 /// Platform-neutral badge geometry: runs under plain `swift test` on any
-/// platform — the whole point of extracting the math from the two views.
+/// platform, which is the whole point of extracting the math from the two views.
 final class AttributionBadgeLayoutMathTests: XCTestCase {
     private let bounds = CGRect(x: 0, y: 0, width: 800, height: 600)
     private let safeArea = PlatformEdgeInsets(top: 20, left: 10, bottom: 34, right: 5)

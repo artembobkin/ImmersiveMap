@@ -14,7 +14,7 @@ import MetalKit
 // The network stage is disk-first: while the download is in flight, the
 // freshest prepared entry (any ETag) is served from disk so a warm cache
 // paints without waiting for the network round-trip; the download result then
-// acts as revalidation — a matching ETag confirms the served content, a
+// acts as revalidation: a matching ETag confirms the served content, a
 // mismatch re-parses the fresh bytes and swaps the tile in place.
 // Decisions about when a tile request is temporarily blocked after errors are
 // delegated to `TileRetryController` (per-tile backoff + global cooldown).
@@ -449,7 +449,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     // CPU stage: prepared cache by ETag -> parse -> materialize -> save.
     // The prepared cache is keyed by the raw tile's ETag: the network stage
     // learned the current ETag, and the disk-first serve (if any) has already
-    // been judged against it — this stage only runs when fresh content must be
+    // been judged against it; this stage only runs when fresh content must be
     // produced (or the serve missed). Honors task cancellation at every step
     // and updates the retry state based on the outcome.
     // `wasServedFromDiskFirst` guards the disk entry that is currently on

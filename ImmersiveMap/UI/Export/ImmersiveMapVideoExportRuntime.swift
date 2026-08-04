@@ -8,7 +8,7 @@ import QuartzCore
 
 /// Owns one offline tour export: builds a headless render stack (its own
 /// engine, camera resolver, presentation controller, and scripted clock,
-/// independent of the on-screen map) and drives the frame loop — advance the
+/// independent of the on-screen map) and drives the frame loop, advance the
 /// tour timeline, render into a writer-vended pixel buffer, wait for tiles,
 /// append. Lives for exactly one export and is released afterwards, freeing
 /// the engine's GPU resources and caches.
@@ -132,7 +132,7 @@ final class ImmersiveMapVideoExportRuntime {
     func run(shots: [ImmersiveMapCameraTourShot],
              progress: @escaping (ImmersiveMapVideoExportProgress) -> Void) async throws {
         // The runtime lives for exactly one export; on any exit the engine is
-        // discarded — stop its tile loader and cut late event deliveries so an
+        // discarded: stop its tile loader and cut late event deliveries so an
         // orphaned load cannot delete valid disk entries or push stale state.
         defer { engine.prepareForDiscard() }
         let driver = TourVideoTimelineDriver(shots: shots,
@@ -192,7 +192,7 @@ final class ImmersiveMapVideoExportRuntime {
     /// Settles the scene before the first captured frame: renders discarded
     /// frames with advancing scene time (label fades and avatar appear-fades
     /// need time to converge) until tiles, fades, the label visibility cycle,
-    /// and avatar animations are quiet — or the readiness timeout expires.
+    /// and avatar animations are quiet, or the readiness timeout expires.
     /// Avatar state is a detached copy, so its animations are finite by
     /// construction and cannot stall the pre-roll.
     private func preroll(driver: TourVideoTimelineDriver) async throws {
@@ -225,8 +225,8 @@ final class ImmersiveMapVideoExportRuntime {
         try await renderOnce(into: scratchTexture)
     }
 
-    /// Renders the current frame, then — with scene time held, so fades and
-    /// retention don't progress — re-renders whenever freshly materialized
+    /// Renders the current frame, then (with scene time held, so fades and
+    /// retention don't progress) re-renders whenever freshly materialized
     /// tiles arrive, until the viewport has no outstanding tiles or the
     /// per-frame readiness timeout expires.
     private func renderSettledFrame(into texture: MTLTexture) async throws {

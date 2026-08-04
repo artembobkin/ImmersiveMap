@@ -86,7 +86,7 @@ enum SceneModelDrawer {
     /// Depth-only replay of the meshes from the light's orthographic cameras
     /// into the two halves of the shadow atlas: no materials, no textures,
     /// cull `.none` (winding does not matter without color output). No encoder
-    /// depth bias — the receiver-side bias computed by ShadowFrameStateResolver
+    /// depth bias, the receiver-side bias computed by ShadowFrameStateResolver
     /// covers both caster kinds.
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
                                   lightProjectionViews: [matrix_float4x4],

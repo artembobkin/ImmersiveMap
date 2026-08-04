@@ -7,9 +7,9 @@ import XCTest
 /// Проверяет `clampEnvelopeBuildingExtrusions`: наружный контур parts-моделируемого
 /// здания (хал) срезается по цепочке перекрывающихся по высоте значимых частей,
 /// а реальное здание с декором крыши остаётся полной высоты. Кейсы из центра
-/// Москвы: квартал Four Seasons (плиты крыши целиком выше контура — вето),
+/// Москвы: квартал Four Seasons (плиты крыши целиком выше контура: вето),
 /// Спасская башня и собор Василия Блаженного (части заканчиваются на вершине
-/// контура — кламп по цепочке), уличный козырёк (разрыв цепочки — не тянет вниз).
+/// контура: кламп по цепочке), уличный козырёк (разрыв цепочки, не тянет вниз).
 final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
@@ -105,7 +105,7 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         baseHeight: 0,
                                         topHeight: 60)]
         // Реальное здание: значимые плиты/фонари крыши целиком НАД вершиной
-        // контура (кейс Four Seasons). Кламп запрещён — иначе тело здания
+        // контура (кейс Four Seasons). Кламп запрещён, иначе тело здания
         // исчезло бы, а декор повис в воздухе.
         for (index, origin) in [SIMD2<Float>(0, 0), SIMD2(50, 0), SIMD2(0, 50), SIMD2(50, 50)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
@@ -131,7 +131,7 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         baseHeight: 0,
                                         topHeight: 60)]
         // Четыре крошечные надстройки (трубы, слуховые окна): суммарно ~1%
-        // следа — не считаются ни свидетелями, ни вето.
+        // следа, не считаются ни свидетелями, ни вето.
         for (index, origin) in [SIMD2<Float>(10, 10), SIMD2(80, 10), SIMD2(10, 80), SIMD2(80, 80)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
                                             exterior: square(x: origin.x, y: origin.y, size: 5),
