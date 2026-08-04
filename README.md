@@ -87,6 +87,7 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | Built-in vector tiles, no token required | Available |
 | Mapbox vector tiles | Available |
 | Your own MVT tile source | Available |
+| [Customizable attribution badge](ATTRIBUTION.md) | Available |
 | Globe rendering and globe-to-flat morph | Available |
 | Labels with MSDF text and GPU collision | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
