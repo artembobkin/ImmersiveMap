@@ -721,8 +721,28 @@ extension TileMvtParser {
     /// `hide_3d` flag. Extruded as-is it becomes one solid box that engulfs the
     /// individually-heighted towers/domes inside it. Detect such an envelope - a
     /// base-0 candidate whose footprint encloses many stacked (base>0) parts from
-    /// OTHER buildings - and clamp its top down to the lowest enclosed part's base,
-    /// leaving a solid pedestal while the parts articulate everything above.
+    /// OTHER buildings - and clamp its top down, leaving a solid pedestal while
+    /// the parts articulate everything above.
+    ///
+    /// Two kinds of buildings meet that footprint test, and only one may be
+    /// clamped. A parts-modeled landmark (St. Basil's, the Kremlin towers) is a
+    /// hull: its stacked parts top out AT its declared height - the outline's top
+    /// IS the tallest part's tip. A real solid building decorated with rooftop
+    /// parts (Moscow's Four Seasons block) is the opposite: its roof slabs and
+    /// lanterns sit entirely ABOVE the outline's top. So a significant part
+    /// wholly above the top vetoes the clamp, and otherwise the clamp level
+    /// descends from the highest significant part down a chain of
+    /// height-overlapping parts, stopping at the first vertical gap - a stray
+    /// low canopy disconnected from the chain cannot drag the building down to
+    /// its base. Tiny parts (chimneys, crosses, dormers) are ignored throughout:
+    /// a footprint below `envelopeClampSignificanceRatio` of the envelope can
+    /// neither veto nor stand in for removed walls.
+    private static let envelopeClampSignificanceRatio: Float = 0.02
+    /// Максимальный вертикальный зазор между частями цепочки, в долях высоты
+    /// конверта: сглаживает квантование высот в данных, не позволяя цепочке
+    /// перепрыгивать настоящие пустоты.
+    private static let envelopeClampChainGapRatio: Float = 0.05
+
     private func clampEnvelopeBuildingExtrusions(
         _ candidates: [MeasuredBuildingExtrusionCandidate]
     ) -> [MeasuredBuildingExtrusionCandidate] {
@@ -739,21 +759,38 @@ extension TileMvtParser {
             let candidate = measured.candidate
             guard candidate.baseHeight <= baseEpsilon else { return measured }
 
-            var minStackedBase = Float.greatestFiniteMagnitude
-            var enclosedCount = 0
+            let chainTolerance = max(Self.envelopeClampChainGapRatio * candidate.topHeight, 1)
+            var enclosedSpans: [(base: Float, top: Float)] = []
+            var hasSignificantPartAboveTop = false
             for other in stackedIndices {
                 let part = candidates[other]
                 guard part.candidate.buildingId != candidate.buildingId,
+                      part.area >= Self.envelopeClampSignificanceRatio * measured.area,
                       part.bounds.isInsideOrEqual(to: measured.bounds),
                       isRingContained(part.candidate.clippedExterior, in: candidate.clippedExterior) else {
                     continue
                 }
-                enclosedCount += 1
-                minStackedBase = min(minStackedBase, part.candidate.baseHeight)
+                if part.candidate.baseHeight >= candidate.topHeight - chainTolerance {
+                    hasSignificantPartAboveTop = true
+                    break
+                }
+                enclosedSpans.append((part.candidate.baseHeight, part.candidate.topHeight))
             }
 
-            guard enclosedCount >= minEnclosedParts else { return measured }
-            let clampedTop = max(candidate.baseHeight, minStackedBase)
+            guard hasSignificantPartAboveTop == false,
+                  enclosedSpans.count >= minEnclosedParts,
+                  var level = enclosedSpans.map(\.top).max() else { return measured }
+
+            var descended = true
+            while descended {
+                descended = false
+                for span in enclosedSpans where span.base < level && span.top + chainTolerance >= level {
+                    level = span.base
+                    descended = true
+                }
+            }
+
+            let clampedTop = max(candidate.baseHeight, level)
             guard clampedTop < candidate.topHeight else { return measured }
 
             let clamped = BuildingExtrusionCandidate(
@@ -854,8 +891,12 @@ extension TileMvtParser {
                 return true
             }
 
+            // The crossing guard above already rejects edges with
+            // previous.y == current.y, so the division is safe; clamping the
+            // denominator would flip its sign for downward edges and turn the
+            // whole test into a coin flip on concave rings.
             let intersects = ((current.y > point.y) != (previous.y > point.y))
-                && (point.x < (previous.x - current.x) * (point.y - current.y) / max(previous.y - current.y, epsilon) + current.x)
+                && (point.x < (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x)
             if intersects {
                 isInside.toggle()
             }

@@ -6,7 +6,7 @@ import XCTest
 
 final class PreparedTileDiskCodecTests: XCTestCase {
     func testPreparedTileCacheFormatVersionIncludesLabelVisibilityPolicyRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 26)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 28)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
