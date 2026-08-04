@@ -1,25 +1,32 @@
 # Attribution
 
-**In one line: the map data credit has to stay visible wherever the map is.** Not on a Settings page, not one tap away — on the map or right next to it.
+## Short version
 
-The engine does it for you. A plain map is already compliant:
+**Keep the map data credit visible wherever the map is.** The engine already does it — a plain map needs nothing from you.
 
 ```swift
-ImmersiveMapView()                                  // badge shown, nothing to do
+// Compliant as is: the badge is on and credits the active tile source.
+ImmersiveMapView()
 
-ImmersiveMapView()                                  // move it, resize it, recolor it
+// Restyle it — size, corner, color. The credit text stays.
+ImmersiveMapView()
     .attributionSettings(size: .small, position: .topLeading)
 
-ImmersiveMapView()                                  // draw the credit yourself instead
+// Or hide it and draw the credit in your own UI, on the same screen.
+ImmersiveMapView()
     .attributionSettings(isVisible: false)
     .attributionProvidedExternally()
 ```
 
-That is the whole API. With the built-in tiles the credit reads **© OpenStreetMap © OpenMapTiles**; if you draw it yourself, that is the text to show, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
+With the built-in tiles the credit reads **© OpenStreetMap © OpenMapTiles**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
 
-The rest of this page is the detail: what each tile source requires, why the placement rule is what it is, and who carries the obligation. It is a practical summary written by the project, not legal advice — the authoritative texts are linked at the bottom.
+Not enough on its own: the credit only on a Settings or About screen.
 
-## What has to be shown
+## Full version
+
+The same thing again, with the reasoning, the per-provider details and the rest of the API. It is a practical summary written by the project, not legal advice — the authoritative texts are linked at the bottom.
+
+### What has to be shown
 
 The required credit depends on whose tiles you render, not on which parts of the engine you use:
 
@@ -31,7 +38,7 @@ The required credit depends on whose tiles you render, not on which parts of the
 
 The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. Mapbox's own terms apply in addition to the OSM credit when you render Mapbox tiles.
 
-## Where it has to appear
+### Where it has to appear
 
 **On the map, or immediately next to it.** The OSMF attribution guidelines ask for the credit to be visible wherever the map is — not one tap away. A line on an About screen, in a Settings tab, or in the App Store description does not satisfy the license on its own.
 
@@ -42,7 +49,7 @@ Two consequences worth stating plainly, because they are the questions that come
 
 What the license does *not* dictate is styling. Size, color, corner and background are yours as long as the credit stays legible against the map underneath it, and the badge is adjustable exactly for that reason.
 
-## Who is responsible for what
+### Who is responsible for what
 
 **The engine gives you a compliant default.** A stock `ImmersiveMapView()` renders the badge for the active provider with no configuration at all — if you write nothing, you are covered.
 
@@ -55,7 +62,7 @@ A short checklist before shipping:
 - The link to the source's license page works (the badge does this for you; a custom overlay has to do it itself).
 - If you swap providers at runtime, the credit swaps with them.
 
-## What the badge shows
+### What the badge shows
 
 The badge takes its text from the **active tile provider**. With the built-in tiles it renders the one-line credit:
 
@@ -65,7 +72,7 @@ A tap (or click on macOS) opens [openstreetmap.org/copyright](https://www.openst
 
 The engine never puts its own name into the badge: a map drawn on OpenStreetMap data credits OpenStreetMap, not the renderer.
 
-## Restyling the badge
+### Restyling the badge
 
 Size, position and text color are adjustable without touching the credit itself, and every change applies live:
 
@@ -96,7 +103,7 @@ ImmersiveMapView()
 
 Overriding the text makes sense only when your app shows the source attribution elsewhere and the source's license permits that.
 
-## Hiding the badge
+### Hiding the badge
 
 ```swift
 ImmersiveMapView()
@@ -115,7 +122,7 @@ ImmersiveMapView()
 
 The declaration changes nothing else; the license obligation stays with the app.
 
-## Drawing the credit yourself
+### Drawing the credit yourself
 
 Hiding the built-in badge to render the credit in your own UI is fully supported, and for a design-heavy app it is often the better route: the badge is drawn by the map view and cannot participate in your layout, your safe-area insets or your animated chrome. What the license asks is that the credit ends up on or next to the map, not that it comes from the engine.
 
@@ -139,11 +146,11 @@ let attribution = ImmersiveMapTilesProvider().attribution
 Text(attribution.title)
 ```
 
-## A wish from the project
+### A wish from the project
 
 Nothing in the license requires crediting ImmersiveMap, and the badge deliberately never mentions it. Still, if the engine is useful in your app, a small user-facing mention of the project somewhere — an about screen, a credits list, a line next to your own attribution — would be genuinely appreciated. It is how other developers find the project, and that is what keeps it alive.
 
-## Sources
+### Sources
 
 - [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/) — the license on OpenStreetMap data.
 - [OpenStreetMap copyright and license](https://www.openstreetmap.org/copyright) — the user-facing summary the badge links to.
