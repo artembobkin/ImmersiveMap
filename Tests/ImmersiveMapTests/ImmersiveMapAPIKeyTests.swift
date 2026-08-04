@@ -6,6 +6,7 @@ import XCTest
 
 /// The API key path: what `apiKey(_:)` puts into the settings, and that it
 /// survives being combined with a provider in either order.
+@MainActor
 final class ImmersiveMapAPIKeyTests: XCTestCase {
     private let key = "im_0123456789abcdef"
 

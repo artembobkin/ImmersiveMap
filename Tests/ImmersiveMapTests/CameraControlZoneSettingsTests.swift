@@ -7,6 +7,7 @@ import XCTest
 /// The corner control zones capture drags that would otherwise pan the map, and
 /// nothing on screen announces them, so they are opt-in. These tests guard the
 /// settings that gate them: the runtime creates the zones straight from here.
+@MainActor
 final class CameraControlZoneSettingsTests: XCTestCase {
     func testControlZonesAreOffByDefault() {
         let controlZones = ImmersiveMapSettings.default.camera.controlZones
