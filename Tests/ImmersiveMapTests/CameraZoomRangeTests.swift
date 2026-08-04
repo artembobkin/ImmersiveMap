@@ -59,6 +59,14 @@ final class CameraZoomRangeTests: XCTestCase {
 
     // MARK: - Camera state
 
+    func testInitialCameraStateRespectsMinimumZoom() {
+        // The default state starts at zoom 0; the bound must hold from the
+        // first frame, not from the first gesture.
+        let controller = CameraStateController(settings: cameraSettings(minimumZoom: 5))
+
+        XCTAssertEqual(controller.zoom, 5)
+    }
+
     func testZoomOutStopsAtMinimum() {
         let controller = CameraStateController(settings: cameraSettings(minimumZoom: 4))
         controller.setCameraPosition(position(zoom: 10))

@@ -234,6 +234,25 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// Reuse of dismantled map views. When a SwiftUI screen with an
+    /// `ImmersiveMapView` goes away, its platform view — renderer, GPU tile
+    /// cache, atlas pages — is parked for `parkedTimeToLive` seconds instead of
+    /// being destroyed, and the next `ImmersiveMapView` adopts it warm. New
+    /// settings are reconciled on adoption through the regular settings-apply
+    /// path, so adopting with a different configuration is safe. An adopted
+    /// view keeps its previous camera unless the new view provides an explicit
+    /// camera position or an attached camera controller.
+    public struct ViewReuseSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        public var parkedTimeToLive: TimeInterval
+
+        public init(isEnabled: Bool = true,
+                    parkedTimeToLive: TimeInterval = 30) {
+            self.isEnabled = isEnabled
+            self.parkedTimeToLive = parkedTimeToLive
+        }
+    }
+
     public struct PresentationSettings: Equatable, Sendable {
         public var automaticTransitionStartZoom: Double
         public var automaticTransitionSpan: Double
@@ -812,6 +831,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var avatars: AvatarSettings
     public var attribution: AttributionSettings
     public var postProcessing: PostProcessingSettings
+    public var viewReuse: ViewReuseSettings
     public var debug: DebugSettings
 
     public init(renderLoop: RenderLoopSettings,
@@ -826,6 +846,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 avatars: AvatarSettings,
                 attribution: AttributionSettings = AttributionSettings(),
                 postProcessing: PostProcessingSettings = PostProcessingSettings(),
+                viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings) {
         self.renderLoop = renderLoop
         self.camera = camera
@@ -839,6 +860,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.avatars = avatars
         self.attribution = attribution
         self.postProcessing = postProcessing
+        self.viewReuse = viewReuse
         self.debug = debug
     }
 
@@ -965,6 +987,12 @@ public extension ImmersiveMapSettings {
     func presentationSettings(_ presentation: PresentationSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.presentation = presentation
+        return settings
+    }
+
+    func viewReuseSettings(_ viewReuse: ViewReuseSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.viewReuse = viewReuse
         return settings
     }
 

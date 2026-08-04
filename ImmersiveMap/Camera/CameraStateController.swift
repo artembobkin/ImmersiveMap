@@ -29,6 +29,9 @@ class CameraStateController {
 
     init(settings: ImmersiveMapSettings.CameraSettings) {
         self.settings = settings
+        // The default state starts at zoom 0; a configured minimumZoom must
+        // hold from the very first frame, not from the first gesture.
+        cameraState.zoom = settings.clampZoom(cameraState.zoom)
     }
 
     convenience init(config: ImmersiveMapSettings) {
