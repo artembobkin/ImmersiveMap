@@ -18,6 +18,12 @@ final class ImmersiveMapCameraAnimationRuntime {
         cameraAnimationRuntime: self,
         renderRuntime: renderRuntime
     )
+    private lazy var pathFollowController = ImmersiveMapCameraPathFollowController(
+        cameraRuntime: cameraRuntime,
+        interactionRuntime: interactionRuntime,
+        cameraAnimationRuntime: self,
+        renderRuntime: renderRuntime
+    )
     private lazy var globeCameraPanInertia = GlobeCameraPanInertia(configuration: makeGlobeCameraPanInertiaConfiguration())
     private var globeCameraPanInertiaIsActive = false
     private lazy var cameraPitchFollow = CameraPitchFollow(configuration: makeCameraPitchFollowConfiguration())
@@ -37,6 +43,10 @@ final class ImmersiveMapCameraAnimationRuntime {
         flightController.isActive
     }
 
+    var isCameraPathFollowActive: Bool {
+        pathFollowController.isActive
+    }
+
     func updateSettings() {
         globeCameraPanInertiaIsActive = globeCameraPanInertia.updateConfiguration(makeGlobeCameraPanInertiaConfiguration())
         cameraPitchFollowIsActive = cameraPitchFollow.updateConfiguration(makeCameraPitchFollowConfiguration())
@@ -52,6 +62,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         if flightController.isActive {
             flightController.cancel(notifyCompletion: true)
         }
+        // Manual angle control wins over a traversal, same as over a flight.
+        pathFollowController.cancel(notifyCompletion: true)
 
         setBearingTarget(bearing, currentTime: currentTime)
         setPitchTarget(pitch, currentTime: currentTime)
@@ -116,6 +128,28 @@ final class ImmersiveMapCameraAnimationRuntime {
         flightController.cancel(notifyCompletion: notifyCompletion)
     }
 
+    func startCameraPathFollow(path: ImmersiveMapGeoPath,
+                               duration: TimeInterval,
+                               curve: ImmersiveMapPathAnimationCurve,
+                               options: ImmersiveMapCameraFollowOptions,
+                               completion: ((Bool) -> Void)?,
+                               currentTime: CFTimeInterval) {
+        pathFollowController.start(path: path,
+                                   duration: duration,
+                                   curve: curve,
+                                   options: options,
+                                   completion: completion,
+                                   currentTime: currentTime)
+    }
+
+    func cancelCameraPathFollow(notifyCompletion: Bool = true) {
+        pathFollowController.cancel(notifyCompletion: notifyCompletion)
+    }
+
+    func advanceCameraPathFollowIfNeeded(currentTime: CFTimeInterval) {
+        pathFollowController.advanceIfNeeded(currentTime: currentTime)
+    }
+
     func advanceCameraFlightIfNeeded(currentTime: CFTimeInterval) {
         flightController.advanceIfNeeded(currentTime: currentTime)
     }
@@ -146,13 +180,18 @@ final class ImmersiveMapCameraAnimationRuntime {
         cancelGlobeCameraPanInertia()
         cancelCameraPitchFollow()
         cancelCameraBearingFollow()
+        // The follow goes last: its completion runs synchronously, and a camera
+        // command the app issues from there must not be undone by the rest of
+        // this sequence.
         flightController.cancel(notifyCompletion: true)
+        pathFollowController.cancel(notifyCompletion: true)
     }
 
     func advanceAnimationsIfNeeded(currentTime: CFTimeInterval) {
         advanceCameraPitchFollowIfNeeded(currentTime: currentTime)
         advanceCameraBearingFollowIfNeeded(currentTime: currentTime)
         advanceGlobeCameraPanInertiaIfNeeded(currentTime: currentTime)
+        pathFollowController.advanceIfNeeded(currentTime: currentTime)
         flightController.advanceIfNeeded(currentTime: currentTime)
     }
 
@@ -163,6 +202,7 @@ final class ImmersiveMapCameraAnimationRuntime {
         cameraPitchFollowIsActive = false
         cameraBearingFollow.cancel()
         cameraBearingFollowIsActive = false
+        pathFollowController.reset()
         flightController.reset()
         refreshRenderingState()
     }
@@ -260,6 +300,7 @@ final class ImmersiveMapCameraAnimationRuntime {
     func refreshRenderingState() {
         renderRuntime.setCameraAnimationRenderingActive(globeCameraPanInertiaIsActive
                                                         || flightController.isActive
+                                                        || pathFollowController.isActive
                                                         || cameraPitchFollowIsActive
                                                         || cameraBearingFollowIsActive)
     }

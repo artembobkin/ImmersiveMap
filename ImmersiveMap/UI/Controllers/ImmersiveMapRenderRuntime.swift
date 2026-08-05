@@ -71,6 +71,11 @@ final class ImmersiveMapRenderRuntime {
                            active: isActive)
     }
 
+    func setRouteAnimationRenderingActive(_ isActive: Bool) {
+        driver.setActivity(.routeAnimation,
+                           active: isActive)
+    }
+
     func setInteractionRenderingActive(_ isActive: Bool) {
         driver.setActivity(.interaction,
                            active: isActive)
@@ -81,6 +86,7 @@ final class ImmersiveMapRenderRuntime {
         setLabelVisibilityCycleRenderingActive(state.labelVisibilityCycleRenderingActive)
         setAvatarAnimationRenderingActive(state.avatarAnimationRenderingActive)
         setSceneModelAnimationRenderingActive(state.sceneModelAnimationRenderingActive)
+        setRouteAnimationRenderingActive(state.routeAnimationRenderingActive)
     }
 
     func beginFrame() -> Bool {

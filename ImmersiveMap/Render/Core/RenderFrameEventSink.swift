@@ -13,6 +13,7 @@ struct RenderActivityState {
     let labelVisibilityCycleRenderingActive: Bool
     let avatarAnimationRenderingActive: Bool
     let sceneModelAnimationRenderingActive: Bool
+    let routeAnimationRenderingActive: Bool
 }
 
 /// Events arrive both from the main thread and from background tasks (tile
@@ -21,6 +22,9 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     func invalidate(_ reason: RenderInvalidationReason)
     func applyActivityState(_ state: RenderActivityState)
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)
+    /// Path animations that ended on the last frame, with where they left the
+    /// model.
+    func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult])
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?)
     /// Unlike `updateAvatarSelectionSnapshot` (completion handler, off-main),
     /// this is called synchronously from the render loop on the main thread so

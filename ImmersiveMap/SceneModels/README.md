@@ -14,6 +14,9 @@ renderer-facing scene model draw code consumes it.
 - Provide renderer-facing scene model source snapshots.
 - Resolve scene model presentation state across frames with deterministic
   animation math (great-circle position, quaternion orientation, scalar easing).
+- Fly a model along an `ImmersiveMapGeoPath`: position, altitude, heading and
+  pitch come from the shared path sampler in `Geo`, so the model rides exactly
+  on the route drawn for the same path.
 
 ## May Contain
 

@@ -13,6 +13,7 @@ final class RenderLoopPacing {
         case cameraAnimation = "camera animation"
         case avatarAnimation = "avatar animation"
         case sceneModelAnimation = "scene model animation"
+        case routeAnimation = "route animation"
 
         var usesInteractionFrameRate: Bool {
             switch self {
@@ -20,7 +21,8 @@ final class RenderLoopPacing {
                  .labelVisibilityCycle,
                  .cameraAnimation,
                  .avatarAnimation,
-                 .sceneModelAnimation:
+                 .sceneModelAnimation,
+                 .routeAnimation:
                 return true
             case .labelFade:
                 return false

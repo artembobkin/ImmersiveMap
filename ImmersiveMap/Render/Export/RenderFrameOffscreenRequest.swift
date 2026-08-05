@@ -12,6 +12,8 @@ struct RenderFrameOffscreenRequest {
     let texture: MTLTexture
     /// Render size in pixels.
     let drawSize: CGSize
+    /// Drawable pixels per layout point for style values expressed in points.
+    let pixelsPerPoint: CGFloat
     /// Invoked on the Metal completion thread after the frame's GPU work
     /// finished (`true` on success). Fires only when the render call returned
     /// `true`: a skipped frame never schedules GPU work.

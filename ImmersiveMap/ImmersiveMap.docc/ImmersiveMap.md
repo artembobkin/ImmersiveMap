@@ -21,6 +21,8 @@ Drop ``ImmersiveMapView`` into a SwiftUI hierarchy to render a map out of the bo
 
 - ``ImmersiveMapCameraController``
 - ``ImmersiveMapAvatarsController``
+- ``ImmersiveMapSceneModelsController``
+- ``ImmersiveMapRoutesController``
 - ``ImmersiveMapSelectionController``
 
 ### Video Export

@@ -65,6 +65,9 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
     public func setOrientation(id:headingDegrees:pitchDegrees:rollDegrees:duration:)
     public func setScale(id:_:duration:)
     public func setAltitude(id:meters:duration:)
+
+    public func animate(id:along:duration:curve:appliesHeading:appliesPitch:completion:)
+    public func cancelPathAnimation(id: UInt64)
 }
 ```
 
@@ -73,6 +76,7 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 - `move` animates along a great circle with a duration derived from the distance (snappy for short hops, capped for jumps), the same feel as avatar movement.
 - `setOrientation` / `setScale` / `setAltitude` ease over `duration` (default 0.3 s); orientation interpolates as a shortest-arc quaternion. Pass `duration: 0` to snap.
 - `upsert` / `set` replace descriptors without transform animation; coordinate changes of surviving ids still glide.
+- `animate(id:along:duration:)` flies a model along an `ImmersiveMapGeoPath` over a real duration, taking its course from the trajectory tangent and its pitch from the altitude profile, with a completion that fires exactly once. That is the API to use for anything longer than a hop: `move` derives its duration from the distance and caps it below a second. See `Documentation/docs/routes.md`, which also covers drawing the path as a line.
 
 ## Loading and memory
 

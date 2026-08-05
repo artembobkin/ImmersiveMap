@@ -57,6 +57,7 @@ final class ImmersiveMapHostRuntime {
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
+                routesController: ImmersiveMapRoutesController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -66,6 +67,7 @@ final class ImmersiveMapHostRuntime {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         sceneModelsController: sceneModelsController,
+                        routesController: routesController,
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction)
@@ -80,8 +82,13 @@ final class ImmersiveMapHostRuntime {
     }
 
     func dismantle() {
+        // Parking cancels camera flights, so a path animation cannot outlive the
+        // view either: its completion resolves here instead of hanging until the
+        // parked view is finally dropped.
+        runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
         syncControllers(avatarsController: nil,
                         sceneModelsController: nil,
+                        routesController: nil,
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil)
@@ -127,15 +134,18 @@ final class ImmersiveMapHostRuntime {
 
     func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
                          sceneModelsController newSceneModelsController: ImmersiveMapSceneModelsController? = nil,
+                         routesController newRoutesController: ImmersiveMapRoutesController? = nil,
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
                          avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?) {
         runtimeGraph.selectionHandler.setAvatarTapAction(newAvatarTapAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
+        let shouldUpdateRoutesController = runtimeGraph.routeRuntime.isAttachedController(newRoutesController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
         guard shouldUpdateAvatarsController
             || shouldUpdateSceneModelsController
+            || shouldUpdateRoutesController
             || shouldUpdateCameraController else {
             runtimeGraph.selectionHandler.syncController(newSelectionController)
             return
@@ -149,6 +159,10 @@ final class ImmersiveMapHostRuntime {
         if shouldUpdateSceneModelsController {
             runtimeGraph.sceneModelRuntime.attachController(newSceneModelsController,
                                                             renderRuntime: runtimeGraph.renderRuntime)
+        }
+        if shouldUpdateRoutesController {
+            runtimeGraph.routeRuntime.attachController(newRoutesController,
+                                                       renderRuntime: runtimeGraph.renderRuntime)
         }
         if shouldUpdateCameraController {
             runtimeGraph.cameraRuntime.attachController(newCameraController,
@@ -183,6 +197,10 @@ final class ImmersiveMapHostRuntime {
 
     private func createRenderer(settings: ImmersiveMapSettings,
                                 cameraPosition: ImmersiveMapCameraPosition?) {
+        // A fresh renderer starts with an empty presentation store, so any
+        // path animation it would have finished is gone: resolve the app's
+        // completions now instead of leaving chains waiting forever.
+        runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
         let renderer = runtimeGraph.rendererBuilder.makeRenderer(layer: metalLayer,
                                                                  settings: settings,
                                                                  cameraPosition: cameraPosition)
@@ -190,6 +208,7 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.renderRuntime.attachRenderer(renderer)
         runtimeGraph.avatarRuntime.markSnapshotDirty()
         runtimeGraph.sceneModelRuntime.markSnapshotDirty()
+        runtimeGraph.routeRuntime.markSnapshotDirty()
         requestFrame()
     }
 
@@ -213,7 +232,9 @@ final class ImmersiveMapHostRuntime {
         Task { @MainActor in
             detachedGraph.cameraAnimationRuntime.reset()
             detachedGraph.avatarRuntime.detachController()
+            detachedGraph.sceneModelRuntime.cancelAllPathAnimations()
             detachedGraph.sceneModelRuntime.detachController()
+            detachedGraph.routeRuntime.detachController()
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()

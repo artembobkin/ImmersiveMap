@@ -18,6 +18,8 @@ controls.
 - Coordinate conversion math shared by camera, tiles, presentation, or render
   code.
 - Small value types that describe geographic transformations.
+- Great-circle math and path sampling shared by route rendering and scene model
+  animation.
 
 ## Must Not Contain
 

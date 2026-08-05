@@ -80,12 +80,23 @@ struct AvatarState {
 
 struct SceneModelFrameState {
     static let empty = SceneModelFrameState(hasActiveAnimations: false,
-                                            hasShadowCasters: false)
+                                            hasShadowCasters: false,
+                                            pathAnimationResults: [])
 
     var hasActiveAnimations: Bool
     /// At least one model survived light-frustum culling this frame; feeds the
     /// shadow-pass gate together with the building-caster check.
     var hasShadowCasters: Bool
+    /// Path animations that ended on this frame, with the transform they left
+    /// the model at; the engine forwards them so the controller's descriptor
+    /// stays truthful and the app's completion fires exactly once.
+    var pathAnimationResults: [SceneModelPathAnimationResult]
+}
+
+struct RouteFrameState {
+    static let empty = RouteFrameState(hasActiveAnimations: false)
+
+    var hasActiveAnimations: Bool
 }
 
 struct MarkerFrameState {
@@ -106,5 +117,6 @@ final class FrameContextSharedState {
     var roadLabelState: RoadLabelState = .empty
     var avatarState: AvatarState = .empty
     var sceneModelState: SceneModelFrameState = .empty
+    var routeState: RouteFrameState = .empty
     var markerState: MarkerFrameState = .empty
 }

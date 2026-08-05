@@ -20,6 +20,28 @@ extension ImmersiveMapHostView {
         cameraAnimationRuntime.advanceCameraFlightIfNeeded(currentTime: currentTime)
     }
 
+    func followForTesting(path: ImmersiveMapGeoPath,
+                          duration: TimeInterval,
+                          curve: ImmersiveMapPathAnimationCurve = .linear,
+                          options: ImmersiveMapCameraFollowOptions = .default,
+                          completion: ((Bool) -> Void)? = nil,
+                          currentTime: CFTimeInterval) {
+        cameraAnimationRuntime.startCameraPathFollow(path: path,
+                                                     duration: duration,
+                                                     curve: curve,
+                                                     options: options,
+                                                     completion: completion,
+                                                     currentTime: currentTime)
+    }
+
+    func advanceCameraPathFollowForTesting(currentTime: CFTimeInterval) {
+        cameraAnimationRuntime.advanceCameraPathFollowIfNeeded(currentTime: currentTime)
+    }
+
+    var hasActiveCameraPathFollowForTesting: Bool {
+        cameraAnimationRuntime.isCameraPathFollowActive
+    }
+
     func setPanInteractionActiveForTesting(_ isActive: Bool) {
         gestureController.setPanInteractionActiveForTesting(isActive)
     }

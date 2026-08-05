@@ -25,6 +25,15 @@ final class ImmersiveMapCameraCommandHandler {
                                                      options: options,
                                                      completion: completion,
                                                      currentTime: CACurrentMediaTime())
+        case .follow(let path, let duration, let curve, let options, let completion):
+            cameraAnimationRuntime.startCameraPathFollow(path: path,
+                                                         duration: duration,
+                                                         curve: curve,
+                                                         options: options,
+                                                         completion: completion,
+                                                         currentTime: CACurrentMediaTime())
+        case .cancelFollow:
+            cameraAnimationRuntime.cancelCameraPathFollow()
         case .cancelFlight:
             cameraAnimationRuntime.cancelCameraFlight()
         case .setAngleTarget(let bearing, let pitch):

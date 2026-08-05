@@ -12,6 +12,7 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
     private weak var markerRuntime: ImmersiveMapMarkerRuntime?
+    private weak var sceneModelRuntime: ImmersiveMapSceneModelRuntime?
     private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore
     // Written and read on the main actor only (invalidateDelivery from the
     // teardown paths, the guard inside the delivery hop).
@@ -20,10 +21,12 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     init(renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
          markerRuntime: ImmersiveMapMarkerRuntime,
+         sceneModelRuntime: ImmersiveMapSceneModelRuntime,
          debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore) {
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
         self.markerRuntime = markerRuntime
+        self.sceneModelRuntime = sceneModelRuntime
         self.debugOverlayHUDSnapshotStore = debugOverlayHUDSnapshotStore
     }
 
@@ -43,6 +46,18 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     /// pool drop, export teardown).
     func invalidateDelivery() {
         isDeliveryInvalidated = true
+    }
+
+    /// Same guarded main-actor hop as the selection snapshot: a discarded
+    /// engine's late frame must not fire a completion the teardown already
+    /// resolved with `false`.
+    func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult]) {
+        Task { @MainActor [weak sceneModelRuntime, self] in
+            guard self.isDeliveryInvalidated == false else {
+                return
+            }
+            sceneModelRuntime?.applyPathAnimationResults(results)
+        }
     }
 
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {

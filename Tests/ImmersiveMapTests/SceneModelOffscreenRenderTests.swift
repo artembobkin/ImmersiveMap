@@ -47,6 +47,7 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: StubMarkerSource(),
                                        sceneModelSource: sceneModelSource,
+                                       routeSource: StubRouteSource(),
                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                        settings: settings,
                                        renderCamera: renderCamera,
@@ -108,7 +109,8 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         clock.setTime(time)
         let didComplete = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
             let request = RenderFrameOffscreenRequest(texture: texture,
-                                                      drawSize: CGSize(width: size, height: size)) { success in
+                                                      drawSize: CGSize(width: size, height: size),
+                                                      pixelsPerPoint: 1) { success in
                 continuation.resume(returning: success)
             }
             if engine.render(offscreen: request) == false {
@@ -156,4 +158,8 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         try obj.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
+}
+
+private final class StubRouteSource: RouteRenderSource {
+    var currentRoutesController: ImmersiveMapRoutesController? { nil }
 }
