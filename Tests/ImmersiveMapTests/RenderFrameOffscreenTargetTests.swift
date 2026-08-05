@@ -44,6 +44,7 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: StubMarkerSource(),
                                        sceneModelSource: StubSceneModelSource(),
+                                       routeSource: StubRouteSource(),
                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                        settings: settings,
                                        renderCamera: renderCamera,
@@ -66,7 +67,8 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
             clock.setTime(TimeInterval(frameIndex) / 60.0)
             let didComplete = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
                 let request = RenderFrameOffscreenRequest(texture: texture,
-                                                          drawSize: CGSize(width: 64, height: 64)) { success in
+                                                          drawSize: CGSize(width: 64, height: 64),
+                                                          pixelsPerPoint: 1) { success in
                     continuation.resume(returning: success)
                 }
                 if engine.render(offscreen: request) == false {
@@ -87,4 +89,8 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         // alpha byte is 255.
         XCTAssertTrue(pixels.contains { $0 != 0 }, "Rendered texture must not be all zero")
     }
+}
+
+private final class StubRouteSource: RouteRenderSource {
+    var currentRoutesController: ImmersiveMapRoutesController? { nil }
 }

@@ -1,0 +1,157 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+import Metal
+import simd
+
+/// Draws route ribbons in the world pass. Globe presentation only: the layer is
+/// absent from the flat plan, and the ribbon fades out over the tail of the
+/// unfurl so it does not pop when the surface mode flips.
+final class RouteRenderSubsystem: RenderSubsystem {
+    let name: String = "Routes"
+
+    /// The unfurl geometry is fully flat by transition 0.9 and the surface mode
+    /// flips at 1.0; fade over that tail.
+    private static let morphFadeStart: Float = 0.9
+    private static let morphFadeEnd: Float = 1.0
+    /// 256 bytes of 16-byte points: keeps every per-route buffer offset aligned
+    /// for `setVertexBuffer` on every platform.
+    private static let pointBufferAlignment = 16
+
+    private let routeSource: RouteRenderSource
+    private let pipeline: RoutePipeline
+    private let routeDepthState: MTLDepthStencilState
+    private let depthDisabledState: MTLDepthStencilState
+    private let presentationStateStore = RoutePresentationStateStore()
+    private let pointBufferStore: FrameSlottedDynamicMetalBuffer<RouteWorldGeometryBuilder.Point>
+
+    private var points: [RouteWorldGeometryBuilder.Point] = []
+    private var drawItems: [RouteDrawItem] = []
+
+    init(routeSource: RouteRenderSource,
+         pipeline: RoutePipeline,
+         routeDepthState: MTLDepthStencilState,
+         depthDisabledState: MTLDepthStencilState,
+         metalDevice: MTLDevice) {
+        self.routeSource = routeSource
+        self.pipeline = pipeline
+        self.routeDepthState = routeDepthState
+        self.depthDisabledState = depthDisabledState
+        self.pointBufferStore = FrameSlottedDynamicMetalBuffer(
+            metalDevice: metalDevice,
+            slotsCount: InFlightFramePool.inFlightFramesCount,
+            options: [.storageModeShared],
+            minimumCapacity: 512)
+    }
+
+    func update(frameContext: FrameContext) {
+        if let controller = routeSource.currentRoutesController {
+            if let snapshot = controller.consumeSnapshot() {
+                presentationStateStore.apply(snapshot: snapshot, time: frameContext.time)
+            }
+        } else if presentationStateStore.isEmpty == false {
+            // A detached controller leaves no snapshot source: clear instead of
+            // rendering stale routes forever.
+            presentationStateStore.apply(snapshot: RoutesSnapshot(routes: [],
+                                                                  progressAnimationDurationsById: [:],
+                                                                  removedIds: [],
+                                                                  version: 0),
+                                         time: frameContext.time)
+        }
+
+        let presented = presentationStateStore.presentedEntries(at: frameContext.time)
+        frameContext.sharedState.routeState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
+
+        points.removeAll(keepingCapacity: true)
+        drawItems.removeAll(keepingCapacity: true)
+
+        guard frameContext.renderSurfaceMode == .spherical, presented.isEmpty == false else { return }
+        let morphFade = Self.morphFadeAlpha(transition: frameContext.transition)
+        guard morphFade > 0 else { return }
+
+        let constants = GeoScreenProjectionMath.FrameConstants(drawSize: frameContext.drawSize,
+                                                               cameraUniform: frameContext.cameraUniform,
+                                                               resolvedPresentation: frameContext.resolvedPresentation)
+        let pixelsPerPoint = Float(max(frameContext.pixelsPerPoint, 1))
+
+        for route in presented {
+            let widthPx = Float(route.widthPoints) * pixelsPerPoint
+            guard widthPx > 0 else { continue }
+
+            // Sub-pixel lines keep a one-pixel body and pay for the missing
+            // width in alpha, so a thin route never flickers in and out.
+            var color = route.color
+            color.w *= morphFade * min(1, widthPx)
+            guard color.w > 0 else { continue }
+
+            let built = RouteWorldGeometryBuilder.build(samples: route.samples,
+                                                        progress: route.progress,
+                                                        constants: constants)
+            guard built.count >= 2 else { continue }
+
+            let offset = Self.alignedCount(points.count)
+            if offset > points.count {
+                points.append(contentsOf: repeatElement(.zero, count: offset - points.count))
+            }
+            points.append(contentsOf: built)
+
+            drawItems.append(RouteDrawItem(
+                pointBufferOffsetElements: offset,
+                pointCount: built.count,
+                uniform: RouteUniformGPU(viewport: constants.viewport,
+                                         halfWidthPx: max(widthPx * 0.5, 0.5),
+                                         sampleCount: UInt32(built.count),
+                                         color: color)))
+        }
+    }
+
+    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+        guard points.isEmpty == false else { return }
+        let buffer = pointBufferStore.ensureCapacity(slot: frameContext.frameSlotIndex, count: points.count)
+        points.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return }
+            buffer.contents().copyMemory(from: baseAddress, byteCount: rawBuffer.count)
+        }
+    }
+
+    func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
+        guard layer == .routes,
+              frameContext.renderSurfaceMode == .spherical,
+              drawItems.isEmpty == false else {
+            return
+        }
+
+        // Depth test without depth write: the globe and the scene models in
+        // front of the arc already wrote depth, and a translucent ribbon must
+        // not occlude itself along the way.
+        encoder.setDepthStencilState(routeDepthState)
+        RouteDrawer.draw(renderEncoder: encoder,
+                         items: drawItems,
+                         pointsBuffer: pointBufferStore.buffer(for: frameContext.frameSlotIndex),
+                         cameraUniform: frameContext.cameraUniform,
+                         pipeline: pipeline)
+        encoder.setDepthStencilState(depthDisabledState)
+    }
+
+    func handleMemoryWarning() {
+        evict()
+    }
+
+    func evict() {
+        points = []
+        drawItems = []
+    }
+
+    static func morphFadeAlpha(transition: Float) -> Float {
+        guard morphFadeEnd > morphFadeStart else {
+            return transition >= morphFadeEnd ? 0 : 1
+        }
+        let normalized = min(max((transition - morphFadeStart) / (morphFadeEnd - morphFadeStart), 0), 1)
+        return 1 - normalized * normalized * (3 - 2 * normalized)
+    }
+
+    private static func alignedCount(_ count: Int) -> Int {
+        let remainder = count % pointBufferAlignment
+        return remainder == 0 ? count : count + (pointBufferAlignment - remainder)
+    }
+}

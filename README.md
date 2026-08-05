@@ -82,6 +82,7 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | Labels with MSDF text and GPU collision | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |
+| [Routes on the globe, 3D models flying along them](Documentation/docs/routes.md) | Available |
 | Camera flights and scripted tours | Available |
 | Disk / memory tile cache | Available |
 

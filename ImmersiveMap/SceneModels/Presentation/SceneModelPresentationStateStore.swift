@@ -27,9 +27,9 @@ private struct SceneModelPositionAnimation {
         guard duration > 0 else { return targetCoordinate }
         let rawProgress = (time - startTime) / duration
         let progress = SceneModelAnimationMath.easedProgress(for: rawProgress)
-        return SceneModelAnimationMath.coordinate(from: startCoordinate,
-                                                  to: targetCoordinate,
-                                                  progress: progress)
+        return GeoGreatCircleMath.coordinate(from: startCoordinate,
+                                             to: targetCoordinate,
+                                             progress: progress)
     }
 
     func isFinished(at time: TimeInterval) -> Bool {
@@ -59,6 +59,44 @@ private struct SceneModelTransformAnimation {
     }
 }
 
+/// A model flying along a path. Cached `GeoPathMetrics` keeps the per-frame
+/// cost to one exact evaluation, and the model rides the drawn ribbon because
+/// both resolve a fraction through the same metrics.
+private struct SceneModelPathAnimation {
+    let metrics: GeoPathMetrics
+    let startTime: TimeInterval
+    let duration: TimeInterval
+    let curve: ImmersiveMapPathAnimationCurve
+    let appliesHeading: Bool
+    let appliesPitch: Bool
+
+    /// nil when the path cannot describe a trajectory.
+    init?(request: SceneModelPathAnimationRequest, startTime: TimeInterval) {
+        guard let metrics = GeoPathMetrics(path: request.path) else { return nil }
+        self.metrics = metrics
+        self.startTime = startTime
+        duration = max(0, request.duration)
+        curve = request.curve
+        appliesHeading = request.appliesHeading
+        appliesPitch = request.appliesPitch
+    }
+
+    func fraction(at time: TimeInterval) -> Double {
+        guard duration > 0 else { return 1 }
+        let raw = min(max((time - startTime) / duration, 0), 1)
+        switch curve {
+        case .linear:
+            return raw
+        case .easeOut:
+            return SceneModelAnimationMath.easedProgress(for: raw)
+        }
+    }
+
+    func isFinished(at time: TimeInterval) -> Bool {
+        time >= startTime + duration
+    }
+}
+
 private struct SceneModelPresentationEntry {
     var model: ImmersiveMapSceneModel
     var displayedCoordinate: GeoCoordinate
@@ -68,6 +106,10 @@ private struct SceneModelPresentationEntry {
     var displayedAltitude: Double
     var positionAnimation: SceneModelPositionAnimation?
     var transformAnimation: SceneModelTransformAnimation?
+    var pathAnimation: SceneModelPathAnimation?
+    /// Set on the frame a path animation reaches its end, drained once by the
+    /// store so the app's completion fires exactly once.
+    private var didFinishPathAnimation: Bool = false
 
     init(model: ImmersiveMapSceneModel) {
         self.model = model
@@ -124,6 +166,22 @@ private struct SceneModelPresentationEntry {
             }
         }
 
+        // Last, so the path owns the fields it drives: a transform animation
+        // started while flying effectively animates only the scale.
+        if let pathAnimation {
+            let sample = pathAnimation.metrics.sample(atFraction: pathAnimation.fraction(at: time))
+            moveDisplayedCoordinate(to: sample.coordinate)
+            displayedAltitude = sample.altitudeMeters
+            displayedOrientation = SceneModelAnimationMath.orientationQuaternion(
+                headingDegrees: pathAnimation.appliesHeading ? sample.headingDegrees : model.headingDegrees,
+                pitchDegrees: pathAnimation.appliesPitch ? sample.pitchDegrees : model.pitchDegrees,
+                rollDegrees: model.rollDegrees)
+            if pathAnimation.isFinished(at: time) {
+                self.pathAnimation = nil
+                didFinishPathAnimation = true
+            }
+        }
+
         return PresentedSceneModel(id: model.id,
                                    source: model.source,
                                    fitDiameterMeters: model.fitDiameterMeters,
@@ -135,7 +193,26 @@ private struct SceneModelPresentationEntry {
 
     mutating func update(with model: ImmersiveMapSceneModel,
                          transformDuration: TimeInterval,
+                         pathAnimationRequest: SceneModelPathAnimationRequest?,
+                         cancelsPathAnimation: Bool,
                          time: TimeInterval) {
+        if cancelsPathAnimation, pathAnimation != nil {
+            _ = presentedModel(at: time)
+            pathAnimation = nil
+            didFinishPathAnimation = false
+        }
+        if let pathAnimationRequest {
+            // Settle first, then let the path take over: a competing move or
+            // transform must not keep running underneath it.
+            _ = presentedModel(at: time)
+            positionAnimation = nil
+            transformAnimation = nil
+            pathAnimation = SceneModelPathAnimation(request: pathAnimationRequest, startTime: time)
+            didFinishPathAnimation = false
+            self.model = model
+            return
+        }
+
         let previous = self.model
         let coordinateChanged = previous.coordinate != model.coordinate
         let transformChanged = previous.headingDegrees != model.headingDegrees
@@ -149,7 +226,9 @@ private struct SceneModelPresentationEntry {
             _ = presentedModel(at: time)
         }
 
-        if coordinateChanged {
+        // While flying, an incoming coordinate is recorded but not applied:
+        // the path owns the position until it finishes or is cancelled.
+        if coordinateChanged, pathAnimation == nil {
             let duration = SceneModelAnimationMath.positionAnimationDuration(from: displayedCoordinate,
                                                                              to: model.coordinate)
             positionAnimation = duration > 0
@@ -186,7 +265,12 @@ private struct SceneModelPresentationEntry {
     }
 
     func hasActiveAnimations(at time: TimeInterval) -> Bool {
-        positionAnimation != nil || transformAnimation != nil
+        positionAnimation != nil || transformAnimation != nil || pathAnimation != nil
+    }
+
+    mutating func takeFinishedPathAnimation() -> Bool {
+        defer { didFinishPathAnimation = false }
+        return didFinishPathAnimation
     }
 }
 
@@ -198,6 +282,7 @@ final class SceneModelPresentationStateStore {
     private var entries: [SceneModelPresentationEntry] = []
     private var presentedCache: [PresentedSceneModel] = []
     private var animatingIndices: [Int] = []
+    private var finishedPathAnimationIds: [UInt64] = []
     private(set) var hasActiveAnimations: Bool = false
 
     var isEmpty: Bool {
@@ -212,18 +297,33 @@ final class SceneModelPresentationStateStore {
             previousEntriesByID[entry.model.id] = entry
         }
 
+        let cancelledPathAnimationIds = Set(snapshot.cancelledPathAnimationIds)
         let sortedModels = snapshot.models.sorted { $0.id < $1.id }
         entries = sortedModels.map { model in
             if var existing = previousEntriesByID[model.id] {
                 existing.update(with: model,
                                 transformDuration: snapshot.transformAnimationDurationsById[model.id] ?? 0,
+                                pathAnimationRequest: snapshot.pathAnimationsById[model.id],
+                                cancelsPathAnimation: cancelledPathAnimationIds.contains(model.id),
                                 time: time)
                 return existing
             }
-            return SceneModelPresentationEntry(model: model)
+            var entry = SceneModelPresentationEntry(model: model)
+            if let request = snapshot.pathAnimationsById[model.id] {
+                entry.update(with: model,
+                             transformDuration: 0,
+                             pathAnimationRequest: request,
+                             cancelsPathAnimation: false,
+                             time: time)
+            }
+            return entry
         }
 
-        presentedCache = entries.indices.map { entries[$0].presentedModel(at: time) }
+        presentedCache = entries.indices.map { index in
+            let presented = entries[index].presentedModel(at: time)
+            collectFinishedPathAnimation(at: index)
+            return presented
+        }
         animatingIndices = entries.indices.filter { entries[$0].hasActiveAnimations(at: time) }
         hasActiveAnimations = animatingIndices.isEmpty == false
     }
@@ -241,6 +341,7 @@ final class SceneModelPresentationStateStore {
         stillAnimating.reserveCapacity(animatingIndices.count)
         for index in animatingIndices {
             presentedCache[index] = entries[index].presentedModel(at: time)
+            collectFinishedPathAnimation(at: index)
             if entries[index].hasActiveAnimations(at: time) {
                 stillAnimating.append(index)
             }
@@ -248,5 +349,16 @@ final class SceneModelPresentationStateStore {
         animatingIndices = stillAnimating
         hasActiveAnimations = stillAnimating.isEmpty == false
         return presentedCache
+    }
+
+    /// Drains the ids whose path animation reached its end since the last call.
+    func consumeFinishedPathAnimationIds() -> [UInt64] {
+        defer { finishedPathAnimationIds.removeAll(keepingCapacity: true) }
+        return finishedPathAnimationIds
+    }
+
+    private func collectFinishedPathAnimation(at index: Int) {
+        guard entries[index].takeFinishedPathAnimation() else { return }
+        finishedPathAnimationIds.append(entries[index].model.id)
     }
 }

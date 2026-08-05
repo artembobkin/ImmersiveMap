@@ -16,7 +16,8 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     private var latestActivityState = RenderActivityState(labelFadeRenderingActive: false,
                                                           labelVisibilityCycleRenderingActive: false,
                                                           avatarAnimationRenderingActive: false,
-                                                          sceneModelAnimationRenderingActive: false)
+                                                          sceneModelAnimationRenderingActive: false,
+                                                          routeAnimationRenderingActive: false)
     private var latestMarkerProjectionSnapshot: MarkerProjectionSnapshot?
 
     /// Latest per-frame activity flags published by the engine.
@@ -49,6 +50,9 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     func applyActivityState(_ state: RenderActivityState) {
         lock.withLock { latestActivityState = state }
     }
+
+    /// Scene models are excluded from export, so no animation can finish here.
+    func completeSceneModelPathAnimations(ids _: [UInt64]) {}
 
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
 

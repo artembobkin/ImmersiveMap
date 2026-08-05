@@ -17,6 +17,7 @@ enum RenderLayer: String, CaseIterable {
     case flatMapSurface
     case buildingExtrusion
     case sceneModels
+    case routes
     case postProcessing
     case labels
     case avatars
@@ -55,7 +56,7 @@ struct RenderLayerPlanner {
         case .flat:
             [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            [.starfield, .globeSurface, .globeCap, .sceneModels]
+            [.starfield, .globeSurface, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in

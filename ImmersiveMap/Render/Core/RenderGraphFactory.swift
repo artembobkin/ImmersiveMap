@@ -39,6 +39,11 @@ enum RenderGraphFactory {
                                                             depthDisabledState: context.depthDisabledState,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture)
+        let routeSubsystem = RouteRenderSubsystem(routeSource: context.routeSource,
+                                                  pipeline: context.routePipeline,
+                                                  routeDepthState: context.globeCapDepthState,
+                                                  depthDisabledState: context.depthDisabledState,
+                                                  metalDevice: context.metalContext.device)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls,
@@ -77,6 +82,7 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             sceneModelSubsystem,
+            routeSubsystem,
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,

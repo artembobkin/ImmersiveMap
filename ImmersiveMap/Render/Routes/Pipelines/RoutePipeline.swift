@@ -1,0 +1,44 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+import Metal
+
+/// GPU mirror of `RouteUniform` in Route.metal. Size and stride are 32 bytes on
+/// both sides; `RouteGPUStructLayoutTests` pins the offsets.
+struct RouteUniformGPU {
+    var viewport: SIMD2<Float>
+    var halfWidthPx: Float
+    var sampleCount: UInt32
+    var color: SIMD4<Float>
+}
+
+/// World-pass pipeline for route ribbons: alpha blended for antialiased edges,
+/// no vertex descriptor because the shader addresses samples by vertex id.
+final class RoutePipeline {
+    let pipelineState: MTLRenderPipelineState
+
+    init(metalDevice: MTLDevice,
+         pixelFormat: MTLPixelFormat,
+         library: MTLLibrary,
+         sampleCount: Int = 1) {
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = library.makeFunction(name: "routeVertexShader")
+        pipelineDescriptor.fragmentFunction = library.makeFunction(name: "routeFragmentShader")
+        pipelineDescriptor.rasterSampleCount = sampleCount
+        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
+        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
+        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
+        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
+        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+
+        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+    }
+
+    func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(pipelineState)
+    }
+}

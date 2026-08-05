@@ -48,6 +48,7 @@ final class RenderFrameEngine {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
+         routeSource: RouteRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          settings: ImmersiveMapSettings = .default,
          debugOverlayControls: DebugOverlayControlState = DebugOverlayControlState(),
@@ -61,6 +62,7 @@ final class RenderFrameEngine {
                                                         avatarSource: avatarSource,
                                                         markerSource: markerSource,
                                                         sceneModelSource: sceneModelSource,
+                                                        routeSource: routeSource,
                                                         providerRuntime: providerRuntime,
                                                         config: settings,
                                                         eventSink: eventSink,
@@ -106,6 +108,7 @@ final class RenderFrameEngine {
         }
 
         let didSchedule = renderFrame(drawSize: layer.drawableSize,
+                                      pixelsPerPoint: layer.contentsScale,
                                       frameSlotIndex: frameSlotIndex,
                                       acquireTarget: { layer.nextDrawable().map { FrameRenderTarget(drawable: $0) } },
                                       onGPUComplete: nil)
@@ -126,6 +129,7 @@ final class RenderFrameEngine {
         }
 
         let didSchedule = renderFrame(drawSize: request.drawSize,
+                                      pixelsPerPoint: request.pixelsPerPoint,
                                       frameSlotIndex: frameSlotIndex,
                                       acquireTarget: { FrameRenderTarget(texture: request.texture) },
                                       onGPUComplete: request.onGPUComplete)
@@ -165,11 +169,14 @@ final class RenderFrameEngine {
     // MARK: - Frame Workflow
 
     private func renderFrame(drawSize: CGSize,
+                             pixelsPerPoint: CGFloat,
                              frameSlotIndex: Int,
                              acquireTarget: () -> FrameRenderTarget?,
                              onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
         let collectStart = CACurrentMediaTime()
-        guard let frameContext = collectInput(drawSize: drawSize, frameSlotIndex: frameSlotIndex) else {
+        guard let frameContext = collectInput(drawSize: drawSize,
+                                              pixelsPerPoint: pixelsPerPoint,
+                                              frameSlotIndex: frameSlotIndex) else {
             return false
         }
         frameContext.diagnostics.recordStage(.collectInput, duration: CACurrentMediaTime() - collectStart)
@@ -199,10 +206,18 @@ final class RenderFrameEngine {
         let hasActiveLabelVisibilityCycle = frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
         let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
+        let hasActiveRouteAnimations = frameContext.sharedState.routeState.hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations,
-                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations))
+                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
+                                                         routeAnimationRenderingActive: hasActiveRouteAnimations))
+        // Independent of `didSchedule`: the animation advanced in `update`
+        // whether or not this frame reached a drawable.
+        let finishedPathAnimationIds = frameContext.sharedState.sceneModelState.finishedPathAnimationIds
+        if finishedPathAnimationIds.isEmpty == false {
+            eventSink.completeSceneModelPathAnimations(ids: finishedPathAnimationIds)
+        }
         // Synchronously and within the same frame: SwiftUI marker positions must
         // land in the same CA transaction as this frame's present. When didSchedule
         // == false the screen shows the old frame and there is nothing to publish.
@@ -215,7 +230,9 @@ final class RenderFrameEngine {
         return didSchedule
     }
 
-    private func collectInput(drawSize: CGSize, frameSlotIndex: Int) -> FrameContext? {
+    private func collectInput(drawSize: CGSize,
+                              pixelsPerPoint: CGFloat,
+                              frameSlotIndex: Int) -> FrameContext? {
         let frameTick = clock.nextFrameTick()
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameTime: frameTick.time)
         let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: clock.currentDate())
@@ -252,6 +269,7 @@ final class RenderFrameEngine {
                             time: frameTick.time,
                             deltaTime: frameTick.deltaTime,
                             drawSize: cameraFrameState.drawSize,
+                            pixelsPerPoint: pixelsPerPoint,
                             viewport: cameraFrameState.viewport,
                             cameraMatrices: cameraFrameState.cameraMatrices,
                             cameraEye: cameraFrameState.cameraEye,

@@ -23,6 +23,9 @@ final class RenderLayerPlannerTests: XCTestCase {
         ])
         XCTAssertTrue(plan.allSatisfy(\.enabled))
         XCTAssertFalse(plan.map(\.layer).contains(.buildingImage))
+        // Routes are a globe-only feature in this version, and the plan is
+        // where that invariant is enforced.
+        XCTAssertFalse(plan.map(\.layer).contains(.routes))
     }
 
     func testFlatModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {
@@ -60,6 +63,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeSurface,
             .globeCap,
             .sceneModels,
+            .routes,
             .labels,
             .avatars,
             .debugOverlay
@@ -81,11 +85,12 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeSurface,
             .globeCap,
             .sceneModels,
+            .routes,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap, .sceneModels])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap, .sceneModels, .routes])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)

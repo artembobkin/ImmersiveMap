@@ -60,6 +60,7 @@ final class SharedRenderResources {
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
     let sceneModelPipeline: SceneModelPipeline
+    let routePipeline: RoutePipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
 
@@ -129,6 +130,10 @@ final class SharedRenderResources {
                                                      pixelFormat: colorPixelFormat,
                                                      library: library,
                                                      sampleCount: renderSampleCount)
+        self.routePipeline = RoutePipeline(metalDevice: device,
+                                           pixelFormat: colorPixelFormat,
+                                           library: library,
+                                           sampleCount: renderSampleCount)
         self.tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library)
         self.roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library)
 

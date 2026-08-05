@@ -18,6 +18,10 @@ struct FrameContext {
     let time: TimeInterval
     let deltaTime: TimeInterval
     let drawSize: CGSize
+    /// Drawable pixels per layout point. Everything else in `Render` is
+    /// pixel-native; this is the one conversion factor for style values the
+    /// public API expresses in points.
+    let pixelsPerPoint: CGFloat
     let viewport: SIMD2<Float>
     let cameraMatrices: FrameCameraMatrices
     let cameraEye: SIMD3<Float>
@@ -86,6 +90,7 @@ struct FrameContext {
          time: TimeInterval,
          deltaTime: TimeInterval,
          drawSize: CGSize,
+         pixelsPerPoint: CGFloat = 1,
          viewport: SIMD2<Float>,
          cameraMatrices: FrameCameraMatrices,
          cameraEye: SIMD3<Float>,
@@ -106,6 +111,7 @@ struct FrameContext {
         self.time = time
         self.deltaTime = deltaTime
         self.drawSize = drawSize
+        self.pixelsPerPoint = pixelsPerPoint
         self.viewport = viewport
         self.cameraMatrices = cameraMatrices
         self.cameraEye = cameraEye

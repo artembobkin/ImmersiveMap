@@ -57,6 +57,11 @@ final class RenderPersistentContext {
     let sceneModelMeshStore: SceneModelMeshStore
     let sceneModelPipeline: SceneModelPipeline
 
+    // MARK: - Route Resources
+
+    let routeSource: RouteRenderSource
+    let routePipeline: RoutePipeline
+
     // MARK: - Avatar and Debug Resources
 
     let avatarSource: AvatarRenderSource
@@ -74,6 +79,7 @@ final class RenderPersistentContext {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
+         routeSource: RouteRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -92,6 +98,9 @@ final class RenderPersistentContext {
         self.shadowFallbackTexture = shared.shadowFallbackTexture
 
         let mapBaseColors = providerRuntime.mapBaseColors
+
+        self.routeSource = routeSource
+        self.routePipeline = shared.routePipeline
 
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline

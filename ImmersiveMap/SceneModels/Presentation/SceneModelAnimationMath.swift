@@ -4,9 +4,10 @@
 import Foundation
 import simd
 
-/// Deterministic animation math for scene models: great-circle position
-/// interpolation, quaternion orientation, and scalar easing. Kept inside
-/// SceneModels so the domain folder does not depend on Avatars.
+/// Deterministic animation math for scene models: move durations, quaternion
+/// orientation, and scalar easing. Kept inside SceneModels so the domain folder
+/// does not depend on Avatars. Great-circle interpolation itself lives in
+/// `GeoGreatCircleMath`, shared with route tessellation.
 enum SceneModelAnimationMath {
     static let minimumPositionDuration: TimeInterval = 0.14
     static let maximumPositionDuration: TimeInterval = 0.60
@@ -25,38 +26,6 @@ enum SceneModelAnimationMath {
         let normalized = min(max(distance / saturationDistanceMeters, 0), 1)
         let eased = pow(normalized, 0.6)
         return minimumPositionDuration + (maximumPositionDuration - minimumPositionDuration) * eased
-    }
-
-    /// Great-circle interpolation over unit vectors: correct near the
-    /// antimeridian and the poles, unlike lat/lon lerp.
-    static func coordinate(from start: GeoCoordinate,
-                           to target: GeoCoordinate,
-                           progress: Double) -> GeoCoordinate {
-        let clampedProgress = min(max(progress, 0), 1)
-        guard clampedProgress > 0 else { return start }
-        guard clampedProgress < 1 else { return target }
-
-        let fromVector = unitVector(for: start)
-        let toVector = unitVector(for: target)
-        let dotProduct = min(max(simd_dot(fromVector, toVector), Float(-1)), Float(1))
-        if dotProduct > 0.9995 {
-            let blended = simd_normalize(fromVector + (toVector - fromVector) * Float(clampedProgress))
-            return coordinate(for: blended)
-        }
-        if dotProduct < -0.9995 {
-            return fallbackCoordinate(from: start, to: target, progress: clampedProgress)
-        }
-
-        let angle = acos(Double(dotProduct))
-        let sinAngle = sin(angle)
-        guard sinAngle > Double.leastNonzeroMagnitude else {
-            return target
-        }
-
-        let startWeight = sin((1 - clampedProgress) * angle) / sinAngle
-        let targetWeight = sin(clampedProgress * angle) / sinAngle
-        let blended = simd_normalize(fromVector * Float(startWeight) + toVector * Float(targetWeight))
-        return coordinate(for: blended)
     }
 
     static func easedProgress(for rawProgress: Double) -> Double {
@@ -112,52 +81,4 @@ enum SceneModelAnimationMath {
         return 6_371_000.0 * c
     }
 
-    private static func unitVector(for coordinate: GeoCoordinate) -> SIMD3<Float> {
-        let latitude = coordinate.latitude * .pi / 180.0
-        let longitude = coordinate.longitude * .pi / 180.0
-        let cosLatitude = cos(latitude)
-        return SIMD3<Float>(Float(cosLatitude * cos(longitude)),
-                            Float(cosLatitude * sin(longitude)),
-                            Float(sin(latitude)))
-    }
-
-    private static func coordinate(for vector: SIMD3<Float>) -> GeoCoordinate {
-        let normalized = simd_normalize(vector)
-        let latitude = atan2(Double(normalized.z),
-                             sqrt(Double(normalized.x * normalized.x + normalized.y * normalized.y)))
-        let longitude = atan2(Double(normalized.y), Double(normalized.x))
-        return GeoCoordinate(latitude: latitude * 180.0 / .pi,
-                             longitude: longitude * 180.0 / .pi)
-    }
-
-    /// Antipodal endpoints leave the great circle underdetermined; fall back
-    /// to a lat/lon lerp along the shortest longitude delta.
-    private static func fallbackCoordinate(from start: GeoCoordinate,
-                                           to target: GeoCoordinate,
-                                           progress: Double) -> GeoCoordinate {
-        let latitude = start.latitude + (target.latitude - start.latitude) * progress
-        let longitudeDelta = shortestLongitudeDelta(from: start.longitude, to: target.longitude)
-        let longitude = normalizedLongitude(start.longitude + longitudeDelta * progress)
-        return GeoCoordinate(latitude: latitude, longitude: longitude)
-    }
-
-    private static func shortestLongitudeDelta(from start: Double, to target: Double) -> Double {
-        var delta = normalizedLongitude(target) - normalizedLongitude(start)
-        if delta > 180 {
-            delta -= 360
-        } else if delta < -180 {
-            delta += 360
-        }
-        return delta
-    }
-
-    private static func normalizedLongitude(_ longitude: Double) -> Double {
-        var normalized = longitude.truncatingRemainder(dividingBy: 360)
-        if normalized > 180 {
-            normalized -= 360
-        } else if normalized < -180 {
-            normalized += 360
-        }
-        return normalized
-    }
 }
