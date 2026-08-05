@@ -13,6 +13,7 @@ struct PresentedRoute {
     let color: SIMD4<Float>
     let widthPoints: Double
     let progress: Double
+    let dash: ImmersiveMapRouteDash?
 }
 
 private struct RouteProgressAnimation {
@@ -49,11 +50,24 @@ private struct RoutePresentationEntry {
     var displayedProgress: Double
     var progressAnimation: RouteProgressAnimation?
 
-    init(route: ImmersiveMapRoute) {
+    /// A route can be added and animated in the same snapshot, in which case the
+    /// descriptor already carries the target and only the request knows where
+    /// the animation should start from.
+    init(route: ImmersiveMapRoute, request: RouteProgressAnimationRequest?, time: TimeInterval) {
         self.route = route
         samples = GeoPathSampler.samples(for: route.path)
-        displayedProgress = min(max(route.progress, 0), 1)
-        progressAnimation = nil
+        let target = min(max(route.progress, 0), 1)
+        if let request, request.duration > 0 {
+            let start = min(max(request.startProgress, 0), 1)
+            displayedProgress = start
+            progressAnimation = RouteProgressAnimation(startProgress: start,
+                                                       targetProgress: target,
+                                                       startTime: time,
+                                                       duration: request.duration)
+        } else {
+            displayedProgress = target
+            progressAnimation = nil
+        }
     }
 
     mutating func update(with route: ImmersiveMapRoute,
@@ -95,7 +109,8 @@ private struct RoutePresentationEntry {
                               samples: samples,
                               color: route.color,
                               widthPoints: route.widthPoints,
-                              progress: displayedProgress)
+                              progress: displayedProgress,
+                              dash: route.dash)
     }
 
     func hasActiveAnimations(at time: TimeInterval) -> Bool {
@@ -126,13 +141,16 @@ final class RoutePresentationStateStore {
 
         let sortedRoutes = snapshot.routes.sorted { $0.id < $1.id }
         entries = sortedRoutes.map { route in
+            let request = snapshot.progressAnimationsById[route.id]
             if var existing = previousEntriesByID[route.id] {
+                // A surviving entry animates from what it displays, not from the
+                // start the controller recorded: the line must not jump back.
                 existing.update(with: route,
-                                progressDuration: snapshot.progressAnimationDurationsById[route.id] ?? 0,
+                                progressDuration: request?.duration ?? 0,
                                 time: time)
                 return existing
             }
-            return RoutePresentationEntry(route: route)
+            return RoutePresentationEntry(route: route, request: request, time: time)
         }
 
         presentedCache = entries.indices.map { entries[$0].presentedRoute(at: time) }

@@ -51,12 +51,12 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
     /// Same guarded main-actor hop as the selection snapshot: a discarded
     /// engine's late frame must not fire a completion the teardown already
     /// resolved with `false`.
-    func completeSceneModelPathAnimations(ids: [UInt64]) {
+    func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult]) {
         Task { @MainActor [weak sceneModelRuntime, self] in
             guard self.isDeliveryInvalidated == false else {
                 return
             }
-            sceneModelRuntime?.finishPathAnimations(ids: ids)
+            sceneModelRuntime?.applyPathAnimationResults(results)
         }
     }
 

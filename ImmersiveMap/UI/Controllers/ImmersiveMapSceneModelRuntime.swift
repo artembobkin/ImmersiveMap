@@ -37,8 +37,8 @@ final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSourc
         controller = nil
     }
 
-    func finishPathAnimations(ids: [UInt64]) {
-        controller?.finishPathAnimations(ids: ids)
+    func applyPathAnimationResults(_ results: [SceneModelPathAnimationResult]) {
+        controller?.applyPathAnimationResults(results)
     }
 
     func cancelAllPathAnimations() {

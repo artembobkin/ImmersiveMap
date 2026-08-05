@@ -214,9 +214,9 @@ final class RenderFrameEngine {
                                                          routeAnimationRenderingActive: hasActiveRouteAnimations))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
-        let finishedPathAnimationIds = frameContext.sharedState.sceneModelState.finishedPathAnimationIds
-        if finishedPathAnimationIds.isEmpty == false {
-            eventSink.completeSceneModelPathAnimations(ids: finishedPathAnimationIds)
+        let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
+        if pathAnimationResults.isEmpty == false {
+            eventSink.completeSceneModelPathAnimations(pathAnimationResults)
         }
         // Synchronously and within the same frame: SwiftUI marker positions must
         // land in the same CA transaction as this frame's present. When didSchedule

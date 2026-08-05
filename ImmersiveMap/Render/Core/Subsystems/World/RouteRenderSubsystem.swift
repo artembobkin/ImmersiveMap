@@ -17,6 +17,8 @@ final class RouteRenderSubsystem: RenderSubsystem {
     /// 256 bytes of 16-byte points: keeps every per-route buffer offset aligned
     /// for `setVertexBuffer` on every platform.
     private static let pointBufferAlignment = 16
+    /// The same 256 bytes, in 4-byte screen lengths.
+    private static let screenLengthBufferAlignment = 64
 
     private let routeSource: RouteRenderSource
     private let pipeline: RoutePipeline
@@ -24,8 +26,10 @@ final class RouteRenderSubsystem: RenderSubsystem {
     private let depthDisabledState: MTLDepthStencilState
     private let presentationStateStore = RoutePresentationStateStore()
     private let pointBufferStore: FrameSlottedDynamicMetalBuffer<RouteWorldGeometryBuilder.Point>
+    private let screenLengthBufferStore: FrameSlottedDynamicMetalBuffer<Float>
 
     private var points: [RouteWorldGeometryBuilder.Point] = []
+    private var screenLengthsPx: [Float] = []
     private var drawItems: [RouteDrawItem] = []
 
     init(routeSource: RouteRenderSource,
@@ -42,6 +46,11 @@ final class RouteRenderSubsystem: RenderSubsystem {
             slotsCount: InFlightFramePool.inFlightFramesCount,
             options: [.storageModeShared],
             minimumCapacity: 512)
+        self.screenLengthBufferStore = FrameSlottedDynamicMetalBuffer(
+            metalDevice: metalDevice,
+            slotsCount: InFlightFramePool.inFlightFramesCount,
+            options: [.storageModeShared],
+            minimumCapacity: 512)
     }
 
     func update(frameContext: FrameContext) {
@@ -53,7 +62,7 @@ final class RouteRenderSubsystem: RenderSubsystem {
             // A detached controller leaves no snapshot source: clear instead of
             // rendering stale routes forever.
             presentationStateStore.apply(snapshot: RoutesSnapshot(routes: [],
-                                                                  progressAnimationDurationsById: [:],
+                                                                  progressAnimationsById: [:],
                                                                   removedIds: [],
                                                                   version: 0),
                                          time: frameContext.time)
@@ -63,6 +72,7 @@ final class RouteRenderSubsystem: RenderSubsystem {
         frameContext.sharedState.routeState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
 
         points.removeAll(keepingCapacity: true)
+        screenLengthsPx.removeAll(keepingCapacity: true)
         drawItems.removeAll(keepingCapacity: true)
 
         guard frameContext.renderSurfaceMode == .spherical, presented.isEmpty == false else { return }
@@ -87,28 +97,46 @@ final class RouteRenderSubsystem: RenderSubsystem {
             let built = RouteWorldGeometryBuilder.build(samples: route.samples,
                                                         progress: route.progress,
                                                         constants: constants)
-            guard built.count >= 2 else { continue }
+            guard built.isEmpty == false else { continue }
 
-            let offset = Self.alignedCount(points.count)
-            if offset > points.count {
-                points.append(contentsOf: repeatElement(.zero, count: offset - points.count))
+            let pointOffset = Self.aligned(points.count, to: Self.pointBufferAlignment)
+            if pointOffset > points.count {
+                points.append(contentsOf: repeatElement(.zero, count: pointOffset - points.count))
             }
-            points.append(contentsOf: built)
+            points.append(contentsOf: built.points)
 
+            let screenLengthOffset = Self.aligned(screenLengthsPx.count, to: Self.screenLengthBufferAlignment)
+            if screenLengthOffset > screenLengthsPx.count {
+                screenLengthsPx.append(contentsOf: repeatElement(0, count: screenLengthOffset - screenLengthsPx.count))
+            }
+            screenLengthsPx.append(contentsOf: built.screenLengthsPx)
+
+            let dash = route.dash.map { Self.dashPixels($0, pixelsPerPoint: pixelsPerPoint) } ?? SIMD2<Float>(0, 0)
             drawItems.append(RouteDrawItem(
-                pointBufferOffsetElements: offset,
-                pointCount: built.count,
+                pointBufferOffsetElements: pointOffset,
+                screenLengthBufferOffsetElements: screenLengthOffset,
+                pointCount: built.points.count,
                 uniform: RouteUniformGPU(viewport: constants.viewport,
                                          halfWidthPx: max(widthPx * 0.5, 0.5),
-                                         sampleCount: UInt32(built.count),
-                                         color: color)))
+                                         sampleCount: UInt32(built.points.count),
+                                         color: color,
+                                         dashPx: dash.x,
+                                         gapPx: dash.y)))
         }
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
         guard points.isEmpty == false else { return }
-        let buffer = pointBufferStore.ensureCapacity(slot: frameContext.frameSlotIndex, count: points.count)
-        points.withUnsafeBytes { rawBuffer in
+        upload(points, into: pointBufferStore, slot: frameContext.frameSlotIndex)
+        upload(screenLengthsPx, into: screenLengthBufferStore, slot: frameContext.frameSlotIndex)
+    }
+
+    private func upload<Element>(_ values: [Element],
+                                 into store: FrameSlottedDynamicMetalBuffer<Element>,
+                                 slot: Int) {
+        guard values.isEmpty == false else { return }
+        let buffer = store.ensureCapacity(slot: slot, count: values.count)
+        values.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return }
             buffer.contents().copyMemory(from: baseAddress, byteCount: rawBuffer.count)
         }
@@ -128,6 +156,7 @@ final class RouteRenderSubsystem: RenderSubsystem {
         RouteDrawer.draw(renderEncoder: encoder,
                          items: drawItems,
                          pointsBuffer: pointBufferStore.buffer(for: frameContext.frameSlotIndex),
+                         screenLengthsBuffer: screenLengthBufferStore.buffer(for: frameContext.frameSlotIndex),
                          cameraUniform: frameContext.cameraUniform,
                          pipeline: pipeline)
         encoder.setDepthStencilState(depthDisabledState)
@@ -139,7 +168,17 @@ final class RouteRenderSubsystem: RenderSubsystem {
 
     func evict() {
         points = []
+        screenLengthsPx = []
         drawItems = []
+    }
+
+    /// A dash whose gap would vanish at this scale reads as a solid line, so it
+    /// is passed through as one instead of shimmering.
+    static func dashPixels(_ dash: ImmersiveMapRouteDash, pixelsPerPoint: Float) -> SIMD2<Float> {
+        let dashPx = Float(dash.dashPoints) * pixelsPerPoint
+        let gapPx = Float(dash.gapPoints) * pixelsPerPoint
+        guard dashPx > 0, gapPx > 0 else { return SIMD2<Float>(0, 0) }
+        return SIMD2<Float>(dashPx, gapPx)
     }
 
     static func morphFadeAlpha(transition: Float) -> Float {
@@ -150,8 +189,8 @@ final class RouteRenderSubsystem: RenderSubsystem {
         return 1 - normalized * normalized * (3 - 2 * normalized)
     }
 
-    private static func alignedCount(_ count: Int) -> Int {
-        let remainder = count % pointBufferAlignment
-        return remainder == 0 ? count : count + (pointBufferAlignment - remainder)
+    private static func aligned(_ count: Int, to alignment: Int) -> Int {
+        let remainder = count % alignment
+        return remainder == 0 ? count : count + (alignment - remainder)
     }
 }

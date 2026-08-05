@@ -52,8 +52,8 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
         let presented = presentationStateStore.presentedEntries(at: frameContext.time)
         frameContext.sharedState.sceneModelState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
         frameContext.sharedState.sceneModelState.hasShadowCasters = false
-        frameContext.sharedState.sceneModelState.finishedPathAnimationIds =
-            presentationStateStore.consumeFinishedPathAnimationIds()
+        frameContext.sharedState.sceneModelState.pathAnimationResults =
+            presentationStateStore.consumePathAnimationResults()
 
         guard presented.isEmpty == false else {
             drawItems = []

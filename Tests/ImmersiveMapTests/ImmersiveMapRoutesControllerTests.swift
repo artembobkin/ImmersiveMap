@@ -60,12 +60,44 @@ final class ImmersiveMapRoutesControllerTests: XCTestCase {
         controller.setProgress(id: 4, 1.7, duration: 2)
         let snapshot = try XCTUnwrap(controller.consumeSnapshot())
         XCTAssertEqual(try XCTUnwrap(snapshot.routes.first).progress, 1)
-        XCTAssertEqual(snapshot.progressAnimationDurationsById[4], 2)
+        XCTAssertEqual(snapshot.progressAnimationsById[4]?.duration, 2)
 
         controller.setProgress(id: 4, -3)
         let next = try XCTUnwrap(controller.consumeSnapshot())
         XCTAssertEqual(try XCTUnwrap(next.routes.first).progress, 0)
-        XCTAssertEqual(next.progressAnimationDurationsById[4], 0)
+        XCTAssertEqual(next.progressAnimationsById[4]?.duration, 0)
+    }
+
+    /// The natural app flow is add + setProgress in the same tick, so the
+    /// request has to carry where the animation starts: by then the descriptor
+    /// already holds the target.
+    func testProgressRequestCarriesTheStartTheRouteHadWhenAsked() throws {
+        let controller = ImmersiveMapRoutesController()
+        controller.add(ImmersiveMapRoute(id: 1,
+                                         path: ImmersiveMapGeoPath(waypoints: [GeoCoordinate(latitude: 0, longitude: 0),
+                                                                               GeoCoordinate(latitude: 0, longitude: 30)]),
+                                         progress: 0))
+        controller.setProgress(id: 1, 1, duration: 4)
+
+        let snapshot = try XCTUnwrap(controller.consumeSnapshot())
+        let request = try XCTUnwrap(snapshot.progressAnimationsById[1])
+        XCTAssertEqual(request.startProgress, 0)
+        XCTAssertEqual(request.duration, 4)
+        XCTAssertEqual(try XCTUnwrap(snapshot.routes.first).progress, 1)
+    }
+
+    /// Two requests between frames animate once, from where the line was.
+    func testSecondProgressRequestKeepsTheOriginalStart() throws {
+        let controller = ImmersiveMapRoutesController()
+        controller.add(makeRoute(id: 1))
+        _ = controller.consumeSnapshot()
+
+        controller.setProgress(id: 1, 0.5, duration: 2)
+        controller.setProgress(id: 1, 0.9, duration: 3)
+
+        let request = try XCTUnwrap(try XCTUnwrap(controller.consumeSnapshot()).progressAnimationsById[1])
+        XCTAssertEqual(request.startProgress, 1, "the route was fully drawn when the first request landed")
+        XCTAssertEqual(request.duration, 3)
     }
 
     func testProgressOnAnUnknownIdDoesNothing() {

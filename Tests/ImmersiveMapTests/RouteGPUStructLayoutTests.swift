@@ -11,12 +11,14 @@ import XCTest
 /// every route draw, and the shader cannot be type-checked against Swift.
 final class RouteGPUStructLayoutTests: XCTestCase {
     func testRouteUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.size, 32)
-        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.stride, 32)
+        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.size, 48)
+        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.stride, 48)
         XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.viewport), 0)
         XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.halfWidthPx), 8)
         XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.sampleCount), 12)
         XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.color), 16)
+        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.dashPx), 32)
+        XCTAssertEqual(MemoryLayout<RouteUniformGPU>.offset(of: \.gapPx), 36)
     }
 
     func testCenterlinePointIsAFloat4() {
@@ -26,9 +28,9 @@ final class RouteGPUStructLayoutTests: XCTestCase {
 
     /// Per-route buffer offsets are padded to whole 256-byte blocks, which is
     /// the strictest `setVertexBuffer` alignment across the supported platforms.
-    func testPointBufferAlignmentCoversTheStrictestOffsetRule() {
-        let alignmentElements = 16
-        XCTAssertEqual(MemoryLayout<RouteWorldGeometryBuilder.Point>.stride * alignmentElements, 256)
+    func testBufferAlignmentsCoverTheStrictestOffsetRule() {
+        XCTAssertEqual(MemoryLayout<RouteWorldGeometryBuilder.Point>.stride * 16, 256)
+        XCTAssertEqual(MemoryLayout<Float>.stride * 64, 256)
     }
 }
 

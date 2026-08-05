@@ -3,13 +3,17 @@
 
 import Metal
 
-/// GPU mirror of `RouteUniform` in Route.metal. Size and stride are 32 bytes on
+/// GPU mirror of `RouteUniform` in Route.metal. Size and stride are 48 bytes on
 /// both sides; `RouteGPUStructLayoutTests` pins the offsets.
 struct RouteUniformGPU {
     var viewport: SIMD2<Float>
     var halfWidthPx: Float
     var sampleCount: UInt32
     var color: SIMD4<Float>
+    /// Drawn part of one dash period, in drawable pixels; zero draws solid.
+    var dashPx: Float
+    var gapPx: Float
+    var padding: SIMD2<Float> = .zero
 }
 
 /// World-pass pipeline for route ribbons: alpha blended for antialiased edges,

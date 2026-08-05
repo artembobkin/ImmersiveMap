@@ -7,6 +7,9 @@ enum ImmersiveMapCameraCommand {
     case jump(ImmersiveMapCameraPosition)
     case fly(ImmersiveMapCameraPosition, CameraFlightOptions, ((Bool) -> Void)?)
     case cancelFlight
+    case follow(ImmersiveMapGeoPath, TimeInterval, ImmersiveMapPathAnimationCurve,
+                ImmersiveMapCameraFollowOptions, ((Bool) -> Void)?)
+    case cancelFollow
     case setAngleTarget(bearing: Float, pitch: Float)
 }
 
@@ -46,6 +49,28 @@ public final class ImmersiveMapCameraController {
 
     public func cancelFlight() {
         enqueue(.cancelFlight)
+    }
+
+    /// Travels the camera along `path` over `duration` seconds, the same
+    /// traversal a scene model gets from
+    /// `ImmersiveMapSceneModelsController.animate(id:along:duration:)`. Start
+    /// both with the same duration and curve and the camera stays on the model.
+    ///
+    /// The camera keeps whatever zoom and pitch it has unless `options` names
+    /// them, so the app can keep zooming while the camera travels. `completion`
+    /// is called exactly once: `true` when the traversal ran out, `false` when
+    /// it was superseded by another camera command, cancelled, or interrupted
+    /// by the user taking the camera.
+    public func follow(path: ImmersiveMapGeoPath,
+                       duration: TimeInterval,
+                       curve: ImmersiveMapPathAnimationCurve = .easeOut,
+                       options: ImmersiveMapCameraFollowOptions = .default,
+                       completion: ((Bool) -> Void)? = nil) {
+        enqueue(.follow(path, duration, curve, options, completion))
+    }
+
+    public func cancelFollow() {
+        enqueue(.cancelFollow)
     }
 
     /// Smoothly steers the camera angles (bearing/pitch, in radians) toward the target, for interactive controls.

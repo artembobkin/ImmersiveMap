@@ -76,6 +76,45 @@ final class RouteOffscreenRenderTests: XCTestCase {
         XCTAssertLessThan(quarter, full)
     }
 
+    /// A dashed route must paint strictly fewer pixels than the same solid one
+    /// while still covering the same stretch of globe.
+    @MainActor
+    func testDashLeavesGapsAlongTheLine() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0)
+        _ = try await renderFrame(context: context, time: 0)
+
+        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
+        let solid = redPixelCount(in: try await renderFrame(context: context, time: 1.0 / 60.0))
+
+        var dashed = makeRoute(around: context.renderCamera, progress: 1)
+        dashed.dash = ImmersiveMapRouteDash(dashPoints: 6, gapPoints: 6)
+        context.routeSource.controller.upsert([dashed])
+        let dashedCount = redPixelCount(in: try await renderFrame(context: context, time: 2.0 / 60.0))
+
+        XCTAssertGreaterThan(solid, 0)
+        XCTAssertGreaterThan(dashedCount, 0, "A dashed route must still draw its dashes")
+        XCTAssertLessThan(dashedCount, solid * 3 / 4, "A one-to-one dash must leave visible gaps")
+    }
+
+    /// A pattern whose gap is zero is a solid line, not a shimmering one.
+    @MainActor
+    func testDashWithoutAGapDrawsSolid() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0)
+        _ = try await renderFrame(context: context, time: 0)
+
+        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
+        let solid = redPixelCount(in: try await renderFrame(context: context, time: 1.0 / 60.0))
+
+        var degenerate = makeRoute(around: context.renderCamera, progress: 1)
+        degenerate.dash = ImmersiveMapRouteDash(dashPoints: 6, gapPoints: 0)
+        context.routeSource.controller.upsert([degenerate])
+        let degenerateCount = redPixelCount(in: try await renderFrame(context: context, time: 2.0 / 60.0))
+
+        XCTAssertEqual(degenerateCount, solid)
+    }
+
     // MARK: - Helpers
 
     private struct Context {

@@ -14,7 +14,12 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
     private var transformAnimationDurationsById: [UInt64: TimeInterval] = [:]
     private var pathAnimationsById: [UInt64: SceneModelPathAnimationRequest] = [:]
     private var cancelledPathAnimationIds: Set<UInt64> = []
-    private var pathAnimationCompletionsById: [UInt64: (Bool) -> Void] = [:]
+    private var pathAnimationCompletionsById: [UInt64: (generation: UInt64, completion: (Bool) -> Void)] = [:]
+    /// The descriptor a model had before `animate` moved it to the path's end,
+    /// kept only until the request is handed to the renderer: cancelling before
+    /// then must leave the model where it was, not glide it to the destination.
+    private var descriptorsBeforePathAnimationById: [UInt64: ImmersiveMapSceneModel] = [:]
+    private var pathAnimationGeneration: UInt64 = 0
     private var version: UInt64 = 0
     private var hasChanges: Bool = false
     private var changeHandler: (() -> Void)?
@@ -40,14 +45,15 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         removedIds.subtract(newIds)
         transformAnimationDurationsById.removeAll(keepingCapacity: true)
         let droppedIds = pathAnimationCompletionsById.keys.filter { newIds.contains($0) == false }
-        let droppedCompletions = droppedIds.compactMap { pathAnimationCompletionsById.removeValue(forKey: $0) }
+        let droppedCompletions = droppedIds.compactMap { pathAnimationCompletionsById.removeValue(forKey: $0)?.completion }
         pathAnimationsById = pathAnimationsById.filter { newIds.contains($0.key) }
         cancelledPathAnimationIds.formIntersection(newIds)
+        descriptorsBeforePathAnimationById = descriptorsBeforePathAnimationById.filter { newIds.contains($0.key) }
         markChangedLocked()
         lock.unlock()
 
         for completion in droppedCompletions {
-            completion(false)
+            deliver(completion, false)
         }
         notifyChanged()
     }
@@ -115,9 +121,9 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
 
     /// Flies the model along `path` over `duration` seconds. While the
     /// animation runs the path owns the model's coordinate, altitude and (when
-    /// the flags are set) heading and pitch; `move`, `setAltitude` and
-    /// `setOrientation` for that id are recorded but not applied until the
-    /// animation ends or `cancelPathAnimation(id:)` is called. `setScale` still
+    /// the flags are set) heading and pitch: `move`, `setAltitude` and
+    /// `setOrientation` for that id are ignored for as long as it runs, and do
+    /// not resurface when it ends. Everything else, `setScale` included, still
     /// applies.
     ///
     /// `completion` is called exactly once on the main thread: `true` when the
@@ -132,12 +138,18 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
                         appliesPitch: Bool = true,
                         completion: ((Bool) -> Void)? = nil) {
         lock.lock()
-        let superseded = pathAnimationCompletionsById.removeValue(forKey: id)
+        let superseded = pathAnimationCompletionsById.removeValue(forKey: id)?.completion
         guard var model = modelsById[id], let metrics = GeoPathMetrics(path: path) else {
             lock.unlock()
-            superseded?(false)
-            completion?(false)
+            deliver(superseded, false)
+            deliver(completion, false)
             return
+        }
+
+        pathAnimationGeneration &+= 1
+        let generation = pathAnimationGeneration
+        if descriptorsBeforePathAnimationById[id] == nil {
+            descriptorsBeforePathAnimationById[id] = model
         }
 
         // The descriptor lands on the path's end state right away, so when the
@@ -153,29 +165,36 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
             model.pitchDegrees = destination.pitchDegrees
         }
         modelsById[id] = model
-        pathAnimationsById[id] = SceneModelPathAnimationRequest(path: path,
+        pathAnimationsById[id] = SceneModelPathAnimationRequest(generation: generation,
+                                                                path: path,
                                                                 duration: duration,
                                                                 curve: curve,
                                                                 appliesHeading: appliesHeading,
                                                                 appliesPitch: appliesPitch)
         cancelledPathAnimationIds.remove(id)
         if let completion {
-            pathAnimationCompletionsById[id] = completion
+            pathAnimationCompletionsById[id] = (generation, completion)
         }
         markChangedLocked()
         lock.unlock()
 
-        superseded?(false)
+        deliver(superseded, false)
         notifyChanged()
     }
 
-    /// Stops a running path animation, leaving the model where it is. Its
-    /// completion fires with `false`.
+    /// Stops a running path animation, leaving the model where the flight got
+    /// to. Its completion fires with `false`.
     public func cancelPathAnimation(id: UInt64) {
         lock.lock()
-        let completion = pathAnimationCompletionsById.removeValue(forKey: id)
-        var changed = pathAnimationsById.removeValue(forKey: id) != nil
-        if modelsById[id] != nil {
+        let completion = pathAnimationCompletionsById.removeValue(forKey: id)?.completion
+        // A request the renderer never saw is undone here: nothing moved, so the
+        // descriptor goes back to what it was before `animate` aimed it at the
+        // destination.
+        let wasPending = pathAnimationsById.removeValue(forKey: id) != nil
+        var changed = wasPending
+        if wasPending, let restored = descriptorsBeforePathAnimationById.removeValue(forKey: id) {
+            modelsById[id] = restored
+        } else if modelsById[id] != nil {
             cancelledPathAnimationIds.insert(id)
             changed = true
         }
@@ -184,7 +203,7 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         }
         lock.unlock()
 
-        completion?(false)
+        deliver(completion, false)
         if changed {
             notifyChanged()
         }
@@ -199,15 +218,16 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
             transformAnimationDurationsById.removeValue(forKey: id)
             pathAnimationsById.removeValue(forKey: id)
             cancelledPathAnimationIds.remove(id)
-            if let completion = pathAnimationCompletionsById.removeValue(forKey: id) {
-                droppedCompletions.append(completion)
+            descriptorsBeforePathAnimationById.removeValue(forKey: id)
+            if let entry = pathAnimationCompletionsById.removeValue(forKey: id) {
+                droppedCompletions.append(entry.completion)
             }
         }
         markChangedLocked()
         lock.unlock()
 
         for completion in droppedCompletions {
-            completion(false)
+            deliver(completion, false)
         }
         notifyChanged()
     }
@@ -223,13 +243,14 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         transformAnimationDurationsById.removeAll(keepingCapacity: true)
         pathAnimationsById.removeAll(keepingCapacity: true)
         cancelledPathAnimationIds.removeAll(keepingCapacity: true)
-        let droppedCompletions = Array(pathAnimationCompletionsById.values)
+        descriptorsBeforePathAnimationById.removeAll(keepingCapacity: true)
+        let droppedCompletions = pathAnimationCompletionsById.values.map(\.completion)
         pathAnimationCompletionsById.removeAll(keepingCapacity: true)
         markChangedLocked()
         lock.unlock()
 
         for completion in droppedCompletions {
-            completion(false)
+            deliver(completion, false)
         }
         notifyChanged()
     }
@@ -249,6 +270,9 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         transformAnimationDurationsById.removeAll(keepingCapacity: true)
         pathAnimationsById.removeAll(keepingCapacity: true)
         cancelledPathAnimationIds.removeAll(keepingCapacity: true)
+        // Handed to the renderer: from here a cancellation has to be answered
+        // with where the flight actually stopped, not with the old descriptor.
+        descriptorsBeforePathAnimationById.removeAll(keepingCapacity: true)
         return snapshot
     }
 
@@ -271,15 +295,35 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Fires the completions of the listed ids with `true`. Called from the
-    /// render loop on the main thread when their animations reached the end.
-    func finishPathAnimations(ids: [UInt64]) {
+    /// Records where each ended path animation left its model and fires the
+    /// matching completion. Called from the render loop on the main thread.
+    ///
+    /// The descriptor write is deliberately silent: the renderer already shows
+    /// that state, and marking the snapshot dirty would send it straight back.
+    func applyPathAnimationResults(_ results: [SceneModelPathAnimationResult]) {
         lock.lock()
-        let completions = ids.compactMap { pathAnimationCompletionsById.removeValue(forKey: $0) }
+        var completions: [((Bool) -> Void, Bool)] = []
+        for result in results {
+            if var model = modelsById[result.id] {
+                model.coordinate = result.coordinate
+                model.altitudeMeters = result.altitudeMeters
+                model.headingDegrees = result.headingDegrees
+                model.pitchDegrees = result.pitchDegrees
+                modelsById[result.id] = model
+            }
+            // A newer `animate` for the same id already owns the completion;
+            // an older result must not resolve it.
+            guard let entry = pathAnimationCompletionsById[result.id],
+                  entry.generation == result.generation else {
+                continue
+            }
+            pathAnimationCompletionsById.removeValue(forKey: result.id)
+            completions.append((entry.completion, result.finished))
+        }
         lock.unlock()
 
-        for completion in completions {
-            completion(true)
+        for (completion, finished) in completions {
+            deliver(completion, finished)
         }
     }
 
@@ -289,15 +333,23 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
     /// would otherwise leave app chains waiting forever.
     func cancelAllPathAnimations() {
         lock.lock()
-        let completions = Array(pathAnimationCompletionsById.values)
+        let completions = pathAnimationCompletionsById.values.map(\.completion)
         pathAnimationCompletionsById.removeAll(keepingCapacity: true)
         pathAnimationsById.removeAll(keepingCapacity: true)
         cancelledPathAnimationIds.removeAll(keepingCapacity: true)
+        descriptorsBeforePathAnimationById.removeAll(keepingCapacity: true)
         lock.unlock()
 
         for completion in completions {
-            completion(false)
+            deliver(completion, false)
         }
+    }
+
+    /// Completions are documented as main-thread, and the controller is
+    /// mutable from any thread, so every exit routes through here.
+    private func deliver(_ completion: ((Bool) -> Void)?, _ success: Bool) {
+        guard let completion else { return }
+        performOnMain { completion(success) }
     }
 
     func markSnapshotDirty() {

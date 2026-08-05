@@ -11,7 +11,7 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
     private let lock = NSLock()
     private var routesById: [UInt64: ImmersiveMapRoute] = [:]
     private var removedIds: Set<UInt64> = []
-    private var progressAnimationDurationsById: [UInt64: TimeInterval] = [:]
+    private var progressAnimationsById: [UInt64: RouteProgressAnimationRequest] = [:]
     private var version: UInt64 = 0
     private var hasChanges: Bool = false
     private var changeHandler: (() -> Void)?
@@ -34,9 +34,15 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
         lock.lock()
         let newIds = Set(routes.map(\.id))
         removedIds.formUnion(routesById.keys.filter { newIds.contains($0) == false })
-        routesById = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
+        // Last wins on a repeated id, matching `upsert`, rather than trapping.
+        var replacement: [UInt64: ImmersiveMapRoute] = [:]
+        replacement.reserveCapacity(routes.count)
+        for route in routes {
+            replacement[route.id] = route
+        }
+        routesById = replacement
         removedIds.subtract(newIds)
-        progressAnimationDurationsById.removeAll(keepingCapacity: true)
+        progressAnimationsById.removeAll(keepingCapacity: true)
         markChangedLocked()
         lock.unlock()
         notifyChanged()
@@ -61,9 +67,15 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
             lock.unlock()
             return
         }
+        // The start is taken from what the route shows now, or from the start
+        // an unconsumed request already recorded: two setProgress calls between
+        // frames animate once, from where the line actually was.
+        let startProgress = progressAnimationsById[id]?.startProgress ?? route.progress
         route.progress = min(max(progress, 0), 1)
         routesById[id] = route
-        progressAnimationDurationsById[id] = max(0, duration)
+        progressAnimationsById[id] = RouteProgressAnimationRequest(
+            startProgress: min(max(startProgress, 0), 1),
+            duration: max(0, duration))
         markChangedLocked()
         lock.unlock()
         notifyChanged()
@@ -74,7 +86,7 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
         for id in ids {
             routesById.removeValue(forKey: id)
             removedIds.insert(id)
-            progressAnimationDurationsById.removeValue(forKey: id)
+            progressAnimationsById.removeValue(forKey: id)
         }
         markChangedLocked()
         lock.unlock()
@@ -89,7 +101,7 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
         lock.lock()
         removedIds.formUnion(routesById.keys)
         routesById.removeAll(keepingCapacity: true)
-        progressAnimationDurationsById.removeAll(keepingCapacity: true)
+        progressAnimationsById.removeAll(keepingCapacity: true)
         markChangedLocked()
         lock.unlock()
         notifyChanged()
@@ -101,11 +113,11 @@ public final class ImmersiveMapRoutesController: @unchecked Sendable {
         guard hasChanges else { return nil }
         hasChanges = false
         let snapshot = RoutesSnapshot(routes: Array(routesById.values),
-                                      progressAnimationDurationsById: progressAnimationDurationsById,
+                                      progressAnimationsById: progressAnimationsById,
                                       removedIds: Array(removedIds),
                                       version: version)
         removedIds.removeAll(keepingCapacity: true)
-        progressAnimationDurationsById.removeAll(keepingCapacity: true)
+        progressAnimationsById.removeAll(keepingCapacity: true)
         return snapshot
     }
 

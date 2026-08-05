@@ -148,24 +148,33 @@ final class SceneModelPathAnimationTests: XCTestCase {
                     time: 0)
 
         _ = store.presentedEntries(at: 5)
-        XCTAssertTrue(store.consumeFinishedPathAnimationIds().isEmpty)
+        XCTAssertTrue(store.consumePathAnimationResults().map(\.id).isEmpty)
 
         _ = store.presentedEntries(at: 10)
-        XCTAssertEqual(store.consumeFinishedPathAnimationIds(), [1])
+        XCTAssertEqual(store.consumePathAnimationResults().map(\.id), [1])
 
         _ = store.presentedEntries(at: 11)
-        XCTAssertTrue(store.consumeFinishedPathAnimationIds().isEmpty)
+        XCTAssertTrue(store.consumePathAnimationResults().map(\.id).isEmpty)
     }
 
-    func testCancelledAnimationDoesNotReportCompletion() {
+    /// A cancellation reports where the flight stopped, so the controller's
+    /// descriptor stops naming the destination, but it never reports success.
+    func testCancelledAnimationReportsWhereItStoppedAndNotSuccess() throws {
         let store = SceneModelPresentationStateStore()
         store.apply(snapshot: makeSnapshot([makeModel()]), time: 0)
-        store.apply(snapshot: makeSnapshot([makeModel()], pathAnimations: [1: makeRequest(duration: 10)]),
+        store.apply(snapshot: makeSnapshot([makeModel()],
+                                           pathAnimations: [1: makeRequest(duration: 10, curve: .linear)]),
                     time: 0)
+        _ = store.presentedEntries(at: 5)
         store.apply(snapshot: makeSnapshot([makeModel()], cancelledPathAnimationIds: [1]), time: 5)
 
+        let result = try XCTUnwrap(store.consumePathAnimationResults().first)
+        XCTAssertEqual(result.id, 1)
+        XCTAssertFalse(result.finished)
+        XCTAssertEqual(result.coordinate.longitude, 30, accuracy: 1e-4)
+
         _ = store.presentedEntries(at: 20)
-        XCTAssertTrue(store.consumeFinishedPathAnimationIds().isEmpty)
+        XCTAssertTrue(store.consumePathAnimationResults().isEmpty)
     }
 
     /// After the flight the descriptor already holds the destination, so a
@@ -204,8 +213,49 @@ final class SceneModelPathAnimationTests: XCTestCase {
                     time: 3)
 
         assertCoordinate(store.presentedEntries(at: 3)[0], end)
-        XCTAssertEqual(store.consumeFinishedPathAnimationIds(), [1])
+        XCTAssertEqual(store.consumePathAnimationResults().map(\.id), [1])
         XCTAssertFalse(store.hasActiveAnimations)
+    }
+
+    /// The path owns coordinate, altitude, heading and pitch; scale is not its
+    /// business and must still animate, even when the change arrives in the very
+    /// snapshot that starts the flight.
+    func testScaleStillAppliesWhileFlying() {
+        let store = SceneModelPresentationStateStore()
+        store.apply(snapshot: makeSnapshot([makeModel()]), time: 0)
+        store.apply(snapshot: makeSnapshot([makeModel(scale: 4)],
+                                           durations: [1: 0],
+                                           pathAnimations: [1: makeRequest(duration: 10, curve: .linear)]),
+                    time: 0)
+
+        XCTAssertEqual(store.presentedEntries(at: 1)[0].scale, 4, accuracy: 1e-9)
+
+        store.apply(snapshot: makeSnapshot([makeModel(scale: 7)], durations: [1: 0]), time: 2)
+        XCTAssertEqual(store.presentedEntries(at: 2)[0].scale, 7, accuracy: 1e-9)
+        // The flight is untouched by the scale change.
+        XCTAssertEqual(longitude(of: store.presentedEntries(at: 5)[0]), 30, accuracy: 1e-4)
+    }
+
+    /// A `move` issued mid-flight is ignored, not stored: storing it would make
+    /// the next comparison see no change and drop it forever, leaving the
+    /// descriptor and the model permanently disagreeing.
+    func testMoveDuringAFlightIsIgnoredAndDoesNotResurfaceLater() {
+        let store = SceneModelPresentationStateStore()
+        store.apply(snapshot: makeSnapshot([makeModel()]), time: 0)
+        store.apply(snapshot: makeSnapshot([makeModel()],
+                                           pathAnimations: [1: makeRequest(duration: 10, curve: .linear)]),
+                    time: 0)
+        store.apply(snapshot: makeSnapshot([makeModel(latitude: 70, longitude: -140)]), time: 5)
+
+        // Lands at the end of the path, not at the swallowed move target.
+        _ = store.presentedEntries(at: 10)
+        assertCoordinate(store.presentedEntries(at: 10)[0], end)
+
+        // And a snapshot after the flight does not resurrect it either.
+        store.apply(snapshot: makeSnapshot([makeModel(latitude: end.latitude, longitude: end.longitude)]),
+                    time: 11)
+        XCTAssertFalse(store.hasActiveAnimations)
+        assertCoordinate(store.presentedEntries(at: 11)[0], end)
     }
 
     func testDegeneratePathStartsNoAnimation() {
@@ -213,6 +263,7 @@ final class SceneModelPathAnimationTests: XCTestCase {
         store.apply(snapshot: makeSnapshot([makeModel()]), time: 0)
         store.apply(snapshot: makeSnapshot([makeModel()],
                                            pathAnimations: [1: SceneModelPathAnimationRequest(
+                                               generation: 1,
                                                path: ImmersiveMapGeoPath(waypoints: [start]),
                                                duration: 10,
                                                curve: .linear,
@@ -229,18 +280,21 @@ final class SceneModelPathAnimationTests: XCTestCase {
     private func makeModel(id: UInt64 = 1,
                            latitude: Double = 0,
                            longitude: Double = 0,
-                           headingDegrees: Double = 0) -> ImmersiveMapSceneModel {
+                           headingDegrees: Double = 0,
+                           scale: Double = 1) -> ImmersiveMapSceneModel {
         ImmersiveMapSceneModel(id: id,
                                source: ImmersiveMapSceneModel.Source(url: URL(fileURLWithPath: "/tmp/m.usdz")),
                                coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
-                               headingDegrees: headingDegrees)
+                               headingDegrees: headingDegrees,
+                               scale: scale)
     }
 
     private func makeSnapshot(_ models: [ImmersiveMapSceneModel],
+                              durations: [UInt64: TimeInterval] = [:],
                               pathAnimations: [UInt64: SceneModelPathAnimationRequest] = [:],
                               cancelledPathAnimationIds: [UInt64] = []) -> SceneModelsSnapshot {
         SceneModelsSnapshot(models: models,
-                            transformAnimationDurationsById: [:],
+                            transformAnimationDurationsById: durations,
                             pathAnimationsById: pathAnimations,
                             cancelledPathAnimationIds: cancelledPathAnimationIds,
                             removedIds: [],
@@ -252,7 +306,8 @@ final class SceneModelPathAnimationTests: XCTestCase {
                              peakAltitudeMeters: Double = 0,
                              appliesHeading: Bool = true,
                              appliesPitch: Bool = true) -> SceneModelPathAnimationRequest {
-        SceneModelPathAnimationRequest(path: ImmersiveMapGeoPath(waypoints: [start, end],
+        SceneModelPathAnimationRequest(generation: 1,
+                                       path: ImmersiveMapGeoPath(waypoints: [start, end],
                                                                  peakAltitudeMeters: peakAltitudeMeters),
                                        duration: duration,
                                        curve: curve,

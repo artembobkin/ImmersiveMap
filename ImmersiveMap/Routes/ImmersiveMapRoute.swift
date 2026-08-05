@@ -4,6 +4,20 @@
 import Foundation
 import simd
 
+/// A dash pattern measured along the route as it appears on screen, so dashes
+/// keep their size at any zoom instead of stretching with the geometry.
+public struct ImmersiveMapRouteDash: Equatable, Sendable {
+    /// Length of the drawn part of one period, in points.
+    public var dashPoints: Double
+    /// Length of the gap of one period, in points.
+    public var gapPoints: Double
+
+    public init(dashPoints: Double, gapPoints: Double) {
+        self.dashPoints = dashPoints
+        self.gapPoints = gapPoints
+    }
+}
+
 /// A route drawn over the globe: a great-circle ribbon following an
 /// ``ImmersiveMapGeoPath``, lifted off the surface by the path's altitude
 /// profile, with a width that stays constant on screen.
@@ -24,16 +38,20 @@ public struct ImmersiveMapRoute: Identifiable, Equatable, Sendable {
     /// `ImmersiveMapRoutesController.setProgress(id:_:duration:)` for a line
     /// that draws itself.
     public var progress: Double
+    /// nil draws a solid line.
+    public var dash: ImmersiveMapRouteDash?
 
     public init(id: UInt64,
                 path: ImmersiveMapGeoPath,
                 color: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
                 widthPoints: Double = 2,
-                progress: Double = 1) {
+                progress: Double = 1,
+                dash: ImmersiveMapRouteDash? = nil) {
         self.id = id
         self.path = path
         self.color = color
         self.widthPoints = widthPoints
         self.progress = progress
+        self.dash = dash
     }
 }

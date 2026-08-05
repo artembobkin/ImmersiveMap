@@ -50,6 +50,34 @@ enum SceneModelAnimationMath {
         return heading * pitch * roll
     }
 
+    /// Inverse of `orientationQuaternion`: recovers heading, pitch and roll from
+    /// an orientation in the anchor's tangent frame. Needed to tell the
+    /// controller where a path animation left a model, since the store carries
+    /// the displayed orientation as a quaternion.
+    static func orientationAngles(of orientation: simd_quatf)
+        -> (headingDegrees: Double, pitchDegrees: Double, rollDegrees: Double) {
+        let matrix = simd_float3x3(orientation)
+        // Rz(-heading) * Rx(pitch) * Ry(roll), so row 2 column 1 is sin(pitch).
+        let sinPitch = min(max(matrix.columns.1[2], -1), 1)
+        let pitch = asin(sinPitch)
+        let cosPitch = sqrt(max(0, 1 - sinPitch * sinPitch))
+
+        let heading: Float
+        let roll: Float
+        if cosPitch > 1e-5 {
+            heading = -atan2(-matrix.columns.1[0], matrix.columns.1[1])
+            roll = atan2(-matrix.columns.0[2], matrix.columns.2[2])
+        } else {
+            // Gimbal lock at +-90 degrees of pitch: heading and roll turn about
+            // the same axis, so the whole turn is reported as heading.
+            heading = -atan2(matrix.columns.0[1], matrix.columns.0[0])
+            roll = 0
+        }
+
+        let degrees = 180.0 / Double.pi
+        return (Double(heading) * degrees, Double(pitch) * degrees, Double(roll) * degrees)
+    }
+
     /// Shortest-arc quaternion interpolation.
     static func orientation(from start: simd_quatf,
                             to target: simd_quatf,

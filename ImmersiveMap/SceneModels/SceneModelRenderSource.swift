@@ -6,11 +6,28 @@ import Foundation
 /// A request to fly a model along a path, collected by the public controller
 /// and started by the presentation store on the frame that applies it.
 struct SceneModelPathAnimationRequest {
+    /// Distinguishes this request from a later `animate` for the same id, so a
+    /// result that arrives after a supersede cannot resolve the new animation.
+    let generation: UInt64
     let path: ImmersiveMapGeoPath
     let duration: TimeInterval
     let curve: ImmersiveMapPathAnimationCurve
     let appliesHeading: Bool
     let appliesPitch: Bool
+}
+
+/// Where a path animation left the model, reported back so the controller's
+/// descriptor keeps telling the truth: a cancelled animation stops partway, and
+/// nothing else knows where that is.
+struct SceneModelPathAnimationResult {
+    let id: UInt64
+    let generation: UInt64
+    /// true when the model reached the end of the path.
+    let finished: Bool
+    let coordinate: GeoCoordinate
+    let altitudeMeters: Double
+    let headingDegrees: Double
+    let pitchDegrees: Double
 }
 
 /// Snapshot of scene model mutations collected by the public controller and

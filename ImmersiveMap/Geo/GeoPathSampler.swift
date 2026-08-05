@@ -162,14 +162,10 @@ struct GeoPathMetrics {
     }
 }
 
-/// Entry points that build metrics on demand. Callers that resolve a path every
-/// frame should keep the `GeoPathMetrics` instead.
+/// Builds metrics on demand for a one-shot tessellation. Callers that resolve a
+/// path every frame keep the `GeoPathMetrics` instead.
 enum GeoPathSampler {
     static func samples(for path: ImmersiveMapGeoPath) -> [GeoPathSample] {
         GeoPathMetrics(path: path)?.samples() ?? []
-    }
-
-    static func sample(for path: ImmersiveMapGeoPath, fraction: Double) -> GeoPathSample? {
-        GeoPathMetrics(path: path)?.sample(atFraction: fraction)
     }
 }

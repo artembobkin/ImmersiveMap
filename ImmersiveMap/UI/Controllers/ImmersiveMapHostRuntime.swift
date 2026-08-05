@@ -82,6 +82,10 @@ final class ImmersiveMapHostRuntime {
     }
 
     func dismantle() {
+        // Parking cancels camera flights, so a path animation cannot outlive the
+        // view either: its completion resolves here instead of hanging until the
+        // parked view is finally dropped.
+        runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
         syncControllers(avatarsController: nil,
                         sceneModelsController: nil,
                         routesController: nil,

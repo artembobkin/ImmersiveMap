@@ -63,6 +63,7 @@ private struct SceneModelTransformAnimation {
 /// cost to one exact evaluation, and the model rides the drawn ribbon because
 /// both resolve a fraction through the same metrics.
 private struct SceneModelPathAnimation {
+    let generation: UInt64
     let metrics: GeoPathMetrics
     let startTime: TimeInterval
     let duration: TimeInterval
@@ -73,6 +74,7 @@ private struct SceneModelPathAnimation {
     /// nil when the path cannot describe a trajectory.
     init?(request: SceneModelPathAnimationRequest, startTime: TimeInterval) {
         guard let metrics = GeoPathMetrics(path: request.path) else { return nil }
+        generation = request.generation
         self.metrics = metrics
         self.startTime = startTime
         duration = max(0, request.duration)
@@ -82,14 +84,7 @@ private struct SceneModelPathAnimation {
     }
 
     func fraction(at time: TimeInterval) -> Double {
-        guard duration > 0 else { return 1 }
-        let raw = min(max((time - startTime) / duration, 0), 1)
-        switch curve {
-        case .linear:
-            return raw
-        case .easeOut:
-            return SceneModelAnimationMath.easedProgress(for: raw)
-        }
+        curve.fraction(elapsed: time - startTime, duration: duration)
     }
 
     func isFinished(at time: TimeInterval) -> Bool {
@@ -107,9 +102,10 @@ private struct SceneModelPresentationEntry {
     var positionAnimation: SceneModelPositionAnimation?
     var transformAnimation: SceneModelTransformAnimation?
     var pathAnimation: SceneModelPathAnimation?
-    /// Set on the frame a path animation reaches its end, drained once by the
-    /// store so the app's completion fires exactly once.
-    private var didFinishPathAnimation: Bool = false
+    /// Where a path animation ended, set once on the frame it ends and drained
+    /// by the store, so the app's completion fires exactly once and the
+    /// controller learns where a cancelled flight stopped.
+    private var pendingPathAnimationResult: SceneModelPathAnimationResult?
 
     init(model: ImmersiveMapSceneModel) {
         self.model = model
@@ -178,7 +174,7 @@ private struct SceneModelPresentationEntry {
                 rollDegrees: model.rollDegrees)
             if pathAnimation.isFinished(at: time) {
                 self.pathAnimation = nil
-                didFinishPathAnimation = true
+                recordPathAnimationResult(generation: pathAnimation.generation, finished: true)
             }
         }
 
@@ -196,11 +192,23 @@ private struct SceneModelPresentationEntry {
                          pathAnimationRequest: SceneModelPathAnimationRequest?,
                          cancelsPathAnimation: Bool,
                          time: TimeInterval) {
-        if cancelsPathAnimation, pathAnimation != nil {
+        // Which fields the path owns on this frame. A cancellation keeps that
+        // ownership for the frame it lands on: the descriptor in the same
+        // snapshot still names the destination, because the controller only
+        // learns where the flight stopped from the result this frame emits.
+        var pathOwnedFields: (appliesHeading: Bool, appliesPitch: Bool)?
+
+        if cancelsPathAnimation, let cancelled = pathAnimation {
             _ = presentedModel(at: time)
             pathAnimation = nil
-            didFinishPathAnimation = false
+            recordPathAnimationResult(generation: cancelled.generation, finished: false)
+            adoptDisplayedTransform()
+            pathOwnedFields = (cancelled.appliesHeading, cancelled.appliesPitch)
         }
+        if let active = pathAnimation {
+            pathOwnedFields = (active.appliesHeading, active.appliesPitch)
+        }
+
         if let pathAnimationRequest {
             // Settle first, then let the path take over: a competing move or
             // transform must not keep running underneath it.
@@ -208,9 +216,28 @@ private struct SceneModelPresentationEntry {
             positionAnimation = nil
             transformAnimation = nil
             pathAnimation = SceneModelPathAnimation(request: pathAnimationRequest, startTime: time)
-            didFinishPathAnimation = false
-            self.model = model
-            return
+            pendingPathAnimationResult = nil
+            // The descriptor in this very snapshot IS the path's destination,
+            // which is what makes the landing seamless, so it is taken as given
+            // rather than frozen. Everything below still runs, so a `setScale`
+            // that rode in with the request is not lost.
+            pathOwnedFields = nil
+        }
+
+        // While a path owns a field, an incoming value for it is ignored rather
+        // than recorded: recording it would make the entry compare the new
+        // descriptor against itself once the flight ends and silently drop the
+        // change forever. Everything else, scale included, applies normally.
+        var model = model
+        if let pathOwnedFields {
+            model.coordinate = self.model.coordinate
+            model.altitudeMeters = self.model.altitudeMeters
+            if pathOwnedFields.appliesHeading {
+                model.headingDegrees = self.model.headingDegrees
+            }
+            if pathOwnedFields.appliesPitch {
+                model.pitchDegrees = self.model.pitchDegrees
+            }
         }
 
         let previous = self.model
@@ -226,8 +253,8 @@ private struct SceneModelPresentationEntry {
             _ = presentedModel(at: time)
         }
 
-        // While flying, an incoming coordinate is recorded but not applied:
-        // the path owns the position until it finishes or is cancelled.
+        // The path drives the position itself, so an installed path suppresses
+        // the glide toward the destination the descriptor now names.
         if coordinateChanged, pathAnimation == nil {
             let duration = SceneModelAnimationMath.positionAnimationDuration(from: displayedCoordinate,
                                                                              to: model.coordinate)
@@ -268,9 +295,31 @@ private struct SceneModelPresentationEntry {
         positionAnimation != nil || transformAnimation != nil || pathAnimation != nil
     }
 
-    mutating func takeFinishedPathAnimation() -> Bool {
-        defer { didFinishPathAnimation = false }
-        return didFinishPathAnimation
+    mutating func takePathAnimationResult() -> SceneModelPathAnimationResult? {
+        defer { pendingPathAnimationResult = nil }
+        return pendingPathAnimationResult
+    }
+
+    /// Makes the descriptor agree with what is on screen, so a later snapshot
+    /// carrying the same descriptor starts no animation.
+    private mutating func adoptDisplayedTransform() {
+        model.coordinate = displayedCoordinate
+        model.altitudeMeters = displayedAltitude
+        let angles = SceneModelAnimationMath.orientationAngles(of: displayedOrientation)
+        model.headingDegrees = angles.headingDegrees
+        model.pitchDegrees = angles.pitchDegrees
+        model.rollDegrees = angles.rollDegrees
+    }
+
+    private mutating func recordPathAnimationResult(generation: UInt64, finished: Bool) {
+        let angles = SceneModelAnimationMath.orientationAngles(of: displayedOrientation)
+        pendingPathAnimationResult = SceneModelPathAnimationResult(id: model.id,
+                                                                   generation: generation,
+                                                                   finished: finished,
+                                                                   coordinate: displayedCoordinate,
+                                                                   altitudeMeters: displayedAltitude,
+                                                                   headingDegrees: angles.headingDegrees,
+                                                                   pitchDegrees: angles.pitchDegrees)
     }
 }
 
@@ -282,7 +331,7 @@ final class SceneModelPresentationStateStore {
     private var entries: [SceneModelPresentationEntry] = []
     private var presentedCache: [PresentedSceneModel] = []
     private var animatingIndices: [Int] = []
-    private var finishedPathAnimationIds: [UInt64] = []
+    private var pathAnimationResults: [SceneModelPathAnimationResult] = []
     private(set) var hasActiveAnimations: Bool = false
 
     var isEmpty: Bool {
@@ -321,7 +370,7 @@ final class SceneModelPresentationStateStore {
 
         presentedCache = entries.indices.map { index in
             let presented = entries[index].presentedModel(at: time)
-            collectFinishedPathAnimation(at: index)
+            collectPathAnimationResult(at: index)
             return presented
         }
         animatingIndices = entries.indices.filter { entries[$0].hasActiveAnimations(at: time) }
@@ -341,7 +390,7 @@ final class SceneModelPresentationStateStore {
         stillAnimating.reserveCapacity(animatingIndices.count)
         for index in animatingIndices {
             presentedCache[index] = entries[index].presentedModel(at: time)
-            collectFinishedPathAnimation(at: index)
+            collectPathAnimationResult(at: index)
             if entries[index].hasActiveAnimations(at: time) {
                 stillAnimating.append(index)
             }
@@ -351,14 +400,14 @@ final class SceneModelPresentationStateStore {
         return presentedCache
     }
 
-    /// Drains the ids whose path animation reached its end since the last call.
-    func consumeFinishedPathAnimationIds() -> [UInt64] {
-        defer { finishedPathAnimationIds.removeAll(keepingCapacity: true) }
-        return finishedPathAnimationIds
+    /// Drains the path animations that ended since the last call.
+    func consumePathAnimationResults() -> [SceneModelPathAnimationResult] {
+        defer { pathAnimationResults.removeAll(keepingCapacity: true) }
+        return pathAnimationResults
     }
 
-    private func collectFinishedPathAnimation(at index: Int) {
-        guard entries[index].takeFinishedPathAnimation() else { return }
-        finishedPathAnimationIds.append(entries[index].model.id)
+    private func collectPathAnimationResult(at index: Int) {
+        guard let result = entries[index].takePathAnimationResult() else { return }
+        pathAnimationResults.append(result)
     }
 }

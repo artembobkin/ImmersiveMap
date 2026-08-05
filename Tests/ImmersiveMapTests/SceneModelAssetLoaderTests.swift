@@ -105,7 +105,7 @@ final class SceneModelMeshStoreTests: XCTestCase {
         }
 
         func applyActivityState(_ state: RenderActivityState) {}
-        func completeSceneModelPathAnimations(ids _: [UInt64]) {}
+        func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
 
         func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
