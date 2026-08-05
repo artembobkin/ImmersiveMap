@@ -88,7 +88,7 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 
 ## App size
 
-Measured from a Release archive of the iOS demo app (`ImmersiveMapIOS`, arm64, unsigned). That demo is 25 lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
+Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`, arm64, unsigned). That demo is 25 lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
 
 | Part | Size |
 |---|---|
@@ -105,19 +105,22 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The repository includes two host apps that reference the package locally:
+The `Examples` folder holds host apps that reference the package locally:
 
-- `ImmersiveMapIOS` - iOS demo app
-- `ImmersiveMapMac` - native macOS demo app (AppKit, not Catalyst)
+| Example | What it shows |
+|---|---|
+| `Examples/ImmersiveMapIOS` | The smallest iOS app that renders the map. |
+| `Examples/ImmersiveMapMac` | Native macOS (AppKit, not Catalyst): a scripted camera tour, SwiftUI markers, a 3D scene model. |
+| `Examples/ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one, and the camera travelling with it. |
 
 To run:
 
 1. Clone the repository.
 2. Open `ImmersiveMap.xcworkspace`.
-3. Select the `ImmersiveMapIOS` or `ImmersiveMapMac` scheme.
+3. Select the scheme you want (`ImmersiveMapIOS`, `ImmersiveMapMac`, `ImmersiveMapRoutesMac`).
 4. Build and run.
 
-Both demo apps render the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox provider instead, attach it to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
+Every example renders the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox provider instead, attach it to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
 
 ## Where the map data comes from
 

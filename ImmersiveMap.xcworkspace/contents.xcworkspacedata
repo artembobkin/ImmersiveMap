@@ -14,10 +14,17 @@
          location = "group:ImmersiveMap">
       </FileRef>
    </Group>
-   <FileRef
-      location = "group:ImmersiveMapIOS/ImmersiveMapIOS.xcodeproj">
-   </FileRef>
-   <FileRef
-      location = "group:ImmersiveMapMac/ImmersiveMapMac.xcodeproj">
-   </FileRef>
+   <Group
+      location = "container:"
+      name = "Examples">
+      <FileRef
+         location = "group:Examples/ImmersiveMapIOS/ImmersiveMapIOS.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapMac/ImmersiveMapMac.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapRoutesMac/ImmersiveMapRoutesMac.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>

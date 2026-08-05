@@ -20,7 +20,7 @@ ImmersiveMap is an early-stage Swift + Metal map rendering engine, currently mai
    swift build
    swift test
    ```
-3. To run the map in a host app, open `ImmersiveMap.xcworkspace` and select the `ImmersiveMapIOS` (iOS) or `ImmersiveMapMac` (native macOS, AppKit) scheme. Both host apps reference the package locally, so unpublished changes run immediately.
+3. To run the map in a host app, open `ImmersiveMap.xcworkspace` and select one of the example schemes: `ImmersiveMapIOS` (iOS), `ImmersiveMapMac` (native macOS, AppKit) or `ImmersiveMapRoutesMac` (routes, a model flying them and a camera following). They live in `Examples/` and reference the package locally, so unpublished changes run immediately.
 
 Native macOS build from the CLI:
 
