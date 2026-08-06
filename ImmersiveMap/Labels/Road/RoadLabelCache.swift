@@ -269,8 +269,7 @@ final class RoadLabelCache {
     // did a dictionary lookup per tile and allocated an array on every access.
     private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 
-    init(metalDevice: MTLDevice,
-         textRenderer _: TextRenderer) {
+    init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice
     }
 

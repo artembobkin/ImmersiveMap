@@ -33,11 +33,11 @@ final class TileTextLabelsBuilder {
         }
     }
 
-    private let textRenderer: TextRenderer
+    private let textLayout: TextLayoutResolver
     private let poiAtlasLayout: PoiSpriteAtlasLayout
 
-    init(textRenderer: TextRenderer) {
-        self.textRenderer = textRenderer
+    init(textLayout: TextLayoutResolver) {
+        self.textLayout = textLayout
         self.poiAtlasLayout = PoiSpriteAtlasLayout()
     }
 
@@ -74,11 +74,11 @@ final class TileTextLabelsBuilder {
             let wrap = LabelWrapOptions(maxWidthPx: textScale * 10.0,
                                         maxLines: Self.baseLabelWrapLineCount,
                                         alignment: .left)
-            let textMetrics = textRenderer.collectLabelVertices(for: label.text,
-                                                                labelIndex: labelIndex,
-                                                                scale: textScale,
-                                                                wrap: wrap,
-                                                                weight: weight)
+            let textMetrics = textLayout.collectLabelVertices(for: label.text,
+                                                              labelIndex: labelIndex,
+                                                              scale: textScale,
+                                                              wrap: wrap,
+                                                              weight: weight)
             let geometry = makeCombinedLabelGeometry(textMetrics: textMetrics,
                                                      poiIcon: label.poiIcon,
                                                      textStyle: style,

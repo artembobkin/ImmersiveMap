@@ -133,14 +133,13 @@ final class RenderPersistentContext {
                                               mapBaseColors: mapBaseColors)
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,
                                                metalDevice: metal.device,
-                                               textRenderer: textRenderer,
+                                               textLayout: textRenderer.layout,
                                                config: config,
                                                tileTraceRecorder: tileTraceRecorder,
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
         self.tileRenderStore.eventSink = eventSink
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
-        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device,
-                                             textRenderer: textRenderer)
+        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device)
 
         self.sceneModelSource = sceneModelSource
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)

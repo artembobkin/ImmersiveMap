@@ -27,7 +27,7 @@ final class TileRenderStore: @unchecked Sendable {
     init(
         providerRuntime: ImmersiveMapProviderRuntimeContext,
         metalDevice: MTLDevice,
-        textRenderer: TextRenderer,
+        textLayout: TextLayoutResolver,
         config: ImmersiveMapSettings,
         tileTraceRecorder: TileTraceRecorder,
         tileLoadingStatusReporter: TileLoadingStatusReporter?
@@ -39,7 +39,7 @@ final class TileRenderStore: @unchecked Sendable {
             styleRevision: mapStyle.preparedTileStyleRevision,
             tileSourceRevision: PreparedTileCacheIdentity.tileSourceRevision(for: config.tiles.network),
             flatSeparateRoadRenderingMinimumZoom: UInt32(max(0, config.style.flatSeparateRoadRenderingMinimumZoom)),
-            textRevision: textRenderer.preparedTileTextRevision,
+            textRevision: textLayout.preparedTileTextRevision,
             labelLanguage: config.labels.language,
             labelFallbackPolicy: config.labels.fallbackPolicy,
             houseNumbersEnabled: config.labels.houseNumbers.enabled,
@@ -54,9 +54,9 @@ final class TileRenderStore: @unchecked Sendable {
         let tileParser = TileMvtParser(determineFeatureStyle: determineFeatureStyle,
                                        labelProviderProfile: providerRuntime.labelProviderProfile,
                                        config: config,
-                                       glyphCoverage: textRenderer.glyphCoverage)
-        let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)
-        let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)
+                                       glyphCoverage: textLayout.glyphCoverage)
+        let textLabelsBuilder = TileTextLabelsBuilder(textLayout: textLayout)
+        let roadLabelsBuilder = TileRoadLabelsBuilder(textLayout: textLayout)
         self.preparedDataBuilder = TilePreparedDataBuilder(tileParser: tileParser,
                                                            textLabelsBuilder: textLabelsBuilder,
                                                            roadLabelsBuilder: roadLabelsBuilder)
