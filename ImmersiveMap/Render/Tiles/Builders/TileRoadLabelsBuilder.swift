@@ -4,13 +4,13 @@
 import simd
 
 final class TileRoadLabelsBuilder {
-    private let textRenderer: TextRenderer
+    private let textLayout: TextLayoutResolver
     private let roadLabelRepeatDistancePx: Float = 100.0
     private let tileExtent: Float = 4096.0
     private let tilePixelSize: Float = 512.0
     private let maxAnchorsPerPath: Int = 7
-    init(textRenderer: TextRenderer) {
-        self.textRenderer = textRenderer
+    init(textLayout: TextLayoutResolver) {
+        self.textLayout = textLayout
     }
 
     func build(roadTextLabels: [TileMvtParser.RoadTextLabel], tile: Tile) -> PreparedTileCPU.RoadLabels {
@@ -65,11 +65,11 @@ final class TileRoadLabelsBuilder {
             let atlasWeight = labelStyle?.weight ?? roadLabel.textStyle.weight
             assert(roadLabel.textStyle.weight == atlasWeight,
                    "Road labels in one tile must share a font weight: the tile binds a single atlas texture per draw.")
-            let textMetrics = textRenderer.collectLabelVertices(for: roadLabel.text,
-                                                                labelIndex: simd_int1(0),
-                                                                scale: roadLabel.textStyle.sizePx,
-                                                                normalizeY: false,
-                                                                weight: atlasWeight)
+            let textMetrics = textLayout.collectLabelVertices(for: roadLabel.text,
+                                                              labelIndex: simd_int1(0),
+                                                              scale: roadLabel.textStyle.sizePx,
+                                                              normalizeY: false,
+                                                              weight: atlasWeight)
             roadLabelSizes.append(SIMD2<Float>(textMetrics.size.width, textMetrics.size.height))
 
             let glyphStart = roadLabelGlyphBounds.count

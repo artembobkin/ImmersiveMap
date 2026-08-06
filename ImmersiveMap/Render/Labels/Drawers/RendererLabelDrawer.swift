@@ -44,7 +44,7 @@ final class RendererLabelDrawer {
                 }
 
                 if bindings.isPoiPipelineBound == false {
-                    renderEncoder.setRenderPipelineState(textRenderer.poiIconPipelineState)
+                    renderEncoder.setRenderPipelineState(textRenderer.pipelines.poiIcon)
                     setFragmentTexture(poiSpriteAtlas.texture, renderEncoder: renderEncoder, bindings: &bindings)
                     bindings.isPoiPipelineBound = true
                 }
@@ -70,7 +70,7 @@ final class RendererLabelDrawer {
             }
         }
 
-        renderEncoder.setRenderPipelineState(textRenderer.labelPipelineState)
+        renderEncoder.setRenderPipelineState(textRenderer.pipelines.label)
         drawBaseLabelTextPass(renderEncoder: renderEncoder,
                               textRenderer: textRenderer,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
@@ -91,7 +91,7 @@ final class RendererLabelDrawer {
             return
         }
 
-        renderEncoder.setRenderPipelineState(textRenderer.roadLabelPipelineState)
+        renderEncoder.setRenderPipelineState(textRenderer.pipelines.roadLabel)
         var screenMatrixValue = screenMatrix
         renderEncoder.setVertexBytes(&screenMatrixValue, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
         // Identical for all road labels - bound once per pass.

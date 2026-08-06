@@ -253,13 +253,13 @@ final class DebugOverlayRenderer {
                                  projectedVertices: [TextVertex] = [],
                                  style: TextStyleUniform? = nil) {
         guard entries.isEmpty == false || projectedVertices.isEmpty == false else { return }
-        textRenderer.collectMultiTextVertices(into: &textVerticesScratch, for: entries)
+        textRenderer.layout.collectMultiTextVertices(into: &textVerticesScratch, for: entries)
         textVerticesScratch.append(contentsOf: projectedVertices)
         guard textVerticesScratch.isEmpty == false else { return }
 
         var textStyle = style ?? TextStyleUniform(textColor: settings.textColor)
         var matrix = screenMatrix
-        renderEncoder.setRenderPipelineState(textRenderer.pipelineState)
+        renderEncoder.setRenderPipelineState(textRenderer.pipelines.text)
         setTileTextVertices(renderEncoder: renderEncoder,
                             vertices: textVerticesScratch,
                             frameSlotIndex: frameSlotIndex)
@@ -365,7 +365,7 @@ final class DebugOverlayRenderer {
     }
 
     private func makeLineAdvance(textRenderer: TextRenderer, scale: Float) -> Float {
-        let atlasLineHeight = Float(textRenderer.atlasData.metrics.lineHeight)
+        let atlasLineHeight = Float(textRenderer.layout.atlasData.metrics.lineHeight)
         return max((atlasLineHeight * scale) + 4.0, scale + 4.0)
     }
 
@@ -613,9 +613,9 @@ final class DebugOverlayRenderer {
                                        lineAdvance: Float,
                                        textRenderer: TextRenderer) {
         let primaryText = Self.formatTileCoordinateString(placeTile.placeIn.tile)
-        let primaryMetrics = textRenderer.collectLabelVertices(for: primaryText,
-                                                               labelIndex: 0,
-                                                               scale: scale)
+        let primaryMetrics = textRenderer.layout.collectLabelVertices(for: primaryText,
+                                                                      labelIndex: 0,
+                                                                      scale: scale)
         appendTileWatermarkVertices(into: &projectedVertices,
                                     metrics: primaryMetrics,
                                     placeTile: placeTile,

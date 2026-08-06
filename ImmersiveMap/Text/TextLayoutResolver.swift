@@ -1,132 +1,19 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import MetalKit
 import Foundation
+import simd
 
-struct TextSize {
-    let width: simd_float1
-    let height: simd_float1
-}
-
-struct TextMetrics {
-    let size: TextSize
-    let vertices: [LabelVertex]
-}
-
-enum LabelTextAlignment {
-    case left
-    case center
-    case right
-}
-
-struct LabelWrapOptions {
-    let maxWidthPx: Float
-    let maxLines: Int
-    let alignment: LabelTextAlignment
-
-    init(maxWidthPx: Float,
-         maxLines: Int,
-         alignment: LabelTextAlignment = .left) {
-        self.maxWidthPx = maxWidthPx
-        self.maxLines = maxLines
-        self.alignment = alignment
-    }
-}
-
-struct AtlasData: Codable {
-    let atlas: AtlasInfo
-    let metrics: Metrics
-    let glyphs: [Glyph]
-}
-
-struct AtlasInfo: Codable {
-    let type: String
-    let distanceRange: CGFloat
-    let distanceRangeMiddle: CGFloat
-    let size: CGFloat
-    let width: Int
-    let height: Int
-    let yOrigin: String
-}
-
-struct Metrics: Codable {
-    let emSize: CGFloat
-    let lineHeight: CGFloat
-    let ascender: CGFloat
-    let descender: CGFloat
-    let underlineY: CGFloat
-    let underlineThickness: CGFloat
-}
-
-struct Glyph: Codable {
-    let unicode: UInt32
-    let advance: CGFloat
-    var planeBounds: Bounds?
-    var atlasBounds: Bounds?
-    
-    enum CodingKeys: String, CodingKey {
-        case unicode, advance, planeBounds = "planeBounds", atlasBounds = "atlasBounds"
-    }
-}
-
-struct Bounds: Codable {
-    let left: CGFloat
-    let bottom: CGFloat
-    let right: CGFloat
-    let top: CGFloat
-}
-
-struct TextVertex {
-    var position: SIMD4<Float> // x, y, z=0, w=1
-    var uv: SIMD2<Float>
-}
-
-struct TextStyleUniform: Equatable {
-    var textColor: SIMD3<Float>
-    var _padding0: Float = 0.0
-    var strokeColor: SIMD3<Float>
-    var strokeWidthPx: Float
-
-    init(textColor: SIMD3<Float>,
-         strokeColor: SIMD3<Float> = SIMD3<Float>(1.0, 1.0, 1.0),
-         strokeWidthPx: Float = 2.0) {
-        self.textColor = textColor
-        self.strokeColor = strokeColor
-        self.strokeWidthPx = strokeWidthPx
-    }
-}
-
-struct LabelVertex {
-    var position: SIMD2<Float>
-    var uv: SIMD2<Float>
-    var labelIndex: simd_int1
-    var spriteUV: SIMD2<Float>
-
-    init(position: SIMD2<Float>,
-         uv: SIMD2<Float>,
-         labelIndex: simd_int1,
-         spriteUV: SIMD2<Float> = .zero) {
-        self.position = position
-        self.uv = uv
-        self.labelIndex = labelIndex
-        self.spriteUV = spriteUV
-    }
-}
-
-struct TextEntry {
-    let text: String
-    let position: SIMD2<Float>
-    let scale: Float
-    
-    init(text: String, position: SIMD2<Float>, scale: Float = 1.0) {
-        self.text = text
-        self.position = position
-        self.scale = scale
-    }
-}
-
-class TextRenderer {
+/// Turns strings into glyph geometry against the bundled MSDF atlases: measures,
+/// wraps, aligns, and emits the vertices the text pipelines draw.
+///
+/// Renderer independent by design: it owns no Metal object, so the same layout
+/// runs while preparing tiles off the main thread and while drawing a frame.
+/// `TextRenderer` in `Render/Text` owns the GPU side and reaches layout through it.
+final class TextLayoutResolver {
+    /// Identity of the geometry this resolver produces. Prepared tiles carry
+    /// laid-out label vertices, so bump this whenever the output changes: it is
+    /// part of the prepared tile cache identity and drops stale caches.
     static let preparedTileTextRevisionValue: UInt32 = 6
 
     private struct LabelLineLayout {
@@ -150,45 +37,36 @@ class TextRenderer {
         case forcedBreak
     }
 
-    private var device: MTLDevice!
-    var texture: MTLTexture!
-    var thinTexture: MTLTexture!
-    private var bundle: Bundle!
-    var atlasData: AtlasData!
-    var thinAtlasData: AtlasData!
-    var pipelineState: MTLRenderPipelineState!
-    var labelPipelineState: MTLRenderPipelineState!
-    var roadLabelPipelineState: MTLRenderPipelineState!
-    var poiIconPipelineState: MTLRenderPipelineState!
-    private var library: MTLLibrary
-    private let sampleCount: Int
-    private let boldAtlasName = "atlas"
-    private let thinAtlasName = "atlas_thin"
-    private var boldGlyphLookup: [UInt32: Glyph] = [:]
-    private var thinGlyphLookup: [UInt32: Glyph] = [:]
-    
-    init(device: MTLDevice,
-         library: MTLLibrary,
-         sampleCount: Int = 1) {
-        self.device = device
-        self.library = library
-        self.sampleCount = sampleCount
-        self.bundle = .module
-        
-        loadAtlasTexture()
-        loadAtlasJSON()
-        buildGlyphLookupTables()
-        createPipelines()
+    let atlasData: AtlasData
+    let thinAtlasData: AtlasData
+    private let boldGlyphLookup: [UInt32: Glyph]
+    private let thinGlyphLookup: [UInt32: Glyph]
+
+    init(atlasData: AtlasData, thinAtlasData: AtlasData) {
+        self.atlasData = atlasData
+        self.thinAtlasData = thinAtlasData
+        self.boldGlyphLookup = atlasData.makeGlyphLookupTable()
+        self.thinGlyphLookup = thinAtlasData.makeGlyphLookupTable()
+    }
+
+    /// Reads both bundled atlases. A missing thin atlas falls back to the bold
+    /// one, exactly as the renderer does for the matching textures.
+    convenience init(bundle: Bundle = .module) {
+        let bold = AtlasData.bundled(.bold, in: bundle) ?? .fallback
+        let thin = AtlasData.bundled(.thin, in: bundle) ?? bold
+        self.init(atlasData: bold, thinAtlasData: thin)
     }
 
     var preparedTileTextRevision: UInt32 {
         Self.preparedTileTextRevisionValue
     }
 
+    /// Which scalars the atlases can actually draw, so label text selection can
+    /// fall back to another language instead of emitting tofu.
     var glyphCoverage: VectorTileLabelGlyphCoverage {
         VectorTileLabelGlyphCoverage(atlasData: atlasData, thinAtlasData: thinAtlasData)
     }
-    
+
     func collectMultiTextVertices(for entries: [TextEntry]) -> [TextVertex] {
         var allVertices: [TextVertex] = []
         collectMultiTextVertices(into: &allVertices, for: entries)
@@ -206,7 +84,7 @@ class TextRenderer {
                                 scale: entry.scale)
         }
     }
-    
+
     func collectLabelVertices(for text: String,
                               labelIndex: simd_int1,
                               scale: Float,
@@ -259,95 +137,6 @@ class TextRenderer {
         var vertices: [TextVertex] = []
         collectTextVertices(into: &vertices, for: text, at: position, scale: scale)
         return vertices
-    }
-    
-    private func loadAtlasTexture() {
-        texture = loadAtlasTexture(named: boldAtlasName) ?? makeFallbackTexture()
-        thinTexture = loadAtlasTexture(named: thinAtlasName) ?? texture
-    }
-    
-    private func loadAtlasJSON() {
-        atlasData = loadAtlasData(named: boldAtlasName) ?? makeFallbackAtlasData()
-        thinAtlasData = loadAtlasData(named: thinAtlasName) ?? atlasData
-    }
-
-    private func buildGlyphLookupTables() {
-        boldGlyphLookup = Self.makeGlyphLookupTable(from: atlasData.glyphs)
-        thinGlyphLookup = Self.makeGlyphLookupTable(from: thinAtlasData.glyphs)
-    }
-
-    private func makeFallbackTexture() -> MTLTexture {
-        let descriptor = MTLTextureDescriptor()
-        descriptor.textureType = .type2D
-        descriptor.pixelFormat = .bgra8Unorm
-        descriptor.width = 1
-        descriptor.height = 1
-        descriptor.usage = [.shaderRead]
-        return device.makeTexture(descriptor: descriptor)!
-    }
-
-    private func makeFallbackAtlasData() -> AtlasData {
-        return AtlasData(
-            atlas: AtlasInfo(type: "fallback",
-                             distanceRange: 0,
-                             distanceRangeMiddle: 0,
-                             size: 1,
-                             width: 1,
-                             height: 1,
-                             yOrigin: "bottom"),
-            metrics: Metrics(emSize: 1,
-                             lineHeight: 1,
-                             ascender: 0,
-                             descender: 0,
-                             underlineY: 0,
-                             underlineThickness: 0),
-            glyphs: []
-        )
-    }
-
-    private func loadAtlasTexture(named name: String) -> MTLTexture? {
-        guard let url = bundle.url(forResource: name, withExtension: "png") else {
-            #if DEBUG
-            print("Could not find atlas texture in bundle: \(name).png")
-            #endif
-            return nil
-        }
-        let textureLoader = MTKTextureLoader(device: device)
-        // .private: the atlas is static, no CPU access is needed after upload. The
-        // loader fills the data via a staging blit, and the texture keeps no shadow
-        // CPU copy (managed/shared would hold one for its entire lifetime).
-        let options: [MTKTextureLoader.Option: Any] = [
-            .SRGB: false,
-            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
-        ]
-        do {
-            let texture = try textureLoader.newTexture(URL: url, options: options)
-            return texture
-        } catch {
-            #if DEBUG
-            print("Failed to load atlas texture \(name).png: \(error)")
-            #endif
-            return nil
-        }
-    }
-
-    private func loadAtlasData(named name: String) -> AtlasData? {
-        guard let url = bundle.url(forResource: name, withExtension: "json") else {
-            #if DEBUG
-            print("Could not find atlas JSON in bundle: \(name).json")
-            #endif
-            return nil
-        }
-        do {
-            let data = try Data(contentsOf: url)
-            let atlas = try JSONDecoder().decode(AtlasData.self, from: data)
-            return atlas
-        } catch {
-            #if DEBUG
-            print("Failed to decode atlas JSON \(name).json: \(error)")
-            #endif
-            return nil
-        }
     }
 
     private func atlasData(for weight: LabelFontWeight) -> AtlasData {
@@ -788,87 +577,5 @@ class TextRenderer {
         entries.reduce(into: 0) { partialResult, entry in
             partialResult += entry.text.unicodeScalars.count * 6
         }
-    }
-
-    static func makeGlyphLookupTable(from glyphs: [Glyph]) -> [UInt32: Glyph] {
-        var lookup: [UInt32: Glyph] = [:]
-        lookup.reserveCapacity(glyphs.count)
-        for glyph in glyphs {
-            lookup[glyph.unicode] = glyph
-        }
-        return lookup
-    }
-    
-    private func createPipelines() {
-        guard let textVertexFn = library.makeFunction(name: "textVertex"),
-              let labelVertexFn = library.makeFunction(name: "labelTextVertex"),
-              let roadLabelVertexFn = library.makeFunction(name: "roadLabelTextVertex"),
-              let poiIconVertexFn = library.makeFunction(name: "poiSpriteVertex"),
-              let poiIconFragmentFn = library.makeFunction(name: "poiSpriteFragment"),
-              let fragmentFn = library.makeFunction(name: "textFragment"),
-              let roadFragmentFn = library.makeFunction(name: "roadTextFragment") else { fatalError("Functions not found") }
-        
-        let textVertexDescriptor = MTLVertexDescriptor()
-        textVertexDescriptor.attributes[0].format = .float4
-        textVertexDescriptor.attributes[0].offset = 0
-        textVertexDescriptor.attributes[0].bufferIndex = 0
-        textVertexDescriptor.attributes[1].format = .float2
-        textVertexDescriptor.attributes[1].offset = MemoryLayout<SIMD4<Float>>.stride
-        textVertexDescriptor.attributes[1].bufferIndex = 0
-        textVertexDescriptor.layouts[0].stride = MemoryLayout<TextVertex>.stride
-        
-        let labelVertexDescriptor = MTLVertexDescriptor()
-        labelVertexDescriptor.attributes[0].format = .float2
-        labelVertexDescriptor.attributes[0].offset = MemoryLayout<LabelVertex>.offset(of: \LabelVertex.position) ?? 0
-        labelVertexDescriptor.attributes[0].bufferIndex = 0
-        labelVertexDescriptor.attributes[1].format = .float2
-        labelVertexDescriptor.attributes[1].offset = MemoryLayout<LabelVertex>.offset(of: \LabelVertex.uv) ?? 0
-        labelVertexDescriptor.attributes[1].bufferIndex = 0
-        labelVertexDescriptor.attributes[2].format = .int
-        labelVertexDescriptor.attributes[2].offset = MemoryLayout<LabelVertex>.offset(of: \LabelVertex.labelIndex) ?? 0
-        labelVertexDescriptor.attributes[2].bufferIndex = 0
-        labelVertexDescriptor.attributes[3].format = .float2
-        labelVertexDescriptor.attributes[3].offset = MemoryLayout<LabelVertex>.offset(of: \LabelVertex.spriteUV) ?? 0
-        labelVertexDescriptor.attributes[3].bufferIndex = 0
-        labelVertexDescriptor.layouts[0].stride = MemoryLayout<LabelVertex>.stride
-        
-        do {
-            pipelineState = try makePipelineState(vertexFunction: textVertexFn,
-                                                  vertexDescriptor: textVertexDescriptor,
-                                                  fragmentFunction: fragmentFn)
-            labelPipelineState = try makePipelineState(vertexFunction: labelVertexFn,
-                                                       vertexDescriptor: labelVertexDescriptor,
-                                                       fragmentFunction: fragmentFn)
-            roadLabelPipelineState = try makePipelineState(vertexFunction: roadLabelVertexFn,
-                                                           vertexDescriptor: labelVertexDescriptor,
-                                                           fragmentFunction: roadFragmentFn)
-            poiIconPipelineState = try makePipelineState(vertexFunction: poiIconVertexFn,
-                                                         vertexDescriptor: labelVertexDescriptor,
-                                                         fragmentFunction: poiIconFragmentFn)
-        } catch {
-            fatalError("Pipeline creation failed: \(error)")
-        }
-    }
-    
-    private func makePipelineState(vertexFunction: MTLFunction,
-                                   vertexDescriptor: MTLVertexDescriptor,
-                                   fragmentFunction: MTLFunction) throws -> MTLRenderPipelineState {
-        let descriptor = MTLRenderPipelineDescriptor()
-        descriptor.vertexDescriptor = vertexDescriptor
-        descriptor.vertexFunction = vertexFunction
-        descriptor.fragmentFunction = fragmentFunction
-        descriptor.rasterSampleCount = sampleCount
-        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        descriptor.depthAttachmentPixelFormat = .depth32Float
-        descriptor.colorAttachments[0].isBlendingEnabled = true
-        descriptor.colorAttachments[0].rgbBlendOperation = .add
-        descriptor.colorAttachments[0].alphaBlendOperation = .add
-        descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        // Alpha blends with .one so glyph coverage accumulates on a transparent
-        // destination; over an opaque one the result is unchanged.
-        descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        return try device.makeRenderPipelineState(descriptor: descriptor)
     }
 }
