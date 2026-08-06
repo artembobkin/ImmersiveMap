@@ -118,4 +118,8 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    auto_incremental_review: true
+    # Review the pull request when it opens, then stay quiet. Re-reviewing every
+    # push spends the plan's review quota on intermediate states nobody reads,
+    # and a branch that is force pushed twice can exhaust it. Ask for a fresh
+    # review explicitly with `@coderabbitai review` once the branch is ready.
+    auto_incremental_review: false
