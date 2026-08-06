@@ -106,3 +106,6 @@ Rule of thumb: rich, interactive and few means SwiftUI markers; uniform, numerou
 - No collision handling: overlapping markers simply draw over each other.
 - Each marker is a hosting view. Hundreds are fine; for thousands of uniform pins use avatar markers, which render through a GPU atlas.
 - Marker content is a closed leaf on iOS: navigation and presentation from inside a marker are not supported (the hosting controller has no parent).
+- Taps are plain SwiftUI and do not go through [the selection API](selection.md), which covers avatars only.
+
+Running example: [`Examples/ImmersiveMapMarkersMac`](../../Examples/ImmersiveMapMarkersMac) switches the anchor, compares interactive content with `allowsHitTesting(false)`, and mutates the backing collection live.

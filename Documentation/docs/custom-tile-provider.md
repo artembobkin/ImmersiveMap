@@ -11,15 +11,73 @@ If you have an MVT (Mapbox Vector Tile) endpoint, you often don't need a new typ
 ```swift
 let provider = VectorTileProvider(
     id: "my-tiles",
-    tileSource: /* ImmersiveMapTileSource pointing at your MVT URL template */,
+    tileSource: ImmersiveMapTileSource(tileBaseURL: myTileURL),
     labelProfile: .generic,
-    maximumTileZoomLevel: 14
+    maximumTileZoomLevel: 14,
+    attribution: .openStreetMap
 )
 
 ImmersiveMapView()
     .tileProvider(provider)
-    .mapStyle(/* your ImmersiveMapMapStyle */)
+    .mapStyle(VectorTileMapStyle(style: MyVectorTileStyle()))
 ```
+
+## Tile source
+
+```swift
+public struct ImmersiveMapTileSource: Equatable, Sendable {
+    public var tileBaseURL: URL
+    public var tileJSONURL: URL?
+    public var accessToken: String?
+    public var authorization: AuthorizationMode   // .bearerHeader | .accessTokenQuery(parameterName:)
+
+    public init(tileBaseURL:tileJSONURL:accessToken:authorization:)
+    public static func url(_ tileBaseURL: URL) -> ImmersiveMapTileSource
+    public func token(_ accessToken: String?) -> ImmersiveMapTileSource
+    public func accessToken(_ accessToken: String?, parameterName: String = "access_token") -> ImmersiveMapTileSource
+}
+```
+
+The loader appends `/{z}/{x}/{y}.mvt` to `tileBaseURL`. When `tileJSONURL` is set it first discovers a versioned, immutable tile URL template from that endpoint and falls back to the base path until (or unless) it resolves, which is what makes tiles CDN-cacheable rather than always revalidated.
+
+`token(_:)` sends the credential in an `Authorization: Bearer` header, `accessToken(_:parameterName:)` puts it in a query parameter. Prefer the header where the service allows it: a key in the URL becomes part of the CDN cache key, so every customer gets a private copy of tiles that are byte-identical for everyone.
+
+## Vector tile styles
+
+A style is one function over a feature:
+
+```swift
+struct MyVectorTileStyle: ImmersiveMapVectorTileStyle {
+    let cacheFingerprint: UInt32 = 1   // bump whenever the rules below change
+
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> ImmersiveMapFeatureStyle {
+        switch feature.layerName {
+        case "water":     .polygon(color: SIMD4<Float>(0.10, 0.20, 0.36, 1))
+        case "building":  .extrudedPolygon(color: SIMD4<Float>(0.22, 0.24, 0.29, 1), fallbackHeight: 8)
+        case "transportation": .line(color: SIMD4<Float>(0.28, 0.29, 0.31, 1), width: 1.2)
+        default:          .hidden
+        }
+    }
+}
+```
+
+`ImmersiveMapFeatureStyleContext` carries the layer name, the tile coordinate and the feature's MVT properties (`string`, `double`, `integer`, `bool`), which is everything needed to classify a feature. The cases of `ImmersiveMapFeatureStyle` are `.hidden`, `.polygon`, `.line`, `.extrudedPolygon`, `.pointLabel` and `.roadLabel`. An optional `baseColors` overrides the engine-level backdrop colors, see [map styling](styling.md).
+
+Wrap it in `VectorTileMapStyle(style:)` to attach it.
+
+## Label profile
+
+`ImmersiveMapVectorTileLabelProfile` tells the provider which MVT properties carry label text, rank and kind, since every schema names them differently:
+
+```swift
+labelProfile: ImmersiveMapVectorTileLabelProfile(
+    textKeys: ["name:en", "name"],
+    rankKeys: ["rank"],
+    kindKeys: ["class"],
+    pointLabelLayers: ["place"])
+```
+
+`.generic` is the default and reads `name:en` with the usual rank keys. The profile is part of the provider's fingerprint, so changing it invalidates prepared tiles correctly.
 
 ## Conforming to `ImmersiveMapTileProvider`
 
@@ -47,7 +105,7 @@ The built-in `ImmersiveMapTilesProvider` and `MapboxTileProvider` are concrete e
 
 ## Map styles
 
-Providers pair with an `ImmersiveMapMapStyle` (see `Provider/ImmersiveMapMapStyle.swift`). Styles expose a `configurationFingerprint` and a `vectorTileStyle`. As with providers, changing style configuration must change the fingerprint so caches stay correct.
+Providers pair with an `ImmersiveMapMapStyle` (see `Provider/Core/ImmersiveMapMapStyle.swift`). Styles expose a `configurationFingerprint` and a `vectorTileStyle`. As with providers, changing style configuration must change the fingerprint so caches stay correct: prepared tiles are cached on disk with the style baked in, see [tile cache](tile-cache.md).
 
 ## Provider-specific schema logic
 
@@ -62,7 +120,7 @@ Most open data carries a licence obligation. OpenStreetMap under ODbL requires v
 ```swift
 let provider = VectorTileProvider(
     id: "my-tiles",
-    tileSource: .immersiveMapTiles(tileBaseURL: myTileURL, apiKey: nil),
+    tileSource: ImmersiveMapTileSource(tileBaseURL: myTileURL),
     attribution: .openStreetMap
 )
 ```
@@ -80,3 +138,5 @@ attribution: ImmersiveMapAttribution(
 `title` is the badge's first line; an empty `copyright` renders a one-line badge, a non-empty one adds a second, smaller line.
 
 An app can override the badge text with `attributionSettings(.init(attributionOverride:))` or hide it with `attributionSettings(isVisible: false)`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence. A map that starts with a hidden or empty badge logs a one-time console warning; an app that shows the credit itself declares that with `.attributionProvidedExternally()`.
+
+Running example: [`Examples/ImmersiveMapCustomTilesMac`](../../Examples/ImmersiveMapCustomTilesMac) wires a provider, a tile source, a hand-written style and an attribution end to end, entirely through the public API.

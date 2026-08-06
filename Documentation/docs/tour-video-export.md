@@ -1,6 +1,6 @@
 # Tour video export
 
-Export a camera tour as a video file with `ImmersiveMapTourVideoRecorder`. The recorder takes the same shot list you would give `ImmersiveMapCameraTourController`, renders it offline into a second, headless render engine, and writes a QuickTime (`.mov`) file: HEVC at 1920×1080, 60 fps by default. Every frame waits for its tiles before it is captured, the timestep is exact, and the on-screen map stays fully interactive while the export runs.
+Export a camera tour as a video file with `ImmersiveMapTourVideoRecorder`. The recorder takes the same shot list you would give [`ImmersiveMapCameraTourController`](camera.md), renders it offline into a second, headless render engine, and writes a QuickTime (`.mov`) file: HEVC at 1920×1080, 60 fps by default. Every frame waits for its tiles before it is captured, the timestep is exact, and the on-screen map stays fully interactive while the export runs.
 
 ```swift
 struct MapScreen: View {
@@ -72,3 +72,6 @@ Because rendering is offline, the export can run faster or slower than real time
 - Remote avatar images have no readiness signal; images already shown on the live map are typically warm in the shared cache. Merged-avatar image cycling is frozen during the export for determinism.
 - The export engine is a full second engine: expect additional GPU and cache memory for the duration of the export. Disk tile caches are shared with the live map, so a tour the map has already played exports without re-downloading.
 - Label and symbol sizes are defined in pixels by the map style, so their apparent size scales with the chosen output resolution: a 4K export shows relatively smaller labels than a 1080p export. Pick the resolution accordingly (and raise `markerScale` for 4K).
+- [Routes](routes.md) and [3D scene models](scene-models.md) are not rendered into the export.
+
+Running example: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) exports one lap of its cinematic to a file chosen in a save panel, with progress and cancellation, while the on-screen map stays interactive.

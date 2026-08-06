@@ -4,9 +4,11 @@ A map engine draws tiles, it does not produce them. Here is exactly what you are
 
 **Out of the box.** The default provider fetches vector tiles from `tiles.immersivemap.dev`, the tile service run for this project. It serves a planet build in the [OpenMapTiles](https://openmaptiles.org) schema, assembled from [OpenFreeMap](https://openfreemap.org) data, which is [OpenStreetMap](https://www.openstreetmap.org/copyright) data under ODbL. No token, no account, no sign-up, and the demo apps in this repository render against it directly.
 
+**A key of your own.** The default provider works anonymously on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you onto your own throughput; attach it with `.apiKey(_:)` and it travels as an `Authorization: Bearer` header.
+
 **Your own tiles.** Any MVT source works through `VectorTileProvider`: your own tile server, your own planet build, or any service that speaks MVT. See the [custom tile provider guide](custom-tile-provider.md).
 
-**Mapbox.** `MapboxTileProvider` renders Mapbox vector tiles with your own access token, paired with `MapboxMapStyle`.
+**Mapbox.** `MapboxTileProvider` renders Mapbox vector tiles with your own access token, paired with `MapboxMapStyle`. See the [Mapbox guide](mapbox.md).
 
 ## Attribution is not optional
 
@@ -19,7 +21,7 @@ If you build a custom `VectorTileProvider`, declare its attribution, because the
 ```swift
 VectorTileProvider(
     id: "my-tiles",
-    tileSource: .immersiveMapTiles(tileBaseURL: myTileURL, apiKey: nil),
+    tileSource: ImmersiveMapTileSource(tileBaseURL: myTileURL),
     attribution: .openStreetMap    // or your own ImmersiveMapAttribution
 )
 ```
