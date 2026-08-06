@@ -1,0 +1,144 @@
+name: Claude review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude review
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Resolve run mode
+        id: mode
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # GitHub withholds secrets from a pull request opened from a fork, so
+          # the review cannot run there and the branch needs a review by hand.
+          # Drafts are skipped to save review quota; marking one ready for
+          # review triggers a full run.
+          if [ "$HEAD_REPOSITORY" != "$REPOSITORY" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "reason=fork" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_DRAFT" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "reason=draft" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.mode.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Review
+        id: review
+        if: steps.mode.outputs.run == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          track_progress: true
+          use_sticky_comment: true
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} of ${{ github.repository }}.
+
+            Scope: the changes this pull request introduces, which you get with
+            `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`.
+            Read the surrounding code of every file you comment on. Do not
+            comment on code the pull request leaves untouched.
+
+            Follow CLAUDE.md in the repository root. It holds the layering
+            rules, the threading model, the naming rules and the file header
+            rule of this package, and a newly introduced violation of it counts
+            against the pull request.
+
+            Block the merge only for a finding in one of these classes:
+
+            - a correctness bug in the changed code
+            - a data race, a missing @MainActor isolation or a Sendable
+              violation
+            - a layering violation: a domain folder reaching into UI or Render,
+              Metal code outside Render, networking inside Render, or
+              provider specific schema logic outside VectorTileAdaptation and
+              the concrete folders under Provider
+            - a state change that redraws nothing because it neither requests a
+              frame nor registers an activity with RenderLoopPacing
+            - a new .metal file or resource directory missing from `resources:`
+              in Package.swift, or a new in source README.md missing from
+              `exclude:`
+            - an unintended break of the public API surface
+            - a hand written file without the two line copyright header
+            - a token, credential or build artifact committed to this public
+              repository
+
+            Style preferences, naming taste, speculative refactors and test
+            coverage wishes are not blocking. Report them in the summary
+            instead.
+
+            Post every blocking finding as an inline comment on the line it
+            applies to with mcp__github_inline_comment__create_inline_comment,
+            and keep the non blocking remarks in your summary.
+
+            Finish with the structured verdict. Use "request_changes" when at
+            least one blocking finding stands and "approve" otherwise. Write in
+            English and never use an em dash.
+          claude_args: |
+            --model opus
+            --max-turns 40
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"
+            --json-schema '{"type":"object","additionalProperties":false,"properties":{"verdict":{"type":"string","enum":["approve","request_changes"]},"summary":{"type":"string"},"blocking_findings":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"}},"required":["file","line","issue"]}}},"required":["verdict","summary","blocking_findings"]}'
+
+      - name: Enforce the verdict
+        if: steps.mode.outputs.run == 'true'
+        env:
+          RESULT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          if [ -z "$RESULT" ]; then
+            echo "::error::The review returned no verdict, so the merge stays blocked. Re-run this job."
+            exit 1
+          fi
+
+          verdict=$(printf '%s' "$RESULT" | jq -r '.verdict')
+          {
+            echo "### Claude review: $verdict"
+            echo
+            printf '%s' "$RESULT" | jq -r '.summary'
+            echo
+            printf '%s' "$RESULT" | jq -r '.blocking_findings[]? | "- `\(.file):\(.line)` \(.issue)"'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$verdict" != "approve" ]; then
+            echo "::error::Claude requested changes. Address the findings and push again."
+            exit 1
+          fi
+
+      - name: Report the skipped review
+        if: steps.mode.outputs.run != 'true'
+        env:
+          REASON: ${{ steps.mode.outputs.reason }}
+        run: |
+          if [ "$REASON" = "fork" ]; then
+            echo "::warning::A pull request from a fork gets no repository secrets, so Claude did not review it. Review this branch by hand before merging."
+          else
+            echo "Draft pull request, so the review is deferred until it is marked ready for review."
+          fi

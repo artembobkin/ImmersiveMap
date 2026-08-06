@@ -53,6 +53,8 @@ Please include:
 
 CI runs `swift build` and `swift test` on every pull request. Please make sure both pass locally first.
 
+Claude reviews every pull request pushed to a branch in this repository and blocks the merge while a blocking finding stands, so a red "Claude review" check means the findings on the diff need an answer, either a fix or a follow-up push. A pull request from a fork gets no repository secrets, so the review is skipped there and a maintainer reads the branch by hand.
+
 ## Reporting bugs and asking questions
 
 Use the GitHub issue templates for bug reports and feature requests - the issue tracker is for actionable work.
