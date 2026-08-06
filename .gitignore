@@ -1,5 +1,7 @@
 .DS_Store
-CLAUDE.md
+# Personal, machine specific agent permissions. The shared project rules live in
+# the tracked .claude/settings.json next to it.
+.claude/settings.local.json
 # playwright-mcp browser-automation artifacts (console logs, screenshots)
 /.playwright-mcp/
 /.build/
