@@ -59,6 +59,7 @@ final class ImmersiveMapRuntimeGraph {
         let cameraCommandHandler = ImmersiveMapCameraCommandHandler(cameraRuntime: cameraRuntime,
                                                                     cameraAnimationRuntime: cameraAnimationRuntime)
         let selectionHandler = ImmersiveMapSelectionHandler(avatarRuntime: avatarRuntime,
+                                                            sceneModelRuntime: sceneModelRuntime,
                                                             viewportRuntime: viewportRuntime,
                                                             renderRuntime: renderRuntime)
         let debugOverlayControls = DebugOverlayControlState()

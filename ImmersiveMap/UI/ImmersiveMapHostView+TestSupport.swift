@@ -66,6 +66,10 @@ extension ImmersiveMapHostView {
         selectionHandler.updateAvatarSelectionSnapshot(snapshot)
     }
 
+    func setSceneModelSelectionSnapshotForTesting(_ snapshot: SceneModelSelectionSnapshot) {
+        selectionHandler.updateSceneModelSelectionSnapshot(snapshot)
+    }
+
     var rendererForTesting: RenderFrameEngine? {
         hostRuntimeForTesting.renderer
     }

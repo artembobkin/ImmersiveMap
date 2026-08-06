@@ -28,6 +28,7 @@ private struct RoutesScreen: View {
     @State private var isFlying = false
     @State private var activeLegTitle: String?
     @State private var missingModel = false
+    @State private var tappedPosition: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -35,20 +36,37 @@ private struct RoutesScreen: View {
                 .camera(camera, position: FlightStoryboard.overview)
                 .routes(routes)
                 .sceneModels(sceneModels)
+                // The plane is tappable while it flies: `coordinate` is where it
+                // is right now, whereas `model.coordinate` is already the leg's
+                // destination.
+                .onSceneModelTap { event in
+                    tappedPosition = String(format: "%.1f°, %.1f°",
+                                            event.coordinate.latitude,
+                                            event.coordinate.longitude)
+                }
                 .ignoresSafeArea()
 
             controls
                 .padding(20)
 
-            if let activeLegTitle {
-                Text(activeLegTitle)
-                    .font(.headline)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(20)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 8) {
+                if let activeLegTitle {
+                    Text(activeLegTitle)
+                        .font(.headline)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                if let tappedPosition {
+                    Label("Plane at \(tappedPosition)", systemImage: "hand.tap.fill")
+                        .font(.subheadline)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .alert("biplane.obj is missing from the app bundle",
                isPresented: $missingModel) {
@@ -82,6 +100,7 @@ private struct RoutesScreen: View {
         guard let first = FlightStoryboard.legs.first else { return }
 
         isFlying = true
+        tappedPosition = nil
         routes.clear()
         sceneModels.clear()
         sceneModels.add(ImmersiveMapSceneModel(

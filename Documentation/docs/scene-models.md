@@ -78,6 +78,37 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 - `upsert` / `set` replace descriptors without transform animation; coordinate changes of surviving ids still glide.
 - `animate(id:along:duration:)` flies a model along an `ImmersiveMapGeoPath` over a real duration, taking its course from the trajectory tangent and its pitch from the altitude profile, with a completion that fires exactly once. That is the API to use for anything longer than a hop: `move` derives its duration from the distance and caps it below a second. See `Documentation/docs/routes.md`, which also covers drawing the path as a line.
 
+## Taps and selection
+
+`.onSceneModelTap { }` delivers a tap that lands on a model:
+
+```swift
+ImmersiveMapView()
+    .sceneModels(sceneModels)
+    .onSceneModelTap { event in
+        print("tapped \(event.model.id) at \(event.coordinate)")
+    }
+```
+
+```swift
+public struct ImmersiveMapSceneModelTapEvent {
+    public let model: ImmersiveMapSceneModel   // descriptor at the moment of the tap
+    public let coordinate: GeoCoordinate       // where the model was DRAWN
+    public let screenPoint: CGPoint            // in map view coordinates
+}
+```
+
+The tap is resolved against the model's bounding box exactly where the frame drew it: the ray is the inverse of the projection the model's vertex shader ran, so hit areas follow the model through flat mode, the globe, the morph between them, and any animation, with no per-model bookkeeping in the app. `coordinate` is where the model *is*, which during `animate(id:along:)` is a point on the flight while `model.coordinate` already holds the path's destination.
+
+Resolution rules:
+
+- **Nearest wins.** Overlapping models resolve to the one closest to the camera.
+- **Avatars first.** Avatar markers are screen-space overlays drawn over the world pass, so one covering a model takes the tap. A model behind the globe horizon is not tappable at all.
+- **Oriented, not spherical.** The box is tested in the model's own space, so a diagonal aircraft has a hit area the shape of the aircraft rather than a ball of empty air around it.
+- **Minimum touch target.** A model whose whole on-screen footprint is smaller than 44 pt grows to that size around its center, so distant models stay reachable by finger. A model large enough to aim at keeps its own outline, so this can never steal a tap from geometry you actually hit.
+
+Models also take part in `ImmersiveMapSelectionController` as `ImmersiveMapSelection.Kind.sceneModel`, alongside avatars: a tap selects, a tap on the background clears, and removing a selected model clears it. Selection carries no appearance of its own for models — the engine draws the asset as authored, and highlighting the selected one is the app's to do (swap the source, nudge the scale, draw a SwiftUI marker over it).
+
 ## Loading and memory
 
 Assets load asynchronously off the main thread via Model I/O (`MDLAsset` → `MTKMesh`); the map renders the model on the first frame after the mesh is ready. Failed loads retry up to 3 times with a growing cooldown. Loaded meshes live in a memory cache (~128 MB) keyed by source URL: models currently on the map are protected from eviction, everything else is dropped under memory pressure and reloads on demand.
@@ -89,4 +120,4 @@ Materials: the base color of each submesh is used (either its texture or its con
 - **Translucent buildings** (the default `buildingExtrusionMode`): the composited building tint carries no depth, so models are never occluded by translucent buildings (and never tinted by them). With `.solid` / `.solidAtHighZoom` at high zoom, occlusion between models and buildings is depth-correct.
 - **Video export**: scene models are not included in tour video exports in this version.
 - **Antimeridian**: a model is drawn once (its anchor wraps to the camera-near copy of the world), not duplicated on both screen edges.
-- **Selection**: models are not tappable in this version.
+- **Tap precision**: hit-testing uses the asset's bounding box, not its triangles, so a tap in the empty corner of the box of a concave model still counts as a hit. Depth is not consulted either: a model hidden behind a solid building is still tappable (the globe horizon is handled, such a model is not).

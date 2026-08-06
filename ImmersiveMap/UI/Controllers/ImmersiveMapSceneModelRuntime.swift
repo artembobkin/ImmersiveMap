@@ -18,6 +18,7 @@ final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSourc
     }
 
     func attachController(_ newController: ImmersiveMapSceneModelsController?,
+                          selectionHandler: ImmersiveMapSelectionHandler,
                           renderRuntime: ImmersiveMapRenderRuntime) {
         guard controller !== newController else {
             return
@@ -25,10 +26,12 @@ final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSourc
 
         controller?.clearChangeHandler(ownedBy: self)
         controller = newController
-        newController?.setChangeHandler({ [weak renderRuntime] in
+        newController?.setChangeHandler({ [weak selectionHandler, weak renderRuntime] in
+            selectionHandler?.handleSceneModelControllerDidChange()
             renderRuntime?.requestFrame()
         }, owner: self)
         newController?.markSnapshotDirty()
+        selectionHandler.syncSelectionWithAvailableMapObjects()
         renderRuntime.requestFrame()
     }
 
@@ -47,5 +50,9 @@ final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSourc
 
     func markSnapshotDirty() {
         controller?.markSnapshotDirty()
+    }
+
+    func model(id: UInt64) -> ImmersiveMapSceneModel? {
+        controller?.model(id: id)
     }
 }

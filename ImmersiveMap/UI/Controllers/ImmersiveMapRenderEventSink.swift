@@ -69,6 +69,15 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
         }
     }
 
+    func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot) {
+        Task { @MainActor [weak selectionHandler, self] in
+            guard self.isDeliveryInvalidated == false else {
+                return
+            }
+            selectionHandler?.updateSceneModelSelectionSnapshot(snapshot)
+        }
+    }
+
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {
         debugOverlayHUDSnapshotStore.publish(snapshot)
     }

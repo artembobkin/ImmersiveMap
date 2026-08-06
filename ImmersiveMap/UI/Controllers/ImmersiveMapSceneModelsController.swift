@@ -255,6 +255,12 @@ public final class ImmersiveMapSceneModelsController: @unchecked Sendable {
         notifyChanged()
     }
 
+    func model(id: UInt64) -> ImmersiveMapSceneModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        return modelsById[id]
+    }
+
     func consumeSnapshot() -> SceneModelsSnapshot? {
         lock.lock()
         defer { lock.unlock() }

@@ -91,6 +91,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: ImmersiveMapSettings.default.renderLoop)
         let selectionHandler = ImmersiveMapSelectionHandler(avatarRuntime: avatarRuntime,
+                                                            sceneModelRuntime: ImmersiveMapSceneModelRuntime(),
                                                             viewportRuntime: viewportRuntime,
                                                             renderRuntime: renderRuntime)
 

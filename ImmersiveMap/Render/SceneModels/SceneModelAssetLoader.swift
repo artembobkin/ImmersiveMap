@@ -153,12 +153,8 @@ enum SceneModelAssetLoader {
 
     private static func makeBounds(of asset: MDLAsset) -> SceneModelMesh.Bounds {
         let boundingBox = asset.boundingBox
-        let center = (boundingBox.minBounds + boundingBox.maxBounds) * 0.5
-        let extents = boundingBox.maxBounds - boundingBox.minBounds
-        let maxExtent = max(extents.x, max(extents.y, extents.z))
-        return SceneModelMesh.Bounds(center: center,
-                                     radius: max(simd_length(extents) * 0.5, 1e-6),
-                                     maxExtent: max(maxExtent, 1e-6))
+        return SceneModelMesh.Bounds(minimum: boundingBox.minBounds,
+                                     maximum: boundingBox.maxBounds)
     }
 
     private static func costInBytes(meshes: [MTKMesh],

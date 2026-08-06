@@ -17,11 +17,15 @@ renderer-facing scene model draw code consumes it.
 - Fly a model along an `ImmersiveMapGeoPath`: position, altitude, heading and
   pitch come from the shared path sampler in `Geo`, so the model rides exactly
   on the route drawn for the same path.
+- Resolve a tap against the models a frame drew: `Selection` holds the per-frame
+  hit volumes and the ray math that inverts the frame's own projection, so a
+  hit means the tap landed on the model where it appears.
 
 ## May Contain
 
 - Scene model value types and scene-model-specific public models.
 - Scene model presentation state stores and deterministic animation math.
+- Per-frame hit-test snapshots and the pure geometry that queries them.
 - Protocols that expose prepared scene model state to the renderer.
 
 ## Must Not Contain
@@ -40,4 +44,6 @@ Public scene models
   -> scene model snapshot
   -> scene model presentation state
   -> Render/SceneModels anchor math and draw code
+  -> selection snapshot of the drawn models
+  -> UI tap hit-test
 ```

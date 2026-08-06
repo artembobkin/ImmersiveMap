@@ -52,6 +52,9 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
         let presented = presentationStateStore.presentedEntries(at: frameContext.time)
         frameContext.sharedState.sceneModelState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
         frameContext.sharedState.sceneModelState.hasShadowCasters = false
+        // Cleared up front so every early return below leaves an empty
+        // snapshot: a model that stops being drawn must stop being tappable.
+        frameContext.sharedState.sceneModelState.selectionSnapshot = .empty
         frameContext.sharedState.sceneModelState.pathAnimationResults =
             presentationStateStore.consumePathAnimationResults()
 
@@ -82,6 +85,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
         }
         var items: [SceneModelDrawItem] = []
         var shadowItems: [SceneModelDrawItem] = []
+        var selectionEntries: [SceneModelSelectionEntry] = []
         items.reserveCapacity(presented.count)
         for model in presented {
             guard let mesh = readyMeshes[model.source.url] else { continue }
@@ -102,10 +106,24 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
                 continue
             }
             items.append(SceneModelDrawItem(mesh: mesh, modelMatrix: anchor.modelMatrix))
+            // Built from the drawn item, not from the presented list: the hit
+            // volume is the geometry this frame put on screen, so the horizon
+            // gate and the frustum cull it exactly as they cull the draw.
+            selectionEntries.append(SceneModelSelectionEntry(id: model.id,
+                                                             coordinate: model.coordinate,
+                                                             modelMatrix: anchor.modelMatrix,
+                                                             boundsMin: mesh.localBounds.minimum,
+                                                             boundsMax: mesh.localBounds.maximum))
         }
         drawItems = items
         shadowCasterItems = shadowItems
         frameContext.sharedState.sceneModelState.hasShadowCasters = shadowItems.isEmpty == false
+        frameContext.sharedState.sceneModelState.selectionSnapshot = SceneModelSelectionSnapshot(
+            frameIndex: frameContext.frameIndex,
+            drawSize: frameContext.drawSize,
+            projectionView: frameContext.cameraMatrices.projectionView,
+            cameraEye: frameContext.cameraEye,
+            entries: selectionEntries)
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
