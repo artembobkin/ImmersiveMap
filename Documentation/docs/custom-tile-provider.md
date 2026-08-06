@@ -125,6 +125,8 @@ let provider = VectorTileProvider(
 )
 ```
 
+`.openStreetMap` is the credit for plain OpenStreetMap data and nothing else. A planet built in the OpenMapTiles schema (which includes the source this engine ships with) owes a second credit, so it needs the spelled-out form below rather than the preset.
+
 Or spell it out for a mixed or custom dataset:
 
 ```swift

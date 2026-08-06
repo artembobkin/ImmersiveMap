@@ -84,8 +84,16 @@ private struct CustomTilesScreen: View {
                 kindKeys: ["class"],
                 pointLabelLayers: ["place"]),
             maximumTileZoomLevel: 14,
-            // Required by the data licence: OpenStreetMap data is ODbL.
-            attribution: .openStreetMap)
+            // Required by the data licence, and it has to name what is actually
+            // being served. This example defaults to the hosted endpoint, an
+            // OpenStreetMap planet in the OpenMapTiles schema, so the badge
+            // credits both; `.openStreetMap` alone would under-credit it. Point
+            // the URL field at your own source and this string becomes yours to
+            // get right, see ATTRIBUTION.md.
+            attribution: ImmersiveMapAttribution(
+                title: "© OpenStreetMap © OpenMapTiles",
+                copyright: "",
+                linkURL: URL(string: "https://www.openstreetmap.org/copyright")))
     }
 
     private var controls: some View {
