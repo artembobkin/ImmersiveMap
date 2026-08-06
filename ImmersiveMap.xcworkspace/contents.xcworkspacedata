@@ -35,5 +35,20 @@
       <FileRef
          location = "group:Examples/ImmersiveMapRoutesMac/ImmersiveMapRoutesMac.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapLabelsMac/ImmersiveMapLabelsMac.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapEarthSceneMac/ImmersiveMapEarthSceneMac.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapBuildingsMac/ImmersiveMapBuildingsMac.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapMapboxMac/ImmersiveMapMapboxMac.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Examples/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>
