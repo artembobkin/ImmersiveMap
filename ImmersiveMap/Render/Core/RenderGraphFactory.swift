@@ -95,6 +95,7 @@ enum RenderGraphFactory {
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,
+            starfieldSubsystem,
             debugSubsystem
         ]
         return RenderGraph(registry: RenderSubsystemRegistry(subsystems: subsystems),

@@ -12,6 +12,7 @@ final class ImmersiveMapHostRuntime {
     let runtimeGraph: ImmersiveMapRuntimeGraph
     private(set) var renderer: RenderFrameEngine?
     private let metalLayer: CAMetalLayer
+    private weak var mapView: ImmersiveMapHostView?
     private let requestsLayout: () -> Void
     private weak var attachedTourVideoRecorder: ImmersiveMapTourVideoRecorder?
     /// Kept for the tour video recorder: the export rasterizes the current
@@ -24,12 +25,14 @@ final class ImmersiveMapHostRuntime {
          initialCameraPosition: ImmersiveMapCameraPosition?,
          requestsLayout: @escaping () -> Void) {
         self.metalLayer = layer
+        self.mapView = mapView
         self.requestsLayout = requestsLayout
         self.runtimeGraph = ImmersiveMapRuntimeGraph(mapView: mapView,
                                                      layer: layer,
                                                      settings: settings,
                                                      initialCameraPosition: initialCameraPosition)
         runtimeGraph.debugOverlayRuntime.apply(settings: settings)
+        mapView.applyBackgroundTransparency(settings.scene.space.isTransparent)
 
         createRenderer(settings: settings,
                        cameraPosition: initialCameraPosition)
@@ -113,6 +116,9 @@ final class ImmersiveMapHostRuntime {
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: currentSettings,
                                                                    to: settings)
+        if currentSettings.scene.space.isTransparent != settings.scene.space.isTransparent {
+            mapView?.applyBackgroundTransparency(settings.scene.space.isTransparent)
+        }
         runtimeGraph.cameraRuntime.updateSettings(settings,
                                                   notifiesCameraPositionChanged: plan.requiresRendererRecreation == false)
         runtimeGraph.cameraAnimationRuntime.updateSettings()

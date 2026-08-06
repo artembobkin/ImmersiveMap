@@ -484,9 +484,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     public struct SpaceSettings: Equatable, Sendable {
         public var clearColor: SIMD4<Double>
+        /// Leaves everything outside the globe unpainted, so whatever the app
+        /// puts behind the map shows through: the frame is cleared to a fully
+        /// transparent pixel and the starfield layer (space background, stars
+        /// and the visible Sun) is not drawn at all. `clearColor` is ignored.
+        /// The globe surface itself stays opaque, and the map of the flat
+        /// presentation still covers the viewport with `mapClearColor`.
+        public var isTransparent: Bool
 
-        public init(clearColor: SIMD4<Double>) {
+        public init(clearColor: SIMD4<Double>,
+                    isTransparent: Bool = false) {
             self.clearColor = clearColor
+            self.isTransparent = isTransparent
         }
     }
 
@@ -1143,6 +1152,14 @@ public extension ImmersiveMapSettings {
     func earthScene(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.earth.isEnabled = isEnabled
+        return settings
+    }
+
+    /// Leaves the area outside the globe unpainted: no space background, no
+    /// stars, no Sun, and a frame that carries its own transparency.
+    func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.space.isTransparent = isTransparent
         return settings
     }
 

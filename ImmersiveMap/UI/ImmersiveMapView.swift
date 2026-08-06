@@ -482,6 +482,17 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Leaves the area outside the globe unpainted: the space background, the
+    /// stars and the visible Sun are not drawn, and the map view becomes
+    /// transparent there, so the app's own background shows through and around
+    /// the globe. A marker hanging off the limb no longer needs the map view
+    /// clipped to a circle.
+    public func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.transparentSpace(isTransparent)
+        return view
+    }
+
     /// World-space direction pointing towards the static sun
     /// (+X east, +Y north, +Z up). Defines where buildings and scene models
     /// cast their shadows.

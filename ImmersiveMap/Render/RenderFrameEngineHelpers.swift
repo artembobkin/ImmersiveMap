@@ -39,9 +39,21 @@ enum RenderFrameClearColor {
     static func make(transition: Float,
                      settings: ImmersiveMapSettings) -> MTLClearColor {
         let transitionMix = Double(transition)
-        let spaceColor = settings.scene.space.clearColor
         let mapColor = settings.scene.mapClearColor
-        let clearColorValue = spaceColor + (mapColor - spaceColor) * transitionMix
+        // Transparent space clears to a fully transparent pixel and reaches the
+        // map color through premultiplied values: the drawable is composited by
+        // the window server as premultiplied alpha, so a non-zero color at zero
+        // alpha would tint the app's own background.
+        let spaceColor = settings.scene.space.isTransparent
+            ? SIMD4<Double>(repeating: 0.0)
+            : settings.scene.space.clearColor
+        let targetColor = settings.scene.space.isTransparent
+            ? SIMD4<Double>(mapColor.x * mapColor.w,
+                            mapColor.y * mapColor.w,
+                            mapColor.z * mapColor.w,
+                            mapColor.w)
+            : mapColor
+        let clearColorValue = spaceColor + (targetColor - spaceColor) * transitionMix
 
         return MTLClearColor(red: clearColorValue.x,
                              green: clearColorValue.y,

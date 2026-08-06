@@ -35,6 +35,9 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noLabelContent
     case noAvatarContent
     case debugOverlayDisabled
+    /// The starfield layer, which paints the space background, the stars and the
+    /// Sun, is off because space is configured transparent.
+    case transparentSpace
 }
 
 struct RenderPassAvailability {
@@ -42,6 +45,9 @@ struct RenderPassAvailability {
     let labelsEnabled: Bool
     let avatarsEnabled: Bool
     let debugOverlayEnabled: Bool
+    /// False when space is configured transparent: nothing outside the globe is
+    /// painted, so the space background, the stars and the Sun are skipped.
+    let starfieldEnabled: Bool
 }
 
 struct RenderLayerPlanItem {
@@ -60,7 +66,10 @@ struct RenderLayerPlanner {
         }
 
         return worldLayers.map { layer in
-            RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
+            guard layer == .starfield, availability.starfieldEnabled == false else {
+                return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
+            }
+            return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
         } + [
             RenderLayerPlanItem(layer: .labels,
                                 enabled: availability.labelsEnabled,
