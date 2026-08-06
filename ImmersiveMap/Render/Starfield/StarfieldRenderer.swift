@@ -61,7 +61,24 @@ final class StarfieldRenderer {
         backgroundParams = Self.makeBackgroundParams(spaceColor: spaceColor,
                                                      transitionTargetColor: transitionTargetColor)
 
-        let stars = StarfieldModel.makeStars(config: config).map { star in
+        let stars = StarfieldModel.makeStars(config: config)
+        let buffer = Self.makeVerticesBuffer(metalDevice: metalDevice, stars: stars)
+        verticesBuffer = buffer
+        verticesCount = buffer == nil ? 0 : stars.count
+    }
+
+    /// Packs the model into a vertex buffer, or returns nil when there is nothing to draw.
+    ///
+    /// `makeBuffer(bytes:length:)` returns nil for a zero length, so an empty starfield
+    /// must not reach the allocation at all. Returning nil lets the caller skip the star
+    /// pass instead of force unwrapping and crashing.
+    ///
+    /// Internal rather than private so the empty case is covered by a behavioral test.
+    static func makeVerticesBuffer(metalDevice: MTLDevice,
+                                   stars: [StarfieldModel.Star]) -> MTLBuffer? {
+        guard !stars.isEmpty else { return nil }
+
+        let vertices = stars.map { star in
             StarVertex(position: star.position,
                        size: star.size,
                        brightness: star.brightness,
@@ -69,14 +86,8 @@ final class StarfieldRenderer {
                        twinklePhase: star.twinklePhase,
                        halo: star.halo)
         }
-        // makeBuffer(bytes:length:) returns nil for a zero length, so an empty
-        // starfield must not reach the allocation at all.
-        let buffer = stars.isEmpty
-            ? nil
-            : metalDevice.makeBuffer(bytes: stars,
-                                     length: MemoryLayout<StarVertex>.stride * stars.count)
-        verticesBuffer = buffer
-        verticesCount = buffer == nil ? 0 : stars.count
+        return metalDevice.makeBuffer(bytes: vertices,
+                                      length: MemoryLayout<StarVertex>.stride * vertices.count)
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
