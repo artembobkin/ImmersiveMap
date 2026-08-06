@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B1000000000000000000000A"
-               BuildableName = "ImmersiveMapMac.app"
-               BlueprintName = "ImmersiveMapMac"
-               ReferencedContainer = "container:ImmersiveMapMac.xcodeproj">
+               BuildableName = "ImmersiveMapSceneModelsMac.app"
+               BlueprintName = "ImmersiveMapSceneModelsMac"
+               ReferencedContainer = "container:ImmersiveMapSceneModelsMac.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,18 +46,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapMac.app"
-            BlueprintName = "ImmersiveMapMac"
-            ReferencedContainer = "container:ImmersiveMapMac.xcodeproj">
+            BuildableName = "ImmersiveMapSceneModelsMac.app"
+            BlueprintName = "ImmersiveMapSceneModelsMac"
+            ReferencedContainer = "container:ImmersiveMapSceneModelsMac.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN"
-            value = ""
-            isEnabled = "NO">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -70,9 +63,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapMac.app"
-            BlueprintName = "ImmersiveMapMac"
-            ReferencedContainer = "container:ImmersiveMapMac.xcodeproj">
+            BuildableName = "ImmersiveMapSceneModelsMac.app"
+            BlueprintName = "ImmersiveMapSceneModelsMac"
+            ReferencedContainer = "container:ImmersiveMapSceneModelsMac.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
