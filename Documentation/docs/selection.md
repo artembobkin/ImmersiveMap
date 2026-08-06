@@ -1,22 +1,30 @@
 # Tap selection
 
-Two APIs report taps on map content. `.onAvatarTap(_:)` is the raw event: every tap on an [avatar marker](avatars.md), including a repeated tap on one that is already selected. `ImmersiveMapSelectionController` is the state: what is selected now, changed by the user or by the app, with events for both.
+Two kinds of API report taps on map content.
+
+- The **per-kind events** are raw: `.onAvatarTap(_:)` fires for every tap on an [avatar marker](avatars.md), `.onSceneModelTap(_:)` for every tap on a [3D scene model](scene-models.md), including a repeated tap on something already selected.
+- `ImmersiveMapSelectionController` is the **state**: what is selected now, changed by the user or by the app, with events for both.
 
 ```swift
 struct MapScreen: View {
     @State private var avatars = ImmersiveMapAvatarsController()
+    @State private var sceneModels = ImmersiveMapSceneModelsController()
     @State private var selection = ImmersiveMapSelectionController()
 
     var body: some View {
         ImmersiveMapView()
             .avatars(avatars)
+            .sceneModels(sceneModels)
             .selection(selection)
             .onAvatarTap { event in
-                print("tapped \(event.marker.id) at \(event.screenPoint)")
+                print("tapped avatar \(event.marker.id) at \(event.screenPoint)")
+            }
+            .onSceneModelTap { event in
+                print("tapped model \(event.model.id) at \(event.coordinate)")
             }
             .onAppear {
                 selection.onSelectionChanged = { event in
-                    print("selected \(event.selection.objectID) via \(event.source)")
+                    print("selected \(event.selection.kind) \(event.selection.objectID)")
                 }
                 selection.onSelectionCleared = { _ in
                     print("nothing selected")
@@ -29,7 +37,7 @@ struct MapScreen: View {
 }
 ```
 
-Use `onAvatarTap` when a tap is a command ("open this person's card"). Use the selection controller when the tap changes state the rest of the UI reads ("this marker is the current one").
+Use the per-kind events when a tap is a command ("open this person's card"). Use the selection controller when the tap changes state the rest of the UI reads ("this one is the current one").
 
 ## Controller
 
@@ -52,7 +60,7 @@ public final class ImmersiveMapSelectionController {
 
 ```swift
 public struct ImmersiveMapSelection: Equatable {
-    public enum Kind: String { case avatar }
+    public enum Kind: String { case avatar, sceneModel }
     public let kind: Kind
     public let objectID: UInt64
 }
@@ -76,17 +84,32 @@ public struct ImmersiveMapSelectionClearEvent: Equatable {
 }
 ```
 
+`objectID` is only unique within its `kind`: an avatar and a scene model may both be id 1, so always switch on `kind` before looking the object up.
+
 `source` is what lets a handler avoid a feedback loop: a UI that calls `select` in response to its own list tap will see the resulting event with `.programmatic` and can ignore it. `screenPoint` is present for taps and `nil` for everything else, which is what a popover anchored to the marker needs.
 
-Selection state and avatar appearance are separate. To make a selected marker look selected, tell the avatars controller:
+## Appearance is the app's
+
+Selection state carries no appearance of its own. For avatars the controller can draw one for you:
 
 ```swift
 selection.onSelectionChanged = { event in
+    guard event.selection.kind == .avatar else { return }
     avatars.update(id: event.selection.objectID,
                    borderColor: SIMD4<Float>(0.2, 0.6, 1.0, 1.0),
                    isSelected: true)
 }
 ```
+
+For scene models there is no equivalent: the engine draws the asset as authored, so highlighting a selected model is the app's job (swap the source, nudge the scale, or put a [SwiftUI marker](markers.md) over it).
+
+## Resolution order
+
+When several things overlap a tap:
+
+- **Avatars beat models.** Avatar markers are screen-space overlays drawn over the world pass, so one covering a model takes the tap. An unhandled avatar tap falls through to the model underneath.
+- **Nearest model wins.** Overlapping scene models resolve to the one closest to the camera.
+- Anything past the globe horizon is not tappable at all, because it is not drawn.
 
 ## Tapping SwiftUI markers
 
@@ -94,8 +117,9 @@ selection.onSelectionChanged = { event in
 
 ## Limitations
 
-- **Avatars only.** `ImmersiveMapSelection.Kind` has a single case today. [Routes](routes.md) and [3D scene models](scene-models.md) are not tappable, and neither are vector tile features (roads, buildings, POIs).
+- **Avatars and scene models only.** [Routes](routes.md) are not tappable, and neither are vector tile features (roads, buildings, POIs).
 - One selection at a time; there is no multi-select.
 - A merged avatar cluster is selectable as itself. Selecting a member that is currently hidden inside a group is not.
+- Model hit-testing uses the asset's bounding box rather than its triangles, and does not consult depth, see [3D scene models](scene-models.md).
 
-Running example: [`Examples/ImmersiveMapAvatarsMac`](../../Examples/ImmersiveMapAvatarsMac) shows the tap event and the selection state side by side, and drives selection from buttons as well as from the map.
+Running examples: [`Examples/ImmersiveMapAvatarsMac`](../../Examples/ImmersiveMapAvatarsMac) shows the tap event and the selection state side by side, and drives selection from buttons as well as from the map; [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) taps a model in mid-flight.

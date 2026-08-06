@@ -76,10 +76,22 @@ public struct StarfieldSettings: Equatable, Sendable {
 
 public struct SpaceSettings: Equatable, Sendable {
     public var clearColor: SIMD4<Double>   // near-black blue
+    public var isTransparent: Bool         // false
 }
 ```
 
 The starfield is a point cloud on a sphere well outside the globe, drawn in the world pass before everything else. `starCount: 0` removes it and leaves `space.clearColor` as the backdrop. `radiusScale` sets how far out the sphere sits, which is what keeps stars from parallaxing as the camera orbits.
+
+## Transparent space
+
+```swift
+ImmersiveMapView()
+    .transparentSpace()
+```
+
+`isTransparent` leaves everything outside the globe unpainted: the frame is cleared to a fully transparent pixel and the entire starfield layer (space background, stars and the visible sun) is skipped, so whatever the app puts behind the map, a color, a gradient, an image, continues around the planet. `clearColor` is ignored in that mode, and the globe surface itself stays opaque.
+
+This is the mode for a globe that is one element on a screen with its own background rather than a scene in orbit. Painting space a flat color could only ever match a flat background exactly; anything else showed as a square around the globe. On the way to the flat presentation the clear color still ramps to the opaque map color through the morph, so the plane arrives fully painted. On macOS the enclosing window must itself be transparent for the desktop to show through.
 
 ## The flat-mode light
 
@@ -93,6 +105,7 @@ ImmersiveMapView()
 ## Limitations
 
 - The sun, the terminator and the starfield are globe-side: they fade out through the [globe-to-flat morph](globe.md) and draw nothing on the fully flat map.
+- `transparentSpace()` and the sun are mutually exclusive by construction: the visible sun draws in the starfield layer, which transparent space skips entirely.
 - The terminator is a lighting model, not a data layer: it shades the rendered sphere and has no bearing on labels, markers or tile content.
 - `.realtime` re-resolves the date per frame, so a long-running screen drifts with the clock by design. Pin it with `.fixed` when that matters.
 

@@ -82,10 +82,10 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
 | [Map styling and colors](Documentation/docs/styling.md) | Available |
 | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) | Available |
-| [Sun, day/night terminator and starfield](Documentation/docs/earth-scene.md) | Available |
+| [Sun, day/night terminator, starfield and transparent space](Documentation/docs/earth-scene.md) | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |
-| [Tap selection](Documentation/docs/selection.md) | Available |
+| [Tap selection of avatars and models](Documentation/docs/selection.md) | Available |
 | [Routes on the globe](Documentation/docs/routes.md) | Available |
 | [3D scene models](Documentation/docs/scene-models.md) | Available |
 | [Camera flights and scripted tours](Documentation/docs/camera.md) | Available |
@@ -121,10 +121,10 @@ The `Examples` folder holds host apps that reference the package locally. There 
 | `ImmersiveMapCameraTourMac` | A looped cinematic [camera tour](Documentation/docs/camera.md) and its offline [video export](Documentation/docs/tour-video-export.md). |
 | `ImmersiveMapMarkersMac` | [SwiftUI markers](Documentation/docs/markers.md): anchors, interactive versus pass-through content, live data changes. |
 | `ImmersiveMapAvatarsMac` | [Avatar markers](Documentation/docs/avatars.md) walking, merging and unmerging, with [tap selection](Documentation/docs/selection.md). |
-| `ImmersiveMapSceneModelsMac` | [3D scene models](Documentation/docs/scene-models.md) from USDZ and OBJ, with the live transform API. |
-| `ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one, and [the camera travelling with it](Documentation/docs/camera-path-follow.md). |
+| `ImmersiveMapSceneModelsMac` | [3D scene models](Documentation/docs/scene-models.md) from USDZ and OBJ, with the live transform API and tap handling. |
+| `ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one and [tappable in mid-flight](Documentation/docs/selection.md), and [the camera travelling with it](Documentation/docs/camera-path-follow.md). |
 | `ImmersiveMapLabelsMac` | [Label](Documentation/docs/labels.md) language, fallback policy and visibility thresholds. |
-| `ImmersiveMapEarthSceneMac` | The [sun, the day/night terminator and the starfield](Documentation/docs/earth-scene.md). |
+| `ImmersiveMapEarthSceneMac` | The [sun, the day/night terminator, the starfield and transparent space](Documentation/docs/earth-scene.md). |
 | `ImmersiveMapBuildingsMac` | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) with a movable sun. |
 | `ImmersiveMapMapboxMac` | [Mapbox vector tiles](Documentation/docs/mapbox.md) with a restyled palette. |
 | `ImmersiveMapCustomTilesMac` | [Your own MVT source](Documentation/docs/custom-tile-provider.md) and a hand-written vector tile style. |

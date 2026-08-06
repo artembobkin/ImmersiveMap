@@ -30,6 +30,7 @@ private struct SceneModelsScreen: View {
     @State private var scale: Double = 1
     @State private var altitude: Double = 0
     @State private var isMissingAsset = false
+    @State private var tapped: String?
 
     /// The model the sliders address. The other three stay put as a reference.
     private let subject = DemoSceneModels.spotByTheEiffelTower
@@ -39,8 +40,26 @@ private struct SceneModelsScreen: View {
             ImmersiveMapView()
                 .camera(camera, position: Self.paris)
                 .sceneModels(sceneModels)
+                // Hit-testing follows the model through the morph and through
+                // any animation: `coordinate` is where it was drawn.
+                .onSceneModelTap { event in
+                    tapped = String(format: "model %llu at %.4f°, %.4f°",
+                                    event.model.id,
+                                    event.coordinate.latitude,
+                                    event.coordinate.longitude)
+                }
                 .enableCameraUIControls()
                 .ignoresSafeArea()
+
+            if let tapped {
+                Label(tapped, systemImage: "hand.tap.fill")
+                    .font(.system(size: 12, design: .monospaced))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
 
             controls
                 .padding(20)

@@ -33,9 +33,17 @@ private struct EarthSceneScreen: View {
     @State private var sunGlow: Double = 0.75
     @State private var limbHalo: Double = 0.35
     @State private var starCount: Double = 2000
+    @State private var isSpaceTransparent = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            // Something behind the map, so transparent space has something to
+            // show through to.
+            LinearGradient(colors: [.indigo, .purple, .orange],
+                           startPoint: .topLeading,
+                           endPoint: .bottomTrailing)
+                .ignoresSafeArea()
+
             ImmersiveMapView()
                 .camera(camera, position: Self.overview)
                 .sceneSettings(sceneSettings)
@@ -59,6 +67,11 @@ private struct EarthSceneScreen: View {
 
         scene.starfield.starCount = Int(starCount)
 
+        // Transparent space leaves everything outside the globe unpainted, so
+        // the gradient behind the map continues around the planet. The whole
+        // starfield layer is skipped, the visible sun with it.
+        scene.space.isTransparent = isSpaceTransparent
+
         return scene
     }
 
@@ -75,6 +88,8 @@ private struct EarthSceneScreen: View {
         VStack(spacing: 12) {
             HStack(spacing: 14) {
                 Toggle("Earth scene", isOn: $isEarthSceneEnabled)
+                    .toggleStyle(.switch)
+                Toggle("Transparent space", isOn: $isSpaceTransparent)
                     .toggleStyle(.switch)
                 Toggle("Follow the clock", isOn: $followsRealtime)
                     .toggleStyle(.switch)

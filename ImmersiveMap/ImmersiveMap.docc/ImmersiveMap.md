@@ -41,6 +41,12 @@ Drop ``ImmersiveMapView`` into a SwiftUI hierarchy to render a map out of the bo
 - ``ImmersiveMapCameraFollowOptions``
 - ``ImmersiveMapCameraTourShot``
 
+### Taps and Selection
+
+- ``ImmersiveMapSelection``
+- ``ImmersiveMapAvatarTapEvent``
+- ``ImmersiveMapSceneModelTapEvent``
+
 ### Video Export
 
 - ``ImmersiveMapTourVideoRecorder``
