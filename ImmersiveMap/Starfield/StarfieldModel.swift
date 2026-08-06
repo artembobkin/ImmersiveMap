@@ -23,9 +23,11 @@ enum StarfieldModel {
         let sizeRange = max(config.sizeMax - config.sizeMin, 0.001)
         let brightnessRange = max(config.brightnessMax - config.brightnessMin, 0.001)
 
-        let dustCount = max(1, Int(Float(config.starCount) * 0.68))
-        let midCount = max(1, Int(Float(config.starCount) * 0.25))
-        let accentCount = max(1, config.starCount - dustCount - midCount)
+        // Layer sizes are clamped by the remaining budget, so a small starCount
+        // never produces more stars than requested.
+        let dustCount = min(config.starCount, max(1, Int(Float(config.starCount) * 0.68)))
+        let midCount = min(config.starCount - dustCount, max(1, Int(Float(config.starCount) * 0.25)))
+        let accentCount = config.starCount - dustCount - midCount
 
         let layers: [(count: Int, profile: LayerProfile)] = [
             (dustCount, LayerProfile(sizeLower: 0.00,

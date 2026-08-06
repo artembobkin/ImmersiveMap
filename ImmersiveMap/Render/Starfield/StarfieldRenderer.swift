@@ -42,7 +42,9 @@ final class StarfieldRenderer {
     }
 
     private let pipeline: StarfieldPipeline
-    private let verticesBuffer: MTLBuffer
+    /// Nil when the model is empty (`starCount == 0`) or the buffer allocation failed:
+    /// the star pass is then skipped, the sky and the Sun still draw.
+    private let verticesBuffer: MTLBuffer?
     private let verticesCount: Int
     private let config: ImmersiveMapSettings.StarfieldSettings
     private let backgroundParams: BackgroundParams
@@ -59,7 +61,24 @@ final class StarfieldRenderer {
         backgroundParams = Self.makeBackgroundParams(spaceColor: spaceColor,
                                                      transitionTargetColor: transitionTargetColor)
 
-        let stars = StarfieldModel.makeStars(config: config).map { star in
+        let stars = StarfieldModel.makeStars(config: config)
+        let buffer = Self.makeVerticesBuffer(metalDevice: metalDevice, stars: stars)
+        verticesBuffer = buffer
+        verticesCount = buffer == nil ? 0 : stars.count
+    }
+
+    /// Packs the model into a vertex buffer, or returns nil when there is nothing to draw.
+    ///
+    /// `makeBuffer(bytes:length:)` returns nil for a zero length, so an empty starfield
+    /// must not reach the allocation at all. Returning nil lets the caller skip the star
+    /// pass instead of force unwrapping and crashing.
+    ///
+    /// Internal rather than private so the empty case is covered by a behavioral test.
+    static func makeVerticesBuffer(metalDevice: MTLDevice,
+                                   stars: [StarfieldModel.Star]) -> MTLBuffer? {
+        guard !stars.isEmpty else { return nil }
+
+        let vertices = stars.map { star in
             StarVertex(position: star.position,
                        size: star.size,
                        brightness: star.brightness,
@@ -67,9 +86,8 @@ final class StarfieldRenderer {
                        twinklePhase: star.twinklePhase,
                        halo: star.halo)
         }
-        verticesCount = stars.count
-        verticesBuffer = metalDevice.makeBuffer(bytes: stars,
-                                                length: MemoryLayout<StarVertex>.stride * stars.count)!
+        return metalDevice.makeBuffer(bytes: vertices,
+                                      length: MemoryLayout<StarVertex>.stride * vertices.count)
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -114,13 +132,15 @@ final class StarfieldRenderer {
                                        index: 2)
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
 
-        pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
-        renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
-        renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
-        renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
-        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
+        if let verticesBuffer, verticesCount > 0 {
+            pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
+            renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
+            renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
+            renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
+            renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
+            renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
+            renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
+        }
 
         var sunState = EarthSceneSunVisualState.make(earthScene: earthScene,
                                                      globe: globe,
