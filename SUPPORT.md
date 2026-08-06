@@ -12,7 +12,7 @@ on a best-effort basis.
 
 ## Documentation
 
-- [README](README.md): overview, installation, quick start. Its **Features** table links every feature to its own guide in `Documentation/docs/`, and its **Example Apps** table links a runnable app per feature.
+- [README](README.md): overview, installation, quick start. Its **Features** table links each configurable feature to its own guide in `Documentation/docs/`, and its **Example Apps** table lists a runnable app for each feature area.
 - [Documentation/docs/architecture.md](Documentation/docs/architecture.md): how the engine is put together, for reading or extending the code.
 
 ## Commercial support

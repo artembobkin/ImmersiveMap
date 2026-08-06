@@ -30,6 +30,11 @@ private struct MapboxScreen: View {
     @State private var appliedToken = ProcessInfo.processInfo
         .environment["IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN"] ?? ""
     @State private var tilesetID = MapboxTileProvider.defaultTilesetID
+    // Staged separately from the text field: the provider's
+    // configurationFingerprint keys the tile caches, so building one per
+    // keystroke would churn cache namespaces and fire network requests for
+    // half-typed tileset ids.
+    @State private var appliedTilesetID = MapboxTileProvider.defaultTilesetID
     @State private var usesNightPalette = false
 
     var body: some View {
@@ -40,7 +45,7 @@ private struct MapboxScreen: View {
                 ImmersiveMapView()
                     .camera(camera, position: Self.overview)
                     .tileProvider(MapboxTileProvider(accessToken: appliedToken,
-                                                     tilesetID: tilesetID))
+                                                     tilesetID: appliedTilesetID))
                     .mapStyle(MapboxMapStyle(configuration: styleConfiguration))
                     .enableCameraUIControls()
                     .ignoresSafeArea()
@@ -77,6 +82,14 @@ private struct MapboxScreen: View {
             }
     }
 
+    private var trimmedToken: String {
+        token.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedTilesetID: String {
+        tilesetID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var missingTokenNotice: some View {
         VStack(spacing: 12) {
             Image(systemName: "key.slash")
@@ -108,8 +121,9 @@ private struct MapboxScreen: View {
                 .frame(width: 260)
             Button("Apply") {
                 appliedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+                appliedTilesetID = tilesetID.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(trimmedToken.isEmpty || trimmedTilesetID.isEmpty)
 
             Divider().frame(height: 20)
 

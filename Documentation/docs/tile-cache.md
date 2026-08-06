@@ -6,7 +6,7 @@ Three layers, outermost first:
 
 | Layer | Holds | Lives in |
 |---|---|---|
-| Raw HTTP cache | The `.mvt` bytes as fetched, revalidated by the server's ETag | `URLCache` on disk |
+| Raw HTTP cache | The `.mvt` bytes as fetched, conditionally revalidated against the server's ETag and `Cache-Control` | `URLCache` on disk |
 | Prepared tile cache | Parsed and tessellated geometry, optionally LZFSE-compressed | A dedicated disk cache |
 | Memory cache | `MetalTile`s: GPU buffers ready to draw | RAM, LRU |
 
@@ -45,7 +45,7 @@ public struct CacheSettings: Equatable, Sendable {
 | `preparedDiskTimeToLive` | How long a prepared tile stays valid. Shorter for fast-moving data, longer for a basemap that rarely changes. |
 | `preparedDiskCompressionEnabled` | Off writes larger files and burns less CPU (and battery) while exploring new areas. Both variants stay readable either way, so flipping it does not invalidate anything. |
 | `preparedTileCacheEnabled` | Off re-parses from raw bytes every load. Useful when iterating on a style, where prepared tiles would be stale by construction. |
-| `urlCacheEnabled` | Off sends every tile to the network, still revalidated by ETag. |
+| `urlCacheEnabled` | Off drops the `URLCache` entirely, so every tile is downloaded in full with no HTTP conditional revalidation. Response ETags are still read, and still key the prepared cache below. |
 | `clearDiskCachesOnLaunch` | A development lever, not a product one. |
 
 ## Cache identity

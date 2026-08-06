@@ -17,7 +17,7 @@ public enum BuildingExtrusionMode: Equatable, Sendable {
     case solid
     case solidAtHighZoom(startZoom: Double, endZoom: Double)
 
-    public static let solidAtHighZoom = BuildingExtrusionMode.solidAtHighZoom(startZoom: 17.0, endZoom: 17.5)
+    public static let solidAtHighZoom = BuildingExtrusionMode.solidAtHighZoom(startZoom: 17.0, endZoom: 18.0)
 }
 ```
 

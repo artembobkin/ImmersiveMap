@@ -90,14 +90,28 @@ public struct ImmersiveMapSelectionClearEvent: Equatable {
 
 ## Appearance is the app's
 
-Selection state carries no appearance of its own. For avatars the controller can draw one for you:
+Selection state carries no appearance of its own. For avatars the controller can draw one for you, but the highlight is yours to move: the controller holds one selection, and nothing clears the previous marker unless you do.
 
 ```swift
+@State private var highlightedAvatarID: UInt64?
+
 selection.onSelectionChanged = { event in
+    clearAvatarHighlight()
     guard event.selection.kind == .avatar else { return }
     avatars.update(id: event.selection.objectID,
                    borderColor: SIMD4<Float>(0.2, 0.6, 1.0, 1.0),
                    isSelected: true)
+    highlightedAvatarID = event.selection.objectID
+}
+
+selection.onSelectionCleared = { _ in
+    clearAvatarHighlight()
+}
+
+func clearAvatarHighlight() {
+    guard let id = highlightedAvatarID else { return }
+    avatars.update(id: id, isSelected: false)
+    highlightedAvatarID = nil
 }
 ```
 

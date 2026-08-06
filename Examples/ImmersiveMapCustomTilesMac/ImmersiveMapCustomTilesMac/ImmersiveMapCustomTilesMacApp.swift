@@ -44,19 +44,22 @@ private struct CustomTilesScreen: View {
     }
 
     /// The modifiers are value builders, so the provider and the style can be
-    /// chosen in plain Swift before the view is handed to SwiftUI. Without them
-    /// the map falls back to the built-in provider and style.
+    /// chosen in plain Swift before the view is handed to SwiftUI.
+    ///
+    /// The tile source is always the one configured above; only the style is
+    /// toggled, so the comparison is like for like: the same bytes drawn by the
+    /// hand-written style versus by the built-in one.
     private var mapView: ImmersiveMapView {
-        let base = ImmersiveMapView().camera(camera, position: Self.overview)
-        guard usesCustomStyle else {
-            return base
-        }
-        return base
+        let base = ImmersiveMapView()
+            .camera(camera, position: Self.overview)
             .tileProvider(provider)
-            .mapStyle(VectorTileMapStyle(style: DemoTileStyle()))
             // An optional key for the source, sent as an Authorization
             // Bearer header. Empty means anonymous.
             .apiKey(apiKey.isEmpty ? nil : apiKey)
+        guard usesCustomStyle else {
+            return base
+        }
+        return base.mapStyle(VectorTileMapStyle(style: DemoTileStyle()))
     }
 
     /// A tile source is a URL template plus how credentials travel. The
@@ -102,7 +105,7 @@ private struct CustomTilesScreen: View {
 
             Toggle("Custom style", isOn: $usesCustomStyle)
                 .toggleStyle(.switch)
-                .help("Off shows the same tiles under the built-in provider and style")
+                .help("Off draws the same tiles with the built-in style")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

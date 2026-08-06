@@ -28,8 +28,11 @@ private struct LabelsScreen: View {
     @State private var language: ImmersiveMapSettings.LabelLanguage = .english
     @State private var fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     @State private var houseNumbersEnabled = true
-    @State private var settlementMaximumZoom: Double = 12
-    @State private var landmarkMinimumZoom: Double = 15
+    // Zoom thresholds are integers in LabelSettings, so the sliders step in
+    // whole levels: a displayed 12.9 that quietly applies 12 is a worse demo
+    // than a slider that only offers 12 and 13.
+    @State private var settlementMaximumZoom = 12
+    @State private var landmarkMinimumZoom = 15
     @State private var fadeSeconds: Double = 0.25
 
     var body: some View {
@@ -52,12 +55,11 @@ private struct LabelsScreen: View {
         labels.houseNumbers.enabled = houseNumbersEnabled
         // A settlement label is drawn up to its own maximum zoom and then gives
         // the screen to street and landmark labels.
-        let maximumZoom = Int(settlementMaximumZoom)
         labels.settlementVisibility = ImmersiveMapSettings.LabelSettings.SettlementVisibilitySettings(
-            capitalMaximumZoom: maximumZoom,
-            cityMaximumZoom: maximumZoom,
-            smallSettlementMaximumZoom: maximumZoom)
-        labels.landmarks.minimumZoom = Int(landmarkMinimumZoom)
+            capitalMaximumZoom: settlementMaximumZoom,
+            cityMaximumZoom: settlementMaximumZoom,
+            smallSettlementMaximumZoom: settlementMaximumZoom)
+        labels.landmarks.minimumZoom = landmarkMinimumZoom
         labels.base.fadeInSeconds = fadeSeconds
         labels.base.fadeOutSeconds = fadeSeconds
         return labels
@@ -92,8 +94,8 @@ private struct LabelsScreen: View {
             }
 
             HStack(spacing: 18) {
-                slider("Settlements up to z", value: $settlementMaximumZoom, range: 4...18)
-                slider("Landmarks from z", value: $landmarkMinimumZoom, range: 10...18)
+                zoomSlider("Settlements up to z", value: $settlementMaximumZoom, range: 4...18)
+                zoomSlider("Landmarks from z", value: $landmarkMinimumZoom, range: 10...18)
                 slider("Fade, s", value: $fadeSeconds, range: 0...1.5)
 
                 Divider().frame(height: 20)
@@ -127,6 +129,20 @@ private struct LabelsScreen: View {
             Text("\(title): \(value.wrappedValue, specifier: "%.2f")")
                 .font(.system(size: 11, design: .monospaced))
             Slider(value: value, in: range)
+                .frame(width: 150)
+        }
+    }
+
+    private func zoomSlider(_ title: String,
+                            value: Binding<Int>,
+                            range: ClosedRange<Int>) -> some View {
+        VStack(spacing: 2) {
+            Text("\(title): \(value.wrappedValue)")
+                .font(.system(size: 11, design: .monospaced))
+            Slider(value: Binding(get: { Double(value.wrappedValue) },
+                                  set: { value.wrappedValue = Int($0.rounded()) }),
+                   in: Double(range.lowerBound)...Double(range.upperBound),
+                   step: 1)
                 .frame(width: 150)
         }
     }

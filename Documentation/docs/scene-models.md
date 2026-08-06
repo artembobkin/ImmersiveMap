@@ -129,7 +129,7 @@ Resolution rules:
 - **Oriented, not spherical.** The box is tested in the model's own space, so a diagonal aircraft has a hit area the shape of the aircraft rather than a ball of empty air around it.
 - **Minimum touch target.** A model whose whole on-screen footprint is smaller than 44 pt grows to that size around its center, so distant models stay reachable by finger. A model large enough to aim at keeps its own outline, so this can never steal a tap from geometry you actually hit.
 
-Models also take part in `ImmersiveMapSelectionController` as `ImmersiveMapSelection.Kind.sceneModel`, alongside avatars: a tap selects, a tap on the background clears, and removing a selected model clears it. Selection carries no appearance of its own for models — the engine draws the asset as authored, and highlighting the selected one is the app's to do (swap the source, nudge the scale, draw a SwiftUI marker over it).
+Models also take part in `ImmersiveMapSelectionController` as `ImmersiveMapSelection.Kind.sceneModel`, alongside avatars: a tap selects, a tap on the background clears, and removing a selected model clears it. Selection carries no appearance of its own for models: the engine draws the asset as authored, and highlighting the selected one is the app's to do (swap the source, nudge the scale, draw a SwiftUI marker over it).
 
 ## Loading and memory
 

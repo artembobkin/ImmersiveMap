@@ -19,8 +19,10 @@ struct ImmersiveMapAvatarsMacApp: App {
 /// they collide and lay themselves out, they merge into clusters, and `move`
 /// glides them along a great circle instead of snapping.
 ///
-/// Tapping is here too, because selection is avatar selection today:
-/// `ImmersiveMapSelection.Kind` has a single case, `.avatar`.
+/// Tapping is here too. `ImmersiveMapSelectionController` covers avatars and
+/// 3D scene models (`ImmersiveMapSelection.Kind`), and this app has avatars, so
+/// it is where the avatar half is shown; the model half lives in
+/// `ImmersiveMapSceneModelsMac`.
 private struct AvatarsScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var avatars = ImmersiveMapAvatarsController()

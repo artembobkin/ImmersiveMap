@@ -113,7 +113,7 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds host apps that reference the package locally. There is one app per feature, so each is small enough to read in a sitting. All of them are macOS (AppKit, not Catalyst) except the first.
+The `Examples` folder holds host apps that reference the package locally. Each one is built around a single feature area, so it stays small enough to read in a sitting. A few cover two features that only make sense together: the tour app also exports that tour to video, the avatars app also handles taps on them, and the routes app flies a model along the route with the camera following. All of them are macOS (AppKit, not Catalyst) except the first.
 
 | Example | What it shows |
 |---|---|
