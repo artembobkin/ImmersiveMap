@@ -11,6 +11,9 @@ struct PresentedSceneModel {
     let id: UInt64
     let source: ImmersiveMapSceneModel.Source
     let fitDiameterMeters: Double?
+    /// Where the model is being drawn this frame. Mid-flight this is a point on
+    /// the path, while the descriptor already holds the destination.
+    let coordinate: GeoCoordinate
     let projectionBasis: GeoProjectionBasis
     let orientation: simd_quatf
     let scale: Double
@@ -181,6 +184,7 @@ private struct SceneModelPresentationEntry {
         return PresentedSceneModel(id: model.id,
                                    source: model.source,
                                    fitDiameterMeters: model.fitDiameterMeters,
+                                   coordinate: displayedCoordinate,
                                    projectionBasis: projectionBasis,
                                    orientation: displayedOrientation,
                                    scale: displayedScale,

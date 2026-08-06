@@ -22,6 +22,7 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     func invalidate(_ reason: RenderInvalidationReason)
     func applyActivityState(_ state: RenderActivityState)
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)
+    func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot)
     /// Path animations that ended on the last frame, with where they left the
     /// model.
     func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult])

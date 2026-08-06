@@ -353,9 +353,11 @@ final class RenderFrameEngine {
         }
 
         let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
+        let sceneModelSelectionSnapshot = frameContext.sharedState.sceneModelState.selectionSnapshot
         commandBuffer.addCompletedHandler { [weak self] completedBuffer in
             self?.inFlightFramePool.release(slot: frameSlotIndex)
             self?.eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
+            self?.eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
             onGPUComplete?(completedBuffer.error == nil)
         }
         if let drawable = target.drawable {

@@ -13,7 +13,8 @@ import XCTest
 final class SceneModelAnchorMathTests: XCTestCase {
     private let drawSize = CGSize(width: 800, height: 600)
     private let presentationSettings = ImmersiveMapSettings.default.presentation
-    private let unitBounds = SceneModelMesh.Bounds(center: .zero, radius: 1, maxExtent: 1)
+    private let unitBounds = SceneModelMesh.Bounds(minimum: SIMD3<Float>(repeating: -0.5),
+                                                          maximum: SIMD3<Float>(repeating: 0.5))
 
     // MARK: - Position equivalence with the geo projector
 
@@ -228,7 +229,8 @@ final class SceneModelAnchorMathTests: XCTestCase {
     func testFitDiameterOverridesNativeSize() throws {
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: 0.0, longitude: 0.0, zoom: 15.0))
-        let bounds = SceneModelMesh.Bounds(center: .zero, radius: 3.46, maxExtent: 4)
+        let bounds = SceneModelMesh.Bounds(minimum: SIMD3<Float>(repeating: -2),
+                                           maximum: SIMD3<Float>(repeating: 2))
 
         let native = SceneModelAnchorMath.resolveAnchor(
             presented: makePresented(latitude: 0.0, longitude: 0.0),
@@ -334,6 +336,7 @@ final class SceneModelAnchorMathTests: XCTestCase {
             id: 1,
             source: ImmersiveMapSceneModel.Source(url: URL(fileURLWithPath: "/tmp/model.usdz")),
             fitDiameterMeters: fitDiameterMeters,
+            coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
             projectionBasis: GeoProjectionBasis(coordinate: GeoCoordinate(latitude: latitude,
                                                                           longitude: longitude)),
             orientation: SceneModelAnimationMath.orientationQuaternion(headingDegrees: headingDegrees,

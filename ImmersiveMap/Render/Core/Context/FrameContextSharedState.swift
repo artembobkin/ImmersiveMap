@@ -81,12 +81,16 @@ struct AvatarState {
 struct SceneModelFrameState {
     static let empty = SceneModelFrameState(hasActiveAnimations: false,
                                             hasShadowCasters: false,
+                                            selectionSnapshot: .empty,
                                             pathAnimationResults: [])
 
     var hasActiveAnimations: Bool
     /// At least one model survived light-frustum culling this frame; feeds the
     /// shadow-pass gate together with the building-caster check.
     var hasShadowCasters: Bool
+    /// Hit volumes of the models this frame drew, published after the frame
+    /// reaches the screen so taps are tested against what is visible.
+    var selectionSnapshot: SceneModelSelectionSnapshot
     /// Path animations that ended on this frame, with the transform they left
     /// the model at; the engine forwards them so the controller's descriptor
     /// stays truthful and the app's completion fires exactly once.

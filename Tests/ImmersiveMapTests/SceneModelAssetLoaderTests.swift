@@ -108,6 +108,7 @@ final class SceneModelMeshStoreTests: XCTestCase {
         func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
 
         func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
+        func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
         func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {}
     }
@@ -141,7 +142,8 @@ final class SceneModelMeshStoreTests: XCTestCase {
         SceneModelMesh(meshes: [],
                        localTransforms: [],
                        materials: [],
-                       localBounds: SceneModelMesh.Bounds(center: .zero, radius: 1, maxExtent: 1),
+                       localBounds: SceneModelMesh.Bounds(minimum: SIMD3<Float>(repeating: -0.5),
+                                                          maximum: SIMD3<Float>(repeating: 0.5)),
                        costInBytes: 64)
     }
 

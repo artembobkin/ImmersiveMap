@@ -12,6 +12,7 @@ import Foundation
 public struct ImmersiveMapSelection: Equatable {
     public enum Kind: String {
         case avatar
+        case sceneModel
     }
 
     public let kind: Kind

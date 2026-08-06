@@ -56,6 +56,8 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
 
     func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
 
+    func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot) {}
+
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
 
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {

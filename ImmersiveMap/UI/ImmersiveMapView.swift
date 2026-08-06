@@ -18,6 +18,7 @@ public struct ImmersiveMapView: View {
     private var cameraUIControls: CameraUIControls?
     private var selectionController: ImmersiveMapSelectionController?
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     private var markerContent: MarkerViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
     private var apiKey: String?
@@ -47,6 +48,7 @@ public struct ImmersiveMapView: View {
                                         cameraController: cameraController,
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
+                                        sceneModelTapAction: sceneModelTapAction,
                                         markerContent: markerContent,
                                         tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
@@ -77,6 +79,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -93,6 +96,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                        cameraController: cameraController,
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
+                                       sceneModelTapAction: sceneModelTapAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -105,6 +109,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         cameraController: cameraController,
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
+                                        sceneModelTapAction: sceneModelTapAction,
                                         markerContent: markerContent)
         return uiView
     }
@@ -117,6 +122,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
+                      sceneModelTapAction: sceneModelTapAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -136,6 +142,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -152,6 +159,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                        cameraController: cameraController,
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
+                                       sceneModelTapAction: sceneModelTapAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -164,6 +172,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         cameraController: cameraController,
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
+                                        sceneModelTapAction: sceneModelTapAction,
                                         markerContent: markerContent)
         return nsView
     }
@@ -176,6 +185,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
+                      sceneModelTapAction: sceneModelTapAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -338,6 +348,23 @@ public extension ImmersiveMapView {
     func onAvatarTap(_ action: @escaping (ImmersiveMapAvatarTapEvent) -> Void) -> ImmersiveMapView {
         var view = self
         view.avatarTapAction = action
+        return view
+    }
+
+    /// Calls `action` on every tap that lands on a 3D scene model.
+    ///
+    /// The tap is tested against the model's bounding box exactly where the
+    /// frame drew it, so it follows the model through flat mode, the globe, the
+    /// morph between them, and any animation; a model hidden behind the globe
+    /// horizon is not hittable. When models overlap, the one nearest the camera
+    /// wins, and an avatar marker over a model takes the tap first. A model too
+    /// small to aim at grows to a 44 pt touch target.
+    ///
+    /// Works without ``ImmersiveMapSelectionController``: the event arrives even
+    /// when selection is not used, and again on a tap on an already selected model.
+    func onSceneModelTap(_ action: @escaping (ImmersiveMapSceneModelTapEvent) -> Void) -> ImmersiveMapView {
+        var view = self
+        view.sceneModelTapAction = action
         return view
     }
 
