@@ -32,11 +32,20 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
 
     private let size = 160
 
+    /// The earth scene is on with its Sun, which is the case that has to hold:
+    /// the space background, the stars and the Sun all come from the starfield
+    /// layer, so if any of them still painted, the corners would come back
+    /// opaque.
     @MainActor
     func testTransparentSpaceLeavesTheAreaOutsideTheGlobeUnpainted() async throws {
         let device = try makeDeviceOrSkip()
+        let settings = ImmersiveMapSettings.default
+            .earthScene(isEnabled: true)
+            .transparentSpace()
+        XCTAssertTrue(settings.scene.earth.sun.isEnabled,
+                      "The Sun must be on, otherwise this test proves nothing")
         let pixels = try await renderFrame(device: device,
-                                           settings: .default.transparentSpace(),
+                                           settings: settings,
                                            routeAlpha: 1.0)
 
         for corner in cornerIndices() {
@@ -95,6 +104,8 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The four frame corners: the globe is centred, so these are the farthest
+    /// pixels from it and the last place anything painting space would miss.
     private func cornerIndices() -> [Int] {
         [
             0,
@@ -117,12 +128,16 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
         return red > 60 && green < 40 && blue < 40
     }
 
+    /// Route pixels that came out fully opaque: content on the globe must keep
+    /// its own coverage while the frame around it stays transparent.
     private func opaqueRoutePixelCount(in pixels: [UInt8]) -> Int {
         stride(from: 0, to: pixels.count, by: 4)
             .filter { isRoutePixel(in: pixels, at: $0) && pixels[$0 + 3] == 255 }
             .count
     }
 
+    /// The strongest coverage the route reached, read at its centre line rather
+    /// than averaged, so antialiased edges do not drag the measurement down.
     private func peakRouteAlpha(in pixels: [UInt8]) -> UInt8? {
         stride(from: 0, to: pixels.count, by: 4)
             .filter { isRoutePixel(in: pixels, at: $0) }
@@ -147,6 +162,9 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
                                  progress: 1)
     }
 
+    /// Renders one offscreen frame of a globe at zoom 1 with a single route
+    /// across it, and reads the texture back as BGRA bytes.
+    /// - Returns: The whole frame, four bytes per pixel, alpha last.
     @MainActor
     private func renderFrame(device _: MTLDevice,
                              settings: ImmersiveMapSettings,

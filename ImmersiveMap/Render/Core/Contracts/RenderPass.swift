@@ -35,6 +35,8 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noLabelContent
     case noAvatarContent
     case debugOverlayDisabled
+    /// The starfield layer, which paints the space background, the stars and the
+    /// Sun, is off because space is configured transparent.
     case transparentSpace
 }
 

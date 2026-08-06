@@ -57,6 +57,22 @@ final class TransparentSpaceSettingsTests: XCTestCase {
         XCTAssertEqual(flat.alpha, 1.0, accuracy: 1e-9)
     }
 
+    /// The earth scene's Sun is drawn by the starfield layer, not by a pass of
+    /// its own, so transparent space must drop that layer even when the earth
+    /// scene is explicitly on. Nothing else paints outside the globe, which is
+    /// what leaves the limb as the edge of everything the map draws.
+    func testTransparentSpaceDropsTheStarfieldWithTheEarthSceneOn() {
+        let settings = ImmersiveMapSettings.default
+            .earthScene(isEnabled: true)
+            .transparentSpace()
+
+        XCTAssertTrue(settings.scene.earth.sun.isEnabled,
+                      "The Sun must be on, otherwise this test proves nothing")
+        XCTAssertFalse(StarfieldRenderSubsystem.isStarfieldEnabled(settings: settings))
+        XCTAssertTrue(StarfieldRenderSubsystem.isStarfieldEnabled(
+            settings: ImmersiveMapSettings.default.earthScene(isEnabled: true)))
+    }
+
     /// The mode is a per-frame uniform and a pass-plan flag, so switching it
     /// must not throw away tile caches or the renderer.
     func testSwitchingTheModeAppliesLive() {

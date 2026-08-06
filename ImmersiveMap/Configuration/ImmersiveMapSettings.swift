@@ -1155,6 +1155,8 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// Leaves the area outside the globe unpainted: no space background, no
+    /// stars, no Sun, and a frame that carries its own transparency.
     func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.space.isTransparent = isTransparent
