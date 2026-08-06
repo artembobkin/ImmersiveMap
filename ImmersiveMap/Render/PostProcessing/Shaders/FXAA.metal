@@ -36,9 +36,13 @@ fragment float4 fxaaFragmentShader(PostProcessingVertexOut in [[stage_in]],
                                     address::clamp_to_edge,
                                     filter::linear);
 
-    float3 center = sourceTexture.sample(sourceSampler, in.uv).rgb;
+    // Alpha is carried through instead of being forced to 1: with transparent
+    // space the frame alpha is the map's coverage mask, and the window server
+    // composites the drawable over the app's own background with it.
+    float4 centerSample = sourceTexture.sample(sourceSampler, in.uv);
+    float3 center = centerSample.rgb;
     if (uniform.isEnabled == 0) {
-        return float4(center, 1.0);
+        return centerSample;
     }
 
     float2 texel = uniform.inverseViewportSize;
@@ -65,16 +69,18 @@ fragment float4 fxaaFragmentShader(PostProcessingVertexOut in [[stage_in]],
     float inverseDirectionAdjustment = 1.0 / (min(abs(direction.x), abs(direction.y)) + directionReduce);
     direction = clamp(direction * inverseDirectionAdjustment, float2(-8.0), float2(8.0)) * texel;
 
-    float3 resultA = 0.5 * (
-        sourceTexture.sample(sourceSampler, in.uv + direction * (1.0 / 3.0 - 0.5)).rgb +
-        sourceTexture.sample(sourceSampler, in.uv + direction * (2.0 / 3.0 - 0.5)).rgb
+    // The blend runs on the full RGBA: the colors are premultiplied, so the
+    // same weights smooth the coverage mask and the color together and the
+    // globe limb keeps a matching antialiased edge in both.
+    float4 resultA = 0.5 * (
+        sourceTexture.sample(sourceSampler, in.uv + direction * (1.0 / 3.0 - 0.5)) +
+        sourceTexture.sample(sourceSampler, in.uv + direction * (2.0 / 3.0 - 0.5))
     );
-    float3 resultB = resultA * 0.5 + 0.25 * (
-        sourceTexture.sample(sourceSampler, in.uv + direction * -0.5).rgb +
-        sourceTexture.sample(sourceSampler, in.uv + direction * 0.5).rgb
+    float4 resultB = resultA * 0.5 + 0.25 * (
+        sourceTexture.sample(sourceSampler, in.uv + direction * -0.5) +
+        sourceTexture.sample(sourceSampler, in.uv + direction * 0.5)
     );
 
-    float lumaB = dot(resultB, lumaWeights);
-    float3 color = (lumaB < lumaMin || lumaB > lumaMax) ? resultA : resultB;
-    return float4(color, 1.0);
+    float lumaB = dot(resultB.rgb, lumaWeights);
+    return (lumaB < lumaMin || lumaB > lumaMax) ? resultA : resultB;
 }

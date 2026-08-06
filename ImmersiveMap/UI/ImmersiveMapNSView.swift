@@ -21,6 +21,13 @@ public class ImmersiveMapNSView: NSView {
         return layer as! CAMetalLayer
     }
 
+    /// Transparent space needs the drawable composited over whatever is behind
+    /// the map. On AppKit the backing layer alone decides it; the enclosing
+    /// window still has to be transparent for the desktop to show through.
+    func applyBackgroundTransparency(_ isTransparent: Bool) {
+        metalLayer.isOpaque = isTransparent == false
+    }
+
     /// Top-left origin, as in UIKit: shared layout math for controls, the HUD,
     /// and gesture coordinates match across platforms.
     public override var isFlipped: Bool { true }

@@ -10,7 +10,8 @@ final class RenderLayerPlannerTests: XCTestCase {
             availability: RenderPassAvailability(renderSurfaceMode: .flat,
                                                  labelsEnabled: true,
                                                  avatarsEnabled: true,
-                                                 debugOverlayEnabled: true)
+                                                 debugOverlayEnabled: true,
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -33,7 +34,8 @@ final class RenderLayerPlannerTests: XCTestCase {
             availability: RenderPassAvailability(renderSurfaceMode: .flat,
                                                  labelsEnabled: false,
                                                  avatarsEnabled: false,
-                                                 debugOverlayEnabled: false)
+                                                 debugOverlayEnabled: false,
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -55,7 +57,8 @@ final class RenderLayerPlannerTests: XCTestCase {
             availability: RenderPassAvailability(renderSurfaceMode: .spherical,
                                                  labelsEnabled: true,
                                                  avatarsEnabled: true,
-                                                 debugOverlayEnabled: true)
+                                                 debugOverlayEnabled: true,
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -77,7 +80,8 @@ final class RenderLayerPlannerTests: XCTestCase {
             availability: RenderPassAvailability(renderSurfaceMode: .spherical,
                                                  labelsEnabled: false,
                                                  avatarsEnabled: false,
-                                                 debugOverlayEnabled: false)
+                                                 debugOverlayEnabled: false,
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -94,6 +98,29 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
+    }
+
+    /// Transparent space keeps the starfield in the plan but disabled: nothing
+    /// outside the globe is painted, and the skip is reported as such.
+    func testTransparentSpaceDisablesTheStarfieldLayer() {
+        let plan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .spherical,
+                                                 labelsEnabled: true,
+                                                 avatarsEnabled: true,
+                                                 debugOverlayEnabled: true,
+                                                 starfieldEnabled: false)
+        )
+
+        XCTAssertEqual(enabledLayers(in: plan), [
+            .globeSurface,
+            .globeCap,
+            .sceneModels,
+            .routes,
+            .labels,
+            .avatars,
+            .debugOverlay
+        ])
+        XCTAssertEqual(skipReason(for: .starfield, in: plan), .transparentSpace)
     }
 
     private func enabledLayers(in plan: [RenderLayerPlanItem]) -> [RenderLayer] {

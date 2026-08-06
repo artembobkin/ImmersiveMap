@@ -25,6 +25,15 @@ public class ImmersiveMapUIView: UIView {
         return layer as! CAMetalLayer
     }
 
+    /// Transparent space needs the drawable composited over whatever is behind
+    /// the map: UIKit must stop treating the view as fully covering its frame,
+    /// otherwise the alpha the frame carries is ignored.
+    func applyBackgroundTransparency(_ isTransparent: Bool) {
+        isOpaque = isTransparent == false
+        backgroundColor = isTransparent ? .clear : nil
+        metalLayer.isOpaque = isTransparent == false
+    }
+
     // MARK: - Controllers
 
     var runtimeGraph: ImmersiveMapRuntimeGraph { hostRuntime.runtimeGraph }
