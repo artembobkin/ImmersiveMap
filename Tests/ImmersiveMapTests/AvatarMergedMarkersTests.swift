@@ -25,11 +25,11 @@ final class AvatarMergedMarkersTests: XCTestCase {
         let markerIDs = Set(snapshot.markers.map(\.id))
         XCTAssertEqual(markerIDs, [mergedID, 3])
         XCTAssertTrue(Set(snapshot.removedIds).isSuperset(of: [1, 2]),
-                      "Участники группы должны уйти с карты")
+                      "Members of a group must leave the map")
 
         let merged = try XCTUnwrap(snapshot.markers.first { $0.id == mergedID })
         XCTAssertEqual(merged.countBadge?.count, 2)
-        XCTAssertTrue(merged.image === imageA, "Цикл начинается с картинки первого участника")
+        XCTAssertTrue(merged.image === imageA, "The cycle starts with the first member's image")
         XCTAssertEqual(merged.coordinate.latitude, 11.0, accuracy: 0.05)
         XCTAssertEqual(merged.coordinate.longitude, 21.0, accuracy: 0.05)
     }
@@ -59,12 +59,12 @@ final class AvatarMergedMarkersTests: XCTestCase {
         controller.advanceMergedImageCycle(mergedID: mergedID)
         var snapshot = try XCTUnwrap(controller.consumeSnapshot())
         var merged = try XCTUnwrap(snapshot.markers.first { $0.id == mergedID })
-        XCTAssertTrue(merged.image === imageB, "Первый шаг цикла показывает второго участника")
+        XCTAssertTrue(merged.image === imageB, "The first step of the cycle shows the second member")
 
         controller.advanceMergedImageCycle(mergedID: mergedID)
         snapshot = try XCTUnwrap(controller.consumeSnapshot())
         merged = try XCTUnwrap(snapshot.markers.first { $0.id == mergedID })
-        XCTAssertTrue(merged.image === imageA, "Цикл возвращается к первому участнику")
+        XCTAssertTrue(merged.image === imageA, "The cycle comes back to the first member")
     }
 
     func testImageCycleTimerAdvancesAutomatically() throws {
@@ -76,7 +76,7 @@ final class AvatarMergedMarkersTests: XCTestCase {
         controller.merge(ids: [1, 2], mergedID: mergedID, imageCycleInterval: 0.05)
         _ = controller.consumeSnapshot()
 
-        let cycled = expectation(description: "Таймер цикла сменил картинку merged-маркера")
+        let cycled = expectation(description: "The cycle timer changed the merged marker's image")
         cycled.assertForOverFulfill = false
         controller.setChangeHandler({
             cycled.fulfill()
@@ -123,7 +123,7 @@ final class AvatarMergedMarkersTests: XCTestCase {
 
         controller.remove(id: 1)
         snapshot = try XCTUnwrap(controller.consumeSnapshot())
-        XCTAssertTrue(snapshot.markers.isEmpty, "Опустевшая группа распускается")
+        XCTAssertTrue(snapshot.markers.isEmpty, "A group left empty is dissolved")
         XCTAssertNil(controller.mergedMemberIDs(mergedID: mergedID))
         _ = merged
     }
@@ -146,7 +146,7 @@ final class AvatarMergedMarkersTests: XCTestCase {
         ])
 
         XCTAssertEqual(abs(average.longitude), 180.0, accuracy: 0.01,
-                       "Среднее через антимеридиан не должно схлопываться к нулевой долготе")
+                       "An average across the antimeridian must not collapse to zero longitude")
         XCTAssertEqual(average.latitude, 0.0, accuracy: 0.01)
     }
 
@@ -159,7 +159,7 @@ final class AvatarMergedMarkersTests: XCTestCase {
         controller.merge(ids: [1, 3], mergedID: 200)
 
         XCTAssertEqual(controller.mergedMemberIDs(mergedID: 200), [3],
-                       "Участник чужой группы не переходит в новую группу")
+                       "A member of another group does not move into the new one")
         XCTAssertEqual(controller.mergedMemberIDs(mergedID: mergedID), [1, 2])
     }
 

@@ -28,7 +28,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         XCTAssertEqual(receivedEvents.first?.marker.id, markerID)
         XCTAssertEqual(receivedEvents.first?.screenPoint, avatarTapPoint)
         XCTAssertNil(environment.selectionHandler.currentMapSelection(),
-                     "Tap action без selection controller не должен создавать selection")
+                     "A tap action without a selection controller must not create a selection")
     }
 
     @MainActor
@@ -57,7 +57,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: avatarTapPoint), .consumed)
 
         XCTAssertEqual(tapEventCount, 2,
-                       "Tap event приходит на каждое нажатие, включая уже выбранный маркер")
+                       "A tap event arrives on every tap, including one on an already selected marker")
         XCTAssertEqual(selectionChangeCount, 1)
         XCTAssertEqual(environment.selectionHandler.currentMapSelection(),
                        ImmersiveMapSelection(kind: .avatar, objectID: markerID))

@@ -72,8 +72,8 @@ final class AvatarSelectionProjectorConsistencyTests: XCTestCase {
             }
         }
         XCTAssertEqual(Set(projected.map(\.marker.id)), expectedVisibleIDs,
-                       "Набор видимых аватаров должен совпадать с общим проектором")
-        XCTAssertTrue(expectedVisibleIDs.contains(1), "Дубай под камерой обязан быть виден")
+                       "The set of visible avatars must match the shared projector")
+        XCTAssertTrue(expectedVisibleIDs.contains(1), "Dubai, right under the camera, must be visible")
 
         for projectedMarker in projected {
             let source = try XCTUnwrap(markers.first { $0.marker.id == projectedMarker.marker.id })

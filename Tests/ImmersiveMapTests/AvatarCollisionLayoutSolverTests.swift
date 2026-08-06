@@ -516,7 +516,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         for item in layout.markerItems where item.isFlowerPetal {
             let distance = simd_length(Self.bodyCenter(of: item) - group.center)
             XCTAssertEqual(distance, ringRadius, accuracy: 1.0,
-                           "Лепесток \(item.marker.id) выбит из слота")
+                           "Petal \(item.marker.id) was knocked out of its slot")
         }
     }
 
@@ -590,13 +590,13 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         }
 
         XCTAssertTrue(try solveOnce(distance: 41).flowerGroups.isEmpty,
-                      "41px > enterR: пара не должна группироваться")
+                      "41px > enterR: the pair must not group")
         XCTAssertEqual(try solveOnce(distance: 30).flowerGroups.count, 1,
-                       "30px <= enterR: пара группируется в цветок")
+                       "30px <= enterR: the pair groups into a flower")
         XCTAssertEqual(try solveOnce(distance: 41).flowerGroups.count, 1,
-                       "41px <= exitR: цветок держится (гистерезис)")
+                       "41px <= exitR: the flower holds (hysteresis)")
         XCTAssertTrue(try solveOnce(distance: 60).flowerGroups.isEmpty,
-                      "60px > exitR: цветок распадается")
+                      "60px > exitR: the flower falls apart")
     }
 
     func testSelectedMarkerJoinsFlowerAsVisiblePetal() throws {
@@ -769,14 +769,14 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                 config: config)
 
         let compactnessLimit = Self.geometry.markerSizePx * AvatarCollisionMath.flowerCompactnessLimitScale
-        XCTAssertGreaterThan(layout.flowerGroups.count, 1, "Переросток не разрезан")
+        XCTAssertGreaterThan(layout.flowerGroups.count, 1, "The oversized group was not split")
         var coveredMembers = 0
         for group in layout.flowerGroups {
             coveredMembers += group.memberIDs.count
             for memberID in group.memberIDs {
                 let anchor = SIMD2<Float>(400.0 + Float(memberID - 1) * 30.0, 300.0)
                 XCTAssertLessThan(simd_length(anchor - group.center), compactnessLimit,
-                                  "Якорь участника \(memberID) далеко от кольца своего кластера")
+                                  "The anchor of member \(memberID) is far from its cluster's ring")
             }
         }
         XCTAssertEqual(coveredMembers, 17)
@@ -808,7 +808,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
         XCTAssertNoThrow(try {
             let still = try flowerCompositions(panOffset: .zero)
             let panned = try flowerCompositions(panOffset: SIMD2(37.0, 53.0))
-            XCTAssertEqual(still, panned, "Пан пересобрал составы кластеров")
+            XCTAssertEqual(still, panned, "Panning rebuilt the cluster memberships")
         }())
     }
 
@@ -832,7 +832,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                 markers: markers,
                                                 config: config)
 
-        XCTAssertEqual(layout.flowerGroups.count, 2, "Кластеры слились, хотя лимит компактности должен запрещать")
+        XCTAssertEqual(layout.flowerGroups.count, 2, "The clusters merged although the compactness limit forbids it")
         let small = try XCTUnwrap(layout.flowerGroups.first { $0.memberIDs.count == 5 })
         let large = try XCTUnwrap(layout.flowerGroups.first { $0.memberIDs.count == 9 })
         // The large one stands on the centroid of its anchors; the small one yielded.
@@ -865,7 +865,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                                                 markers: markers,
                                                 config: config)
 
-        XCTAssertGreaterThan(layout.flowerGroups.count, 3, "Плотное поле должно дать мозаику кластеров")
+        XCTAssertGreaterThan(layout.flowerGroups.count, 3, "A dense field must produce a mosaic of clusters")
         try Self.assertNoBodyOverlaps(layout: layout, config: config, tolerance: 1.5)
     }
 
@@ -935,7 +935,7 @@ final class AvatarCollisionLayoutSolverTests: XCTestCase {
                 let distance = simd_length(bodyCenter(of: lhs) - bodyCenter(of: rhs))
                 XCTAssertGreaterThanOrEqual(distance,
                                             bodyRadius(of: lhs) + bodyRadius(of: rhs) - tolerance,
-                                            "Тела маркеров \(lhs.marker.id) и \(rhs.marker.id) пересекаются",
+                                            "The bodies of markers \(lhs.marker.id) and \(rhs.marker.id) overlap",
                                             file: file,
                                             line: line)
             }

@@ -73,7 +73,7 @@ final class PresentationStateResolverTests: XCTestCase {
         }
 
         XCTAssertEqual(transitions, transitions.sorted())
-        XCTAssertEqual(Set(transitions).count, transitions.count, "Ступени перехода не должны слипаться")
+        XCTAssertEqual(Set(transitions).count, transitions.count, "The transition steps must not collapse into each other")
     }
 
     /// The morph geometry finishes unfurling by 90% of the phase: for the final tenth

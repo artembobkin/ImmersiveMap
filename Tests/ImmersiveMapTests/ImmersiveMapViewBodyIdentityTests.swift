@@ -26,7 +26,7 @@ final class ImmersiveMapViewBodyIdentityTests: XCTestCase {
         XCTAssertEqual(enabledType, disabledType)
         XCTAssertEqual(enabledType, plainType)
         XCTAssertFalse(enabledType.contains("_ConditionalContent"),
-                       "Ветвление по типу на верхнем уровне body ломает identity host view")
+                       "Branching on type at the top level of body breaks the host view's identity")
     }
 
     func testBodyTypeDoesNotDependOnSceneModelsModifier() {
@@ -37,6 +37,6 @@ final class ImmersiveMapViewBodyIdentityTests: XCTestCase {
 
         XCTAssertEqual(withModelsType, plainType)
         XCTAssertFalse(withModelsType.contains("_ConditionalContent"),
-                       "Ветвление по типу на верхнем уровне body ломает identity host view")
+                       "Branching on type at the top level of body breaks the host view's identity")
     }
 }

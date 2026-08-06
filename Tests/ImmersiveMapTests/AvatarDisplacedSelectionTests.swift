@@ -21,7 +21,7 @@ final class AvatarDisplacedSelectionTests: XCTestCase {
 
         XCTAssertEqual(snapshot.hitTest(point: CGPoint(x: 500, y: 340)), .marker(1))
         XCTAssertNil(snapshot.hitTest(point: CGPoint(x: 400, y: 340)),
-                     "Истинный якорь после смещения пуст: тап туда не должен попадать в маркер")
+                     "The true anchor is empty once the marker is displaced: a tap there must not hit it")
     }
 
     func testHitRectShrinksWithDisplayScale() throws {
@@ -41,7 +41,7 @@ final class AvatarDisplacedSelectionTests: XCTestCase {
         let probe = CGPoint(x: 440, y: 320)
         XCTAssertEqual(fullSnapshot.hitTest(point: probe), .marker(1))
         XCTAssertNil(compressedSnapshot.hitTest(point: probe),
-                     "Сжатый маркер занимает меньше места: широкая хит-зона должна сжаться")
+                     "A shrunk marker takes less room, so its hit area must shrink with it")
     }
 
     // MARK: - Helpers

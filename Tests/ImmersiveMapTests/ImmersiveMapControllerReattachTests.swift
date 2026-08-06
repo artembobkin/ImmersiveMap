@@ -33,10 +33,10 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         camera.jump(to: ImmersiveMapCameraPosition(latitudeDegrees: 35.6595,
                                                    longitudeDegrees: 139.7005,
                                                    zoom: 4))
-        XCTAssertEqual(newHandled, 1, "Команда должна дойти до нового владельца")
+        XCTAssertEqual(newHandled, 1, "The command must reach the new owner")
         XCTAssertEqual(oldHandled, 0)
         XCTAssertNotNil(camera.currentCameraPosition(),
-                        "Демонтаж устаревшего view не должен стирать кэш позиции")
+                        "Dismantling a stale view must not clear the cached position")
     }
 
     func testOwnedCameraDetachClearsHandlerAndQueuesCommandsForReplay() {
@@ -50,11 +50,11 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
                                                    longitudeDegrees: 2,
                                                    zoom: 3))
         XCTAssertEqual(handledBeforeDetach, 0,
-                       "После отвязки владельцем команды копятся, а не исполняются")
+                       "Once detached from its owner, commands queue up instead of running")
 
         var replayed = 0
         camera.attachRuntime(owner: owner) { _ in replayed += 1 }
-        XCTAssertEqual(replayed, 1, "Повторная привязка реиграет накопленные команды")
+        XCTAssertEqual(replayed, 1, "Reattaching replays the queued commands")
     }
 
     // MARK: - Avatars
@@ -73,7 +73,7 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         avatars.add(AvatarMarker(id: 1,
                                  coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                  image: try Self.makeTestImage()))
-        XCTAssertGreaterThan(newFired, 0, "Изменения должны доходить до нового владельца")
+        XCTAssertGreaterThan(newFired, 0, "Changes must reach the new owner")
         XCTAssertEqual(oldFired, 0)
     }
 
@@ -99,7 +99,7 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         let newOwner = Owner()
         var newReceived = 0
         selection.attachHandler(owner: oldOwner) { _ in
-            XCTFail("Команда не должна попадать к устаревшему владельцу")
+            XCTFail("A command must not reach a stale owner")
             return false
         }
         selection.attachHandler(owner: newOwner) { _ in
@@ -113,7 +113,7 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         XCTAssertTrue(selection.select(ImmersiveMapSelection(kind: .avatar, objectID: 7)))
         XCTAssertEqual(newReceived, 1)
         XCTAssertNotNil(selection.currentSelection(),
-                        "Демонтаж устаревшего view не должен стирать кэш выделения")
+                        "Dismantling a stale view must not clear the cached selection")
     }
 
     func testOwnedSelectionDetachClearsHandlerAndSelection() {

@@ -60,7 +60,7 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
         let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
 
         XCTAssertNil(applySource.range(of: "AtlasResource"),
-                     "apply/clear не должны трогать ленивые атласы")
+                     "apply and clear must not touch the lazy atlases")
     }
 
     func testFrameRebuildGuardsEmptySceneBeforeAtlasAccess() throws {

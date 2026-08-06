@@ -24,7 +24,7 @@ final class VisibleTilesPreprocessorLatitudeLodTests: XCTestCase {
 
         XCTAssertFalse(output.isEmpty)
         XCTAssertTrue(output.allSatisfy { $0.z == 2 },
-                      "Ожидались родители z2, получено: \(output.map(\.z))")
+                      "Expected z2 parents, got: \(output.map(\.z))")
     }
 
     func testGlobeEquatorRowStaysExactOnSphere() {
@@ -76,7 +76,7 @@ final class VisibleTilesPreprocessorLatitudeLodTests: XCTestCase {
 
         for (index, lhs) in output.enumerated() {
             for rhs in output[(index + 1)...] {
-                XCTAssertFalse(tilesOverlap(lhs, rhs), "Пересечение: \(lhs) и \(rhs)")
+                XCTAssertFalse(tilesOverlap(lhs, rhs), "Overlap: \(lhs) and \(rhs)")
             }
         }
     }

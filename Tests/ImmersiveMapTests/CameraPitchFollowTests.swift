@@ -35,7 +35,7 @@ final class CameraPitchFollowTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(didFinish, "follow должен завершиться, а не крутиться вечно")
+        XCTAssertTrue(didFinish, "follow must finish instead of spinning forever")
         XCTAssertFalse(follow.active)
         XCTAssertEqual(pitch, 1.0, accuracy: 0.001)
     }
@@ -83,7 +83,7 @@ final class CameraPitchFollowTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(becameInactive, "follow должен остановиться при упоре в потолок")
+        XCTAssertTrue(becameInactive, "follow must stop once it runs into the ceiling")
         XCTAssertFalse(follow.active)
     }
 

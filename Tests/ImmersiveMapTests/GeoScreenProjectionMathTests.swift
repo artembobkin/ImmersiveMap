@@ -102,7 +102,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
             }
         }
         XCTAssertTrue(foundInvisible,
-                      "Ожидалась хотя бы одна точка позади камеры с clip.w <= 0")
+                      "Expected at least one point behind the camera with clip.w <= 0")
     }
 
     // MARK: - Globe
@@ -154,7 +154,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
             }
         }
         XCTAssertTrue(foundPartialAlpha,
-                      "Ожидалась долгота с частичной alpha в полосе горизонта")
+                      "Expected a longitude with partial alpha inside the horizon band")
     }
 
     /// Mid-morph, a point must ride the unfurl wave (transitionLocalPhase)
@@ -183,7 +183,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
         let localPhase = simd_clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0)
         XCTAssertGreaterThan(abs(localPhase - transition), 1e-3,
-                             "Для точки вдали от центра волна должна отличаться от равномерного лерпа")
+                             "Far from the centre the wave must differ from a uniform lerp")
 
         let waveWorld = sphere + (flat - sphere) * localPhase
         let expected = try XCTUnwrap(screenPoint(worldPosition: waveWorld,
@@ -196,7 +196,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
                                                         constants: environment.constants))
         let distanceToUniform = simd_length(point.position - uniformExpected)
         XCTAssertGreaterThan(distanceToUniform, 1.0,
-                             "Равномерный лерп должен давать заметно другую экранную точку")
+                             "A uniform lerp must land on a noticeably different screen point")
     }
 
     /// Regression of a screenshot artifact: mid-morph (medium zoom), a marker
@@ -217,7 +217,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
             constants: environment.constants)
 
         XCTAssertEqual(point.visible, 0,
-                       "Точка на ещё сферической обратной стороне обязана скрываться")
+                       "A point on the still spherical far side must be hidden")
         XCTAssertEqual(point.visibilityAlpha, 0.0)
     }
 
