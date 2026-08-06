@@ -42,7 +42,9 @@ final class StarfieldRenderer {
     }
 
     private let pipeline: StarfieldPipeline
-    private let verticesBuffer: MTLBuffer
+    /// Nil when the model is empty (`starCount == 0`) or the buffer allocation failed:
+    /// the star pass is then skipped, the sky and the Sun still draw.
+    private let verticesBuffer: MTLBuffer?
     private let verticesCount: Int
     private let config: ImmersiveMapSettings.StarfieldSettings
     private let backgroundParams: BackgroundParams
@@ -67,9 +69,14 @@ final class StarfieldRenderer {
                        twinklePhase: star.twinklePhase,
                        halo: star.halo)
         }
-        verticesCount = stars.count
-        verticesBuffer = metalDevice.makeBuffer(bytes: stars,
-                                                length: MemoryLayout<StarVertex>.stride * stars.count)!
+        // makeBuffer(bytes:length:) returns nil for a zero length, so an empty
+        // starfield must not reach the allocation at all.
+        let buffer = stars.isEmpty
+            ? nil
+            : metalDevice.makeBuffer(bytes: stars,
+                                     length: MemoryLayout<StarVertex>.stride * stars.count)
+        verticesBuffer = buffer
+        verticesCount = buffer == nil ? 0 : stars.count
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -114,13 +121,15 @@ final class StarfieldRenderer {
                                        index: 2)
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
 
-        pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
-        renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
-        renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
-        renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
-        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
+        if let verticesBuffer, verticesCount > 0 {
+            pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
+            renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
+            renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
+            renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
+            renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
+            renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
+            renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
+        }
 
         var sunState = EarthSceneSunVisualState.make(earthScene: earthScene,
                                                      globe: globe,
