@@ -36,7 +36,7 @@ final class CameraBearingFollowTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(didFinish, "follow должен завершиться, а не крутиться вечно")
+        XCTAssertTrue(didFinish, "follow must finish instead of spinning forever")
         XCTAssertFalse(follow.active)
         XCTAssertEqual(bearing, radians(90), accuracy: 0.001)
     }
@@ -64,7 +64,7 @@ final class CameraBearingFollowTests: XCTestCase {
         }
 
         XCTAssertTrue(didFinish)
-        XCTAssertGreaterThan(maximumBearing, start, "должен был пройти вверх через 180°")
+        XCTAssertGreaterThan(maximumBearing, start, "it had to pass upwards through 180 degrees")
         XCTAssertEqual(CameraBearingFollowMath.shortestDelta(current: bearing, target: target),
                        0,
                        accuracy: 0.001)
@@ -108,7 +108,7 @@ final class CameraBearingFollowTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(becameInactive, "follow должен остановиться при упоре в предел")
+        XCTAssertTrue(becameInactive, "follow must stop once it runs into the limit")
         XCTAssertFalse(follow.active)
     }
 

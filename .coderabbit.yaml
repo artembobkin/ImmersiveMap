@@ -68,8 +68,11 @@ reviews:
         drives disk cache identity. Flag any change to provider configuration
         that does not change the fingerprint.
 
-        Many files carry Russian language doc comments. That is intentional:
-        match the surrounding file rather than asking for translation.
+        Everything written for a reader is in English: doc comments, inline
+        comments, assertion messages, fatalError and log text. Flag any new
+        Cyrillic outside data, meaning localized map strings ("ru" name entries,
+        style keywords matched against tile properties) and test fixtures that
+        exist to exercise non-ASCII text.
 
         Never use an em dash in code, comments or documentation.
 

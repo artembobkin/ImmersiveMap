@@ -738,9 +738,9 @@ extension TileMvtParser {
     /// a footprint below `envelopeClampSignificanceRatio` of the envelope can
     /// neither veto nor stand in for removed walls.
     private static let envelopeClampSignificanceRatio: Float = 0.02
-    /// Максимальный вертикальный зазор между частями цепочки, в долях высоты
-    /// конверта: сглаживает квантование высот в данных, не позволяя цепочке
-    /// перепрыгивать настоящие пустоты.
+    /// Largest vertical gap allowed between parts of the chain, as a fraction of
+    /// the envelope height: it smooths over height quantization in the data
+    /// without letting the chain jump across a real void.
     private static let envelopeClampChainGapRatio: Float = 0.05
 
     private func clampEnvelopeBuildingExtrusions(

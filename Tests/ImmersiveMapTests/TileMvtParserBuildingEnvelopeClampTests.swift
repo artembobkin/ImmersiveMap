@@ -4,12 +4,13 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Проверяет `clampEnvelopeBuildingExtrusions`: наружный контур parts-моделируемого
-/// здания (хал) срезается по цепочке перекрывающихся по высоте значимых частей,
-/// а реальное здание с декором крыши остаётся полной высоты. Кейсы из центра
-/// Москвы: квартал Four Seasons (плиты крыши целиком выше контура: вето),
-/// Спасская башня и собор Василия Блаженного (части заканчиваются на вершине
-/// контура: кламп по цепочке), уличный козырёк (разрыв цепочки, не тянет вниз).
+/// Covers `clampEnvelopeBuildingExtrusions`: the outer envelope (hull) of a
+/// building modelled as parts is clamped down the chain of significant parts
+/// that overlap in height, while a real building with roof decoration keeps its
+/// full height. The cases come from central Moscow: the Four Seasons block (roof
+/// slabs entirely above the envelope top: veto), the Spasskaya Tower and Saint
+/// Basil's Cathedral (parts ending at the envelope top: clamped down the chain),
+/// and a street canopy (a break in the chain, which must not drag the top down).
 final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
@@ -59,8 +60,8 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
                                         topHeight: 60)]
-        // Четыре части-квадранта доходят до вершины контура (хал): цепочка
-        // спускается до их базы.
+        // Four quadrant parts reach the top of the envelope (the hull), so the
+        // chain walks down to their base.
         for (index, origin) in [SIMD2<Float>(0, 0), SIMD2(50, 0), SIMD2(0, 50), SIMD2(50, 50)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
                                             exterior: square(x: origin.x, y: origin.y, size: 50),
@@ -79,15 +80,16 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
                                         topHeight: 60)]
-        // Значимые части крыши образуют цепочку у вершины...
+        // Significant roof parts form a chain near the top...
         for (index, origin) in [SIMD2<Float>(0, 0), SIMD2(50, 0), SIMD2(0, 50), SIMD2(50, 50)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
                                             exterior: square(x: origin.x, y: origin.y, size: 40),
                                             baseHeight: 50,
                                             topHeight: 58))
         }
-        // ...а значимый уличный козырёк висит с разрывом по высоте: до фикса
-        // именно он задавал уровень среза, оставляя 2-метровый цоколь.
+        // ...while a significant street canopy hangs with a gap in height below
+        // them: before the fix it was the one setting the clamp level, leaving a
+        // two-metre stump.
         candidates.append(makeCandidate(buildingId: 20,
                                         exterior: square(x: 30, y: 30, size: 30),
                                         baseHeight: 4,
@@ -104,16 +106,17 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
                                         topHeight: 60)]
-        // Реальное здание: значимые плиты/фонари крыши целиком НАД вершиной
-        // контура (кейс Four Seasons). Кламп запрещён, иначе тело здания
-        // исчезло бы, а декор повис в воздухе.
+        // A real building: significant roof slabs and lanterns sit entirely
+        // ABOVE the envelope top (the Four Seasons case). Clamping is vetoed,
+        // otherwise the body of the building would vanish and its decoration
+        // would hang in the air.
         for (index, origin) in [SIMD2<Float>(0, 0), SIMD2(50, 0), SIMD2(0, 50), SIMD2(50, 50)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
                                             exterior: square(x: origin.x, y: origin.y, size: 40),
                                             baseHeight: 62,
                                             topHeight: 66))
         }
-        // Даже при наличии низких значимых частей внутри контура.
+        // The veto holds even with low significant parts inside the envelope.
         candidates.append(makeCandidate(buildingId: 20,
                                         exterior: square(x: 10, y: 10, size: 40),
                                         baseHeight: 8,
@@ -130,8 +133,8 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
                                         topHeight: 60)]
-        // Четыре крошечные надстройки (трубы, слуховые окна): суммарно ~1%
-        // следа, не считаются ни свидетелями, ни вето.
+        // Four tiny structures (chimneys, dormers): about 1% of the footprint in
+        // total, so they count neither as witnesses nor as a veto.
         for (index, origin) in [SIMD2<Float>(10, 10), SIMD2(80, 10), SIMD2(10, 80), SIMD2(80, 80)].enumerated() {
             candidates.append(makeCandidate(buildingId: UInt64(10 + index),
                                             exterior: square(x: origin.x, y: origin.y, size: 5),

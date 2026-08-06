@@ -29,7 +29,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
 
             XCTAssertEqual(output.count, 1, "distance \(testCase.distance)")
             XCTAssertEqual(output.first?.z, testCase.expectedZoom,
-                           "distance \(testCase.distance): ожидался z\(testCase.expectedZoom), получен z\(String(describing: output.first?.z))")
+                           "distance \(testCase.distance): expected z\(testCase.expectedZoom), got z\(String(describing: output.first?.z))")
         }
     }
 
@@ -52,7 +52,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
 
             XCTAssertEqual(output.count, 1, "distance \(testCase.distance)")
             XCTAssertEqual(output.first?.z, testCase.expectedZoom,
-                           "distance \(testCase.distance): ожидался z\(testCase.expectedZoom), получен z\(String(describing: output.first?.z))")
+                           "distance \(testCase.distance): expected z\(testCase.expectedZoom), got z\(String(describing: output.first?.z))")
         }
     }
 
@@ -62,10 +62,10 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
     /// on top of the near coverage.
     func testFlatFarRingIsHandedToBackdrop() {
         let cases: [(x: Int, expectedZooms: [Int], note: String)] = [
-            (8, [5], "внутри порога работает лесенка (z-4 на дистанции 8)"),
-            (10, [5], "дистанция 10 ещё на лесенке"),
-            (11, [], "за порогом 10 тайл отдан подложке"),
-            (20, [], "глубокая даль отдана подложке")
+            (8, [5], "inside the threshold the staircase applies (z-4 at distance 8)"),
+            (10, [5], "distance 10 is still on the staircase"),
+            (11, [], "past the threshold of 10 the tile is left to the backdrop"),
+            (20, [], "the deep distance is left to the backdrop")
         ]
 
         for testCase in cases {
@@ -104,7 +104,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
                                              transition: 1)
 
         XCTAssertEqual(Set(output), Set(nearBlock),
-                       "Ожидалось только ближнее точное покрытие, получено: \(output.map { "z\($0.z)/\($0.x)/\($0.y)" })")
+                       "Expected only the near exact coverage, got: \(output.map { "z\($0.z)/\($0.x)/\($0.y)" })")
     }
 
     /// Without a backdrop the ring must not be dropped: at target zooms no
@@ -119,7 +119,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
                                              transition: 1)
 
         XCTAssertEqual(output, [VisibleTile(x: 0, y: 0, z: 0, loop: 1)],
-                       "Дальний тайл врапнутой копии обязан остаться покрытием (лесенка до z0)")
+                       "A far tile of the wrapped copy must stay coverage (the staircase goes down to z0)")
     }
 
     func testTilesBeyondMaxVisibleDistanceAreDropped() {
@@ -151,8 +151,8 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
 
         XCTAssertFalse(output.isEmpty)
         XCTAssertLessThanOrEqual(output.count, 6,
-                                 "Дальняя полоса должна схлопнуться в несколько грубых тайлов, получено \(output.count)")
+                                 "The far band must collapse into a few coarse tiles, got \(output.count)")
         XCTAssertTrue(output.allSatisfy { $0.z <= 3 },
-                      "Ожидались только грубые родители, получено: \(output.map(\.z))")
+                      "Expected only coarse parents, got: \(output.map(\.z))")
     }
 }

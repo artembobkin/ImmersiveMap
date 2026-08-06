@@ -22,7 +22,7 @@ final class TileCullingBackdropTests: XCTestCase {
 
         XCTAssertFalse(content.backdropTiles.isEmpty)
         XCTAssertTrue(content.backdropTiles.allSatisfy { $0.z == TileCulling.flatBackdropZoomLevel },
-                      "Подложка обязана жить на фиксированном зуме, получено: \(content.backdropTiles.map(\.z))")
+                      "The backdrop must live at a fixed zoom, got: \(content.backdropTiles.map(\.z))")
         XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z == 9 })
     }
 

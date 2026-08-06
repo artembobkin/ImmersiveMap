@@ -20,9 +20,9 @@ final class MemoryMetalTileCacheTests: XCTestCase {
         }
 
         XCTAssertNotNil(cache.getTile(forKey: pinnedTile),
-                        "Pinned z3 тайл не должен вытесняться обычным давлением")
+                        "A pinned z3 tile must not be evicted by ordinary pressure")
         XCTAssertNil(cache.getTile(forKey: highZoomTiles[0]),
-                     "Старые обычные тайлы должны вытесняться при лимите 1 байт")
+                     "Old ordinary tiles must be evicted under a one-byte limit")
     }
 
     func testMemoryWarningDropsHiddenPinnedTile() throws {

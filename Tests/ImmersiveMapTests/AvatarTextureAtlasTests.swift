@@ -48,9 +48,9 @@ final class AvatarTextureAtlasTests: XCTestCase {
         }
         // The fifth image evicts image zero (last used in frame 1).
         XCTAssertNotNil(atlas.uploadImage(images[4]))
-        XCTAssertNil(atlas.slot(for: images[0]), "вытеснена")
+        XCTAssertNil(atlas.slot(for: images[0]), "evicted")
         for index in 1..<5 {
-            XCTAssertNotNil(atlas.slot(for: images[index]), "image \(index) на месте")
+            XCTAssertNotNil(atlas.slot(for: images[index]), "image \(index) is still there")
         }
     }
 
@@ -65,7 +65,7 @@ final class AvatarTextureAtlasTests: XCTestCase {
             _ = atlas.slot(for: images[index])
         }
         XCTAssertNil(atlas.uploadImage(images[4]),
-                     "все слоты использованы в текущем кадре - вытеснять нечего")
+                     "every slot is used by the current frame, so there is nothing to evict")
         for index in 0..<4 {
             XCTAssertNotNil(atlas.slot(for: images[index]))
         }

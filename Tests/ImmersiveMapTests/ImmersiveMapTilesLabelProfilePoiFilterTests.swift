@@ -12,7 +12,7 @@ final class ImmersiveMapTilesLabelProfilePoiFilterTests: XCTestCase {
     func testNoisePoiClassesAreExcluded() {
         for noiseClass in ["bicycle_parking", "waste_basket", "gate", "entrance", "bench"] {
             XCTAssertFalse(includesPoi(className: noiseClass, rank: 1),
-                           "Класс \(noiseClass) не должен становиться подписью")
+                           "Class \(noiseClass) must not become a label")
         }
     }
 

@@ -51,7 +51,7 @@ final class FlatVisibleTileResolverTests: XCTestCase {
                                                                 renderSurfaceMode: .flat,
                                                                 transition: 1))
             XCTAssertEqual(resolvedCoverage, referenceCoverage,
-                           "Расхождение на итерации \(iteration): z\(targetZoom) pitch \(pitch) bearing \(bearing) pan \(pan)")
+                           "Mismatch at iteration \(iteration): z\(targetZoom) pitch \(pitch) bearing \(bearing) pan \(pan)")
         }
     }
 

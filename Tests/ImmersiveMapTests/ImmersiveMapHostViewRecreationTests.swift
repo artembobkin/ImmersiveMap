@@ -33,14 +33,14 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
         oldView.dismantle()
 
         XCTAssertNotNil(camera.currentCameraPosition(),
-                        "Демонтаж старого view не должен стирать кэш позиции камеры")
+                        "Dismantling the old view must not clear the cached camera position")
 
         var completed: Bool?
         camera.fly(to: tokyo, options: CameraFlightOptions(duration: 0.2)) { success in
             completed = success
         }
         XCTAssertTrue(newView.hasActiveCameraFlightForTesting,
-                      "fly должен дойти до нового host view")
+                      "fly must reach the new host view")
 
         newView.advanceCameraFlightForTesting(currentTime: CACurrentMediaTime() + 1.0)
         XCTAssertEqual(completed, true)
@@ -74,7 +74,7 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
                     cameraPosition: overview)
 
         XCTAssertEqual(firstCompleted, false,
-                       "Пересоздание рендерера должно завершить перелёт, а не подвесить его")
+                       "Recreating the renderer must finish the flight, not leave it hanging")
         XCTAssertFalse(view.hasActiveCameraFlightForTesting)
 
         var secondCompleted: Bool?
@@ -82,7 +82,7 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
             secondCompleted = success
         }
         XCTAssertTrue(view.hasActiveCameraFlightForTesting,
-                      "После пересоздания рендерера перелёты должны работать")
+                      "Flights must still work after the renderer is recreated")
         view.advanceCameraFlightForTesting(currentTime: CACurrentMediaTime() + 1.0)
         XCTAssertEqual(secondCompleted, true)
     }

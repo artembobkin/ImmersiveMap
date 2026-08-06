@@ -15,7 +15,7 @@ enum RendererSetup {
         layer.device = sharedResources.device
         layer.pixelFormat = sharedResources.colorPixelFormat
         guard let queue = sharedResources.device.makeCommandQueue() else {
-            fatalError("Не удалось создать command queue")
+            fatalError("Could not create the command queue")
         }
         return RenderMetalContext(device: sharedResources.device,
                                   commandQueue: queue,
@@ -34,7 +34,7 @@ enum RendererSetup {
             if let fallback = metalDevice.makeDefaultLibrary() {
                 return fallback
             }
-            fatalError("Не удалось создать MTLLibrary: \(error)")
+            fatalError("Could not create the MTLLibrary: \(error)")
         }
     }
 

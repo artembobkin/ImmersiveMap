@@ -49,7 +49,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
         let inputAfter = environment.runtime.currentMarkerProjectionInput
         XCTAssertEqual(inputAfter.entries.count, 1)
         XCTAssertEqual(inputAfter.entries[0].id, secondInternalID,
-                       "Внутренний id живущего маркера не должен меняться при диффе")
+                       "The internal id of a surviving marker must not change across a diff")
     }
 
     func testReorderFollowsCollectionOrder() throws {
@@ -87,7 +87,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
 
         let container = try XCTUnwrap(environment.runtime.markerContainerViewIfLoaded)
         XCTAssertTrue(container.subviews[0].isHidden,
-                      "До первого снапшота проекции маркер не должен показываться (вспышка в (0,0))")
+                      "Before the first projection snapshot a marker must stay hidden (a flash at (0,0))")
     }
 
     func testApplyPositionsShowsViewAndAppliesAlpha() throws {
@@ -127,7 +127,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
         let container = try XCTUnwrap(environment.runtime.markerContainerViewIfLoaded)
         XCTAssertFalse(container.subviews[0].isHidden)
         XCTAssertTrue(container.subviews[1].isHidden,
-                      "Маркер за горизонтом (вне снапшота) должен прятаться")
+                      "A marker beyond the horizon (absent from the snapshot) must hide")
     }
 
     func testBottomAnchorShiftsFrameUp() throws {
@@ -146,7 +146,7 @@ final class ImmersiveMapMarkerRuntimeTests: XCTestCase {
         let markerView = container.subviews[0]
         XCTAssertEqual(markerView.frame.midX, 200, accuracy: 0.5)
         XCTAssertEqual(markerView.frame.maxY, 150, accuracy: 0.5,
-                       "С якорем .bottom нижняя середина view должна попасть в спроецированную точку")
+                       "With the .bottom anchor the view's bottom centre must land on the projected point")
     }
 
     // MARK: - Helpers

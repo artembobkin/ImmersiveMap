@@ -42,7 +42,7 @@ class PolygonsPipeline {
         do {
             pipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         } catch {
-            fatalError("Не удалось создать pipeline: \(error)")
+            fatalError("Could not create the pipeline: \(error)")
         }
     }
     

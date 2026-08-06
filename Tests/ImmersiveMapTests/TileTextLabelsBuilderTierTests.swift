@@ -42,9 +42,9 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
         let degraded = result.reduced.placementInputs[3]
         XCTAssertEqual(degraded.placementMeta.labelSizePx, minorIconPoi.iconOnlySizePx)
         let reducedGlyphIndices = Set(result.reduced.glyphRuns.flatMap { $0.localGlyphVertices }.map { Int($0.labelIndex) })
-        XCTAssertFalse(reducedGlyphIndices.contains(3), "Икон-only лейбл не должен нести текстовые вершины")
+        XCTAssertFalse(reducedGlyphIndices.contains(3), "An icon-only label must carry no text vertices")
         let reducedIconIndices = Set(result.reduced.poiIconRuns.flatMap { $0.localIconVertices }.map { Int($0.labelIndex) })
-        XCTAssertTrue(reducedIconIndices.contains(3), "Икон-only лейбл обязан нести вершины иконки")
+        XCTAssertTrue(reducedIconIndices.contains(3), "An icon-only label must carry the icon vertices")
 
         // Minimal: only anchors within the budget, no POIs or house numbers.
         XCTAssertEqual(result.minimal.placementInputs.map { $0.placementMeta.key },
@@ -70,10 +70,10 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
         XCTAssertEqual(result.reduced.placementInputs.count, 24)
         XCTAssertEqual(result.reduced.placementInputs.prefix(12).map { $0.placementMeta.key },
                        (1...12).map { UInt64($0) },
-                       "Бюджет якорей забирают первые по приоритету")
+                       "The anchor budget goes to the highest priority first")
         XCTAssertEqual(result.reduced.placementInputs.suffix(12).map { $0.placementMeta.key },
                        (21...32).map { UInt64($0) },
-                       "Бюджет POI забирают лучшие по рангу")
+                       "The POI budget goes to the best ranked first")
         XCTAssertEqual(result.minimal.placementInputs.count, 4)
     }
 

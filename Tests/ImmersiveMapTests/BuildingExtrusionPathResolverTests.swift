@@ -34,7 +34,7 @@ final class BuildingExtrusionPathResolverTests: XCTestCase {
         let style = makeStyle(mode: .solidAtHighZoom(startZoom: 17.0, endZoom: 18.0), alpha: 0.6)
 
         guard case .composited(let alpha) = BuildingExtrusionPathResolver.resolve(style: style, zoom: 17.5) else {
-            return XCTFail("Внутри перехода ожидается composited-путь")
+            return XCTFail("Inside the transition the composited path is expected")
         }
         XCTAssertEqual(alpha, 0.8, accuracy: 1e-4)
     }
