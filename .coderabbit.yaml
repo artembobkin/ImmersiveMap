@@ -7,7 +7,7 @@ tone_instructions: >-
   API stability over style. Skip praise. Never use an em dash.
 
 reviews:
-  profile: chill
+  profile: assertive
   request_changes_workflow: false
   high_level_summary: true
   review_status: true
@@ -85,8 +85,24 @@ reviews:
       instructions: >-
         XCTest suites. swift test runs natively on macOS but cannot compile
         .metal shaders, so tests that need a compiled Metal library must skip
-        themselves rather than fail. Flag timing dependent assertions, sleeps and
-        anything else likely to be flaky in CI.
+        themselves rather than fail. A test that needs an MTLDevice should
+        obtain it with MTLCreateSystemDefaultDevice and throw XCTSkip when it is
+        unavailable, not fail.
+
+        Flag timing dependent assertions, sleeps and anything else likely to be
+        flaky in CI.
+
+        Flag any test that asserts on source code as text, for example reading a
+        .swift file with String(contentsOf:) and matching substrings, or locating
+        a file by walking up from #filePath. Such a test breaks on a harmless
+        rename or reformat and still passes when the bug returns in a slightly
+        different shape, so it reports the opposite of the truth in both
+        directions. Ask for an assertion on observable behavior instead, and
+        suggest extracting a seam if the behavior is currently unreachable.
+
+        Flag assertions that merely restate the implementation, tests with no
+        assertion at all, and tests whose name promises more than the body
+        checks.
 
     - path: "Package.swift"
       instructions: >-
