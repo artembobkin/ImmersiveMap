@@ -132,6 +132,24 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertNil(occlusionItem?.skipReason)
     }
 
+    /// Labels keep drawing when no models are on screen: only the occlusion
+    /// prepass is skipped, reported as missing scene model content.
+    func testSceneModelOcclusionIsDisabledWithoutModels() {
+        let plan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .flat,
+                                                 labelsEnabled: true,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 sceneModelOcclusionEnabled: false,
+                                                 starfieldEnabled: true)
+        )
+
+        let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
+        XCTAssertEqual(occlusionItem?.enabled, false)
+        XCTAssertEqual(occlusionItem?.skipReason, .noSceneModelContent)
+        XCTAssertTrue(enabledLayers(in: plan).contains(.labels))
+    }
+
     /// The occlusion prepass must run inside the overlay pass: its depth
     /// writes land in the overlay depth attachment the labels test against.
     func testSceneModelOcclusionIsAnOverlayLayer() {
