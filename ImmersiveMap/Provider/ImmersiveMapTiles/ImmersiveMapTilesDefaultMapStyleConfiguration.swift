@@ -60,8 +60,16 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         /// deeper.
         public var poiIconlessMinimumZoom: Int
 
-        public init(poiIconlessMinimumZoom: Int = 16) {
+        /// Minimum camera zoom from which any POI label (icon or icon-less) is
+        /// drawn, applied on top of the rank-derived thresholds. The default 0
+        /// keeps the rank behavior; a value above the camera's maximum zoom
+        /// hides POIs entirely (useful for clean cinematic footage).
+        public var poiMinimumZoom: Int
+
+        public init(poiIconlessMinimumZoom: Int = 16,
+                    poiMinimumZoom: Int = 0) {
             self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
+            self.poiMinimumZoom = poiMinimumZoom
         }
     }
 
@@ -278,9 +286,10 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         add(features.buildingFillColor)
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
-        // Not a palette value, but it changes which labels are drawn, so it must
-        // participate in the disk-cache identity.
+        // Not palette values, but they change which labels are drawn, so they
+        // must participate in the disk-cache identity.
         out.append(Float(labelVisibility.poiIconlessMinimumZoom))
+        out.append(Float(labelVisibility.poiMinimumZoom))
         return out
     }
 }

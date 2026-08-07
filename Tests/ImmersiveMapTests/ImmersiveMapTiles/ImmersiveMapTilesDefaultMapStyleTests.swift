@@ -135,6 +135,33 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(earlierTileStyle.labelMinCameraZoom, 13.5, accuracy: 0.001)
     }
 
+    func testPoiMinimumZoomFloorsEveryPoiAboveRankAndOverzoomThresholds() {
+        let style = ImmersiveMapTilesDefaultMapStyle(
+            configuration: .immersiveMapTilesDefault.labelVisibility { visibility in
+                visibility.poiMinimumZoom = 30
+            }
+        )
+
+        // The floor wins over both the from-birth anchor threshold and the
+        // overzoom-delay cap (tile.z + 3.5), so a value above the camera's
+        // maximum zoom hides POIs entirely.
+        let hospitalStyle = makeStyle(style, layerName: "poi", className: "hospital", rank: 20, zoom: 14)
+        XCTAssertEqual(hospitalStyle.labelMinCameraZoom, 30)
+        let shopStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 14)
+        XCTAssertEqual(shopStyle.labelMinCameraZoom, 30)
+    }
+
+    func testPoiMinimumZoomChangesPreparedTileRevision() {
+        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let updated = original.labelVisibility { visibility in
+            visibility.poiMinimumZoom = 30
+        }
+
+        XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+    }
+
     func testIconlessPoiZoomChangesPreparedTileRevision() {
         let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let updated = original.labelVisibility { visibility in

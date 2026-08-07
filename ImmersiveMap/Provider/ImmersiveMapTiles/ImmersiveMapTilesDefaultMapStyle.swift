@@ -477,6 +477,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiIconlessMinimumZoom))
         }
         minCameraZoom = min(minCameraZoom, Float(tileZoom) + Self.poiMaximumOverzoomAppearanceDelay)
+        // The global POI floor comes after the overzoom-delay cap on purpose:
+        // the cap bounds rank-derived delays, while the floor is an absolute
+        // visibility gate that may exceed it (up to hiding POIs entirely).
+        minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiMinimumZoom))
 
         var appearance = configuration.labels.poi
         appearance.fillColor = poiCategoryColor(cls: cls, subclass: subclass)
