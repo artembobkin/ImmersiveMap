@@ -74,17 +74,25 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | Native iOS (UIKit host) | Available |
 | Native macOS (AppKit host, no Catalyst) | Available |
 | Native Metal renderer | Available |
-| Built-in vector tiles, no token required | Available |
-| Mapbox vector tiles | Available |
-| Your own MVT tile source | Available |
+| [Built-in vector tiles, no token required](Documentation/docs/map-data.md) | Available |
+| [Mapbox vector tiles](Documentation/docs/mapbox.md) | Available |
+| [Your own MVT tile source](Documentation/docs/custom-tile-provider.md) | Available |
 | [Customizable attribution badge](ATTRIBUTION.md) | Available |
-| Globe rendering and globe-to-flat morph | Available |
-| Labels with MSDF text and GPU collision | Available |
+| [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md) | Available |
+| [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
+| [Map styling and colors](Documentation/docs/styling.md) | Available |
+| [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) | Available |
+| [Sun, day/night terminator, starfield and transparent space](Documentation/docs/earth-scene.md) | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |
-| [Routes on the globe, models and camera travelling along them](Documentation/docs/routes.md) | Available |
-| Camera flights and scripted tours | Available |
-| Disk / memory tile cache | Available |
+| [Tap selection of avatars and models](Documentation/docs/selection.md) | Available |
+| [Routes on the globe](Documentation/docs/routes.md) | Available |
+| [3D scene models](Documentation/docs/scene-models.md) | Available |
+| [Camera flights and scripted tours](Documentation/docs/camera.md) | Available |
+| [Camera travelling along a path](Documentation/docs/camera-path-follow.md) | Available |
+| [Tour video export](Documentation/docs/tour-video-export.md) | Available |
+| [Disk / memory tile cache](Documentation/docs/tile-cache.md) | Available |
+| [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md) | Available |
 
 ## App size
 
@@ -105,22 +113,30 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds host apps that reference the package locally:
+The `Examples` folder holds host apps that reference the package locally. Each one is built around a single feature area, so it stays small enough to read in a sitting. A few cover two features that only make sense together: the tour app also exports that tour to video, the avatars app also handles taps on them, and the routes app flies a model along the route with the camera following. All of them are macOS (AppKit, not Catalyst) except the first.
 
 | Example | What it shows |
 |---|---|
-| `Examples/ImmersiveMapIOS` | The smallest iOS app that renders the map. |
-| `Examples/ImmersiveMapMac` | Native macOS (AppKit, not Catalyst): a scripted camera tour, SwiftUI markers, a 3D scene model. |
-| `Examples/ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one, and the camera travelling with it. |
+| `ImmersiveMapIOS` | The smallest iOS app that renders the map. |
+| `ImmersiveMapCameraTourMac` | A looped cinematic [camera tour](Documentation/docs/camera.md) and its offline [video export](Documentation/docs/tour-video-export.md). |
+| `ImmersiveMapMarkersMac` | [SwiftUI markers](Documentation/docs/markers.md): anchors, interactive versus pass-through content, live data changes. |
+| `ImmersiveMapAvatarsMac` | [Avatar markers](Documentation/docs/avatars.md) walking, merging and unmerging, with [tap selection](Documentation/docs/selection.md). |
+| `ImmersiveMapSceneModelsMac` | [3D scene models](Documentation/docs/scene-models.md) from USDZ and OBJ, with the live transform API and tap handling. |
+| `ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one and [tappable in mid-flight](Documentation/docs/selection.md), and [the camera travelling with it](Documentation/docs/camera-path-follow.md). |
+| `ImmersiveMapLabelsMac` | [Label](Documentation/docs/labels.md) language, fallback policy and visibility thresholds. |
+| `ImmersiveMapEarthSceneMac` | The [sun, the day/night terminator, the starfield and transparent space](Documentation/docs/earth-scene.md). |
+| `ImmersiveMapBuildingsMac` | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) with a movable sun. |
+| `ImmersiveMapMapboxMac` | [Mapbox vector tiles](Documentation/docs/mapbox.md) with a restyled palette. |
+| `ImmersiveMapCustomTilesMac` | [Your own MVT source](Documentation/docs/custom-tile-provider.md) and a hand-written vector tile style. |
 
 To run:
 
 1. Clone the repository.
 2. Open `ImmersiveMap.xcworkspace`.
-3. Select the scheme you want (`ImmersiveMapIOS`, `ImmersiveMapMac`, `ImmersiveMapRoutesMac`).
+3. Select the scheme you want; every example is its own scheme.
 4. Build and run.
 
-Every example renders the built-in tile provider out of the box, so they run with no token or account. To try the Mapbox provider instead, attach it to the app's `ImmersiveMapView` as shown in [Quick Start](#quick-start).
+Every example except `ImmersiveMapMapboxMac` renders the built-in tile provider out of the box, so they run with no token or account. The Mapbox one reads a public token from the `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` launch environment variable declared in its scheme, and offers an in-app field as a fallback.
 
 ## Where the map data comes from
 

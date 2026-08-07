@@ -26,14 +26,16 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
-To run the map in an app, open `ImmersiveMap.xcworkspace`, which has schemes `ImmersiveMapIOS` (iOS host app) and `ImmersiveMapMac` (native macOS host app, AppKit). Both host apps reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
+To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per API feature, each its own scheme: `ImmersiveMapIOS` (the only iOS one) plus `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapLabelsMac`, `ImmersiveMapEarthSceneMac`, `ImmersiveMapBuildingsMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
 
 ```sh
-xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapMac \
+xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac \
   -destination 'platform=macOS' build
 ```
 
-Host apps read optional launch environment variables: `IMMERSIVE_MAP_TILE_BASE_URL`, `IMMERSIVE_MAP_AUTH_TOKEN`, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN`, `IMMERSIVE_MAP_MAPBOX_TILESET_ID`. If the Mapbox token is present, the host apps use the Mapbox Vector Tiles API.
+Only `ImmersiveMapMapboxMac` reads a launch environment variable, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` (declared in its scheme with an empty value). Every other example renders the built-in tile provider with no token or account.
+
+The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping the `XCLocalSwiftPackageReference` at `relativePath = ../..`, a shared scheme under `xcshareddata/xcschemes/`, and a `FileRef` in the `Examples` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`.
 
 Offline tooling (not part of the SwiftPM build):
 
