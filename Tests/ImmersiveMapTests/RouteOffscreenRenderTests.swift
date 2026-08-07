@@ -247,14 +247,18 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// Tilt swings the eye off the axis (pitch rotates it about +x, so it moves
     /// towards -y while the view stays on the point under it) and brings it
     /// closer to the planet's center, which pulls the far horizon in: looking
-    /// north from 55.8N at the pitch limit, the surface runs out around 15
-    /// degrees of latitude ahead instead of the 47 it reaches head on.
+    /// north from 55.8N at the pitch limit, the surface runs out 12.85 degrees
+    /// of latitude ahead instead of the 53.2 it reaches head on at this zoom.
     ///
-    /// Both tracks here are chosen to be **inside the frustum** (`w` of 1.23 and
+    /// Both tracks here are chosen to be **inside the frustum** (`w` of 1.08 and
     /// 0.94), which is the whole point: a track picked on the near side is
     /// clipped for being behind the camera, and then the test reads zero no
     /// matter what the horizon gate does. The pair differs only in being past
     /// the horizon or short of it, so the zero can only come from the gate.
+    ///
+    /// What survives the gate's removal at `+17` is the couple of pixels of
+    /// ribbon that clear the limb, so a smaller `widthPoints` here would quietly
+    /// turn this back into a test that cannot fail.
     @MainActor
     func testHorizonHoldsUnderCameraTilt() async throws {
         let device = try makeDeviceOrSkip()
