@@ -102,6 +102,7 @@ final class RenderFrameEngine {
 
     @discardableResult
     func render(to layer: CAMetalLayer) -> Bool {
+        updatePresentationSyncMode(layer: layer)
         guard let frameSlotIndex = inFlightFramePool.tryAcquire() else {
             recordSkippedFrame(reason: .inFlightSlotsExhausted)
             return false
@@ -116,6 +117,21 @@ final class RenderFrameEngine {
             inFlightFramePool.release(slot: frameSlotIndex)
         }
         return didSchedule
+    }
+
+    /// SwiftUI markers are platform views above the Metal layer: their frames
+    /// commit with the main-thread CATransaction, while a free-running drawable
+    /// presents on its own once the GPU finishes, typically one vsync apart, so
+    /// markers visibly detach from their geo points while the camera moves.
+    /// While markers exist, the drawable must present inside the transaction
+    /// (see `presentFrame`) so map and markers reach the screen in the same
+    /// commit; without markers the cheaper free-running present stays.
+    private func updatePresentationSyncMode(layer: CAMetalLayer) {
+        let needsTransactionSync = persistentContext.markerSource
+            .currentMarkerProjectionInput.entries.isEmpty == false
+        if layer.presentsWithTransaction != needsTransactionSync {
+            layer.presentsWithTransaction = needsTransactionSync
+        }
     }
 
     /// Renders one frame into a caller-supplied offscreen texture. Used by the
@@ -361,9 +377,21 @@ final class RenderFrameEngine {
             onGPUComplete?(completedBuffer.error == nil)
         }
         if let drawable = target.drawable {
-            commandBuffer.present(drawable)
+            if drawable.layer.presentsWithTransaction {
+                // Markers are on screen: commit, wait until the buffer is
+                // scheduled, then present, so the drawable rides the current
+                // CATransaction together with the marker view frames set right
+                // after `presentFrame` (Apple's transaction-synced pattern).
+                commandBuffer.commit()
+                commandBuffer.waitUntilScheduled()
+                drawable.present()
+            } else {
+                commandBuffer.present(drawable)
+                commandBuffer.commit()
+            }
+        } else {
+            commandBuffer.commit()
         }
-        commandBuffer.commit()
         renderGraph.frameCommitted()
         return true
     }
