@@ -76,7 +76,29 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 - `move` animates along a great circle with a duration derived from the distance (snappy for short hops, capped for jumps), the same feel as avatar movement.
 - `setOrientation` / `setScale` / `setAltitude` ease over `duration` (default 0.3 s); orientation interpolates as a shortest-arc quaternion. Pass `duration: 0` to snap.
 - `upsert` / `set` replace descriptors without transform animation; coordinate changes of surviving ids still glide.
-- `animate(id:along:duration:)` flies a model along an `ImmersiveMapGeoPath` over a real duration, taking its course from the trajectory tangent and its pitch from the altitude profile, with a completion that fires exactly once. That is the API to use for anything longer than a hop: `move` derives its duration from the distance and caps it below a second. See `Documentation/docs/routes.md`, which also covers drawing the path as a line.
+- `animate(id:along:duration:)` flies a model along an `ImmersiveMapGeoPath`, see the next section.
+
+## Flying a model along a path
+
+```swift
+public func animate(id: UInt64,
+                    along path: ImmersiveMapGeoPath,
+                    duration: TimeInterval,
+                    curve: ImmersiveMapPathAnimationCurve = .easeOut,
+                    appliesHeading: Bool = true,
+                    appliesPitch: Bool = true,
+                    completion: ((Bool) -> Void)? = nil)
+
+public func cancelPathAnimation(id: UInt64)
+```
+
+`animate` moves an existing scene model along the path over `duration` seconds. That is the API to use for anything longer than a hop: `move` derives its duration from the distance and caps it below a second. With `appliesHeading` the model turns to face along the trajectory (course clockwise from north); with `appliesPitch` it tilts nose up while the altitude profile climbs and nose down while it descends. `curve` is `.easeOut` (leaves at full speed and settles onto the destination) or `.linear` (constant ground speed).
+
+`completion` fires exactly once on the main thread: `true` when the model reached the end of the path, `false` when the animation was superseded by another `animate` for the same id, cancelled, or dropped because the model was removed, the map view went away, or the renderer was recreated by a settings change. That makes it safe to chain legs of a journey without leaking a waiting continuation.
+
+While the animation runs the path owns the model's coordinate, altitude and, when the flags are set, heading and pitch: `move`, `setAltitude` and `setOrientation` for that id are ignored for as long as it runs, and do not resurface when it ends. Everything else, `setScale` included, still applies. `cancelPathAnimation(id:)` leaves the model where the flight got to, and the engine writes that position back into the descriptor, so a later mutation starts from where the model actually is.
+
+Note that this is not limited to the globe: the model animation works in flat presentation and through the morph. To draw the same path as a line see [routes](routes.md) (globe only), and to send the camera along it see [travelling the camera along a path](camera-path-follow.md). The three share one `ImmersiveMapGeoPath` and one duration, and nothing passes between them at runtime.
 
 ## Taps and selection
 
@@ -107,7 +129,7 @@ Resolution rules:
 - **Oriented, not spherical.** The box is tested in the model's own space, so a diagonal aircraft has a hit area the shape of the aircraft rather than a ball of empty air around it.
 - **Minimum touch target.** A model whose whole on-screen footprint is smaller than 44 pt grows to that size around its center, so distant models stay reachable by finger. A model large enough to aim at keeps its own outline, so this can never steal a tap from geometry you actually hit.
 
-Models also take part in `ImmersiveMapSelectionController` as `ImmersiveMapSelection.Kind.sceneModel`, alongside avatars: a tap selects, a tap on the background clears, and removing a selected model clears it. Selection carries no appearance of its own for models — the engine draws the asset as authored, and highlighting the selected one is the app's to do (swap the source, nudge the scale, draw a SwiftUI marker over it).
+Models also take part in `ImmersiveMapSelectionController` as `ImmersiveMapSelection.Kind.sceneModel`, alongside avatars: a tap selects, a tap on the background clears, and removing a selected model clears it. Selection carries no appearance of its own for models: the engine draws the asset as authored, and highlighting the selected one is the app's to do (swap the source, nudge the scale, draw a SwiftUI marker over it).
 
 ## Loading and memory
 
@@ -117,7 +139,9 @@ Materials: the base color of each submesh is used (either its texture or its con
 
 ## Limitations
 
-- **Translucent buildings** (the default `buildingExtrusionMode`): the composited building tint carries no depth, so models are never occluded by translucent buildings (and never tinted by them). With `.solid` / `.solidAtHighZoom` at high zoom, occlusion between models and buildings is depth-correct.
-- **Video export**: scene models are not included in tour video exports in this version.
+- **Translucent buildings** (the default `buildingExtrusionMode`): the composited building tint carries no depth, so models are never occluded by translucent buildings (and never tinted by them). With `.solid` / `.solidAtHighZoom` at high zoom, occlusion between models and buildings is depth-correct, see [buildings and shadows](buildings-and-shadows.md).
+- **Video export**: scene models are not included in [tour video exports](tour-video-export.md) in this version.
 - **Antimeridian**: a model is drawn once (its anchor wraps to the camera-near copy of the world), not duplicated on both screen edges.
-- **Tap precision**: hit-testing uses the asset's bounding box, not its triangles, so a tap in the empty corner of the box of a concave model still counts as a hit. Depth is not consulted either: a model hidden behind a solid building is still tappable (the globe horizon is handled, such a model is not).
+- **Tap precision**: hit-testing uses the asset's bounding box, not its triangles, so a tap in the empty corner of the box of a concave model still counts as a hit. Depth is not consulted either: a model hidden behind a solid building is still tappable (the globe horizon is handled, such a model is not). See [tap selection](selection.md).
+
+Running examples: [`Examples/ImmersiveMapSceneModelsMac`](../../Examples/ImmersiveMapSceneModelsMac) places USDZ and OBJ models and drives the live transform API; [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) flies one along a path.
