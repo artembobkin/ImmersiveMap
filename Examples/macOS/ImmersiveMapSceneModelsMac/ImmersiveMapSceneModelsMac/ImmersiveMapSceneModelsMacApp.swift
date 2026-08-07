@@ -14,31 +14,35 @@ struct ImmersiveMapSceneModelsMacApp: App {
     }
 }
 
-/// 3D scene models: USDZ and OBJ assets anchored to geographic coordinates with
-/// the `.sceneModels(...)` modifier. They render inside the map world pass with
+/// 3D scene models: USDZ assets anchored to geographic coordinates with the
+/// `.sceneModels(...)` modifier. They render inside the map world pass with
 /// real depth and the same light as extruded buildings, in flat mode, on the
 /// globe, and through the morph.
 ///
-/// The sliders drive the live transform API (`setOrientation`, `setScale`,
-/// `setAltitude`), which eases over a duration instead of snapping.
+/// Each demo city hosts its own cow, and the sliders always drive the cow of
+/// the city the camera is over: fly or pan between Paris and Seoul and the
+/// panel retargets itself. The sliders call the live transform API
+/// (`setOrientation`, `setScale`, `setAltitude`), which eases over a duration
+/// instead of snapping. The scale slider is logarithmic: at the top end the
+/// cow is hundreds of kilometers tall and stays visible after zooming all the
+/// way out to the globe.
 private struct SceneModelsScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var sceneModels = ImmersiveMapSceneModelsController()
-    @State private var heading: Double = -35
-    @State private var pitch: Double = 0
-    @State private var roll: Double = 0
-    @State private var scale: Double = 1
-    @State private var altitude: Double = 0
+    @State private var city: DemoCity = .paris
+    @State private var transforms: [DemoCity: ModelTransform] = [
+        .paris: ModelTransform(heading: -35),
+        .seoul: ModelTransform(heading: 30),
+    ]
     @State private var isMissingAsset = false
     @State private var tapped: String?
 
-    /// The model the sliders address. The other three stay put as a reference.
-    private let subject = DemoSceneModels.spotByTheEiffelTower
+    private static let scaleRange: ClosedRange<Double> = 0.25...10_000
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ImmersiveMapView()
-                .camera(camera, position: Self.paris)
+                .camera(camera, position: DemoCity.paris.cameraPosition)
                 .sceneModels(sceneModels)
                 // Hit-testing follows the model through the morph and through
                 // any animation: `coordinate` is where it was drawn.
@@ -67,7 +71,23 @@ private struct SceneModelsScreen: View {
         .task {
             let models = DemoSceneModels.makeModels()
             sceneModels.set(models)
-            isMissingAsset = models.contains { $0.id == DemoSceneModels.spotByTheEiffelTower } == false
+            isMissingAsset = models.isEmpty
+        }
+        .onAppear {
+            camera.onCameraPositionChanged = { position in
+                // The engine can notify from inside SwiftUI's update pass, so
+                // the subject switch is deferred to the next runloop turn.
+                DispatchQueue.main.async {
+                    let nearest = DemoCity.nearest(toLatitude: position.latitudeDegrees,
+                                                   longitude: position.longitudeDegrees)
+                    if nearest != city {
+                        city = nearest
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            camera.onCameraPositionChanged = nil
         }
         .alert("spot.usdz is missing from the app bundle", isPresented: $isMissingAsset) {
             Button("OK", role: .cancel) {}
@@ -77,55 +97,44 @@ private struct SceneModelsScreen: View {
     private var controls: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                Button("Paris") {
-                    camera.fly(to: Self.paris, options: CameraFlightOptions(duration: 2.0))
-                }
-                Button("Tokyo") {
-                    camera.fly(to: Self.tokyo,
-                               options: CameraFlightOptions(duration: 3.0,
-                                                            routeStyle: .greatCircle,
-                                                            altitudeStyle: .overviewFirst))
-                }
-                Button("Dubai") {
-                    camera.fly(to: Self.dubai,
-                               options: CameraFlightOptions(duration: 3.0,
-                                                            routeStyle: .greatCircle,
-                                                            altitudeStyle: .overviewFirst))
+                ForEach(DemoCity.allCases) { destination in
+                    Button(destination.rawValue) {
+                        camera.fly(to: destination.cameraPosition,
+                                   options: CameraFlightOptions(duration: 3.0,
+                                                                routeStyle: .greatCircle,
+                                                                altitudeStyle: .overviewFirst))
+                    }
                 }
 
                 Divider().frame(height: 20)
 
-                // `move` glides along a great circle with a duration derived
-                // from the distance, the same feel as avatar movement.
-                Button("Send the cow to Tokyo") {
-                    sceneModels.move(id: subject, to: DemoSceneModels.tokyo)
-                }
-                Button("Bring her back") {
-                    sceneModels.move(id: subject, to: DemoSceneModels.paris)
-                }
+                // The subject follows the camera: whichever demo city is
+                // closest owns the sliders below.
+                Label("Cow in \(city.rawValue)", systemImage: "slider.horizontal.3")
+                    .font(.system(size: 12, weight: .semibold))
             }
 
             HStack(spacing: 18) {
-                slider("Heading", value: $heading, range: -180...180) {
-                    sceneModels.setOrientation(id: subject,
-                                               headingDegrees: heading,
+                slider("Heading", value: binding(\.heading), range: -180...180) {
+                    sceneModels.setOrientation(id: city.modelId,
+                                               headingDegrees: transform.heading,
                                                duration: 0.4)
                 }
-                slider("Pitch", value: $pitch, range: -60...60) {
-                    sceneModels.setOrientation(id: subject,
-                                               pitchDegrees: pitch,
+                slider("Pitch", value: binding(\.pitch), range: -60...60) {
+                    sceneModels.setOrientation(id: city.modelId,
+                                               pitchDegrees: transform.pitch,
                                                duration: 0.4)
                 }
-                slider("Roll", value: $roll, range: -60...60) {
-                    sceneModels.setOrientation(id: subject,
-                                               rollDegrees: roll,
+                slider("Roll", value: binding(\.roll), range: -60...60) {
+                    sceneModels.setOrientation(id: city.modelId,
+                                               rollDegrees: transform.roll,
                                                duration: 0.4)
                 }
-                slider("Scale", value: $scale, range: 0.25...4) {
-                    sceneModels.setScale(id: subject, scale, duration: 0.4)
-                }
-                slider("Altitude, m", value: $altitude, range: 0...800) {
-                    sceneModels.setAltitude(id: subject, meters: altitude, duration: 0.4)
+                scaleSlider
+                slider("Altitude, m", value: binding(\.altitude), range: 0...800) {
+                    sceneModels.setAltitude(id: city.modelId,
+                                            meters: transform.altitude,
+                                            duration: 0.4)
                 }
             }
         }
@@ -150,27 +159,106 @@ private struct SceneModelsScreen: View {
         }
     }
 
-    private static let paris = ImmersiveMapCameraPosition(
-        latitudeDegrees: 48.8570,
-        longitudeDegrees: 2.2952,
-        zoom: 15.6,
-        bearing: 0.4,
-        pitch: 1.0
-    )
+    /// Logarithmic: equal slider travel multiplies the scale by the same
+    /// factor, so fine steps near ×1 and globe-sized values share one thumb.
+    private var scaleSlider: some View {
+        VStack(spacing: 2) {
+            Text("Scale: ×\(scaleText)")
+                .font(.system(size: 11, design: .monospaced))
+            Slider(value: logScale,
+                   in: log10(Self.scaleRange.lowerBound)...log10(Self.scaleRange.upperBound)) { isEditing in
+                if isEditing == false {
+                    sceneModels.setScale(id: city.modelId, transform.scale, duration: 0.4)
+                }
+            }
+            .frame(width: 130)
+        }
+    }
 
-    private static let tokyo = ImmersiveMapCameraPosition(
-        latitudeDegrees: 35.6595,
-        longitudeDegrees: 139.7005,
-        zoom: 15.4,
-        bearing: 0.2,
-        pitch: 0.95
-    )
+    private var logScale: Binding<Double> {
+        Binding(
+            get: { log10(max(Self.scaleRange.lowerBound, transform.scale)) },
+            set: { transforms[city, default: ModelTransform()].scale = pow(10, $0) }
+        )
+    }
 
-    private static let dubai = ImmersiveMapCameraPosition(
-        latitudeDegrees: 25.1972,
-        longitudeDegrees: 55.2744,
-        zoom: 14.8,
-        bearing: -0.3,
-        pitch: 0.95
-    )
+    private var scaleText: String {
+        let scale = transform.scale
+        let format = scale < 10 ? "%.2f" : scale < 100 ? "%.1f" : "%.0f"
+        return String(format: format, locale: .current, scale)
+    }
+
+    private var transform: ModelTransform {
+        transforms[city, default: ModelTransform()]
+    }
+
+    private func binding(_ keyPath: WritableKeyPath<ModelTransform, Double>) -> Binding<Double> {
+        Binding(
+            get: { transforms[city, default: ModelTransform()][keyPath: keyPath] },
+            set: { transforms[city, default: ModelTransform()][keyPath: keyPath] = $0 }
+        )
+    }
+}
+
+/// Slider state of one cow, kept per city so that switching the subject
+/// restores what that cow was last set to.
+private struct ModelTransform {
+    var heading: Double = 0
+    var pitch: Double = 0
+    var roll: Double = 0
+    var scale: Double = 1
+    var altitude: Double = 0
+}
+
+/// The demo cities. Each owns one slider-addressable cow; the control panel
+/// binds to whichever city the camera is currently closest to.
+private enum DemoCity: String, CaseIterable, Identifiable {
+    case paris = "Paris"
+    case seoul = "Seoul"
+
+    var id: String { rawValue }
+
+    var modelId: UInt64 {
+        switch self {
+        case .paris: return DemoSceneModels.spotByTheEiffelTower
+        case .seoul: return DemoSceneModels.spotInSeoul
+        }
+    }
+
+    var coordinate: GeoCoordinate {
+        switch self {
+        case .paris: return DemoSceneModels.paris
+        case .seoul: return DemoSceneModels.seoul
+        }
+    }
+
+    var cameraPosition: ImmersiveMapCameraPosition {
+        switch self {
+        case .paris:
+            return ImmersiveMapCameraPosition(latitudeDegrees: coordinate.latitude,
+                                              longitudeDegrees: coordinate.longitude,
+                                              zoom: 15.6,
+                                              bearing: 0.4,
+                                              pitch: 1.0)
+        case .seoul:
+            return ImmersiveMapCameraPosition(latitudeDegrees: coordinate.latitude,
+                                              longitudeDegrees: coordinate.longitude,
+                                              zoom: 15.4,
+                                              bearing: 0.2,
+                                              pitch: 0.95)
+        }
+    }
+
+    /// Closest demo city to a camera position, on a longitude-wrapped
+    /// flat-earth metric: plenty for two cities half a world apart.
+    static func nearest(toLatitude latitude: Double, longitude: Double) -> DemoCity {
+        func squaredDistance(to city: DemoCity) -> Double {
+            let deltaLatitude = city.coordinate.latitude - latitude
+            let wrappedDeltaLongitude = (city.coordinate.longitude - longitude + 540)
+                .truncatingRemainder(dividingBy: 360) - 180
+            let scaledDeltaLongitude = wrappedDeltaLongitude * cos(latitude * .pi / 180)
+            return deltaLatitude * deltaLatitude + scaledDeltaLongitude * scaledDeltaLongitude
+        }
+        return allCases.min { squaredDistance(to: $0) < squaredDistance(to: $1) } ?? .paris
+    }
 }
