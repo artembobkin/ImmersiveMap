@@ -49,4 +49,11 @@
          </FileRef>
       </Group>
    </Group>
+   <Group
+      location = "container:"
+      name = "Posts">
+      <FileRef
+         location = "group:Posts/NewYorkFlyover/NewYorkFlyover.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>
