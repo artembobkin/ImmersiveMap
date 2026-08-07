@@ -92,4 +92,4 @@ Both disk caches sit in the app's caches directory, so the system may evict them
 - Cache identity is the app's responsibility for custom providers and styles. A fingerprint that does not change when the output does produces stale tiles that look like rendering bugs.
 - There is no offline pre-download API: the caches fill from what the camera has actually looked at.
 
-Running example: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) raises the memory cache to 1 GiB so a looped tour does not re-upload tiles between laps.
+Running examples: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) raises the memory cache to 1 GiB so a looped tour does not re-upload tiles between laps; the **Diagnostics** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) turns the raw and prepared caches off one at a time, so the cost of the stage below each one is visible on screen.

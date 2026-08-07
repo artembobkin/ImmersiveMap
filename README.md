@@ -96,7 +96,7 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 
 ## App size
 
-Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`, arm64, unsigned). That demo is 25 lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
+Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`, arm64, unsigned). That demo is about twenty lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
 
 | Part | Size |
 |---|---|
@@ -113,7 +113,7 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds host apps that reference the package locally. Each one is built around a single feature area, so it stays small enough to read in a sitting. A few cover two features that only make sense together: the tour app also exports that tour to video, the avatars app also handles taps on them, and the routes app flies a model along the route with the camera following. All of them are macOS (AppKit, not Catalyst) except the first.
+The `Examples` folder holds host apps that reference the package locally. Most of them are integration examples: one scenario each, built around the code you would copy into your own app, small enough to read in a sitting. A few cover two features that only make sense together: the tour app also exports that tour to video, the avatars app also handles taps on them, and the routes app flies a model along the route with the camera following. Everything that is a value on `ImmersiveMapSettings` lives in one app instead, `ImmersiveMapSettingsMac`, where a sidebar switches between the branches of that value. All of them are macOS (AppKit, not Catalyst) except the first.
 
 | Example | What it shows |
 |---|---|
@@ -123,9 +123,7 @@ The `Examples` folder holds host apps that reference the package locally. Each o
 | `ImmersiveMapAvatarsMac` | [Avatar markers](Documentation/docs/avatars.md) walking, merging and unmerging, with [tap selection](Documentation/docs/selection.md). |
 | `ImmersiveMapSceneModelsMac` | [3D scene models](Documentation/docs/scene-models.md) from USDZ and OBJ, with the live transform API and tap handling. |
 | `ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one and [tappable in mid-flight](Documentation/docs/selection.md), and [the camera travelling with it](Documentation/docs/camera-path-follow.md). |
-| `ImmersiveMapLabelsMac` | [Label](Documentation/docs/labels.md) language, fallback policy and visibility thresholds. |
-| `ImmersiveMapEarthSceneMac` | The [sun, the day/night terminator, the starfield and transparent space](Documentation/docs/earth-scene.md). |
-| `ImmersiveMapBuildingsMac` | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) with a movable sun. |
+| `ImmersiveMapSettingsMac` | Everything an app can change on a map that is already on screen, one sidebar section per branch of `ImmersiveMapSettings`: [labels](Documentation/docs/labels.md), [buildings and shadows](Documentation/docs/buildings-and-shadows.md), the [earth scene](Documentation/docs/earth-scene.md), [style and palettes](Documentation/docs/styling.md), the [globe-to-flat window](Documentation/docs/globe.md), and the [debug HUD](Documentation/docs/performance-and-debug.md) with the [tile caches](Documentation/docs/tile-cache.md). A badge names what each edit costs the engine. |
 | `ImmersiveMapMapboxMac` | [Mapbox vector tiles](Documentation/docs/mapbox.md) with a restyled palette. |
 | `ImmersiveMapCustomTilesMac` | [Your own MVT source](Documentation/docs/custom-tile-provider.md) and a hand-written vector tile style. |
 

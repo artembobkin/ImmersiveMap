@@ -85,4 +85,4 @@ Label colors and sizes are not part of `LabelSettings`: they belong to the map s
 - Which names exist at all is a property of the tile source, not the engine. A source that carries no `name:ja` will fall back however the policy says, in every language you ask for.
 - Changing the language reloads prepared tiles.
 
-Running example: [`Examples/ImmersiveMapLabelsMac`](../../Examples/ImmersiveMapLabelsMac) switches language, fallback policy, house numbers, settlement ceilings and fade timings live.
+Running example: the **Labels** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) switches language, fallback policy, house numbers, settlement ceilings and fade timings, and shows what each of those changes costs: every field here re-prepares the tiles.

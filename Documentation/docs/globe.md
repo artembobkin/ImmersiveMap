@@ -63,4 +63,4 @@ A zoomed-out globe limits how far the camera may rotate and tilt, so a small dra
 - A tilted pass through the window is the most demanding thing the renderer does; a slow flight across it (three to five seconds) reads far better than a fast one.
 - `globeRadiusScale` changes framing, not projection: it does not make the globe more or less accurate, only bigger or smaller on screen.
 
-Running example: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) crosses the whole window twice under near-maximum tilt, in both directions.
+Running examples: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) crosses the whole window twice under near-maximum tilt, in both directions; the **Presentation** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) moves the window itself and prints the resolved transition next to the camera zoom and latitude.

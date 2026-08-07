@@ -20,7 +20,7 @@ ImmersiveMap is an early-stage Swift + Metal map rendering engine, currently mai
    swift build
    swift test
    ```
-3. To run the map in a host app, open `ImmersiveMap.xcworkspace` and select one of the example schemes. They live in `Examples/`, one app per feature, and reference the package locally, so unpublished changes run immediately. `ImmersiveMapIOS` is the iOS one; the rest are native macOS (AppKit). The README's **Example Apps** table lists what each one shows.
+3. To run the map in a host app, open `ImmersiveMap.xcworkspace` and select one of the example schemes. They live in `Examples/`, one app per integration scenario, and reference the package locally, so unpublished changes run immediately. `ImmersiveMapIOS` is the iOS one; the rest are native macOS (AppKit). The README's **Example Apps** table lists what each one shows.
 
 Native macOS build from the CLI:
 
@@ -30,6 +30,8 @@ xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac
 ```
 
 A new example is a hand-written `.xcodeproj` copied from a sibling: keep the `XCLocalSwiftPackageReference` with `relativePath = ../..`, ship a shared scheme under `xcshareddata/xcschemes/` (otherwise the scheme will not appear in the workspace for anyone else), and add a `FileRef` to the `Examples` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`.
+
+New projects are for integration scenarios: things an app wires up, like a provider, a controller or a view of your own. A new field on `ImmersiveMapSettings` is not one of those; it gets a section in `ImmersiveMapSettingsMac` next to the labels, scene, style, presentation and diagnostics panels.
 
 ## Project conventions
 
