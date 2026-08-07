@@ -73,4 +73,4 @@ Coverage is expressed in camera **distance**, not in a screen or world rectangle
 - Building heights come from the tile data. Where a source carries none, the style's fallback height is used, so a city with sparse height data extrudes unevenly.
 - Shadow casters are buildings and scene models. Terrain, roads and other tile geometry receive shadows but do not cast them.
 
-Running example: the **Buildings and shadows** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) switches the three extrusion modes at street level and drives the sun angle, strength, map resolution and coverage live.
+Running example: the **Buildings and shadows** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) switches the three extrusion modes at street level and drives the sun angle, strength, map resolution and coverage live.

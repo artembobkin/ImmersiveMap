@@ -109,4 +109,4 @@ ImmersiveMapView()
 - The terminator is a lighting model, not a data layer: it shades the rendered sphere and has no bearing on labels, markers or tile content.
 - `.realtime` re-resolves the date per frame, so a long-running screen drifts with the clock by design. Pin it with `.fixed` when that matters.
 
-Running example: the **Earth scene** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) drives the terminator with an hour slider, exposes the sun fields live, and puts a gradient behind the map so transparent space has something to show through to.
+Running example: the **Earth scene** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) drives the terminator with an hour slider, exposes the sun fields live, and puts a gradient behind the map so transparent space has something to show through to.

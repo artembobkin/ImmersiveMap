@@ -26,7 +26,7 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
-To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per integration scenario, each its own scheme: `ImmersiveMapIOS` (the only iOS one, a minimal host rather than a feature demo) plus `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapSettingsMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. Everything that is a field on `ImmersiveMapSettings` (labels, scene, style, presentation, tiles, debug) belongs in `ImmersiveMapSettingsMac`, which has a sidebar section per branch: add a section there instead of a new project. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
+To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per integration scenario, each its own scheme, split by platform: `Examples/ImmersiveMapIOS` (the only iOS one, a minimal host rather than a feature demo) and, under `Examples/macOS/`, `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapSettingsMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. Everything that is a field on `ImmersiveMapSettings` (labels, scene, style, presentation, tiles, debug) belongs in `ImmersiveMapSettingsMac`, which has a sidebar section per branch: add a section there instead of a new project. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
 
 ```sh
 xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac \
@@ -35,7 +35,7 @@ xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac
 
 Only `ImmersiveMapMapboxMac` reads a launch environment variable, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` (declared in its scheme with an empty value). Every other example renders the built-in tile provider with no token or account.
 
-The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping the `XCLocalSwiftPackageReference` at `relativePath = ../..`, a shared scheme under `xcshareddata/xcschemes/`, and a `FileRef` in `ImmersiveMap.xcworkspace/contents.xcworkspacedata`, inside the `macOS` group of `Examples` for a Mac app and directly under `Examples` for an iOS one.
+The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping a shared scheme under `xcshareddata/xcschemes/` and the `XCLocalSwiftPackageReference` pointed at the package root, which is `relativePath = ../../..` for a Mac app in `Examples/macOS/` and `relativePath = ../..` for an iOS one directly in `Examples/`. It also needs a `FileRef` in `ImmersiveMap.xcworkspace/contents.xcworkspacedata`, inside the `macOS` group of `Examples` for a Mac app and directly under `Examples` for an iOS one.
 
 Offline tooling (not part of the SwiftPM build):
 

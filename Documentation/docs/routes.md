@@ -98,4 +98,4 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 - **Ground-level routes**: a route with a zero altitude profile lies exactly on the surface and can stipple against it under the depth test. Give a ground track a small `baseAltitudeMeters` (a few kilometers reads as flat at globe zoom).
 - **Selection**: routes are not tappable.
 
-Running example: [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) draws a round-the-world journey leg by leg, with a dashed plan under a solid line that grows along it.
+Running example: [`Examples/macOS/ImmersiveMapRoutesMac`](../../Examples/macOS/ImmersiveMapRoutesMac) draws a round-the-world journey leg by leg, with a dashed plan under a solid line that grows along it.

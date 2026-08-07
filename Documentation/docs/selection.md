@@ -136,4 +136,4 @@ When several things overlap a tap:
 - A merged avatar cluster is selectable as itself. Selecting a member that is currently hidden inside a group is not.
 - Model hit-testing uses the asset's bounding box rather than its triangles, and does not consult depth, see [3D scene models](scene-models.md).
 
-Running examples: [`Examples/ImmersiveMapAvatarsMac`](../../Examples/ImmersiveMapAvatarsMac) shows the tap event and the selection state side by side, and drives selection from buttons as well as from the map; [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) taps a model in mid-flight.
+Running examples: [`Examples/macOS/ImmersiveMapAvatarsMac`](../../Examples/macOS/ImmersiveMapAvatarsMac) shows the tap event and the selection state side by side, and drives selection from buttons as well as from the map; [`Examples/macOS/ImmersiveMapRoutesMac`](../../Examples/macOS/ImmersiveMapRoutesMac) taps a model in mid-flight.

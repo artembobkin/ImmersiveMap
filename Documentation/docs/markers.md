@@ -108,4 +108,4 @@ Rule of thumb: rich, interactive and few means SwiftUI markers; uniform, numerou
 - Marker content is a closed leaf on iOS: navigation and presentation from inside a marker are not supported (the hosting controller has no parent).
 - Taps are plain SwiftUI and do not go through [the selection API](selection.md), which covers avatars and 3D scene models.
 
-Running example: [`Examples/ImmersiveMapMarkersMac`](../../Examples/ImmersiveMapMarkersMac) switches the anchor, compares interactive content with `allowsHitTesting(false)`, and mutates the backing collection live.
+Running example: [`Examples/macOS/ImmersiveMapMarkersMac`](../../Examples/macOS/ImmersiveMapMarkersMac) switches the anchor, compares interactive content with `allowsHitTesting(false)`, and mutates the backing collection live.

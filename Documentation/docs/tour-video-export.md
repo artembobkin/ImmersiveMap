@@ -74,4 +74,4 @@ Because rendering is offline, the export can run faster or slower than real time
 - Label and symbol sizes are defined in pixels by the map style, so their apparent size scales with the chosen output resolution: a 4K export shows relatively smaller labels than a 1080p export. Pick the resolution accordingly (and raise `markerScale` for 4K).
 - [Routes](routes.md) and [3D scene models](scene-models.md) are not rendered into the export.
 
-Running example: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) exports one lap of its cinematic to a file chosen in a save panel, with progress and cancellation, while the on-screen map stays interactive.
+Running example: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) exports one lap of its cinematic to a file chosen in a save panel, with progress and cancellation, while the on-screen map stays interactive.

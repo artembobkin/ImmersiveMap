@@ -144,4 +144,4 @@ Materials: the base color of each submesh is used (either its texture or its con
 - **Antimeridian**: a model is drawn once (its anchor wraps to the camera-near copy of the world), not duplicated on both screen edges.
 - **Tap precision**: hit-testing uses the asset's bounding box, not its triangles, so a tap in the empty corner of the box of a concave model still counts as a hit. Depth is not consulted either: a model hidden behind a solid building is still tappable (the globe horizon is handled, such a model is not). See [tap selection](selection.md).
 
-Running examples: [`Examples/ImmersiveMapSceneModelsMac`](../../Examples/ImmersiveMapSceneModelsMac) places USDZ and OBJ models and drives the live transform API; [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) flies one along a path.
+Running examples: [`Examples/macOS/ImmersiveMapSceneModelsMac`](../../Examples/macOS/ImmersiveMapSceneModelsMac) places USDZ and OBJ models and drives the live transform API; [`Examples/macOS/ImmersiveMapRoutesMac`](../../Examples/macOS/ImmersiveMapRoutesMac) flies one along a path.

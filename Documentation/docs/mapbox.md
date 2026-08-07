@@ -63,7 +63,7 @@ ImmersiveMapView()
 
 A token is a credential. Do not put one in a source file that gets committed. The workable options, in order of preference:
 
-1. A launch environment variable, which is what `Examples/ImmersiveMapMapboxMac` does. The scheme declares `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` with an empty value; each developer fills theirs in locally, and nothing lands in git.
+1. A launch environment variable, which is what `Examples/macOS/ImmersiveMapMapboxMac` does. The scheme declares `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` with an empty value; each developer fills theirs in locally, and nothing lands in git.
 2. A gitignored `.xcconfig` or plist read at launch.
 3. Fetching it from your own backend at runtime, which is also what lets you rotate it.
 
@@ -87,4 +87,4 @@ Any third source works too, through `VectorTileProvider`, see [custom tile provi
 - Terrain layers are only present if the tileset includes them; the default composite does.
 - Mapbox usage is billed by Mapbox and governed by their terms; nothing in this engine changes that.
 
-Running example: [`Examples/ImmersiveMapMapboxMac`](../../Examples/ImmersiveMapMapboxMac) reads the token from the environment, falls back to an in-app field, and shows a restyled night palette.
+Running example: [`Examples/macOS/ImmersiveMapMapboxMac`](../../Examples/macOS/ImmersiveMapMapboxMac) reads the token from the environment, falls back to an in-app field, and shows a restyled night palette.

@@ -124,7 +124,7 @@
 			);
 			mainGroup = B10000000000000000000007;
 			packageReferences = (
-				B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */,
+				B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */,
 			);
 			productRefGroup = B10000000000000000000009 /* Products */;
 			projectDirPath = "";
@@ -284,16 +284,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */ = {
+		B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../..;
+			relativePath = ../../..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		B10000000000000000000004 /* ImmersiveMap */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
+			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */;
 			productName = ImmersiveMap;
 		};
 /* End XCSwiftPackageProductDependency section */

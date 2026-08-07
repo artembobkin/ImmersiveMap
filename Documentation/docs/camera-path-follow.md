@@ -76,4 +76,4 @@ sceneModels.animate(id: planeID, along: leg.path, duration: leg.seconds) { finis
 - **Camera trailing**: with the default smoothing the camera ends a traversal slightly behind the destination. Pass `smoothingHalfLife: 0` when the endpoint has to be exact.
 - Unlike the drawn route, following works in both presentations: the path is geometry, not a globe-only ribbon.
 
-Running example: [`Examples/ImmersiveMapRoutesMac`](../../Examples/ImmersiveMapRoutesMac) flies a round-the-world journey leg by leg with the camera travelling along each one.
+Running example: [`Examples/macOS/ImmersiveMapRoutesMac`](../../Examples/macOS/ImmersiveMapRoutesMac) flies a round-the-world journey leg by leg with the camera travelling along each one.

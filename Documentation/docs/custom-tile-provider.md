@@ -141,4 +141,4 @@ attribution: ImmersiveMapAttribution(
 
 An app can override the badge text with `attributionSettings(.init(attributionOverride:))` or hide it with `attributionSettings(isVisible: false)`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence. A map that starts with a hidden or empty badge logs a one-time console warning; an app that shows the credit itself declares that with `.attributionProvidedExternally()`.
 
-Running example: [`Examples/ImmersiveMapCustomTilesMac`](../../Examples/ImmersiveMapCustomTilesMac) wires a provider, a tile source, a hand-written style and an attribution end to end, entirely through the public API.
+Running example: [`Examples/macOS/ImmersiveMapCustomTilesMac`](../../Examples/macOS/ImmersiveMapCustomTilesMac) wires a provider, a tile source, a hand-written style and an attribution end to end, entirely through the public API.

@@ -148,4 +148,4 @@ The same shot list can be rendered to a file instead of the screen, see [tour vi
 - Pitch and bearing limits are zoom-dependent on the globe. Commands are clamped rather than refused, so a flight to a heavily tilted globe position lands level and gains its tilt as it zooms in.
 - The tour controller is `@MainActor`; the camera controller is not, but its callbacks are delivered on the main thread.
 
-Running example: [`Examples/ImmersiveMapCameraTourMac`](../../Examples/ImmersiveMapCameraTourMac) plays a ten-shot cinematic that exercises every route and altitude style, and exports the same list to a video file.
+Running example: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) plays a ten-shot cinematic that exercises every route and altitude style, and exports the same list to a video file.

@@ -7,16 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B10000000000000000000021 /* ImmersiveMapAvatarsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ImmersiveMapAvatarsMacApp.swift */; };
-		B10000000000000000000023 /* DemoAvatars.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000022 /* DemoAvatars.swift */; };
+		B10000000000000000000001 /* ImmersiveMapRoutesMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* ImmersiveMapRoutesMacApp.swift */; };
 		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
-/* End PBXBuildFile section */
+		B10000000000000000000016 /* FlightStoryboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* FlightStoryboard.swift */; };
+		B1000000000000000000001A /* biplane.obj in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* biplane.obj */; };
+		B1000000000000000000001C /* biplane.mtl in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001B /* biplane.mtl */; };
+		B1000000000000000000001E /* diffuse_512.png in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001D /* diffuse_512.png */; };/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B10000000000000000000020 /* ImmersiveMapAvatarsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapAvatarsMacApp.swift; sourceTree = "<group>"; };
-		B10000000000000000000022 /* DemoAvatars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAvatars.swift; sourceTree = "<group>"; };
-		B10000000000000000000005 /* ImmersiveMapAvatarsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapAvatarsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
+		B10000000000000000000002 /* ImmersiveMapRoutesMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapRoutesMacApp.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* ImmersiveMapRoutesMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapRoutesMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000015 /* FlightStoryboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightStoryboard.swift; sourceTree = "<group>"; };
+		B10000000000000000000019 /* biplane.obj */ = {isa = PBXFileReference; lastKnownFileType = text; name = biplane.obj; path = Resources/biplane.obj; sourceTree = "<group>"; };
+		B1000000000000000000001B /* biplane.mtl */ = {isa = PBXFileReference; lastKnownFileType = text; name = biplane.mtl; path = Resources/biplane.mtl; sourceTree = "<group>"; };
+		B1000000000000000000001D /* diffuse_512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = diffuse_512.png; path = Resources/diffuse_512.png; sourceTree = "<group>"; };
+		B1000000000000000000001F /* CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CREDITS.md; path = Resources/CREDITS.md; sourceTree = "<group>"; };/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B10000000000000000000006 /* Frameworks */ = {
@@ -33,24 +38,28 @@
 		B10000000000000000000007 = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000008 /* ImmersiveMapAvatarsMac */,
+				B10000000000000000000008 /* ImmersiveMapRoutesMac */,
 				B10000000000000000000009 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		B10000000000000000000008 /* ImmersiveMapAvatarsMac */ = {
+		B10000000000000000000008 /* ImmersiveMapRoutesMac */ = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000020 /* ImmersiveMapAvatarsMacApp.swift */,
-				B10000000000000000000022 /* DemoAvatars.swift */,
+				B10000000000000000000002 /* ImmersiveMapRoutesMacApp.swift */,
+				B10000000000000000000015 /* FlightStoryboard.swift */,
+				B10000000000000000000019 /* biplane.obj */,
+				B1000000000000000000001B /* biplane.mtl */,
+				B1000000000000000000001D /* diffuse_512.png */,
+				B1000000000000000000001F /* CREDITS.md */,
 			);
-			path = ImmersiveMapAvatarsMac;
+			path = ImmersiveMapRoutesMac;
 			sourceTree = "<group>";
 		};
 		B10000000000000000000009 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000005 /* ImmersiveMapAvatarsMac.app */,
+				B10000000000000000000005 /* ImmersiveMapRoutesMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -58,9 +67,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B1000000000000000000000A /* ImmersiveMapAvatarsMac */ = {
+		B1000000000000000000000A /* ImmersiveMapRoutesMac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapAvatarsMac" */;
+			buildConfigurationList = B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapRoutesMac" */;
 			buildPhases = (
 				B1000000000000000000000C /* Sources */,
 				B10000000000000000000006 /* Frameworks */,
@@ -70,12 +79,12 @@
 			);
 			dependencies = (
 			);
-			name = ImmersiveMapAvatarsMac;
+			name = ImmersiveMapRoutesMac;
 			packageProductDependencies = (
 				B10000000000000000000004 /* ImmersiveMap */,
 			);
-			productName = ImmersiveMapAvatarsMac;
-			productReference = B10000000000000000000005 /* ImmersiveMapAvatarsMac.app */;
+			productName = ImmersiveMapRoutesMac;
+			productReference = B10000000000000000000005 /* ImmersiveMapRoutesMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -93,7 +102,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapAvatarsMac" */;
+			buildConfigurationList = B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapRoutesMac" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -103,13 +112,13 @@
 			);
 			mainGroup = B10000000000000000000007;
 			packageReferences = (
-				B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */,
+				B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */,
 			);
 			productRefGroup = B10000000000000000000009 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B1000000000000000000000A /* ImmersiveMapAvatarsMac */,
+				B1000000000000000000000A /* ImmersiveMapRoutesMac */,
 			);
 		};
 /* End PBXProject section */
@@ -119,7 +128,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-
+				B1000000000000000000001A /* biplane.obj in Resources */,
+				B1000000000000000000001C /* biplane.mtl in Resources */,
+				B1000000000000000000001E /* diffuse_512.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,8 +141,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000000000000000000021 /* ImmersiveMapAvatarsMacApp.swift in Sources */,
-				B10000000000000000000023 /* DemoAvatars.swift in Sources */,
+				B10000000000000000000001 /* ImmersiveMapRoutesMacApp.swift in Sources */,
+				B10000000000000000000016 /* FlightStoryboard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -203,7 +214,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapAvatarsMac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapRoutesMac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -225,7 +236,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapAvatarsMac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapRoutesMac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -235,7 +246,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapAvatarsMac" */ = {
+		B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapRoutesMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B10000000000000000000013 /* Debug */,
@@ -244,7 +255,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapAvatarsMac" */ = {
+		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapRoutesMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B10000000000000000000011 /* Debug */,
@@ -256,16 +267,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */ = {
+		B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../..;
+			relativePath = ../../..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		B10000000000000000000004 /* ImmersiveMap */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
+			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../../.." */;
 			productName = ImmersiveMap;
 		};
 /* End XCSwiftPackageProductDependency section */

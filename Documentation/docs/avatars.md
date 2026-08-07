@@ -91,4 +91,4 @@ Members stay addressable (`move`/`update`) while hidden. `remove(id: 100)` delet
 
 `.onAvatarTap` above is the raw event. To keep track of which marker is currently the selected one, and to drive that from code as well as from taps, attach an `ImmersiveMapSelectionController`, see [tap selection](selection.md).
 
-Running example: [`Examples/ImmersiveMapAvatarsMac`](../../Examples/ImmersiveMapAvatarsMac) walks a crowd with animated `move`, merges and unmerges it, and shows the tap event next to the selection state.
+Running example: [`Examples/macOS/ImmersiveMapAvatarsMac`](../../Examples/macOS/ImmersiveMapAvatarsMac) walks a crowd with animated `move`, merges and unmerges it, and shows the tap event next to the selection state.
