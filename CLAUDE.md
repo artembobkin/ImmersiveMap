@@ -35,7 +35,7 @@ xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac
 
 Only `ImmersiveMapMapboxMac` reads a launch environment variable, `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` (declared in its scheme with an empty value). Every other example renders the built-in tile provider with no token or account.
 
-The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping the `XCLocalSwiftPackageReference` at `relativePath = ../..`, a shared scheme under `xcshareddata/xcschemes/`, and a `FileRef` in the `Examples` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`.
+The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping the `XCLocalSwiftPackageReference` at `relativePath = ../..`, a shared scheme under `xcshareddata/xcschemes/`, and a `FileRef` in `ImmersiveMap.xcworkspace/contents.xcworkspacedata`, inside the `macOS` group of `Examples` for a Mac app and directly under `Examples` for an iOS one.
 
 Offline tooling (not part of the SwiftPM build):
 

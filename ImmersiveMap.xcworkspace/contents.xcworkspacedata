@@ -20,29 +20,33 @@
       <FileRef
          location = "group:Examples/ImmersiveMapIOS/ImmersiveMapIOS.xcodeproj">
       </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapCameraTourMac/ImmersiveMapCameraTourMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapMarkersMac/ImmersiveMapMarkersMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapAvatarsMac/ImmersiveMapAvatarsMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapRoutesMac/ImmersiveMapRoutesMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapSettingsMac/ImmersiveMapSettingsMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapMapboxMac/ImmersiveMapMapboxMac.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Examples/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
-      </FileRef>
+      <Group
+         location = "container:"
+         name = "macOS">
+         <FileRef
+            location = "group:Examples/ImmersiveMapCameraTourMac/ImmersiveMapCameraTourMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapMarkersMac/ImmersiveMapMarkersMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapAvatarsMac/ImmersiveMapAvatarsMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapRoutesMac/ImmersiveMapRoutesMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapSettingsMac/ImmersiveMapSettingsMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapMapboxMac/ImmersiveMapMapboxMac.xcodeproj">
+         </FileRef>
+         <FileRef
+            location = "group:Examples/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
+         </FileRef>
+      </Group>
    </Group>
 </Workspace>
