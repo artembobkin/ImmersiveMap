@@ -117,11 +117,13 @@ final class RouteOffscreenRenderTests: XCTestCase {
 
     // MARK: - Horizon
 
-    /// A ribbon on the far hemisphere must not reach the drawable at all. The
-    /// shader's own horizon gate is what guarantees it: the depth written by the
-    /// surface is incomplete (chord tessellation at the limb, no depth under the
-    /// polar caps, nothing at all before tiles arrive), so a route that trusted
-    /// depth alone painted the far side over the visible one.
+    /// A ribbon on the far hemisphere must not reach the drawable at all.
+    ///
+    /// Two mechanisms cover this one deep in the far side: the shader gate and
+    /// the depth the surface writes. It therefore stays green with the gate
+    /// removed, and it is here for the behaviour, not as coverage of the gate.
+    /// The cases the gate alone answers, where the depth buffer is incomplete,
+    /// are the limb, the polar caps and the tilted horizon below.
     @MainActor
     func testRouteOnTheFarSideOfTheGlobeIsNotDrawn() async throws {
         let device = try makeDeviceOrSkip()
@@ -203,6 +205,28 @@ final class RouteOffscreenRenderTests: XCTestCase {
         XCTAssertGreaterThan(redPixelCount(in: painted), 0)
     }
 
+    /// The polar caps draw without depth writes, and the placeholder fill under
+    /// the tiles stops at the Mercator limit of 85.05 degrees, so the depth
+    /// buffer has a hole exactly over each pole. A ground track on the far side
+    /// whose line of sight leaves the globe through that hole is what used to
+    /// paint a red arc across the Arctic, and only the shader gate stops it:
+    /// remove the gate and this test paints again.
+    @MainActor
+    func testFarSideRouteDoesNotLeakThroughThePolarCap() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: 0,
+            longitude: center.longitudeDegrees + 180,
+            halfSpanDegrees: 30))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertEqual(redPixelCount(in: painted), 0)
+    }
+
     /// The control for all three: the same short ribbon on the visible face
     /// paints, so a zero above means "gated", not "never drawn".
     @MainActor
@@ -220,10 +244,17 @@ final class RouteOffscreenRenderTests: XCTestCase {
         XCTAssertGreaterThan(redPixelCount(in: painted), 0)
     }
 
-    /// Tilting swings the camera around the point under it, which brings the
-    /// eye closer to the planet's center and pulls the horizon in, so the same
-    /// ground track has to be cut earlier than it is head on. Nothing in the
-    /// test refers to the camera's orientation, and this is what pins that.
+    /// Tilt swings the eye off the axis (pitch rotates it about +x, so it moves
+    /// towards -y while the view stays on the point under it) and brings it
+    /// closer to the planet's center, which pulls the far horizon in: looking
+    /// north from 55.8N at the pitch limit, the surface runs out around 15
+    /// degrees of latitude ahead instead of the 47 it reaches head on.
+    ///
+    /// Both tracks here are chosen to be **inside the frustum** (`w` of 1.23 and
+    /// 0.94), which is the whole point: a track picked on the near side is
+    /// clipped for being behind the camera, and then the test reads zero no
+    /// matter what the horizon gate does. The pair differs only in being past
+    /// the horizon or short of it, so the zero can only come from the gate.
     @MainActor
     func testHorizonHoldsUnderCameraTilt() async throws {
         let device = try makeDeviceOrSkip()
@@ -237,7 +268,7 @@ final class RouteOffscreenRenderTests: XCTestCase {
         let center = context.renderCamera.currentCameraPosition()
         XCTAssertGreaterThan(center.pitch, 0.5, "The camera must actually be tilted")
 
-        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees - 60,
+        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 17,
                                                      longitude: center.longitudeDegrees,
                                                      halfSpanDegrees: 5))
         let beyondHorizon = try await renderFrame(context: context, time: 1.0 / 60.0)
@@ -245,12 +276,12 @@ final class RouteOffscreenRenderTests: XCTestCase {
                        "A tilted camera must not see a ground track beyond its horizon")
 
         context.routeSource.controller.clear()
-        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees,
+        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 10,
                                                      longitude: center.longitudeDegrees,
-                                                     halfSpanDegrees: 2))
-        let underTheCamera = try await renderFrame(context: context, time: 2.0 / 60.0)
-        XCTAssertGreaterThan(redPixelCount(in: underTheCamera), 0,
-                             "A track under the tilted camera must still paint")
+                                                     halfSpanDegrees: 5))
+        let shortOfTheHorizon = try await renderFrame(context: context, time: 2.0 / 60.0)
+        XCTAssertGreaterThan(redPixelCount(in: shortOfTheHorizon), 0,
+                             "The same track short of that horizon must paint")
     }
 
     // MARK: - Helpers
