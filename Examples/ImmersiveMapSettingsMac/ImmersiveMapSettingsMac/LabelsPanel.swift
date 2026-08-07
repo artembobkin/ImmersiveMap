@@ -19,15 +19,15 @@ struct LabelsPanel: View {
             PanelRow {
                 Picker("Language", selection: $settings.labels.language) {
                     Text("English").tag(ImmersiveMapSettings.LabelLanguage.english)
-                    Text("Русский").tag(ImmersiveMapSettings.LabelLanguage.russian)
-                    Text("Français").tag(ImmersiveMapSettings.LabelLanguage.french)
-                    Text("Deutsch").tag(ImmersiveMapSettings.LabelLanguage.german)
-                    Text("Español").tag(ImmersiveMapSettings.LabelLanguage.spanish)
-                    Text("Italiano").tag(ImmersiveMapSettings.LabelLanguage.italian)
-                    Text("Português").tag(ImmersiveMapSettings.LabelLanguage.portuguese)
-                    Text("Türkçe").tag(ImmersiveMapSettings.LabelLanguage.turkish)
+                    Text("Russian").tag(ImmersiveMapSettings.LabelLanguage.russian)
+                    Text("French").tag(ImmersiveMapSettings.LabelLanguage.french)
+                    Text("German").tag(ImmersiveMapSettings.LabelLanguage.german)
+                    Text("Spanish").tag(ImmersiveMapSettings.LabelLanguage.spanish)
+                    Text("Italian").tag(ImmersiveMapSettings.LabelLanguage.italian)
+                    Text("Portuguese").tag(ImmersiveMapSettings.LabelLanguage.portuguese)
+                    Text("Turkish").tag(ImmersiveMapSettings.LabelLanguage.turkish)
                     // Any BCP-47-ish code works, the presets are a convenience.
-                    Text("日本語 (ja)").tag(ImmersiveMapSettings.LabelLanguage("ja"))
+                    Text("Japanese (ja)").tag(ImmersiveMapSettings.LabelLanguage("ja"))
                 }
                 .frame(width: 210)
 

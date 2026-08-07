@@ -88,8 +88,12 @@ struct EarthScenePanel: View {
 
     /// Today at the chosen UTC hour. The sun direction is derived from this
     /// date, so a fixed date makes the whole scene deterministic.
+    ///
+    /// The hour wraps: the slider reaches 24, which is midnight again rather
+    /// than a date on the next day.
     private func date(atHour hour: Double) -> Date {
-        startOfUTCDay(for: Date()).addingTimeInterval(hour * 3600)
+        let wrappedHour = hour.truncatingRemainder(dividingBy: 24)
+        return startOfUTCDay(for: Date()).addingTimeInterval(wrappedHour * 3600)
     }
 
     private func startOfUTCDay(for date: Date) -> Date {

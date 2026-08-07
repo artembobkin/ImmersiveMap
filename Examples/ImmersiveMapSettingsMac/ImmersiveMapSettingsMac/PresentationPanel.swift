@@ -92,11 +92,15 @@ struct PresentationPanel: View {
         return min(max(raw, 0), 1)
     }
 
+    /// The morph phase and the surface the engine picks from it are not the
+    /// same thing: the flat surface is selected at a fully completed
+    /// transition only, so everything below 1 still renders as a sphere being
+    /// unfurled.
     private var surfaceDescription: String {
         switch transition {
         case 0: "globe"
         case 1: "flat"
-        default: "morphing"
+        default: "morphing, still a sphere"
         }
     }
 }
