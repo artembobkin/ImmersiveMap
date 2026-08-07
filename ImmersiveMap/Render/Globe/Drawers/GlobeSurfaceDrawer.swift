@@ -5,40 +5,42 @@ import Metal
 import simd
 
 enum GlobeSurfaceDrawer {
-    /// The whole sphere in one draw, in the map's background color, before any
-    /// tile. A tile that has not arrived (or a hole in coverage) then reads as
-    /// blank map rather than as a window into space, and the depth it writes is
-    /// the same depth a tile would have written there.
+    /// Blank tiles in the map's background color for every visible slot that
+    /// no content paints yet, drawn before the atlas mappings. A tile that has
+    /// not arrived (or a hole in coverage) then reads as blank map rather than
+    /// as a window into space, and the depth it writes is the depth the tile
+    /// will write.
     ///
-    /// `tile.z = 0` makes the grid span the entire Mercator range in a single
-    /// draw; the atlas fields go unread because the fragment stage never
-    /// samples a texture.
-    static func drawPlaceholder(renderEncoder: MTLRenderCommandEncoder,
-                                cameraUniform: CameraUniform,
-                                globe: GlobeUniform,
-                                earthScene: EarthSceneUniform,
-                                placeholderPipeline: GlobePipeline,
-                                mapSurfaceGridBuffers: MapSurfaceGridBuffers,
-                                horizonFog: HorizonFogUniform,
-                                fillColor: SIMD4<Float>) {
+    /// Each fill draws the exact slot the missing tile targets, on the same
+    /// grid, so the arriving tile lands on identical geometry and depth. A
+    /// single coarser fill (the whole sphere was tried) touches the true
+    /// sphere at its own grid vertices while the finer tile mesh chords under
+    /// it there, and every such vertex showed as a background-colored dot.
+    ///
+    /// The atlas fields of `TileData` go unread because the fragment stage
+    /// never samples a texture.
+    static func drawPlaceholderTiles(renderEncoder: MTLRenderCommandEncoder,
+                                     cameraUniform: CameraUniform,
+                                     globe: GlobeUniform,
+                                     earthScene: EarthSceneUniform,
+                                     placeholderPipeline: GlobePipeline,
+                                     mapSurfaceGridBuffers: MapSurfaceGridBuffers,
+                                     horizonFog: HorizonFogUniform,
+                                     fillColor: SIMD4<Float>,
+                                     slots: [Tile]) {
+        guard slots.isEmpty == false else {
+            return
+        }
         var cameraUniformValue = cameraUniform
         var earthSceneValue = earthScene
         var globeValue = globe
         var horizonFogValue = horizonFog
         var fillColorValue = fillColor
-        var wholeSphere = TileAtlasTexture.TileData(position: 0,
-                                                    textureSize: 1,
-                                                    cellSize: 1,
-                                                    tile: simd_int3(0, 0, 0),
-                                                    sourceTile: simd_int3(0, 0, 0))
 
         placeholderPipeline.selectPipeline(renderEncoder: renderEncoder)
         renderEncoder.setCullMode(.front)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 2)
-        renderEncoder.setVertexBytes(&wholeSphere,
-                                     length: MemoryLayout<TileAtlasTexture.TileData>.stride,
-                                     index: 3)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&earthSceneValue, length: MemoryLayout<EarthSceneUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&horizonFogValue,
@@ -48,11 +50,22 @@ enum GlobeSurfaceDrawer {
                                        length: MemoryLayout<SIMD4<Float>>.stride,
                                        index: 5)
         renderEncoder.setVertexBuffer(mapSurfaceGridBuffers.verticesBuffer, offset: 0, index: 0)
-        renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: mapSurfaceGridBuffers.indicesCount,
-                                            indexType: .uint32,
-                                            indexBuffer: mapSurfaceGridBuffers.indicesBuffer,
-                                            indexBufferOffset: 0)
+        for slot in slots {
+            let slotVector = simd_int3(Int32(slot.x), Int32(slot.y), Int32(slot.z))
+            var slotData = TileAtlasTexture.TileData(position: 0,
+                                                     textureSize: 1,
+                                                     cellSize: 1,
+                                                     tile: slotVector,
+                                                     sourceTile: slotVector)
+            renderEncoder.setVertexBytes(&slotData,
+                                         length: MemoryLayout<TileAtlasTexture.TileData>.stride,
+                                         index: 3)
+            renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                indexCount: mapSurfaceGridBuffers.indicesCount,
+                                                indexType: .uint32,
+                                                indexBuffer: mapSurfaceGridBuffers.indicesBuffer,
+                                                indexBufferOffset: 0)
+        }
     }
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,

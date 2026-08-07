@@ -42,20 +42,23 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: mapClearColor)
-        // Blank map under the atlas. Drawn first and with the same depth state,
-        // so tiles land on top of it: their grid is finer, which puts them at
-        // or in front of this depth, never behind it.
-        GlobeSurfaceDrawer.drawPlaceholder(renderEncoder: encoder,
-                                           cameraUniform: frameContext.cameraUniform,
-                                           globe: frameContext.globeRenderUniform,
-                                           earthScene: frameContext.earthSceneUniform,
-                                           placeholderPipeline: placeholderPipeline,
-                                           mapSurfaceGridBuffers: mapSurfaceGridBuffers,
-                                           horizonFog: horizonFog,
-                                           fillColor: SIMD4<Float>(Float(mapClearColor.x),
-                                                                   Float(mapClearColor.y),
-                                                                   Float(mapClearColor.z),
-                                                                   Float(mapClearColor.w)))
+        // Blank map in every slot the placements leave unpainted, drawn first
+        // and with the same depth state. Each fill is the slot its tile will
+        // draw, on the same grid: the tile replaces it at identical depth, so
+        // nothing coarser sits under the tiles to poke through their mesh.
+        let uncoveredSlots = frameContext.sharedState.tilePlacementState.tileAtlasPlaceTilesContext.uncoveredSlots
+        GlobeSurfaceDrawer.drawPlaceholderTiles(renderEncoder: encoder,
+                                                cameraUniform: frameContext.cameraUniform,
+                                                globe: frameContext.globeRenderUniform,
+                                                earthScene: frameContext.earthSceneUniform,
+                                                placeholderPipeline: placeholderPipeline,
+                                                mapSurfaceGridBuffers: mapSurfaceGridBuffers,
+                                                horizonFog: horizonFog,
+                                                fillColor: SIMD4<Float>(Float(mapClearColor.x),
+                                                                        Float(mapClearColor.y),
+                                                                        Float(mapClearColor.z),
+                                                                        Float(mapClearColor.w)),
+                                                slots: uncoveredSlots)
         GlobeSurfaceDrawer.draw(renderEncoder: encoder,
                                 cameraUniform: frameContext.cameraUniform,
                                 globe: frameContext.globeRenderUniform,

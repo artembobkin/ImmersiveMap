@@ -303,15 +303,17 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
                              in, camera, earthScene, horizonFog);
 }
 
-/// The planet under the tiles: one pass of the whole sphere in the map's own
-/// background color, drawn before the atlas and writing depth like any other
-/// surface.
+/// A blank tile in the map's own background color, drawn into every visible
+/// slot that no content paints yet, before the atlas mappings, writing depth
+/// like any other surface.
 ///
 /// Two things depended on the surface being there and had nothing to fall back
 /// on while tiles were still loading, or wherever coverage has a hole: the
 /// planet read as a see-through shell against space, and the depth buffer had
-/// nothing to occlude with. The fill costs one grid draw and is overpainted by
-/// every tile that arrives.
+/// nothing to occlude with. Each fill draws the exact slot geometry its tile
+/// will draw, so the tile replaces it at identical depth; a single coarser
+/// fill of the whole sphere poked through the finer tile mesh at its own grid
+/// vertices as background-colored dots.
 fragment float4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
                                                       constant Camera& camera [[buffer(1)]],
                                                       constant EarthScene& earthScene [[buffer(2)]],
