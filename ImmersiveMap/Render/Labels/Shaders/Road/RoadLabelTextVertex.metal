@@ -33,6 +33,10 @@ vertex VertexOut roadLabelTextVertex(LabelVertexIn in [[stage_in]],
     float2 pixelPosition = placement.position + rotated + screenOffset;
 
     out.position = matrix * float4(pixelPosition, 0.0, 1.0);
+    // Far-plane depth: the cleared overlay depth (1.0) passes the labels'
+    // lessEqual test, while the scene model occlusion prepass depth, always
+    // closer, clips the label to the model silhouette.
+    out.position.z = out.position.w;
     out.uv = in.uv;
     out.alpha = placement.visible != 0u ? meta.fadeAlpha : 0.0;
     out.spriteUV = in.spriteUV;

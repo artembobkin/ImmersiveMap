@@ -1,6 +1,6 @@
 # Labels
 
-Map labels are MSDF text: glyphs are stored as multi-channel signed distance fields in a bundled atlas, so a name stays crisp at any size and any zoom without re-rasterizing. Placement and collision run on the GPU every frame, so labels fight for space, fade in and out, and follow curved roads without the CPU laying out a single line of text.
+Map labels are MSDF text: glyphs are stored as multi-channel signed distance fields in a bundled atlas, so a name stays crisp at any size and any zoom without re-rasterizing. Placement and collision run on the GPU every frame, so labels fight for space, fade in and out, and follow curved roads without the CPU laying out a single line of text. Labels also never paint over a 3D scene model: a depth-only replay of the models opens the overlay pass, and every label fragment depth-tests against it, clipping to the model silhouettes.
 
 Everything an app configures lives on `ImmersiveMapSettings.LabelSettings` and is attached with `.labelSettings(_:)`. The idiomatic pattern is to take the current settings, change what you need, and hand them back:
 

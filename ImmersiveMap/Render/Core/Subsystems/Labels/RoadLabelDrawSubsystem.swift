@@ -12,12 +12,18 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
     let name: String = "RoadLabelDraw"
 
     private let textRenderer: TextRenderer
+    private let labelDepthState: MTLDepthStencilState
+    private let depthDisabledState: MTLDepthStencilState
 
     private(set) var hasRenderableLabels: Bool = false
 
     init(textRenderer: TextRenderer,
+         labelDepthState: MTLDepthStencilState,
+         depthDisabledState: MTLDepthStencilState,
          metalDevice _: MTLDevice) {
         self.textRenderer = textRenderer
+        self.labelDepthState = labelDepthState
+        self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext: FrameContext) {
@@ -47,10 +53,15 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
+        // Labels rasterize at the far plane (see RoadLabelTextVertex.metal),
+        // so lessEqual passes on the cleared overlay depth and fails wherever
+        // the scene model occlusion prepass wrote closer depth.
+        encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            textRenderer: textRenderer,
                                            roadDrawLabels: roadLabelState.drawLabels)
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

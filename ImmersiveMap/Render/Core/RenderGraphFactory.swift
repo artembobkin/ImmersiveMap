@@ -25,8 +25,12 @@ enum RenderGraphFactory {
                                                            debugOverlayControls: debugOverlayControls)
         let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,
                                                             poiSpriteAtlas: context.poiSpriteAtlas,
+                                                            labelDepthState: context.globeCapDepthState,
+                                                            depthDisabledState: context.depthDisabledState,
                                                             metalDevice: context.metalContext.device)
         let roadLabelDrawSubsystem = RoadLabelDrawSubsystem(textRenderer: context.textRenderer,
+                                                            labelDepthState: context.globeCapDepthState,
+                                                            depthDisabledState: context.depthDisabledState,
                                                             metalDevice: context.metalContext.device)
         let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
                                                     avatarSource: context.avatarSource,
@@ -96,6 +100,7 @@ enum RenderGraphFactory {
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,
+            sceneModelSubsystem,
             starfieldSubsystem,
             debugSubsystem
         ]
