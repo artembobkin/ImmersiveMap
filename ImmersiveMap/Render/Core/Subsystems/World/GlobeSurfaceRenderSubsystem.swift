@@ -8,17 +8,20 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
 
     private let globeDepthState: MTLDepthStencilState
     private let globePipeline: GlobePipeline
+    private let placeholderPipeline: GlobePipeline
     private let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     private let tilesTexture: TileAtlasTexture
     private let debugOverlayControls: DebugOverlayControlState
 
     init(globeDepthState: MTLDepthStencilState,
          globePipeline: GlobePipeline,
+         placeholderPipeline: GlobePipeline,
          mapSurfaceGridBuffers: MapSurfaceGridBuffers,
          tilesTexture: TileAtlasTexture,
          debugOverlayControls: DebugOverlayControlState) {
         self.globeDepthState = globeDepthState
         self.globePipeline = globePipeline
+        self.placeholderPipeline = placeholderPipeline
         self.mapSurfaceGridBuffers = mapSurfaceGridBuffers
         self.tilesTexture = tilesTexture
         self.debugOverlayControls = debugOverlayControls
@@ -35,9 +38,24 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         }
 
         encoder.setDepthStencilState(globeDepthState)
+        let mapClearColor = frameContext.services.settings.scene.mapClearColor
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
-                                                mapClearColor: frameContext.services.settings.scene.mapClearColor)
+                                                mapClearColor: mapClearColor)
+        // Blank map under the atlas. Drawn first and with the same depth state,
+        // so tiles land on top of it: their grid is finer, which puts them at
+        // or in front of this depth, never behind it.
+        GlobeSurfaceDrawer.drawPlaceholder(renderEncoder: encoder,
+                                           cameraUniform: frameContext.cameraUniform,
+                                           globe: frameContext.globeRenderUniform,
+                                           earthScene: frameContext.earthSceneUniform,
+                                           placeholderPipeline: placeholderPipeline,
+                                           mapSurfaceGridBuffers: mapSurfaceGridBuffers,
+                                           horizonFog: horizonFog,
+                                           fillColor: SIMD4<Float>(Float(mapClearColor.x),
+                                                                   Float(mapClearColor.y),
+                                                                   Float(mapClearColor.z),
+                                                                   Float(mapClearColor.w)))
         GlobeSurfaceDrawer.draw(renderEncoder: encoder,
                                 cameraUniform: frameContext.cameraUniform,
                                 globe: frameContext.globeRenderUniform,

@@ -1,6 +1,6 @@
 # Routes
 
-Draw great-circle routes over the globe with the `.routes(...)` modifier and `ImmersiveMapRoutesController`. A route is a ribbon lifted off the surface by an altitude profile, so a flight path arcs away from the planet and back; it renders inside the map world pass with real depth, which is what makes the far half of the arc disappear behind the globe and a model in front of the line cover it. Line width is specified in points and stays constant on screen at any zoom.
+Draw great-circle routes over the globe with the `.routes(...)` modifier and `ImmersiveMapRoutesController`. A route is a ribbon lifted off the surface by an altitude profile, so a flight path arcs away from the planet and back. It renders inside the map world pass: the far half of an arc disappears behind the globe because the shader tests every point against the sphere itself, and a model in front of the line covers it through the depth buffer. Line width is specified in points and stays constant on screen at any zoom.
 
 A route is one of three things that can share a path. The other two have their own pages: [flying a model along it](scene-models.md) and [travelling the camera with it](camera-path-follow.md).
 
@@ -95,7 +95,8 @@ The controller is thread-safe and can be mutated from any thread. Rendering stay
 - **Globe presentation only**: routes are drawn while the map is a globe, including the whole sphere-to-plane morph, and fade out over the last tenth of that morph. On the fully flat map nothing is drawn. Model animation and camera follow over the same path are unaffected.
 - **Style**: no gradient along the path, and butt end caps.
 - **Video export**: routes are not included in [tour video exports](tour-video-export.md), matching scene models.
-- **Ground-level routes**: a route with a zero altitude profile lies exactly on the surface and can stipple against it under the depth test. Give a ground track a small `baseAltitudeMeters` (a few kilometers reads as flat at globe zoom).
+- **Ground-level routes**: a route with a zero altitude profile lies exactly on the surface and can stipple against it under the depth test. Give a ground track a small `baseAltitudeMeters` (a few kilometers reads as flat at globe zoom). The altitude also moves the point's own horizon, so a lifted track legitimately stays visible slightly further around the planet than a ground one.
+- **Ribbon width at the limb**: the ribbon is widened in screen space around a centerline that is hidden at the horizon, so where a route runs out over the limb its last half width can reach a couple of pixels past the silhouette.
 - **Selection**: routes are not tappable.
 
 Running example: [`Examples/macOS/ImmersiveMapRoutesMac`](../../Examples/macOS/ImmersiveMapRoutesMac) draws a round-the-world journey leg by leg, with a dashed plan under a solid line that grows along it.

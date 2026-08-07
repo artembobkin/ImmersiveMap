@@ -115,7 +115,201 @@ final class RouteOffscreenRenderTests: XCTestCase {
         XCTAssertEqual(degenerateCount, solid)
     }
 
+    // MARK: - Horizon
+
+    /// A ribbon on the far hemisphere must not reach the drawable at all.
+    ///
+    /// Two mechanisms cover this one deep in the far side: the shader gate and
+    /// the depth the surface writes. It therefore stays green with the gate
+    /// removed, and it is here for the behaviour, not as coverage of the gate.
+    /// The cases the gate alone answers, where the depth buffer is incomplete,
+    /// are the limb, the polar caps and the tilted horizon below.
+    @MainActor
+    func testRouteOnTheFarSideOfTheGlobeIsNotDrawn() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: -center.latitudeDegrees,
+            longitude: center.longitudeDegrees + 180,
+            halfSpanDegrees: 20))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertEqual(redPixelCount(in: painted), 0)
+    }
+
+    /// Just past the horizon (the visible cap ends at 77.4 degrees from the
+    /// camera at this zoom) the ribbon used to survive the depth test and paint
+    /// over the rim of the globe, which is exactly where a viewer reads it as
+    /// "the path is on the other side, why can I see it".
+    @MainActor
+    func testGroundRouteBeyondTheHorizonDoesNotSpillOverTheLimb() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: center.latitudeDegrees - 80,
+            longitude: center.longitudeDegrees,
+            halfSpanDegrees: 5))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertEqual(redPixelCount(in: painted), 0)
+    }
+
+    /// The gate tests the point where it actually is, altitude included, so an
+    /// arc that climbs away from the planet clears the horizon plane on its own
+    /// and keeps flying past the limb. Same geometry as the test above, lifted
+    /// far enough to rise over it: at 80 degrees from the camera the horizon
+    /// plane sits at roughly 2000 km of altitude, so this is the same ribbon
+    /// with only the altitude profile changed.
+    @MainActor
+    func testLiftedArcStaysVisibleBeyondTheHorizon() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: center.latitudeDegrees - 80,
+            longitude: center.longitudeDegrees,
+            halfSpanDegrees: 5,
+            baseAltitudeMeters: 2_500_000))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+    }
+
+    /// The shadow a sphere casts is a cone, not a half space. This ribbon sits
+    /// past the plane through the tangent circle (101 degrees from the camera,
+    /// where a point on the surface is long hidden) but its altitude carries it
+    /// out of the cone, so the line of sight reaches it and it must paint.
+    /// A plane test passes every other case here and fails only this one.
+    @MainActor
+    func testLiftedArcOutsideTheShadowConeStillPaints() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: center.latitudeDegrees - 101,
+            longitude: center.longitudeDegrees,
+            halfSpanDegrees: 5,
+            baseAltitudeMeters: 600_000))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+    }
+
+    /// The polar caps draw without depth writes, and the placeholder fill under
+    /// the tiles stops at the Mercator limit of 85.05 degrees, so the depth
+    /// buffer has a hole exactly over each pole. A ground track on the far side
+    /// whose line of sight leaves the globe through that hole is what used to
+    /// paint a red arc across the Arctic, and only the shader gate stops it:
+    /// remove the gate and this test paints again.
+    @MainActor
+    func testFarSideRouteDoesNotLeakThroughThePolarCap() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(
+            latitude: 0,
+            longitude: center.longitudeDegrees + 180,
+            halfSpanDegrees: 30))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertEqual(redPixelCount(in: painted), 0)
+    }
+
+    /// The control for all three: the same short ribbon on the visible face
+    /// paints, so a zero above means "gated", not "never drawn".
+    @MainActor
+    func testShortRouteOnTheVisibleFacePaints() async throws {
+        let device = try makeDeviceOrSkip()
+        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+
+        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees,
+                                                     longitude: center.longitudeDegrees,
+                                                     halfSpanDegrees: 5))
+        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+
+        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+    }
+
+    /// Tilt swings the eye off the axis (pitch rotates it about +x, so it moves
+    /// towards -y while the view stays on the point under it) and brings it
+    /// closer to the planet's center, which pulls the far horizon in: looking
+    /// north from 55.8N at the pitch limit, the surface runs out 12.85 degrees
+    /// of latitude ahead instead of the 53.2 it reaches head on at this zoom.
+    ///
+    /// Both tracks here are chosen to be **inside the frustum** (`w` of 1.08 and
+    /// 0.94), which is the whole point: a track picked on the near side is
+    /// clipped for being behind the camera, and then the test reads zero no
+    /// matter what the horizon gate does. The pair differs only in being past
+    /// the horizon or short of it, so the zero can only come from the gate.
+    ///
+    /// What survives the gate's removal at `+17` is the couple of pixels of
+    /// ribbon that clear the limb, so a smaller `widthPoints` here would quietly
+    /// turn this back into a test that cannot fail.
+    @MainActor
+    func testHorizonHoldsUnderCameraTilt() async throws {
+        let device = try makeDeviceOrSkip()
+        // Pitch is released with zoom on the globe (globePitchUnlockZoom), so
+        // the tilt only reaches its limit past that zoom.
+        let context = try makeContext(device: device,
+                                      zoom: 3.5,
+                                      settings: Self.flatlitSettings,
+                                      pitch: ImmersiveMapSettings.default.camera.maximumPitch)
+        _ = try await renderFrame(context: context, time: 0)
+        let center = context.renderCamera.currentCameraPosition()
+        XCTAssertGreaterThan(center.pitch, 0.5, "The camera must actually be tilted")
+
+        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 17,
+                                                     longitude: center.longitudeDegrees,
+                                                     halfSpanDegrees: 5))
+        let beyondHorizon = try await renderFrame(context: context, time: 1.0 / 60.0)
+        XCTAssertEqual(redPixelCount(in: beyondHorizon), 0,
+                       "A tilted camera must not see a ground track beyond its horizon")
+
+        context.routeSource.controller.clear()
+        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 10,
+                                                     longitude: center.longitudeDegrees,
+                                                     halfSpanDegrees: 5))
+        let shortOfTheHorizon = try await renderFrame(context: context, time: 2.0 / 60.0)
+        XCTAssertGreaterThan(redPixelCount(in: shortOfTheHorizon), 0,
+                             "The same track short of that horizon must paint")
+    }
+
     // MARK: - Helpers
+
+    /// Flat lighting for the horizon tests: the terminator would sink a red
+    /// ribbon into the night side, and the Sun's glow reads as red pixels.
+    private static let flatlitSettings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+
+    /// A short ground ribbon centred on one coordinate, so a test states the
+    /// angular distance from the camera it wants and nothing else.
+    private func makeRoute(latitude: Double,
+                           longitude: Double,
+                           halfSpanDegrees: Double,
+                           baseAltitudeMeters: Double = 0) -> ImmersiveMapRoute {
+        let path = ImmersiveMapGeoPath(
+            from: GeoCoordinate(latitude: latitude, longitude: longitude - halfSpanDegrees),
+            to: GeoCoordinate(latitude: latitude, longitude: longitude + halfSpanDegrees),
+            baseAltitudeMeters: baseAltitudeMeters)
+        return ImmersiveMapRoute(id: 1,
+                                 path: path,
+                                 color: SIMD4<Float>(1, 0, 0, 1),
+                                 widthPoints: 6,
+                                 progress: 1)
+    }
 
     private struct Context {
         let engine: RenderFrameEngine
@@ -126,15 +320,18 @@ final class RouteOffscreenRenderTests: XCTestCase {
     }
 
     @MainActor
-    private func makeContext(device: MTLDevice, zoom: Double) throws -> Context {
-        let settings = ImmersiveMapSettings.default
+    private func makeContext(device: MTLDevice,
+                             zoom: Double,
+                             settings: ImmersiveMapSettings = .default,
+                             pitch: Float = 0) throws -> Context {
         let clock = RenderFrameScriptedClock()
         let routeSource = StubRouteSource()
         let renderCamera = FrameCameraStateResolver(settings: settings)
         let start = renderCamera.currentCameraPosition()
         renderCamera.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: start.latitudeDegrees,
                                                                   longitudeDegrees: start.longitudeDegrees,
-                                                                  zoom: zoom))
+                                                                  zoom: zoom,
+                                                                  pitch: pitch))
         let layer = CAMetalLayer()
         let engine = RenderFrameEngine(layer: layer,
                                        avatarSource: StubAvatarSource(),
