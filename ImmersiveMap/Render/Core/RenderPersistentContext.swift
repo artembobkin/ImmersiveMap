@@ -22,6 +22,7 @@ final class RenderPersistentContext {
     let globeTileTexturePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let globePipeline: GlobePipeline
+    let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
@@ -107,6 +108,7 @@ final class RenderPersistentContext {
         self.globeTileTexturePipeline = shared.globeTileTexturePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.globePipeline = shared.globePipeline
+        self.globeSurfacePlaceholderPipeline = shared.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline

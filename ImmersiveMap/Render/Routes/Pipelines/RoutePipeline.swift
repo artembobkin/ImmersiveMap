@@ -4,7 +4,9 @@
 import Metal
 
 /// GPU mirror of `RouteUniform` in Route.metal. Size and stride are 48 bytes on
-/// both sides; `RouteGPUStructLayoutTests` pins the offsets.
+/// both sides; `RouteGPUStructLayoutTests` pins the offsets. The globe the
+/// shader tests the centerline against arrives separately, as the same
+/// `GlobeUniform` the surface layers bind.
 struct RouteUniformGPU {
     var viewport: SIMD2<Float>
     var halfWidthPx: Float

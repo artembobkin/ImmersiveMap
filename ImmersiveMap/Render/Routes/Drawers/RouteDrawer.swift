@@ -19,6 +19,7 @@ enum RouteDrawer {
                      pointsBuffer: MTLBuffer,
                      screenLengthsBuffer: MTLBuffer,
                      cameraUniform: CameraUniform,
+                     globeUniform: GlobeUniform,
                      pipeline: RoutePipeline) {
         guard items.isEmpty == false else { return }
 
@@ -29,6 +30,14 @@ enum RouteDrawer {
 
         var camera = cameraUniform
         renderEncoder.setVertexBytes(&camera, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        // The sphere the shader tests the centerline against: routes are hidden
+        // by the globe body itself, not by what happens to be in the depth
+        // buffer. The fragment stage runs the occlusion test, the vertex stage
+        // only needs the radius for the unfurl release.
+        var globe = globeUniform
+        renderEncoder.setVertexBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 4)
+        renderEncoder.setFragmentBytes(&camera, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        renderEncoder.setFragmentBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 2)
 
         let pointStride = MemoryLayout<RouteWorldGeometryBuilder.Point>.stride
         let screenLengthStride = MemoryLayout<Float>.stride

@@ -57,6 +57,8 @@ final class SharedRenderResources {
     let globeTileTexturePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let globePipeline: GlobePipeline
+    /// Same sphere, flat map color: the fill the tiles are painted over.
+    let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
     let sceneModelPipeline: SceneModelPipeline
@@ -119,6 +121,12 @@ final class SharedRenderResources {
                                            pixelFormat: colorPixelFormat,
                                            library: library,
                                            sampleCount: renderSampleCount)
+        self.globeSurfacePlaceholderPipeline = GlobePipeline(
+            metalDevice: device,
+            pixelFormat: colorPixelFormat,
+            library: library,
+            sampleCount: renderSampleCount,
+            fragmentFunctionName: "globeSurfacePlaceholderFragmentShader")
         self.fxaaPipeline = FXAAPipeline(metalDevice: device,
                                          pixelFormat: colorPixelFormat,
                                          library: library)

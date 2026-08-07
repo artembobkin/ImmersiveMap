@@ -149,15 +149,19 @@ final class RouteRenderSubsystem: RenderSubsystem {
             return
         }
 
-        // Depth test without depth write: the globe and the scene models in
-        // front of the arc already wrote depth, and a translucent ribbon must
-        // not occlude itself along the way.
+        // Depth test without depth write: the scene models in front of the arc
+        // already wrote depth, and a translucent ribbon must not occlude itself
+        // along the way. The globe is not what hides the far half of a route;
+        // the shader's own horizon gate is, because depth is only as complete
+        // as the surface that wrote it (tessellated in chords, missing where
+        // tiles have not arrived, absent under the polar caps).
         encoder.setDepthStencilState(routeDepthState)
         RouteDrawer.draw(renderEncoder: encoder,
                          items: drawItems,
                          pointsBuffer: pointBufferStore.buffer(for: frameContext.frameSlotIndex),
                          screenLengthsBuffer: screenLengthBufferStore.buffer(for: frameContext.frameSlotIndex),
                          cameraUniform: frameContext.cameraUniform,
+                         globeUniform: frameContext.globeRenderUniform,
                          pipeline: pipeline)
         encoder.setDepthStencilState(depthDisabledState)
     }

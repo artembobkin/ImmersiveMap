@@ -250,23 +250,15 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
     };
 }
 
-fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
-                                    texture2d<float> texture [[texture(0)]],
-                                    constant Camera& camera [[buffer(1)]],
-                                    constant EarthScene& earthScene [[buffer(2)]],
-                                    constant Tile& tileData [[buffer(3)]],
-                                    constant HorizonFog& horizonFog [[buffer(4)]]) {
-    constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
-    
-//    return float4(1.0, 0, 0, 1);
-    
-    AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
-    AtlasSampleCoords coords = atlasSampleCoords(in.texCoord, bounds, in.halfTexel);
-    if (coords.outsideCoverage) {
-        discard_fragment();
-    }
-
-    float4 color = texture.sample(textureSampler, coords.uv, level(coords.lod));
+/// Everything the globe surface does to a sampled color: day/night shading, the
+/// limb glow, and the haze that hides the seam at the surface swap. Shared so
+/// the placeholder fill below is lit exactly like the tiles that replace it,
+/// and a tile arriving over it changes only the texture, never the shading.
+static inline float4 globeSurfaceShade(float4 color,
+                                       VertexOut in,
+                                       constant Camera& camera,
+                                       constant EarthScene& earthScene,
+                                       constant HorizonFog& horizonFog) {
     if (earthScene.isEnabled != 0) {
         float sunDot = dot(normalize(in.earthNormal), normalize(earthScene.sunDirection));
         float dayFactor = smoothstep(-earthScene.terminatorFadeWidth,
@@ -291,6 +283,41 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
     // morph and the plane are fogged identically - the horizon-line seam is hidden.
     color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
+}
+
+fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
+                                    texture2d<float> texture [[texture(0)]],
+                                    constant Camera& camera [[buffer(1)]],
+                                    constant EarthScene& earthScene [[buffer(2)]],
+                                    constant Tile& tileData [[buffer(3)]],
+                                    constant HorizonFog& horizonFog [[buffer(4)]]) {
+    constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
+
+    AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
+    AtlasSampleCoords coords = atlasSampleCoords(in.texCoord, bounds, in.halfTexel);
+    if (coords.outsideCoverage) {
+        discard_fragment();
+    }
+
+    return globeSurfaceShade(texture.sample(textureSampler, coords.uv, level(coords.lod)),
+                             in, camera, earthScene, horizonFog);
+}
+
+/// The planet under the tiles: one pass of the whole sphere in the map's own
+/// background color, drawn before the atlas and writing depth like any other
+/// surface.
+///
+/// Two things depended on the surface being there and had nothing to fall back
+/// on while tiles were still loading, or wherever coverage has a hole: the
+/// planet read as a see-through shell against space, and the depth buffer had
+/// nothing to occlude with. The fill costs one grid draw and is overpainted by
+/// every tile that arrives.
+fragment float4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
+                                                      constant Camera& camera [[buffer(1)]],
+                                                      constant EarthScene& earthScene [[buffer(2)]],
+                                                      constant HorizonFog& horizonFog [[buffer(4)]],
+                                                      constant float4& fillColor [[buffer(5)]]) {
+    return globeSurfaceShade(fillColor, in, camera, earthScene, horizonFog);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],

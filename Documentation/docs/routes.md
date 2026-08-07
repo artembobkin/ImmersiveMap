@@ -1,6 +1,6 @@
 # Routes
 
-Draw great-circle routes over the globe with the `.routes(...)` modifier and `ImmersiveMapRoutesController`, fly a 3D model along the same trajectory with `ImmersiveMapSceneModelsController.animate(id:along:duration:)`, and travel the camera with it through `ImmersiveMapCameraController.follow(path:duration:)`. A route is a ribbon lifted off the surface by an altitude profile, so a flight path arcs away from the planet and back; it renders inside the map world pass with real depth, which is what makes the far half of the arc disappear behind the globe and a model in front of the line cover it. Line width is specified in points and stays constant on screen at any zoom.
+Draw great-circle routes over the globe with the `.routes(...)` modifier and `ImmersiveMapRoutesController`, fly a 3D model along the same trajectory with `ImmersiveMapSceneModelsController.animate(id:along:duration:)`, and travel the camera with it through `ImmersiveMapCameraController.follow(path:duration:)`. A route is a ribbon lifted off the surface by an altitude profile, so a flight path arcs away from the planet and back. It renders inside the map world pass: the far half of an arc disappears behind the globe because the shader tests every point against the sphere itself, and a model in front of the line covers it through the depth buffer. Line width is specified in points and stays constant on screen at any zoom.
 
 ```swift
 struct MapScreen: View {
@@ -156,5 +156,6 @@ While the animation runs the path owns the model's coordinate, altitude and, whe
 - **Camera course**: `Bearing.course` is subject to the engine's own globe bearing limit, so on a zoomed-out globe the camera turns only as far as `CameraSettings.globeBearingUnlockZoom` allows. Raise that setting, or zoom in, for a full chase.
 - **Camera trailing**: with the default smoothing the camera ends a traversal slightly behind the destination rather than snapping onto it. Pass `smoothingHalfLife: 0` when the endpoint has to be exact.
 - **Video export**: routes are not included in tour video exports, matching scene models.
-- **Ground-level routes**: a route with a zero altitude profile lies exactly on the surface and can stipple against it under the depth test. Give a ground track a small `baseAltitudeMeters` (a few kilometers reads as flat at globe zoom).
+- **Ground-level routes**: a route with a zero altitude profile lies exactly on the surface and can stipple against it under the depth test. Give a ground track a small `baseAltitudeMeters` (a few kilometers reads as flat at globe zoom). The altitude also moves the point's own horizon, so a lifted track legitimately stays visible slightly further around the planet than a ground one.
+- **Ribbon width at the limb**: the ribbon is widened in screen space around a centerline that is hidden at the horizon, so where a route runs out over the limb its last half width can reach a couple of pixels past the silhouette.
 - **Selection**: routes are not tappable.
