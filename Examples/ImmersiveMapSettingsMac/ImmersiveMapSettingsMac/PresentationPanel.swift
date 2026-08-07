@@ -59,7 +59,17 @@ struct PresentationPanel: View {
         }
         .onAppear {
             position = camera.currentCameraPosition()
-            camera.onCameraPositionChanged = { position = $0 }
+            camera.onCameraPositionChanged = { newPosition in
+                // The engine notifies synchronously from its settings-apply
+                // path, which runs inside SwiftUI's update pass: a slider here
+                // writes `settings`, the map view re-renders, the settings are
+                // applied, the camera re-clamps and notifies. Writing @State
+                // there is the "modifying state during view update" case, so
+                // the readout is updated on the next runloop turn instead.
+                DispatchQueue.main.async {
+                    position = newPosition
+                }
+            }
         }
         .onDisappear {
             camera.onCameraPositionChanged = nil

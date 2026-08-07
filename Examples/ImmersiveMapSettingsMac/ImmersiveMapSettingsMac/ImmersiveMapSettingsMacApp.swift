@@ -71,7 +71,7 @@ private struct SettingsPlaygroundScreen: View {
                 .ignoresSafeArea()
 
             ImmersiveMapView(settings: settings)
-                .camera(camera, position: PlaygroundSection.labels.cameraPosition)
+                .camera(camera)
                 .enableCameraUIControls()
                 .ignoresSafeArea()
 
@@ -83,6 +83,16 @@ private struct SettingsPlaygroundScreen: View {
                 .padding(20)
         }
         .navigationTitle(section.title)
+        // The opening position is placed imperatively instead of declared with
+        // `.camera(camera, position:)`. A declared position is reapplied on
+        // every SwiftUI update, and this app both flies the camera between
+        // sections and re-renders on every settings edit, so the two would
+        // fight: the first slider move after a flight would snap the map back
+        // to where the declaration points. Commands queue up in the controller
+        // until the view attaches, so this is safe before the first frame.
+        .onAppear {
+            camera.jump(to: section.cameraPosition)
+        }
     }
 
     private var panel: some View {
