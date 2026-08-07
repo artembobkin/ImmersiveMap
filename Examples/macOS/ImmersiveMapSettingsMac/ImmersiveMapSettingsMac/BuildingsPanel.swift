@@ -58,7 +58,7 @@ struct BuildingsPanel: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 340)
+                .frame(width: 400)
 
                 Toggle("Shadows", isOn: $settings.scene.shadows.isEnabled)
                     .toggleStyle(.switch)

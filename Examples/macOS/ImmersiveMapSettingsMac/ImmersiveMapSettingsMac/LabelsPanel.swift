@@ -36,7 +36,7 @@ struct LabelsPanel: View {
                     Text("Local first").tag(ImmersiveMapSettings.LabelFallbackPolicy.localFirst)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 230)
+                .frame(width: 290)
 
                 Toggle("House numbers", isOn: $settings.labels.houseNumbers.enabled)
                     .toggleStyle(.switch)

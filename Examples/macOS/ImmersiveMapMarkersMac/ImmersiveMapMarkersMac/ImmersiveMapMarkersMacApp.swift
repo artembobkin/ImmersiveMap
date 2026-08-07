@@ -60,7 +60,7 @@ private struct MarkersScreen: View {
                 Text("Top").tag(UnitPoint.top)
             }
             .pickerStyle(.segmented)
-            .frame(width: 220)
+            .frame(width: 300)
 
             Toggle("Interactive cards", isOn: $usesCards)
                 .toggleStyle(.switch)
