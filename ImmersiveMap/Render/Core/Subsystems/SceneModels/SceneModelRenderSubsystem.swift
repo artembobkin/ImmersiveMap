@@ -4,7 +4,7 @@
 import Metal
 import simd
 
-final class SceneModelRenderSubsystem: RenderSubsystem {
+final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "SceneModels"
 
     private let sceneModelSource: SceneModelRenderSource
@@ -126,6 +126,12 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
             entries: selectionEntries)
     }
 
+    func contributePassAvailability(settings _: ImmersiveMapSettings,
+                                    builder: inout RenderPassAvailabilityBuilder) {
+        builder.sceneModelOcclusionEnabled = builder.sceneModelOcclusionEnabled
+            || drawItems.isEmpty == false
+    }
+
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
@@ -142,6 +148,14 @@ final class SceneModelRenderSubsystem: RenderSubsystem {
                                   pipeline: pipeline,
                                   extrudedDepthState: extrudedDepthState,
                                   depthDisabledState: depthDisabledState)
+        case .sceneModelOcclusion:
+            guard drawItems.isEmpty == false else { return }
+            SceneModelDrawer.drawLabelOcclusion(renderEncoder: encoder,
+                                                cameraUniform: frameContext.cameraUniform,
+                                                items: drawItems,
+                                                pipeline: pipeline,
+                                                extrudedDepthState: extrudedDepthState,
+                                                depthDisabledState: depthDisabledState)
         case .shadowCasters:
             guard let shadowState = frameContext.shadowFrameState,
                   shadowCasterItems.isEmpty == false else { return }

@@ -17,6 +17,10 @@ enum RenderLayer: String, CaseIterable {
     case flatMapSurface
     case buildingExtrusion
     case sceneModels
+    /// Depth-only replay of the scene models at the start of the overlay pass:
+    /// label fragments depth-test against it, so model silhouettes clip them
+    /// while the visible models stay in the world pass with MSAA and shadows.
+    case sceneModelOcclusion
     case routes
     case postProcessing
     case labels
@@ -34,6 +38,7 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case flatTileOriginUnavailable
     case noLabelContent
     case noAvatarContent
+    case noSceneModelContent
     case debugOverlayDisabled
     /// The starfield layer, which paints the space background, the stars and the
     /// Sun, is off because space is configured transparent.
@@ -45,6 +50,9 @@ struct RenderPassAvailability {
     let labelsEnabled: Bool
     let avatarsEnabled: Bool
     let debugOverlayEnabled: Bool
+    /// True when the frame has drawn scene models whose silhouettes should
+    /// clip the labels via the overlay-pass depth prepass.
+    let sceneModelOcclusionEnabled: Bool
     /// False when space is configured transparent: nothing outside the globe is
     /// painted, so the space background, the stars and the Sun are skipped.
     let starfieldEnabled: Bool
@@ -71,6 +79,12 @@ struct RenderLayerPlanner {
             }
             return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
         } + [
+            // First in the overlay pass: the depth it writes is what the label
+            // draws test against. It only serves labels, so it is off without
+            // them (the labels item reports that skip on its own).
+            RenderLayerPlanItem(layer: .sceneModelOcclusion,
+                                enabled: availability.sceneModelOcclusionEnabled && availability.labelsEnabled,
+                                skipReason: availability.sceneModelOcclusionEnabled ? nil : .noSceneModelContent),
             RenderLayerPlanItem(layer: .labels,
                                 enabled: availability.labelsEnabled,
                                 skipReason: availability.labelsEnabled ? nil : .noLabelContent),

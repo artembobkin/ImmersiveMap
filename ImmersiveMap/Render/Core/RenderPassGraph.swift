@@ -10,14 +10,15 @@ final class RenderPassGraph {
         case .starfield, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion, .sceneModels,
              .routes:
             return true
-        case .shadowCasters, .buildingImage, .postProcessing, .labels, .avatars, .debugOverlay:
+        case .shadowCasters, .buildingImage, .postProcessing, .sceneModelOcclusion, .labels, .avatars,
+             .debugOverlay:
             return false
         }
     }
 
     static func isOverlayLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
-        case .labels, .avatars, .debugOverlay:
+        case .sceneModelOcclusion, .labels, .avatars, .debugOverlay:
             return true
         case .shadowCasters, .buildingImage, .starfield, .globeSurface, .globeCap, .flatMapSurface,
              .buildingExtrusion, .sceneModels, .routes, .postProcessing:

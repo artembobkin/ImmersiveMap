@@ -45,7 +45,7 @@ Rendering is **on-demand**. `ImmersiveMapRenderDriver` drives a `CADisplayLink` 
 collectInput → updateScene → prepareGPU → encodePasses → presentFrame
 ```
 
-Work is organized as ~17 `RenderSubsystem`s registered by `RenderGraphFactory`. `RenderPassGraph` groups render layers into up to five passes: `shadowMap` (flat-only depth pass from the directional light, sampled by later passes), `buildingImage` (flat-only offscreen render of opaque buildings that the world pass composites translucently), `world` (MSAA), `postProcessing` (FXAA), and `overlay` (labels/avatars/debug). GPU frame overlap is bounded by `InFlightFramePool`.
+Work is organized as ~17 `RenderSubsystem`s registered by `RenderGraphFactory`. `RenderPassGraph` groups render layers into up to five passes: `shadowMap` (flat-only depth pass from the directional light, sampled by later passes), `buildingImage` (flat-only offscreen render of opaque buildings that the world pass composites translucently), `world` (MSAA), `postProcessing` (FXAA), and `overlay` (a scene-model label-occlusion depth prepass, then labels/avatars/debug: labels rasterize at the far plane and depth-test against the prepass, so model silhouettes clip them). GPU frame overlap is bounded by `InFlightFramePool`.
 
 ## Tile pipeline
 

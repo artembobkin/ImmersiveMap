@@ -1,6 +1,6 @@
 # 3D scene models
 
-Anchor 3D models (USDZ or OBJ) to geographic coordinates with the `.sceneModels(...)` modifier and `ImmersiveMapSceneModelsController`. Models render inside the map world pass (with real depth, MSAA, and the same light as extruded buildings) in flat mode, on the globe, and through the globe-to-flat morph: a model sticks to the surface, tilts with the sphere, scales with zoom, and disappears behind the globe horizon.
+Anchor 3D models (USDZ or OBJ) to geographic coordinates with the `.sceneModels(...)` modifier and `ImmersiveMapSceneModelsController`. Models render inside the map world pass (with real depth, MSAA, and the same light as extruded buildings) in flat mode, on the globe, and through the globe-to-flat morph: a model sticks to the surface, tilts with the sphere, scales with zoom, and disappears behind the globe horizon. Map labels never paint over a model: a depth-only replay of the drawn models opens the overlay pass, and label fragments depth-test against it, so model silhouettes clip them.
 
 ```swift
 struct MapScreen: View {

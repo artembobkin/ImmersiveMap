@@ -13,14 +13,20 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
 
     private let textRenderer: TextRenderer
     private let poiSpriteAtlas: PoiSpriteAtlas
+    private let labelDepthState: MTLDepthStencilState
+    private let depthDisabledState: MTLDepthStencilState
 
     private(set) var hasRenderableLabels: Bool = false
 
     init(textRenderer: TextRenderer,
          poiSpriteAtlas: PoiSpriteAtlas,
+         labelDepthState: MTLDepthStencilState,
+         depthDisabledState: MTLDepthStencilState,
          metalDevice _: MTLDevice) {
         self.textRenderer = textRenderer
         self.poiSpriteAtlas = poiSpriteAtlas
+        self.labelDepthState = labelDepthState
+        self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext: FrameContext) {
@@ -58,6 +64,10 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
+        // Labels rasterize at the far plane (see LabelTextVertex.metal), so
+        // lessEqual passes on the cleared overlay depth and fails wherever the
+        // scene model occlusion prepass wrote closer depth.
+        encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawBaseLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            textRenderer: textRenderer,
@@ -65,6 +75,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
                                            screenPositionsBuffer: screenPositionsBuffer,
                                            labelRuntimeMetaBuffer: labelRuntimeMetaBuffer,
                                            baseLabelsDrawBatches: baseLabelState.baseLabelsDrawBatches)
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

@@ -12,6 +12,7 @@ struct RenderPassAvailabilityBuilder {
     var labelsEnabled: Bool = false
     var avatarsEnabled: Bool = false
     var debugOverlayEnabled: Bool = false
+    var sceneModelOcclusionEnabled: Bool = false
     /// Unlike the content-driven flags above, the starfield is on by default and
     /// is turned off by settings, so it starts enabled instead of accumulating.
     var starfieldEnabled: Bool = true
@@ -21,6 +22,7 @@ struct RenderPassAvailabilityBuilder {
                                labelsEnabled: labelsEnabled,
                                avatarsEnabled: avatarsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
+                               sceneModelOcclusionEnabled: sceneModelOcclusionEnabled,
                                starfieldEnabled: starfieldEnabled)
     }
 }

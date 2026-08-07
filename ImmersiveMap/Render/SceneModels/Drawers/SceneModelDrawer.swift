@@ -83,6 +83,47 @@ enum SceneModelDrawer {
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
+    /// Depth-only replay of the drawn models into the overlay pass depth
+    /// attachment, encoded before the labels: label fragments sit at the far
+    /// plane and depth-test lessEqual, so the depth written here clips them to
+    /// the model silhouettes. No materials and no textures; the world-pass
+    /// color render stays the only visible model draw. Cull `.none` like the
+    /// shadow replay: winding does not matter without color output.
+    static func drawLabelOcclusion(renderEncoder: MTLRenderCommandEncoder,
+                                   cameraUniform: CameraUniform,
+                                   items: [SceneModelDrawItem],
+                                   pipeline: SceneModelPipeline,
+                                   extrudedDepthState: MTLDepthStencilState,
+                                   depthDisabledState: MTLDepthStencilState) {
+        guard items.isEmpty == false else { return }
+
+        pipeline.selectLabelOcclusionPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setDepthStencilState(extrudedDepthState)
+        var cameraUniformValue = cameraUniform
+        renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
+
+        for item in items {
+            for (meshIndex, mesh) in item.mesh.meshes.enumerated() {
+                var modelMatrix = item.modelMatrix * item.mesh.localTransforms[meshIndex]
+                renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 2)
+
+                guard let vertexBuffer = mesh.vertexBuffers.first else { continue }
+                renderEncoder.setVertexBuffer(vertexBuffer.buffer, offset: vertexBuffer.offset, index: 0)
+
+                for submesh in mesh.submeshes {
+                    renderEncoder.drawIndexedPrimitives(type: submesh.primitiveType,
+                                                        indexCount: submesh.indexCount,
+                                                        indexType: submesh.indexType,
+                                                        indexBuffer: submesh.indexBuffer.buffer,
+                                                        indexBufferOffset: submesh.indexBuffer.offset)
+                }
+            }
+        }
+
+        renderEncoder.setDepthStencilState(depthDisabledState)
+    }
+
     /// Depth-only replay of the meshes from the light's orthographic cameras
     /// into the two halves of the shadow atlas: no materials, no textures,
     /// cull `.none` (winding does not matter without color output). No encoder
