@@ -27,6 +27,10 @@ final class RenderLayerPlannerTests: XCTestCase {
         // Routes are a globe-only feature in this version, and the plan is
         // where that invariant is enforced.
         XCTAssertFalse(plan.map(\.layer).contains(.routes))
+        // The globe surface layer, which also paints the placeholder fill under
+        // the tile atlas, is absent here: the flat map has its own surface and
+        // clears to the map color by itself.
+        XCTAssertFalse(plan.map(\.layer).contains(.globeSurface))
     }
 
     func testFlatModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {

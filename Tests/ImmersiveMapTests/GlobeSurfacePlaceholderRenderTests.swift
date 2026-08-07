@@ -38,10 +38,14 @@ final class GlobeSurfacePlaceholderRenderTests: XCTestCase {
         let center = pixel(in: frame, x: size / 2, y: size / 2)
 
         // The default map color is white, and the placeholder is the only thing
-        // that can paint the middle of the globe on frame one.
+        // that can paint the middle of the globe on frame one. Alpha is part of
+        // the claim: a fully transparent white pixel would satisfy every RGB
+        // check while the planet still read as a hole into whatever is behind
+        // the drawable.
         XCTAssertGreaterThan(Int(center.red), 200)
         XCTAssertGreaterThan(Int(center.green), 200)
         XCTAssertGreaterThan(Int(center.blue), 200)
+        XCTAssertGreaterThan(Int(center.alpha), 200)
     }
 
     /// The fill follows the configured map color rather than being hardcoded
@@ -58,17 +62,6 @@ final class GlobeSurfacePlaceholderRenderTests: XCTestCase {
 
         XCTAssertGreaterThan(Int(center.blue), Int(center.red))
         XCTAssertGreaterThan(Int(center.blue), Int(center.green))
-    }
-
-    /// The flat presentation has its own surface layer and clears to the map
-    /// color anyway; the placeholder belongs to the globe alone.
-    @MainActor
-    func testPlaceholderDoesNotRunOnTheFlatMap() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 15.0)
-        let frame = try await renderFrame(context: context)
-
-        XCTAssertEqual(frame.count, size * size * 4)
     }
 
     // MARK: - Helpers
@@ -115,9 +108,11 @@ final class GlobeSurfacePlaceholderRenderTests: XCTestCase {
         return Context(engine: engine, clock: clock, texture: texture)
     }
 
-    private func pixel(in pixels: [UInt8], x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8) {
+    private func pixel(in pixels: [UInt8],
+                       x: Int,
+                       y: Int) -> (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) {
         let index = (y * size + x) * 4
-        return (pixels[index + 2], pixels[index + 1], pixels[index])
+        return (pixels[index + 2], pixels[index + 1], pixels[index], pixels[index + 3])
     }
 
     @MainActor
