@@ -26,7 +26,7 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
-To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per API feature, each its own scheme: `ImmersiveMapIOS` (the only iOS one) plus `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapLabelsMac`, `ImmersiveMapEarthSceneMac`, `ImmersiveMapBuildingsMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
+To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per integration scenario, each its own scheme: `ImmersiveMapIOS` (the only iOS one, a minimal host rather than a feature demo) plus `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. Everything that is a field on `ImmersiveMapSettings` (labels, scene, style, presentation, tiles, debug) belongs in `ImmersiveMapSettingsMac`, which has a sidebar section per branch: add a section there instead of a new project. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
 
 ```sh
 xcodebuild -workspace ImmersiveMap.xcworkspace -scheme ImmersiveMapCameraTourMac \

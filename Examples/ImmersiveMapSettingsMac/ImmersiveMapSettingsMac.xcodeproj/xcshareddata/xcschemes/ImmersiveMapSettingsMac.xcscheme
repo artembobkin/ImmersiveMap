@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B1000000000000000000000A"
-               BuildableName = "ImmersiveMapEarthSceneMac.app"
-               BlueprintName = "ImmersiveMapEarthSceneMac"
-               ReferencedContainer = "container:ImmersiveMapEarthSceneMac.xcodeproj">
+               BuildableName = "ImmersiveMapSettingsMac.app"
+               BlueprintName = "ImmersiveMapSettingsMac"
+               ReferencedContainer = "container:ImmersiveMapSettingsMac.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,9 +46,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapEarthSceneMac.app"
-            BlueprintName = "ImmersiveMapEarthSceneMac"
-            ReferencedContainer = "container:ImmersiveMapEarthSceneMac.xcodeproj">
+            BuildableName = "ImmersiveMapSettingsMac.app"
+            BlueprintName = "ImmersiveMapSettingsMac"
+            ReferencedContainer = "container:ImmersiveMapSettingsMac.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -63,9 +63,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapEarthSceneMac.app"
-            BlueprintName = "ImmersiveMapEarthSceneMac"
-            ReferencedContainer = "container:ImmersiveMapEarthSceneMac.xcodeproj">
+            BuildableName = "ImmersiveMapSettingsMac.app"
+            BlueprintName = "ImmersiveMapSettingsMac"
+            ReferencedContainer = "container:ImmersiveMapSettingsMac.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

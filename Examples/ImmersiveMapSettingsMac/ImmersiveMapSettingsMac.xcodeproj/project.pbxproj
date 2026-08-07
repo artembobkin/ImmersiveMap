@@ -7,13 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B10000000000000000000021 /* ImmersiveMapLabelsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ImmersiveMapLabelsMacApp.swift */; };
+		B10000000000000000000041 /* ImmersiveMapSettingsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000031 /* ImmersiveMapSettingsMacApp.swift */; };
+		B10000000000000000000042 /* PlaygroundSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000032 /* PlaygroundSection.swift */; };
+		B10000000000000000000043 /* PanelControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000033 /* PanelControls.swift */; };
+		B10000000000000000000044 /* LabelsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000034 /* LabelsPanel.swift */; };
+		B10000000000000000000045 /* BuildingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035 /* BuildingsPanel.swift */; };
+		B10000000000000000000046 /* EarthScenePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* EarthScenePanel.swift */; };
+		B10000000000000000000047 /* StylePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* StylePanel.swift */; };
+		B10000000000000000000048 /* PresentationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038 /* PresentationPanel.swift */; };
+		B10000000000000000000049 /* DiagnosticsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000039 /* DiagnosticsPanel.swift */; };
 		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B10000000000000000000020 /* ImmersiveMapLabelsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapLabelsMacApp.swift; sourceTree = "<group>"; };
-		B10000000000000000000005 /* ImmersiveMapLabelsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapLabelsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000031 /* ImmersiveMapSettingsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapSettingsMacApp.swift; sourceTree = "<group>"; };
+		B10000000000000000000032 /* PlaygroundSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaygroundSection.swift; sourceTree = "<group>"; };
+		B10000000000000000000033 /* PanelControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelControls.swift; sourceTree = "<group>"; };
+		B10000000000000000000034 /* LabelsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelsPanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000035 /* BuildingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingsPanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000036 /* EarthScenePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarthScenePanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000037 /* StylePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylePanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000038 /* PresentationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationPanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000039 /* DiagnosticsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsPanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* ImmersiveMapSettingsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapSettingsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -31,23 +47,31 @@
 		B10000000000000000000007 = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000008 /* ImmersiveMapLabelsMac */,
+				B10000000000000000000008 /* ImmersiveMapSettingsMac */,
 				B10000000000000000000009 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		B10000000000000000000008 /* ImmersiveMapLabelsMac */ = {
+		B10000000000000000000008 /* ImmersiveMapSettingsMac */ = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000020 /* ImmersiveMapLabelsMacApp.swift */,
+				B10000000000000000000031 /* ImmersiveMapSettingsMacApp.swift */,
+				B10000000000000000000032 /* PlaygroundSection.swift */,
+				B10000000000000000000033 /* PanelControls.swift */,
+				B10000000000000000000034 /* LabelsPanel.swift */,
+				B10000000000000000000035 /* BuildingsPanel.swift */,
+				B10000000000000000000036 /* EarthScenePanel.swift */,
+				B10000000000000000000037 /* StylePanel.swift */,
+				B10000000000000000000038 /* PresentationPanel.swift */,
+				B10000000000000000000039 /* DiagnosticsPanel.swift */,
 			);
-			path = ImmersiveMapLabelsMac;
+			path = ImmersiveMapSettingsMac;
 			sourceTree = "<group>";
 		};
 		B10000000000000000000009 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B10000000000000000000005 /* ImmersiveMapLabelsMac.app */,
+				B10000000000000000000005 /* ImmersiveMapSettingsMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,9 +79,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B1000000000000000000000A /* ImmersiveMapLabelsMac */ = {
+		B1000000000000000000000A /* ImmersiveMapSettingsMac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapLabelsMac" */;
+			buildConfigurationList = B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapSettingsMac" */;
 			buildPhases = (
 				B1000000000000000000000C /* Sources */,
 				B10000000000000000000006 /* Frameworks */,
@@ -67,12 +91,12 @@
 			);
 			dependencies = (
 			);
-			name = ImmersiveMapLabelsMac;
+			name = ImmersiveMapSettingsMac;
 			packageProductDependencies = (
 				B10000000000000000000004 /* ImmersiveMap */,
 			);
-			productName = ImmersiveMapLabelsMac;
-			productReference = B10000000000000000000005 /* ImmersiveMapLabelsMac.app */;
+			productName = ImmersiveMapSettingsMac;
+			productReference = B10000000000000000000005 /* ImmersiveMapSettingsMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -90,7 +114,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapLabelsMac" */;
+			buildConfigurationList = B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapSettingsMac" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -106,7 +130,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B1000000000000000000000A /* ImmersiveMapLabelsMac */,
+				B1000000000000000000000A /* ImmersiveMapSettingsMac */,
 			);
 		};
 /* End PBXProject section */
@@ -127,7 +151,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000000000000000000021 /* ImmersiveMapLabelsMacApp.swift in Sources */,
+				B10000000000000000000041 /* ImmersiveMapSettingsMacApp.swift in Sources */,
+				B10000000000000000000042 /* PlaygroundSection.swift in Sources */,
+				B10000000000000000000043 /* PanelControls.swift in Sources */,
+				B10000000000000000000044 /* LabelsPanel.swift in Sources */,
+				B10000000000000000000045 /* BuildingsPanel.swift in Sources */,
+				B10000000000000000000046 /* EarthScenePanel.swift in Sources */,
+				B10000000000000000000047 /* StylePanel.swift in Sources */,
+				B10000000000000000000048 /* PresentationPanel.swift in Sources */,
+				B10000000000000000000049 /* DiagnosticsPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,7 +231,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapLabelsMac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapSettingsMac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -221,7 +253,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapLabelsMac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapSettingsMac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -231,7 +263,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapLabelsMac" */ = {
+		B1000000000000000000000B /* Build configuration list for PBXNativeTarget "ImmersiveMapSettingsMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B10000000000000000000013 /* Debug */,
@@ -240,7 +272,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapLabelsMac" */ = {
+		B1000000000000000000000F /* Build configuration list for PBXProject "ImmersiveMapSettingsMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B10000000000000000000011 /* Debug */,

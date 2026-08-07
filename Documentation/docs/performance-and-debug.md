@@ -94,3 +94,5 @@ For the shape of the pipeline (the five passes, the subsystems, the tile path) s
 - No published frame-time or memory budget: app size is measured (see the README), performance numbers are not.
 - `forceContinuousRendering` is for measurement, not for fixing a missing redraw. If something does not appear, the cause is a missing frame request, not the pacing.
 - The debug HUD is not localized and not designed for screenshots.
+
+Running example: the **Diagnostics** section of [`Examples/ImmersiveMapSettingsMac`](../../Examples/ImmersiveMapSettingsMac) drives the HUD, FXAA, the frame loop and the tile caches from one panel, with a badge that names what each change makes the engine do.
