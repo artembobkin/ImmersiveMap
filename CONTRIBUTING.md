@@ -57,7 +57,7 @@ Please include:
 
 CI runs `swift build` and `swift test` on every pull request. Please make sure both pass locally first.
 
-Claude reviews every pull request pushed to a branch in this repository and blocks the merge while a blocking finding stands, so a red "Claude review" check means the findings on the diff need an answer, either a fix or a follow-up push. A draft is reviewed once it is marked ready for review. A pull request from a fork gets no repository secrets, so the review is skipped there and a maintainer reads the branch by hand.
+Claude reviews every pull request pushed to a branch in this repository and posts what it finds as inline comments, so a red "Claude review" check means the findings on the diff need an answer, either a fix or a follow-up push. The check is advisory: it does not gate the merge, and an unfinished review holds nothing up. `Build & Test (SPM)` is the only required check. A draft is reviewed once it is marked ready for review. A pull request from a fork gets no repository secrets, so the review is skipped there and a maintainer reads the branch by hand.
 
 ## Reporting bugs and asking questions
 

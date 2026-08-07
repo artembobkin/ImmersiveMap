@@ -153,7 +153,7 @@ jobs:
                least one finding survived step 6, `approve` when none did, and
                `blocking_findings` holding exactly the survivors. The summary
                says what was checked and what stands. Keep the dropped issues
-               out of the verdict, they are noise on a blocking check.
+               out of the verdict, they are noise on the report.
           claude_args: |
             --model opus
             --max-turns 120
@@ -166,7 +166,7 @@ jobs:
           RESULT: ${{ steps.review.outputs.structured_output }}
         run: |
           if [ -z "$RESULT" ]; then
-            echo "::error::The review returned no verdict, so the merge stays blocked. Re-run this job."
+            echo "::error::The review returned no verdict. Re-run this job to get one."
             exit 1
           fi
 
@@ -186,7 +186,7 @@ jobs:
           fi
 
           if [ "$findings" != "0" ]; then
-            echo "::error::The verdict approves the pull request while listing $findings blocking findings, so the merge stays blocked."
+            echo "::error::The verdict approves the pull request while listing $findings blocking findings, so the check fails."
             exit 1
           fi
 
