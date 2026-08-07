@@ -113,28 +113,7 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds host apps that reference the package locally. Most of them are integration examples: one scenario each, built around the code you would copy into your own app, small enough to read in a sitting. A few cover two features that only make sense together: the tour app also exports that tour to video, the avatars app also handles taps on them, and the routes app flies a model along the route with the camera following. Everything that is a value on `ImmersiveMapSettings` lives in one app instead, `ImmersiveMapSettingsMac`, where a sidebar switches between the branches of that value. All of them are macOS (AppKit, not Catalyst) except the first.
-
-| Example | What it shows |
-|---|---|
-| `ImmersiveMapIOS` | The smallest iOS app that renders the map. |
-| `ImmersiveMapCameraTourMac` | A looped cinematic [camera tour](Documentation/docs/camera.md) and its offline [video export](Documentation/docs/tour-video-export.md). |
-| `ImmersiveMapMarkersMac` | [SwiftUI markers](Documentation/docs/markers.md): anchors, interactive versus pass-through content, live data changes. |
-| `ImmersiveMapAvatarsMac` | [Avatar markers](Documentation/docs/avatars.md) walking, merging and unmerging, with [tap selection](Documentation/docs/selection.md). |
-| `ImmersiveMapSceneModelsMac` | [3D scene models](Documentation/docs/scene-models.md) from USDZ and OBJ, with the live transform API and tap handling. |
-| `ImmersiveMapRoutesMac` | A round-the-world journey: [routes](Documentation/docs/routes.md) drawn leg by leg, a biplane flying each one and [tappable in mid-flight](Documentation/docs/selection.md), and [the camera travelling with it](Documentation/docs/camera-path-follow.md). |
-| `ImmersiveMapSettingsMac` | Everything an app can change on a map that is already on screen, one sidebar section per branch of `ImmersiveMapSettings`: [labels](Documentation/docs/labels.md), [buildings and shadows](Documentation/docs/buildings-and-shadows.md), the [earth scene](Documentation/docs/earth-scene.md), [style and palettes](Documentation/docs/styling.md), the [globe-to-flat window](Documentation/docs/globe.md), and the [debug HUD](Documentation/docs/performance-and-debug.md) with the [tile caches](Documentation/docs/tile-cache.md). A badge names what each edit costs the engine. |
-| `ImmersiveMapMapboxMac` | [Mapbox vector tiles](Documentation/docs/mapbox.md) with a restyled palette. |
-| `ImmersiveMapCustomTilesMac` | [Your own MVT source](Documentation/docs/custom-tile-provider.md) and a hand-written vector tile style. |
-
-To run:
-
-1. Clone the repository.
-2. Open `ImmersiveMap.xcworkspace`.
-3. Select the scheme you want; every example is its own scheme.
-4. Build and run.
-
-Every example except `ImmersiveMapMapboxMac` renders the built-in tile provider out of the box, so they run with no token or account. The Mapbox one reads a public token from the `IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN` launch environment variable declared in its scheme, and offers an in-app field as a fallback.
+The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, Mapbox tiles, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally and, except for the Mapbox one, render the built-in tile provider with no token or account.
 
 ## Where the map data comes from
 
