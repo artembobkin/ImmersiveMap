@@ -56,28 +56,12 @@ final class GlobeCapRenderer {
                                            pixelFormat: pixelFormat,
                                            library: library,
                                            sampleCount: sampleCount),
-                northCapBuffers: MapSurfaceGridBuffers(
-                    verticesBuffer: metalDevice.makeBuffer(
-                        bytes: northCap.vertices,
-                        length: MemoryLayout<CapGeometry.Vertex>.stride * northCap.vertices.count
-                    )!,
-                    indicesBuffer: metalDevice.makeBuffer(
-                        bytes: northCap.indices,
-                        length: MemoryLayout<UInt32>.stride * northCap.indices.count
-                    )!,
-                    indicesCount: northCap.indices.count
-                ),
-                southCapBuffers: MapSurfaceGridBuffers(
-                    verticesBuffer: metalDevice.makeBuffer(
-                        bytes: southCap.vertices,
-                        length: MemoryLayout<CapGeometry.Vertex>.stride * southCap.vertices.count
-                    )!,
-                    indicesBuffer: metalDevice.makeBuffer(
-                        bytes: southCap.indices,
-                        length: MemoryLayout<UInt32>.stride * southCap.indices.count
-                    )!,
-                    indicesCount: southCap.indices.count
-                ),
+                northCapBuffers: MapSurfaceGridBuffers.make(metalDevice: metalDevice,
+                                                            vertices: northCap.vertices,
+                                                            indices: northCap.indices),
+                southCapBuffers: MapSurfaceGridBuffers.make(metalDevice: metalDevice,
+                                                            vertices: southCap.vertices,
+                                                            indices: southCap.indices),
                 fallbackTexture: GlobeCapRenderer.makeFallbackTexture(metalDevice: metalDevice)
             )
         }
@@ -180,7 +164,7 @@ final class GlobeCapRenderer {
         renderEncoder.setVertexBuffer(northCapBuffers.verticesBuffer, offset: 0, index: 0)
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: northCapBuffers.indicesCount,
-                                            indexType: .uint32,
+                                            indexType: northCapBuffers.indexType,
                                             indexBuffer: northCapBuffers.indicesBuffer,
                                             indexBufferOffset: 0)
     }
@@ -195,7 +179,7 @@ final class GlobeCapRenderer {
         renderEncoder.setVertexBuffer(southCapBuffers.verticesBuffer, offset: 0, index: 0)
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: southCapBuffers.indicesCount,
-                                            indexType: .uint32,
+                                            indexType: southCapBuffers.indexType,
                                             indexBuffer: southCapBuffers.indicesBuffer,
                                             indexBufferOffset: 0)
     }

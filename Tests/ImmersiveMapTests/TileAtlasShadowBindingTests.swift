@@ -95,18 +95,21 @@ final class TileAtlasShadowBindingTests: XCTestCase {
                                                stylesBuffer: stylesBuffer,
                                                overviewStyleMaskBuffer: maskBuffer,
                                                indicesCount: indices.count,
-                                               verticesCount: vertices.count)
+                                               verticesCount: vertices.count,
+                                               indexType: .uint32)
         let emptyLayer = TileBuffers.GeometryLayer(verticesBuffer: verticesBuffer,
                                                    indicesBuffer: indicesBuffer,
                                                    stylesBuffer: stylesBuffer,
                                                    overviewStyleMaskBuffer: maskBuffer,
                                                    indicesCount: 0,
-                                                   verticesCount: 0)
+                                                   verticesCount: 0,
+                                                   indexType: .uint32)
         let extruded = TileBuffers.Extruded(verticesBuffer: verticesBuffer,
                                             indicesBuffer: indicesBuffer,
                                             stylesBuffer: stylesBuffer,
                                             indicesCount: 0,
-                                            verticesCount: 0)
+                                            verticesCount: 0,
+                                            indexType: .uint32)
         let phases = RoadGeometryPhases(shadow: emptyLayer,
                                         casing: emptyLayer,
                                         fill: emptyLayer,

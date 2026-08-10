@@ -40,17 +40,9 @@ enum RendererSetup {
 
     static func makeMapSurfaceGridBuffers(metalDevice: MTLDevice) -> MapSurfaceGridBuffers {
         let baseGrid = SphereGeometry.createGrid(stacks: 60, slices: 60)
-        return MapSurfaceGridBuffers(
-            verticesBuffer: metalDevice.makeBuffer(
-                bytes: baseGrid.vertices,
-                length: MemoryLayout<SphereGeometry.Vertex>.stride * baseGrid.vertices.count
-            )!,
-            indicesBuffer: metalDevice.makeBuffer(
-                bytes: baseGrid.indices,
-                length: MemoryLayout<UInt32>.stride * baseGrid.indices.count
-            )!,
-            indicesCount: baseGrid.indices.count
-        )
+        return MapSurfaceGridBuffers.make(metalDevice: metalDevice,
+                                          vertices: baseGrid.vertices,
+                                          indices: baseGrid.indices)
     }
 
     static func configureCamera(_ cameraStateController: CameraStateController) {

@@ -246,7 +246,7 @@ class TileAtlasTexture {
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: buffers.ground.indicesCount,
-                                            indexType: .uint32,
+                                            indexType: buffers.ground.indexType,
                                             indexBuffer: groundIndicesBuffer,
                                             indexBufferOffset: 0)
 

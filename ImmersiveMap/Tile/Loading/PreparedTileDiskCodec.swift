@@ -24,7 +24,11 @@ enum PreparedTileDiskEnvelope {
     }
 
     private static let magic = Data([0x49, 0x4d, 0x50, 0x54, 0x49, 0x4c, 0x45, 0x00]) // "IMPTILE\0"
-    private static let currentVersion: UInt16 = 1
+    // Version 1 checksums the payload with byte-wise FNV-1a; version 2 hashes
+    // 8-byte words instead, which verifies megabyte payloads an order of
+    // magnitude faster. Both are readable; new envelopes are written as 2.
+    private static let byteChecksumVersion: UInt16 = 1
+    private static let currentVersion: UInt16 = 2
     private static let headerSize = 28
     // A prepared tile is a cache artifact for one source tile. 64 MiB leaves
     // ample room for dense geometry while bounding any single decode allocation.
@@ -82,7 +86,7 @@ enum PreparedTileDiskEnvelope {
         }
 
         let version: UInt16 = try readLittleEndian(from: data, offset: 8)
-        guard version == currentVersion else {
+        guard version == byteChecksumVersion || version == currentVersion else {
             throw PreparedTileDiskCodecError.corruptedPayload("Unsupported prepared-tile envelope version.")
         }
         guard let algorithm = Algorithm(rawValue: data[10]), data[11] == 0 else {
@@ -123,7 +127,10 @@ enum PreparedTileDiskEnvelope {
 #endif
         }
 
-        guard payload.count == Int(decodedByteCount), checksum(payload) == expectedChecksum else {
+        let computedChecksum = version == byteChecksumVersion
+            ? byteChecksum(payload)
+            : checksum(payload)
+        guard payload.count == Int(decodedByteCount), computedChecksum == expectedChecksum else {
             throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile envelope checksum mismatch.")
         }
         return payload
@@ -167,14 +174,42 @@ enum PreparedTileDiskEnvelope {
         return value
     }
 
-    /// FNV-1a is used as a fast corruption check, not as a security primitive.
+    /// FNV-1a over little-endian 8-byte words, used as a fast corruption
+    /// check, not as a security primitive. The zero-padded tail cannot
+    /// collide with genuine trailing zero bytes because the header stores the
+    /// payload length and decode compares it before trusting the checksum.
     private static func checksum(_ data: Data) -> UInt64 {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in data {
-            hash ^= UInt64(byte)
-            hash &*= 1_099_511_628_211
+        data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> UInt64 in
+            var hash: UInt64 = 14_695_981_039_346_656_037
+            let wordCount = buffer.count / 8
+            for wordIndex in 0..<wordCount {
+                let word = buffer.loadUnaligned(fromByteOffset: wordIndex * 8, as: UInt64.self)
+                hash ^= UInt64(littleEndian: word)
+                hash &*= 1_099_511_628_211
+            }
+            let tailStart = wordCount * 8
+            if tailStart < buffer.count {
+                var tail: UInt64 = 0
+                for byteIndex in tailStart..<buffer.count {
+                    tail |= UInt64(buffer[byteIndex]) << (UInt64(byteIndex - tailStart) * 8)
+                }
+                hash ^= tail
+                hash &*= 1_099_511_628_211
+            }
+            return hash
         }
-        return hash
+    }
+
+    /// The byte-wise FNV-1a that version-1 envelopes were written with.
+    private static func byteChecksum(_ data: Data) -> UInt64 {
+        data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> UInt64 in
+            var hash: UInt64 = 14_695_981_039_346_656_037
+            for byte in buffer {
+                hash ^= UInt64(byte)
+                hash &*= 1_099_511_628_211
+            }
+            return hash
+        }
     }
 
 #if canImport(Compression)

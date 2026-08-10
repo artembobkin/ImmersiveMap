@@ -31,6 +31,9 @@ struct TileBuffers {
         let overviewStyleMaskBuffer: MTLBuffer?
         let indicesCount: Int
         let verticesCount: Int
+        /// Element width of `indicesBuffer`: layers within the 16-bit vertex
+        /// range are narrowed at buffer creation, oversized ones stay 32-bit.
+        let indexType: MTLIndexType
     }
 
     struct Extruded {
@@ -39,6 +42,8 @@ struct TileBuffers {
         let stylesBuffer: MTLBuffer?
         let indicesCount: Int
         let verticesCount: Int
+        /// Element width of `indicesBuffer`; see `GeometryLayer.indexType`.
+        let indexType: MTLIndexType
     }
 
     struct TextLabelSet {

@@ -64,6 +64,20 @@ once the public API stabilizes.
 - `ImmersiveMapSettings.AttributionSettings` no longer carries `title`, `copyright` and `linkURL`. It keeps `isVisible` plus an optional `attributionOverride`, and the resolved text comes from the active tile provider unless the app overrides it. `VectorTileProvider` gained an `attribution` parameter (`.none` by default, with `.openStreetMap` provided for plain OSM sources). Switching tile providers now updates the badge live.
 - README documents where the default tiles come from (an OpenMapTiles-schema planet assembled from OpenFreeMap data, i.e. OpenStreetMap data under ODbL), how to point the engine at your own MVT source, and how attribution is resolved. Status wording that described the package as unfinished was dropped in favour of a feature list.
 
+### Performance
+
+- ProMotion frame rates on iOS. During interaction and animations the display link is now offered a frame-rate range from the configured `interactionFramesPerSecond` (still the floor, 60 by default) up to 120 Hz, so ProMotion panels pan, zoom and animate at 120 instead of being pinned to 60; non-ProMotion hardware clamps to its own maximum and behaves exactly as before, and label fades keep their deliberately low cadence. On iPhone, rates above 60 additionally require the host app to declare `CADisableMinimumFrameDurationOnPhone` in its Info.plist; the macOS path is unchanged.
+
+- Every fragment of the ground, roads, buildings and globe pays for shadow sampling only when shadows are actually on: `sampleShadowFactor` now exits before the cascade math when the bound shadow uniform is disabled (`strength <= 0`), instead of projecting all three cascades and evaluating six screen-space derivatives per pixel and only then returning 1.0. Shadows are gated off for whole frames routinely (the globe presentation, no casters on screen, a low sun), and the disabled uniform is bound to every world fragment in those frames.
+
+- First-view startup compiles the ~29 render and compute pipeline states (and the other device-only shared resources: the text atlases, the avatar marker SDF, the polar-cap geometry) on all cores via `DispatchQueue.concurrentPerform` instead of strictly one after another on the main thread. The created set and the synchronous-before-first-frame contract are unchanged; the wall-clock cost of the most expensive startup stage divides by the core count.
+
+- Tile geometry indices are written as `uint16` whenever a layer stays within 65535 vertices, which covers nearly every layer of every tile; oversized layers keep `uint32`, decided per buffer at creation. The same narrowing applies to the static globe surface grid and polar-cap grids. This halves index bandwidth and index memory in the GPU tile cache, and building geometry is drawn up to four times per frame (world pass or building image plus two shadow cascades), so the bandwidth saving multiplies. The prepared-tile disk format still stores 32-bit arrays and is not invalidated.
+
+- The prepared-tile disk cache verifies integrity an order of magnitude faster: the envelope checksum hashes 8-byte words instead of single `Data` bytes on both encode and decode (envelope version 2; version-1 entries stay readable through the byte-wise path, so existing caches survive). Reads also map the file (`.mappedIfSafe`) instead of copying it into memory up front, so pages stream in as the checksum and the decompressor walk the payload.
+
+- MVT polygon and line decoding reserves each ring's exact point capacity before the decode loop (the command integer announces the count, capped by the remaining geometry), removing repeated array growth from the hottest parsing loop.
+
 ## [0.4.1] - 2026-07-30
 
 ### Changed

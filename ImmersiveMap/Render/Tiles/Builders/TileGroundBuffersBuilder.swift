@@ -11,13 +11,24 @@ final class TileGroundBuffersBuilder {
     }
 
     func build(layer: PreparedTileCPU.GeometryLayer) -> TileBuffers.GeometryLayer {
-        TileBuffers.GeometryLayer(
+        let indicesBuffer: MTLBuffer?
+        let indexType: MTLIndexType
+        if let narrowedIndices = IndexStorageMath.narrowedIndices(layer.indices,
+                                                                  vertexCount: layer.vertices.count) {
+            indicesBuffer = makeBuffer(narrowedIndices)
+            indexType = .uint16
+        } else {
+            indicesBuffer = makeBuffer(layer.indices)
+            indexType = .uint32
+        }
+        return TileBuffers.GeometryLayer(
             verticesBuffer: makeBuffer(layer.vertices),
-            indicesBuffer: makeBuffer(layer.indices),
+            indicesBuffer: indicesBuffer,
             stylesBuffer: makeBuffer(layer.styles),
             overviewStyleMaskBuffer: makeBuffer(layer.overviewStyleMasks),
             indicesCount: layer.indices.count,
-            verticesCount: layer.vertices.count
+            verticesCount: layer.vertices.count,
+            indexType: indexType
         )
     }
 
