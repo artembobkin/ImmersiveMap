@@ -262,7 +262,6 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private func prune() {
         let quota = policy.byteQuota
         let now = Date()
-        lastPruneDate = now
         var emptiedParentDirectories: Set<URL> = []
 
         for entry in Array(indexedFilesByPath.values)
@@ -289,6 +288,9 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         for directory in emptiedParentDirectories {
             removeEmptyParentDirectories(startingAt: directory)
         }
+        // Stamped on completion: measuring the interval from the start would
+        // count the sweep's own duration against the throttle window.
+        lastPruneDate = Date()
     }
 
     @discardableResult
