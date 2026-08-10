@@ -55,5 +55,8 @@
       <FileRef
          location = "group:Posts/NewYorkFlyover/NewYorkFlyover.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Posts/BerlinNightDescent/BerlinNightDescent.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>
