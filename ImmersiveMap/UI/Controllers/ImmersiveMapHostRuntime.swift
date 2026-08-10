@@ -54,25 +54,25 @@ final class ImmersiveMapHostRuntime {
                                object: nil,
                                queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.applyCurrentPowerConstraints()
+                    self?.applyCurrentPowerConstraintState()
                 }
             },
             center.addObserver(forName: Notification.Name.NSProcessInfoPowerStateDidChange,
                                object: nil,
                                queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.applyCurrentPowerConstraints()
+                    self?.applyCurrentPowerConstraintState()
                 }
             }
         ])
-        applyCurrentPowerConstraints()
+        applyCurrentPowerConstraintState()
     }
 
-    private func applyCurrentPowerConstraints() {
+    private func applyCurrentPowerConstraintState() {
         let processInfo = ProcessInfo.processInfo
-        let constraints = RenderLoopPacing.PowerConstraints.resolve(thermalState: processInfo.thermalState,
+        let constraints = RenderLoopPacing.PowerConstraintState.resolve(thermalState: processInfo.thermalState,
                                                                     isLowPowerModeEnabled: processInfo.isLowPowerModeEnabled)
-        runtimeGraph.renderRuntime.applyPowerConstraints(constraints)
+        runtimeGraph.renderRuntime.applyPowerConstraintState(constraints)
     }
 
     func start(displayLinkFactory: DisplayLinkFactory) {

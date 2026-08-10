@@ -42,8 +42,8 @@ final class ImmersiveMapRenderRuntime {
         driver.updateRenderLoopSettings(settings)
     }
 
-    func applyPowerConstraints(_ constraints: RenderLoopPacing.PowerConstraints) {
-        driver.applyPowerConstraints(constraints)
+    func applyPowerConstraintState(_ constraints: RenderLoopPacing.PowerConstraintState) {
+        driver.applyPowerConstraintState(constraints)
     }
 
     func requestFrame(reason: RenderInvalidationReason = .externalStateChanged) {

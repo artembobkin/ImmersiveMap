@@ -296,6 +296,17 @@ final class DebugOverlayRendererTests: XCTestCase {
         XCTAssertTrue(lines.contains("memory ram:128.0MB"))
     }
 
+    func testOverlayDiagnosticsShowUnknownFrameDeltaAsDashes() {
+        let diagnostics = FrameDiagnostics(frameIndex: 1, frameDeltaTime: 0)
+
+        let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
+            cameraDebugLines: [],
+            diagnostics: diagnostics
+        )
+
+        XCTAssertTrue(lines.contains("frame:1 dt:-- fps:--"))
+    }
+
     func testOverlayDiagnosticsAppendGPUFrameTimeWhenMeasured() {
         let diagnostics = FrameDiagnostics(frameIndex: 42, frameDeltaTime: 0.0167)
         diagnostics.setMeasurement(.gpuFrameDurationMs, value: 5.25)

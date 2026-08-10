@@ -48,14 +48,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     public struct RenderLoopSettings: Equatable, Sendable {
         public var forceContinuousRendering: Bool
-        /// Frame rate floor while the map is interacting or animating, and
-        /// whenever `forceContinuousRendering` keeps the loop running. The
-        /// display link is offered a range from this value up to ProMotion
-        /// rates on both platforms, so 120 Hz iPhone, iPad, and MacBook Pro
-        /// panels animate at 120; on iPhone that additionally requires the
-        /// host app to declare `CADisableMinimumFrameDurationOnPhone` in its
+        /// Requested frame rate while the map is interacting or animating, and
+        /// whenever `forceContinuousRendering` keeps the loop running. On
+        /// ProMotion displays the link is offered a range from this value up
+        /// to 120 Hz, so supporting iPhone, iPad, and MacBook Pro panels
+        /// animate at 120; on iPhone that additionally requires the host app
+        /// to declare `CADisableMinimumFrameDurationOnPhone` in its
         /// Info.plist. Displays that cannot reach the requested rate clamp to
-        /// their own maximum.
+        /// their own maximum, and thermal pressure or Low Power Mode may cap
+        /// the effective rate below this value
+        /// (`RenderLoopPacing.PowerConstraintState`).
         public var interactionFramesPerSecond: Int
         /// Exact low-power cadence for label fade animations; it gets no
         /// ProMotion headroom.

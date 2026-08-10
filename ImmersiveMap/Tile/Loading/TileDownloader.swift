@@ -137,10 +137,13 @@ class TileDownloader {
         // behind Foundation's smaller default when HTTP/1.1 is negotiated.
         // HTTP/2 and HTTP/3 multiplex on fewer connections regardless.
         configuration.httpMaximumConnectionsPerHost = max(1, maxConcurrentFetches)
-        // A tile stalled for the default 60 s would hold one of those slots
-        // hostage; 30 s is still far beyond any healthy tile response, and the
-        // retry controller backs off failed tiles anyway.
+        // A tile that stops delivering data for 30 s (sliding idle timeout)
+        // or takes over 60 s in total has failed for map purposes; the
+        // Foundation defaults (60 s idle, 7 days total) would hold one of
+        // those slots hostage. The retry controller backs off failed tiles,
+        // and the disk-first path keeps serving previous content meanwhile.
         configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 60
         if urlCacheEnabled {
             // Raw tiles are cached by URLSession's HTTP cache (URLCache): the single
             // raw-tile cache layer. It revalidates against the tile server's ETag /

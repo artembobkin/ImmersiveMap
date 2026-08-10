@@ -32,14 +32,14 @@ final class RenderLoopPacing {
 
     /// Ceilings imposed by the device's power situation, applied on top of the
     /// configured rates regardless of which activities are running.
-    struct PowerConstraints: Equatable {
+    struct PowerConstraintState: Equatable {
         /// Hard frame-rate ceiling; nil leaves the configured rates untouched.
         var maximumFramesPerSecond: Int?
         /// Whether interaction-class activities may still ride above the
         /// configured floor to ProMotion rates.
         var allowsProMotionHeadroom: Bool
 
-        static let unconstrained = PowerConstraints(maximumFramesPerSecond: nil,
+        static let unconstrained = PowerConstraintState(maximumFramesPerSecond: nil,
                                                     allowsProMotionHeadroom: true)
 
         /// Serious thermal pressure caps rendering at 60, critical at 30, and
@@ -47,8 +47,8 @@ final class RenderLoopPacing {
         /// headroom: the configured floor stays, so interactions remain smooth
         /// while the display stops being driven above what was asked for.
         static func resolve(thermalState: ProcessInfo.ThermalState,
-                            isLowPowerModeEnabled: Bool) -> PowerConstraints {
-            var constraints = PowerConstraints.unconstrained
+                            isLowPowerModeEnabled: Bool) -> PowerConstraintState {
+            var constraints = PowerConstraintState.unconstrained
             switch thermalState {
             case .serious:
                 constraints.maximumFramesPerSecond = 60
@@ -67,7 +67,7 @@ final class RenderLoopPacing {
     }
 
     private var configuration: ImmersiveMapSettings.RenderLoopSettings
-    private var powerConstraints: PowerConstraints = .unconstrained
+    private var powerConstraints: PowerConstraintState = .unconstrained
     private var requestedFrameReason: RenderInvalidationReason?
     private var activeRenderingActivities: Set<Activity> = []
     // A view parked in the reuse pool has nothing to present into: rendering
@@ -84,7 +84,7 @@ final class RenderLoopPacing {
         self.configuration = configuration
     }
 
-    func applyPowerConstraints(_ constraints: PowerConstraints) {
+    func applyPowerConstraintState(_ constraints: PowerConstraintState) {
         powerConstraints = constraints
     }
 
