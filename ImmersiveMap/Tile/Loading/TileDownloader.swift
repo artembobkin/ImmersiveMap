@@ -83,7 +83,8 @@ class TileDownloader {
     private var tileJSONTemplateTask: Task<Void, Never>?
 
     init(config: ImmersiveMapSettings) {
-        let configuration = Self.makeSessionConfiguration(urlCacheEnabled: config.tiles.cache.urlCacheEnabled)
+        let configuration = Self.makeSessionConfiguration(urlCacheEnabled: config.tiles.cache.urlCacheEnabled,
+                                                          maxConcurrentFetches: config.tiles.network.maxConcurrentFetches)
         if config.tiles.cache.clearDiskCachesOnLaunch {
             configuration.urlCache?.removeAllCachedResponses()
         }
@@ -128,8 +129,18 @@ class TileDownloader {
         tileJSONTemplateTask?.cancel()
     }
 
-    static func makeSessionConfiguration(urlCacheEnabled: Bool = true) -> URLSessionConfiguration {
+    static func makeSessionConfiguration(urlCacheEnabled: Bool = true,
+                                         maxConcurrentFetches: Int = 5) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.default
+        // The loader dispatches up to maxConcurrentFetches tile requests at
+        // once; matching the per-host connection cap keeps none of them queued
+        // behind Foundation's smaller default when HTTP/1.1 is negotiated.
+        // HTTP/2 and HTTP/3 multiplex on fewer connections regardless.
+        configuration.httpMaximumConnectionsPerHost = max(1, maxConcurrentFetches)
+        // A tile stalled for the default 60 s would hold one of those slots
+        // hostage; 30 s is still far beyond any healthy tile response, and the
+        // retry controller backs off failed tiles anyway.
+        configuration.timeoutIntervalForRequest = 30
         if urlCacheEnabled {
             // Raw tiles are cached by URLSession's HTTP cache (URLCache): the single
             // raw-tile cache layer. It revalidates against the tile server's ETag /
@@ -178,6 +189,10 @@ class TileDownloader {
         
         let tileURL = mapTileDownloader.get(tileX: x, tileY: y, tileZ: zoom)
         var request = URLRequest(url: tileURL)
+        // Tile CDNs widely speak HTTP/3; this lets the very first connection
+        // try QUIC instead of waiting for an Alt-Svc upgrade, and URLSession
+        // falls back to HTTP/2 or 1.1 transparently where it is unsupported.
+        request.assumesHTTP3Capable = true
         if let authorizationToken, authorizationMode == .bearerHeader {
             request.setValue("Bearer \(authorizationToken)", forHTTPHeaderField: "Authorization")
         }
