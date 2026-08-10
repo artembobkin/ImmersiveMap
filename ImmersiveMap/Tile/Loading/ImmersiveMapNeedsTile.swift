@@ -519,11 +519,13 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 return
             }
             if materializedFromNetwork {
-                // The tile is already on screen; completion must not wait for
-                // the disk write. Encoding and compressing the prepared payload
-                // costs tens of milliseconds, so the load is marked succeeded
-                // first and the save runs after, still on this task so cancelAll
-                // keeps interrupting it.
+                // The tile is already on screen (materialize invalidated the
+                // frame); encoding and compressing the prepared payload costs
+                // tens of milliseconds, so the retry/status bookkeeping of
+                // markLoadSucceeded runs first instead of waiting behind it.
+                // The save stays on this task: the parse slot is held until it
+                // finishes, and cancellation does not abort it (the encode is
+                // synchronous and the write completes on the IO queue).
                 guard markLoadSucceeded(tile: tile,
                                         generation: generation,
                                         source: "network") else {
