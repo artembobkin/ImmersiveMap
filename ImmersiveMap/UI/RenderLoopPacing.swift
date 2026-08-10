@@ -81,6 +81,16 @@ final class RenderLoopPacing {
         return 0
     }
 
+    /// True when the current target rate comes from an interaction-class
+    /// activity (or forced continuous rendering): the configured rate is a
+    /// floor there and the display link may ride up to the display's maximum
+    /// on ProMotion hardware. The label fade keeps its deliberately low
+    /// cadence and gets no headroom.
+    var allowsFrameRateHeadroom: Bool {
+        configuration.forceContinuousRendering
+            || activeRenderingActivities.contains(where: \.usesInteractionFrameRate)
+    }
+
     func requestOneFrame(reason: RenderInvalidationReason) {
         requestedFrameReason = reason
     }

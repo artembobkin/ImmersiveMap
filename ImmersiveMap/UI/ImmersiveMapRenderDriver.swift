@@ -131,11 +131,33 @@ final class ImmersiveMapRenderDriver: NSObject {
         return didSchedule
     }
 
+    /// Upper bound offered to the display link for interaction-class
+    /// activities: the highest refresh rate iPhone and iPad ProMotion panels
+    /// ship. Non-ProMotion hardware clamps the range to its own maximum, so
+    /// the offer is a no-op there. On iPhone, rates above 60 additionally
+    /// require the host app to declare `CADisableMinimumFrameDurationOnPhone`
+    /// in its Info.plist; without it the system keeps the 60 Hz cap.
+    private static let proMotionMaximumFramesPerSecond: Float = 120
+
     private func applyDisplayLinkState() {
         #if canImport(UIKit)
-        displayLink?.preferredFramesPerSecond = pacing.targetFramesPerSecond
+        let targetFramesPerSecond = pacing.targetFramesPerSecond
+        if targetFramesPerSecond > 0 {
+            // The configured rate is the floor. Interaction-class activities
+            // may ride up to ProMotion rates; the label fade keeps its narrow
+            // low-power cadence.
+            let maximumFramesPerSecond = pacing.allowsFrameRateHeadroom
+                ? max(Float(targetFramesPerSecond), Self.proMotionMaximumFramesPerSecond)
+                : Float(targetFramesPerSecond)
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFramesPerSecond),
+                                                                    maximum: maximumFramesPerSecond,
+                                                                    preferred: maximumFramesPerSecond)
+        } else {
+            displayLink?.preferredFrameRateRange = .default
+        }
         #else
-        // On macOS CADisplayLink has no preferredFramesPerSecond - only the range API.
+        // On macOS the NSView-vended display link tracks the window's display;
+        // pinning the exact configured rate matches the previous behavior.
         let targetFramesPerSecond = pacing.targetFramesPerSecond
         if targetFramesPerSecond > 0 {
             displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFramesPerSecond),
