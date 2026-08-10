@@ -53,7 +53,15 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
     uint start = pathRange.start;
     uint end = start + pathRange.count;
     uint anchorSegmentIndex = min(anchor.segmentIndex, pathRange.count - 2);
-    float anchorT = clamp(anchor.t, 0.0, 1.0);
+    // The anchor's screen position is its own projected point (see
+    // RoadLabelCache.makeAnchorPointInput). Lerping the world-space `t` along
+    // the projected segment is not the projection of the world-space anchor:
+    // under a tilted camera that mismatch grows with segment length, and
+    // labels on long straight roads slid along the road while tilting.
+    ScreenPointOutput anchorPoint = pathPoints[anchor.pointIndex];
+    if (anchorPoint.visible == 0) {
+        hasInvisible = true;
+    }
 
     float2 startPos = pathPoints[start].position;
     float2 endPos = pathPoints[end - 1].position;
@@ -78,7 +86,12 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
         float segmentLength = length(current - prev);
         uint segmentIndex = i - start - 1;
         if (segmentIndex == anchorSegmentIndex) {
-            anchorDistance = totalLength + segmentLength * anchorT;
+            float along = 0.0;
+            if (segmentLength > 0.0) {
+                along = clamp(dot(anchorPoint.position - prev, current - prev) / segmentLength,
+                              0.0, segmentLength);
+            }
+            anchorDistance = totalLength + along;
         }
         totalLength += segmentLength;
         prev = current;

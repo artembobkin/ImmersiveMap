@@ -87,7 +87,7 @@ final class RoadLabelTileRecord {
          instanceSourcePriorities: [Int],
          pathInputs: [TilePointInput],
          pathRanges: [RoadPathRangeGpu],
-         anchors: [RoadLabelAnchor],
+         anchors: [RoadLabelAnchorGpu],
          glyphInputs: [RoadGlyphInput],
          collisionInputs: [ScreenCollisionInput],
          localGlyphVerticesBuffer: MTLBuffer?,
@@ -407,7 +407,7 @@ final class RoadLabelCache {
         var instanceSourcePriorities: [Int] = []
         var pathInputs: [TilePointInput] = []
         var pathRanges: [RoadPathRangeGpu] = []
-        var anchors: [RoadLabelAnchor] = []
+        var anchors: [RoadLabelAnchorGpu] = []
         var glyphInputs: [RoadGlyphInput] = []
         var collisionInputs: [ScreenCollisionInput] = []
 
@@ -491,11 +491,16 @@ final class RoadLabelCache {
                 instanceKeys.append(instanceKey)
                 instanceRetainedFlags.append(isRetained)
                 instanceLabelSizes.append(labelSize)
-                anchors.append(RoadLabelAnchor(pathIndex: localPathIndex,
-                                               segmentIndex: anchor.segmentIndex,
-                                               t: anchor.t,
-                                               distanceAlongPath: anchor.distanceAlongPath,
-                                               anchorOrdinal: anchor.anchorOrdinal))
+                // The anchor rides the point stream as its own point (outside
+                // the path range), so the placement kernel reads the anchor's
+                // true projected screen position instead of lerping `t` along
+                // the projected segment, which drifts under perspective.
+                let anchorPointIndex = UInt32(pathInputs.count)
+                pathInputs.append(Self.makeAnchorPointInput(anchor: anchor,
+                                                            path: localPathInputs))
+                anchors.append(RoadLabelAnchorGpu(pathIndex: localPathIndex,
+                                                  segmentIndex: anchor.segmentIndex,
+                                                  pointIndex: anchorPointIndex))
 
                 let labelMinY = glyphBounds.reduce(Float.greatestFiniteMagnitude) { min($0, $1.z) }
                 let labelMaxY = glyphBounds.reduce(-Float.greatestFiniteMagnitude) { max($0, $1.w) }
@@ -544,6 +549,20 @@ final class RoadLabelCache {
                                    collisionInputs: collisionInputs,
                                    localGlyphVerticesBuffer: roadLabels.localGlyphVerticesBuffer,
                                    localGlyphVertexCount: roadLabels.localGlyphVertexCount)
+    }
+
+    // The anchor's world position as a projectable point: interpolated in tile
+    // UV space on its segment. Requires `path.count >= 2` (the caller's path
+    // range guard).
+    static func makeAnchorPointInput(anchor: RoadLabelAnchor,
+                                     path: [TilePointInput]) -> TilePointInput {
+        let segmentIndex = min(max(Int(anchor.segmentIndex), 0), path.count - 2)
+        let t = min(max(anchor.t, 0.0), 1.0)
+        let segmentStart = path[segmentIndex]
+        let segmentEnd = path[segmentIndex + 1]
+        return TilePointInput(uv: segmentStart.uv + (segmentEnd.uv - segmentStart.uv) * t,
+                              tile: segmentStart.tile,
+                              tileSlotIndex: segmentStart.tileSlotIndex)
     }
 
     private static func totalLength(points: [SIMD2<Float>]) -> Float {

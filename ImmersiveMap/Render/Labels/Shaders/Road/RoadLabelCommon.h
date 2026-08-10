@@ -44,9 +44,8 @@ struct RoadGlyphCollisionOutput {
 struct RoadLabelAnchor {
     uint pathIndex;
     uint segmentIndex;
-    float t;
-    float distanceAlongPath;
-    uint anchorOrdinal;
+    // Index of the anchor's own projected point in the path points buffer.
+    uint pointIndex;
     uint _padding;
 };
 

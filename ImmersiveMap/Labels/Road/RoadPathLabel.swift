@@ -54,7 +54,16 @@ struct RoadLabelAnchor {
     let pathIndex: UInt32
     let segmentIndex: UInt32
     let t: Float
-    let distanceAlongPath: Float
     let anchorOrdinal: UInt32
+}
+
+// GPU mirror of the Metal RoadLabelAnchor (RoadLabelCommon.h). The placement
+// kernel reads the anchor's screen position from its own projected path point
+// at `pointIndex` instead of re-deriving it from `t`: a screen-space lerp is
+// not the projection of the world-space anchor under a tilted camera.
+struct RoadLabelAnchorGpu {
+    let pathIndex: UInt32
+    let segmentIndex: UInt32
+    let pointIndex: UInt32
     let _padding: UInt32 = 0
 }
