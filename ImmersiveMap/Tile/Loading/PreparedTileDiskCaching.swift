@@ -390,7 +390,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
 }
 
 final class PreparedTileDiskCaching {
-    static let preparedFormatVersion: UInt32 = 28
+    static let preparedFormatVersion: UInt32 = 29
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

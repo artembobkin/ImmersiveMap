@@ -656,7 +656,13 @@ extension TileMvtParser {
                 let top1 = roofField?.height(at: p1) ?? topHeight
                 let v2 = SIMD3<Float>(p1.x, p1.y, top1)
                 let v3 = SIMD3<Float>(p0.x, p0.y, top0)
-                let wallNormal = simd_normalize(simd_cross(v1 - v0, v2 - v0))
+                // Argument order makes every wall normal face out of the
+                // building material: away from an exterior ring's interior,
+                // into a hole ring's cavity (exterior rings are wound CW
+                // here, holes CCW). The shading contract depends on this:
+                // the shadow shader treats an away-facing normal as
+                // geometric self-shadow.
+                let wallNormal = simd_normalize(simd_cross(v2 - v0, v1 - v0))
                 if wallNormal.x.isNaN || wallNormal.y.isNaN || wallNormal.z.isNaN {
                     continue
                 }
