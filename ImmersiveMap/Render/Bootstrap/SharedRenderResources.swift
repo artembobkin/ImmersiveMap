@@ -101,64 +101,161 @@ final class SharedRenderResources {
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
 
-        self.polygonPipeline = PolygonsPipeline(metalDevice: device,
-                                                pixelFormat: colorPixelFormat,
-                                                library: library)
-        self.tilePipeline = TilePipeline(metalDevice: device,
-                                         pixelFormat: colorPixelFormat,
-                                         library: library,
-                                         sampleCount: renderSampleCount)
-        // The atlas variant renders into non-MSAA atlas pages, which share the
-        // same color format as the drawable.
-        self.globeTileTexturePipeline = TilePipeline(metalDevice: device,
-                                                     pixelFormat: colorPixelFormat,
-                                                     library: library)
-        self.extrudedTilePipeline = ExtrudedTilePipeline(metalDevice: device,
-                                                         pixelFormat: colorPixelFormat,
-                                                         library: library,
-                                                         sampleCount: renderSampleCount)
-        self.globePipeline = GlobePipeline(metalDevice: device,
-                                           pixelFormat: colorPixelFormat,
-                                           library: library,
-                                           sampleCount: renderSampleCount)
-        self.globeSurfacePlaceholderPipeline = GlobePipeline(
-            metalDevice: device,
-            pixelFormat: colorPixelFormat,
-            library: library,
-            sampleCount: renderSampleCount,
-            fragmentFunctionName: "globeSurfacePlaceholderFragmentShader")
-        self.fxaaPipeline = FXAAPipeline(metalDevice: device,
-                                         pixelFormat: colorPixelFormat,
-                                         library: library)
-        self.starfieldPipeline = StarfieldPipeline(metalDevice: device,
-                                                   pixelFormat: colorPixelFormat,
-                                                   library: library,
-                                                   sampleCount: renderSampleCount)
-        self.sceneModelPipeline = SceneModelPipeline(metalDevice: device,
-                                                     pixelFormat: colorPixelFormat,
-                                                     library: library,
-                                                     sampleCount: renderSampleCount)
-        self.routePipeline = RoutePipeline(metalDevice: device,
-                                           pixelFormat: colorPixelFormat,
-                                           library: library,
-                                           sampleCount: renderSampleCount)
-        self.tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library)
-        self.roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library)
+        let compiled = Self.makeConcurrentlyCompiledResources(device: device,
+                                                              library: library,
+                                                              pixelFormat: colorPixelFormat,
+                                                              sampleCount: renderSampleCount)
+        self.polygonPipeline = compiled.polygonPipeline
+        self.tilePipeline = compiled.tilePipeline
+        self.globeTileTexturePipeline = compiled.globeTileTexturePipeline
+        self.extrudedTilePipeline = compiled.extrudedTilePipeline
+        self.globePipeline = compiled.globePipeline
+        self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
+        self.fxaaPipeline = compiled.fxaaPipeline
+        self.starfieldPipeline = compiled.starfieldPipeline
+        self.sceneModelPipeline = compiled.sceneModelPipeline
+        self.routePipeline = compiled.routePipeline
+        self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
+        self.roadLabelPlacementPipeline = compiled.roadLabelPlacementPipeline
+        self.globeCap = compiled.globeCap
+        self.avatars = compiled.avatars
+        self.textRenderer = compiled.textRenderer
 
         self.mapSurfaceGridBuffers = RendererSetup.makeMapSurfaceGridBuffers(metalDevice: device)
-        self.globeCap = GlobeCapRenderer.SharedResources.make(metalDevice: device,
-                                                              pixelFormat: colorPixelFormat,
-                                                              library: library,
-                                                              sampleCount: renderSampleCount,
-                                                              maxLatitude: WebMercatorMath.maxLatitudeRadians)
-        self.avatars = AvatarsRenderer.SharedResources.make(metalDevice: device,
-                                                            pixelFormat: colorPixelFormat,
-                                                            library: library,
-                                                            sampleCount: 1)
-        self.textRenderer = TextRenderer(device: device,
-                                         library: library,
-                                         sampleCount: 1)
+        // SF Symbol rasterization goes through UIImage/NSImage and stays on
+        // the calling (main) thread rather than joining the concurrent batch.
         self.poiSpriteAtlas = PoiSpriteAtlas(device: device)
+    }
+
+    // MARK: - Concurrent pipeline compilation
+
+    /// The pipeline groups and shared resources whose construction touches
+    /// only the device and the library.
+    private struct ConcurrentlyCompiledResources {
+        let polygonPipeline: PolygonsPipeline
+        let tilePipeline: TilePipeline
+        let globeTileTexturePipeline: TilePipeline
+        let extrudedTilePipeline: ExtrudedTilePipeline
+        let globePipeline: GlobePipeline
+        let globeSurfacePlaceholderPipeline: GlobePipeline
+        let fxaaPipeline: FXAAPipeline
+        let starfieldPipeline: StarfieldPipeline
+        let sceneModelPipeline: SceneModelPipeline
+        let routePipeline: RoutePipeline
+        let tilePointScreenPipelines: TilePointScreenPipelines
+        let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
+        let globeCap: GlobeCapRenderer.SharedResources
+        let avatars: AvatarsRenderer.SharedResources
+        let textRenderer: TextRenderer
+    }
+
+    /// Compiles the ~29 pipeline states (and the device-only shared resources
+    /// around them) on all cores instead of serializing them on the main
+    /// thread. `MTLDevice` and `MTLLibrary` are thread-safe, every job below
+    /// writes exactly one captured variable of its own, and
+    /// `concurrentPerform` returns only after all iterations finished, so the
+    /// collection at the end observes fully initialized values. The set of
+    /// created resources and the synchronous-before-first-frame contract are
+    /// unchanged.
+    private nonisolated static func makeConcurrentlyCompiledResources(
+        device: MTLDevice,
+        library: MTLLibrary,
+        pixelFormat: MTLPixelFormat,
+        sampleCount: Int
+    ) -> ConcurrentlyCompiledResources {
+        var polygonPipeline: PolygonsPipeline?
+        var tilePipeline: TilePipeline?
+        var globeTileTexturePipeline: TilePipeline?
+        var extrudedTilePipeline: ExtrudedTilePipeline?
+        var globePipeline: GlobePipeline?
+        var globeSurfacePlaceholderPipeline: GlobePipeline?
+        var fxaaPipeline: FXAAPipeline?
+        var starfieldPipeline: StarfieldPipeline?
+        var sceneModelPipeline: SceneModelPipeline?
+        var routePipeline: RoutePipeline?
+        var tilePointScreenPipelines: TilePointScreenPipelines?
+        var roadLabelPlacementPipeline: RoadLabelPlacementPipeline?
+        var globeCap: GlobeCapRenderer.SharedResources?
+        var avatars: AvatarsRenderer.SharedResources?
+        var textRenderer: TextRenderer?
+
+        let jobs: [() -> Void] = [
+            // The heaviest groups go first so they overlap the whole batch.
+            { textRenderer = TextRenderer(device: device,
+                                          library: library,
+                                          sampleCount: 1) },
+            { avatars = AvatarsRenderer.SharedResources.make(metalDevice: device,
+                                                             pixelFormat: pixelFormat,
+                                                             library: library,
+                                                             sampleCount: 1) },
+            { globeCap = GlobeCapRenderer.SharedResources.make(metalDevice: device,
+                                                               pixelFormat: pixelFormat,
+                                                               library: library,
+                                                               sampleCount: sampleCount,
+                                                               maxLatitude: WebMercatorMath.maxLatitudeRadians) },
+            { extrudedTilePipeline = ExtrudedTilePipeline(metalDevice: device,
+                                                          pixelFormat: pixelFormat,
+                                                          library: library,
+                                                          sampleCount: sampleCount) },
+            { polygonPipeline = PolygonsPipeline(metalDevice: device,
+                                                 pixelFormat: pixelFormat,
+                                                 library: library) },
+            { tilePipeline = TilePipeline(metalDevice: device,
+                                          pixelFormat: pixelFormat,
+                                          library: library,
+                                          sampleCount: sampleCount) },
+            // The atlas variant renders into non-MSAA atlas pages, which share
+            // the same color format as the drawable.
+            { globeTileTexturePipeline = TilePipeline(metalDevice: device,
+                                                      pixelFormat: pixelFormat,
+                                                      library: library) },
+            { globePipeline = GlobePipeline(metalDevice: device,
+                                            pixelFormat: pixelFormat,
+                                            library: library,
+                                            sampleCount: sampleCount) },
+            { globeSurfacePlaceholderPipeline = GlobePipeline(
+                metalDevice: device,
+                pixelFormat: pixelFormat,
+                library: library,
+                sampleCount: sampleCount,
+                fragmentFunctionName: "globeSurfacePlaceholderFragmentShader") },
+            { fxaaPipeline = FXAAPipeline(metalDevice: device,
+                                          pixelFormat: pixelFormat,
+                                          library: library) },
+            { starfieldPipeline = StarfieldPipeline(metalDevice: device,
+                                                    pixelFormat: pixelFormat,
+                                                    library: library,
+                                                    sampleCount: sampleCount) },
+            { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
+                                                      pixelFormat: pixelFormat,
+                                                      library: library,
+                                                      sampleCount: sampleCount) },
+            { routePipeline = RoutePipeline(metalDevice: device,
+                                            pixelFormat: pixelFormat,
+                                            library: library,
+                                            sampleCount: sampleCount) },
+            { tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library) },
+            { roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library) }
+        ]
+        DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
+
+        return ConcurrentlyCompiledResources(
+            polygonPipeline: polygonPipeline!,
+            tilePipeline: tilePipeline!,
+            globeTileTexturePipeline: globeTileTexturePipeline!,
+            extrudedTilePipeline: extrudedTilePipeline!,
+            globePipeline: globePipeline!,
+            globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
+            fxaaPipeline: fxaaPipeline!,
+            starfieldPipeline: starfieldPipeline!,
+            sceneModelPipeline: sceneModelPipeline!,
+            routePipeline: routePipeline!,
+            tilePointScreenPipelines: tilePointScreenPipelines!,
+            roadLabelPlacementPipeline: roadLabelPlacementPipeline!,
+            globeCap: globeCap!,
+            avatars: avatars!,
+            textRenderer: textRenderer!
+        )
     }
 
     // MARK: - Shadow fallback
