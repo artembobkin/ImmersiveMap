@@ -82,6 +82,12 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     // operations from older instances never restore stale limits.
     private var policy = Policy(byteQuota: Int64(256 * 1_024 * 1_024),
                                 timeToLive: 7 * 24 * 60 * 60)
+    // Pruning sweeps the whole index (and sorts it when over quota), so writes
+    // trigger it through a throttle: immediately on quota overshoot, otherwise
+    // at most once per interval. Expired files are also rejected on read, so a
+    // sweep delayed by the throttle cannot serve stale data.
+    private var lastPruneDate: Date = .distantPast
+    private static let pruneInterval: TimeInterval = 60
 
     private init(rootDirectory: URL, fileManager: FileManager) {
         self.rootDirectory = rootDirectory
@@ -160,6 +166,16 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
 
     func markAccessed(_ url: URL) {
         let now = Date()
+        // The mtime doubles as the LRU/TTL access time, and refreshing it costs
+        // a metadata write per cache hit. LRU decisions tolerate coarse access
+        // times, so a recently refreshed entry is left untouched. The window
+        // scales down with short TTLs so an actively used entry cannot expire
+        // between refreshes.
+        let refreshInterval = min(15.0 * 60.0, policy.timeToLive / 16.0)
+        if let existing = indexedFilesByPath[indexKey(for: url)],
+           now.timeIntervalSince(existing.lastAccessDate) < refreshInterval {
+            return
+        }
         do {
             try fileManager.setAttributes([.modificationDate: now], ofItemAtPath: url.path)
             let existing = indexedFilesByPath[indexKey(for: url)]
@@ -189,6 +205,14 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         upsert(IndexedFile(url: url,
                            byteCount: byteCount,
                            lastAccessDate: modificationDate))
+        pruneIfNeeded()
+    }
+
+    private func pruneIfNeeded() {
+        guard indexedByteCount > policy.byteQuota
+                || Date().timeIntervalSince(lastPruneDate) >= Self.pruneInterval else {
+            return
+        }
         prune()
     }
 
@@ -238,6 +262,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private func prune() {
         let quota = policy.byteQuota
         let now = Date()
+        lastPruneDate = now
         var emptiedParentDirectories: Set<URL> = []
 
         for entry in Array(indexedFilesByPath.values)
