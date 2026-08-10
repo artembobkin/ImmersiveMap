@@ -8,9 +8,12 @@ enum RenderFrameStageMeasurer {
     static func measure(_ stage: FrameStage,
                         diagnostics: FrameDiagnostics,
                         block: () -> Void) {
+        let signposter = MapSignposts.render
+        let signpostState = signposter.beginInterval("stage", "\(stage.rawValue)")
         let start = CACurrentMediaTime()
         block()
         diagnostics.recordStage(stage, duration: CACurrentMediaTime() - start)
+        signposter.endInterval("stage", signpostState)
     }
 }
 

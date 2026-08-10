@@ -195,10 +195,17 @@ final class RenderFrameEngine {
                              frameSlotIndex: Int,
                              acquireTarget: () -> FrameRenderTarget?,
                              onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
+        let signposter = MapSignposts.render
+        let frameSignpostState = signposter.beginInterval("frame")
+        defer { signposter.endInterval("frame", frameSignpostState) }
+
+        let collectSignpostState = signposter.beginInterval("stage", "collectInput")
         let collectStart = CACurrentMediaTime()
-        guard let frameContext = collectInput(drawSize: drawSize,
-                                              pixelsPerPoint: pixelsPerPoint,
-                                              frameSlotIndex: frameSlotIndex) else {
+        let collectedContext = collectInput(drawSize: drawSize,
+                                            pixelsPerPoint: pixelsPerPoint,
+                                            frameSlotIndex: frameSlotIndex)
+        signposter.endInterval("stage", collectSignpostState)
+        guard let frameContext = collectedContext else {
             return false
         }
         frameContext.diagnostics.recordStage(.collectInput, duration: CACurrentMediaTime() - collectStart)
@@ -210,18 +217,22 @@ final class RenderFrameEngine {
         RenderFrameStageMeasurer.measure(.prepareGPU, diagnostics: frameContext.diagnostics) {
             prepareGPU(frameContext: frameContext)
         }
+        let encodeSignpostState = signposter.beginInterval("stage", "encodePasses")
         let encodeStart = CACurrentMediaTime()
         let target = passEncoder.encode(frameContext: frameContext,
                                         acquireTarget: acquireTarget,
                                         settings: settings)
         frameContext.diagnostics.recordStage(.encodePasses, duration: CACurrentMediaTime() - encodeStart)
+        signposter.endInterval("stage", encodeSignpostState)
 
+        let presentSignpostState = signposter.beginInterval("stage", "presentFrame")
         let presentStart = CACurrentMediaTime()
         let didSchedule = presentFrame(frameContext: frameContext,
                                        target: target,
                                        frameSlotIndex: frameSlotIndex,
                                        onGPUComplete: onGPUComplete)
         frameContext.diagnostics.recordStage(.presentFrame, duration: CACurrentMediaTime() - presentStart)
+        signposter.endInterval("stage", presentSignpostState)
 
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
