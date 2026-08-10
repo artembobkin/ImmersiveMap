@@ -146,7 +146,12 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         }
 
         do {
-            let data = try Data(contentsOf: url)
+            // Mapping skips an upfront full-file copy; pages stream in as the
+            // checksum and decompressor walk the payload. Atomic writes replace
+            // the file by rename and APFS keeps a deleted file's pages valid
+            // while mapped, so a concurrent replace or prune cannot invalidate
+            // a mapping handed to a decode in flight.
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
             let byteCount = fileByteCount(attributes: attributes, fallback: data.count)
             upsert(IndexedFile(url: url,
                                byteCount: byteCount,
