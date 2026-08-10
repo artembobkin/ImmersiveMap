@@ -9,10 +9,10 @@ struct PostProcessingVertexOut {
     float2 uv;
 };
 
+// The pass itself is planned only when FXAA is enabled (RenderPassGraph), so
+// the shader carries no enabled flag.
 struct FXAAUniform {
     float2 inverseViewportSize;
-    uint isEnabled;
-    uint _padding;
 };
 
 vertex PostProcessingVertexOut postProcessingVertexShader(uint vertexID [[vertex_id]]) {
@@ -41,10 +41,6 @@ fragment float4 fxaaFragmentShader(PostProcessingVertexOut in [[stage_in]],
     // composites the drawable over the app's own background with it.
     float4 centerSample = sourceTexture.sample(sourceSampler, in.uv);
     float3 center = centerSample.rgb;
-    if (uniform.isEnabled == 0) {
-        return centerSample;
-    }
-
     float2 texel = uniform.inverseViewportSize;
     float3 nw = sourceTexture.sample(sourceSampler, in.uv + texel * float2(-1.0, -1.0)).rgb;
     float3 ne = sourceTexture.sample(sourceSampler, in.uv + texel * float2(1.0, -1.0)).rgb;

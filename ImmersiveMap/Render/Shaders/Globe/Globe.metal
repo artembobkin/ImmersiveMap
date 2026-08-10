@@ -13,7 +13,6 @@ struct VertexIn {
 
 struct VertexOut {
     float4 position [[position]];
-    float pointSize [[point_size]];
     float2 texCoord;
     float uvSize;
     float posU;
@@ -163,7 +162,6 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     VertexOut out;
     // Keep clip-space position; GPU performs the perspective divide.
     out.position = clip;
-    out.pointSize = 5.0;
     out.texCoord = float2(t_u, t_v);
     out.uvSize = 1.0 / count;
     out.posU = posU;

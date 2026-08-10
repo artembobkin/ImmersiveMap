@@ -27,8 +27,7 @@ final class PostProcessingRenderSubsystem: RenderSubsystem {
 
         fxaaPipeline.draw(renderEncoder: encoder,
                           sourceTexture: inputTexture,
-                          drawSize: frameContext.drawSize,
-                          isEnabled: frameContext.services.settings.postProcessing.fxaaEnabled)
+                          drawSize: frameContext.drawSize)
     }
 
     func handleMemoryWarning() {}

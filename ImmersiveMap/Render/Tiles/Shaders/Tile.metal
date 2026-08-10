@@ -17,7 +17,6 @@ struct VertexOut {
     float3 worldPos;
     float4 color;
     float lowZoomFadeMask;
-    float pointSize [[point_size]];
 };
 
 struct Style {
@@ -46,7 +45,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.position = clipPosition;
     out.localPosition = float2(vertexIn.position.xy);
     out.worldPos = worldPosition.xyz;
-    out.pointSize = 5.0;
     out.color = style.color;
     out.lowZoomFadeMask = lowZoomFadeMasks[vertexIn.styleIndex];
     return out;

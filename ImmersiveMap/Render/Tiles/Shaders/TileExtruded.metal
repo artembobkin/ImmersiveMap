@@ -18,8 +18,6 @@ struct VertexOut {
     float3 worldNormal;
     float2 localPosition;
     float4 color;
-    uint surfaceID [[flat]];
-    float pointSize [[point_size]];
 };
 
 struct Style {
@@ -40,12 +38,10 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
 
     VertexOut out;
     out.position = clipPosition;
-    out.pointSize = 5.0;
     out.color = style.color;
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = worldNormal;
     out.localPosition = vertexIn.position.xy;
-    out.surfaceID = vertexIn.surfaceID;
     return out;
 }
 
