@@ -7,10 +7,11 @@ import ImmersiveMap
 /// A sphere unrolling into a plane and rolling back up, with nothing else
 /// happening on screen.
 ///
-/// Every position shares one ground point, one bearing and one pitch, so the
-/// only value the flights interpolate is zoom, and zoom is the only input the
-/// morph has. Anything else in motion, a pan, a turn, a tilt, would give the
-/// eye something to follow that is not the change being demonstrated.
+/// Every position shares one ground point and one bearing, so the map never
+/// slides or turns under the camera: the only values the flights interpolate
+/// are zoom, which is also the morph's only input, and the tilt that moves with
+/// it. Nothing else is allowed to move, or the eye follows something other than
+/// the change being demonstrated.
 ///
 /// The tour stops twice on the way out, once halfway through the morph and once
 /// after it has finished, and then runs the whole range backwards to close the
@@ -25,25 +26,33 @@ import ImmersiveMap
 enum UnfurlStoryboard {
     private static let latitude = 43.5
     private static let longitude = 11.0
-    /// Held across the whole tour, and the reason the morph is visible at all.
+    /// The tilt is what makes the morph visible, and it moves.
     ///
     /// Straight down, a sphere and a plane project to almost the same picture:
     /// the map fills the frame either way, the change is a slow stretch at the
     /// edges, and the moment of unrolling passes unnoticed. The shape only
     /// shows at a grazing angle, where the sphere has a curved horizon cutting
-    /// across the frame and the plane has a straight one. 57 degrees puts that
-    /// horizon in shot at every zoom the tour visits, so the whole morph is
-    /// one continuous straightening of the line the eye is already following.
-    private static let pitch: Float = 1.0
+    /// across the frame and the plane has a straight one.
+    ///
+    /// The camera therefore starts almost lying on its side, near the engine's
+    /// 75 degree ceiling (`CameraSettings.maximumPitch`), and comes up as the
+    /// world flattens: 73 degrees on the globe, 66 halfway through the morph,
+    /// 57 once the map is a plane, and back down again on the return leg. The
+    /// tilt moving with the zoom keeps the horizon in frame while its curvature
+    /// leaves, which is the only thing in shot that should read as a change.
+    private static let globePitch: Float = 1.28
+    private static let halfwayPitch: Float = 1.16
+    private static let flatPitch: Float = 1.00
 
     /// The whole globe in frame, well below the start of the morph.
-    static let globe = position(zoom: 3.0)
+    static let globe = position(zoom: 3.0, pitch: globePitch)
 
     /// Halfway through the morph: neither a sphere nor a plane.
-    private static let halfway = position(zoom: UnfurlPresentation.midpointZoom)
+    private static let halfway = position(zoom: UnfurlPresentation.midpointZoom,
+                                          pitch: halfwayPitch)
 
     /// Past the end of the morph, fully flat.
-    private static let flat = position(zoom: 9.0)
+    private static let flat = position(zoom: 9.0, pitch: flatPitch)
 
     static func makeShots() -> [ImmersiveMapCameraTourShot] {
         [
@@ -71,7 +80,7 @@ enum UnfurlStoryboard {
                             altitudeStyle: .direct)
     }
 
-    private static func position(zoom: Double) -> ImmersiveMapCameraPosition {
+    private static func position(zoom: Double, pitch: Float) -> ImmersiveMapCameraPosition {
         ImmersiveMapCameraPosition(latitudeDegrees: latitude,
                                    longitudeDegrees: longitude,
                                    zoom: zoom,
