@@ -390,9 +390,10 @@ final class RenderFrameEngine {
         let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
         let sceneModelSelectionSnapshot = frameContext.sharedState.sceneModelState.selectionSnapshot
         commandBuffer.addCompletedHandler { [weak self] completedBuffer in
-            self?.lastCompletedGPUFrameDuration.withLock {
-                $0 = completedBuffer.gpuEndTime - completedBuffer.gpuStartTime
-            }
+            // Read the timestamps before entering the lock: withLock takes a
+            // @Sendable closure, and MTLCommandBuffer is not Sendable.
+            let gpuFrameDuration = completedBuffer.gpuEndTime - completedBuffer.gpuStartTime
+            self?.lastCompletedGPUFrameDuration.withLock { $0 = gpuFrameDuration }
             self?.inFlightFramePool.release(slot: frameSlotIndex)
             self?.eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
             self?.eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
