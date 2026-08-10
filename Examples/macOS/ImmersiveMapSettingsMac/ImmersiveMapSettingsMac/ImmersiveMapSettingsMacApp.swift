@@ -97,11 +97,18 @@ private struct SettingsPlaygroundScreen: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // An exact width, not `maxWidth` and not `idealWidth`. The window
+            // asks its content for a size before it has a width of its own, and
+            // under that query a text with an upper bound only is free to wrap
+            // one word per line: the paragraph reports a column some 2500 points
+            // tall, the window opens taller than the display, and this panel
+            // ends up below its bottom edge with no way to reach it. A width the
+            // text can measure against keeps the paragraph five lines.
             Text(section.summary)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 640, alignment: .leading)
+                .frame(width: 640, alignment: .leading)
 
             sectionControls
         }
