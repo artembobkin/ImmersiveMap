@@ -303,10 +303,10 @@ class TileAtlasTexture {
                                                                        height: size,
                                                                        mipmapped: false)
         depthDescriptor.usage = [.renderTarget]
-        // The simulator and native macOS don't support memoryless depth for this
-        // render into the atlas (memoryless is a tile-memory optimization for iOS
-        // TBDR GPUs).
-        #if targetEnvironment(simulator) || os(macOS)
+        // Memoryless: the atlas depth lives only within the page render pass
+        // (clear in, dontCare out). Apple-family GPUs keep it in tile memory;
+        // Intel Macs fail the family check and the simulator lacks support.
+        #if targetEnvironment(simulator)
         depthDescriptor.storageMode = .private
         #else
         depthDescriptor.storageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private

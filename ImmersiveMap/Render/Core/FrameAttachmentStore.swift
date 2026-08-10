@@ -23,10 +23,12 @@ final class FrameAttachmentStore {
          renderSampleCount: Int) {
         self.metalDevice = metalDevice
         self.renderSampleCount = max(1, renderSampleCount)
-        // Memoryless is a tile memory optimization for iOS TBDR GPUs. The simulator
-        // doesn't support it; on native macOS (incl. Apple Silicon) memoryless attachments
-        // produce an empty render for this pipeline, so we use .private there.
-        #if targetEnvironment(simulator) || os(macOS)
+        // Memoryless keeps these pass-transient attachments entirely in tile
+        // memory on Apple-family GPUs; Intel Macs fail the family check and the
+        // simulator lacks support, both fall back to .private. Verified on
+        // Apple Silicon macOS with the offscreen pixel-comparison suites (an
+        // older comment claimed an empty render there; it no longer reproduces).
+        #if targetEnvironment(simulator)
         self.transientStorageMode = .private
         #else
         self.transientStorageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
