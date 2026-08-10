@@ -132,20 +132,21 @@ final class ImmersiveMapRenderDriver: NSObject {
     }
 
     /// Upper bound offered to the display link for interaction-class
-    /// activities: the highest refresh rate iPhone and iPad ProMotion panels
-    /// ship. Non-ProMotion hardware clamps the range to its own maximum, so
-    /// the offer is a no-op there. On iPhone, rates above 60 additionally
-    /// require the host app to declare `CADisableMinimumFrameDurationOnPhone`
-    /// in its Info.plist; without it the system keeps the 60 Hz cap.
+    /// activities: the highest refresh rate ProMotion panels ship on iPhone,
+    /// iPad, and MacBook Pro. Non-ProMotion hardware clamps the range to its
+    /// own maximum, so the offer is a no-op there. On iPhone, rates above 60
+    /// additionally require the host app to declare
+    /// `CADisableMinimumFrameDurationOnPhone` in its Info.plist; without it
+    /// the system keeps the 60 Hz cap.
     private static let proMotionMaximumFramesPerSecond: Float = 120
 
     private func applyDisplayLinkState() {
-        #if canImport(UIKit)
         let targetFramesPerSecond = pacing.targetFramesPerSecond
         if targetFramesPerSecond > 0 {
             // The configured rate is the floor. Interaction-class activities
-            // may ride up to ProMotion rates; the label fade keeps its narrow
-            // low-power cadence.
+            // may ride up to ProMotion rates on both platforms (the
+            // NSView-vended macOS link honors the range the same way); the
+            // label fade keeps its narrow low-power cadence.
             let maximumFramesPerSecond = pacing.allowsFrameRateHeadroom
                 ? max(Float(targetFramesPerSecond), Self.proMotionMaximumFramesPerSecond)
                 : Float(targetFramesPerSecond)
@@ -155,18 +156,6 @@ final class ImmersiveMapRenderDriver: NSObject {
         } else {
             displayLink?.preferredFrameRateRange = .default
         }
-        #else
-        // On macOS the NSView-vended display link tracks the window's display;
-        // pinning the exact configured rate matches the previous behavior.
-        let targetFramesPerSecond = pacing.targetFramesPerSecond
-        if targetFramesPerSecond > 0 {
-            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFramesPerSecond),
-                                                                    maximum: Float(targetFramesPerSecond),
-                                                                    preferred: Float(targetFramesPerSecond))
-        } else {
-            displayLink?.preferredFrameRateRange = .default
-        }
-        #endif
         displayLink?.isPaused = pacing.shouldPauseDisplayLink
     }
 
