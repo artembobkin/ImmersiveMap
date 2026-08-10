@@ -13,7 +13,7 @@ enum NewYorkStoryboard {
     /// Start frame (debug panel: z 15.95, pitch 59.9 deg, bearing -115.3 deg).
     static let overview = ImmersiveMapCameraPosition(
         latitudeDegrees: 40.800,
-        longitudeDegrees: -73.959,
+        longitudeDegrees: -73.959,  
         zoom: 15.95,
         bearing: -2.013,
         pitch: 1.046

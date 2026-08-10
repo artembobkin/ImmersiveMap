@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B1000000000000000000000A"
-               BuildableName = "ImmersiveMapMapboxMac.app"
-               BlueprintName = "ImmersiveMapMapboxMac"
-               ReferencedContainer = "container:ImmersiveMapMapboxMac.xcodeproj">
+               BuildableName = "ImmersiveMapIOS.app"
+               BlueprintName = "ImmersiveMapIOS"
+               ReferencedContainer = "container:ImmersiveMapIOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,18 +46,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapMapboxMac.app"
-            BlueprintName = "ImmersiveMapMapboxMac"
-            ReferencedContainer = "container:ImmersiveMapMapboxMac.xcodeproj">
+            BuildableName = "ImmersiveMapIOS.app"
+            BlueprintName = "ImmersiveMapIOS"
+            ReferencedContainer = "container:ImmersiveMapIOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "IMMERSIVE_MAP_MAPBOX_ACCESS_TOKEN"
-            value = ""
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -70,9 +63,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B1000000000000000000000A"
-            BuildableName = "ImmersiveMapMapboxMac.app"
-            BlueprintName = "ImmersiveMapMapboxMac"
-            ReferencedContainer = "container:ImmersiveMapMapboxMac.xcodeproj">
+            BuildableName = "ImmersiveMapIOS.app"
+            BlueprintName = "ImmersiveMapIOS"
+            ReferencedContainer = "container:ImmersiveMapIOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

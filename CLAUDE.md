@@ -39,6 +39,8 @@ Only `ImmersiveMapMapboxMac` reads a launch environment variable, `IMMERSIVE_MAP
 
 The example projects are hand-written `.xcodeproj` files, not generated: a new one is a copy of a sibling with the names changed, keeping a shared scheme under `xcshareddata/xcschemes/` and the `XCLocalSwiftPackageReference` pointed at the package root, which is `relativePath = ../../..` for a Mac app in `Examples/macOS/` and `relativePath = ../..` for an iOS one directly in `Examples/`. It also needs a `FileRef` in `ImmersiveMap.xcworkspace/contents.xcworkspacedata`, inside the `macOS` group of `Examples` for a Mac app and directly under `Examples` for an iOS one.
 
+Every example and post scheme runs the app in `Release`, not `Debug`: these projects exist to be watched, and a debug build of the engine drops frames on exactly the scenes they are built to show. `ONLY_ACTIVE_ARCH = YES` is set in the `Release` configuration too, so a run builds the native slice instead of a universal binary. A new project copied from a sibling inherits both; keep them. Debugging one of these apps means switching its scheme's Run action back to `Debug` by hand.
+
 Offline tooling (not part of the SwiftPM build):
 
 - `Tools/TextAtlas/generate_text_atlas.sh`: regenerates the committed MSDF text atlases in `ImmersiveMap/Text/Resources/` (requires `msdf-atlas-gen` and local Noto Sans fonts; fonts are never committed).
