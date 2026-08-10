@@ -80,12 +80,14 @@ final class MemoryMetalTileCacheTests: XCTestCase {
                                                stylesBuffer: buffer,
                                                overviewStyleMaskBuffer: buffer,
                                                indicesCount: 0,
-                                               verticesCount: 0)
+                                               verticesCount: 0,
+                                               indexType: .uint32)
         let extruded = TileBuffers.Extruded(verticesBuffer: buffer,
                                             indicesBuffer: buffer,
                                             stylesBuffer: buffer,
                                             indicesCount: 0,
-                                            verticesCount: 0)
+                                            verticesCount: 0,
+                                            indexType: .uint32)
         let phases = RoadGeometryPhases(shadow: ground,
                                         casing: ground,
                                         fill: ground,

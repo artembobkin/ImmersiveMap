@@ -148,7 +148,7 @@ enum BuildingExtrusionDrawer {
 
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: buffers.extruded.indicesCount,
-                                                indexType: .uint32,
+                                                indexType: buffers.extruded.indexType,
                                                 indexBuffer: extrudedIndicesBuffer,
                                                 indexBufferOffset: 0)
         }

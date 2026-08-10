@@ -136,7 +136,7 @@ enum FlatMapSurfaceDrawer {
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: buffers.indicesCount,
-                                            indexType: .uint32,
+                                            indexType: buffers.indexType,
                                             indexBuffer: indicesBuffer,
                                             indexBufferOffset: 0)
     }

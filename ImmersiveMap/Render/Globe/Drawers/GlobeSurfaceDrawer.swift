@@ -62,7 +62,7 @@ enum GlobeSurfaceDrawer {
                                          index: 3)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: mapSurfaceGridBuffers.indicesCount,
-                                                indexType: .uint32,
+                                                indexType: mapSurfaceGridBuffers.indexType,
                                                 indexBuffer: mapSurfaceGridBuffers.indicesBuffer,
                                                 indexBufferOffset: 0)
         }
@@ -113,7 +113,7 @@ enum GlobeSurfaceDrawer {
                                            index: 3)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: mapSurfaceGridBuffers.indicesCount,
-                                                indexType: .uint32,
+                                                indexType: mapSurfaceGridBuffers.indexType,
                                                 indexBuffer: mapSurfaceGridBuffers.indicesBuffer,
                                                 indexBufferOffset: 0)
         }

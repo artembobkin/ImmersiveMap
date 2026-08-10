@@ -11,12 +11,23 @@ final class TileExtrudedBuffersBuilder {
     }
 
     func build(extruded: PreparedTileCPU.Extruded) -> TileBuffers.Extruded {
-        TileBuffers.Extruded(
+        let indicesBuffer: MTLBuffer?
+        let indexType: MTLIndexType
+        if let narrowedIndices = IndexStorageMath.narrowedIndices(extruded.indices,
+                                                                  vertexCount: extruded.vertices.count) {
+            indicesBuffer = makeBuffer(narrowedIndices)
+            indexType = .uint16
+        } else {
+            indicesBuffer = makeBuffer(extruded.indices)
+            indexType = .uint32
+        }
+        return TileBuffers.Extruded(
             verticesBuffer: makeBuffer(extruded.vertices),
-            indicesBuffer: makeBuffer(extruded.indices),
+            indicesBuffer: indicesBuffer,
             stylesBuffer: makeBuffer(extruded.styles),
             indicesCount: extruded.indices.count,
-            verticesCount: extruded.vertices.count
+            verticesCount: extruded.vertices.count,
+            indexType: indexType
         )
     }
 
