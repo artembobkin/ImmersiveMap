@@ -4,6 +4,7 @@
 import Foundation
 import Metal
 import MetalKit
+import os
 import QuartzCore
 
 /// Owns the map's Metal frame pipeline: resources, subsystem graph, frame attachments, and the render-loop workflow.
@@ -35,6 +36,11 @@ final class RenderFrameEngine {
     private let inFlightFramePool = InFlightFramePool(slotsCount: InFlightFramePool.inFlightFramesCount)
     private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
+
+    /// GPU duration of the most recently completed frame, written on the Metal
+    /// completion thread and read on the main thread when the next frame's
+    /// diagnostics are built.
+    private let lastCompletedGPUFrameDuration = OSAllocatedUnfairLock<TimeInterval>(initialState: 0)
 
     private(set) var currentDiagnostics: FrameDiagnostics?
 
@@ -250,7 +256,9 @@ final class RenderFrameEngine {
                               pixelsPerPoint: CGFloat,
                               frameSlotIndex: Int) -> FrameContext? {
         let frameTick = clock.nextFrameTick()
-        let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameTime: frameTick.time)
+        let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameDeltaTime: frameTick.deltaTime)
+        diagnostics.setMeasurement(.gpuFrameDurationMs,
+                                   value: lastCompletedGPUFrameDuration.withLock { $0 } * 1000.0)
         let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: clock.currentDate())
 
         guard let cameraFrameState = renderCamera.makeFrameState(drawSize: drawSize,
@@ -371,6 +379,9 @@ final class RenderFrameEngine {
         let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
         let sceneModelSelectionSnapshot = frameContext.sharedState.sceneModelState.selectionSnapshot
         commandBuffer.addCompletedHandler { [weak self] completedBuffer in
+            self?.lastCompletedGPUFrameDuration.withLock {
+                $0 = completedBuffer.gpuEndTime - completedBuffer.gpuStartTime
+            }
             self?.inFlightFramePool.release(slot: frameSlotIndex)
             self?.eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
             self?.eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
@@ -400,7 +411,7 @@ final class RenderFrameEngine {
 
     private func recordSkippedFrame(reason: RenderSkipReason) {
         let frameTick = clock.nextFrameTick()
-        let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameTime: frameTick.time)
+        let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameDeltaTime: frameTick.deltaTime)
         diagnostics.recordSkipReason(reason)
         diagnostics.recordStage(.collectInput, duration: 0)
         diagnostics.recordStage(.updateScene, duration: 0)

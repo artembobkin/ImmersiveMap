@@ -303,11 +303,15 @@ final class DebugOverlayRenderer {
     private static func appendDiagnosticsSections(from diagnostics: FrameDiagnostics,
                                                   memorySnapshot: ProcessMemorySnapshot?,
                                                   into lines: inout [String]) {
-        let frameTimeText = String(format: "%.2f", diagnostics.frameTime)
-        let fpsText = diagnostics.frameTime > 0
-            ? String(format: "%.1f", 1000.0 / diagnostics.frameTime)
+        let frameTimeText = String(format: "%.2f", diagnostics.frameDeltaTime * 1000.0)
+        let fpsText = diagnostics.frameDeltaTime > 0
+            ? String(format: "%.1f", 1.0 / diagnostics.frameDeltaTime)
             : "--"
-        let frameLine = "frame:\(diagnostics.frameIndex) dt:\(frameTimeText)ms fps:\(fpsText)"
+        var frameLine = "frame:\(diagnostics.frameIndex) dt:\(frameTimeText)ms fps:\(fpsText)"
+        let gpuFrameMs = diagnostics.measurementValue(.gpuFrameDurationMs)
+        if gpuFrameMs > 0 {
+            frameLine += " gpu:\(String(format: "%.2f", gpuFrameMs))ms"
+        }
         let memoryLine = memorySnapshot.map { snapshot in
             "memory ram:\(String(format: "%.1f", snapshot.physicalFootprintMegabytes))MB"
         }

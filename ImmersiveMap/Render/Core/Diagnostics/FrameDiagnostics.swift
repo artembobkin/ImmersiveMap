@@ -36,10 +36,13 @@ final class FrameDiagnostics: FrameDiagnosticsService {
 
     enum Measurement: String, CaseIterable {
         case globeCullingDurationMs
+        case gpuFrameDurationMs
     }
 
     private(set) var frameIndex: UInt64
-    private(set) var frameTime: TimeInterval
+    /// Seconds between this frame and the previous one; 0 for the first frame
+    /// of a renderer, so consumers must treat non-positive values as "unknown".
+    private(set) var frameDeltaTime: TimeInterval
     private(set) var stageDurations: [FrameStage: TimeInterval] = [:]
     private(set) var metalPassDurations: [RenderPassName: TimeInterval] = [:]
     private(set) var layerDurations: [RenderLayer: TimeInterval] = [:]
@@ -47,9 +50,9 @@ final class FrameDiagnostics: FrameDiagnosticsService {
     private(set) var measurements: [Measurement: Double] = [:]
     private(set) var skipReasons: Set<RenderSkipReason> = []
 
-    init(frameIndex: UInt64, frameTime: TimeInterval) {
+    init(frameIndex: UInt64, frameDeltaTime: TimeInterval) {
         self.frameIndex = frameIndex
-        self.frameTime = frameTime
+        self.frameDeltaTime = frameDeltaTime
         for counter in Counter.allCases {
             counters[counter] = 0
         }
