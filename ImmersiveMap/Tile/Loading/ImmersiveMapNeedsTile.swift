@@ -519,17 +519,21 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 return
             }
             if materializedFromNetwork {
-                await loadPipeline.savePreparedOnDisk(tile: tile,
-                                                      preparedTile: preparedFromNetwork.preparedTile,
-                                                      sourceETag: etag)
-                if Task.isCancelled {
-                    return
-                }
+                // The tile is already on screen (materialize invalidated the
+                // frame); encoding and compressing the prepared payload costs
+                // tens of milliseconds, so the retry/status bookkeeping of
+                // markLoadSucceeded runs first instead of waiting behind it.
+                // The save stays on this task: the parse slot is held until it
+                // finishes, and cancellation does not abort it (the encode is
+                // synchronous and the write completes on the IO queue).
                 guard markLoadSucceeded(tile: tile,
                                         generation: generation,
                                         source: "network") else {
                     return
                 }
+                await loadPipeline.savePreparedOnDisk(tile: tile,
+                                                      preparedTile: preparedFromNetwork.preparedTile,
+                                                      sourceETag: etag)
             } else {
                 if wasServedFromDiskFirst == false {
                     loadPipeline.removePreparedFromDisk(tile: tile)

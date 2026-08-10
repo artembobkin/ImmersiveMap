@@ -8,8 +8,6 @@ import QuartzCore
 final class FXAAPipeline {
     private struct Uniform {
         var inverseViewportSize: SIMD2<Float>
-        var isEnabled: UInt32
-        var padding: UInt32 = 0
     }
 
     private let pipelineState: MTLRenderPipelineState
@@ -26,12 +24,10 @@ final class FXAAPipeline {
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
               sourceTexture: MTLTexture,
-              drawSize: CGSize,
-              isEnabled: Bool) {
+              drawSize: CGSize) {
         let width = max(Float(drawSize.width), 1.0)
         let height = max(Float(drawSize.height), 1.0)
-        var uniform = Uniform(inverseViewportSize: SIMD2<Float>(1.0 / width, 1.0 / height),
-                              isEnabled: isEnabled ? 1 : 0)
+        var uniform = Uniform(inverseViewportSize: SIMD2<Float>(1.0 / width, 1.0 / height))
 
         renderEncoder.setRenderPipelineState(pipelineState)
         renderEncoder.setFragmentTexture(sourceTexture, index: 0)
