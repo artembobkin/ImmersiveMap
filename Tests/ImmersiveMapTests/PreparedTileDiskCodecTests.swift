@@ -144,6 +144,28 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(encoded[9], 0x00)
     }
 
+    func testPreparedTileEnvelopeMatchesVersionTwoChecksumFixture() throws {
+        // Golden version-2 envelope with an independently computed word-wise
+        // checksum (little-endian 8-byte words, zero-padded tail). The
+        // 11-byte payload exercises one full word plus a 3-byte tail, so the
+        // constant pins byte order and tail padding: a mirrored mistake shared
+        // by encode and decode survives the round-trip tests above but fails
+        // against these fixed bytes.
+        let payload = Data([0xa5, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0xff])
+        var fixture = Data([0x49, 0x4d, 0x50, 0x54, 0x49, 0x4c, 0x45, 0x00])
+        fixture.append(contentsOf: [0x02, 0x00]) // envelope version 2
+        fixture.append(0x00) // uncompressed
+        fixture.append(0x00) // reserved flags
+        appendLittleEndian(UInt64(payload.count), to: &fixture)
+        appendLittleEndian(UInt64(16_975_706_397_689_694_488), to: &fixture)
+        fixture.append(payload)
+
+        XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: fixture), payload)
+        XCTAssertEqual(try PreparedTileDiskEnvelope.encode(payload: payload,
+                                                           compressionEnabled: false),
+                       fixture)
+    }
+
     func testPreparedTileEnvelopeRoundTripsHighlyCompressiblePayload() throws {
         let payload = Data(repeating: 0, count: 1 * 1_024 * 1_024)
 

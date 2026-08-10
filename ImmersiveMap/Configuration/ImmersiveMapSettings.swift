@@ -48,7 +48,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     public struct RenderLoopSettings: Equatable, Sendable {
         public var forceContinuousRendering: Bool
-        /// Frame rate floor while the map is interacting or animating. On iOS
+        /// Frame rate floor while the map is interacting or animating, and
+        /// whenever `forceContinuousRendering` keeps the loop running. On iOS
         /// the display link is offered a range from this value up to ProMotion
         /// rates, so 120 Hz panels animate at 120; on iPhone that additionally
         /// requires the host app to declare
