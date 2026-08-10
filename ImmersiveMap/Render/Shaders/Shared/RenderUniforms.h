@@ -205,6 +205,13 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
                                        depth2d<float> shadowMap,
                                        float3 worldPos,
                                        float3 surfaceNormal) {
+    // Disabled shadows exit before any cascade math. The condition reads a
+    // constant-buffer value, so every fragment of the draw takes the same
+    // branch and control flow stays uniform for the derivatives below.
+    if (shadow.strength <= 0.0) {
+        return 1.0;
+    }
+
     float normalLength = length(surfaceNormal);
     float hasNormal = normalLength > 1e-5 ? 1.0 : 0.0;
     float3 normal = surfaceNormal / max(normalLength, 1e-5);
@@ -233,10 +240,6 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         float4 projected = shadow.cascades[i].worldToShadowTexture * float4(position, 1.0);
         uvzs[i] = projected.xyz / projected.w;
         gradients[i] = shadowReceiverGradient(shadow.cascades[i], uvzs[i]);
-    }
-
-    if (shadow.strength <= 0.0) {
-        return 1.0;
     }
 
     float mapVisibility = 1.0;
