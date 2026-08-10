@@ -59,6 +59,15 @@ final class ImmersiveMapRenderDriver: NSObject {
         }
     }
 
+    /// Applies thermal/Low Power ceilings on top of the configured rates.
+    func applyPowerConstraints(_ constraints: RenderLoopPacing.PowerConstraints) {
+        performOnMain {
+            self.updatePacing {
+                self.pacing.applyPowerConstraints(constraints)
+            }
+        }
+    }
+
     func requestFrame(reason: RenderInvalidationReason) {
         performOnMain {
             self.updatePacing {

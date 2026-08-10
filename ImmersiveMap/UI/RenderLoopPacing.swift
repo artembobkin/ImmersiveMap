@@ -30,7 +30,44 @@ final class RenderLoopPacing {
         }
     }
 
+    /// Ceilings imposed by the device's power situation, applied on top of the
+    /// configured rates regardless of which activities are running.
+    struct PowerConstraints: Equatable {
+        /// Hard frame-rate ceiling; nil leaves the configured rates untouched.
+        var maximumFramesPerSecond: Int?
+        /// Whether interaction-class activities may still ride above the
+        /// configured floor to ProMotion rates.
+        var allowsProMotionHeadroom: Bool
+
+        static let unconstrained = PowerConstraints(maximumFramesPerSecond: nil,
+                                                    allowsProMotionHeadroom: true)
+
+        /// Serious thermal pressure caps rendering at 60, critical at 30, and
+        /// both revoke ProMotion headroom. Low Power Mode only revokes the
+        /// headroom: the configured floor stays, so interactions remain smooth
+        /// while the display stops being driven above what was asked for.
+        static func resolve(thermalState: ProcessInfo.ThermalState,
+                            isLowPowerModeEnabled: Bool) -> PowerConstraints {
+            var constraints = PowerConstraints.unconstrained
+            switch thermalState {
+            case .serious:
+                constraints.maximumFramesPerSecond = 60
+            case .critical:
+                constraints.maximumFramesPerSecond = 30
+            case .nominal, .fair:
+                break
+            @unknown default:
+                break
+            }
+            if isLowPowerModeEnabled || constraints.maximumFramesPerSecond != nil {
+                constraints.allowsProMotionHeadroom = false
+            }
+            return constraints
+        }
+    }
+
     private var configuration: ImmersiveMapSettings.RenderLoopSettings
+    private var powerConstraints: PowerConstraints = .unconstrained
     private var requestedFrameReason: RenderInvalidationReason?
     private var activeRenderingActivities: Set<Activity> = []
     // A view parked in the reuse pool has nothing to present into: rendering
@@ -45,6 +82,10 @@ final class RenderLoopPacing {
 
     func applyConfiguration(_ configuration: ImmersiveMapSettings.RenderLoopSettings) {
         self.configuration = configuration
+    }
+
+    func applyPowerConstraints(_ constraints: PowerConstraints) {
+        powerConstraints = constraints
     }
 
     var needsFrameRendering: Bool {
@@ -70,13 +111,13 @@ final class RenderLoopPacing {
 
     var targetFramesPerSecond: Int {
         if configuration.forceContinuousRendering {
-            return configuration.interactionFramesPerSecond
+            return powerConstrained(configuration.interactionFramesPerSecond)
         }
         if activeRenderingActivities.contains(where: \.usesInteractionFrameRate) {
-            return configuration.interactionFramesPerSecond
+            return powerConstrained(configuration.interactionFramesPerSecond)
         }
         if activeRenderingActivities.contains(.labelFade) {
-            return configuration.labelFadeFramesPerSecond
+            return powerConstrained(configuration.labelFadeFramesPerSecond)
         }
         return 0
     }
@@ -85,10 +126,21 @@ final class RenderLoopPacing {
     /// activity (or forced continuous rendering): the configured rate is a
     /// floor there and the display link may ride up to the display's maximum
     /// on ProMotion hardware. The label fade keeps its deliberately low
-    /// cadence and gets no headroom.
+    /// cadence and gets no headroom, and power constraints (thermal pressure,
+    /// Low Power Mode) revoke it globally.
     var allowsFrameRateHeadroom: Bool {
-        configuration.forceContinuousRendering
+        guard powerConstraints.allowsProMotionHeadroom else {
+            return false
+        }
+        return configuration.forceContinuousRendering
             || activeRenderingActivities.contains(where: \.usesInteractionFrameRate)
+    }
+
+    private func powerConstrained(_ framesPerSecond: Int) -> Int {
+        guard let ceiling = powerConstraints.maximumFramesPerSecond else {
+            return framesPerSecond
+        }
+        return min(framesPerSecond, ceiling)
     }
 
     func requestOneFrame(reason: RenderInvalidationReason) {
