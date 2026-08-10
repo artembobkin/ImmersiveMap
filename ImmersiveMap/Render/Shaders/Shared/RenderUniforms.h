@@ -313,4 +313,17 @@ static inline float3 applyHorizonFog(float3 color,
     return mix(color, fog.color, fogAmount);
 }
 
+// Half-precision fragment tails: the fog distances stay float (world units
+// overflow half), only the final unit-range mix runs in half.
+static inline half3 applyHorizonFog(half3 color,
+                                    constant HorizonFog& fog,
+                                    float3 worldPos) {
+    float eyeHeight = max(abs(fog.eye.z), 1e-4);
+    float distanceToEye = length(worldPos - fog.eye);
+    half fogAmount = half(smoothstep(fog.startEyeHeights * eyeHeight,
+                                     fog.endEyeHeights * eyeHeight,
+                                     distanceToEye) * fog.strength);
+    return mix(color, half3(fog.color), fogAmount);
+}
+
 #endif

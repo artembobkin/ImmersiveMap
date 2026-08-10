@@ -41,20 +41,22 @@ vertex VertexOut poiSpriteVertex(LabelVertexIn in [[stage_in]],
     return out;
 }
 
-fragment float4 poiSpriteFragment(VertexOut in [[stage_in]],
-                                  texture2d<float> atlasTexture [[texture(0)]],
-                                  constant PoiIconStyle& style [[buffer(0)]]) {
+// Everything after the sample is unit-range, so the composite runs in half.
+fragment half4 poiSpriteFragment(VertexOut in [[stage_in]],
+                                 texture2d<half> atlasTexture [[texture(0)]],
+                                 constant PoiIconStyle& style [[buffer(0)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
-    float4 texel = atlasTexture.sample(textureSampler, in.uv);
-    float2 centeredUV = in.spriteUV * 2.0 - 1.0;
-    float circleDistance = length(centeredUV);
-    float circleAlpha = 1.0 - smoothstep(0.82, 0.96, circleDistance);
-    float iconAlpha = texel.a;
+    half4 texel = atlasTexture.sample(textureSampler, in.uv);
+    half2 centeredUV = half2(in.spriteUV) * 2.0h - 1.0h;
+    half circleDistance = length(centeredUV);
+    half circleAlpha = 1.0h - smoothstep(0.82h, 0.96h, circleDistance);
+    half iconAlpha = texel.a;
 
-    float backgroundAlpha = circleAlpha * in.alpha * style.backgroundColor.a;
-    float foregroundAlpha = iconAlpha * in.alpha * style.iconColor.a;
-    float alpha = foregroundAlpha + backgroundAlpha * (1.0 - foregroundAlpha);
-    float3 color = style.iconColor.rgb * foregroundAlpha
-        + style.backgroundColor.rgb * backgroundAlpha * (1.0 - foregroundAlpha);
-    return float4(color, alpha);
+    half vertexAlpha = half(in.alpha);
+    half backgroundAlpha = circleAlpha * vertexAlpha * half(style.backgroundColor.a);
+    half foregroundAlpha = iconAlpha * vertexAlpha * half(style.iconColor.a);
+    half alpha = foregroundAlpha + backgroundAlpha * (1.0h - foregroundAlpha);
+    half3 color = half3(style.iconColor.rgb) * foregroundAlpha
+        + half3(style.backgroundColor.rgb) * backgroundAlpha * (1.0h - foregroundAlpha);
+    return half4(color, alpha);
 }

@@ -182,10 +182,12 @@ static inline float routeDashCoverage(float arcPx, float dashPx, float gapPx) {
     return smoothstep(-0.5, 0.5, distanceToEdge);
 }
 
-fragment float4 routeFragmentShader(RouteVertexOut in [[stage_in]],
-                                    constant RouteUniform& route [[buffer(0)]],
-                                    constant Camera& camera [[buffer(1)]],
-                                    constant Globe& globe [[buffer(2)]]) {
+// Coverage math stays float: dash arclengths reach thousands of pixels and
+// the clearance runs on world positions. Only the final color is half.
+fragment half4 routeFragmentShader(RouteVertexOut in [[stage_in]],
+                                   constant RouteUniform& route [[buffer(0)]],
+                                   constant Camera& camera [[buffer(1)]],
+                                   constant Globe& globe [[buffer(2)]]) {
     float distancePx = route.halfWidthPx - abs(in.offsetPx);
     float coverage = smoothstep(-0.5, 0.5, distancePx);
     coverage *= routeDashCoverage(in.arcPx, route.dashPx, route.gapPx);
@@ -193,5 +195,5 @@ fragment float4 routeFragmentShader(RouteVertexOut in [[stage_in]],
     // position, and the cut has to land where the limb is, not at the nearest
     // tessellation step.
     coverage *= max(routeGlobeClearance(in.worldPosition, camera, globe), in.horizonRelease);
-    return float4(route.color.rgb, route.color.a * coverage);
+    return half4(half3(route.color.rgb), half(route.color.a * coverage));
 }

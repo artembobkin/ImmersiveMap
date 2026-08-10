@@ -75,10 +75,11 @@ vertex BeamVertexOut avatarBeamVertex(uint vid [[vertex_id]],
     return out;
 }
 
-fragment float4 avatarBeamFragment(BeamVertexOut in [[stage_in]],
-                                   constant float4& beamColor [[buffer(0)]]) {
+fragment half4 avatarBeamFragment(BeamVertexOut in [[stage_in]],
+                                  constant float4& beamColor [[buffer(0)]]) {
     // Cubic falloff toward the geo point: the beam is dense at the circle and
     // dissolves well before the cone apex at the actual geo point.
-    float taper = in.taper * in.taper * in.taper;
-    return float4(beamColor.rgb, beamColor.a * in.alpha * taper);
+    half taper = half(in.taper);
+    taper = taper * taper * taper;
+    return half4(half3(beamColor.rgb), half(beamColor.a) * half(in.alpha) * taper);
 }

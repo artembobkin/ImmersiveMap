@@ -79,11 +79,13 @@ vertex AvatarVertexOut avatarVertex(uint vid [[vertex_id]],
     return out;
 }
 
-fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
-                               constant AvatarMarkerStyleGPU& style [[buffer(0)]],
-                               constant AvatarMarkerSDFParams& sdfParams [[buffer(1)]],
-                               texture2d_array<float> atlasTexture [[texture(0)]],
-                               texture2d<float> sdfTexture [[texture(1)]]) {
+// The texel-space SDF math stays float: squared texel distances overflow
+// half's range. Sampling and the unit-range mask composition run in half.
+fragment half4 avatarFragment(AvatarVertexOut in [[stage_in]],
+                              constant AvatarMarkerStyleGPU& style [[buffer(0)]],
+                              constant AvatarMarkerSDFParams& sdfParams [[buffer(1)]],
+                              texture2d_array<half> atlasTexture [[texture(0)]],
+                              texture2d<half> sdfTexture [[texture(1)]]) {
     constexpr sampler atlasSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     constexpr sampler sdfSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
 
@@ -92,8 +94,8 @@ fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
     float interiorMask;
     float imageMask;
     float2 sdfUv = float2(in.uvLocal.x, 1.0 - in.uvLocal.y);
-    float4 mtsdfSample = sdfTexture.sample(sdfSampler, sdfUv);
-    float encodedDistance = mtsdfSample.a;
+    half4 mtsdfSample = sdfTexture.sample(sdfSampler, sdfUv);
+    float encodedDistance = float(mtsdfSample.a);
     float markerDistanceTexels = decodeSignedDistanceTexels(encodedDistance, sdfParams);
     float2 sdfTextureSize = float2(float(sdfTexture.get_width()), float(sdfTexture.get_height()));
     // Pin -> circle morph: an analytic SDF of the body circle (without the tail)
@@ -125,15 +127,17 @@ fragment float4 avatarFragment(AvatarVertexOut in [[stage_in]],
     float2 contentHalfUv = max(bodyHalfUv - insetUv, float2(0.0001));
     float2 imageUv = clamp((in.uvLocal - (circleCenter - contentHalfUv)) / (2.0 * contentHalfUv), 0.0, 1.0);
     float2 atlasUv = mix(in.uvRect.xy, in.uvRect.zw, imageUv);
-    float4 tex = atlasTexture.sample(atlasSampler, atlasUv, in.atlasIndex);
+    half4 tex = atlasTexture.sample(atlasSampler, atlasUv, in.atlasIndex);
 
-    float whiteFillMask = max(interiorMask - imageMask, 0.0);
-    float4 imageColor = tex * imageMask;
-    float4 whiteFillColor = float4(1.0, 1.0, 1.0, 1.0) * whiteFillMask;
-    float4 outlineColor = float4(0.0, 0.0, 0.0, 1.0) * borderMask;
-    float4 color = imageColor + whiteFillColor + outlineColor;
-    float alpha = tex.a * imageMask + whiteFillMask + borderMask;
-    color.a = alpha * in.visibilityAlpha;
+    half hImageMask = half(imageMask);
+    half hBorderMask = half(borderMask);
+    half whiteFillMask = half(max(interiorMask - imageMask, 0.0));
+    half4 imageColor = tex * hImageMask;
+    half4 whiteFillColor = half4(1.0h) * whiteFillMask;
+    half4 outlineColor = half4(0.0h, 0.0h, 0.0h, 1.0h) * hBorderMask;
+    half4 color = imageColor + whiteFillColor + outlineColor;
+    half alpha = tex.a * hImageMask + whiteFillMask + hBorderMask;
+    color.a = alpha * half(in.visibilityAlpha);
     return color;
 }
 
@@ -177,12 +181,12 @@ vertex AvatarBatteryBadgeVertexOut avatarBatteryBadgeVertex(
     return out;
 }
 
-fragment float4 avatarBatteryBadgeFragment(AvatarBatteryBadgeVertexOut in [[stage_in]],
-                                           texture2d<float> badgeAtlas [[texture(0)]]) {
+fragment half4 avatarBatteryBadgeFragment(AvatarBatteryBadgeVertexOut in [[stage_in]],
+                                          texture2d<half> badgeAtlas [[texture(0)]]) {
     constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
-    float4 color = badgeAtlas.sample(badgeSampler, uv);
-    color.a *= in.visibilityAlpha * in.contentAlpha;
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
     return color;
 }
 
@@ -225,12 +229,12 @@ vertex AvatarSpeedBadgeVertexOut avatarSpeedBadgeVertex(
     return out;
 }
 
-fragment float4 avatarSpeedBadgeFragment(AvatarSpeedBadgeVertexOut in [[stage_in]],
-                                         texture2d<float> badgeAtlas [[texture(0)]]) {
+fragment half4 avatarSpeedBadgeFragment(AvatarSpeedBadgeVertexOut in [[stage_in]],
+                                        texture2d<half> badgeAtlas [[texture(0)]]) {
     constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
-    float4 color = badgeAtlas.sample(badgeSampler, uv);
-    color.a *= in.visibilityAlpha * in.contentAlpha;
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
     return color;
 }
 
@@ -281,11 +285,11 @@ vertex AvatarCountBadgeVertexOut avatarCountBadgeVertex(
     return out;
 }
 
-fragment float4 avatarCountBadgeFragment(AvatarCountBadgeVertexOut in [[stage_in]],
-                                         texture2d<float> badgeAtlas [[texture(0)]]) {
+fragment half4 avatarCountBadgeFragment(AvatarCountBadgeVertexOut in [[stage_in]],
+                                        texture2d<half> badgeAtlas [[texture(0)]]) {
     constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
-    float4 color = badgeAtlas.sample(badgeSampler, uv);
-    color.a *= in.visibilityAlpha * in.contentAlpha;
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
     return color;
 }

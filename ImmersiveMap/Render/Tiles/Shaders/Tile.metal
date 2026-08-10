@@ -11,12 +11,15 @@ struct VertexIn {
     unsigned char styleIndex [[attribute(1)]];
 };
 
+// color and the fade mask are unit-range, so they interpolate as half: fewer
+// interpolant registers and double-rate ALU on A-series GPUs (the same split
+// the starfield shader uses). Positions stay float.
 struct VertexOut {
     float4 position [[position]];
     float2 localPosition;
     float3 worldPos;
-    float4 color;
-    float lowZoomFadeMask;
+    half4 color;
+    half lowZoomFadeMask;
 };
 
 struct Style {
@@ -45,20 +48,20 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.position = clipPosition;
     out.localPosition = float2(vertexIn.position.xy);
     out.worldPos = worldPosition.xyz;
-    out.color = style.color;
-    out.lowZoomFadeMask = lowZoomFadeMasks[vertexIn.styleIndex];
+    out.color = half4(style.color);
+    out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
     return out;
 }
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
 // A retained substitute is drawn as the full source quad - fragments outside the
 // placeIn slot are discarded so they don't overlap neighboring exact tiles.
-fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
-                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                   constant float4& localClipBounds [[buffer(1)]],
-                                   constant HorizonFog& horizonFog [[buffer(2)]],
-                                   constant Shadow& shadow [[buffer(3)]],
-                                   depth2d<float> shadowMap [[texture(0)]]) {
+fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
+                                  constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                  constant float4& localClipBounds [[buffer(1)]],
+                                  constant HorizonFog& horizonFog [[buffer(2)]],
+                                  constant Shadow& shadow [[buffer(3)]],
+                                  depth2d<float> shadowMap [[texture(0)]]) {
     // The shadow factor comes first: it evaluates screen-space derivatives,
     // which are undefined in any 2x2 quad after a divergent discard (MSL
     // spec), so the clip discard must not precede it.
@@ -67,21 +70,21 @@ fragment float4 tileFragmentShader(VertexOut in [[stage_in]],
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
         discard_fragment();
     }
-    float4 color = in.color;
-    float fade = 1.0;
-    if (in.lowZoomFadeMask >= 2.5) {
-        fade = overviewFade.landuseAlpha;
-    } else if (in.lowZoomFadeMask >= 1.5) {
-        fade = overviewFade.roadAlpha;
-    } else if (in.lowZoomFadeMask >= 0.5) {
-        fade = overviewFade.overviewAlpha;
+    half4 color = in.color;
+    half fade = 1.0h;
+    if (in.lowZoomFadeMask >= 2.5h) {
+        fade = half(overviewFade.landuseAlpha);
+    } else if (in.lowZoomFadeMask >= 1.5h) {
+        fade = half(overviewFade.roadAlpha);
+    } else if (in.lowZoomFadeMask >= 0.5h) {
+        fade = half(overviewFade.overviewAlpha);
     }
     color.a *= fade;
     // Shadow before fog: fog wins at distance, so the shadow-coverage edge
     // dissolves into the haze instead of cutting a visible line. Zero normal
     // (passed above): the ground always faces the sun and keeps its tight
     // contact (no normal-offset shift).
-    color.rgb *= shadowFactor;
+    color.rgb *= half(shadowFactor);
     color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }

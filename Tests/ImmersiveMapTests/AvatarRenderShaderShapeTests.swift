@@ -28,14 +28,14 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
         let source = try shaderSource(named: "AvatarRender.metal")
 
         XCTAssertTrue(source.contains("out.contentAlpha = instance.contentAlpha"))
-        XCTAssertTrue(source.contains("color.a *= in.visibilityAlpha * in.contentAlpha"))
+        XCTAssertTrue(source.contains("color.a *= half(in.visibilityAlpha * in.contentAlpha)"))
     }
 
     func testAvatarFragmentsApplyScreenPointVisibilityAlpha() throws {
         let source = try shaderSource(named: "AvatarRender.metal")
 
         XCTAssertTrue(source.contains("out.visibilityAlpha = point.visibilityAlpha"))
-        XCTAssertTrue(source.contains("color.a = alpha * in.visibilityAlpha"))
+        XCTAssertTrue(source.contains("color.a = alpha * half(in.visibilityAlpha)"))
     }
 
     func testBeamShaderStartsAtTrueAnchorAndFollowsCompression() throws {
@@ -52,7 +52,7 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
         XCTAssertTrue(source.contains("* point.visibilityAlpha"))
         XCTAssertTrue(source.contains("beamReveal(length(offset.value))"))
         // The ray fades out as it approaches the actual geo point.
-        XCTAssertTrue(source.contains("float taper = in.taper * in.taper * in.taper;"))
+        XCTAssertTrue(source.contains("taper = taper * taper * taper;"))
         // No anchor dots at the geo positions: the cone only.
         XCTAssertFalse(source.contains("avatarAnchorDotVertex"))
     }
