@@ -117,6 +117,33 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         }
     }
 
+    func testPreparedTileEnvelopeDecodesVersionOneByteChecksummedEnvelope() throws {
+        // Version-1 envelopes on disk carry a byte-wise FNV-1a checksum; newer
+        // builds must keep reading them without invalidating the cache.
+        let payload = Data((0..<100).map { UInt8($0 % 251) })
+        var data = Data([0x49, 0x4d, 0x50, 0x54, 0x49, 0x4c, 0x45, 0x00])
+        data.append(contentsOf: [0x01, 0x00]) // envelope version 1
+        data.append(0x00) // uncompressed
+        data.append(0x00) // reserved flags
+        appendLittleEndian(UInt64(payload.count), to: &data)
+        var byteChecksum: UInt64 = 14_695_981_039_346_656_037
+        for byte in payload {
+            byteChecksum ^= UInt64(byte)
+            byteChecksum &*= 1_099_511_628_211
+        }
+        appendLittleEndian(byteChecksum, to: &data)
+        data.append(payload)
+
+        XCTAssertEqual(try PreparedTileDiskEnvelope.decode(data: data), payload)
+    }
+
+    func testPreparedTileEnvelopeWritesVersionTwo() throws {
+        let encoded = try PreparedTileDiskEnvelope.encode(payload: Data([0x01, 0x02, 0x03]))
+
+        XCTAssertEqual(encoded[8], 0x02)
+        XCTAssertEqual(encoded[9], 0x00)
+    }
+
     func testPreparedTileEnvelopeRoundTripsHighlyCompressiblePayload() throws {
         let payload = Data(repeating: 0, count: 1 * 1_024 * 1_024)
 
