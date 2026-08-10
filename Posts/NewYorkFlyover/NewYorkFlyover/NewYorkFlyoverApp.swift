@@ -68,6 +68,7 @@ private struct FlyoverScreen: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ImmersiveMapView()
+                .debugPanel()
                 .camera(camera, position: NewYorkStoryboard.overview)
                 .enableCameraUIControls(showChrome)
                 .tourVideoRecorder(videoRecorder)
