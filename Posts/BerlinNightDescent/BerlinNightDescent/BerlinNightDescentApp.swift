@@ -36,7 +36,8 @@ private enum VideoFormat: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Berlin post scene: `BerlinStoryboard` plays as a looped on-screen
+/// The Berlin post scene: a straight fall from the globe onto the colonnade of
+/// the Altes Museum. `BerlinStoryboard` plays as a looped on-screen
 /// preview (started with the button or the R key, stopped with R again, Esc, or
 /// any gesture on the map), and "Render Video" writes one lap of the same
 /// storyboard to a QuickTime file offline while the on-screen map stays fully

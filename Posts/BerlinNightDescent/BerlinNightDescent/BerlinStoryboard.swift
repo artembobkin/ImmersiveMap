@@ -4,71 +4,78 @@
 import Foundation
 import ImmersiveMap
 
-/// One fall out of orbit into the middle of Berlin.
+/// A straight drop out of orbit onto the colonnade of the Altes Museum.
 ///
-/// The camera opens on the globe with Europe turned towards it, drops straight
-/// onto the city, and finishes low over Mitte with the historic centre ahead of
-/// it: Museumsinsel and the Berliner Dom, the Lustgarten, Unter den Linden
-/// running west towards the Brandenburg Gate.
+/// Every position here shares one latitude, one longitude and one bearing, and
+/// that is the whole trick. A flight interpolates the ground point as well as
+/// the zoom, so a globe centred anywhere other than the target spends the
+/// descent travelling sideways: from a sphere that reads as skimming along the
+/// surface rather than falling towards it. With the globe already centred on
+/// the target there is no ground distance left to cover, nothing is left for
+/// the route style to interpolate, and the only things that move are the
+/// altitude and, at the end, the tilt.
 ///
-/// The move is cut in two shots that share a bearing, so it reads as one
-/// continuous fall rather than a flight with a turn in it. The first covers the
-/// distance, the second spends its whole length on the last two zoom levels,
-/// where the extruded blocks come up out of the plane. Bearing and pitch are
-/// radians (the debug panel shows degrees), and both frames are meant to be
-/// re-framed by hand in the app with the panel open before a final render.
+/// The target is the Altes Museum on Museumsinsel, whose eighteen Ionic columns
+/// face south across the Lustgarten. That is why the whole storyboard holds
+/// bearing 0, looking due north: the camera comes down in front of the
+/// colonnade instead of having to turn towards it, with the Berliner Dom to the
+/// right and the Spree behind. Pitch is in radians (the debug panel shows
+/// degrees).
 enum BerlinStoryboard {
-    /// The establishing globe. Centred south of Berlin so the city sits high on
-    /// the lit face of the sphere rather than on the horizon.
+    /// The one ground point the whole descent is pinned to.
+    private static let latitude = 52.51972
+    private static let longitude = 13.39806
+
+    /// The establishing globe, already centred on Berlin.
     static let overview = ImmersiveMapCameraPosition(
-        latitudeDegrees: 41.0,
-        longitudeDegrees: 13.4,
+        latitudeDegrees: latitude,
+        longitudeDegrees: longitude,
         zoom: 1.3,
         bearing: 0,
         pitch: 0
     )
 
-    /// Out of the sphere and over the city, still flat on and high enough to
-    /// hold the whole of Berlin (debug panel: z 11.8, pitch 17.2 deg,
-    /// bearing 24.1 deg).
-    private static let approach = ImmersiveMapCameraPosition(
-        latitudeDegrees: 52.5080,
-        longitudeDegrees: 13.3900,
-        zoom: 11.8,
-        bearing: 0.42,
-        pitch: 0.30
+    /// Out of the sphere and over the city, still looking straight down so the
+    /// fall stays vertical while it covers most of the altitude.
+    private static let overCity = ImmersiveMapCameraPosition(
+        latitudeDegrees: latitude,
+        longitudeDegrees: longitude,
+        zoom: 12.6,
+        bearing: 0,
+        pitch: 0
     )
 
-    /// Low over Mitte, looking north-east into Museumsinsel (debug panel:
-    /// z 16.7, pitch 60.2 deg, bearing 24.1 deg).
-    private static let mitte = ImmersiveMapCameraPosition(
-        latitudeDegrees: 52.5128,
-        longitudeDegrees: 13.3948,
-        zoom: 16.7,
-        bearing: 0.42,
+    /// In front of the colonnade (debug panel: z 18.0, pitch 60.2 deg,
+    /// bearing 0 deg).
+    private static let colonnade = ImmersiveMapCameraPosition(
+        latitudeDegrees: latitude,
+        longitudeDegrees: longitude,
+        zoom: 18.0,
+        bearing: 0,
         pitch: 1.05
     )
 
     static func makeShots() -> [ImmersiveMapCameraTourShot] {
         [
             // `.direct` altitude, not the cinematic arc: the arc gains height
-            // first, and there is no height left to gain from a globe. The
-            // great circle keeps the ground track honest over that distance.
+            // before it descends, and there is no height left to gain from a
+            // globe. The route style has nothing to do here, because start and
+            // end sit on the same point.
             ImmersiveMapCameraTourShot(
-                position: approach,
-                options: CameraFlightOptions(duration: 11.0,
-                                             routeStyle: .greatCircle,
+                position: overCity,
+                options: CameraFlightOptions(duration: 10.0,
+                                             routeStyle: .mercatorShortestPath,
                                              altitudeStyle: .direct)
             ),
-            // Short on the map, long in time: the ground is close now, so the
-            // same seconds buy far less distance and the descent slows down of
-            // its own accord.
+            // The last five zoom levels, and the only shot that tilts: the
+            // camera drops the rest of the way and lies back into the facade as
+            // it arrives.
             ImmersiveMapCameraTourShot(
-                position: mitte,
+                position: colonnade,
                 options: CameraFlightOptions(duration: 13.0,
                                              routeStyle: .mercatorShortestPath,
                                              altitudeStyle: .direct),
-                holdAfter: 2.0
+                holdAfter: 2.5
             ),
         ]
     }
