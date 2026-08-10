@@ -182,9 +182,9 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
 // `surfaceNormal` is the receiver's (unnormalized) world normal, or zero for
 // receivers without one (the ground plane, which always faces the sun). For
 // normal-bearing receivers three defenses compose:
-//  * the normal is flipped towards the camera first (two-sided test), because map
-//    data contains inverted-winding buildings that render fine as opaque
-//    boxes but carry inward normals;
+//  * the normal is flipped towards the camera first (two-sided test): building
+//    walls arrive outward-facing from the parser, but scene-model assets and
+//    the inner walls of clip-substituted buildings can still face away;
 //  * geometric self-shadow: a face turned away from the sun is in shadow by
 //    definition (no map lookup is needed or trusted there), with a narrow
 //    smoothstep band at grazing angles where the wall's map footprint is
