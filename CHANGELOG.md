@@ -10,6 +10,8 @@ once the public API stabilizes.
 
 ### Added
 
+- Instruments visibility: the engine now emits `os_signpost` intervals (subsystem `ImmersiveMap`, categories `Render` and `Tiles`) around every frame, each frame stage, each render-pass encode, and every tile download and parse, so Metal System Trace lines CPU-side work up with the GPU track; render encoders carry the pass name as their label in GPU captures. The debug HUD's `[Frame]` line gained `gpu:<ms>`, the duration of the most recently completed command buffer measured by the GPU itself (`gpuStartTime`/`gpuEndTime`).
+
 - `ImmersiveMapTilesDefaultMapStyleConfiguration.LabelVisibility.poiMinimumZoom`: an absolute camera-zoom floor for every POI label, icon or icon-less, applied on top of the rank-derived thresholds and above the overzoom-delay cap, so a value above the camera's maximum zoom removes POI badges entirely. The default 0 changes nothing. Like `poiIconlessMinimumZoom`, the value participates in the prepared-tile disk-cache identity. Motivated by cinematic footage: colored POI badges read as app chrome in a video meant to look like a flight over the city rather than a map screenshot.
 
 - `Posts/`: standalone macOS apps that stage a scene and render it into a video file for social media, following the example project conventions (local package reference, one shared scheme each, registered in the workspace under a `Posts` group). The first is `NewYorkFlyover`, a slow cinematic flyover of Manhattan's skyscrapers: a harbor establish of the Lower Manhattan skyline, a dive to One World Trade Center with partial orbits, a low glide up the island to the Empire State Building, a drift to Billionaires' Row, and a pull-back that closes the loop. It previews the tour on screen and renders it offline through `ImmersiveMapTourVideoRecorder` with a format picker (1080p, 4K, vertical 9:16), and a headless `IMMERSIVE_POST_AUTORENDER_*` launch-environment mode renders from the CLI with no clicks for batch use.
@@ -48,6 +50,8 @@ once the public API stabilizes.
 
 ### Fixed
 
+- The debug HUD's `dt`/`fps` figures are real again: the panel used to print seconds-since-renderer-creation as a millisecond delta and derive fps as 1000 divided by it, so `dt` grew without bound and fps decayed toward zero over a session. The diagnostics now carry the actual frame delta.
+
 - Dark palettes no longer grow a bright blue spot over the north pole and a dark hole over Antarctica. Mercator tiles stop at the maximum latitude, and the caps that fill the rest continue the last row of tiles at their rim but fade into a single color at the pole itself. That color was taken from `baseColors.water` in the north and from `baseColors.tileBackground` in the south, which only works for a light style: a dark one that sets the two backgrounds and forgets the water keeps the daylight blue at the north pole, and its near-black tile background bears no relation to the white Antarctica the southern rim actually shows. The southern pole color is now a palette color of its own, `ImmersiveMapSettings.StyleSettings.BaseColors.polarIce`, defaulting to the white the daylight palette has always drawn, so a style declares its ice instead of having it inferred from a background. The `night` and `blueprint` palettes of the settings example now set `water` and `polarIce` alongside the backgrounds.
 
 - Attribution now credits the data source instead of the engine. The badge previously showed "Immersive map, © 2025-2026 ImmersiveMap contributors" over OpenStreetMap data, which satisfies neither ODbL nor the OpenMapTiles and Mapbox terms. Attribution is now a property of the tile provider (`ImmersiveMapTileProvider.attribution`): the built-in tiles credit OpenStreetMap, OpenFreeMap and OpenMapTiles, `MapboxTileProvider` credits Mapbox and OpenStreetMap, and a provider that declares no attribution renders no badge at all instead of borrowing someone else's name.
@@ -67,6 +71,16 @@ once the public API stabilizes.
 - README documents where the default tiles come from (an OpenMapTiles-schema planet assembled from OpenFreeMap data, i.e. OpenStreetMap data under ODbL), how to point the engine at your own MVT source, and how attribution is resolved. Status wording that described the package as unfinished was dropped in favour of a feature list.
 
 ### Performance
+
+- Unit-range fragment math now runs in half precision across every remaining shader (MSDF text, tile fill with fog, building lighting cues, globe day/night shading and rim glow, FXAA luma, POI sprites, avatars with badges and beams, routes, scene models, the building-image composite), extending the measured starfield precedent (~15% for ALU-bound fragments on A-series GPUs, rate-identical on M-series, lower register pressure on both). Values that need range or gradient precision stay float: uv derivatives, texel-space SDF distances, dash arclengths, world positions, fog distances and all shadow projections. Output targets are 8-bit, so no rendered pixel can tell the difference.
+
+- The shadow cascade atlas is `depth16Unorm` instead of `depth32Float`: half the memory (24 MB instead of 48 MB at the default resolution) and half the bandwidth of every shadow compare, up to 8 per fragment. The cascades are refit each frame to a tight caster range with depth clamping and the receiver bias is texel-derived, so 16 bits lose nothing visible; the offscreen shadow suites pass unchanged.
+
+- Rendering now respects the device's power situation: serious thermal pressure caps the frame rate at 60, critical at 30, and both (as well as Low Power Mode) revoke ProMotion headroom, while Low Power Mode alone keeps the configured interaction floor. An idle map still renders nothing at all.
+
+- ProMotion frame rates on macOS: the display link range now mirrors the iOS behavior instead of pinning to the configured rate, so 120 Hz MacBook Pro panels pan and animate at 120 during interactions while the label fade keeps its low cadence.
+
+- The tile `URLSession` matches its per-host connection cap to `maxConcurrentFetches`, marks tile requests `assumesHTTP3Capable` so the first connection to an HTTP/3 CDN can start on QUIC (with transparent fallback), and drops the request timeout from 60 s to 30 s so a stalled tile releases its fetch slot sooner.
 
 - ProMotion frame rates on iOS. During interaction and animations the display link is now offered a frame-rate range from the configured `interactionFramesPerSecond` (still the floor, 60 by default) up to 120 Hz, so ProMotion panels pan, zoom and animate at 120 instead of being pinned to 60; non-ProMotion hardware clamps to its own maximum and behaves exactly as before, and label fades keep their deliberately low cadence. On iPhone, rates above 60 additionally require the host app to declare `CADisableMinimumFrameDurationOnPhone` in its Info.plist; the macOS path is unchanged.
 
