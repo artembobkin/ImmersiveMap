@@ -20,13 +20,21 @@ import ImmersiveMap
 ///
 /// The Ligurian coast is under the camera because the unrolling is easiest to
 /// read against a coastline running across the frame: the curve of the horizon
-/// straightens into it. Pitch and bearing are radians.
+/// straightens into it, and the coast is the only line in shot that does not.
+/// Pitch and bearing are radians.
 enum UnfurlStoryboard {
     private static let latitude = 43.5
     private static let longitude = 11.0
-    /// Held across the whole tour. Enough tilt to see the sphere as a sphere,
-    /// little enough that the flat map at the end is still legible.
-    private static let pitch: Float = 0.35
+    /// Held across the whole tour, and the reason the morph is visible at all.
+    ///
+    /// Straight down, a sphere and a plane project to almost the same picture:
+    /// the map fills the frame either way, the change is a slow stretch at the
+    /// edges, and the moment of unrolling passes unnoticed. The shape only
+    /// shows at a grazing angle, where the sphere has a curved horizon cutting
+    /// across the frame and the plane has a straight one. 57 degrees puts that
+    /// horizon in shot at every zoom the tour visits, so the whole morph is
+    /// one continuous straightening of the line the eye is already following.
+    private static let pitch: Float = 1.0
 
     /// The whole globe in frame, well below the start of the morph.
     static let globe = position(zoom: 3.0)
