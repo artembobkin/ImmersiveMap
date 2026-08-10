@@ -58,5 +58,8 @@
       <FileRef
          location = "group:Posts/BerlinNightDescent/BerlinNightDescent.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Posts/GlobeUnfurl/GlobeUnfurl.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>
