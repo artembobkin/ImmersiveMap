@@ -682,14 +682,12 @@ enum PreparedTileDiskCodec {
         let pathIndex: UInt32
         let segmentIndex: UInt32
         let t: Float
-        let distanceAlongPath: Float
         let anchorOrdinal: UInt32
 
         init(_ value: RoadLabelAnchor) {
             pathIndex = value.pathIndex
             segmentIndex = value.segmentIndex
             t = value.t
-            distanceAlongPath = value.distanceAlongPath
             anchorOrdinal = value.anchorOrdinal
         }
 
@@ -697,7 +695,6 @@ enum PreparedTileDiskCodec {
             RoadLabelAnchor(pathIndex: pathIndex,
                             segmentIndex: segmentIndex,
                             t: t,
-                            distanceAlongPath: distanceAlongPath,
                             anchorOrdinal: anchorOrdinal)
         }
     }

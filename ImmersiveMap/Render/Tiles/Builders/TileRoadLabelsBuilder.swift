@@ -363,7 +363,6 @@ final class TileRoadLabelsBuilder {
             anchors.append(RoadLabelAnchor(pathIndex: UInt32(labelIndex),
                                            segmentIndex: UInt32(segmentIndex),
                                            t: t,
-                                           distanceAlongPath: totalLength > 0.0 ? (distance / totalLength) : 0.0,
                                            anchorOrdinal: UInt32(ordinal)))
         }
 
