@@ -230,7 +230,7 @@ final class FrameAttachmentStore {
             return shadowMapTexture
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
                                                                   width: width,
                                                                   height: resolution,
                                                                   mipmapped: false)

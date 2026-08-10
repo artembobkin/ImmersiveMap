@@ -28,7 +28,7 @@ final class TileAtlasShadowBindingTests: XCTestCase {
                                         library: library,
                                         sampleCount: 1)
 
-        let fallbackDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        let fallbackDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
                                                                           width: 1,
                                                                           height: 1,
                                                                           mipmapped: false)
