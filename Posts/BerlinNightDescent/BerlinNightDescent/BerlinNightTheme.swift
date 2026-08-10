@@ -69,10 +69,19 @@ enum BerlinNightTheme {
     }
 
     /// The colors the palette cannot carry, because no tile contains them.
+    ///
+    /// All five of them. The polar caps are built out of `water` and
+    /// `polarIce`, so a dark style that sets only the two backgrounds keeps the
+    /// daylight blue at the north pole and fades Antarctica into a dark hole.
     static var style: ImmersiveMapSettings.StyleSettings {
         var style = ImmersiveMapSettings.default.style
         style.baseColors.tileBackground = land
         style.baseColors.globeBackground = SIMD4<Double>(0.02, 0.03, 0.07, 1.0)
+        style.baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+        style.baseColors.landCover = SIMD4<Float>(0.08, 0.16, 0.12, 0.7)
+        // The same snow the global landcover paints Antarctica with, so the cap
+        // continues the continent instead of punching a hole in it.
+        style.baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
         // Depth-correct buildings rather than the default translucent
         // composite: the last third of the descent is spent among them.
         style.buildingExtrusionMode = .solid

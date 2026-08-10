@@ -38,10 +38,13 @@ class ImmersiveMapBaseColors {
         self.backgroundColor = settings.globeBackground
         self.waterColor = settings.water
         self.landCoverColor = settings.landCover
+        // The Arctic is open ocean at the latitudes the cap has to invent, so the
+        // northern pole follows the palette's water.
         self.northPoleColor = self.waterColor
-        // Antarctica renders as ice over the white tile background at the southern
-        // Mercator edge, so the polar-cap fallback should degrade to that background
-        // rather than land-cover green when no edge tile has been sampled yet.
-        self.southPoleColor = self.tileBgColor
+        // Antarctica is ice all the way to the pole, and the palette says which
+        // ice. Deriving it from the tile background instead would only hold for
+        // a light style: a dark one paints that background near black and the
+        // cap fades from the snow at its rim into a dark hole at the pole.
+        self.southPoleColor = settings.polarIce
     }
 }

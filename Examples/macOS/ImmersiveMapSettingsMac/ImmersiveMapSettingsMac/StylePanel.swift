@@ -85,6 +85,8 @@ enum StylePalette: String, CaseIterable, Identifiable {
         settings = settings.mapStyle(mapStyle)
         settings.style.baseColors.tileBackground = tileBackground
         settings.style.baseColors.globeBackground = globeBackground
+        settings.style.baseColors.water = water
+        settings.style.baseColors.polarIce = polarIce
         settings.scene.mapClearColor = mapClearColor
     }
 
@@ -195,6 +197,29 @@ enum StylePalette: String, CaseIterable, Identifiable {
         case .day: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
         case .night: SIMD4<Float>(0.09, 0.10, 0.13, 1.0)
         case .blueprint: SIMD4<Float>(0.05, 0.16, 0.38, 1.0)
+        }
+    }
+
+    /// Not the same water as `layers.water`, which is a tile color. This one is
+    /// the engine's own, and the northern polar cap fades into it: leave it at
+    /// the daylight blue and a dark palette grows a bright blue spot over the
+    /// Arctic, where Mercator tiles stop and the cap takes over.
+    private var water: SIMD4<Float> {
+        switch self {
+        case .day: SIMD4<Float>(0.3, 0.6, 0.9, 1.0)
+        case .night: SIMD4<Float>(0.04, 0.09, 0.20, 1.0)
+        case .blueprint: SIMD4<Float>(0.03, 0.11, 0.30, 1.0)
+        }
+    }
+
+    /// What the southern cap fades into, and so the color of the south pole. It
+    /// has to match the snow the global landcover paints Antarctica with, or
+    /// the pole reads as a hole in the continent.
+    private var polarIce: SIMD4<Float> {
+        switch self {
+        case .day: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
+        case .night: SIMD4<Float>(0.30, 0.32, 0.36, 1.0)
+        case .blueprint: SIMD4<Float>(0.22, 0.36, 0.62, 1.0)
         }
     }
 

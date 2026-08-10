@@ -48,6 +48,8 @@ once the public API stabilizes.
 
 ### Fixed
 
+- Dark palettes no longer grow a bright blue spot over the north pole and a dark hole over Antarctica. Mercator tiles stop at the maximum latitude, and the caps that fill the rest continue the last row of tiles at their rim but fade into a single color at the pole itself. That color was taken from `baseColors.water` in the north and from `baseColors.tileBackground` in the south, which only works for a light style: a dark one that sets the two backgrounds and forgets the water keeps the daylight blue at the north pole, and its near-black tile background bears no relation to the white Antarctica the southern rim actually shows. The southern pole color is now a palette color of its own, `ImmersiveMapSettings.StyleSettings.BaseColors.polarIce`, defaulting to the white the daylight palette has always drawn, so a style declares its ice instead of having it inferred from a background. The `night` and `blueprint` palettes of the settings example now set `water` and `polarIce` alongside the backgrounds.
+
 - Attribution now credits the data source instead of the engine. The badge previously showed "Immersive map, © 2025-2026 ImmersiveMap contributors" over OpenStreetMap data, which satisfies neither ODbL nor the OpenMapTiles and Mapbox terms. Attribution is now a property of the tile provider (`ImmersiveMapTileProvider.attribution`): the built-in tiles credit OpenStreetMap, OpenFreeMap and OpenMapTiles, `MapboxTileProvider` credits Mapbox and OpenStreetMap, and a provider that declares no attribution renders no badge at all instead of borrowing someone else's name.
 
 ### Changed
