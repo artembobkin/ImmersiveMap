@@ -20,14 +20,17 @@ struct StarVertexIn {
     float halo [[attribute(5)]];
 };
 
+// Star attributes are unit-range (phase is 0..2pi), so the interpolants ride
+// as half: cheaper interpolation and half-rate fragment math on A-series GPUs,
+// identical rate on M-series.
 struct StarVertexOut {
     float4 position [[position]];
     float pointSize [[point_size]];
-    float brightness;
-    float temperature;
-    float twinklePhase;
-    float halo;
-    float transition;
+    half brightness;
+    half temperature;
+    half twinklePhase;
+    half halo;
+    half transition;
 };
 
 struct StarfieldParams {
@@ -143,18 +146,22 @@ fragment float4 starfieldBackgroundFragmentShader(BackgroundVertexOut in [[stage
     float band = pow(clamp(1.0 - abs(localDirection.y + 0.08), 0.0, 1.0), 4.5);
     float directionalLift = pow(clamp(1.0 - abs(localDirection.y - 0.28), 0.0, 1.0), 2.6);
     float wisps = fractalNoise(float2(localDirection.z, localDirection.x) * (params.controls.y * 0.75) + float2(1.3, -2.6));
-    float nebulaA = smoothstep(0.56, 0.83, largeNoise) * (band * 0.65 + directionalLift * 0.28);
-    float nebulaB = smoothstep(0.60, 0.88, detailNoise) * (band * 0.45 + wisps * 0.22);
+    // The noise lattice above needs float (hash21 works on large coordinates);
+    // the composition below is unit-range and runs in half.
+    half nebulaA = smoothstep(0.56h, 0.83h, half(largeNoise))
+        * (half(band) * 0.65h + half(directionalLift) * 0.28h);
+    half nebulaB = smoothstep(0.60h, 0.88h, half(detailNoise))
+        * (half(band) * 0.45h + half(wisps) * 0.22h);
 
-    float3 color = params.deepColor.rgb;
-    color += params.hazeColor.rgb * (band * 0.18 + directionalLift * 0.12);
-    color += params.nebulaColorA.rgb * nebulaA * params.controls.z;
-    color += params.nebulaColorB.rgb * nebulaB * params.controls.z * 0.85;
-    color *= 1.0 - smoothstep(0.15, 0.98, abs(localDirection.y)) * params.controls.x * 0.22;
-    float transitionFade = smoothstep(0.0, 1.0, globe.transition);
-    color = mix(color, params.transitionTargetColor.rgb, transitionFade);
+    half3 color = half3(params.deepColor.rgb);
+    color += half3(params.hazeColor.rgb) * (half(band) * 0.18h + half(directionalLift) * 0.12h);
+    color += half3(params.nebulaColorA.rgb) * nebulaA * half(params.controls.z);
+    color += half3(params.nebulaColorB.rgb) * nebulaB * half(params.controls.z) * 0.85h;
+    color *= 1.0h - half(smoothstep(0.15, 0.98, abs(localDirection.y))) * half(params.controls.x) * 0.22h;
+    half transitionFade = smoothstep(0.0h, 1.0h, half(globe.transition));
+    color = mix(color, half3(params.transitionTargetColor.rgb), transitionFade);
 
-    return float4(color, 1.0);
+    return float4(float3(color), 1.0);
 }
 
 vertex BackgroundVertexOut sunVertexShader(uint vertexID [[vertex_id]]) {
@@ -174,11 +181,16 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
 
     float diskDistance = length((uv - sun.screenCenter) * aspectScale);
     float diskRadius = max(earth.sunDiskAngularSize, 0.001);
-    float core = exp(-pow(diskDistance / diskRadius, 2.0) * 2.6) * sun.diskAlpha * earth.sunDiskIntensity;
-    float glow = exp(-pow(diskDistance / (diskRadius * 3.5), 2.0)) * sun.diskAlpha;
+    // Screen-space distances stay float; the falloff composition runs in half.
+    // The distance ratios overflow half only where exp() underflows to zero
+    // anyway, so the result is unchanged.
+    half diskT = half(diskDistance / diskRadius);
+    half core = exp(-diskT * diskT * 2.6h) * half(sun.diskAlpha) * half(earth.sunDiskIntensity);
+    half glowT = diskT * (1.0h / 3.5h);
+    half glow = exp(-glowT * glowT) * half(sun.diskAlpha);
 
     float edgeDistance = length((uv - sun.clampedScreenCenter) * aspectScale);
-    float edgeGlare = exp(-edgeDistance * 8.0) * sun.edgeGlareAlpha * earth.sunEdgeGlareIntensity;
+    half edgeGlare = exp(half(-edgeDistance) * 8.0h) * half(sun.edgeGlareAlpha) * half(earth.sunEdgeGlareIntensity);
 
     float globeDistance = length((uv - sun.globeScreenCenter) * aspectScale);
     float limbDistance = abs(globeDistance - sun.globeScreenRadius);
@@ -190,19 +202,21 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     float2 sunDirection = sunVector / max(sunVectorLength, 0.0001);
     float limbAlignment = dot(limbDirection, sunDirection);
     float directionalLimb = sunVectorLength > 0.0001 ? smoothstep(0.18, 0.92, limbAlignment) : 0.0;
-    float limb = exp(-pow(limbDistance / max(earth.sunLimbHaloWidth, 0.001), 2.0) * 6.0)
-        * sun.limbHaloAlpha
-        * directionalLimb
-        * earth.sunLimbHaloIntensity;
+    half limbT = half(limbDistance / max(earth.sunLimbHaloWidth, 0.001));
+    half limb = exp(-limbT * limbT * 6.0h)
+        * half(sun.limbHaloAlpha)
+        * half(directionalLimb)
+        * half(earth.sunLimbHaloIntensity);
 
-    float3 warmCore = float3(1.0, 0.94, 0.72);
-    float3 orangeGlow = float3(1.0, 0.45, 0.12);
-    float3 color = warmCore * core
-        + orangeGlow * glow * earth.sunGlowIntensity
+    half3 warmCore = half3(1.0h, 0.94h, 0.72h);
+    half3 orangeGlow = half3(1.0h, 0.45h, 0.12h);
+    half glowIntensity = half(earth.sunGlowIntensity);
+    half3 color = warmCore * core
+        + orangeGlow * glow * glowIntensity
         + orangeGlow * edgeGlare
         + warmCore * limb;
-    float alpha = saturate(core + glow * earth.sunGlowIntensity * 0.7 + edgeGlare * 0.45 + limb * 0.55);
-    return float4(color, alpha);
+    half alpha = saturate(core + glow * glowIntensity * 0.7h + edgeGlare * 0.45h + limb * 0.55h);
+    return float4(float3(color), float(alpha));
 }
 
 vertex StarVertexOut starfieldVertexShader(StarVertexIn in [[stage_in]],
@@ -217,39 +231,42 @@ vertex StarVertexOut starfieldVertexShader(StarVertexIn in [[stage_in]],
     out.position = camera.matrix * world;
     float sizeScale = starRadius / globe.radius;
     out.pointSize = max(1.2, in.size * sizeScale * 0.32);
-    out.brightness = in.brightness;
-    out.temperature = in.temperature;
-    out.twinklePhase = in.twinklePhase;
-    out.halo = in.halo;
-    out.transition = globe.transition;
+    out.brightness = half(in.brightness);
+    out.temperature = half(in.temperature);
+    out.twinklePhase = half(in.twinklePhase);
+    out.halo = half(in.halo);
+    out.transition = half(globe.transition);
     return out;
 }
 
 fragment float4 starfieldFragmentShader(StarVertexOut in [[stage_in]],
                                         float2 pointCoord [[point_coord]],
                                         constant float &time [[buffer(0)]]) {
-    float2 centered = pointCoord * 2.0 - 1.0;
-    float radiusSquared = dot(centered, centered);
-    if (radiusSquared > 1.0) {
+    half2 centered = half2(pointCoord) * 2.0h - 1.0h;
+    half radiusSquared = dot(centered, centered);
+    if (radiusSquared > 1.0h) {
         discard_fragment();
     }
 
-    float core = exp(-radiusSquared * 7.8);
-    float halo = exp(-radiusSquared * 2.35) * (0.45 + in.halo * 0.95);
-    float crossGlow = exp(-abs(centered.x * centered.y) * 10.0) * 0.08 * in.halo;
-    float twinkle = 0.9 + 0.1 * sin(time * (1.0 + in.halo * 1.3) + in.twinklePhase);
-    float intensity = in.brightness * twinkle;
+    // All terms are unit-range, so the whole sprite evaluates in half. The
+    // twinkle argument stays float: time grows unbounded and would lose the
+    // phase entirely at half precision.
+    half core = exp(-radiusSquared * 7.8h);
+    half halo = exp(-radiusSquared * 2.35h) * (0.45h + in.halo * 0.95h);
+    half crossGlow = exp(-abs(centered.x * centered.y) * 10.0h) * 0.08h * in.halo;
+    half twinkle = 0.9h + 0.1h * half(sin(time * (1.0 + float(in.halo) * 1.3) + float(in.twinklePhase)));
+    half intensity = in.brightness * twinkle;
 
-    float3 warm = float3(1.0, 0.88, 0.78);
-    float3 neutral = float3(0.96, 0.97, 1.0);
-    float3 cool = float3(0.72, 0.83, 1.0);
-    float clampedTemperature = clamp(in.temperature, 0.0, 1.0);
-    float3 color = clampedTemperature < 0.5
-        ? mix(warm, neutral, clampedTemperature * 2.0)
-        : mix(neutral, cool, (clampedTemperature - 0.5) * 2.0);
+    half3 warm = half3(1.0h, 0.88h, 0.78h);
+    half3 neutral = half3(0.96h, 0.97h, 1.0h);
+    half3 cool = half3(0.72h, 0.83h, 1.0h);
+    half clampedTemperature = clamp(in.temperature, 0.0h, 1.0h);
+    half3 color = clampedTemperature < 0.5h
+        ? mix(warm, neutral, clampedTemperature * 2.0h)
+        : mix(neutral, cool, (clampedTemperature - 0.5h) * 2.0h);
 
-    float transitionAlpha = 1.0 - smoothstep(0.0, 1.0, in.transition);
-    float alpha = saturate(core * 0.95 + halo * 0.55 + crossGlow) * intensity * transitionAlpha;
-    float3 emissive = color * (core * 1.3 + halo * 0.75 + crossGlow * 1.6) * intensity * transitionAlpha;
-    return float4(emissive, alpha);
+    half transitionAlpha = 1.0h - smoothstep(0.0h, 1.0h, in.transition);
+    half alpha = saturate(core * 0.95h + halo * 0.55h + crossGlow) * intensity * transitionAlpha;
+    half3 emissive = color * (core * 1.3h + halo * 0.75h + crossGlow * 1.6h) * intensity * transitionAlpha;
+    return float4(float3(emissive), float(alpha));
 }

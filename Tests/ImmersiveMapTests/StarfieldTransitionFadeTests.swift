@@ -8,16 +8,16 @@ final class StarfieldTransitionFadeTests: XCTestCase {
         let source = try starfieldShaderSource()
 
         XCTAssertTrue(source.contains("transitionTargetColor"))
-        XCTAssertTrue(source.contains("float transitionFade = smoothstep(0.0, 1.0, globe.transition);"))
-        XCTAssertTrue(source.contains("color = mix(color, params.transitionTargetColor.rgb, transitionFade);"))
+        XCTAssertTrue(source.contains("half transitionFade = smoothstep(0.0h, 1.0h, half(globe.transition));"))
+        XCTAssertTrue(source.contains("color = mix(color, half3(params.transitionTargetColor.rgb), transitionFade);"))
     }
 
     func testStarfieldStarsFadeOutDuringGlobeTransition() throws {
         let source = try starfieldShaderSource()
 
-        XCTAssertTrue(source.contains("float transitionAlpha = 1.0 - smoothstep(0.0, 1.0, in.transition);"))
-        XCTAssertTrue(source.contains("float alpha = saturate(core * 0.95 + halo * 0.55 + crossGlow) * intensity * transitionAlpha;"))
-        XCTAssertTrue(source.contains("float3 emissive = color * (core * 1.3 + halo * 0.75 + crossGlow * 1.6) * intensity * transitionAlpha;"))
+        XCTAssertTrue(source.contains("half transitionAlpha = 1.0h - smoothstep(0.0h, 1.0h, in.transition);"))
+        XCTAssertTrue(source.contains("half alpha = saturate(core * 0.95h + halo * 0.55h + crossGlow) * intensity * transitionAlpha;"))
+        XCTAssertTrue(source.contains("half3 emissive = color * (core * 1.3h + halo * 0.75h + crossGlow * 1.6h) * intensity * transitionAlpha;"))
     }
 
     func testStarfieldRendererUsesMapClearColorAsTransitionTarget() throws {
