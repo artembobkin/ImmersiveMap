@@ -48,7 +48,11 @@ class DecodeLine {
             let lineId = Int(lineCmd & 0x7)
             let lineCount = Int(lineCmd >> 3)
             guard lineId == 2 && lineCount > 0 else { return [] }
-            
+
+            // The command integer announces the point count up front; capped by
+            // the remaining geometry (2 ints per point) so a corrupt count
+            // cannot force a huge allocation.
+            linePoints.reserveCapacity(1 + min(lineCount, (geometry.count - i) / 2))
             for _ in 0..<lineCount {
                 guard i + 1 < geometry.count else { return [] }
                 let dxU = geometry[i]; i += 1
