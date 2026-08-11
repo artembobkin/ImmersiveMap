@@ -121,6 +121,33 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
     }
 
+    /// The placement subsystem reports the active set on every rendered frame
+    /// (including dirty-gated ones), so a tile that just left the placements
+    /// always carries a fresh stamp: the in-flight window is measured from
+    /// the frame it actually stopped being drawn, not from the last placement
+    /// rebuild hundreds of gated frames earlier.
+    func testFreshPerFrameStampsMeasureTheWindowFromTheLastDrawnFrame() throws {
+        let device = try makeDevice()
+        let key = Tile(x: 7, y: 8, z: 10)
+        let (tile, observedBuffer) = try makeTile(device: device, key: key)
+        let cache = MemoryMetalTileCache(maxCacheSizeInBytes: 64 * 1024 * 1024,
+                                         tileTraceRecorder: TileTraceRecorder())
+
+        cache.setTileData(tile: tile, forKey: key)
+        // A long stable stretch: the tile is placed and re-stamped every frame.
+        for frameIndex in UInt64(100)...600 {
+            cache.recordActiveTiles([key], frameIndex: frameIndex)
+        }
+
+        // The tile leaves the placements: the very next sweep must not park
+        // it (in-flight frames may still read it), only a sweep past the
+        // window may.
+        cache.recordActiveTiles([], frameIndex: 601)
+        XCTAssertNotEqual(currentPurgeableState(of: observedBuffer), .volatile)
+        cache.recordActiveTiles([], frameIndex: 600 + MemoryMetalTileCache.volatileDelayFrames)
+        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
+    }
+
     func testReclaimedTileDropsOutAsMiss() throws {
         let device = try makeDevice()
         let key = Tile(x: 5, y: 6, z: 10)
