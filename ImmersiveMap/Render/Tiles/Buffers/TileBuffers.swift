@@ -93,6 +93,52 @@ struct TileBuffers {
     let extruded: Extruded
     let textLabels: TextLabels
     let roadLabels: RoadLabels
+
+    /// Enumerates every Metal buffer the tile owns: the cache uses it for
+    /// byte accounting and purgeable-state transitions.
+    func forEachBuffer(_ body: (MTLBuffer) -> Void) {
+        let geometryLayers = [ground] + roads.drawOrderBuckets.flatMap(\.drawOrderLayers) + [bridgeOverlay]
+        for layer in geometryLayers {
+            for buffer in [layer.verticesBuffer, layer.indicesBuffer,
+                           layer.stylesBuffer, layer.overviewStyleMaskBuffer] {
+                if let buffer { body(buffer) }
+            }
+        }
+        for buffer in [extruded.verticesBuffer, extruded.indicesBuffer, extruded.stylesBuffer] {
+            if let buffer { body(buffer) }
+        }
+        for labelSet in [textLabels.full, textLabels.reduced, textLabels.minimal] {
+            for run in labelSet.labelsByStyleRuns {
+                if let buffer = run.localGlyphVerticesBuffer { body(buffer) }
+            }
+            for run in labelSet.poiIconRuns {
+                if let buffer = run.localVerticesBuffer { body(buffer) }
+            }
+        }
+        if let buffer = roadLabels.localGlyphVerticesBuffer { body(buffer) }
+    }
+
+    /// Offers every buffer to the OS as reclaimable-under-pressure. Only the
+    /// cache calls this, and only for tiles outside the demanded set and the
+    /// retained placements, past the in-flight frame window.
+    func markVolatile() {
+        forEachBuffer { buffer in
+            _ = buffer.setPurgeableState(.volatile)
+        }
+    }
+
+    /// Pins the buffers back before reuse. Returns false when the OS
+    /// reclaimed any buffer's contents while it was volatile: the tile is
+    /// unusable and must be dropped and reloaded.
+    func restoreFromVolatile() -> Bool {
+        var contentsRetained = true
+        forEachBuffer { buffer in
+            if buffer.setPurgeableState(.nonVolatile) == .empty {
+                contentsRetained = false
+            }
+        }
+        return contentsRetained
+    }
 }
 
 struct LabelGlyphRange {

@@ -123,6 +123,22 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             preprocessedVisibleTilesHashTracker.commitPending()
         }
 
+        // Purgeable bookkeeping: the cache may only park tiles that nothing
+        // references, and the demanded set alone is not that (retained
+        // substitutes in the placements keep drawing after leaving demand).
+        // Report the union of everything the three placement contexts hold.
+        var activeTiles = Set<Tile>()
+        for placement in placeTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        for placement in backdropPlaceTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        for placement in tileAtlasPlaceTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        tileRenderStore.recordActiveTiles(activeTiles, frameIndex: frameContext.frameIndex)
+
         let visibleTilesCount = visibleTiles.count
         let readyTilesCount = tileRequestResult.readyTilesCount
         let requestedTilesCount = tileRequestResult.requestedTilesCount

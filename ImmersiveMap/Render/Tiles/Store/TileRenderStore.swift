@@ -81,6 +81,15 @@ final class TileRenderStore: @unchecked Sendable {
         return memoryMetalTile.getTile(forKey: tile)
     }
 
+    /// Placements can retain tiles beyond the demanded set (a stale substitute
+    /// keeps drawing until its replacement arrives), so the placement
+    /// subsystem reports the actually referenced tiles whenever it rebuilds:
+    /// everything else in the cache goes volatile for the OS to reclaim under
+    /// memory pressure.
+    func recordActiveTiles(_ tiles: Set<Tile>, frameIndex: UInt64) {
+        memoryMetalTile.recordActiveTiles(tiles, frameIndex: frameIndex)
+    }
+
     // Tile cache content version: changes on materialization/eviction.
     // Together with coverageVersion it forms the demand pipeline's dirty-gate key.
     var cacheContentVersion: UInt64 {

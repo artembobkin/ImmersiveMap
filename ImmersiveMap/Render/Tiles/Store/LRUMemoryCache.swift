@@ -36,6 +36,24 @@ struct LRUMemoryCache<Key: Hashable, Value> {
         slotsByKey[key]?.cost
     }
 
+    var keys: [Key] {
+        Array(slotsByKey.keys)
+    }
+
+    /// Reads without bumping the recency tick: for maintenance sweeps that
+    /// must not disturb the LRU order.
+    func peekValue(forKey key: Key) -> Value? {
+        slotsByKey[key]?.value
+    }
+
+    mutating func removeValue(forKey key: Key) -> Entry? {
+        guard let slot = slotsByKey.removeValue(forKey: key) else {
+            return nil
+        }
+        totalCost -= slot.cost
+        return Entry(key: key, value: slot.value, cost: slot.cost)
+    }
+
     mutating func value(forKey key: Key) -> Value? {
         guard let index = slotsByKey.index(forKey: key) else {
             return nil
