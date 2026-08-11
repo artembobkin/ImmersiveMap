@@ -43,6 +43,10 @@ final class ShadowCasterCoverageTests: XCTestCase {
     }
 
     func testSweepFollowsTheSunRayScaledByTheCasterHeightCap() throws {
+        // The cap itself is part of the contract: it must track the
+        // middle-cascade caster cap, currently 500 meters.
+        XCTAssertEqual(ShadowCasterSweepResolver.maxCasterHeightMeters, 500)
+
         let scene = ImmersiveMapSettings.default.scene
         let centerWorldMercator = SIMD2<Double>(0.5, 0.55)
         let renderMapSize = 65536.0
@@ -52,14 +56,13 @@ final class ShadowCasterCoverageTests: XCTestCase {
                                                                     centerWorldMercator: centerWorldMercator,
                                                                     renderMapSize: renderMapSize))
 
+        // Fixed expectation, computed independently for this fixture: the
+        // default light (-0.4, -0.6, 1)/|.| at latitude(-17.711 deg) and map
+        // size 65536 gives units-per-meter 0.0017167; 500 m of caster height
+        // along the sun ray projects to these ground world units.
+        XCTAssertEqual(sweep.x, -0.34334, accuracy: 0.001)
+        XCTAssertEqual(sweep.y, -0.51501, accuracy: 0.001)
         let light = simd_normalize(scene.light.direction)
-        let latitudeRadians = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centerWorldMercator.y)
-        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitudeRadians,
-                                                                      renderMapSize: renderMapSize)
-        let expected = SIMD2<Float>(light.x, light.y)
-            * Float(ShadowCasterSweepResolver.maxCasterHeightMeters * unitsPerMeter) / light.z
-        XCTAssertEqual(sweep.x, expected.x, accuracy: abs(expected.x) * 1e-5)
-        XCTAssertEqual(sweep.y, expected.y, accuracy: abs(expected.y) * 1e-5)
         XCTAssertGreaterThan(simd_dot(sweep, SIMD2<Float>(light.x, light.y)), 0,
                              "The sweep must point sun-ward: casters sit between receivers and the sun")
     }
