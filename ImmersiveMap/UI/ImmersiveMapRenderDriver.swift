@@ -215,11 +215,12 @@ private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDis
                           needsUpdate update: CAMetalDisplayLink.Update) {
         guard let driver else { return }
 
-        // Animations sample at the update's target time (the moment this
-        // frame is predicted to display), not at "now": that is the time
-        // the frame is going to be seen at.
+        // Animations sample at the update's presentation time (the moment
+        // this frame is predicted to appear on the display), not at "now"
+        // and not at targetTimestamp, which is the deadline for finishing
+        // the render: that is the time the frame is going to be seen at.
         frameDelegate?.renderDriverDidTick(driver,
-                                           currentTime: update.targetTimestamp,
+                                           currentTime: update.targetPresentationTimestamp,
                                            drawable: update.drawable)
     }
 }
