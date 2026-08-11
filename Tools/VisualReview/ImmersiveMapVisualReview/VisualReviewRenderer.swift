@@ -96,9 +96,18 @@ struct VisualReviewVerdictStore {
 enum VisualReviewFingerprint {
     private static let side = 16
 
-    static func of(_ image: CGImage) -> String {
+    /// - Returns: nil when the thumbnail could not be drawn.
+    ///
+    /// Optional rather than a fallback string on purpose. The obvious failure
+    /// value here is the digest of an untouched buffer, all zeros, which is
+    /// indistinguishable from a real fingerprint: two artifacts that failed to
+    /// hash would compare equal, report as the same picture and be filtered
+    /// out of the list of things to look at. A fingerprint that says "this did
+    /// not change" when nobody measured it defeats the only job it has.
+    static func of(_ image: CGImage) -> String? {
         let count = side * side * 4
         var pixels = [UInt8](repeating: 0, count: count)
+        var didDraw = false
         pixels.withUnsafeMutableBytes { buffer in
             guard let context = CGContext(data: buffer.baseAddress,
                                           width: side,
@@ -111,6 +120,10 @@ enum VisualReviewFingerprint {
             }
             context.interpolationQuality = .medium
             context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            didDraw = true
+        }
+        guard didDraw else {
+            return nil
         }
 
         var digest = ""
@@ -150,12 +163,16 @@ enum VisualReviewFingerprint {
         for index in 0 ..< sampleCount {
             let fraction = Double(index) / Double(max(1, sampleCount - 1))
             let time = CMTime(seconds: duration.seconds * fraction, preferredTimescale: 600)
-            guard let image = try? await generator.image(at: time).image else {
+            guard let image = try? await generator.image(at: time).image,
+                  let digest = of(image) else {
                 continue
             }
-            digests.append(of(image))
+            digests.append(digest)
         }
-        return digests.isEmpty ? nil : digests.joined(separator: ":")
+        // Every sample must land, not merely one of them: a fingerprint built
+        // from fewer frames than the last one would differ for that reason
+        // alone and report a scene as changed when it is not.
+        return digests.count == sampleCount ? digests.joined(separator: ":") : nil
     }
 }
 
@@ -203,9 +220,10 @@ final class VisualReviewRenderer {
                                                     configuration: configuration)
         let url = directory.appending(path: "\(scenario.id).png")
         try write(image, to: url)
-        return VisualReviewArtifact(scenarioID: scenario.id,
-                                    url: url,
-                                    fingerprint: VisualReviewFingerprint.of(image))
+        guard let fingerprint = VisualReviewFingerprint.of(image) else {
+            throw VisualReviewError.couldNotFingerprint(url)
+        }
+        return VisualReviewArtifact(scenarioID: scenario.id, url: url, fingerprint: fingerprint)
     }
 
     /// Movie output: 1280x720 at 30 fps is enough to judge motion, popping and
