@@ -388,19 +388,48 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// How the tile loader uses regions downloaded through
+        /// `ImmersiveMapOfflineController`. Serving needs no wiring beyond the
+        /// mode: downloaded tiles are found on disk by the tile source
+        /// identity the provider already carries.
+        public struct OfflineSettings: Equatable, Sendable {
+            public enum Mode: String, CaseIterable, Equatable, Sendable {
+                /// Tiles come from the network; when a request fails (offline,
+                /// server error, missing authorization), the downloaded
+                /// regions answer instead.
+                case automatic
+                /// The network is never touched: only downloaded regions and
+                /// the local caches render. Tiles outside every region stay
+                /// empty.
+                case offlineOnly
+                /// Downloaded regions are ignored; failures render nothing,
+                /// as if no region existed.
+                case disabled
+            }
+
+            public var mode: Mode
+
+            public init(mode: Mode = .automatic) {
+                self.mode = mode
+            }
+        }
+
         public var coverage: CoverageSettings
         public var network: NetworkSettings
         public var cache: CacheSettings
         public var parsing: ParsingSettings
+        public var offline: OfflineSettings
 
         public init(coverage: CoverageSettings,
                     network: NetworkSettings,
                     cache: CacheSettings,
-                    parsing: ParsingSettings) {
+                    parsing: ParsingSettings,
+                    offline: OfflineSettings = OfflineSettings()) {
             self.coverage = coverage
             self.network = network
             self.cache = cache
             self.parsing = parsing
+            self.offline = offline
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -1156,6 +1185,21 @@ public extension ImmersiveMapSettings {
         if let memoryCacheSizeInBytes {
             settings.tiles.cache.memoryCacheSizeInBytes = memoryCacheSizeInBytes
         }
+        return settings
+    }
+
+    func offlineTileSettings(_ offline: TileSettings.OfflineSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.offline = offline
+        return settings
+    }
+
+    /// How the tile loader uses regions downloaded through
+    /// `ImmersiveMapOfflineController`: `.automatic` falls back to them when
+    /// the network fails, `.offlineOnly` never touches the network at all.
+    func offlineTileMode(_ mode: TileSettings.OfflineSettings.Mode) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.offline.mode = mode
         return settings
     }
 

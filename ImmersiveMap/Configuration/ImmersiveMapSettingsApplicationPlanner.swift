@@ -102,6 +102,13 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.parsing != newValue.tiles.parsing {
             mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
+        // The offline mode decides which transports the load pipeline is even
+        // built with (offline-only maps never create a downloader), so it
+        // applies by recreating the renderer; caches stay valid because the
+        // bytes come from the same tile source either way.
+        if oldValue.tiles.offline != newValue.tiles.offline {
+            mark(.tiles, actions: [.recreateRenderer])
+        }
 
         if oldValue.labels != newValue.labels {
             mark(.labels, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])

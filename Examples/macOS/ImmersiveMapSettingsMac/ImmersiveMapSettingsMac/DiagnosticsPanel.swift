@@ -62,7 +62,17 @@ struct DiagnosticsPanel: View {
                 }
             }
 
-            DeferredNote(text: "Cache switches rebuild the tile loader, so tiles on screen are fetched again.")
+            PanelRow {
+                Picker("Offline tiles", selection: $settings.tiles.offline.mode) {
+                    Text("Automatic").tag(ImmersiveMapSettings.TileSettings.OfflineSettings.Mode.automatic)
+                    Text("Offline only").tag(ImmersiveMapSettings.TileSettings.OfflineSettings.Mode.offlineOnly)
+                    Text("Disabled").tag(ImmersiveMapSettings.TileSettings.OfflineSettings.Mode.disabled)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+            }
+
+            DeferredNote(text: "Cache switches rebuild the tile loader, so tiles on screen are fetched again. Offline only serves nothing but regions downloaded via ImmersiveMapOfflineController (see ImmersiveMapOfflineMac).")
         }
     }
 }

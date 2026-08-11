@@ -161,4 +161,17 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
+
+    func testOfflineTileModeChangeRecreatesTheRendererWithoutInvalidatingCaches() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.offlineTileMode(.offlineOnly)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.tiles])
+        // The bytes come from the same tile source either way, so the caches
+        // stay valid; only the pipeline's transports need rebuilding.
+        XCTAssertEqual(plan.actions, [.recreateRenderer])
+        XCTAssertTrue(plan.requiresRendererRecreation)
+    }
 }
