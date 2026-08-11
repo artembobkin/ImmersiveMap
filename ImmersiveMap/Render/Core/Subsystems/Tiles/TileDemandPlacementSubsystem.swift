@@ -148,8 +148,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // Purgeable bookkeeping: the cache may only park tiles that nothing
         // references, and the demanded set alone is not that (retained
         // substitutes in the placements keep drawing after leaving demand).
-        // Report the union of everything the three placement contexts hold,
-        // on every rendered frame (the gated branch above reports too), so
+        // Report the union of everything the placement contexts hold, on
+        // every rendered frame (the gated branch above reports too), so
         // stamps stay fresh and the in-flight window is measured from the
         // frame a tile actually stopped being drawn.
         tileRenderStore.recordActiveTiles(activePlacementTiles, frameIndex: frameContext.frameIndex)
@@ -192,6 +192,12 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             activeTiles.insert(placement.metalTile.tile)
         }
         for placement in backdropPlaceTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        // The sun-ward caster strip renders into the cascade maps every flat
+        // frame: its tiles are as live as the visible ones and must never be
+        // parked volatile under the shadow pass.
+        for placement in shadowCasterPlaceTilesContext.tilePlacements {
             activeTiles.insert(placement.metalTile.tile)
         }
         for placement in tileAtlasPlaceTilesContext.tilePlacements {
