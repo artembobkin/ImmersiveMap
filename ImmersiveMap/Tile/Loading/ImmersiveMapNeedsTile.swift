@@ -303,7 +303,12 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         }) else {
             return nil
         }
+        let signposter = MapSignposts.tiles
+        let signpostState = signposter.beginInterval("tileDownload",
+                                                     id: signposter.makeSignpostID(),
+                                                     "\(tile.z)/\(tile.x)/\(tile.y)")
         let downloadResult = await loadPipeline.download(tile: tile)
+        signposter.endInterval("tileDownload", signpostState)
         if Task.isCancelled {
             return nil
         }
@@ -396,10 +401,15 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                              generation: UInt64,
                              downloadResult: TileDownloader.DownloadResult,
                              wasServedFromDiskFirst: Bool) async {
+        let signposter = MapSignposts.tiles
+        let signpostState = signposter.beginInterval("tileParse",
+                                                     id: signposter.makeSignpostID(),
+                                                     "\(tile.z)/\(tile.x)/\(tile.y)")
         await processDownloadResult(tile: tile,
                                     generation: generation,
                                     downloadResult: downloadResult,
                                     wasServedFromDiskFirst: wasServedFromDiskFirst)
+        signposter.endInterval("tileParse", signpostState)
         releaseCPUSlot(tile: tile, generation: generation)
         Task { @MainActor in
             self.finishLoading(tile: tile, generation: generation)

@@ -664,7 +664,7 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
                                                   zoom: 5.0,
                                                   bearing: 0,
                                                   pitch: 0)
-        let diagnostics = FrameDiagnostics(frameIndex: 0, frameTime: 0)
+        let diagnostics = FrameDiagnostics(frameIndex: 0, frameDeltaTime: 0)
         return FrameContext(frameIndex: 0,
                             time: 0,
                             deltaTime: 0,
@@ -698,7 +698,7 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
                                                   pitch: 0)
         let resolver = FrameCameraStateResolver(settings: settings)
         resolver.setCameraState(cameraState)
-        let diagnostics = FrameDiagnostics(frameIndex: 0, frameTime: 0)
+        let diagnostics = FrameDiagnostics(frameIndex: 0, frameDeltaTime: 0)
         guard let cameraFrameState = resolver.makeFrameState(drawSize: drawSize,
                                                              diagnostics: diagnostics) else {
             throw XCTSkip("Camera frame state is required for globe atlas regression fixture.")

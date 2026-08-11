@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import CoreGraphics
+import Foundation
 import QuartzCore
 
 /// Logic shared by the UIKit/AppKit host views for owning the runtime graph and `RenderFrameEngine`:
@@ -18,6 +19,7 @@ final class ImmersiveMapHostRuntime {
     /// Kept for the tour video recorder: the export rasterizes the current
     /// marker views into the video.
     private var currentMarkerContent: MarkerViewContent?
+    private var powerStateObservers: NotificationObserverBag?
 
     init(mapView: ImmersiveMapHostView,
          layer: CAMetalLayer,
@@ -37,6 +39,40 @@ final class ImmersiveMapHostRuntime {
         createRenderer(settings: settings,
                        cameraPosition: initialCameraPosition)
         runtimeGraph.cameraRuntime.syncPitchControlValue()
+        subscribeToPowerStateNotifications()
+    }
+
+    /// Thermal pressure and Low Power Mode cap the display-link rates for the
+    /// whole lifetime of the host: serious heat drops rendering to 60, critical
+    /// to 30, and both (as well as Low Power Mode) revoke ProMotion headroom.
+    /// The on-demand pacing contract is untouched: an idle map still renders
+    /// nothing at all.
+    private func subscribeToPowerStateNotifications() {
+        let center = NotificationCenter.default
+        powerStateObservers = NotificationObserverBag(observers: [
+            center.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification,
+                               object: nil,
+                               queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.applyCurrentPowerConstraintState()
+                }
+            },
+            center.addObserver(forName: Notification.Name.NSProcessInfoPowerStateDidChange,
+                               object: nil,
+                               queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.applyCurrentPowerConstraintState()
+                }
+            }
+        ])
+        applyCurrentPowerConstraintState()
+    }
+
+    private func applyCurrentPowerConstraintState() {
+        let processInfo = ProcessInfo.processInfo
+        let constraints = RenderLoopPacing.PowerConstraintState.resolve(thermalState: processInfo.thermalState,
+                                                                    isLowPowerModeEnabled: processInfo.isLowPowerModeEnabled)
+        runtimeGraph.renderRuntime.applyPowerConstraintState(constraints)
     }
 
     func start(displayLinkFactory: DisplayLinkFactory) {
@@ -250,6 +286,23 @@ final class ImmersiveMapHostRuntime {
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()
+        }
+    }
+}
+
+/// Removes its notification observers when deallocated, so a `@MainActor`
+/// owner does not have to touch the non-Sendable tokens from its nonisolated
+/// deinit.
+private final class NotificationObserverBag {
+    private let observers: [NSObjectProtocol]
+
+    init(observers: [NSObjectProtocol]) {
+        self.observers = observers
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 }

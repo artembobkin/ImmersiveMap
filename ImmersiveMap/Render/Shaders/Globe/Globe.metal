@@ -252,29 +252,34 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
 /// limb glow, and the haze that hides the seam at the surface swap. Shared so
 /// the placeholder fill below is lit exactly like the tiles that replace it,
 /// and a tile arriving over it changes only the texture, never the shading.
-static inline float4 globeSurfaceShade(float4 color,
-                                       VertexOut in,
-                                       constant Camera& camera,
-                                       constant EarthScene& earthScene,
-                                       constant HorizonFog& horizonFog) {
+/// Unit-range shading runs in half; view direction and fog distances stay
+/// float because they run on world positions.
+static inline half4 globeSurfaceShade(half4 color,
+                                      VertexOut in,
+                                      constant Camera& camera,
+                                      constant EarthScene& earthScene,
+                                      constant HorizonFog& horizonFog) {
+    half transition = half(in.transition);
     if (earthScene.isEnabled != 0) {
-        float sunDot = dot(normalize(in.earthNormal), normalize(earthScene.sunDirection));
-        float dayFactor = smoothstep(-earthScene.terminatorFadeWidth,
-                                     earthScene.terminatorFadeWidth,
-                                     sunDot);
-        float dayBrightness = mix(earthScene.daySideMinimumBrightness, 1.0, dayFactor);
-        float surfaceBrightness = mix(earthScene.nightSideBrightness, dayBrightness, dayFactor);
-        surfaceBrightness = mix(surfaceBrightness, 1.0, in.transition);
-        surfaceBrightness = mix(surfaceBrightness, 1.0, earthScene.sunShadowFade);
+        half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
+        half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);
+        half dayFactor = smoothstep(-terminatorFadeWidth,
+                                    terminatorFadeWidth,
+                                    sunDot);
+        half dayBrightness = mix(half(earthScene.daySideMinimumBrightness), 1.0h, dayFactor);
+        half surfaceBrightness = mix(half(earthScene.nightSideBrightness), dayBrightness, dayFactor);
+        surfaceBrightness = mix(surfaceBrightness, 1.0h, transition);
+        surfaceBrightness = mix(surfaceBrightness, 1.0h, half(earthScene.sunShadowFade));
         color.rgb *= surfaceBrightness;
     }
 
     float3 viewDir = normalize(camera.eye - in.worldPos);
-    float rim = pow(max(0.0, 1.0 - dot(in.normal, viewDir)), 2.35);
-    float outerGlow = pow(max(0.0, 1.0 - dot(in.normal, viewDir)), 5.2);
-    float glowStrength = rim * 0.38 * (1.0 - in.transition);
-    float3 innerGlowColor = float3(0.28, 0.54, 1.0) * glowStrength;
-    float3 outerGlowColor = float3(0.08, 0.22, 0.72) * outerGlow * 0.22 * (1.0 - in.transition);
+    half facing = half(max(0.0, 1.0 - dot(in.normal, viewDir)));
+    half rim = pow(facing, 2.35h);
+    half outerGlow = pow(facing, 5.2h);
+    half glowStrength = rim * 0.38h * (1.0h - transition);
+    half3 innerGlowColor = half3(0.28h, 0.54h, 1.0h) * glowStrength;
+    half3 outerGlowColor = half3(0.08h, 0.22h, 0.72h) * outerGlow * 0.22h * (1.0h - transition);
     color.rgb += innerGlowColor + outerGlowColor;
     // The haze is gated by the transition phase (strength = transition): a pure
     // globe in space stays fog-free, and by the moment the surfaces swap, the
@@ -283,12 +288,12 @@ static inline float4 globeSurfaceShade(float4 color,
     return color;
 }
 
-fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
-                                    texture2d<float> texture [[texture(0)]],
-                                    constant Camera& camera [[buffer(1)]],
-                                    constant EarthScene& earthScene [[buffer(2)]],
-                                    constant Tile& tileData [[buffer(3)]],
-                                    constant HorizonFog& horizonFog [[buffer(4)]]) {
+fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
+                                   texture2d<half> texture [[texture(0)]],
+                                   constant Camera& camera [[buffer(1)]],
+                                   constant EarthScene& earthScene [[buffer(2)]],
+                                   constant Tile& tileData [[buffer(3)]],
+                                   constant HorizonFog& horizonFog [[buffer(4)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
     AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
@@ -312,12 +317,12 @@ fragment float4 globeFragmentShader(VertexOut in [[stage_in]],
 /// will draw, so the tile replaces it at identical depth; a single coarser
 /// fill of the whole sphere poked through the finer tile mesh at its own grid
 /// vertices as background-colored dots.
-fragment float4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
-                                                      constant Camera& camera [[buffer(1)]],
-                                                      constant EarthScene& earthScene [[buffer(2)]],
-                                                      constant HorizonFog& horizonFog [[buffer(4)]],
-                                                      constant float4& fillColor [[buffer(5)]]) {
-    return globeSurfaceShade(fillColor, in, camera, earthScene, horizonFog);
+fragment half4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
+                                                     constant Camera& camera [[buffer(1)]],
+                                                     constant EarthScene& earthScene [[buffer(2)]],
+                                                     constant HorizonFog& horizonFog [[buffer(4)]],
+                                                     constant float4& fillColor [[buffer(5)]]) {
+    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
@@ -376,25 +381,26 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
     return out;
 }
 
-fragment float4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
-                                       texture2d<float> texture [[texture(0)]],
-                                       constant CapParams& params [[buffer(0)]],
-                                       constant Camera& camera [[buffer(1)]],
-                                       constant EarthScene& earthScene [[buffer(2)]],
-                                       constant Tile& tileData [[buffer(3)]]) {
+fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
+                                      texture2d<half> texture [[texture(0)]],
+                                      constant CapParams& params [[buffer(0)]],
+                                      constant Camera& camera [[buffer(1)]],
+                                      constant EarthScene& earthScene [[buffer(2)]],
+                                      constant Tile& tileData [[buffer(3)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
-    float seamBlend = smoothstep(params.blendStartAbsLatitude,
-                                 params.blendEndAbsLatitude,
-                                 in.absLatitude);
-    float4 color;
+    half seamBlend = half(smoothstep(params.blendStartAbsLatitude,
+                                     params.blendEndAbsLatitude,
+                                     in.absLatitude));
+    half capAlpha = half(in.capAlpha);
+    half4 color;
     if (params.sampleOptions.y > 0.5) {
         GlobeCapAtlasSample sample = globeCapAtlasSampleUV(params.sampleOptions.x,
                                                            in.longitude,
                                                            tileData);
         if (!sample.isValid) {
             discard_fragment();
-            return float4(0.0);
+            return half4(0.0h);
         }
         // Explicit level(0): the cap smears a single edge row of tile texels,
         // and the base mip is precise and stable. Automatic LOD explodes near
@@ -402,37 +408,38 @@ fragment float4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
         // the uv derivatives discontinuous), so sampling dives into deep atlas
         // mips where texels average neighboring page tiles: a fan of gray
         // wedges across the grid triangles and flicker on every atlas repack.
-        float4 sampled = texture.sample(textureSampler, sample.uv, level(0.0));
+        half4 sampled = texture.sample(textureSampler, sample.uv, level(0.0));
         // Feather toward the pole color: the edge row continues the surface at
         // the rim (seamBlend 0) but does not reach the pole itself as "needles":
         // narrow coastal features of the rim (e.g. the Ross Sea water at 85°S)
         // would otherwise smear as radial stripes across the whole cap.
-        color = mix(sampled, params.fillColor, seamBlend);
+        color = mix(sampled, half4(params.fillColor), seamBlend);
     } else {
-        color = mix(params.edgeColor, params.fillColor, seamBlend);
+        color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }
 
     if (earthScene.isEnabled != 0) {
-        float sunDot = dot(normalize(in.earthNormal), normalize(earthScene.sunDirection));
-        float dayFactor = smoothstep(-earthScene.terminatorFadeWidth,
-                                     earthScene.terminatorFadeWidth,
-                                     sunDot);
-        float dayBrightness = mix(earthScene.daySideMinimumBrightness, 1.0, dayFactor);
-        float surfaceBrightness = mix(earthScene.nightSideBrightness, dayBrightness, dayFactor);
-        surfaceBrightness = mix(surfaceBrightness, 1.0, clamp(1.0 - in.capAlpha, 0.0, 1.0));
-        surfaceBrightness = mix(surfaceBrightness, 1.0, earthScene.sunShadowFade);
+        half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
+        half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);
+        half dayFactor = smoothstep(-terminatorFadeWidth,
+                                    terminatorFadeWidth,
+                                    sunDot);
+        half dayBrightness = mix(half(earthScene.daySideMinimumBrightness), 1.0h, dayFactor);
+        half surfaceBrightness = mix(half(earthScene.nightSideBrightness), dayBrightness, dayFactor);
+        surfaceBrightness = mix(surfaceBrightness, 1.0h, clamp(1.0h - capAlpha, 0.0h, 1.0h));
+        surfaceBrightness = mix(surfaceBrightness, 1.0h, half(earthScene.sunShadowFade));
         color.rgb *= surfaceBrightness;
-
     }
 
     float3 viewDir = normalize(camera.eye - in.worldPos);
-    float rim = pow(max(0.0, 1.0 - dot(in.normal, viewDir)), 2.35);
-    float outerGlow = pow(max(0.0, 1.0 - dot(in.normal, viewDir)), 5.2);
-    float glowStrength = rim * 0.38 * in.capAlpha;
-    float3 glowColor = float3(0.28, 0.54, 1.0) * glowStrength
-        + float3(0.08, 0.22, 0.72) * outerGlow * 0.22 * in.capAlpha;
+    half facing = half(max(0.0, 1.0 - dot(in.normal, viewDir)));
+    half rim = pow(facing, 2.35h);
+    half outerGlow = pow(facing, 5.2h);
+    half glowStrength = rim * 0.38h * capAlpha;
+    half3 glowColor = half3(0.28h, 0.54h, 1.0h) * glowStrength
+        + half3(0.08h, 0.22h, 0.72h) * outerGlow * 0.22h * capAlpha;
 
     color.rgb += glowColor;
-    color.a *= in.capAlpha;
+    color.a *= capAlpha;
     return color;
 }

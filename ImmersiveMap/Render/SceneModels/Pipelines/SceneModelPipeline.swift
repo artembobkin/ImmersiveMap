@@ -56,7 +56,7 @@ class SceneModelPipeline {
         shadowDescriptor.fragmentFunction = nil
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
-        shadowDescriptor.depthAttachmentPixelFormat = .depth32Float
+        shadowDescriptor.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
 
         let occlusionDescriptor = MTLRenderPipelineDescriptor()

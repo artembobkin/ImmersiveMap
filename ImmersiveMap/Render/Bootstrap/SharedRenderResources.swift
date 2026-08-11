@@ -261,7 +261,7 @@ final class SharedRenderResources {
     // MARK: - Shadow fallback
 
     private static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
                                                                   width: 1,
                                                                   height: 1,
                                                                   mipmapped: false)

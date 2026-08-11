@@ -70,7 +70,7 @@ final class DebugOverlayRendererTests: XCTestCase {
     func testHudSnapshotIncludesCoordinatesAndDiagnosticsLines() {
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
-        let diagnostics = FrameDiagnostics(frameIndex: 42, frameTime: 16.7)
+        let diagnostics = FrameDiagnostics(frameIndex: 42, frameDeltaTime: 0.0167)
 
         let snapshot = DebugOverlayHUDSnapshot.make(
             settings: settings,
@@ -272,7 +272,7 @@ final class DebugOverlayRendererTests: XCTestCase {
     }
 
     func testOverlayDiagnosticsPrependCameraLinesBeforeFrameDiagnostics() {
-        let diagnostics = FrameDiagnostics(frameIndex: 42, frameTime: 16.7)
+        let diagnostics = FrameDiagnostics(frameIndex: 42, frameDeltaTime: 0.0167)
 
         let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
             cameraDebugLines: ["camera z:5.41 pitch:36.00 bearing:18.00"],
@@ -285,7 +285,7 @@ final class DebugOverlayRendererTests: XCTestCase {
     }
 
     func testOverlayDiagnosticsIncludeRamUsageWhenAvailable() {
-        let diagnostics = FrameDiagnostics(frameIndex: 42, frameTime: 16.7)
+        let diagnostics = FrameDiagnostics(frameIndex: 42, frameDeltaTime: 0.0167)
 
         let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
             cameraDebugLines: [],
@@ -296,8 +296,31 @@ final class DebugOverlayRendererTests: XCTestCase {
         XCTAssertTrue(lines.contains("memory ram:128.0MB"))
     }
 
+    func testOverlayDiagnosticsShowUnknownFrameDeltaAsDashes() {
+        let diagnostics = FrameDiagnostics(frameIndex: 1, frameDeltaTime: 0)
+
+        let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
+            cameraDebugLines: [],
+            diagnostics: diagnostics
+        )
+
+        XCTAssertTrue(lines.contains("frame:1 dt:-- fps:--"))
+    }
+
+    func testOverlayDiagnosticsAppendGPUFrameTimeWhenMeasured() {
+        let diagnostics = FrameDiagnostics(frameIndex: 42, frameDeltaTime: 0.0167)
+        diagnostics.setMeasurement(.gpuFrameDurationMs, value: 5.25)
+
+        let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
+            cameraDebugLines: [],
+            diagnostics: diagnostics
+        )
+
+        XCTAssertTrue(lines.contains("frame:42 dt:16.70ms fps:59.9 gpu:5.25ms"))
+    }
+
     func testOverlayDiagnosticsGroupsStatsAndAddsFPS() {
-        let diagnostics = FrameDiagnostics(frameIndex: 909, frameTime: 67.44)
+        let diagnostics = FrameDiagnostics(frameIndex: 909, frameDeltaTime: 0.06744)
         diagnostics.setCounter(.visibleTiles, value: 16)
         diagnostics.setCounter(.readyTiles, value: 25)
         diagnostics.setCounter(.requestedTiles, value: 0)

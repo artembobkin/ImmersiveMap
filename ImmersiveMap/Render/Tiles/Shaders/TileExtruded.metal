@@ -12,12 +12,15 @@ struct VertexIn {
     uint surfaceID [[attribute(3)]];
 };
 
+// color and the unit normal are unit-range, so they interpolate as half:
+// fewer interpolant registers and double-rate ALU on A-series GPUs. World
+// position stays float for the shadow projection.
 struct VertexOut {
     float4 position [[position]];
     float3 worldPosition;
-    float3 worldNormal;
+    half3 worldNormal;
     float2 localPosition;
-    float4 color;
+    half4 color;
 };
 
 struct Style {
@@ -38,9 +41,9 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
 
     VertexOut out;
     out.position = clipPosition;
-    out.color = style.color;
+    out.color = half4(style.color);
     out.worldPosition = worldPosition.xyz;
-    out.worldNormal = worldNormal;
+    out.worldNormal = half3(worldNormal);
     out.localPosition = vertexIn.position.xy;
     return out;
 }
@@ -65,31 +68,33 @@ static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBoun
 //   (short buildings also read slightly darker than tall ones).
 // Both are tonal cues, not lighting: they never exceed 1 and compose with
 // the shadow factor and the geometric self-shadow untouched.
-constant float kWallShadeBase = 0.94;
-constant float kWallShadeSunSwing = 0.03;
-constant float kBaseDarkening = 0.90;
-constant float kGradientRampMeters = 30.0;
+constant half kWallShadeBase = 0.94h;
+constant half kWallShadeSunSwing = 0.03h;
+constant half kBaseDarkening = 0.90h;
+constant half kGradientRampMeters = 30.0h;
 
-static inline float extrudedDepthCueShade(float3 worldNormal,
-                                          float heightMeters,
-                                          float3 lightDirection) {
-    float upness = saturate(worldNormal.z);
+// Unit-range tonal math runs in half; heights saturate the 30 m ramp far
+// below half's range, so nothing here needs float.
+static inline half extrudedDepthCueShade(half3 worldNormal,
+                                         half heightMeters,
+                                         half3 lightDirection) {
+    half upness = saturate(worldNormal.z);
 
-    float sunSide = 0.0;
-    float2 horizontalNormal = worldNormal.xy;
-    float2 horizontalSun = lightDirection.xy;
-    float normalLength = length(horizontalNormal);
-    float sunLength = length(horizontalSun);
+    half sunSide = 0.0h;
+    half2 horizontalNormal = worldNormal.xy;
+    half2 horizontalSun = lightDirection.xy;
+    half normalLength = length(horizontalNormal);
+    half sunLength = length(horizontalSun);
     // Degenerate cases (roof fragments, shadows disabled with the vertical
     // placeholder sun) fall back to the neutral wall tone.
-    if (normalLength > 1e-4 && sunLength > 1e-4) {
+    if (normalLength > 1.0e-3h && sunLength > 1.0e-3h) {
         sunSide = dot(horizontalNormal / normalLength, horizontalSun / sunLength);
     }
-    float wallShade = kWallShadeBase + kWallShadeSunSwing * sunSide;
-    float orientationShade = mix(wallShade, 1.0, upness);
+    half wallShade = kWallShadeBase + kWallShadeSunSwing * sunSide;
+    half orientationShade = mix(wallShade, 1.0h, upness);
 
-    float gradient = mix(kBaseDarkening, 1.0,
-                         smoothstep(0.0, kGradientRampMeters, heightMeters));
+    half gradient = mix(kBaseDarkening, 1.0h,
+                        smoothstep(0.0h, kGradientRampMeters, heightMeters));
     return orientationShade * gradient;
 }
 
@@ -101,26 +106,31 @@ static inline float extrudedDepthCueShade(float3 worldNormal,
 // in solid mode - directly into the world pass, in translucent - into the
 // offscreen building image, which the world pass then composites over the map
 // with a shared alpha.
-fragment float4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
-                                           constant float4& localClipBounds [[buffer(4)]],
-                                           constant Shadow& shadow [[buffer(5)]],
-                                           constant float& metersToWorldZ [[buffer(6)]],
-                                           depth2d<float> shadowMap [[texture(0)]]) {
+fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
+                                          constant float4& localClipBounds [[buffer(4)]],
+                                          constant Shadow& shadow [[buffer(5)]],
+                                          constant float& metersToWorldZ [[buffer(6)]],
+                                          depth2d<float> shadowMap [[texture(0)]]) {
     // Derivatives (inside sampleShadowFactor) must precede the divergent
     // discard, because MSL leaves them undefined in a quad after any lane discards.
-    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal);
+    half shadowFactor = half(sampleShadowFactor(shadow, shadowMap,
+                                                in.worldPosition, float3(in.worldNormal)));
     if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
         discard_fragment();
     }
 
+    // The meters conversion stays float: metersToWorldZ can be tiny and the
+    // guard ratio overflows half, which the saturating ramp then absorbs.
     float heightMeters = in.worldPosition.z / max(metersToWorldZ, 1e-9);
-    float depthCueShade = extrudedDepthCueShade(in.worldNormal, heightMeters, shadow.lightDirection);
+    half depthCueShade = extrudedDepthCueShade(in.worldNormal,
+                                               half(min(heightMeters, 1.0e4)),
+                                               half3(shadow.lightDirection));
     // The cues fade out with the shadow factor: a self-shadowed or cast-shadowed
     // face keeps the pure shadow color instead of stacking darkening on
     // darkening (dark x dark reads unnatural). With shadows disabled the
     // factor is 1 and the cues apply fully.
-    float appliedCue = mix(1.0, depthCueShade, shadowFactor);
-    return float4(in.color.rgb * appliedCue * shadowFactor, 1.0);
+    half appliedCue = mix(1.0h, depthCueShade, shadowFactor);
+    return half4(in.color.rgb * appliedCue * shadowFactor, 1.0h);
 }
 
 // Depth-only path of the shadow map pass: the light's orthographic camera
@@ -168,9 +178,9 @@ vertex ExtrudedCompositeVertexOut tileExtrudedCompositeVertexShader(uint vertexI
 // Multiplying by the global alpha and premultiplied blending
 // (one / oneMinusSourceAlpha) tint every map pixel exactly once - no matter
 // how many building surfaces overlap.
-fragment float4 tileExtrudedCompositeFragmentShader(ExtrudedCompositeVertexOut in [[stage_in]],
-                                                    texture2d<float, access::read> buildingImage [[texture(0)]],
-                                                    constant float& alpha [[buffer(0)]]) {
-    float4 premultiplied = buildingImage.read(uint2(in.position.xy));
-    return premultiplied * alpha;
+fragment half4 tileExtrudedCompositeFragmentShader(ExtrudedCompositeVertexOut in [[stage_in]],
+                                                   texture2d<half, access::read> buildingImage [[texture(0)]],
+                                                   constant float& alpha [[buffer(0)]]) {
+    half4 premultiplied = buildingImage.read(uint2(in.position.xy));
+    return premultiplied * half(alpha);
 }

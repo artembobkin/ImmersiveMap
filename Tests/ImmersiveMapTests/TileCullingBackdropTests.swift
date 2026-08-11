@@ -71,7 +71,7 @@ final class TileCullingBackdropTests: XCTestCase {
                                                   pitch: 0)
         let resolver = FrameCameraStateResolver(settings: settings)
         resolver.setCameraState(cameraState)
-        let diagnostics = FrameDiagnostics(frameIndex: 0, frameTime: 0)
+        let diagnostics = FrameDiagnostics(frameIndex: 0, frameDeltaTime: 0)
         guard let cameraFrameState = resolver.makeFrameState(drawSize: CGSize(width: 1024, height: 768),
                                                              diagnostics: diagnostics) else {
             throw XCTSkip("Camera frame state is required for tile culling fixture.")

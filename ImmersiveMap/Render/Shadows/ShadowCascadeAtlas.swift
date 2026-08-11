@@ -14,6 +14,15 @@ enum ShadowCascadeAtlas {
     /// (~11 m) visibly wobble diagonal shadow edges.
     static let cascadeCount = 3
 
+    /// 16 bits are enough: every cascade projection is refit each frame to a
+    /// tight caster range with depth clamping, and the receiver bias is
+    /// derived from the texel footprint rather than raw depth deltas, so the
+    /// extra depth32Float precision bought nothing while doubling atlas
+    /// memory and the bandwidth of every `sample_compare` tap. Shared by the
+    /// atlas texture, the caster pipelines and the fallback texture so their
+    /// formats can never disagree.
+    static let depthPixelFormat: MTLPixelFormat = .depth16Unorm
+
     static func selectCascade(renderEncoder: MTLRenderCommandEncoder,
                               cascadeIndex: Int,
                               mapResolution: Int) {

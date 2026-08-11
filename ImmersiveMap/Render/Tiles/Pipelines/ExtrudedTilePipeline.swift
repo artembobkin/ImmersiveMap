@@ -76,7 +76,7 @@ class ExtrudedTilePipeline {
         shadowDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedShadowFragmentShader")
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
-        shadowDescriptor.depthAttachmentPixelFormat = .depth32Float
+        shadowDescriptor.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         self.compositePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeDescriptor)

@@ -40,6 +40,7 @@ final class RenderFramePassEncoder {
                                        target: target,
                                        renderGraph: renderGraph)
 
+        let signposter = MapSignposts.render
         for passNode in passNodes {
             guard let descriptor = passNode.descriptorProvider.makeRenderPassDescriptor(frameContext: frameContext,
                                                                                        attachments: attachments,
@@ -47,7 +48,10 @@ final class RenderFramePassEncoder {
                   let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
                 continue
             }
+            // Names the encoder in GPU captures and Metal System Trace.
+            renderEncoder.label = passNode.name.rawValue
 
+            let passSignpostState = signposter.beginInterval("encodePass", "\(passNode.name.rawValue)")
             let passStart = CACurrentMediaTime()
             for layer in passNode.layers {
                 let layerStart = CACurrentMediaTime()
@@ -60,6 +64,7 @@ final class RenderFramePassEncoder {
             renderEncoder.endEncoding()
             frameContext.diagnostics.recordMetalPass(passNode.name,
                                                      duration: CACurrentMediaTime() - passStart)
+            signposter.endInterval("encodePass", passSignpostState)
         }
 
         return target

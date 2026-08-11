@@ -54,13 +54,13 @@ vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_i
 // (TileExtruded.metal): the base color darkens only where the shadow map says
 // the static sun is occluded: faces away from the sun are occluded by their
 // own mesh in the map and come out shadowed like any cast shadow.
-fragment float4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
-                                         constant SceneModelMaterial& material [[buffer(3)]],
-                                         constant Shadow& shadow [[buffer(4)]],
-                                         texture2d<float> baseColorTexture [[texture(0)]],
-                                         depth2d<float> shadowMap [[texture(1)]],
-                                         sampler baseColorSampler [[sampler(0)]]) {
-    float4 base = baseColorTexture.sample(baseColorSampler, in.uv) * material.baseColor;
-    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal);
-    return float4(base.rgb * shadowFactor, 1.0);
+fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
+                                        constant SceneModelMaterial& material [[buffer(3)]],
+                                        constant Shadow& shadow [[buffer(4)]],
+                                        texture2d<half> baseColorTexture [[texture(0)]],
+                                        depth2d<float> shadowMap [[texture(1)]],
+                                        sampler baseColorSampler [[sampler(0)]]) {
+    half4 base = baseColorTexture.sample(baseColorSampler, in.uv) * half4(material.baseColor);
+    half shadowFactor = half(sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal));
+    return half4(base.rgb * shadowFactor, 1.0h);
 }

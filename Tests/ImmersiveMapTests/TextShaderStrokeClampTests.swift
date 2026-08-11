@@ -18,12 +18,12 @@ final class TextShaderStrokeClampTests: XCTestCase {
 
         XCTAssertTrue(source.contains("atlasSample.a"))
         XCTAssertTrue(source.contains("sdfPxDist"))
-        XCTAssertTrue(source.contains("float outer = smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist);"))
+        XCTAssertTrue(source.contains("half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));"))
     }
 
     func testBaseTextFragmentCapsStrokeBeforeItFillsGlyphQuad() throws {
         let source = try textShaderSource()
-        let baseFragmentSource = try XCTUnwrap(source.components(separatedBy: "fragment float4 roadTextFragment").first)
+        let baseFragmentSource = try XCTUnwrap(source.components(separatedBy: "fragment half4 roadTextFragment").first)
 
         XCTAssertFalse(baseFragmentSource.contains("max(distance.screenPxRange - 0.75, 0.75)"))
         XCTAssertTrue(baseFragmentSource.contains("max(0.5 * distance.screenPxRange - 0.5, 0.0)"))
