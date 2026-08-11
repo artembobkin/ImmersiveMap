@@ -64,9 +64,14 @@ final class TileRenderStore: @unchecked Sendable {
         let maxCachedTilesMemory = config.tiles.cache.memoryCacheSizeInBytes
         memoryMetalTile = MemoryMetalTileCache(maxCacheSizeInBytes: maxCachedTilesMemory,
                                                tileTraceRecorder: tileTraceRecorder)
+        let geometryTransport: any PreparedTileGeometryTransporting =
+            MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice)
+                ? MTLIOPreparedTileGeometryTransport()
+                : InlinePreparedTileGeometryTransport()
         mapNeedsTile = ImmersiveMapNeedsTile(tileRenderStore: self,
                                              config: config,
                                              preparedTileCacheIdentity: preparedTileCacheIdentity,
+                                             geometryTransport: geometryTransport,
                                              tileTraceRecorder: tileTraceRecorder,
                                              tileLoadingStatusReporter: tileLoadingStatusReporter)
         // Backoff-window expiry wakes the on-demand renderer: the frame reruns
@@ -171,21 +176,59 @@ final class TileRenderStore: @unchecked Sendable {
             return false
         }
 
+        await publishMaterializedTile(metalTile,
+                                      forKey: preparedTile.tile,
+                                      awaitingRevalidation: awaitingRevalidation)
+        tileTraceRecorder.record(.tileMaterializeSuccess(preparedTile.tile))
+        return true
+    }
+
+    /// The arena-image sibling of `materializePreparedTile`: a disk hit is
+    /// blob bytes plus a span table, so the factory copies (or MTLIO-loads)
+    /// instead of rebuilding buffers from decoded arrays.
+    func materializeArenaImage(_ image: PreparedTileArenaImage,
+                               awaitingRevalidation: Bool = false) async -> PreparedTileImageMaterializeOutcome {
+        tileTraceRecorder.record(.tileMaterializeStart(image.tile))
+        let result = await metalTileFactory.makeTile(fromImage: image)
+        let metalTile: MetalTile
+        switch result {
+        case .tile(let tile):
+            metalTile = tile
+        case .allocationFailed:
+            tileTraceRecorder.record(.tileMaterializeFailed(image.tile))
+            return .allocationOrStoreFailed
+        case .imageUnreadable:
+            tileTraceRecorder.record(.tileMaterializeFailed(image.tile))
+            return .imageUnreadable
+        }
+
+        await publishMaterializedTile(metalTile,
+                                      forKey: image.tile,
+                                      awaitingRevalidation: awaitingRevalidation)
+        tileTraceRecorder.record(.tileMaterializeSuccess(image.tile))
+        return .materialized
+    }
+
+    /// Shared tail of both materialize paths: stores the tile, maintains the
+    /// awaiting-revalidation set, and invalidates a frame. The revalidation
+    /// bookkeeping is load-bearing (see `requestTiles`), so it lives in one
+    /// place.
+    private func publishMaterializedTile(_ metalTile: MetalTile,
+                                         forKey key: Tile,
+                                         awaitingRevalidation: Bool) async {
         await MainActor.run {
             self.memoryMetalTile.setTileData(
                 tile: metalTile,
-                forKey: preparedTile.tile
+                forKey: key
             )
             if awaitingRevalidation {
-                self.tilesAwaitingRevalidation.insert(preparedTile.tile)
+                self.tilesAwaitingRevalidation.insert(key)
             } else {
-                self.tilesAwaitingRevalidation.remove(preparedTile.tile)
+                self.tilesAwaitingRevalidation.remove(key)
             }
 
             eventSink?.invalidate(.tileAvailable)
         }
-        tileTraceRecorder.record(.tileMaterializeSuccess(preparedTile.tile))
-        return true
     }
 
     /// The revalidation download confirmed (or knowingly accepted, for the

@@ -936,8 +936,34 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         if let matchingETag, matchingETag != storedETag {
             return nil
         }
-        return PreparedTileDiskCacheHit(preparedTile: Self.makePreparedTile(tile: tile),
+        return PreparedTileDiskCacheHit(image: Self.makeArenaImage(tile: tile),
                                         sourceETag: storedETag)
+    }
+
+    /// A structurally empty arena image: the mock's `materialize(image:)` is
+    /// stubbed, so the payload never reaches the real factory.
+    static func makeArenaImage(tile: Tile) -> PreparedTileArenaImage {
+        let emptyMeta = PreparedTileArenaImage.TextLabelSetMeta(placementInputs: [],
+                                                                glyphRunStyles: [],
+                                                                poiIconRunStyles: [])
+        return PreparedTileArenaImage(
+            tile: tile,
+            spans: [],
+            arenaByteCount: 0,
+            textLabelsFull: emptyMeta,
+            textLabelsReduced: emptyMeta,
+            textLabelsMinimal: emptyMeta,
+            roadLabels: PreparedTileArenaImage.RoadLabelsMeta(pathInputs: [],
+                                                              pathRanges: [],
+                                                              pathLabels: [],
+                                                              labelStyle: nil,
+                                                              glyphBounds: [],
+                                                              glyphBoundRanges: [],
+                                                              sizes: [],
+                                                              anchorRanges: [],
+                                                              anchors: []),
+            blob: .inline(Data())
+        )
     }
 
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
@@ -986,6 +1012,17 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         return await withCheckedContinuation { continuation in
             recordMaterializeStarted(tile: preparedTile.tile, continuation: continuation)
         }
+    }
+
+    func materialize(image: PreparedTileArenaImage,
+                     awaitingRevalidation: Bool) async -> PreparedTileImageMaterializeOutcome {
+        recordMaterializeFlag(tile: image.tile, awaitingRevalidation: awaitingRevalidation)
+        let materialized = await withCheckedContinuation { continuation in
+            recordMaterializeStarted(tile: image.tile, continuation: continuation)
+        }
+        // The stub maps false to the transient failure: existing tests assert
+        // the explicit call-site removal semantics, not the corrupt-image one.
+        return materialized ? .materialized : .allocationOrStoreFailed
     }
 
     func markRevalidated(tile: Tile) async {

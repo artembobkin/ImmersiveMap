@@ -95,12 +95,14 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     convenience init(tileRenderStore: TileRenderStore,
                      config: ImmersiveMapSettings,
                      preparedTileCacheIdentity: PreparedTileCacheIdentity,
+                     geometryTransport: any PreparedTileGeometryTransporting,
                      tileTraceRecorder: TileTraceRecorder,
                      tileLoadingStatusReporter: TileLoadingStatusReporter?) {
         self.init(config: config,
                   loadPipeline: DefaultTileLoadPipeline(tileRenderStore: tileRenderStore,
                                                         config: config,
-                                                        preparedTileCacheIdentity: preparedTileCacheIdentity),
+                                                        preparedTileCacheIdentity: preparedTileCacheIdentity,
+                                                        geometryTransport: geometryTransport),
                   tileTraceRecorder: tileTraceRecorder,
                   tileLoadingStatusReporter: tileLoadingStatusReporter)
     }
@@ -259,10 +261,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         guard let hit = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil) else {
             return .notServed
         }
-        guard await materializePreparedTile(hit.preparedTile,
-                                            expectedTile: tile,
-                                            generation: generation,
-                                            awaitingRevalidation: true) else {
+        guard await materializeDiskImage(hit.image,
+                                         expectedTile: tile,
+                                         generation: generation,
+                                         awaitingRevalidation: true) else {
             return .notServed
         }
         return .served(etag: hit.sourceETag)
@@ -484,9 +486,9 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 if Task.isCancelled {
                     return
                 }
-                if await materializePreparedTile(cached.preparedTile,
-                                                 expectedTile: tile,
-                                                 generation: generation) {
+                if await materializeDiskImage(cached.image,
+                                              expectedTile: tile,
+                                              generation: generation) {
                     guard markLoadSucceeded(tile: tile,
                                             generation: generation,
                                             source: "prepared_disk") else {
@@ -554,13 +556,13 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             // Offline / server error with no disk-first serve on screen (a serve
             // would have ended the load in the network stage). Retry the disk
             // read once more: a transient materialize failure during the serve
-            // may still resolve here. materializePreparedTile returns false on
+            // may still resolve here. materializeDiskImage returns false on
             // cancellation; a cancelled or superseded load must not mutate the
             // replacement task's retry state.
             if let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil),
-               await materializePreparedTile(cached.preparedTile,
-                                             expectedTile: tile,
-                                             generation: generation) {
+               await materializeDiskImage(cached.image,
+                                          expectedTile: tile,
+                                          generation: generation) {
                 guard markLoadSucceeded(tile: tile,
                                         generation: generation,
                                         source: "prepared_disk_offline") else {
@@ -606,6 +608,50 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             return nil
         }
         return result
+    }
+
+    /// Disk-hit sibling of `materializePreparedTile`. On a genuinely
+    /// unreadable image (corrupt blob or span table, not cancellation and not
+    /// memory pressure) the entry is removed, mirroring the codec's cleanup
+    /// of corrupt metadata one stage earlier, so a broken pair cannot fail
+    /// every retry forever.
+    private func materializeDiskImage(_ image: PreparedTileArenaImage,
+                                      expectedTile: Tile,
+                                      generation: UInt64,
+                                      awaitingRevalidation: Bool = false) async -> Bool {
+        if Task.isCancelled {
+            return false
+        }
+        guard image.tile == expectedTile else {
+            return false
+        }
+        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordMaterializationStarted(tile: expectedTile)
+        }) else {
+            return false
+        }
+        let outcome = await loadPipeline.materialize(image: image,
+                                                     awaitingRevalidation: awaitingRevalidation)
+        if Task.isCancelled {
+            return false
+        }
+        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
+            if outcome == .materialized {
+                tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: expectedTile)
+            } else {
+                tileLoadingStatusReporter?.recordMaterializationFailed(tile: expectedTile,
+                                                                      reason: "materialize_failed")
+            }
+        }) else {
+            return false
+        }
+        if outcome == .imageUnreadable {
+            // Behind the generation gate above: a superseded task that read a
+            // corrupt entry must not delete the fresh pair its replacement
+            // may have just saved.
+            loadPipeline.removePreparedFromDisk(tile: expectedTile)
+        }
+        return outcome == .materialized
     }
 
     private func materializePreparedTile(_ preparedTile: PreparedTileCPU,

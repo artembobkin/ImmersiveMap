@@ -5,8 +5,10 @@
 import XCTest
 
 final class PreparedTileDiskCodecTests: XCTestCase {
-    func testPreparedTileCacheFormatVersionIncludesLabelVisibilityPolicyRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 29)
+    private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
+
+    func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 30)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -19,54 +21,116 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                                     minimal: makeTextLabelSet(seed: 3))
         )
 
-        let legacyData = try PreparedTileDiskCodec.encodeLegacyPropertyList(
-            preparedTile: preparedTile,
-            cacheIdentity: cacheIdentity
-        )
+        let uncompressedData = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                                cacheIdentity: cacheIdentity,
+                                                                compressionEnabled: false).metadata
         let encodedData = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                           cacheIdentity: cacheIdentity)
+                                                           cacheIdentity: cacheIdentity).metadata
 
         XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encodedData))
 #if canImport(Compression)
         XCTAssertTrue(PreparedTileDiskEnvelope.isCompressedEnvelope(encodedData))
-        XCTAssertLessThan(encodedData.count, legacyData.count)
+        XCTAssertLessThan(encodedData.count, uncompressedData.count)
 #endif
         let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
                                                        expectedTile: tile,
-                                                       cacheIdentity: cacheIdentity)
-        XCTAssertEqual(decoded.preparedTile.tile, tile)
-        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: preparedTile.textLabels.full)
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
+        XCTAssertEqual(decoded.image.tile, tile)
+        assertTextLabelSetMeta(decoded.image.textLabelsFull, equals: preparedTile.textLabels.full)
+        assertTextLabelSetMeta(decoded.image.textLabelsReduced, equals: preparedTile.textLabels.reduced)
+        assertTextLabelSetMeta(decoded.image.textLabelsMinimal, equals: preparedTile.textLabels.minimal)
+        XCTAssertEqual(inlineBlob(of: decoded.image),
+                       makeBlobData(for: preparedTile),
+                       "The inline blob must byte-match the arena plan of the encoded tile")
+        XCTAssertEqual(decoded.image.spans,
+                       TileArenaImageMath.plan(for: preparedTile).spans,
+                       "The stored span table must match the plan the factory would build")
     }
 
-    func testPreparedTileCodecReadsLegacyUncompressedPropertyList() throws {
-        let tile = Tile(x: 4, y: 5, z: 6)
+    func testPreparedTileCodecFileTransportSeparatesBlobFromMetadata() throws {
+        let tile = Tile(x: 3, y: 4, z: 5)
         let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
-        let legacyData = try PreparedTileDiskCodec.encodeLegacyPropertyList(
-            preparedTile: makePreparedTile(tile: tile),
-            cacheIdentity: cacheIdentity,
-            sourceETag: "legacy-etag"
+        let preparedTile = makePreparedTile(
+            tile: tile,
+            textLabels: PreparedTileCPU.TextLabels(full: makeTextLabelSet(seed: 7),
+                                                    reduced: makeTextLabelSet(seed: 8),
+                                                    minimal: makeTextLabelSet(seed: 9))
         )
 
-        XCTAssertFalse(PreparedTileDiskEnvelope.isEnvelope(legacyData))
-        let decoded = try PreparedTileDiskCodec.decode(data: legacyData,
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobTransport: .file)
+
+        XCTAssertEqual(encoded.fileBlob, makeBlobData(for: preparedTile),
+                       "The file blob must be the same arena image the inline transport embeds")
+
+        let decoded = try PreparedTileDiskCodec.decode(data: encoded.metadata,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
-                                                       expectedSourceETag: "legacy-etag")
-        XCTAssertEqual(decoded.preparedTile.tile, tile)
+                                                       blobFileURL: Self.testBlobURL)
+        guard case .file(let url) = decoded.image.blob else {
+            return XCTFail("A file-transport entry must resolve to a file blob")
+        }
+        XCTAssertEqual(url, Self.testBlobURL)
+        XCTAssertEqual(decoded.image.arenaByteCount, encoded.fileBlob.count)
+    }
+
+    func testPreparedTileCodecRejectsTamperedSpanTable() throws {
+        let tile = Tile(x: 6, y: 7, z: 8)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let preparedTile = makePreparedTile(
+            tile: tile,
+            textLabels: PreparedTileCPU.TextLabels(full: makeTextLabelSet(seed: 1),
+                                                    reduced: makeTextLabelSet(seed: 2),
+                                                    minimal: makeTextLabelSet(seed: 3))
+        )
+        // A plist-level forgery: re-encode the entry with a truncated span
+        // table but the original blob, which the structural validation must
+        // reject before any span is trusted.
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       compressionEnabled: false).metadata
+        let payload = try PreparedTileDiskEnvelope.decode(data: encoded)
+        guard var entry = try PropertyListSerialization.propertyList(from: payload,
+                                                                     options: [],
+                                                                     format: nil) as? [String: Any],
+              var spanTable = entry["spanTable"] as? [[String: Any]],
+              let removedIndex = spanTable.firstIndex(where: { ($0["byteCount"] as? Int ?? 0) > 0 }) else {
+            return XCTFail("The v30 entry must carry a span table with a non-empty span")
+        }
+        // Removing an empty span keeps the offset chain intact (it occupies
+        // no bytes); only dropping a non-empty span provably breaks it.
+        spanTable.remove(at: removedIndex)
+        entry["spanTable"] = spanTable
+        let forgedPayload = try PropertyListSerialization.data(fromPropertyList: entry,
+                                                               format: .binary,
+                                                               options: 0)
+        let forged = try PreparedTileDiskEnvelope.encode(payload: forgedPayload)
+
+        XCTAssertThrowsError(
+            try PreparedTileDiskCodec.decode(data: forged,
+                                             expectedTile: tile,
+                                             cacheIdentity: cacheIdentity,
+                                             blobFileURL: Self.testBlobURL)
+        ) { error in
+            XCTAssertTrue(error is PreparedTileDiskCodecError)
+        }
     }
 
     func testPreparedTileCodecRejectsCorruptedCompressedEnvelope() throws {
         let tile = Tile(x: 7, y: 8, z: 9)
         let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
         var data = try PreparedTileDiskCodec.encode(preparedTile: makePreparedTile(tile: tile),
-                                                    cacheIdentity: cacheIdentity)
+                                                    cacheIdentity: cacheIdentity).metadata
         let lastIndex = data.index(before: data.endIndex)
         data[lastIndex] ^= 0xff
 
         XCTAssertThrowsError(
             try PreparedTileDiskCodec.decode(data: data,
                                              expectedTile: tile,
-                                             cacheIdentity: cacheIdentity)
+                                             cacheIdentity: cacheIdentity,
+                                             blobFileURL: Self.testBlobURL)
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
@@ -205,15 +269,17 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         let encodedData = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                            cacheIdentity: cacheIdentity,
-                                                           compressionEnabled: false)
+                                                           compressionEnabled: false).metadata
 
         XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(encodedData))
         XCTAssertFalse(PreparedTileDiskEnvelope.isCompressedEnvelope(encodedData))
         let decoded = try PreparedTileDiskCodec.decode(data: encodedData,
                                                        expectedTile: tile,
-                                                       cacheIdentity: cacheIdentity)
-        XCTAssertEqual(decoded.preparedTile.tile, tile)
-        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: preparedTile.textLabels.full)
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
+        XCTAssertEqual(decoded.image.tile, tile)
+        assertTextLabelSetMeta(decoded.image.textLabelsFull, equals: preparedTile.textLabels.full)
+        XCTAssertEqual(inlineBlob(of: decoded.image), makeBlobData(for: preparedTile))
     }
 
     func testPreparedTileDiskCacheSerializesSaveBeforeFollowingRead() async throws {
@@ -234,9 +300,49 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                sourceETag: "ordered-etag")
         let loaded = await cache.requestPreparedDiskCached(tile: tile, matchingETag: "ordered-etag")
 
-        XCTAssertEqual(loaded?.preparedTile.tile, tile)
+        XCTAssertEqual(loaded?.image.tile, tile)
         let storedData = try Data(contentsOf: cache.cachePathFor(tile: tile))
         XCTAssertTrue(PreparedTileDiskEnvelope.isEnvelope(storedData))
+    }
+
+    func testPreparedTileDiskCacheWritesAndRemovesBlobPairWithFileTransport() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("PreparedTileDiskCache-pair-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: baseDirectory) }
+
+        let tile = Tile(x: 14, y: 15, z: 13)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let config = ImmersiveMapSettings.default
+            .tileSettings(preparedDiskCacheSizeInBytes: 4 * 1_024 * 1_024)
+        let cache = PreparedTileDiskCaching(config: config,
+                                            cacheIdentity: cacheIdentity,
+                                            geometryTransport: PlainFileGeometryTransport(),
+                                            baseCachesDirectory: baseDirectory)
+
+        await cache.saveOnDisk(tile: tile,
+                               preparedTile: makePreparedTile(
+                                   tile: tile,
+                                   textLabels: PreparedTileCPU.TextLabels(full: makeTextLabelSet(seed: 1),
+                                                                          reduced: makeTextLabelSet(seed: 2),
+                                                                          minimal: makeTextLabelSet(seed: 3))),
+                               sourceETag: "pair-etag")
+
+        XCTAssertTrue(fileManager.fileExists(atPath: cache.cachePathFor(tile: tile).path))
+        XCTAssertTrue(fileManager.fileExists(atPath: cache.blobPathFor(tile: tile).path),
+                      "The file transport must write the sibling blob")
+
+        let loaded = await cache.requestPreparedDiskCached(tile: tile, matchingETag: "pair-etag")
+        guard case .file(let url) = loaded?.image.blob else {
+            return XCTFail("A file-transport hit must reference the sibling blob")
+        }
+        XCTAssertEqual(url, cache.blobPathFor(tile: tile))
+
+        cache.removeFromDisk(tile: tile)
+        _ = await cache.requestPreparedDiskCached(tile: tile, matchingETag: nil)
+        XCTAssertFalse(fileManager.fileExists(atPath: cache.cachePathFor(tile: tile).path))
+        XCTAssertFalse(fileManager.fileExists(atPath: cache.blobPathFor(tile: tile).path),
+                       "Removal must delete the metadata and the blob together")
     }
 
     func testPreparedTileDiskCachePrunesOldestFilesAcrossAllNamespaces() async throws {
@@ -319,12 +425,13 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let preparedTile = makePreparedTile(tile: tile)
 
         let data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                    cacheIdentity: cacheIdentity)
+                                                    cacheIdentity: cacheIdentity).metadata
         let decoded = try PreparedTileDiskCodec.decode(data: data,
                                                        expectedTile: tile,
-                                                       cacheIdentity: cacheIdentity)
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
 
-        XCTAssertEqual(decoded.preparedTile.tile, tile)
+        XCTAssertEqual(decoded.image.tile, tile)
     }
 
     func testPreparedTileCodecRoundTripsTextLabelDetailTiers() throws {
@@ -336,14 +443,17 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let preparedTile = makePreparedTile(tile: tile, textLabels: textLabels)
 
         let data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                    cacheIdentity: cacheIdentity)
+                                                    cacheIdentity: cacheIdentity).metadata
         let decoded = try PreparedTileDiskCodec.decode(data: data,
                                                        expectedTile: tile,
-                                                       cacheIdentity: cacheIdentity)
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
 
-        assertTextLabelSet(decoded.preparedTile.textLabels.full, equals: textLabels.full)
-        assertTextLabelSet(decoded.preparedTile.textLabels.reduced, equals: textLabels.reduced)
-        assertTextLabelSet(decoded.preparedTile.textLabels.minimal, equals: textLabels.minimal)
+        assertTextLabelSetMeta(decoded.image.textLabelsFull, equals: textLabels.full)
+        assertTextLabelSetMeta(decoded.image.textLabelsReduced, equals: textLabels.reduced)
+        assertTextLabelSetMeta(decoded.image.textLabelsMinimal, equals: textLabels.minimal)
+        XCTAssertEqual(inlineBlob(of: decoded.image), makeBlobData(for: preparedTile),
+                       "Glyph and icon vertex bytes travel in the blob")
     }
 
     func testPreparedTileCodecRejectsMismatchedLabelLanguageMetadata() throws {
@@ -351,12 +461,13 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let data = try PreparedTileDiskCodec.encode(
             preparedTile: makePreparedTile(tile: tile),
             cacheIdentity: makeCacheIdentity(labelLanguage: .portuguese)
-        )
+        ).metadata
 
         XCTAssertThrowsError(
             try PreparedTileDiskCodec.decode(data: data,
                                              expectedTile: tile,
-                                             cacheIdentity: makeCacheIdentity(labelLanguage: .english))
+                                             cacheIdentity: makeCacheIdentity(labelLanguage: .english),
+                                             blobFileURL: Self.testBlobURL)
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
@@ -369,21 +480,23 @@ final class PreparedTileDiskCodecTests: XCTestCase {
             preparedTile: makePreparedTile(tile: tile),
             cacheIdentity: cacheIdentity,
             sourceETag: "etag-A"
-        )
+        ).metadata
 
         // Matching ETag -> reused without re-parsing.
         let matched = try PreparedTileDiskCodec.decode(data: data,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
-                                                       expectedSourceETag: "etag-A")
-        XCTAssertEqual(matched.preparedTile.tile, tile)
+                                                       expectedSourceETag: "etag-A",
+                                                       blobFileURL: Self.testBlobURL)
+        XCTAssertEqual(matched.image.tile, tile)
 
         // Different ETag (server content changed at the same URL) -> rejected.
         XCTAssertThrowsError(
             try PreparedTileDiskCodec.decode(data: data,
                                              expectedTile: tile,
                                              cacheIdentity: cacheIdentity,
-                                             expectedSourceETag: "etag-B")
+                                             expectedSourceETag: "etag-B",
+                                             blobFileURL: Self.testBlobURL)
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
@@ -392,8 +505,9 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let anyETag = try PreparedTileDiskCodec.decode(data: data,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
-                                                       expectedSourceETag: nil)
-        XCTAssertEqual(anyETag.preparedTile.tile, tile)
+                                                       expectedSourceETag: nil,
+                                                       blobFileURL: Self.testBlobURL)
+        XCTAssertEqual(anyETag.image.tile, tile)
     }
 
     func testPreparedTileCodecRejectsMismatchedTextRevisionMetadata() throws {
@@ -401,13 +515,14 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let data = try PreparedTileDiskCodec.encode(
             preparedTile: makePreparedTile(tile: tile),
             cacheIdentity: makeCacheIdentity(labelLanguage: .portuguese, textRevision: 5)
-        )
+        ).metadata
 
         XCTAssertThrowsError(
             try PreparedTileDiskCodec.decode(data: data,
                                              expectedTile: tile,
                                              cacheIdentity: makeCacheIdentity(labelLanguage: .portuguese,
-                                                                              textRevision: 6))
+                                                                              textRevision: 6),
+                                             blobFileURL: Self.testBlobURL)
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
@@ -418,16 +533,51 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let data = try PreparedTileDiskCodec.encode(
             preparedTile: makePreparedTile(tile: tile),
             cacheIdentity: makeCacheIdentity(labelLanguage: .portuguese, fallbackPolicy: .international)
-        )
+        ).metadata
 
         XCTAssertThrowsError(
             try PreparedTileDiskCodec.decode(data: data,
                                              expectedTile: tile,
                                              cacheIdentity: makeCacheIdentity(labelLanguage: .portuguese,
-                                                                              fallbackPolicy: .localFirst))
+                                                                              fallbackPolicy: .localFirst),
+                                             blobFileURL: Self.testBlobURL)
         ) { error in
             XCTAssertTrue(error is PreparedTileDiskCodecError)
         }
+    }
+
+    // MARK: - Helpers
+
+    /// File transport stand-in that writes the raw blob bytes: cache-level
+    /// pair semantics (sibling write, paired removal) are testable without an
+    /// MTLIO container, which only the render-side transport can produce.
+    private struct PlainFileGeometryTransport: PreparedTileGeometryTransporting {
+        let cacheNamespaceMarker = "btest"
+        let writesBlobFiles = true
+
+        func writeBlobFile(_ blob: Data, to url: URL) throws {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try blob.write(to: url, options: .atomic)
+        }
+    }
+
+    private func makeBlobData(for preparedTile: PreparedTileCPU) -> Data {
+        let plan = TileArenaImageMath.plan(for: preparedTile)
+        var blob = Data(count: plan.totalByteCount)
+        if plan.totalByteCount > 0 {
+            blob.withUnsafeMutableBytes { bytes in
+                TileArenaImageMath.writeBlob(plan: plan, into: bytes.baseAddress!)
+            }
+        }
+        return blob
+    }
+
+    private func inlineBlob(of image: PreparedTileArenaImage) -> Data? {
+        guard case .inline(let blob) = image.blob else {
+            return nil
+        }
+        return blob
     }
 
     private func makeCompressedEnvelope(decodedByteCount: UInt64,
@@ -468,44 +618,17 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
     private func makePreparedTile(tile: Tile,
                                   textLabels: PreparedTileCPU.TextLabels? = nil) -> PreparedTileCPU {
-        let emptyGeometry = PreparedTileCPU.GeometryLayer(vertices: [],
-                                                         indices: [],
-                                                         styles: [],
-                                                         overviewStyleMasks: [])
-        let emptyRoadPhases = RoadGeometryPhases(shadow: emptyGeometry,
-                                                 casing: emptyGeometry,
-                                                 fill: emptyGeometry,
-                                                 detail: emptyGeometry,
-                                                 overlay: emptyGeometry)
-
+        let base = PreparedTileCPUTestFixtures.empty(tile: tile)
+        guard let textLabels else {
+            return base
+        }
         return PreparedTileCPU(tile: tile,
-                               ground: emptyGeometry,
-                               roads: RoadStructureBuckets(tunnel: emptyRoadPhases,
-                                                          ground: emptyRoadPhases,
-                                                          bridge: emptyRoadPhases),
-                               bridgeOverlay: emptyGeometry,
-                               extruded: PreparedTileCPU.Extruded(vertices: [],
-                                                                  indices: [],
-                                                                  styles: []),
-                               textLabels: textLabels ?? PreparedTileCPU.TextLabels(full: emptyTextLabelSet(),
-                                                                                    reduced: emptyTextLabelSet(),
-                                                                                    minimal: emptyTextLabelSet()),
-                               roadLabels: PreparedTileCPU.RoadLabels(pathInputs: [],
-                                                                      pathRanges: [],
-                                                                      pathLabels: [],
-                                                                      labelStyle: nil,
-                                                                      localGlyphVertices: [],
-                                                                      glyphBounds: [],
-                                                                      glyphBoundRanges: [],
-                                                                      sizes: [],
-                                                                      anchorRanges: [],
-                                                                      anchors: []))
-    }
-
-    private func emptyTextLabelSet() -> PreparedTileCPU.TextLabelSet {
-        PreparedTileCPU.TextLabelSet(placementInputs: [],
-                                     glyphRuns: [],
-                                     poiIconRuns: [])
+                               ground: base.ground,
+                               roads: base.roads,
+                               bridgeOverlay: base.bridgeOverlay,
+                               extruded: base.extruded,
+                               textLabels: textLabels,
+                               roadLabels: base.roadLabels)
     }
 
     private func makeTextLabelSet(seed: Int32) -> PreparedTileCPU.TextLabelSet {
@@ -547,45 +670,25 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                     spriteUV: SIMD2<Float>(Float(spriteSeed) + 3.1, Float(spriteSeed) + 3.2))
     }
 
-    private func assertTextLabelSet(_ actual: PreparedTileCPU.TextLabelSet,
-                                    equals expected: PreparedTileCPU.TextLabelSet,
-                                    file: StaticString = #filePath,
-                                    line: UInt = #line) {
+    private func assertTextLabelSetMeta(_ actual: PreparedTileArenaImage.TextLabelSetMeta,
+                                        equals expected: PreparedTileCPU.TextLabelSet,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) {
         XCTAssertEqual(actual.placementInputs.count, expected.placementInputs.count, file: file, line: line)
-        XCTAssertEqual(actual.glyphRuns.count, expected.glyphRuns.count, file: file, line: line)
-        XCTAssertEqual(actual.poiIconRuns.count, expected.poiIconRuns.count, file: file, line: line)
+        XCTAssertEqual(actual.glyphRunStyles.count, expected.glyphRuns.count, file: file, line: line)
+        XCTAssertEqual(actual.poiIconRunStyles.count, expected.poiIconRuns.count, file: file, line: line)
         guard actual.placementInputs.isEmpty == false,
-              actual.glyphRuns.isEmpty == false,
-              actual.poiIconRuns.isEmpty == false else {
-            return
-        }
-        XCTAssertEqual(actual.glyphRuns[0].localGlyphVertices.count,
-                       expected.glyphRuns[0].localGlyphVertices.count,
-                       file: file,
-                       line: line)
-        XCTAssertEqual(actual.poiIconRuns[0].localIconVertices.count,
-                       expected.poiIconRuns[0].localIconVertices.count,
-                       file: file,
-                       line: line)
-        guard actual.glyphRuns[0].localGlyphVertices.isEmpty == false,
-              actual.poiIconRuns[0].localIconVertices.isEmpty == false else {
+              actual.glyphRunStyles.isEmpty == false,
+              actual.poiIconRunStyles.isEmpty == false else {
             return
         }
 
         assertPlacementInput(actual.placementInputs[0], equals: expected.placementInputs[0], file: file, line: line)
-        assertLabelTextStyle(actual.glyphRuns[0].style, equals: expected.glyphRuns[0].style, file: file, line: line)
-        assertLabelVertex(actual.glyphRuns[0].localGlyphVertices[0],
-                          equals: expected.glyphRuns[0].localGlyphVertices[0],
-                          file: file,
-                          line: line)
-        assertLabelTextStyle(actual.poiIconRuns[0].style,
+        assertLabelTextStyle(actual.glyphRunStyles[0], equals: expected.glyphRuns[0].style, file: file, line: line)
+        assertLabelTextStyle(actual.poiIconRunStyles[0],
                              equals: expected.poiIconRuns[0].style,
                              file: file,
                              line: line)
-        assertLabelVertex(actual.poiIconRuns[0].localIconVertices[0],
-                          equals: expected.poiIconRuns[0].localIconVertices[0],
-                          file: file,
-                          line: line)
     }
 
     private func assertPlacementInput(_ actual: TextLabelPlacementInput,
@@ -615,15 +718,5 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.strokeWidthPx, expected.strokeWidthPx, file: file, line: line)
         XCTAssertEqual(actual.sizePx, expected.sizePx, file: file, line: line)
         XCTAssertEqual(actual.weight, expected.weight, file: file, line: line)
-    }
-
-    private func assertLabelVertex(_ actual: LabelVertex,
-                                   equals expected: LabelVertex,
-                                   file: StaticString,
-                                   line: UInt) {
-        XCTAssertEqual(actual.position, expected.position, file: file, line: line)
-        XCTAssertEqual(actual.uv, expected.uv, file: file, line: line)
-        XCTAssertEqual(actual.labelIndex, expected.labelIndex, file: file, line: line)
-        XCTAssertEqual(actual.spriteUV, expected.spriteUV, file: file, line: line)
     }
 }

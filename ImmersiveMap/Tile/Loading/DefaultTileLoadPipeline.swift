@@ -17,11 +17,14 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
 
     convenience init(tileRenderStore: TileRenderStore,
                      config: ImmersiveMapSettings,
-                     preparedTileCacheIdentity: PreparedTileCacheIdentity) {
+                     preparedTileCacheIdentity: PreparedTileCacheIdentity,
+                     geometryTransport: any PreparedTileGeometryTransporting) {
         let offlineMode = config.tiles.offline.mode
         self.init(tileRenderStore: tileRenderStore,
                   preparedTileDiskCaching: config.tiles.cache.preparedTileCacheEnabled
-                      ? PreparedTileDiskCaching(config: config, cacheIdentity: preparedTileCacheIdentity)
+                      ? PreparedTileDiskCaching(config: config,
+                                                cacheIdentity: preparedTileCacheIdentity,
+                                                geometryTransport: geometryTransport)
                       : nil,
                   tileDownloader: offlineMode == .offlineOnly ? nil : TileDownloader(config: config),
                   offlineTileStore: offlineMode == .disabled ? nil : OfflineTileStore(network: config.tiles.network),
@@ -92,6 +95,15 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         }
         return await tileRenderStore.materializePreparedTile(preparedTile,
                                                              awaitingRevalidation: awaitingRevalidation)
+    }
+
+    func materialize(image: PreparedTileArenaImage,
+                     awaitingRevalidation: Bool) async -> PreparedTileImageMaterializeOutcome {
+        guard let tileRenderStore else {
+            return .allocationOrStoreFailed
+        }
+        return await tileRenderStore.materializeArenaImage(image,
+                                                           awaitingRevalidation: awaitingRevalidation)
     }
 
     func markRevalidated(tile: Tile) async {

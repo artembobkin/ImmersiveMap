@@ -21,35 +21,14 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
     /// purgeable-state transitions are a no-op, so the fixture must be large
     /// enough to observe them. The observed buffer IS the backing buffer.
     private func makeTile(device: MTLDevice, key: Tile) throws -> (MetalTile, MTLBuffer) {
-        let arena = try XCTUnwrap(TileBufferArena(metalDevice: device, length: 64 * 1024))
-        let vertices = Array(repeating: TilePipeline.VertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
-                             count: 3)
-        let ground = TileBuffers.GeometryLayer(vertices: arena.append(vertices),
-                                               indices: nil,
-                                               styles: nil,
-                                               overviewStyleMask: nil,
-                                               indexType: .uint16)
-        let emptyLayer = TileBuffersFixtures.emptyGeometryLayer()
-        let phases = RoadGeometryPhases(shadow: emptyLayer,
-                                        casing: emptyLayer,
-                                        fill: emptyLayer,
-                                        detail: emptyLayer,
-                                        overlay: emptyLayer)
-        let buffers = TileBuffers(backingBuffer: arena.backingBuffer,
-                                  ground: ground,
-                                  roads: RoadStructureBuckets(tunnel: phases,
-                                                              ground: phases,
-                                                              bridge: phases),
-                                  bridgeOverlay: emptyLayer,
-                                  extruded: TileBuffers.Extruded(vertices: nil,
-                                                                 indices: nil,
-                                                                 styles: nil,
-                                                                 indexType: .uint16),
-                                  textLabels: TileBuffers.TextLabels(full: TileBuffersFixtures.emptyTextLabelSet(),
-                                                                     reduced: TileBuffersFixtures.emptyTextLabelSet(),
-                                                                     minimal: TileBuffersFixtures.emptyTextLabelSet()),
-                                  roadLabels: TileBuffersFixtures.emptyRoadLabels())
-        return (MetalTile(tile: key, tileBuffers: buffers), arena.backingBuffer)
+        // 16K vertices * 8 bytes keeps the arena at page scale (128 KiB), so
+        // the driver gives it a standalone allocation rather than a pooled
+        // suballocation where purgeable transitions are a no-op.
+        let preparedTile = PreparedTileCPUTestFixtures.withGroundVertexCount(16 * 1024, tile: key)
+        let factory = MetalTileFactory(metalDevice: device)
+        let metalTile = try XCTUnwrap(factory.makeTile(from: preparedTile))
+        let observedBuffer = try XCTUnwrap(metalTile.tileBuffers.backingBuffer)
+        return (metalTile, observedBuffer)
     }
 
     private func currentPurgeableState(of buffer: MTLBuffer) -> MTLPurgeableState {
@@ -88,6 +67,13 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
                       "The OS reclaimed the parked buffer before the lookup")
 
         let restored = cache.getTile(forKey: key)
+        if restored == nil, currentPurgeableState(of: observedBuffer) == .empty {
+            // The reclaim landed between the guard above and the lookup: the
+            // miss is the correct behavior then, and the restore claim is
+            // unobservable in this run (testReclaimedTileDropsOutAsMiss owns
+            // that path).
+            throw XCTSkip("The OS reclaimed the parked buffer during the lookup")
+        }
         XCTAssertNotNil(restored)
         XCTAssertEqual(currentPurgeableState(of: observedBuffer), .nonVolatile)
     }

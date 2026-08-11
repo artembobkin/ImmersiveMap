@@ -306,39 +306,24 @@ enum PreparedTileDiskCodec {
         // ETag of the raw tile this prepared tile was derived from; lets the cache
         // self-invalidate when the server content at the same URL changes.
         let sourceETag: String
-        let groundVertices: Data
-        let groundVertexCount: UInt32
-        let groundIndices: Data
-        let groundIndexCount: UInt32
-        let groundStyles: Data
-        let groundStyleCount: UInt32
-        let groundOverviewStyleMasks: Data
-        let groundOverviewStyleMaskCount: UInt32
-        let roads: RoadStructureBucketsValue
-        let bridgeVertices: Data
-        let bridgeVertexCount: UInt32
-        let bridgeIndices: Data
-        let bridgeIndexCount: UInt32
-        let bridgeStyles: Data
-        let bridgeStyleCount: UInt32
-        let bridgeOverviewStyleMasks: Data
-        let bridgeOverviewStyleMaskCount: UInt32
-        let extrudedVertices: Data
-        let extrudedVertexCount: UInt32
-        let extrudedIndices: Data
-        let extrudedIndexCount: UInt32
-        let extrudedStyles: Data
-        let extrudedStyleCount: UInt32
-        let textFull: TextLabelSetValue
-        let textReduced: TextLabelSetValue
-        let textMinimal: TextLabelSetValue
+        // The tile's GPU bytes as one arena image (see TileArenaImageMath):
+        // a span table plus a blob that byte-matches the arena the factory
+        // builds, so a hit copies or DMA-loads the blob instead of decoding
+        // per-array fields.
+        let arenaByteCount: UInt64
+        let spanTable: [SpanValue]
+        let geometryTransportRawValue: UInt8
+        /// The arena image for the inline transport; empty when the blob
+        /// lives in the sibling MTLIO container file.
+        let geometryBlob: Data
+        let textFull: TextLabelSetMetaValue
+        let textReduced: TextLabelSetMetaValue
+        let textMinimal: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
         let roadPathRanges: [RoadPathRangeValue]
         let roadPathLabels: [RoadPathLabelValue]
         let roadLabelStyle: LabelTextStyleValue?
-        let roadGlyphVertices: Data
-        let roadGlyphVertexCount: UInt32
         let roadGlyphBounds: Data
         let roadGlyphBoundsCount: UInt32
         let roadGlyphBoundRanges: [LabelGlyphRangeValue]
@@ -348,110 +333,66 @@ enum PreparedTileDiskCodec {
         let roadAnchors: [RoadLabelAnchorValue]
     }
 
-    struct GeometryLayerValue: Codable {
-        let vertices: Data
-        let vertexCount: UInt32
-        let indices: Data
-        let indexCount: UInt32
-        let styles: Data
-        let styleCount: UInt32
-        let overviewStyleMasks: Data
-        let overviewStyleMaskCount: UInt32
+    /// How the geometry blob of an entry is stored.
+    enum GeometryBlobTransport: UInt8 {
+        /// Inside the metadata envelope (`Entry.geometryBlob`); readable on
+        /// every device, materialized with one CPU copy.
+        case inline = 0
+        /// As an MTLIO compression container in the sibling `.ptgeo` file,
+        /// loaded straight into the arena buffer by `MTLIOCommandQueue`.
+        case file = 1
+    }
 
-        init(vertices: Data,
-             vertexCount: UInt32,
-             indices: Data,
-             indexCount: UInt32,
-             styles: Data,
-             styleCount: UInt32,
-             overviewStyleMasks: Data,
-             overviewStyleMaskCount: UInt32) {
-            self.vertices = vertices
-            self.vertexCount = vertexCount
-            self.indices = indices
-            self.indexCount = indexCount
-            self.styles = styles
-            self.styleCount = styleCount
-            self.overviewStyleMasks = overviewStyleMasks
-            self.overviewStyleMaskCount = overviewStyleMaskCount
+    struct SpanValue: Codable {
+        let byteOffset: UInt64
+        let byteCount: UInt64
+        let elementCount: UInt32
+        /// Present only on index spans; see `TileArenaIndexWidth`.
+        let indexWidthRawValue: UInt8?
+
+        init(_ span: TileArenaSpan) throws {
+            byteOffset = UInt64(span.byteOffset)
+            byteCount = UInt64(span.byteCount)
+            elementCount = try encodeUInt32(span.elementCount, field: "Span.elementCount")
+            indexWidthRawValue = span.indexWidth?.rawValue
         }
 
-        init(_ layer: PreparedTileCPU.GeometryLayer, fieldPrefix: String) throws {
-            vertices = encodePODArray(layer.vertices)
-            vertexCount = try encodeUInt32(layer.vertices.count, field: "\(fieldPrefix).vertices.count")
-            indices = encodePODArray(layer.indices)
-            indexCount = try encodeUInt32(layer.indices.count, field: "\(fieldPrefix).indices.count")
-            styles = encodePODArray(layer.styles)
-            styleCount = try encodeUInt32(layer.styles.count, field: "\(fieldPrefix).styles.count")
-            overviewStyleMasks = encodePODArray(layer.overviewStyleMasks)
-            overviewStyleMaskCount = try encodeUInt32(layer.overviewStyleMasks.count,
-                                                      field: "\(fieldPrefix).overviewStyleMasks.count")
-        }
-
-        func runtimeValue(fieldPrefix: String) throws -> PreparedTileCPU.GeometryLayer {
-            PreparedTileCPU.GeometryLayer(
-                vertices: try decodePODArray(vertices,
-                                             count: Int(vertexCount),
-                                             as: TilePipeline.VertexIn.self,
-                                             field: "\(fieldPrefix).vertices"),
-                indices: try decodePODArray(indices,
-                                            count: Int(indexCount),
-                                            as: UInt32.self,
-                                            field: "\(fieldPrefix).indices"),
-                styles: try decodePODArray(styles,
-                                           count: Int(styleCount),
-                                           as: TilePolygonStyle.self,
-                                           field: "\(fieldPrefix).styles"),
-                overviewStyleMasks: try decodePODArray(overviewStyleMasks,
-                                                       count: Int(overviewStyleMaskCount),
-                                                       as: Float.self,
-                                                       field: "\(fieldPrefix).overviewStyleMasks")
-            )
+        func runtimeValue() throws -> TileArenaSpan {
+            guard byteOffset <= UInt64(Int.max), byteCount <= UInt64(Int.max) else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Span range does not fit the platform word.")
+            }
+            let indexWidth: TileArenaIndexWidth?
+            if let indexWidthRawValue {
+                guard let width = TileArenaIndexWidth(rawValue: indexWidthRawValue) else {
+                    throw PreparedTileDiskCodecError.corruptedPayload("Invalid span index width.")
+                }
+                indexWidth = width
+            } else {
+                indexWidth = nil
+            }
+            return TileArenaSpan(byteOffset: Int(byteOffset),
+                                 byteCount: Int(byteCount),
+                                 elementCount: Int(elementCount),
+                                 indexWidth: indexWidth)
         }
     }
 
-    struct RoadGeometryPhasesValue: Codable {
-        let shadow: GeometryLayerValue
-        let casing: GeometryLayerValue
-        let fill: GeometryLayerValue
-        let detail: GeometryLayerValue
-        let overlay: GeometryLayerValue
+    struct TextLabelSetMetaValue: Codable {
+        let placementInputs: [TextPlacementInputValue]
+        let glyphRunStyles: [LabelTextStyleValue]
+        let poiIconRunStyles: [LabelTextStyleValue]
 
-        init(_ phases: RoadGeometryPhases<PreparedTileCPU.GeometryLayer>) throws {
-            shadow = try GeometryLayerValue(phases.shadow, fieldPrefix: "Roads.shadow")
-            casing = try GeometryLayerValue(phases.casing, fieldPrefix: "Roads.casing")
-            fill = try GeometryLayerValue(phases.fill, fieldPrefix: "Roads.fill")
-            detail = try GeometryLayerValue(phases.detail, fieldPrefix: "Roads.detail")
-            overlay = try GeometryLayerValue(phases.overlay, fieldPrefix: "Roads.overlay")
+        init(_ set: PreparedTileCPU.TextLabelSet) throws {
+            placementInputs = try set.placementInputs.map(TextPlacementInputValue.init)
+            glyphRunStyles = try set.glyphRuns.map { try LabelTextStyleValue($0.style) }
+            poiIconRunStyles = try set.poiIconRuns.map { try LabelTextStyleValue($0.style) }
         }
 
-        func runtimeValue() throws -> RoadGeometryPhases<PreparedTileCPU.GeometryLayer> {
-            RoadGeometryPhases(
-                shadow: try shadow.runtimeValue(fieldPrefix: "Entry.roads.shadow"),
-                casing: try casing.runtimeValue(fieldPrefix: "Entry.roads.casing"),
-                fill: try fill.runtimeValue(fieldPrefix: "Entry.roads.fill"),
-                detail: try detail.runtimeValue(fieldPrefix: "Entry.roads.detail"),
-                overlay: try overlay.runtimeValue(fieldPrefix: "Entry.roads.overlay")
-            )
-        }
-    }
-
-    struct RoadStructureBucketsValue: Codable {
-        let tunnel: RoadGeometryPhasesValue
-        let ground: RoadGeometryPhasesValue
-        let bridge: RoadGeometryPhasesValue
-
-        init(_ buckets: RoadStructureBuckets<RoadGeometryPhases<PreparedTileCPU.GeometryLayer>>) throws {
-            tunnel = try RoadGeometryPhasesValue(buckets.tunnel)
-            ground = try RoadGeometryPhasesValue(buckets.ground)
-            bridge = try RoadGeometryPhasesValue(buckets.bridge)
-        }
-
-        func runtimeValue() throws -> RoadStructureBuckets<RoadGeometryPhases<PreparedTileCPU.GeometryLayer>> {
-            RoadStructureBuckets(
-                tunnel: try tunnel.runtimeValue(),
-                ground: try ground.runtimeValue(),
-                bridge: try bridge.runtimeValue()
+        func runtimeValue() throws -> PreparedTileArenaImage.TextLabelSetMeta {
+            PreparedTileArenaImage.TextLabelSetMeta(
+                placementInputs: placementInputs.map { $0.runtimeValue() },
+                glyphRunStyles: try glyphRunStyles.map { try $0.runtimeValue() },
+                poiIconRunStyles: try poiIconRunStyles.map { try $0.runtimeValue() }
             )
         }
     }
@@ -562,64 +503,6 @@ enum PreparedTileDiskCodec {
         }
     }
 
-    struct TextGlyphRunValue: Codable {
-        let style: LabelTextStyleValue
-        let localGlyphVertices: Data
-        let localGlyphVertexCount: UInt32
-
-        init(_ run: PreparedTileCPU.TextGlyphRun) throws {
-            style = try LabelTextStyleValue(run.style)
-            localGlyphVertices = encodePODArray(run.localGlyphVertices)
-            localGlyphVertexCount = try encodeUInt32(run.localGlyphVertices.count, field: "TextGlyphRun.localGlyphVertices.count")
-        }
-
-        func runtimeValue() throws -> PreparedTileCPU.TextGlyphRun {
-            PreparedTileCPU.TextGlyphRun(style: try style.runtimeValue(),
-                                         localGlyphVertices: try decodePODArray(localGlyphVertices,
-                                                                                count: Int(localGlyphVertexCount),
-                                                                                as: LabelVertex.self,
-                                                                                field: "TextGlyphRun.localGlyphVertices"))
-        }
-    }
-
-    struct TextPoiIconRunValue: Codable {
-        let style: LabelTextStyleValue
-        let localIconVertices: Data
-        let localIconVertexCount: UInt32
-
-        init(_ run: PreparedTileCPU.PoiIconRun) throws {
-            style = try LabelTextStyleValue(run.style)
-            localIconVertices = encodePODArray(run.localIconVertices)
-            localIconVertexCount = try encodeUInt32(run.localIconVertices.count, field: "TextPoiIconRun.localIconVertices.count")
-        }
-
-        func runtimeValue() throws -> PreparedTileCPU.PoiIconRun {
-            PreparedTileCPU.PoiIconRun(style: try style.runtimeValue(),
-                                       localIconVertices: try decodePODArray(localIconVertices,
-                                                                             count: Int(localIconVertexCount),
-                                                                             as: LabelVertex.self,
-                                                                             field: "TextPoiIconRun.localIconVertices"))
-        }
-    }
-
-    struct TextLabelSetValue: Codable {
-        let placementInputs: [TextPlacementInputValue]
-        let glyphRuns: [TextGlyphRunValue]
-        let poiIconRuns: [TextPoiIconRunValue]
-
-        init(_ set: PreparedTileCPU.TextLabelSet) throws {
-            placementInputs = try set.placementInputs.map(TextPlacementInputValue.init)
-            glyphRuns = try set.glyphRuns.map(TextGlyphRunValue.init)
-            poiIconRuns = try set.poiIconRuns.map(TextPoiIconRunValue.init)
-        }
-
-        func runtimeValue() throws -> PreparedTileCPU.TextLabelSet {
-            PreparedTileCPU.TextLabelSet(placementInputs: placementInputs.map { $0.runtimeValue() },
-                                         glyphRuns: try glyphRuns.map { try $0.runtimeValue() },
-                                         poiIconRuns: try poiIconRuns.map { try $0.runtimeValue() })
-        }
-    }
-
     struct RoadPathRangeValue: Codable {
         let start: UInt32
         let count: UInt32
@@ -699,22 +582,29 @@ enum PreparedTileDiskCodec {
         }
     }
 
+    /// The two artifacts of one encoded prepared tile: the metadata envelope
+    /// (identity, span table, CPU-only label structures, and the blob itself
+    /// for the inline transport) and the raw arena-image bytes for the file
+    /// transport (empty for inline; the caller writes it as an MTLIO
+    /// compression container next to the metadata).
+    struct EncodedPreparedTile {
+        let metadata: Data
+        let fileBlob: Data
+    }
+
     static func encode(preparedTile: PreparedTileCPU,
                        cacheIdentity: PreparedTileCacheIdentity,
                        sourceETag: String = "",
-                       compressionEnabled: Bool = true) throws -> Data {
-        let payload = try encodeLegacyPropertyList(preparedTile: preparedTile,
-                                                   cacheIdentity: cacheIdentity,
-                                                   sourceETag: sourceETag)
-        return try PreparedTileDiskEnvelope.encode(payload: payload,
-                                                   compressionEnabled: compressionEnabled)
-    }
+                       compressionEnabled: Bool = true,
+                       blobTransport: GeometryBlobTransport = .inline) throws -> EncodedPreparedTile {
+        let plan = TileArenaImageMath.plan(for: preparedTile)
+        var blob = Data(count: plan.totalByteCount)
+        if plan.totalByteCount > 0 {
+            blob.withUnsafeMutableBytes { bytes in
+                TileArenaImageMath.writeBlob(plan: plan, into: bytes.baseAddress!)
+            }
+        }
 
-    /// The pre-envelope representation. Kept internal so compatibility can be
-    /// regression-tested and old cache files remain a first-class decode path.
-    static func encodeLegacyPropertyList(preparedTile: PreparedTileCPU,
-                                         cacheIdentity: PreparedTileCacheIdentity,
-                                         sourceETag: String = "") throws -> Data {
         let entry = try Entry(
             preparedFormatVersion: cacheIdentity.preparedFormatVersion,
             styleRevision: cacheIdentity.styleRevision,
@@ -730,59 +620,41 @@ enum PreparedTileDiskCodec {
             houseNumbersMinimumZoom: cacheIdentity.houseNumbersMinimumZoom,
             addTestBorders: cacheIdentity.addTestBorders,
             sourceETag: sourceETag,
-            groundVertices: encodePODArray(preparedTile.ground.vertices),
-            groundVertexCount: encodeUInt32(preparedTile.ground.vertices.count, field: "Ground.vertices.count"),
-            groundIndices: encodePODArray(preparedTile.ground.indices),
-            groundIndexCount: encodeUInt32(preparedTile.ground.indices.count, field: "Ground.indices.count"),
-            groundStyles: encodePODArray(preparedTile.ground.styles),
-            groundStyleCount: encodeUInt32(preparedTile.ground.styles.count, field: "Ground.styles.count"),
-            groundOverviewStyleMasks: encodePODArray(preparedTile.ground.overviewStyleMasks),
-            groundOverviewStyleMaskCount: encodeUInt32(preparedTile.ground.overviewStyleMasks.count,
-                                                       field: "Ground.overviewStyleMasks.count"),
-            roads: try RoadStructureBucketsValue(preparedTile.roads),
-            bridgeVertices: encodePODArray(preparedTile.bridgeOverlay.vertices),
-            bridgeVertexCount: encodeUInt32(preparedTile.bridgeOverlay.vertices.count, field: "BridgeOverlay.vertices.count"),
-            bridgeIndices: encodePODArray(preparedTile.bridgeOverlay.indices),
-            bridgeIndexCount: encodeUInt32(preparedTile.bridgeOverlay.indices.count, field: "BridgeOverlay.indices.count"),
-            bridgeStyles: encodePODArray(preparedTile.bridgeOverlay.styles),
-            bridgeStyleCount: encodeUInt32(preparedTile.bridgeOverlay.styles.count, field: "BridgeOverlay.styles.count"),
-            bridgeOverviewStyleMasks: encodePODArray(preparedTile.bridgeOverlay.overviewStyleMasks),
-            bridgeOverviewStyleMaskCount: encodeUInt32(preparedTile.bridgeOverlay.overviewStyleMasks.count,
-                                                       field: "BridgeOverlay.overviewStyleMasks.count"),
-            extrudedVertices: encodePODArray(preparedTile.extruded.vertices),
-            extrudedVertexCount: encodeUInt32(preparedTile.extruded.vertices.count, field: "Extruded.vertices.count"),
-            extrudedIndices: encodePODArray(preparedTile.extruded.indices),
-            extrudedIndexCount: encodeUInt32(preparedTile.extruded.indices.count, field: "Extruded.indices.count"),
-            extrudedStyles: encodePODArray(preparedTile.extruded.styles),
-            extrudedStyleCount: encodeUInt32(preparedTile.extruded.styles.count, field: "Extruded.styles.count"),
-            textFull: try TextLabelSetValue(preparedTile.textLabels.full),
-            textReduced: try TextLabelSetValue(preparedTile.textLabels.reduced),
-            textMinimal: try TextLabelSetValue(preparedTile.textLabels.minimal),
+            arenaByteCount: UInt64(plan.totalByteCount),
+            spanTable: plan.spans.map(SpanValue.init),
+            geometryTransportRawValue: blobTransport.rawValue,
+            geometryBlob: blobTransport == .inline ? blob : Data(),
+            textFull: TextLabelSetMetaValue(preparedTile.textLabels.full),
+            textReduced: TextLabelSetMetaValue(preparedTile.textLabels.reduced),
+            textMinimal: TextLabelSetMetaValue(preparedTile.textLabels.minimal),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
-            roadPathRanges: try preparedTile.roadLabels.pathRanges.map(RoadPathRangeValue.init),
+            roadPathRanges: preparedTile.roadLabels.pathRanges.map(RoadPathRangeValue.init),
             roadPathLabels: preparedTile.roadLabels.pathLabels.map(RoadPathLabelValue.init),
-            roadLabelStyle: try preparedTile.roadLabels.labelStyle.map(LabelTextStyleValue.init),
-            roadGlyphVertices: encodePODArray(preparedTile.roadLabels.localGlyphVertices),
-            roadGlyphVertexCount: encodeUInt32(preparedTile.roadLabels.localGlyphVertices.count, field: "RoadLabels.localGlyphVertices.count"),
+            roadLabelStyle: preparedTile.roadLabels.labelStyle.map(LabelTextStyleValue.init),
             roadGlyphBounds: encodePODArray(preparedTile.roadLabels.glyphBounds),
             roadGlyphBoundsCount: encodeUInt32(preparedTile.roadLabels.glyphBounds.count, field: "RoadLabels.glyphBounds.count"),
-            roadGlyphBoundRanges: try preparedTile.roadLabels.glyphBoundRanges.map(LabelGlyphRangeValue.init),
+            roadGlyphBoundRanges: preparedTile.roadLabels.glyphBoundRanges.map(LabelGlyphRangeValue.init),
             roadSizes: encodePODArray(preparedTile.roadLabels.sizes),
             roadSizeCount: encodeUInt32(preparedTile.roadLabels.sizes.count, field: "RoadLabels.sizes.count"),
-            roadAnchorRanges: try preparedTile.roadLabels.anchorRanges.map(RoadLabelAnchorRangeValue.init),
+            roadAnchorRanges: preparedTile.roadLabels.anchorRanges.map(RoadLabelAnchorRangeValue.init),
             roadAnchors: preparedTile.roadLabels.anchors.map(RoadLabelAnchorValue.init)
         )
 
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        return try encoder.encode(entry)
+        let payload = try encoder.encode(entry)
+        let metadata = try PreparedTileDiskEnvelope.encode(payload: payload,
+                                                           compressionEnabled: compressionEnabled)
+        return EncodedPreparedTile(metadata: metadata,
+                                   fileBlob: blobTransport == .file ? blob : Data())
     }
 
     static func decode(data: Data,
                        expectedTile: Tile,
                        cacheIdentity: PreparedTileCacheIdentity,
-                       expectedSourceETag: String? = nil) throws -> PreparedTileDiskCacheHit {
+                       expectedSourceETag: String? = nil,
+                       blobFileURL: URL) throws -> PreparedTileDiskCacheHit {
         let payload = try PreparedTileDiskEnvelope.decode(data: data)
         let decoder = PropertyListDecoder()
         let entry: Entry
@@ -811,45 +683,38 @@ enum PreparedTileDiskCodec {
             throw PreparedTileDiskCodecError.invalidMetadata
         }
 
-        let preparedTile = PreparedTileCPU(
+        guard entry.arenaByteCount <= UInt64(Int.max) else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Arena byte count does not fit the platform word.")
+        }
+        let arenaByteCount = Int(entry.arenaByteCount)
+        let spans = try entry.spanTable.map { try $0.runtimeValue() }
+        try validate(spans: spans, arenaByteCount: arenaByteCount)
+
+        guard let transport = GeometryBlobTransport(rawValue: entry.geometryTransportRawValue) else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Unknown geometry blob transport.")
+        }
+        let blob: PreparedTileArenaImage.GeometryBlob
+        switch transport {
+        case .inline:
+            guard entry.geometryBlob.count == arenaByteCount else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Inline geometry blob size mismatch.")
+            }
+            blob = .inline(entry.geometryBlob)
+        case .file:
+            guard entry.geometryBlob.isEmpty else {
+                throw PreparedTileDiskCodecError.corruptedPayload("File-transport entry carries an inline blob.")
+            }
+            blob = .file(blobFileURL)
+        }
+
+        let image = PreparedTileArenaImage(
             tile: expectedTile,
-            ground: try GeometryLayerValue(vertices: entry.groundVertices,
-                                           vertexCount: entry.groundVertexCount,
-                                           indices: entry.groundIndices,
-                                           indexCount: entry.groundIndexCount,
-                                           styles: entry.groundStyles,
-                                           styleCount: entry.groundStyleCount,
-                                           overviewStyleMasks: entry.groundOverviewStyleMasks,
-                                           overviewStyleMaskCount: entry.groundOverviewStyleMaskCount)
-                .runtimeValue(fieldPrefix: "Entry.ground"),
-            roads: try entry.roads.runtimeValue(),
-            bridgeOverlay: try GeometryLayerValue(vertices: entry.bridgeVertices,
-                                                  vertexCount: entry.bridgeVertexCount,
-                                                  indices: entry.bridgeIndices,
-                                                  indexCount: entry.bridgeIndexCount,
-                                                  styles: entry.bridgeStyles,
-                                                  styleCount: entry.bridgeStyleCount,
-                                                  overviewStyleMasks: entry.bridgeOverviewStyleMasks,
-                                                  overviewStyleMaskCount: entry.bridgeOverviewStyleMaskCount)
-                .runtimeValue(fieldPrefix: "Entry.bridgeOverlay"),
-            extruded: PreparedTileCPU.Extruded(
-                vertices: try decodePODArray(entry.extrudedVertices,
-                                             count: Int(entry.extrudedVertexCount),
-                                             as: TileMvtParser.ExtrudedVertexIn.self,
-                                             field: "Entry.extrudedVertices"),
-                indices: try decodePODArray(entry.extrudedIndices,
-                                            count: Int(entry.extrudedIndexCount),
-                                            as: UInt32.self,
-                                            field: "Entry.extrudedIndices"),
-                styles: try decodePODArray(entry.extrudedStyles,
-                                           count: Int(entry.extrudedStyleCount),
-                                           as: TilePolygonStyle.self,
-                                           field: "Entry.extrudedStyles")
-            ),
-            textLabels: PreparedTileCPU.TextLabels(full: try entry.textFull.runtimeValue(),
-                                                   reduced: try entry.textReduced.runtimeValue(),
-                                                   minimal: try entry.textMinimal.runtimeValue()),
-            roadLabels: PreparedTileCPU.RoadLabels(
+            spans: spans,
+            arenaByteCount: arenaByteCount,
+            textLabelsFull: try entry.textFull.runtimeValue(),
+            textLabelsReduced: try entry.textReduced.runtimeValue(),
+            textLabelsMinimal: try entry.textMinimal.runtimeValue(),
+            roadLabels: PreparedTileArenaImage.RoadLabelsMeta(
                 pathInputs: try decodePODArray(entry.roadPathInputs,
                                                count: Int(entry.roadPathInputCount),
                                                as: TilePointInput.self,
@@ -857,10 +722,6 @@ enum PreparedTileDiskCodec {
                 pathRanges: entry.roadPathRanges.map { $0.runtimeValue() },
                 pathLabels: entry.roadPathLabels.map { $0.runtimeValue() },
                 labelStyle: try entry.roadLabelStyle?.runtimeValue(),
-                localGlyphVertices: try decodePODArray(entry.roadGlyphVertices,
-                                                       count: Int(entry.roadGlyphVertexCount),
-                                                       as: LabelVertex.self,
-                                                       field: "Entry.roadGlyphVertices"),
                 glyphBounds: try decodePODArray(entry.roadGlyphBounds,
                                                 count: Int(entry.roadGlyphBoundsCount),
                                                 as: SIMD4<Float>.self,
@@ -872,10 +733,33 @@ enum PreparedTileDiskCodec {
                                           field: "Entry.roadSizes"),
                 anchorRanges: entry.roadAnchorRanges.map { $0.runtimeValue() },
                 anchors: entry.roadAnchors.map { $0.runtimeValue() }
-            )
+            ),
+            blob: blob
         )
-        return PreparedTileDiskCacheHit(preparedTile: preparedTile,
+        return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)
+    }
+
+    /// Structural validation of an untrusted span table: spans must ascend
+    /// without overlap, start aligned, and stay inside the arena. Element
+    /// strides are checked later by the factory, which knows each span's
+    /// slot type.
+    private static func validate(spans: [TileArenaSpan], arenaByteCount: Int) throws {
+        var expectedNextOffset = 0
+        for span in spans {
+            guard span.byteOffset == expectedNextOffset,
+                  span.byteCount >= 0,
+                  span.elementCount >= 0,
+                  (span.elementCount == 0) == (span.byteCount == 0),
+                  span.byteOffset % TileArenaImageMath.spanAlignment == 0,
+                  span.byteCount <= arenaByteCount - span.byteOffset else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Invalid arena span table.")
+            }
+            expectedNextOffset = span.byteOffset + TileArenaImageMath.alignedByteCount(span.byteCount)
+        }
+        guard expectedNextOffset == arenaByteCount else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Arena span table does not cover the arena.")
+        }
     }
 
     private static func encodePODArray<T>(_ values: [T]) -> Data {
