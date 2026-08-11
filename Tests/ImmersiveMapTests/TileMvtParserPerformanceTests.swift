@@ -37,13 +37,17 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let fullParse = Self.measure(label: "parse(full)", warmup: 2, iterations: 10) {
             _ = try parser.parse(tile: tile, mvtData: mvtData)
         }
-        let decodeOnly = Self.measure(label: "decode(wire only)", warmup: 2, iterations: 10) {
+        let zeroCopyDecode = Self.measure(label: "decode(zero-copy)", warmup: 2, iterations: 10) {
+            _ = try MvtTileDecoder.decode(data: mvtData)
+        }
+        let protobufDecode = Self.measure(label: "decode(swift-protobuf)", warmup: 2, iterations: 10) {
             _ = try VectorTile_Tile(serializedBytes: mvtData)
         }
 
         print("[perf] tile payload: \(mvtData.count) bytes")
-        print("[perf] parse(full)      min \(Self.format(fullParse.min))  median \(Self.format(fullParse.median))")
-        print("[perf] decode(wire only) min \(Self.format(decodeOnly.min))  median \(Self.format(decodeOnly.median))")
+        print("[perf] parse(full)             min \(Self.format(fullParse.min))  median \(Self.format(fullParse.median))")
+        print("[perf] decode(zero-copy)       min \(Self.format(zeroCopyDecode.min))  median \(Self.format(zeroCopyDecode.median))")
+        print("[perf] decode(swift-protobuf)  min \(Self.format(protobufDecode.min))  median \(Self.format(protobufDecode.median))")
     }
 
     func testParseOceanOverviewTileThroughput() throws {
