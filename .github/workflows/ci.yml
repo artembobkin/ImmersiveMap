@@ -86,25 +86,35 @@ jobs:
 
       # The device list of a runner image is not something to hardcode: take
       # whatever iPhone this image ships and fail loudly if it ships none.
+      #
+      # The UDID is what gets passed on, not the name. Device names contain
+      # parentheses ("iPhone SE (3rd generation)"), so anything that reads the
+      # human-readable listing risks handing xcodebuild a truncated name that
+      # matches no device.
       - name: Pick a simulator
         id: simulator
         shell: bash
         run: |
-          name=$(xcrun simctl list devices available \
-            | sed -n 's/^ *\(iPhone[^(]*\) (.*/\1/p' \
-            | sed 's/ *$//' \
-            | tail -n 1)
-          if [ -z "$name" ]; then
+          set -euo pipefail
+          device=$(xcrun simctl list devices available --json | jq -r '
+            [ .devices
+              | to_entries[]
+              | select(.key | test("SimRuntime\\.iOS-"))
+              | .value[]
+              | select(.name | startswith("iPhone"))
+            ] | last // empty | "\(.udid)\t\(.name)"')
+          if [ -z "$device" ]; then
             echo "No iPhone simulator is available on this runner image" >&2
             xcrun simctl list devices available >&2
             exit 1
           fi
-          echo "Using $name"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
+          udid=${device%%$'\t'*}
+          echo "Using ${device#*$'\t'} ($udid)"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       - name: Test
         shell: bash
-        run: .github/scripts/run-xcodebuild-test.sh "platform=iOS Simulator,name=${{ steps.simulator.outputs.name }}" ios
+        run: .github/scripts/run-xcodebuild-test.sh "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" ios
 
       - name: Upload the result bundle
         if: failure()
