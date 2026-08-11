@@ -106,18 +106,23 @@ final class RenderFrameEngine {
 
     // MARK: - Rendering
 
+    /// Renders one live frame into the drawable the display link delivered
+    /// with its update. The drawable arrives pre-acquired and already sized,
+    /// so the frame is measured against the texture it actually renders into
+    /// and never blocks in `nextDrawable()` mid-encode.
     @discardableResult
-    func render(to layer: CAMetalLayer) -> Bool {
+    func render(to layer: CAMetalLayer, drawable: any CAMetalDrawable) -> Bool {
         updatePresentationSyncMode(layer: layer)
         guard let frameSlotIndex = inFlightFramePool.tryAcquire() else {
             recordSkippedFrame(reason: .inFlightSlotsExhausted)
             return false
         }
 
-        let didSchedule = renderFrame(drawSize: layer.drawableSize,
+        let didSchedule = renderFrame(drawSize: CGSize(width: drawable.texture.width,
+                                                       height: drawable.texture.height),
                                       pixelsPerPoint: layer.contentsScale,
                                       frameSlotIndex: frameSlotIndex,
-                                      acquireTarget: { layer.nextDrawable().map { FrameRenderTarget(drawable: $0) } },
+                                      acquireTarget: { FrameRenderTarget(drawable: drawable) },
                                       onGPUComplete: nil)
         if didSchedule == false {
             inFlightFramePool.release(slot: frameSlotIndex)

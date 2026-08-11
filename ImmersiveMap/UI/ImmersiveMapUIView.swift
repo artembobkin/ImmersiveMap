@@ -123,9 +123,7 @@ public class ImmersiveMapUIView: UIView {
                                               requestsLayout: { [weak self] in
                                                   self?.setNeedsLayout()
                                               })
-        hostRuntime.start(displayLinkFactory: { target, selector in
-            CADisplayLink(target: target, selector: selector)
-        })
+        hostRuntime.start()
     }
 
     // MARK: - Layout

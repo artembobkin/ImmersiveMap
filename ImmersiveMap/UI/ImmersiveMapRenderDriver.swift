@@ -4,20 +4,21 @@
 import Foundation
 import QuartzCore
 
-/// Creates the `CADisplayLink` for the driver: on iOS the link is system-wide,
-/// on macOS it is vended by `NSView` and tied to the host view window's display.
-typealias DisplayLinkFactory = (_ target: Any, _ selector: Selector) -> CADisplayLink
-
-/// Manages the map's render loop at the view level: holds the `CADisplayLink`,
-/// enables or pauses it based on `RenderLoopPacing` state,
-/// and invokes `RenderFrameEngine.render(to:)`.
-/// Does not own `RenderFrameEngine` and does not manage render settings.
+/// Manages the map's render loop at the view level: holds the
+/// `CAMetalDisplayLink` built from the host view's `CAMetalLayer`, enables or
+/// pauses it based on `RenderLoopPacing` state, and invokes
+/// `RenderFrameEngine.render(to:drawable:)` with the drawable each link update
+/// delivers. The system hands the drawable together with the tick, so frames
+/// never block in `nextDrawable()` mid-encode, and the link paces wakeups
+/// against actual drawable availability (the update also carries presentation
+/// deadlines, which is what makes ProMotion pacing exact). Does not own
+/// `RenderFrameEngine` and does not manage render settings.
 final class ImmersiveMapRenderDriver: NSObject {
     typealias Activity = RenderLoopPacing.Activity
 
     private var pacing: RenderLoopPacing
-    private var displayLink: CADisplayLink?
-    private var displayLinkTarget: WeakDisplayLinkTarget?
+    private var displayLink: CAMetalDisplayLink?
+    private var displayLinkDelegate: MetalDisplayLinkBridge?
     private weak var renderer: RenderFrameEngine?
 
     init(configuration: ImmersiveMapSettings.RenderLoopSettings) {
@@ -29,16 +30,22 @@ final class ImmersiveMapRenderDriver: NSObject {
         pacing.isCameraAnimationRenderingActive
     }
 
+    /// The layer must already carry its Metal device (the renderer is created
+    /// before the loop starts): the link is built from the layer and follows
+    /// it for the lifetime of the driver, across renderer recreations and
+    /// window moves alike.
+    @MainActor
     func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate,
-               displayLinkFactory: DisplayLinkFactory) {
+               layer: CAMetalLayer) {
         guard displayLink == nil else { return }
 
-        let target = WeakDisplayLinkTarget(driver: self,
-                                           frameDelegate: frameDelegate)
-        displayLinkTarget = target
-        displayLink = displayLinkFactory(target,
-                                         #selector(WeakDisplayLinkTarget.displayLinkDidFire(_:)))
-        displayLink?.add(to: .main, forMode: .common)
+        let bridge = MetalDisplayLinkBridge(driver: self,
+                                            frameDelegate: frameDelegate)
+        displayLinkDelegate = bridge
+        let link = CAMetalDisplayLink(metalLayer: layer)
+        link.delegate = bridge
+        link.add(to: .main, forMode: .common)
+        displayLink = link
         applyDisplayLinkState()
     }
 
@@ -103,7 +110,7 @@ final class ImmersiveMapRenderDriver: NSObject {
         renderer?.prepareForDiscard()
         displayLink?.invalidate()
         displayLink = nil
-        displayLinkTarget = nil
+        displayLinkDelegate = nil
     }
 
     func beginFrame() -> Bool {
@@ -126,13 +133,14 @@ final class ImmersiveMapRenderDriver: NSObject {
 
     @discardableResult
     func renderFrame(layer: CAMetalLayer,
+                     drawable: any CAMetalDrawable,
                      isRenderable: Bool) -> Bool {
         guard isRenderable else {
             applyDisplayLinkState()
             return false
         }
 
-        let didSchedule = renderer?.render(to: layer) ?? false
+        let didSchedule = renderer?.render(to: layer, drawable: drawable) ?? false
         if didSchedule {
             pacing.consumeOneFrameRequest()
         }
@@ -153,9 +161,8 @@ final class ImmersiveMapRenderDriver: NSObject {
         let targetFramesPerSecond = pacing.targetFramesPerSecond
         if targetFramesPerSecond > 0 {
             // The configured rate is the floor. Interaction-class activities
-            // may ride up to ProMotion rates on both platforms (the
-            // NSView-vended macOS link honors the range the same way); the
-            // label fade keeps its narrow low-power cadence.
+            // may ride up to ProMotion rates on both platforms; the label
+            // fade keeps its narrow low-power cadence.
             let maximumFramesPerSecond = pacing.allowsFrameRateHeadroom
                 ? max(Float(targetFramesPerSecond), Self.proMotionMaximumFramesPerSecond)
                 : Float(targetFramesPerSecond)
@@ -181,12 +188,20 @@ final class ImmersiveMapRenderDriver: NSObject {
 @MainActor
 protocol ImmersiveMapRenderDriverFrameDelegate: AnyObject {
     func renderDriverDidTick(_ driver: ImmersiveMapRenderDriver,
-                             currentTime: CFTimeInterval)
+                             currentTime: CFTimeInterval,
+                             drawable: any CAMetalDrawable)
 }
 
-/// Weak proxy target for `CADisplayLink`.
-/// Keeps the display link from retaining the render driver or frame delegate.
-private final class WeakDisplayLinkTarget: NSObject {
+/// Weak delegate bridge for `CAMetalDisplayLink`. The link holds its delegate
+/// weakly and the bridge holds the driver and frame delegate weakly, so the
+/// display link never retains the render stack. A skipped update simply drops
+/// its drawable, which returns to the layer's pool on release.
+///
+/// The link is added to the main runloop, so updates always arrive on the
+/// main thread; the `@preconcurrency` conformance carries that guarantee into
+/// the delegate method (the runtime asserts main-actor isolation on entry).
+@MainActor
+private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDisplayLinkDelegate {
     private weak var driver: ImmersiveMapRenderDriver?
     private weak var frameDelegate: ImmersiveMapRenderDriverFrameDelegate?
 
@@ -196,11 +211,15 @@ private final class WeakDisplayLinkTarget: NSObject {
         self.frameDelegate = frameDelegate
     }
 
-    // @MainActor: the display link is added to the main runloop, the tick is always on main.
-    @MainActor @objc func displayLinkDidFire(_ displayLink: CADisplayLink) {
+    func metalDisplayLink(_ link: CAMetalDisplayLink,
+                          needsUpdate update: CAMetalDisplayLink.Update) {
         guard let driver else { return }
 
+        // Animations sample at the update's target time (the moment this
+        // frame is predicted to display), not at "now": that is the time
+        // the frame is going to be seen at.
         frameDelegate?.renderDriverDidTick(driver,
-                                           currentTime: CACurrentMediaTime())
+                                           currentTime: update.targetTimestamp,
+                                           drawable: update.drawable)
     }
 }
