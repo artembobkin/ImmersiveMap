@@ -247,24 +247,19 @@ extension TileMvtParser {
         return featureId
     }
 
-    func collectBuildingPartIds(layer: VectorTile_Tile.Layer) -> Set<UInt64> {
+    /// One pass over a building layer collecting both the part identifiers and
+    /// the part footprint signatures, from attributes the caller already
+    /// decoded.
+    func collectBuildingPartInfo(layer: VectorTile_Tile.Layer,
+                                 featureAttributes: [[String: VectorTile_Tile.Value]])
+        -> (partIds: Set<UInt64>, footprintSignatures: Set<BuildingFootprintSignature>) {
         var partIds = Set<UInt64>()
-        for feature in layer.features {
-            let attributes = decodeAttributes(feature: feature, layer: layer)
-            if isTruthy(attributes["building:part"]) {
-                let id = buildingIdentifier(attributes: attributes, featureId: feature.id)
-                partIds.insert(id)
-            }
-        }
-        return partIds
-    }
-
-    func collectBuildingPartFootprintSignatures(layer: VectorTile_Tile.Layer) -> Set<BuildingFootprintSignature> {
         var signatures = Set<BuildingFootprintSignature>()
         let polygonDecoder = DecodePolygon()
-        for feature in layer.features {
-            let attributes = decodeAttributes(feature: feature, layer: layer)
+        for (featureIndex, feature) in layer.features.enumerated() {
+            let attributes = featureAttributes[featureIndex]
             guard isTruthy(attributes["building:part"]) else { continue }
+            partIds.insert(buildingIdentifier(attributes: attributes, featureId: feature.id))
             let polygons = normalize(polygonDecoder.decode(geometry: feature.geometry), layer: layer)
             for polygon in polygons {
                 if let signature = buildingFootprintSignature(for: polygon) {
@@ -272,7 +267,7 @@ extension TileMvtParser {
                 }
             }
         }
-        return signatures
+        return (partIds, signatures)
     }
 
     func normalize(_ polygons: MultiPolygon, layer: VectorTile_Tile.Layer) -> MultiPolygon {

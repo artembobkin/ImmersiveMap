@@ -164,32 +164,50 @@ class TileMvtParser {
         attributes["layer"].flatMap(parseIntValue) ?? 0
     }
 
-    private func buildHighZoomRoadSharedPointCounts(layer: VectorTile_Tile.Layer,
-                                                    tile: Tile) -> [RoadConnectionPointKey: Int] {
-        let lineClipper = LineClipper()
-        var pointCounts: [RoadConnectionPointKey: Int] = [:]
+    /// A road line decoded, converted, and exact-clipped once: the pre-pass
+    /// counts shared endpoints from it and the main pass tessellates from it,
+    /// so the geometry work is not repeated per pass.
+    private struct PreparedRoadLine {
+        let points: [SIMD2<Float>]
+        let exactFragments: [ClippedLineFragment]
+    }
 
-        for feature in layer.features where feature.type == .linestring {
-            let attributes = decodeAttributes(feature: feature, layer: layer)
-            let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(layerName: layer.name,
-                                                                                  properties: attributes,
-                                                                                  tile: tile))
-            guard style.key != 0 else {
+    private struct HighZoomRoadPrecomputation {
+        let sharedPointCounts: [RoadConnectionPointKey: Int]
+        let linesByFeatureIndex: [[PreparedRoadLine]]
+
+        static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:], linesByFeatureIndex: [])
+    }
+
+    private func buildHighZoomRoadPrecomputation(layer: VectorTile_Tile.Layer,
+                                                 featureStyles: [FeatureStyle],
+                                                 lineClipper: LineClipper) -> HighZoomRoadPrecomputation {
+        var pointCounts: [RoadConnectionPointKey: Int] = [:]
+        var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
+
+        for (featureIndex, feature) in layer.features.enumerated() where feature.type == .linestring {
+            guard featureStyles[featureIndex].key != 0 else {
                 continue
             }
 
             let lines = normalize(decodeLine.decode(geometry: feature.geometry), layer: layer)
+            var preparedLines: [PreparedRoadLine] = []
+            preparedLines.reserveCapacity(lines.count)
             for line in lines {
-                let fragments = lineClipper.clip(points: floatPoints(line), tileExtent: Float(tileExtent))
+                let points = floatPoints(line)
+                let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
                 for fragment in fragments {
                     for point in fragment.points {
                         pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
                     }
                 }
+                preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
             }
+            linesByFeatureIndex[featureIndex] = preparedLines
         }
 
-        return pointCounts
+        return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
+                                          linesByFeatureIndex: linesByFeatureIndex)
     }
 
     private func lineLength(points: [SIMD2<Float>]) -> Float {
@@ -653,26 +671,40 @@ class TileMvtParser {
         for layer in vectorTile.layers {
             let layerStart = DispatchTime.now().uptimeNanoseconds
             let layerName = layer.name
-            let buildingPartIds = layerName == "building" ? collectBuildingPartIds(layer: layer) : []
-            let buildingPartFootprintSignatures = layerName == "building"
-                ? collectBuildingPartFootprintSignatures(layer: layer)
-                : []
-            let highZoomRoadSharedPointCounts = Self.isSeparateRoadLayer(layerName)
+            let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
                 && tile.z >= config.style.flatSeparateRoadRenderingMinimumZoom
-                ? buildHighZoomRoadSharedPointCounts(layer: layer, tile: tile)
-                : [:]
+
+            // Attributes and style resolve exactly once per feature here; the
+            // building and road pre-passes below share them instead of
+            // re-decoding the tag table per pass.
+            var featureAttributes: [[String: VectorTile_Tile.Value]] = []
+            featureAttributes.reserveCapacity(layer.features.count)
+            var featureStyles: [FeatureStyle] = []
+            featureStyles.reserveCapacity(layer.features.count)
             for feature in layer.features {
                 let attributes = decodeAttributes(feature: feature, layer: layer)
-                
-                let detStyleData = DetFeatureStyleData(
+                featureAttributes.append(attributes)
+                featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
                     layerName: layerName,
                     properties: attributes,
                     tile: tile
-                )
-                let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
-                    && tile.z >= config.style.flatSeparateRoadRenderingMinimumZoom
+                )))
+            }
 
-                let style = determineFeatureStyle.makeStyle(data: detStyleData)
+            let buildingPartInfo = layerName == "building"
+                ? collectBuildingPartInfo(layer: layer, featureAttributes: featureAttributes)
+                : (partIds: Set<UInt64>(), footprintSignatures: Set<BuildingFootprintSignature>())
+            let buildingPartIds = buildingPartInfo.partIds
+            let buildingPartFootprintSignatures = buildingPartInfo.footprintSignatures
+            let highZoomRoads = usesSeparateRoadRendering
+                ? buildHighZoomRoadPrecomputation(layer: layer,
+                                                  featureStyles: featureStyles,
+                                                  lineClipper: lineClipper)
+                : .empty
+            let highZoomRoadSharedPointCounts = highZoomRoads.sharedPointCounts
+            for (featureIndex, feature) in layer.features.enumerated() {
+                let attributes = featureAttributes[featureIndex]
+                let style = featureStyles[featureIndex]
                 let styleKey = style.key
                 if styleKey == 0 {
                     // none defineded style
@@ -800,10 +832,24 @@ class TileMvtParser {
                             max(partial, pass.parseGeometryStyleData.lineWidth * 0.5)
                         }
                     )
-                    let lines = normalize(decodeLine.decode(geometry: geometry), layer: layer)
-                    for line in lines {
-                        let linePoints = floatPoints(line)
-                        let exactClippedFragments = lineClipper.clip(points: linePoints, tileExtent: Float(tileExtent))
+                    let preparedLines: [PreparedRoadLine]
+                    if usesSeparateRoadRendering {
+                        preparedLines = highZoomRoads.linesByFeatureIndex[featureIndex]
+                    } else {
+                        let lines = normalize(decodeLine.decode(geometry: geometry), layer: layer)
+                        var converted: [PreparedRoadLine] = []
+                        converted.reserveCapacity(lines.count)
+                        for line in lines {
+                            let points = floatPoints(line)
+                            converted.append(PreparedRoadLine(points: points,
+                                                              exactFragments: lineClipper.clip(points: points,
+                                                                                               tileExtent: Float(tileExtent))))
+                        }
+                        preparedLines = converted
+                    }
+                    for preparedLine in preparedLines {
+                        let linePoints = preparedLine.points
+                        let exactClippedFragments = preparedLine.exactFragments
                         guard exactClippedFragments.isEmpty == false else {
                             continue
                         }
