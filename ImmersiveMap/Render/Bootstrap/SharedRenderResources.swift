@@ -37,12 +37,21 @@ final class SharedRenderResources {
     /// The one color format the engine renders in; `RendererSetup` stamps it
     /// onto every view's layer.
     let colorPixelFormat: MTLPixelFormat = .bgra8Unorm
+    /// Apple GPUs read the current framebuffer value in the fragment stage
+    /// ([[color(n)]]), which lets the composited building path run inside the
+    /// world pass through a memoryless attachment. Intel Macs and the
+    /// simulator keep the two-pass path.
+    let supportsFramebufferFetch: Bool
 
     // MARK: - Depth states and fallback textures
 
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
+    /// For the framebuffer-fetch composite: every fragment passes and writes
+    /// the far plane back, restoring the pre-building depth mid-pass so the
+    /// scene models keep ignoring composited building depth.
+    let compositeDepthResetState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -95,16 +104,23 @@ final class SharedRenderResources {
         self.device = device
         self.library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
         self.renderSampleCount = RendererSetup.preferredRenderSampleCount(metalDevice: device)
+        #if targetEnvironment(simulator)
+        self.supportsFramebufferFetch = false
+        #else
+        self.supportsFramebufferFetch = device.supportsFamily(.apple1)
+        #endif
 
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
+        self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
 
         let compiled = Self.makeConcurrentlyCompiledResources(device: device,
                                                               library: library,
                                                               pixelFormat: colorPixelFormat,
-                                                              sampleCount: renderSampleCount)
+                                                              sampleCount: renderSampleCount,
+                                                              supportsFramebufferFetch: supportsFramebufferFetch)
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
         self.globeTileTexturePipeline = compiled.globeTileTexturePipeline
@@ -161,7 +177,8 @@ final class SharedRenderResources {
         device: MTLDevice,
         library: MTLLibrary,
         pixelFormat: MTLPixelFormat,
-        sampleCount: Int
+        sampleCount: Int,
+        supportsFramebufferFetch: Bool
     ) -> ConcurrentlyCompiledResources {
         var polygonPipeline: PolygonsPipeline?
         var tilePipeline: TilePipeline?
@@ -196,14 +213,16 @@ final class SharedRenderResources {
             { extrudedTilePipeline = ExtrudedTilePipeline(metalDevice: device,
                                                           pixelFormat: pixelFormat,
                                                           library: library,
-                                                          sampleCount: sampleCount) },
+                                                          sampleCount: sampleCount,
+                                                          supportsFramebufferFetch: supportsFramebufferFetch) },
             { polygonPipeline = PolygonsPipeline(metalDevice: device,
                                                  pixelFormat: pixelFormat,
                                                  library: library) },
             { tilePipeline = TilePipeline(metalDevice: device,
                                           pixelFormat: pixelFormat,
                                           library: library,
-                                          sampleCount: sampleCount) },
+                                          sampleCount: sampleCount,
+                                          supportsFramebufferFetch: supportsFramebufferFetch) },
             // The atlas variant renders into non-MSAA atlas pages, which share
             // the same color format as the drawable.
             { globeTileTexturePipeline = TilePipeline(metalDevice: device,
@@ -229,7 +248,8 @@ final class SharedRenderResources {
             { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
-                                                      sampleCount: sampleCount) },
+                                                      sampleCount: sampleCount,
+                                                      supportsFramebufferFetch: supportsFramebufferFetch) },
             { routePipeline = RoutePipeline(metalDevice: device,
                                             pixelFormat: pixelFormat,
                                             library: library,
@@ -290,6 +310,13 @@ final class SharedRenderResources {
     }
 
     // MARK: - Depth descriptors
+
+    private static func makeCompositeDepthResetDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .always
+        descriptor.isDepthWriteEnabled = true
+        return descriptor
+    }
 
     private static func makeSceneDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()

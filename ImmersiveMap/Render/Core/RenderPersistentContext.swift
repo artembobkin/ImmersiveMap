@@ -36,6 +36,10 @@ final class RenderPersistentContext {
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
+    /// See `SharedRenderResources.compositeDepthResetState`.
+    let compositeDepthResetState: MTLDepthStencilState
+    /// See `SharedRenderResources.supportsFramebufferFetch`.
+    let supportsFramebufferFetch: Bool
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -96,6 +100,8 @@ final class RenderPersistentContext {
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.depthDisabledState = shared.depthDisabledState
+        self.compositeDepthResetState = shared.compositeDepthResetState
+        self.supportsFramebufferFetch = shared.supportsFramebufferFetch
         self.shadowFallbackTexture = shared.shadowFallbackTexture
 
         let mapBaseColors = providerRuntime.mapBaseColors

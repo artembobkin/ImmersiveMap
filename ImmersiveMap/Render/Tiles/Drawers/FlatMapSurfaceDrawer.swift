@@ -20,8 +20,10 @@ enum FlatMapSurfaceDrawer {
                      horizonFog: HorizonFogUniform,
                      shadowBinding: ShadowReceiverBinding,
                      tilePipeline: TilePipeline,
-                     isWireframeEnabled: Bool) {
-        tilePipeline.selectPipeline(renderEncoder: renderEncoder)
+                     isWireframeEnabled: Bool,
+                     withBuildingImageAttachment: Bool = false) {
+        tilePipeline.selectPipeline(renderEncoder: renderEncoder,
+                                    withBuildingImageAttachment: withBuildingImageAttachment)
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.lines)
         }

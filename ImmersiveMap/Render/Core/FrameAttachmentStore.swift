@@ -17,7 +17,12 @@ final class FrameAttachmentStore {
     private var overlayDepthTexture: MTLTexture?
     private var buildingImageColorTexture: MTLTexture?
     private var buildingImageTexture: MTLTexture?
+    private var worldBuildingImageTexture: MTLTexture?
     private var shadowMapTexture: MTLTexture?
+
+    /// See `SharedRenderResources.supportsFramebufferFetch`; recomputed here
+    /// from the device so the pass planner needs no extra plumbing.
+    let supportsFramebufferFetch: Bool
 
     init(metalDevice: MTLDevice,
          renderSampleCount: Int) {
@@ -30,8 +35,10 @@ final class FrameAttachmentStore {
         // older comment claimed an empty render there; it no longer reproduces).
         #if targetEnvironment(simulator)
         self.transientStorageMode = .private
+        self.supportsFramebufferFetch = false
         #else
         self.transientStorageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
+        self.supportsFramebufferFetch = metalDevice.supportsFamily(.apple1)
         #endif
     }
 
@@ -78,6 +85,40 @@ final class FrameAttachmentStore {
         let newTexture = metalDevice.makeTexture(descriptor: descriptor)
         newTexture?.label = RenderResourceName.colorTexture.rawValue
         colorTexture = newTexture
+        return newTexture
+    }
+
+    /// Second color attachment of the framebuffer-fetch world pass: the
+    /// buildings render into it and the composite reads it back per sample,
+    /// all within the pass (clear in, dontCare out), so on Apple GPUs it is
+    /// memoryless and never exists outside tile memory.
+    func ensureWorldBuildingImageTexture(drawSize: CGSize,
+                                         pixelFormat: MTLPixelFormat) -> MTLTexture? {
+        let width = Int(drawSize.width)
+        let height = Int(drawSize.height)
+        guard width > 0, height > 0 else { return nil }
+
+        if let worldBuildingImageTexture,
+           worldBuildingImageTexture.width == width,
+           worldBuildingImageTexture.height == height,
+           worldBuildingImageTexture.pixelFormat == pixelFormat,
+           worldBuildingImageTexture.sampleCount == renderSampleCount {
+            return worldBuildingImageTexture
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
+                                                                  width: width,
+                                                                  height: height,
+                                                                  mipmapped: false)
+        if renderSampleCount > 1 {
+            descriptor.textureType = .type2DMultisample
+            descriptor.sampleCount = renderSampleCount
+        }
+        descriptor.usage = [.renderTarget]
+        descriptor.storageMode = transientStorageMode
+        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
+        newTexture?.label = RenderResourceName.worldBuildingImageTexture.rawValue
+        worldBuildingImageTexture = newTexture
         return newTexture
     }
 
@@ -250,6 +291,7 @@ final class FrameAttachmentStore {
         overlayDepthTexture = nil
         buildingImageColorTexture = nil
         buildingImageTexture = nil
+        worldBuildingImageTexture = nil
         shadowMapTexture = nil
     }
 }

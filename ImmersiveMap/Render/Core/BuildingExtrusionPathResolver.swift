@@ -14,6 +14,25 @@ enum BuildingExtrusionPathResolver {
         case composited(alpha: Float)
     }
 
+    /// True when the composited path runs through the world pass's second
+    /// memoryless attachment via framebuffer fetch instead of the offscreen
+    /// building-image pass. Every consumer (the pass planner, the buildings,
+    /// the flat surface, and the scene models picking pass-compatible
+    /// pipelines) must derive the same answer within a frame, so the decision
+    /// lives here.
+    static func usesInPassBuildingImage(style: ImmersiveMapSettings.StyleSettings,
+                                        zoom: Double,
+                                        renderSurfaceMode: ViewMode,
+                                        supportsFramebufferFetch: Bool) -> Bool {
+        guard supportsFramebufferFetch, renderSurfaceMode == .flat else {
+            return false
+        }
+        if case .composited = resolve(style: style, zoom: zoom) {
+            return true
+        }
+        return false
+    }
+
     static func resolve(style: ImmersiveMapSettings.StyleSettings, zoom: Double) -> Path {
         switch style.buildingExtrusionMode {
         case .solid:

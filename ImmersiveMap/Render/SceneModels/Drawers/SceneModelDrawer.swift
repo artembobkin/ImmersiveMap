@@ -24,11 +24,13 @@ enum SceneModelDrawer {
                      items: [SceneModelDrawItem],
                      pipeline: SceneModelPipeline,
                      extrudedDepthState: MTLDepthStencilState,
-                     depthDisabledState: MTLDepthStencilState) {
+                     depthDisabledState: MTLDepthStencilState,
+                     withBuildingImageAttachment: Bool = false) {
         guard items.isEmpty == false else { return }
 
         var cameraUniformValue = cameraUniform
-        pipeline.selectPipeline(renderEncoder: renderEncoder)
+        pipeline.selectPipeline(renderEncoder: renderEncoder,
+                                withBuildingImageAttachment: withBuildingImageAttachment)
         renderEncoder.setCullMode(.back)
         // Model I/O meshes are counterclockwise-wound; Metal defaults to clockwise.
         renderEncoder.setFrontFacing(.counterClockwise)

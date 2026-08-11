@@ -15,11 +15,16 @@ enum BuildingExtrusionDrawer {
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedDepthState: MTLDepthStencilState,
-                              depthDisabledState: MTLDepthStencilState) {
+                              depthDisabledState: MTLDepthStencilState,
+                              intoImageAttachment: Bool = false) {
         var cameraUniformValue = cameraUniform
         renderEncoder.setCullMode(.back)
 
-        extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
+        if intoImageAttachment {
+            extrudedTilePipeline.selectIntoImagePipeline(renderEncoder: renderEncoder)
+        } else {
+            extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
+        }
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
@@ -74,6 +79,24 @@ enum BuildingExtrusionDrawer {
                              usesBackFaceCulling: false,
                              instanceCount: ShadowCascadeAtlas.cascadeCount)
         renderEncoder.setDepthClipMode(.clip)
+    }
+
+    /// Framebuffer-fetch composite: one fullscreen triangle that reads the
+    /// in-pass building attachment per sample, blends it over the map with
+    /// the shared alpha, and writes the far plane back into depth (see the
+    /// shader for the exact semantics contract).
+    static func drawCompositeFetch(renderEncoder: MTLRenderCommandEncoder,
+                                   alpha: Float,
+                                   extrudedTilePipeline: ExtrudedTilePipeline,
+                                   compositeDepthResetState: MTLDepthStencilState,
+                                   depthDisabledState: MTLDepthStencilState) {
+        renderEncoder.setCullMode(.none)
+        extrudedTilePipeline.selectCompositeFetchPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setDepthStencilState(compositeDepthResetState)
+        var alphaValue = alpha
+        renderEncoder.setFragmentBytes(&alphaValue, length: MemoryLayout<Float>.stride, index: 0)
+        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
     /// Composites the building image over the world pass with a shared alpha:
