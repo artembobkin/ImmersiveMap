@@ -33,7 +33,7 @@ ImmersiveMapView()
         labelFadeFramesPerSecond: 30))
 ```
 
-The display link itself is created per platform: `CADisplayLink` on iOS, `NSView.displayLink(target:selector:)` on macOS, which follows the display the window is actually on.
+The display link is a `CAMetalDisplayLink` built from the host view's `CAMetalLayer` on both platforms: it delivers each frame's drawable together with the tick and follows the display that actually presents the layer.
 
 ## View reuse
 
