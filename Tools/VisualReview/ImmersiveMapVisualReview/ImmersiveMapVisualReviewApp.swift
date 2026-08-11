@@ -153,6 +153,12 @@ final class VisualReviewModel {
                                                                    into: directory)
                 case let .video(establish, shots):
                     videoScenarioOnScreen = item.scenario
+                    // Cleared however the export ends. Left mounted after a
+                    // failure, the live map would keep rendering underneath
+                    // every still that follows in the queue: extra GPU work
+                    // during a capture, in a tool whose whole point is output
+                    // that does not vary between runs.
+                    defer { videoScenarioOnScreen = nil }
                     // Give SwiftUI a commit to put the scene on screen and let
                     // the recorder bind to it before the export starts.
                     try? await Task.sleep(for: .milliseconds(300))
@@ -161,7 +167,6 @@ final class VisualReviewModel {
                                                                    shots: shots,
                                                                    recorder: videoRecorder,
                                                                    into: directory)
-                    videoScenarioOnScreen = nil
                 }
                 item.state = .rendered
             } catch {

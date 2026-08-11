@@ -8,17 +8,23 @@ import QuartzCore
 
 /// Renders one frame of the map offscreen and hands it back as a `CGImage`.
 ///
-/// Standalone by design: it takes the settings and the camera position it
+/// Standalone by design: it takes the settings, the camera and the content it
 /// should draw, rather than attaching to a live map the way
 /// ``ImmersiveMapTourVideoRecorder`` does. That makes it usable with no view on
 /// screen at all, which is what generating thumbnails, share images or a batch
 /// of reference renders needs.
 ///
+/// Content is passed as values (routes, scene models, avatar markers) rather
+/// than as controllers. A controller hands its state to a renderer as a
+/// one-shot diff, so sharing one with a capture would drain the diff a live map
+/// had not consumed yet, and a second capture from the same controller would
+/// draw nothing. Values have no such history.
+///
 /// The frame is rendered by a second, headless engine, so an on-screen map
-/// keeps its own state and stays interactive. The capture waits for the tiles
-/// its camera needs (see
-/// ``ImmersiveMapStillConfiguration/tileReadinessTimeout``) before taking the
-/// frame, because a still has no later frame in which to correct itself.
+/// keeps its own state and stays interactive. The capture settles the scene
+/// before taking the frame: it waits for the tiles its camera needs and lets
+/// label fades converge, because a still has no later frame in which to
+/// correct itself.
 ///
 /// ```swift
 /// let recorder = ImmersiveMapStillRecorder()
@@ -30,8 +36,10 @@ import QuartzCore
 ///     configuration: ImmersiveMapStillConfiguration(width: 1280, height: 720))
 /// ```
 ///
-/// The attribution badge is host-view chrome and does not appear in a capture.
-/// Add attribution before publishing captured imagery.
+/// SwiftUI markers are platform views above the Metal layer and never draw in
+/// Metal, so a capture cannot contain them. The attribution badge is host-view
+/// chrome and does not appear either; add attribution before publishing
+/// captured imagery.
 @MainActor
 public final class ImmersiveMapStillRecorder {
     public private(set) var isCapturing = false
@@ -46,17 +54,16 @@ public final class ImmersiveMapStillRecorder {
     ///     forced off for the capture.
     ///   - camera: where to look from. `nil` uses the same default position an
     ///     untouched map starts at.
-    ///   - avatars: avatar markers to include. Pass the controller a live map
-    ///     uses and its markers are drawn as they are on screen.
-    ///   - routes: routes to include.
-    ///   - sceneModels: scene models to include.
+    ///   - avatars: avatar markers to draw.
+    ///   - routes: routes to draw.
+    ///   - sceneModels: scene models to draw.
     ///   - configuration: output geometry and timing.
     /// - Throws: ``ImmersiveMapStillCaptureError``.
     public func capture(settings: ImmersiveMapSettings = .default,
                         camera: ImmersiveMapCameraPosition? = nil,
-                        avatars: ImmersiveMapAvatarsController? = nil,
-                        routes: ImmersiveMapRoutesController? = nil,
-                        sceneModels: ImmersiveMapSceneModelsController? = nil,
+                        avatars: [AvatarMarker] = [],
+                        routes: [ImmersiveMapRoute] = [],
+                        sceneModels: [ImmersiveMapSceneModel] = [],
                         configuration: ImmersiveMapStillConfiguration = .default) async throws -> CGImage {
         guard isCapturing == false else {
             throw ImmersiveMapStillCaptureError.captureAlreadyInProgress
@@ -77,9 +84,24 @@ public final class ImmersiveMapStillRecorder {
 }
 
 /// The headless engine behind one still: builds the render sources, settles the
-/// tiles, renders a frame, and reads it back into an image.
+/// scene, renders a frame, and reads it back into an image.
 @MainActor
 final class ImmersiveMapStillRuntime {
+    /// How much scene time each settle pass covers.
+    ///
+    /// Larger than a frame on purpose. The loop is converging fades to their
+    /// end state rather than animating them for anyone to watch, and a quarter
+    /// second a pass gets there in a handful of renders instead of sixty.
+    private static let sceneTimeStep: TimeInterval = 0.25
+
+    /// Settle passes that run whatever the timeout says.
+    ///
+    /// `tileReadinessTimeout` bounds waiting on the network, and a caller who
+    /// sets it to zero means "do not wait for tiles", not "hand me a frame
+    /// where every label is still at zero opacity". Eight passes is two
+    /// seconds of scene time, past any fade the style can configure.
+    private static let minimumSettlePasses = 8
+
     private final class StillAvatarSource: AvatarRenderSource {
         private let controller: ImmersiveMapAvatarsController?
 
@@ -110,8 +132,6 @@ final class ImmersiveMapStillRuntime {
         var currentSceneModelsController: ImmersiveMapSceneModelsController? { controller }
     }
 
-    /// SwiftUI markers are platform views above the Metal layer and never draw
-    /// in Metal, so a capture cannot contain them and does not pretend to.
     private final class StillMarkerSource: MarkerRenderSource {
         var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
     }
@@ -127,14 +147,15 @@ final class ImmersiveMapStillRuntime {
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
     private let metalLayer: CAMetalLayer
-    private let device: MTLDevice
+    private let readback: OffscreenTextureImageReadback
     private let engine: RenderFrameEngine
+    private var sceneTime: TimeInterval = 0
 
     init(settings: ImmersiveMapSettings,
          camera: ImmersiveMapCameraPosition?,
-         avatars: ImmersiveMapAvatarsController?,
-         routes: ImmersiveMapRoutesController?,
-         sceneModels: ImmersiveMapSceneModelsController?,
+         avatars: [AvatarMarker],
+         routes: [ImmersiveMapRoute],
+         sceneModels: [ImmersiveMapSceneModel],
          configuration: ImmersiveMapStillConfiguration) throws {
         self.configuration = configuration
         self.drawSize = CGSize(width: configuration.width, height: configuration.height)
@@ -152,10 +173,38 @@ final class ImmersiveMapStillRuntime {
         let presentationStateResolver = MapPresentationStateController(settings: settings)
         self.presentationStateResolver = presentationStateResolver
 
-        let avatarSource = StillAvatarSource(controller: avatars)
+        // Controllers built here and owned by this capture alone: their
+        // snapshots are one-shot diffs, and sharing one with a live map would
+        // take the state that map had not read yet.
+        let avatarsController: ImmersiveMapAvatarsController?
+        if avatars.isEmpty {
+            avatarsController = nil
+        } else {
+            let controller = ImmersiveMapAvatarsController()
+            avatars.forEach { controller.add($0) }
+            avatarsController = controller
+        }
+        let routesController: ImmersiveMapRoutesController?
+        if routes.isEmpty {
+            routesController = nil
+        } else {
+            let controller = ImmersiveMapRoutesController()
+            controller.add(routes)
+            routesController = controller
+        }
+        let sceneModelsController: ImmersiveMapSceneModelsController?
+        if sceneModels.isEmpty {
+            sceneModelsController = nil
+        } else {
+            let controller = ImmersiveMapSceneModelsController()
+            controller.add(sceneModels)
+            sceneModelsController = controller
+        }
+
+        let avatarSource = StillAvatarSource(controller: avatarsController)
         let markerSource = StillMarkerSource()
-        let routeSource = StillRouteSource(controller: routes)
-        let sceneModelSource = StillSceneModelSource(controller: sceneModels)
+        let routeSource = StillRouteSource(controller: routesController)
+        let sceneModelSource = StillSceneModelSource(controller: sceneModelsController)
         self.avatarSource = avatarSource
         self.markerSource = markerSource
         self.routeSource = routeSource
@@ -182,48 +231,80 @@ final class ImmersiveMapStillRuntime {
         guard let device = metalLayer.device else {
             throw ImmersiveMapStillCaptureError.metalUnavailable
         }
-        self.device = device
+        self.readback = OffscreenTextureImageReadback(device: device)
     }
 
     func captureImage() async throws -> CGImage {
-        guard let texture = makeReadableTexture() else {
+        // The runtime lives for exactly one capture, and on every exit the
+        // engine is dropped: stop its tile loader and cut late event delivery
+        // so an orphaned load cannot delete valid prepared-disk entries that a
+        // live map shares, or push state into a dead store.
+        defer { engine.prepareForDiscard() }
+
+        let texture: MTLTexture
+        do {
+            texture = try readback.makeReadableTexture(width: configuration.width,
+                                                       height: configuration.height)
+        } catch {
             throw ImmersiveMapStillCaptureError.metalUnavailable
         }
-        clock.setTime(0)
+
         try await renderSettledFrame(into: texture)
-        return try makeImage(from: texture)
+
+        do {
+            return try readback.makeImage(from: texture)
+        } catch OffscreenTextureImageReadback.Failure.synchronizeFailed {
+            throw ImmersiveMapStillCaptureError.renderFrameFailure
+        } catch {
+            throw ImmersiveMapStillCaptureError.imageCreationFailure
+        }
     }
 
     // MARK: - Rendering
 
-    /// Renders, then keeps re-rendering while tiles are still outstanding, up
-    /// to the configured timeout.
+    /// Renders until the scene has stopped changing, then takes the frame.
     ///
-    /// The loop is driven by the renderer's own invalidations rather than by a
-    /// fixed number of frames: a tile that finishes loading invalidates, and
-    /// only then is there anything new to draw.
+    /// Scene time advances on every pass, which is the whole point and the
+    /// thing a still cannot borrow from the per-frame path in video export.
+    /// That one deliberately holds time still so fades do not run ahead
+    /// between frames of a tour; here there is no next frame, so a held clock
+    /// means the fades never start: `BaseLabelPresentationStateStore` seeds an
+    /// entry at zero opacity and returns early unless time elapsed, so every
+    /// label, POI sprite and road label would come out invisible.
+    ///
+    /// Settled means no outstanding tiles and no running fade or visibility
+    /// cycle, which is the same condition the video export pre-roll uses
+    /// before it starts capturing.
     private func renderSettledFrame(into texture: MTLTexture) async throws {
-        try await renderOnce(into: texture)
-        guard requestedTilesCount > 0 else {
-            return
-        }
-
         let deadline = Date().addingTimeInterval(configuration.tileReadinessTimeout)
-        var didRerender = false
-        while requestedTilesCount > 0, Date() < deadline {
+        var passes = 0
+        while true {
             try checkCancelled()
-            if eventSink.consumePendingInvalidation() {
-                try await renderOnce(into: texture)
-                didRerender = true
-            } else {
-                try await Task.sleep(for: .milliseconds(50))
+            advanceSceneTime()
+            try await renderOnce(into: texture)
+            passes += 1
+
+            let hasPendingTiles = requestedTilesCount > 0
+            let activity = eventSink.activityState
+            let isSettled = hasPendingTiles == false
+                && activity.labelFadeRenderingActive == false
+                && activity.labelVisibilityCycleRenderingActive == false
+                && activity.avatarAnimationRenderingActive == false
+            if isSettled {
+                break
+            }
+            if passes >= Self.minimumSettlePasses, Date() >= deadline {
+                break
+            }
+            if hasPendingTiles, eventSink.consumePendingInvalidation() == false {
+                try await sleep(milliseconds: 50)
             }
         }
-        if didRerender {
-            // Settle frame: commits globe-atlas changes staged by the last
-            // re-render into the captured pixels.
-            try await renderOnce(into: texture)
-        }
+
+        // One more frame so globe-atlas changes staged by the last render are
+        // committed into the pixels that get read back.
+        advanceSceneTime()
+        try await renderOnce(into: texture)
     }
 
     private func renderOnce(into texture: MTLTexture) async throws {
@@ -251,9 +332,25 @@ final class ImmersiveMapStillRuntime {
                 guard attempts < 5 else {
                     throw ImmersiveMapStillCaptureError.renderFrameFailure
                 }
-                try await Task.sleep(for: .milliseconds(10))
+                try await sleep(milliseconds: 10)
             }
         }
+    }
+
+    /// `Task.sleep` throws `CancellationError`, which would escape a capture
+    /// documented as throwing ``ImmersiveMapStillCaptureError`` and land a
+    /// caller switching over that enum in its default branch.
+    private func sleep(milliseconds: Int) async throws {
+        do {
+            try await Task.sleep(for: .milliseconds(milliseconds))
+        } catch {
+            throw ImmersiveMapStillCaptureError.cancelled
+        }
+    }
+
+    private func advanceSceneTime() {
+        sceneTime += Self.sceneTimeStep
+        clock.setTime(sceneTime)
     }
 
     private var requestedTilesCount: Int {
@@ -264,83 +361,5 @@ final class ImmersiveMapStillRuntime {
         if Task.isCancelled {
             throw ImmersiveMapStillCaptureError.cancelled
         }
-    }
-
-    // MARK: - Readback
-
-    /// A render target the CPU can read.
-    ///
-    /// Shared storage everywhere it exists, which is every Apple GPU and the
-    /// simulator. A discrete GPU on an Intel Mac keeps its own copy, so the
-    /// texture is managed there and its contents have to be synchronized back
-    /// over the bus before `getBytes` sees them; without the distinction the
-    /// capture would hand back an uninitialized image instead of failing.
-    /// `.managed` exists only on macOS, hence the platform split rather than a
-    /// bare `hasUnifiedMemory` test: the iOS Simulator also reports no unified
-    /// memory and would be given a storage mode its platform does not have.
-    private func makeReadableTexture() -> MTLTexture? {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
-                                                                  width: configuration.width,
-                                                                  height: configuration.height,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        #if os(macOS)
-        descriptor.storageMode = device.hasUnifiedMemory ? .shared : .managed
-        #else
-        descriptor.storageMode = .shared
-        #endif
-        return device.makeTexture(descriptor: descriptor)
-    }
-
-    private func synchronizeIfNeeded(_ texture: MTLTexture) throws {
-        #if os(macOS)
-        guard texture.storageMode == .managed else {
-            return
-        }
-        guard let queue = device.makeCommandQueue(),
-              let commandBuffer = queue.makeCommandBuffer(),
-              let blit = commandBuffer.makeBlitCommandEncoder() else {
-            throw ImmersiveMapStillCaptureError.renderFrameFailure
-        }
-        blit.synchronize(resource: texture)
-        blit.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        #endif
-    }
-
-    private func makeImage(from texture: MTLTexture) throws -> CGImage {
-        try synchronizeIfNeeded(texture)
-
-        let width = configuration.width
-        let height = configuration.height
-        let bytesPerRow = width * 4
-        var bytes = [UInt8](repeating: 0, count: bytesPerRow * height)
-        bytes.withUnsafeMutableBytes { buffer in
-            texture.getBytes(buffer.baseAddress!,
-                             bytesPerRow: bytesPerRow,
-                             from: MTLRegionMake2D(0, 0, width, height),
-                             mipmapLevel: 0)
-        }
-
-        // The render target is `bgra8Unorm` with premultiplied alpha, which is
-        // little-endian 32-bit with alpha first once the byte order is named.
-        let bitmapInfo = CGBitmapInfo.byteOrder32Little
-            .union(CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue))
-        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
-              let image = CGImage(width: width,
-                                  height: height,
-                                  bitsPerComponent: 8,
-                                  bitsPerPixel: 32,
-                                  bytesPerRow: bytesPerRow,
-                                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: bitmapInfo,
-                                  provider: provider,
-                                  decode: nil,
-                                  shouldInterpolate: false,
-                                  intent: .defaultIntent) else {
-            throw ImmersiveMapStillCaptureError.imageCreationFailure
-        }
-        return image
     }
 }

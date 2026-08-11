@@ -60,7 +60,8 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
             throw ImmersiveMapStillCaptureError.invalidConfiguration("height must be within 1...16384")
         }
         guard pixelsPerPoint > 0, pixelsPerPoint <= 8 else {
-            throw ImmersiveMapStillCaptureError.invalidConfiguration("pixelsPerPoint must be within 0...8")
+            throw ImmersiveMapStillCaptureError
+                .invalidConfiguration("pixelsPerPoint must be greater than 0 and at most 8")
         }
         guard tileReadinessTimeout >= 0 else {
             throw ImmersiveMapStillCaptureError.invalidConfiguration("tileReadinessTimeout must not be negative")

@@ -24,7 +24,12 @@ public enum ImmersiveMapStillCaptureError: Error, Equatable, Sendable {
     case cancelled
 }
 
-extension ImmersiveMapStillCaptureError: CustomStringConvertible {
+/// `LocalizedError` as well as `CustomStringConvertible`: without it
+/// `localizedDescription` falls back to Foundation's generic text and the
+/// sentences below never reach a log.
+extension ImmersiveMapStillCaptureError: CustomStringConvertible, LocalizedError {
+    public var errorDescription: String? { description }
+
     public var description: String {
         switch self {
         case .captureAlreadyInProgress:

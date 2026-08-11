@@ -61,6 +61,42 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         XCTAssertFalse(recorder.isCapturing, "A rejected capture must not leave the recorder busy")
     }
 
+    /// One recorder captures one frame at a time. The second caller is told so
+    /// rather than being handed a frame from an engine another capture is
+    /// still driving.
+    @MainActor
+    func testASecondCaptureOnABusyRecorderIsRefused() async throws {
+        try MetalTestEnvironment.requireDevice()
+        let recorder = ImmersiveMapStillRecorder()
+        let configuration = ImmersiveMapStillConfiguration(width: 64,
+                                                           height: 64,
+                                                           pixelsPerPoint: 1,
+                                                           tileReadinessTimeout: 0,
+                                                           sceneDate: Date(timeIntervalSinceReferenceDate: 0))
+
+        // Both run on the main actor, so the second call gets its turn while
+        // the first is suspended awaiting the GPU, which is exactly the window
+        // the guard exists for.
+        async let first: CGImage = recorder.capture(configuration: configuration)
+        async let second: CGImage = recorder.capture(configuration: configuration)
+
+        var failures: [ImmersiveMapStillCaptureError] = []
+        do {
+            _ = try await first
+        } catch let error as ImmersiveMapStillCaptureError {
+            failures.append(error)
+        }
+        do {
+            _ = try await second
+        } catch let error as ImmersiveMapStillCaptureError {
+            failures.append(error)
+        }
+
+        XCTAssertEqual(failures, [.captureAlreadyInProgress],
+                       "Exactly one of two overlapping captures must be refused")
+        XCTAssertFalse(recorder.isCapturing, "The recorder must be free again afterwards")
+    }
+
     // MARK: - Rendering
 
     /// The frame comes back at the requested size, with the map drawn on it
@@ -114,23 +150,70 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                                          camera: camera,
                                                                          configuration: configuration)
 
-        let routes = ImmersiveMapRoutesController()
-        routes.add(ImmersiveMapRoute(id: 1,
-                                     path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
-                                                               to: GeoCoordinate(latitude: 0, longitude: 20),
-                                                               peakAltitudeMeters: 500_000),
-                                     color: SIMD4<Float>(1, 0, 0, 1),
-                                     widthPoints: 6,
-                                     progress: 1))
+        let route = ImmersiveMapRoute(id: 1,
+                                      path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
+                                                                to: GeoCoordinate(latitude: 0, longitude: 20),
+                                                                peakAltitudeMeters: 500_000),
+                                      color: SIMD4<Float>(1, 0, 0, 1),
+                                      widthPoints: 6,
+                                      progress: 1)
         let withRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                       camera: camera,
-                                                                      routes: routes,
+                                                                      routes: [route],
                                                                       configuration: configuration)
 
-        let before = try readPixels(from: withoutRoute)
-        let after = try readPixels(from: withRoute)
-        XCTAssertGreaterThan(zip(before, after).count { $0 != $1 }, 100,
-                             "A route across the globe must change the captured image")
+        // Counted by colour rather than by diffing the two frames: tiles keep
+        // arriving between captures, so a byte difference would prove only
+        // that the map moved on, not that the route was drawn.
+        XCTAssertEqual(try routePixelCount(in: withoutRoute), 0,
+                       "The map has no red of its own")
+        XCTAssertGreaterThan(try routePixelCount(in: withRoute), 0,
+                             "A route across the globe must reach the captured image")
+    }
+
+    /// Content passed to a capture is a value, so capturing twice draws it
+    /// twice.
+    ///
+    /// The controllers a renderer consumes hand over their state as a one-shot
+    /// diff. An earlier version of this API took the controllers themselves,
+    /// which meant the first capture drained the diff and every capture after
+    /// it drew an empty map, and sharing a controller with a live map took the
+    /// state that map had not read yet.
+    @MainActor
+    func testTheSameContentCanBeCapturedTwice() async throws {
+        try MetalTestEnvironment.requireDevice()
+        let configuration = ImmersiveMapStillConfiguration(width: 128,
+                                                           height: 128,
+                                                           pixelsPerPoint: 1,
+                                                           tileReadinessTimeout: 0,
+                                                           sceneDate: Date(timeIntervalSinceReferenceDate: 0))
+        let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
+        let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+        let routes = [ImmersiveMapRoute(id: 1,
+                                        path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
+                                                                  to: GeoCoordinate(latitude: 0, longitude: 20),
+                                                                  peakAltitudeMeters: 500_000),
+                                        color: SIMD4<Float>(1, 0, 0, 1),
+                                        widthPoints: 6,
+                                        progress: 1)]
+
+        let recorder = ImmersiveMapStillRecorder()
+        let first = try await recorder.capture(settings: settings,
+                                               camera: camera,
+                                               routes: routes,
+                                               configuration: configuration)
+        let second = try await recorder.capture(settings: settings,
+                                                camera: camera,
+                                                routes: routes,
+                                                configuration: configuration)
+
+        // Stated as "the route is in both frames" rather than "the frames are
+        // identical": tiles the first capture fetched are on disk for the
+        // second, so the map underneath is allowed to differ. The route is
+        // what this test is about.
+        XCTAssertGreaterThan(try routePixelCount(in: first), 0)
+        XCTAssertGreaterThan(try routePixelCount(in: second), 0,
+                             "The second capture of the same content must still draw it")
     }
 
     // MARK: - Helpers
@@ -156,5 +239,14 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
 
     private func alpha(in pixels: [UInt8], x: Int, y: Int, width: Int) -> UInt8 {
         pixels[(y * width + x) * 4 + 3]
+    }
+
+    /// The map has no red anywhere in its default palette, so a saturated red
+    /// pixel can only have come from the red route these tests add.
+    private func routePixelCount(in image: CGImage) throws -> Int {
+        let pixels = try readPixels(from: image)
+        return stride(from: 0, to: pixels.count, by: 4).count { index in
+            pixels[index] > 150 && pixels[index + 1] < 90 && pixels[index + 2] < 90
+        }
     }
 }
