@@ -56,6 +56,20 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         buffer.setPurgeableState(.keepCurrent)
     }
 
+    /// Whether the cache has parked this buffer, meaning the OS is free to take
+    /// it.
+    ///
+    /// `.empty` counts: it is what a volatile buffer becomes once the OS
+    /// actually reclaims it, which can happen at any moment after parking,
+    /// including between the sweep and this read. A test that demanded exactly
+    /// `.volatile` would fail whenever the system did the very thing parking
+    /// invites, which is why the whole suite running at once (real memory
+    /// pressure) used to turn these red at random.
+    private func isParked(_ buffer: MTLBuffer) -> Bool {
+        let state = currentPurgeableState(of: buffer)
+        return state == .volatile || state == .empty
+    }
+
     func testIdleTileGoesVolatileAndRestoresOnLookup() throws {
         let device = try makeDevice()
         let key = Tile(x: 1, y: 2, z: 10)
@@ -65,7 +79,13 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
 
         cache.setTileData(tile: tile, forKey: key)
         cache.recordActiveTiles([], frameIndex: 100)
-        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
+        XCTAssertTrue(isParked(observedBuffer))
+
+        // Restoring is only observable on a buffer the OS has not taken yet. If
+        // it has, the entry is correctly gone instead of restored, which is the
+        // claim `testReclaimedTileDropsOutAsMiss` makes.
+        try XCTSkipIf(currentPurgeableState(of: observedBuffer) == .empty,
+                      "The OS reclaimed the parked buffer before the lookup")
 
         let restored = cache.getTile(forKey: key)
         XCTAssertNotNil(restored)
@@ -80,22 +100,25 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
                                          tileTraceRecorder: TileTraceRecorder())
 
         cache.setTileData(tile: tile, forKey: key)
+        // Asserted as "still non-volatile" rather than "not volatile": an
+        // unparked buffer can only be non-volatile, and the loose form would
+        // also accept `.empty`, the one state that proves it was parked.
         cache.updateProtectedTiles([key])
         cache.recordActiveTiles([], frameIndex: 100)
-        XCTAssertNotEqual(currentPurgeableState(of: observedBuffer), .volatile,
-                          "A demanded tile must never go volatile")
+        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .nonVolatile,
+                       "A demanded tile must never go volatile")
 
         cache.updateProtectedTiles([])
         cache.recordActiveTiles([key], frameIndex: 200)
-        XCTAssertNotEqual(currentPurgeableState(of: observedBuffer), .volatile,
-                          "A placed (active) tile must never go volatile")
+        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .nonVolatile,
+                       "A placed (active) tile must never go volatile")
 
         cache.recordActiveTiles([], frameIndex: 201)
-        XCTAssertNotEqual(currentPurgeableState(of: observedBuffer), .volatile,
-                          "The in-flight window must pass before a tile goes volatile")
+        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .nonVolatile,
+                       "The in-flight window must pass before a tile goes volatile")
 
         cache.recordActiveTiles([], frameIndex: 200 + MemoryMetalTileCache.volatileDelayFrames)
-        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
+        XCTAssertTrue(isParked(observedBuffer))
     }
 
     /// The placement subsystem reports the active set on every rendered frame
@@ -120,9 +143,9 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         // it (in-flight frames may still read it), only a sweep past the
         // window may.
         cache.recordActiveTiles([], frameIndex: 601)
-        XCTAssertNotEqual(currentPurgeableState(of: observedBuffer), .volatile)
+        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .nonVolatile)
         cache.recordActiveTiles([], frameIndex: 600 + MemoryMetalTileCache.volatileDelayFrames)
-        XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
+        XCTAssertTrue(isParked(observedBuffer))
     }
 
     /// Activity stamps must stay a subset of the cache keys: the demanded set

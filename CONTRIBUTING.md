@@ -55,7 +55,31 @@ Please include:
 - Tests, where applicable.
 - Any known limitations.
 
-CI runs `swift build` and `swift test` on every pull request. Please make sure both pass locally first.
+CI runs three jobs on every pull request:
+
+- **Build & Test (SPM)** - `swift build` and `swift test`.
+- **Test with shaders (Xcode, macOS)** - the same suite through `xcodebuild`. SwiftPM does not compile the package's `.metal` sources for the test bundle, so under `swift test` every Metal-backed test skips itself, including all the end-to-end offscreen frames. This job is the only one that actually runs them.
+- **Test (Xcode, iOS Simulator)** - the same suite on iOS, which is where the UIKit half of the platform layer runs at all.
+
+Please make sure they pass locally first. `swift test` alone is not enough for a rendering change; run the suite the way the Xcode jobs do:
+
+```bash
+mkdir -p .swiftpm/xcode/package.xcworkspace
+cat > .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace version = "1.0">
+   <FileRef location = "self:"></FileRef>
+</Workspace>
+XML
+xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap \
+  -destination 'platform=macOS'
+```
+
+(Opening `Package.swift` in Xcode writes that workspace for you; it is gitignored, so a fresh clone has to produce it.)
+
+End-to-end rendering tests build on `OffscreenFrameHarness` (`Tests/ImmersiveMapTests/Support/`): it stands up a real `RenderFrameEngine` drawing into a texture on a scripted clock and hands the frame back as pixels. Assert on properties of the picture (a corner is unpainted, N pixels carry a colour, the frame got darker), not on a stored reference image: those differ between GPU families and would have to be regenerated on every shader tweak.
+
+The Xcode jobs set `IMMERSIVE_MAP_REQUIRE_METAL=1`, which turns "this machine cannot render" from a skip into a failure. A GPU suite that skips its way to green reports health it never checked.
 
 Claude reviews every pull request pushed to a branch in this repository and posts what it finds as inline comments, so a red "Claude review" check means the findings on the diff need an answer, either a fix or a follow-up push. The check is advisory: it does not gate the merge, and an unfinished review holds nothing up. `Build & Test (SPM)` is the only required check. A draft is reviewed once it is marked ready for review. A pull request from a fork gets no repository secrets, so the review is skipped there and a maintainer reads the branch by hand.
 

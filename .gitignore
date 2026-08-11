@@ -9,6 +9,8 @@
 /.worktrees/
 /DerivedData/
 /Traces/
+# xcodebuild test result bundles (CI uploads them as artifacts on failure)
+*.xcresult
 /ImmersiveMapMacDevelop/
 /ImmersiveMapIOSDevelop/
 /ImmersiveMap.local.xcworkspace/
