@@ -14,7 +14,10 @@ final class MetalTileFactory {
         self.metalDevice = metalDevice
     }
 
-    func makeTile(from preparedTile: PreparedTileCPU) -> MetalTile {
+    /// nil when the backing allocation fails (memory pressure): the caller
+    /// fails the materialize so the load records a retryable failure instead
+    /// of caching a permanently blank tile.
+    func makeTile(from preparedTile: PreparedTileCPU) -> MetalTile? {
         // Indices narrow to 16 bits once, ahead of both passes.
         let groundIndices = NarrowedIndices(indices: preparedTile.ground.indices,
                                             vertexCount: preparedTile.ground.vertices.count)
@@ -50,6 +53,9 @@ final class MetalTileFactory {
         totalLength += TileBufferArena.alignedSize(of: preparedTile.roadLabels.localGlyphVertices)
 
         let arena = TileBufferArena(metalDevice: metalDevice, length: totalLength)
+        guard totalLength == 0 || arena != nil else {
+            return nil
+        }
 
         let ground = build(layer: preparedTile.ground, indices: groundIndices, arena: arena)
         let roads = roadsWithIndices.map { structureBucket in

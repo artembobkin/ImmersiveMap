@@ -163,7 +163,13 @@ final class TileRenderStore: @unchecked Sendable {
     func materializePreparedTile(_ preparedTile: PreparedTileCPU,
                                  awaitingRevalidation: Bool = false) async -> Bool {
         tileTraceRecorder.record(.tileMaterializeStart(preparedTile.tile))
-        let metalTile = metalTileFactory.makeTile(from: preparedTile)
+        guard let metalTile = metalTileFactory.makeTile(from: preparedTile) else {
+            // Backing allocation failed (memory pressure): report a
+            // materialize failure so the loader's retry path owns the tile
+            // instead of the cache holding a permanently blank one.
+            tileTraceRecorder.record(.tileMaterializeFailed(preparedTile.tile))
+            return false
+        }
 
         await MainActor.run {
             self.memoryMetalTile.setTileData(

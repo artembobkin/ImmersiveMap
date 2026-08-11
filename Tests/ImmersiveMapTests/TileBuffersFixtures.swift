@@ -42,13 +42,15 @@ enum TileBuffersFixtures {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is required for MetalTile test fixture.")
         }
+        let backingBuffer = try XCTUnwrap(device.makeBuffer(length: 16),
+                                          "The fixture contract requires a nonzero cacheable allocation")
         let ground = emptyGeometryLayer()
         let phases = RoadGeometryPhases(shadow: ground,
                                         casing: ground,
                                         fill: ground,
                                         detail: ground,
                                         overlay: ground)
-        return TileBuffers(backingBuffer: device.makeBuffer(length: 16),
+        return TileBuffers(backingBuffer: backingBuffer,
                            ground: ground,
                            roads: RoadStructureBuckets(tunnel: phases,
                                                        ground: phases,
