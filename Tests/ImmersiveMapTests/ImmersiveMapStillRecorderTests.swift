@@ -116,7 +116,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            tileReadinessTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
-        let image = try await recorder.capture(settings: .default.transparentSpace(),
+        let image = try await recorder.capture(settings: offlineSettings(.default.transparentSpace()),
                                                camera: ImmersiveMapCameraPosition(latitudeDegrees: 0,
                                                                                   longitudeDegrees: 0,
                                                                                   zoom: 1),
@@ -144,7 +144,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            tileReadinessTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+        let settings = offlineSettings(.default.earthScene(isEnabled: false))
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -162,12 +162,12 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                                       routes: [route],
                                                                       configuration: configuration)
 
-        // Counted by colour rather than by diffing the two frames: tiles keep
-        // arriving between captures, so a byte difference would prove only
-        // that the map moved on, not that the route was drawn.
-        XCTAssertEqual(try routePixelCount(in: withoutRoute), 0,
-                       "The map has no red of its own")
-        XCTAssertGreaterThan(try routePixelCount(in: withRoute), 0,
+        // Stated as a difference between two frames rather than as a count of
+        // red pixels. With no tiles in either capture the map underneath is
+        // identical, so anything that differs is the route, and the claim
+        // survives whatever a given GPU and colour pipeline do to the exact
+        // shade that comes back.
+        XCTAssertGreaterThan(try differingPixelCount(withoutRoute, withRoute), 100,
                              "A route across the globe must reach the captured image")
     }
 
@@ -188,7 +188,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            tileReadinessTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+        let settings = offlineSettings(.default.earthScene(isEnabled: false))
         let routes = [ImmersiveMapRoute(id: 1,
                                         path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
                                                                   to: GeoCoordinate(latitude: 0, longitude: 20),
@@ -198,6 +198,9 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                         progress: 1)]
 
         let recorder = ImmersiveMapStillRecorder()
+        let baseline = try await recorder.capture(settings: settings,
+                                                  camera: camera,
+                                                  configuration: configuration)
         let first = try await recorder.capture(settings: settings,
                                                camera: camera,
                                                routes: routes,
@@ -207,16 +210,25 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                 routes: routes,
                                                 configuration: configuration)
 
-        // Stated as "the route is in both frames" rather than "the frames are
-        // identical": tiles the first capture fetched are on disk for the
-        // second, so the map underneath is allowed to differ. The route is
-        // what this test is about.
-        XCTAssertGreaterThan(try routePixelCount(in: first), 0)
-        XCTAssertGreaterThan(try routePixelCount(in: second), 0,
+        XCTAssertGreaterThan(try differingPixelCount(baseline, first), 100)
+        XCTAssertGreaterThan(try differingPixelCount(baseline, second), 100,
                              "The second capture of the same content must still draw it")
     }
 
     // MARK: - Helpers
+
+    /// Settings whose tile provider points at a port nothing listens on.
+    ///
+    /// A test that renders the real provider depends on a tile service, a CDN
+    /// and how warm the local disk cache happens to be, which is three ways
+    /// for the same assertion to mean something different on a laptop and on
+    /// a runner. Nothing here is about tiles.
+    private func offlineSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
+        var offline = settings
+        offline.tileProvider = AnyImmersiveMapTileProvider(
+            ImmersiveMapTilesProvider(tileBaseURL: URL(string: "http://127.0.0.1:1/tiles")!))
+        return offline
+    }
 
     /// Redraws the image into a known layout, so the assertions do not depend
     /// on the byte order the capture happened to use.
@@ -241,12 +253,21 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         pixels[(y * width + x) * 4 + 3]
     }
 
-    /// The map has no red anywhere in its default palette, so a saturated red
-    /// pixel can only have come from the red route these tests add.
-    private func routePixelCount(in image: CGImage) throws -> Int {
-        let pixels = try readPixels(from: image)
-        return stride(from: 0, to: pixels.count, by: 4).count { index in
-            pixels[index] > 150 && pixels[index + 1] < 90 && pixels[index + 2] < 90
+    /// How many pixels differ between two captures of the same size.
+    private func differingPixelCount(_ lhs: CGImage, _ rhs: CGImage) throws -> Int {
+        let left = try readPixels(from: lhs)
+        let right = try readPixels(from: rhs)
+        var differing = 0
+        for index in stride(from: 0, to: min(left.count, right.count), by: 4) {
+            let sameRed = left[index] == right[index]
+            let sameGreen = left[index + 1] == right[index + 1]
+            let sameBlue = left[index + 2] == right[index + 2]
+            let sameAlpha = left[index + 3] == right[index + 3]
+            if sameRed && sameGreen && sameBlue && sameAlpha {
+                continue
+            }
+            differing += 1
         }
+        return differing
     }
 }
