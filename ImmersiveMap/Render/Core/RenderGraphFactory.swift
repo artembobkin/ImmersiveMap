@@ -42,7 +42,8 @@ enum RenderGraphFactory {
                                                             extrudedDepthState: context.extrudedDepthState,
                                                             depthDisabledState: context.depthDisabledState,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
-                                                            shadowFallbackTexture: context.shadowFallbackTexture)
+                                                            shadowFallbackTexture: context.shadowFallbackTexture,
+                                                            supportsFramebufferFetch: context.supportsFramebufferFetch)
         let routeSubsystem = RouteRenderSubsystem(routeSource: context.routeSource,
                                                   pipeline: context.routePipeline,
                                                   routeDepthState: context.globeCapDepthState,
@@ -52,13 +53,16 @@ enum RenderGraphFactory {
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                    shadowFallbackTexture: context.shadowFallbackTexture)
+                                                                    shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                    supportsFramebufferFetch: context.supportsFramebufferFetch)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingImageTextureProvider: buildingImageTextureProvider,
                                                                           extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
                                                                           depthDisabledState: context.depthDisabledState,
+                                                                          compositeDepthResetState: context.compositeDepthResetState,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                          shadowFallbackTexture: context.shadowFallbackTexture)
+                                                                          shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                          supportsFramebufferFetch: context.supportsFramebufferFetch)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)

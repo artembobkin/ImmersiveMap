@@ -5,7 +5,12 @@ import MetalKit
 
 class TilePipeline {
     let pipelineState: MTLRenderPipelineState
-    
+    /// Variant for the framebuffer-fetch world pass (Apple GPUs, nil
+    /// elsewhere): identical, but declares the pass's second building
+    /// attachment with an empty write mask so the pipeline stays
+    /// pass-compatible.
+    let withBuildingImagePipelineState: MTLRenderPipelineState?
+
     struct VertexIn {
         let position: SIMD2<Int16>
         let styleIndex: UInt8
@@ -17,7 +22,8 @@ class TilePipeline {
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
-         sampleCount: Int = 1) {
+         sampleCount: Int = 1,
+         supportsFramebufferFetch: Bool = false) {
         let vertexFunction = library.makeFunction(name: "tileVertexShader")
         let fragmentFunction = library.makeFunction(name: "tileFragmentShader")
         
@@ -52,9 +58,22 @@ class TilePipeline {
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+
+        if supportsFramebufferFetch {
+            pipelineDescriptor.colorAttachments[1].pixelFormat = pixelFormat
+            pipelineDescriptor.colorAttachments[1].writeMask = []
+            self.withBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        } else {
+            self.withBuildingImagePipelineState = nil
+        }
     }
-    
-    func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
+
+    func selectPipeline(renderEncoder: MTLRenderCommandEncoder,
+                        withBuildingImageAttachment: Bool = false) {
+        if withBuildingImageAttachment, let withBuildingImagePipelineState {
+            renderEncoder.setRenderPipelineState(withBuildingImagePipelineState)
+            return
+        }
         renderEncoder.setRenderPipelineState(pipelineState)
     }
 }

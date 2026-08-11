@@ -11,17 +11,20 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let debugOverlayControls: DebugOverlayControlState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
+    private let supportsFramebufferFetch: Bool
 
     init(tilePipeline: TilePipeline,
          separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture) {
+         shadowFallbackTexture: MTLTexture,
+         supportsFramebufferFetch: Bool) {
         self.tilePipeline = tilePipeline
         self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
+        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext _: FrameContext) {}
@@ -42,6 +45,15 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                           shadowMapTexture: shadowMapTextureProvider(),
                                                           fallbackTexture: shadowFallbackTexture)
+        // The framebuffer-fetch world pass carries a second building
+        // attachment; every pipeline in it must declare that attachment to
+        // stay pass-compatible (same decision as RenderPassGraph.plan).
+        let withBuildingImageAttachment = BuildingExtrusionPathResolver.usesInPassBuildingImage(
+            style: frameContext.services.settings.style,
+            zoom: frameContext.zoom,
+            renderSurfaceMode: frameContext.renderSurfaceMode,
+            supportsFramebufferFetch: supportsFramebufferFetch
+        )
 
         // The horizon backdrop is drawn first: the main coverage lands on top
         // (painter's order), and beyond its edge the ground is painted all the
@@ -56,7 +68,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   horizonFog: horizonFog,
                                   shadowBinding: shadowBinding,
                                   tilePipeline: tilePipeline,
-                                  isWireframeEnabled: isWireframeEnabled)
+                                  isWireframeEnabled: isWireframeEnabled,
+                                  withBuildingImageAttachment: withBuildingImageAttachment)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -66,7 +79,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   horizonFog: horizonFog,
                                   shadowBinding: shadowBinding,
                                   tilePipeline: tilePipeline,
-                                  isWireframeEnabled: isWireframeEnabled)
+                                  isWireframeEnabled: isWireframeEnabled,
+                                  withBuildingImageAttachment: withBuildingImageAttachment)
     }
 
     func handleMemoryWarning() {}

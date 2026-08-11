@@ -16,21 +16,27 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     private let extrudedTilePipeline: ExtrudedTilePipeline
     private let extrudedDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
+    private let compositeDepthResetState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
+    private let supportsFramebufferFetch: Bool
 
     init(buildingImageTextureProvider: @escaping () -> MTLTexture?,
          extrudedTilePipeline: ExtrudedTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
+         compositeDepthResetState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture) {
+         shadowFallbackTexture: MTLTexture,
+         supportsFramebufferFetch: Bool) {
         self.buildingImageTextureProvider = buildingImageTextureProvider
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
         self.depthDisabledState = depthDisabledState
+        self.compositeDepthResetState = compositeDepthResetState
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
+        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext _: FrameContext) {}
@@ -65,21 +71,37 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         // path is resolved the same way as in RenderPassGraph.plan.
         let style = frameContext.services.settings.style
         let path = BuildingExtrusionPathResolver.resolve(style: style, zoom: frameContext.zoom)
+        let usesInPassImage = BuildingExtrusionPathResolver.usesInPassBuildingImage(
+            style: style,
+            zoom: frameContext.zoom,
+            renderSurfaceMode: frameContext.renderSurfaceMode,
+            supportsFramebufferFetch: supportsFramebufferFetch
+        )
         switch layer {
         case .buildingImage:
             guard case .composited = path else { return }
-            drawBuildings(encoder: encoder, frameContext: frameContext)
+            drawBuildings(encoder: encoder,
+                          frameContext: frameContext,
+                          intoImageAttachment: usesInPassImage)
         case .buildingExtrusion:
             switch path {
             case .solid:
                 drawBuildings(encoder: encoder, frameContext: frameContext)
             case .composited(let alpha):
-                guard let buildingImageTexture = buildingImageTextureProvider() else { return }
-                BuildingExtrusionDrawer.drawComposite(renderEncoder: encoder,
-                                                      buildingImageTexture: buildingImageTexture,
-                                                      alpha: alpha,
-                                                      extrudedTilePipeline: extrudedTilePipeline,
-                                                      depthDisabledState: depthDisabledState)
+                if usesInPassImage {
+                    BuildingExtrusionDrawer.drawCompositeFetch(renderEncoder: encoder,
+                                                               alpha: alpha,
+                                                               extrudedTilePipeline: extrudedTilePipeline,
+                                                               compositeDepthResetState: compositeDepthResetState,
+                                                               depthDisabledState: depthDisabledState)
+                } else {
+                    guard let buildingImageTexture = buildingImageTextureProvider() else { return }
+                    BuildingExtrusionDrawer.drawComposite(renderEncoder: encoder,
+                                                          buildingImageTexture: buildingImageTexture,
+                                                          alpha: alpha,
+                                                          extrudedTilePipeline: extrudedTilePipeline,
+                                                          depthDisabledState: depthDisabledState)
+                }
             }
         default:
             return
@@ -90,7 +112,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     func evict() {}
 
-    private func drawBuildings(encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
+    private func drawBuildings(encoder: MTLRenderCommandEncoder,
+                               frameContext: FrameContext,
+                               intoImageAttachment: Bool = false) {
         let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                           shadowMapTexture: shadowMapTextureProvider(),
                                                           fallbackTexture: shadowFallbackTexture)
@@ -101,6 +125,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedDepthState: extrudedDepthState,
-                                              depthDisabledState: depthDisabledState)
+                                              depthDisabledState: depthDisabledState,
+                                              intoImageAttachment: intoImageAttachment)
     }
 }

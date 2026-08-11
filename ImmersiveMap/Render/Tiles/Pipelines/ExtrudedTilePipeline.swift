@@ -14,6 +14,15 @@ class ExtrudedTilePipeline {
     /// shadow map. No color attachments; the fragment stage only replicates the
     /// placeIn clip discard.
     let shadowPipelineState: MTLRenderPipelineState
+    /// Framebuffer-fetch path (Apple GPUs, nil elsewhere): the same building
+    /// shading rendered into the world pass's second memoryless attachment,
+    /// with color(0) masked off.
+    let intoImagePipelineState: MTLRenderPipelineState?
+    /// Framebuffer-fetch composite (Apple GPUs, nil elsewhere): reads the
+    /// in-pass building attachment via [[color(1)]], blends it over color(0)
+    /// with the same premultiplied factors, and writes far-plane depth to
+    /// restore the pre-building depth for the scene models.
+    let compositeFetchPipelineState: MTLRenderPipelineState?
 
     struct VertexIn {
         let position: SIMD3<Float>
@@ -28,7 +37,8 @@ class ExtrudedTilePipeline {
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
-         sampleCount: Int = 1) {
+         sampleCount: Int = 1,
+         supportsFramebufferFetch: Bool = false) {
         let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
         let fragmentFunction = library.makeFunction(name: "tileExtrudedFragmentShader")
 
@@ -84,6 +94,40 @@ class ExtrudedTilePipeline {
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         self.compositePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeDescriptor)
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+
+        if supportsFramebufferFetch {
+            let intoImageDescriptor = MTLRenderPipelineDescriptor()
+            intoImageDescriptor.vertexFunction = vertexFunction
+            intoImageDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedIntoImageFragmentShader")
+            intoImageDescriptor.vertexDescriptor = vertexDescriptor
+            intoImageDescriptor.rasterSampleCount = sampleCount
+            intoImageDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+            intoImageDescriptor.colorAttachments[0].writeMask = []
+            intoImageDescriptor.colorAttachments[1].pixelFormat = pixelFormat
+            intoImageDescriptor.depthAttachmentPixelFormat = .depth32Float
+
+            let compositeFetchDescriptor = MTLRenderPipelineDescriptor()
+            compositeFetchDescriptor.vertexFunction = compositeDescriptor.vertexFunction
+            compositeFetchDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedCompositeFetchFragmentShader")
+            compositeFetchDescriptor.rasterSampleCount = sampleCount
+            compositeFetchDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+            compositeFetchDescriptor.colorAttachments[1].pixelFormat = pixelFormat
+            compositeFetchDescriptor.colorAttachments[1].writeMask = []
+            compositeFetchDescriptor.depthAttachmentPixelFormat = .depth32Float
+            compositeFetchDescriptor.colorAttachments[0].isBlendingEnabled = true
+            compositeFetchDescriptor.colorAttachments[0].rgbBlendOperation = .add
+            compositeFetchDescriptor.colorAttachments[0].alphaBlendOperation = .add
+            compositeFetchDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+            compositeFetchDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+            compositeFetchDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+            compositeFetchDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+
+            self.intoImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: intoImageDescriptor)
+            self.compositeFetchPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeFetchDescriptor)
+        } else {
+            self.intoImagePipelineState = nil
+            self.compositeFetchPipelineState = nil
+        }
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
@@ -96,5 +140,17 @@ class ExtrudedTilePipeline {
 
     func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(shadowPipelineState)
+    }
+
+    /// Framebuffer-fetch path only; callers gate on the capability that
+    /// created the pipeline.
+    func selectIntoImagePipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(intoImagePipelineState!)
+    }
+
+    /// Framebuffer-fetch path only; callers gate on the capability that
+    /// created the pipeline.
+    func selectCompositeFetchPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(compositeFetchPipelineState!)
     }
 }

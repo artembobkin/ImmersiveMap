@@ -14,6 +14,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
     private let depthDisabledState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
+    private let supportsFramebufferFetch: Bool
     private let presentationStateStore = SceneModelPresentationStateStore()
     private var drawItems: [SceneModelDrawItem] = []
     private var shadowCasterItems: [SceneModelDrawItem] = []
@@ -24,7 +25,8 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
          extrudedDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture) {
+         shadowFallbackTexture: MTLTexture,
+         supportsFramebufferFetch: Bool) {
         self.sceneModelSource = sceneModelSource
         self.meshStore = meshStore
         self.pipeline = pipeline
@@ -32,6 +34,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         self.depthDisabledState = depthDisabledState
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
+        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext: FrameContext) {
@@ -141,13 +144,23 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                               shadowMapTexture: shadowMapTextureProvider(),
                                                               fallbackTexture: shadowFallbackTexture)
+            // The framebuffer-fetch world pass carries a second building
+            // attachment; every pipeline in it must declare that attachment
+            // to stay pass-compatible (same decision as RenderPassGraph.plan).
+            let withBuildingImageAttachment = BuildingExtrusionPathResolver.usesInPassBuildingImage(
+                style: frameContext.services.settings.style,
+                zoom: frameContext.zoom,
+                renderSurfaceMode: frameContext.renderSurfaceMode,
+                supportsFramebufferFetch: supportsFramebufferFetch
+            )
             SceneModelDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   shadowBinding: shadowBinding,
                                   items: drawItems,
                                   pipeline: pipeline,
                                   extrudedDepthState: extrudedDepthState,
-                                  depthDisabledState: depthDisabledState)
+                                  depthDisabledState: depthDisabledState,
+                                  withBuildingImageAttachment: withBuildingImageAttachment)
         case .sceneModelOcclusion:
             guard drawItems.isEmpty == false else { return }
             SceneModelDrawer.drawLabelOcclusion(renderEncoder: encoder,

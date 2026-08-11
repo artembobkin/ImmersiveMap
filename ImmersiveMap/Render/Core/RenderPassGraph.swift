@@ -93,13 +93,19 @@ final class RenderPassGraph {
         private let clearColor: MTLClearColor
         private let depthTexture: MTLTexture?
         private let outputPlan: RenderFrameOutputPlan
+        /// Framebuffer-fetch composited buildings: the pass carries a second,
+        /// memoryless color attachment the buildings render into and the
+        /// composite reads back, so the intermediate never leaves tile memory.
+        private let includesBuildingImageAttachment: Bool
 
         init(clearColor: MTLClearColor,
              depthTexture: MTLTexture?,
-             outputPlan: RenderFrameOutputPlan) {
+             outputPlan: RenderFrameOutputPlan,
+             includesBuildingImageAttachment: Bool) {
             self.clearColor = clearColor
             self.depthTexture = depthTexture
             self.outputPlan = outputPlan
+            self.includesBuildingImageAttachment = includesBuildingImageAttachment
         }
 
         func makeRenderPassDescriptor(frameContext: FrameContext,
@@ -138,6 +144,20 @@ final class RenderPassGraph {
             }
             descriptor.colorAttachments[0].loadAction = .clear
             descriptor.colorAttachments[0].clearColor = clearColor
+            if includesBuildingImageAttachment {
+                guard let worldBuildingImage = attachments.ensureWorldBuildingImageTexture(
+                    drawSize: frameContext.drawSize,
+                    pixelFormat: target.texture.pixelFormat
+                ) else {
+                    return nil
+                }
+                descriptor.colorAttachments[1].texture = worldBuildingImage
+                descriptor.colorAttachments[1].loadAction = .clear
+                descriptor.colorAttachments[1].storeAction = .dontCare
+                // Transparent: per sample, the alpha becomes the building
+                // silhouette coverage the composite blends with.
+                descriptor.colorAttachments[1].clearColor = MTLClearColorMake(0, 0, 0, 0)
+            }
             if let depthTexture {
                 descriptor.depthAttachment.texture = depthTexture
                 descriptor.depthAttachment.loadAction = .clear
@@ -216,13 +236,22 @@ final class RenderPassGraph {
                                         descriptorProvider: ShadowMapDescriptorProvider(),
                                         layers: [.shadowCasters]))
         }
-        // The offscreen building image is needed only when buildings composite over
-        // the map translucently (translucent, or the solidAtHighZoom zoom
-        // transition): they render into it opaquely (depth test, MSAA), and the
-        // world pass composites the result over the map with a single blend at a
-        // shared alpha, so every pixel is tinted exactly once with no seams
-        // between surfaces. Fully opaque buildings render straight into the world pass.
-        if frameContext.renderSurfaceMode == .flat,
+        // Composited buildings (translucent, or the solidAtHighZoom zoom
+        // transition) render opaquely into a building image (depth test,
+        // MSAA), which is then blended over the map once at a shared alpha, so
+        // every pixel is tinted exactly once with no seams between surfaces.
+        // On Apple GPUs the image is the world pass's second memoryless
+        // attachment read back via framebuffer fetch; elsewhere it is a
+        // separate offscreen pass whose resolve the world pass samples. Fully
+        // opaque buildings render straight into the world pass.
+        let usesInPassBuildingImage = BuildingExtrusionPathResolver.usesInPassBuildingImage(
+            style: settings.style,
+            zoom: frameContext.zoom,
+            renderSurfaceMode: frameContext.renderSurfaceMode,
+            supportsFramebufferFetch: attachments.supportsFramebufferFetch
+        )
+        if usesInPassBuildingImage == false,
+           frameContext.renderSurfaceMode == .flat,
            case .composited = BuildingExtrusionPathResolver.resolve(style: settings.style,
                                                                     zoom: frameContext.zoom),
            let buildingImageTexture = attachments.ensureBuildingImageTexture(drawSize: frameContext.drawSize,
@@ -232,7 +261,13 @@ final class RenderPassGraph {
                                         descriptorProvider: BuildingImageDescriptorProvider(),
                                         layers: [.buildingImage]))
         }
-        let worldLayers = layerPlan.filter(Self.isWorldLayer)
+        var worldLayers = layerPlan.filter(Self.isWorldLayer)
+        if usesInPassBuildingImage,
+           let buildingExtrusionIndex = worldLayers.firstIndex(of: .buildingExtrusion) {
+            // The buildings render into the in-pass image right before the
+            // composite reads it back.
+            worldLayers.insert(.buildingImage, at: buildingExtrusionIndex)
+        }
         let overlayLayers = layerPlan.filter(Self.isOverlayLayer)
         let outputPlan = RenderFrameOutputPlanner.plan(
             fxaaEnabled: settings.postProcessing.fxaaEnabled,
@@ -242,7 +277,8 @@ final class RenderPassGraph {
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
                                                                                 depthTexture: depthTexture,
-                                                                                outputPlan: outputPlan),
+                                                                                outputPlan: outputPlan,
+                                                                                includesBuildingImageAttachment: usesInPassBuildingImage),
                                     layers: worldLayers))
         if outputPlan.includesPostProcessingPass {
             nodes.append(RenderPassNode(name: .postProcessing,

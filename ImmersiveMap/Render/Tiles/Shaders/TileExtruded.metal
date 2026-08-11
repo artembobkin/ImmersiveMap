@@ -104,13 +104,14 @@ static inline half extrudedDepthCueShade(half3 worldNormal,
 // come out shadowed exactly like cast shadows: one consistent system.
 // Building geometry is always drawn opaque with a regular depth test and MSAA:
 // in solid mode - directly into the world pass, in translucent - into the
-// offscreen building image, which the world pass then composites over the map
-// with a shared alpha.
-fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
-                                          constant float4& localClipBounds [[buffer(4)]],
-                                          constant Shadow& shadow [[buffer(5)]],
-                                          constant float& metersToWorldZ [[buffer(6)]],
-                                          depth2d_array<float> shadowMap [[texture(0)]]) {
+// building image (a separate offscreen pass, or the world pass's second
+// memoryless attachment on GPUs with framebuffer fetch), which is then
+// composited over the map with a shared alpha.
+static inline half4 shadeExtrudedFragment(VertexOut in,
+                                          constant float4& localClipBounds,
+                                          constant Shadow& shadow,
+                                          constant float& metersToWorldZ,
+                                          depth2d_array<float> shadowMap) {
     // Derivatives (inside sampleShadowFactor) must precede the divergent
     // discard, because MSL leaves them undefined in a quad after any lane discards.
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap,
@@ -131,6 +132,32 @@ fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
     // factor is 1 and the cues apply fully.
     half appliedCue = mix(1.0h, depthCueShade, shadowFactor);
     return half4(in.color.rgb * appliedCue * shadowFactor, 1.0h);
+}
+
+fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
+                                          constant float4& localClipBounds [[buffer(4)]],
+                                          constant Shadow& shadow [[buffer(5)]],
+                                          constant float& metersToWorldZ [[buffer(6)]],
+                                          depth2d_array<float> shadowMap [[texture(0)]]) {
+    return shadeExtrudedFragment(in, localClipBounds, shadow, metersToWorldZ, shadowMap);
+}
+
+// Framebuffer-fetch path (Apple GPUs): the same shading lands in the world
+// pass's second, memoryless color attachment; color(0) is untouched (its
+// write mask is empty in the pipeline), and the composite below reads the
+// attachment back per sample without it ever leaving tile memory.
+struct ExtrudedIntoImageFragmentOut {
+    half4 image [[color(1)]];
+};
+
+fragment ExtrudedIntoImageFragmentOut tileExtrudedIntoImageFragmentShader(VertexOut in [[stage_in]],
+                                                                          constant float4& localClipBounds [[buffer(4)]],
+                                                                          constant Shadow& shadow [[buffer(5)]],
+                                                                          constant float& metersToWorldZ [[buffer(6)]],
+                                                                          depth2d_array<float> shadowMap [[texture(0)]]) {
+    ExtrudedIntoImageFragmentOut out;
+    out.image = shadeExtrudedFragment(in, localClipBounds, shadow, metersToWorldZ, shadowMap);
+    return out;
 }
 
 // Depth-only path of the shadow map pass. All cascades render in one pass:
@@ -187,4 +214,25 @@ fragment half4 tileExtrudedCompositeFragmentShader(ExtrudedCompositeVertexOut in
                                                    constant float& alpha [[buffer(0)]]) {
     half4 premultiplied = buildingImage.read(uint2(in.position.xy));
     return premultiplied * half(alpha);
+}
+
+// Framebuffer-fetch composite: reads the in-pass building attachment per
+// sample, entirely in tile memory, and blends it over the map with the same
+// premultiplied factors as the two-pass path (per covered sample instead of
+// per resolved pixel, which only differs where a building edge crosses a
+// ground-color edge within one pixel). The far-plane depth output restores
+// the pre-building depth: the pass clears depth to 1.0 and the flat surface
+// writes none, so composited buildings keep not occluding the scene models,
+// exactly like the two-pass path.
+struct ExtrudedCompositeFetchFragmentOut {
+    half4 color [[color(0)]];
+    float depth [[depth(any)]];
+};
+
+fragment ExtrudedCompositeFetchFragmentOut tileExtrudedCompositeFetchFragmentShader(half4 image [[color(1)]],
+                                                                                    constant float& alpha [[buffer(0)]]) {
+    ExtrudedCompositeFetchFragmentOut out;
+    out.color = image * half(alpha);
+    out.depth = 1.0;
+    return out;
 }
