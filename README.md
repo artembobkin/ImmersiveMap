@@ -2,9 +2,7 @@
 
 [![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
-![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
-
-Video: [CrowdBloom](https://youtu.be/fU4HzPMEyD8), fifty avatar markers over Barcelona clustering and coming apart across sixteen zoom levels, rendered in 4K by the engine itself (`Posts/CrowdBloom`).
+https://github.com/user-attachments/assets/bbd2b88b-1873-4f14-8e60-1c88b53d4c05
 
 Native Swift + Metal map rendering engine for SwiftUI apps.
 
