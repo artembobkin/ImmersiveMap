@@ -25,6 +25,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var demandGateFingerprint: Int?
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, preprocessed: 0, demanded: 0, ready: 0)
+    /// Union of the tiles the three placement contexts reference, rebuilt on
+    /// every placement change and reported to the cache on every rendered
+    /// frame for the purgeable bookkeeping.
+    private var activePlacementTiles: Set<Tile> = []
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
@@ -53,6 +57,13 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let gateFingerprint = gateHasher.finalize()
         if gateFingerprint == demandGateFingerprint,
            latestRequestedTilesCount == 0 {
+            // The gated frame still renders the existing placements, so their
+            // tiles must keep fresh activity stamps: otherwise the first
+            // placement rebuild after a long gated stretch would compare
+            // against stamps hundreds of frames old and could park a tile
+            // volatile while in-flight GPU frames still read it.
+            tileRenderStore.recordActiveTiles(activePlacementTiles,
+                                              frameIndex: frameContext.frameIndex)
             publishState(frameContext: frameContext,
                          visibleTilesCount: latestCounts.visible,
                          readyTilesCount: latestCounts.ready,
@@ -121,7 +132,17 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                                          previousContext: tileAtlasPlaceTilesContext)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
+            rebuildActivePlacementTiles()
         }
+
+        // Purgeable bookkeeping: the cache may only park tiles that nothing
+        // references, and the demanded set alone is not that (retained
+        // substitutes in the placements keep drawing after leaving demand).
+        // Report the union of everything the three placement contexts hold,
+        // on every rendered frame (the gated branch above reports too), so
+        // stamps stay fresh and the in-flight window is measured from the
+        // frame a tile actually stopped being drawn.
+        tileRenderStore.recordActiveTiles(activePlacementTiles, frameIndex: frameContext.frameIndex)
 
         let visibleTilesCount = visibleTiles.count
         let readyTilesCount = tileRequestResult.readyTilesCount
@@ -153,6 +174,20 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                      visibleTilesCount: visibleTilesCount,
                      readyTilesCount: readyTilesCount,
                      requestedTilesCount: requestedTilesCount)
+    }
+
+    private func rebuildActivePlacementTiles() {
+        var activeTiles = Set<Tile>()
+        for placement in placeTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        for placement in backdropPlaceTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        for placement in tileAtlasPlaceTilesContext.tilePlacements {
+            activeTiles.insert(placement.metalTile.tile)
+        }
+        activePlacementTiles = activeTiles
     }
 
     private func publishState(frameContext: FrameContext,

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [Unreleased]
+
+### Performance
+
+- All three shadow cascades render in one layered pass: the shadow map is a depth16Unorm texture array with one square slice per cascade, every caster draw carries `instanceCount = cascadeCount`, and the vertex stages route each instance to its cascade's slice via `[[render_target_array_index]]`, so building and model geometry is encoded once per frame instead of once per cascade. Layered rendering is supported by every GPU the package targets (Apple5 and later covers all iOS 18 hardware, mac2 covers every Mac). Receivers sample the array by cascade index and each cascade owns its full slice UV, which also retires the atlas seam insets and non-square texel handling.
+
+- Warm-cache tiles that nothing references (neither the demanded set, nor the pinned world cover, nor a retained placement) park their buffers as purgeable-volatile once the in-flight frame window has passed, so the OS can reclaim them under memory pressure system-wide before jetsam looks at the process. A reclaimed tile is detected on its next lookup, drops out as a plain cache miss, and reloads through the normal demand path; a reused tile is pinned back untouched.
+
 ## [0.5.0] - 2026-08-10
 
 ### Added

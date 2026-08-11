@@ -202,8 +202,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
                                                                      renderMapSize: Self.renderMapSize)
         let cap = Float(ShadowFrameStateResolver.normalOffsetMetersCap * unitsPerMeter)
-        let expectedTexelUV = SIMD2<Float>(1.0 / Float(state.mapResolution * ShadowCascadeAtlas.cascadeCount),
-                                           1.0 / Float(state.mapResolution))
+        let expectedTexelUV = SIMD2<Float>(repeating: 1.0 / Float(state.mapResolution))
 
         for (index, cascade) in cascades.enumerated() {
             XCTAssertGreaterThan(cascade.normalOffsetWorld, 0, "cascade \(index)")
@@ -219,14 +218,16 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         }
     }
 
-    func testAtlasRectsAndFadeFollowCameraDistance() throws {
+    func testSliceRectsAndFadeFollowCameraDistance() throws {
         let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: 0.8)
         let state = try XCTUnwrap(Self.resolve(eye: eye))
 
-        let slotWidth = 1.0 / Float(ShadowCascadeAtlas.cascadeCount)
+        // Every cascade owns its full array slice, inset by the kernel reach.
         for (index, cascade) in state.shadowUniform.cascades.enumerated() {
-            XCTAssertGreaterThan(cascade.uvMinimum.x, slotWidth * Float(index), "cascade \(index)")
-            XCTAssertLessThan(cascade.uvMaximum.x, slotWidth * Float(index + 1), "cascade \(index)")
+            XCTAssertGreaterThan(cascade.uvMinimum.x, 0, "cascade \(index)")
+            XCTAssertLessThan(cascade.uvMaximum.x, 1, "cascade \(index)")
+            XCTAssertEqual(cascade.uvMinimum.x, cascade.uvMinimum.y, "cascade \(index)")
+            XCTAssertEqual(cascade.uvMaximum.x, cascade.uvMaximum.y, "cascade \(index)")
         }
 
         let expectedRadius = ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances * simd_length(eye)

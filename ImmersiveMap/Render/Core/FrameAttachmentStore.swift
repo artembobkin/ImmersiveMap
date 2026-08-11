@@ -215,25 +215,26 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// Depth of the directional-light pass, an N:1 cascade atlas
-    /// (near → far, left to right) sampled later by the world and
+    /// Depth of the directional-light pass, a texture array with one square
+    /// slice per cascade (near → far), sampled later by the world and
     /// buildingImage passes: unlike the transient depth attachments it must
     /// survive its pass (`.store`) and be readable, so it is always `.private`
     /// with `.shaderRead`, never memoryless.
     func ensureShadowMapTexture(resolution: Int) -> MTLTexture? {
         guard resolution > 0 else { return nil }
 
-        let width = resolution * ShadowCascadeAtlas.cascadeCount
         if let shadowMapTexture,
-           shadowMapTexture.width == width,
+           shadowMapTexture.width == resolution,
            shadowMapTexture.height == resolution {
             return shadowMapTexture
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
-                                                                  width: width,
-                                                                  height: resolution,
-                                                                  mipmapped: false)
+        let descriptor = MTLTextureDescriptor()
+        descriptor.textureType = .type2DArray
+        descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        descriptor.width = resolution
+        descriptor.height = resolution
+        descriptor.arrayLength = ShadowCascadeAtlas.cascadeCount
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
         let newTexture = metalDevice.makeTexture(descriptor: descriptor)

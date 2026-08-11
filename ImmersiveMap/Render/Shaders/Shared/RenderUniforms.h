@@ -56,7 +56,8 @@ struct SunVisualState {
 
 // One shadow cascade; the layout mirrors ShadowCascadeUniform.swift (pinned
 // by ShadowUniformLayoutTests). worldToShadowTexture maps world space straight
-// to the cascade's half of the 2:1 shadow atlas: xy = atlas UV, z = depth.
+// to the cascade's slice of the shadow texture array: xy = slice UV, z = depth;
+// the slice index equals the cascade's position in Shadow.cascades.
 struct ShadowCascade {
     float4x4 worldToShadowTexture;
     // Reserved (kept for layout stability); the tent PCF filter footprint is
@@ -65,15 +66,24 @@ struct ShadowCascade {
     float depthBias;
     // Cap for the receiver-plane depth gradient (normalized depth per UV).
     float gradientClamp;
-    // Valid atlas-UV rectangle, inset so taps never cross the atlas seam.
+    // Valid slice-UV rectangle, inset so taps never leave the fitted window.
     float2 uvMinimum;
     float2 uvMaximum;
     // World-space normal-offset distance for receivers with normals
     // (~1.5 texels of this cascade, meter-capped).
     float normalOffsetWorld;
     float _padding0;
-    // One cascade texel in atlas UV, for the per-tap slope bias.
+    // One cascade texel in slice UV, for the per-tap slope bias.
     float2 texelSizeUV;
+};
+
+// Light matrices of the caster pass, one per cascade; the layout mirrors
+// ShadowCasterUniform.swift (pinned by ShadowUniformLayoutTests). The caster
+// vertex stages index it by [[instance_id]] and route the result to the
+// matching array slice via [[render_target_array_index]], so all cascades
+// render in one pass with one draw per geometry.
+struct ShadowCasterMatrices {
+    float4x4 lightProjectionViews[3];
 };
 
 // Directional shadow sampling parameters; the layout mirrors ShadowUniform.swift.
@@ -125,7 +135,8 @@ static inline bool shadowCascadeContains(constant ShadowCascade& cascade, float3
 // depth predicted from the gradient, so flat surfaces (roofs, ground) need
 // almost no constant bias: no acne striping and no contact detachment.
 static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
-                                            depth2d<float> shadowMap,
+                                            depth2d_array<float> shadowMap,
+                                            uint cascadeIndex,
                                             float3 uvz,
                                             float2 dzduv) {
     constexpr sampler shadowSampler(coord::normalized,
@@ -143,8 +154,7 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
                               + abs(dzduv.y) * cascade.texelSizeUV.y);
     float bias = cascade.depthBias + slopeBias;
 
-    // Tent weights/offsets in texel space (atlas texels are non-square:
-    // u spans half the texture, so all conversions go through texelSizeUV).
+    // Tent weights/offsets in texel space; conversions go through texelSizeUV.
     float2 texelCoords = uvz.xy / cascade.texelSizeUV;
     float2 base = floor(texelCoords + 0.5);
     float s = texelCoords.x + 0.5 - base.x;
@@ -163,16 +173,16 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
     float visibility = 0.0;
     float2 tapUV;
     tapUV = baseUV + float2(u0, v0) * cascade.texelSizeUV;
-    visibility += uw0 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV,
+    visibility += uw0 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV, cascadeIndex,
         uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
     tapUV = baseUV + float2(u1, v0) * cascade.texelSizeUV;
-    visibility += uw1 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV,
+    visibility += uw1 * vw0 * shadowMap.sample_compare(shadowSampler, tapUV, cascadeIndex,
         uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
     tapUV = baseUV + float2(u0, v1) * cascade.texelSizeUV;
-    visibility += uw0 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV,
+    visibility += uw0 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV, cascadeIndex,
         uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
     tapUV = baseUV + float2(u1, v1) * cascade.texelSizeUV;
-    visibility += uw1 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV,
+    visibility += uw1 * vw1 * shadowMap.sample_compare(shadowSampler, tapUV, cascadeIndex,
         uvz.z + dot(dzduv, tapUV - uvz.xy) - bias);
     return visibility * (1.0 / 16.0);
 }
@@ -202,7 +212,7 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
 // Must be called from uniform control flow (derivatives): callers multiply
 // the result into their color instead of branching around the call.
 static inline float sampleShadowFactor(constant Shadow& shadow,
-                                       depth2d<float> shadowMap,
+                                       depth2d_array<float> shadowMap,
                                        float3 worldPos,
                                        float3 surfaceNormal) {
     // Disabled shadows exit before any cascade math. The condition reads a
@@ -247,7 +257,7 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         for (int i = 0; i < 3; ++i) {
             if (shadowCascadeContains(shadow.cascades[i], uvzs[i])) {
                 float cascadeVisibility = shadowCascadeVisibility(shadow.cascades[i], shadowMap,
-                                                                  uvzs[i], gradients[i]);
+                                                                  uint(i), uvzs[i], gradients[i]);
                 // Cross-fade to the next cascade near this window's edge.
                 // The cascade windows are anchored at the camera's look-at
                 // point, so panning drives content through them: with a hard
@@ -265,7 +275,7 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
                 if (i + 1 < 3 && edgeDistance < blendBand
                     && shadowCascadeContains(shadow.cascades[i + 1], uvzs[i + 1])) {
                     float nextVisibility = shadowCascadeVisibility(shadow.cascades[i + 1], shadowMap,
-                                                                   uvzs[i + 1], gradients[i + 1]);
+                                                                   uint(i + 1), uvzs[i + 1], gradients[i + 1]);
                     cascadeVisibility = mix(nextVisibility, cascadeVisibility,
                                             saturate(edgeDistance / blendBand));
                 }

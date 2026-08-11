@@ -61,7 +61,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
                                   constant float4& localClipBounds [[buffer(1)]],
                                   constant HorizonFog& horizonFog [[buffer(2)]],
                                   constant Shadow& shadow [[buffer(3)]],
-                                  depth2d<float> shadowMap [[texture(0)]]) {
+                                  depth2d_array<float> shadowMap [[texture(0)]]) {
     // The shadow factor comes first: it evaluates screen-space derivatives,
     // which are undefined in any 2x2 quad after a divergent discard (MSL
     // spec), so the clip discard must not precede it.

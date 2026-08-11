@@ -110,7 +110,7 @@ fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                           constant float4& localClipBounds [[buffer(4)]],
                                           constant Shadow& shadow [[buffer(5)]],
                                           constant float& metersToWorldZ [[buffer(6)]],
-                                          depth2d<float> shadowMap [[texture(0)]]) {
+                                          depth2d_array<float> shadowMap [[texture(0)]]) {
     // Derivatives (inside sampleShadowFactor) must precede the divergent
     // discard, because MSL leaves them undefined in a quad after any lane discards.
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap,
@@ -133,21 +133,25 @@ fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
     return half4(in.color.rgb * appliedCue * shadowFactor, 1.0h);
 }
 
-// Depth-only path of the shadow map pass: the light's orthographic camera
-// arrives in the Camera slot, everything else matches the main draw so both
-// replay the same per-tile buffers and model matrices.
+// Depth-only path of the shadow map pass. All cascades render in one pass:
+// the geometry draws with instanceCount = cascade count, each instance
+// projects through its cascade's light matrix and lands in the matching
+// slice of the shadow texture array via [[render_target_array_index]].
 struct ExtrudedShadowVertexOut {
     float4 position [[position]];
     float2 localPosition;
+    uint layer [[render_target_array_index]];
 };
 
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
-                                                              constant Camera& lightCamera [[buffer(1)]],
+                                                              uint instanceID [[instance_id]],
+                                                              constant ShadowCasterMatrices& casters [[buffer(1)]],
                                                               constant float4x4& modelMatrix [[buffer(3)]]) {
     float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
     ExtrudedShadowVertexOut out;
-    out.position = lightCamera.matrix * worldPosition;
+    out.position = casters.lightProjectionViews[instanceID] * worldPosition;
     out.localPosition = vertexIn.position.xy;
+    out.layer = instanceID;
     return out;
 }
 

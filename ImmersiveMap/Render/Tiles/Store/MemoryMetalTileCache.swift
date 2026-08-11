@@ -12,6 +12,11 @@ class MemoryMetalTileCache {
     /// Invisible pinned tiles don't survive a memory warning: they warm up again.
     static let pinnedWorldCoverMaxZoomLevel = 3
 
+    /// Frames a tile must sit outside the demanded set and the retained
+    /// placements before its buffers go volatile: covers every in-flight GPU
+    /// frame that may still read them, plus one for the frame being encoded.
+    static let volatileDelayFrames = UInt64(InFlightFramePool.inFlightFramesCount + 1)
+
     private var cache: LRUMemoryCache<Tile, MetalTile>
     private let costLimit: Int
     private let stateLock = NSLock()
@@ -22,6 +27,13 @@ class MemoryMetalTileCache {
     private var pinnedTiles: Set<Tile> = []
     private var pinnedCost: Int = 0
     private var mutationVersion: UInt64 = 0
+    // Purgeable bookkeeping: buffers of tiles that are cached but neither
+    // demanded, pinned, nor retained by a placement are offered to the OS as
+    // volatile, so memory pressure reclaims warm-cache tiles system-wide
+    // before jetsam ever looks at the process. A reclaimed tile is detected
+    // on the next lookup and drops out as a plain cache miss.
+    private var volatileTiles: Set<Tile> = []
+    private var lastActiveFrame: [Tile: UInt64] = [:]
 
     init(maxCacheSizeInBytes: Int, tileTraceRecorder: TileTraceRecorder) {
         self.costLimit = maxCacheSizeInBytes
@@ -37,6 +49,15 @@ class MemoryMetalTileCache {
         return mutationVersion
     }
 
+    /// Test hook: the number of activity stamps currently tracked. Must stay
+    /// bounded by the cache contents; a stamp for a tile that never
+    /// materialized would otherwise leak for the process lifetime.
+    var trackedActivityStampCount: Int {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return lastActiveFrame.count
+    }
+
     func updateProtectedTiles(_ tiles: Set<Tile>) {
         let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
         stateLock.lock()
@@ -50,6 +71,7 @@ class MemoryMetalTileCache {
                                      protectedKeys: protectedTiles.union(pinnedTiles))
             if evicted.isEmpty == false {
                 mutationVersion &+= 1
+                forgetPurgeableBookkeepingLocked(for: evicted)
             }
             result = (evicted, cache.totalCost, cache.count)
         } else {
@@ -63,6 +85,49 @@ class MemoryMetalTileCache {
                                                            trackedCost: result.totalCost,
                                                            trackedCount: result.count,
                                                            costLimit: costLimit))
+        }
+    }
+
+    /// The set of tiles actually referenced by the current placements
+    /// (retained substitutes included), stamped with the frame index. Cached
+    /// tiles outside the demanded, pinned, and active sets go volatile once
+    /// the in-flight window has passed; the pinned world cover keeps its
+    /// residency promise and is never offered to the OS.
+    func recordActiveTiles(_ activeTiles: Set<Tile>, frameIndex: UInt64) {
+        var markedVolatile: [Tile] = []
+        stateLock.lock()
+        // Stamp only tiles that live in the cache: the demanded set contains
+        // tiles that may never materialize (404s, parse failures, requests
+        // dropped when the camera moves on) and placements can retain a tile
+        // past its eviction. Guarding on membership keeps lastActiveFrame a
+        // subset of the cache keys, so the eviction paths bound its growth.
+        for tile in activeTiles where cache.cost(forKey: tile) != nil {
+            lastActiveFrame[tile] = frameIndex
+        }
+        for tile in protectedTiles where cache.cost(forKey: tile) != nil {
+            lastActiveFrame[tile] = frameIndex
+        }
+        for key in cache.keys {
+            guard volatileTiles.contains(key) == false,
+                  protectedTiles.contains(key) == false,
+                  pinnedTiles.contains(key) == false,
+                  activeTiles.contains(key) == false else {
+                continue
+            }
+            let lastActive = lastActiveFrame[key] ?? 0
+            guard frameIndex >= lastActive &+ Self.volatileDelayFrames,
+                  let metalTile = cache.peekValue(forKey: key) else {
+                continue
+            }
+            metalTile.tileBuffers.markVolatile()
+            volatileTiles.insert(key)
+            markedVolatile.append(key)
+        }
+        stateLock.unlock()
+
+        for key in markedVolatile {
+            tileTraceRecorder.record(.event("tile_memory_cache_volatile",
+                                            fields: ["tile": .string("\(key.z)/\(key.x)/\(key.y)")]))
         }
     }
 
@@ -92,6 +157,10 @@ class MemoryMetalTileCache {
                                                      trackedCost: snapshot.totalCost,
                                                      trackedCount: snapshot.count,
                                                      costLimit: costLimit))
+        if snapshot.wasReclaimed {
+            tileTraceRecorder.record(.event("tile_memory_cache_reclaimed",
+                                            fields: ["tile": .string("\(key.z)/\(key.x)/\(key.y)")]))
+        }
         return snapshot.tile
     }
 
@@ -118,6 +187,7 @@ class MemoryMetalTileCache {
             pinnedTiles.remove(evictedEntry.key)
             pinnedCost = max(0, pinnedCost - evictedEntry.cost)
         }
+        forgetPurgeableBookkeepingLocked(for: evicted)
         if evicted.isEmpty == false {
             mutationVersion &+= 1
         }
@@ -152,19 +222,47 @@ class MemoryMetalTileCache {
                                             cost: cost,
                                             protectedKeys: protectedTiles.union(pinnedTiles),
                                             evictionCostLimit: costLimit + pinnedCost) ?? []
+        // A replaced value keeps the key: the fresh tile must not inherit the
+        // predecessor's volatile mark.
+        volatileTiles.remove(key)
+        forgetPurgeableBookkeepingLocked(for: evictedEntries)
         mutationVersion &+= 1
         return (replacedCost, evictedEntries, cache.totalCost, cache.count)
+    }
+
+    private func forgetPurgeableBookkeepingLocked(for evicted: [LRUMemoryCache<Tile, MetalTile>.Entry]) {
+        for entry in evicted {
+            volatileTiles.remove(entry.key)
+            lastActiveFrame.removeValue(forKey: entry.key)
+        }
     }
 
     private func getTileAndSnapshot(forKey key: Tile) -> (tile: MetalTile?,
                                                           knownCost: Int?,
                                                           totalCost: Int,
-                                                          count: Int) {
+                                                          count: Int,
+                                                          wasReclaimed: Bool) {
         stateLock.lock()
         defer { stateLock.unlock() }
 
-        let tile = cache.value(forKey: key)
-        return (tile, cache.cost(forKey: key), cache.totalCost, cache.count)
+        guard let tile = cache.value(forKey: key) else {
+            return (nil, nil, cache.totalCost, cache.count, false)
+        }
+        if volatileTiles.remove(key) != nil,
+           tile.tileBuffers.restoreFromVolatile() == false {
+            // The OS reclaimed the volatile buffers: the tile is gone in all
+            // but name, so it leaves the cache as a plain miss and reloads
+            // through the normal demand path.
+            if let removed = cache.removeValue(forKey: key) {
+                if pinnedTiles.remove(key) != nil {
+                    pinnedCost = max(0, pinnedCost - removed.cost)
+                }
+                lastActiveFrame.removeValue(forKey: key)
+                mutationVersion &+= 1
+            }
+            return (nil, nil, cache.totalCost, cache.count, true)
+        }
+        return (tile, cache.cost(forKey: key), cache.totalCost, cache.count, false)
     }
 
     private func removeAllTiles() -> (totalCost: Int, count: Int) {
@@ -175,39 +273,17 @@ class MemoryMetalTileCache {
         _ = cache.removeAll()
         pinnedTiles = []
         pinnedCost = 0
+        volatileTiles = []
+        lastActiveFrame = [:]
         mutationVersion &+= 1
         return snapshot
     }
     
     private func estimateTileByteSize(_ tile: MetalTile) -> Int {
-        let tileBuffers = tile.tileBuffers
-        
-        let layers = [tileBuffers.ground]
-            + tileBuffers.roads.drawOrderBuckets.flatMap(\.drawOrderLayers)
-            + [tileBuffers.bridgeOverlay]
-        // Sums are split into step-by-step +=: a chain of several `?? 0` in one
-        // expression exceeds the type-checker limit on weak machines (CI).
-        let geometrySize = layers.reduce(0) { partial, layer in
-            var size = partial
-            size += layer.verticesBuffer?.allocatedSize ?? 0
-            size += layer.indicesBuffer?.allocatedSize ?? 0
-            size += layer.stylesBuffer?.allocatedSize ?? 0
-            size += layer.overviewStyleMaskBuffer?.allocatedSize ?? 0
-            return size
+        var size = 0
+        tile.tileBuffers.forEachBuffer { buffer in
+            size += buffer.allocatedSize
         }
-        var extrudedSize = tileBuffers.extruded.verticesBuffer?.allocatedSize ?? 0
-        extrudedSize += tileBuffers.extruded.indicesBuffer?.allocatedSize ?? 0
-        extrudedSize += tileBuffers.extruded.stylesBuffer?.allocatedSize ?? 0
-        let textLabelSets = [tileBuffers.textLabels.full,
-                             tileBuffers.textLabels.reduced,
-                             tileBuffers.textLabels.minimal]
-        let textLabelsSize = textLabelSets.reduce(0) { partial, labelSet in
-            var size = partial
-            size += labelSet.labelsByStyleRuns.reduce(0) { $0 + ($1.localGlyphVerticesBuffer?.allocatedSize ?? 0) }
-            size += labelSet.poiIconRuns.reduce(0) { $0 + ($1.localVerticesBuffer?.allocatedSize ?? 0) }
-            return size
-        }
-        let roadLabelsSize = tileBuffers.roadLabels.localGlyphVerticesBuffer?.allocatedSize ?? 0
-        return geometrySize + extrudedSize + textLabelsSize + roadLabelsSize
+        return size
     }
 }

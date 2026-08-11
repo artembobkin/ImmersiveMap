@@ -47,7 +47,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
                 lightProjectionViews: shadowState.lightProjectionViews,
-                mapResolution: shadowState.mapResolution,
                 placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 extrudedTilePipeline: extrudedTilePipeline,

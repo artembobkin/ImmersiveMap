@@ -46,17 +46,18 @@ enum BuildingExtrusionDrawer {
     }
 
     /// Same geometry replayed depth-only from the light's orthographic
-    /// cameras into the two halves of the shadow atlas (viewport + scissor per
-    /// cascade). Cull `.none`: winding juggling is pointless in a depth-only
-    /// pass, and drawing both faces partially covers the wall quads missing on
-    /// tile boundaries. No encoder depth bias: the receiver-side bias is
-    /// computed per frame from the actual texel footprint
-    /// (ShadowFrameStateResolver), which keeps shadows attached to building
-    /// bases. Depth clamp (pancaking) keeps casters taller than the fitted
-    /// near plane instead of clipping them away.
+    /// cameras, all cascades in one pass: every draw carries
+    /// `instanceCount = cascadeCount` and the vertex stage routes each
+    /// instance to its cascade's array slice, so the geometry is encoded
+    /// once instead of once per cascade. Cull `.none`: winding juggling is
+    /// pointless in a depth-only pass, and drawing both faces partially
+    /// covers the wall quads missing on tile boundaries. No encoder depth
+    /// bias: the receiver-side bias is computed per frame from the actual
+    /// texel footprint (ShadowFrameStateResolver), which keeps shadows
+    /// attached to building bases. Depth clamp (pancaking) keeps casters
+    /// taller than the fitted near plane instead of clipping them away.
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
                                   lightProjectionViews: [matrix_float4x4],
-                                  mapResolution: Int,
                                   placeTilesContext: PlaceTilesContext,
                                   flatRenderState: FlatRenderState,
                                   extrudedTilePipeline: ExtrudedTilePipeline,
@@ -65,17 +66,13 @@ enum BuildingExtrusionDrawer {
         extrudedTilePipeline.selectShadowPipeline(renderEncoder: renderEncoder)
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setDepthClipMode(.clamp)
-        for (cascadeIndex, lightProjectionView) in lightProjectionViews.enumerated() {
-            ShadowCascadeAtlas.selectCascade(renderEncoder: renderEncoder,
-                                             cascadeIndex: cascadeIndex,
-                                             mapResolution: mapResolution)
-            var cameraUniformValue = CameraUniform(matrix: lightProjectionView, eye: .zero, padding: 0)
-            renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-            drawExtrudedGeometry(renderEncoder: renderEncoder,
-                                 placeTilesContext: placeTilesContext,
-                                 flatRenderState: flatRenderState,
-                                 usesBackFaceCulling: false)
-        }
+        var castersValue = ShadowCasterUniform(lightProjectionViews: lightProjectionViews)
+        renderEncoder.setVertexBytes(&castersValue, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
+        drawExtrudedGeometry(renderEncoder: renderEncoder,
+                             placeTilesContext: placeTilesContext,
+                             flatRenderState: flatRenderState,
+                             usesBackFaceCulling: false,
+                             instanceCount: ShadowCascadeAtlas.cascadeCount)
         renderEncoder.setDepthClipMode(.clip)
     }
 
@@ -100,7 +97,8 @@ enum BuildingExtrusionDrawer {
     private static func drawExtrudedGeometry(renderEncoder: MTLRenderCommandEncoder,
                                              placeTilesContext: PlaceTilesContext,
                                              flatRenderState: FlatRenderState,
-                                             usesBackFaceCulling: Bool = true) {
+                                             usesBackFaceCulling: Bool = true,
+                                             instanceCount: Int = 1) {
         var isBackCullingEnabled = usesBackFaceCulling
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
@@ -150,7 +148,8 @@ enum BuildingExtrusionDrawer {
                                                 indexCount: buffers.extruded.indicesCount,
                                                 indexType: buffers.extruded.indexType,
                                                 indexBuffer: extrudedIndicesBuffer,
-                                                indexBufferOffset: 0)
+                                                indexBufferOffset: 0,
+                                                instanceCount: instanceCount)
         }
     }
 }

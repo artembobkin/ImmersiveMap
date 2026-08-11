@@ -28,10 +28,12 @@ final class TileAtlasShadowBindingTests: XCTestCase {
                                         library: library,
                                         sampleCount: 1)
 
-        let fallbackDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
-                                                                          width: 1,
-                                                                          height: 1,
-                                                                          mipmapped: false)
+        let fallbackDescriptor = MTLTextureDescriptor()
+        fallbackDescriptor.textureType = .type2DArray
+        fallbackDescriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        fallbackDescriptor.width = 1
+        fallbackDescriptor.height = 1
+        fallbackDescriptor.arrayLength = ShadowCascadeAtlas.cascadeCount
         fallbackDescriptor.usage = [.renderTarget, .shaderRead]
         fallbackDescriptor.storageMode = .private
         let fallbackTexture = try XCTUnwrap(device.makeTexture(descriptor: fallbackDescriptor))
