@@ -52,10 +52,17 @@ struct MTLIOPreparedTileGeometryTransport: PreparedTileGeometryTransporting {
             throw PreparedTileDiskCodecError.corruptedPayload("Could not write the MTLIO compression container.")
         }
 
-        // Atomic replace: readers that already opened the previous container
-        // keep its inode; the next open sees the new one.
+        // Atomic swap into place: `replaceItemAt` needs an existing original,
+        // so the first save of a tile moves the temp file instead. Readers
+        // that already opened the previous container keep its inode; the next
+        // open sees the new one. Writes are serialized per cache root, so the
+        // exists check cannot race another writer of the same tile.
         do {
-            _ = try FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
+            if FileManager.default.fileExists(atPath: url.path) {
+                _ = try FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
+            } else {
+                try FileManager.default.moveItem(at: temporaryURL, to: url)
+            }
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
             throw error

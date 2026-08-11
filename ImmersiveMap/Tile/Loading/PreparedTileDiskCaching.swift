@@ -472,8 +472,11 @@ final class PreparedTileDiskCaching {
                 }
                 ioCoordinator.markAccessed(cachePath)
                 if usesBlobFiles {
-                    // The pair lives and dies together: refreshing both access
-                    // times keeps LRU pruning from splitting it.
+                    // Both access times are refreshed together so LRU pruning
+                    // rarely splits the pair; the files are still pruned
+                    // individually, and a split self-heals (a lost blob fails
+                    // the materialize, which removes the pair and re-parses;
+                    // an orphan blob simply ages out).
                     ioCoordinator.markAccessed(blobPath)
                 }
                 continuation.resume(returning: data)

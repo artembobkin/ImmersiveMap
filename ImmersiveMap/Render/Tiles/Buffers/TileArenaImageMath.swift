@@ -28,7 +28,7 @@ struct TileArenaSpan: Equatable, Sendable {
 /// 256-byte-aligned spans and 16-bit index narrowing already applied.
 ///
 /// This is the single source of truth shared by `MetalTileFactory` (which
-/// writes the plan straight into the tile's `TileBufferArena`) and the
+/// writes the plan straight into the tile's backing `MTLBuffer`) and the
 /// prepared-tile disk codec (which writes the identical bytes into the cached
 /// geometry blob), so a cached blob can be copied, or DMA-loaded, into a
 /// fresh arena without any per-array decoding.

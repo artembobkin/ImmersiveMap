@@ -556,7 +556,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             // Offline / server error with no disk-first serve on screen (a serve
             // would have ended the load in the network stage). Retry the disk
             // read once more: a transient materialize failure during the serve
-            // may still resolve here. materializePreparedTile returns false on
+            // may still resolve here. materializeDiskImage returns false on
             // cancellation; a cancelled or superseded load must not mutate the
             // replacement task's retry state.
             if let cached = await loadPipeline.requestPreparedDiskCached(tile: tile, matchingETag: nil),
@@ -632,9 +632,6 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         }
         let outcome = await loadPipeline.materialize(image: image,
                                                      awaitingRevalidation: awaitingRevalidation)
-        if outcome == .imageUnreadable, Task.isCancelled == false {
-            loadPipeline.removePreparedFromDisk(tile: expectedTile)
-        }
         if Task.isCancelled {
             return false
         }
@@ -647,6 +644,12 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             }
         }) else {
             return false
+        }
+        if outcome == .imageUnreadable {
+            // Behind the generation gate above: a superseded task that read a
+            // corrupt entry must not delete the fresh pair its replacement
+            // may have just saved.
+            loadPipeline.removePreparedFromDisk(tile: expectedTile)
         }
         return outcome == .materialized
     }

@@ -12,16 +12,25 @@ import MetalKit
 final class MetalTileFactory {
     private let metalDevice: MTLDevice
 #if !targetEnvironment(simulator)
-    /// Created on first file-blob materialize. The geometry transport only
-    /// writes file blobs on devices where `supportsFamily(.metal3)` holds,
-    /// so creation failure here is unexpected and simply fails the
-    /// materialize into the retry path. The simulator SDK has no MTLIO
-    /// surface at all; its transport is inline-only.
-    private var ioCommandQueue: MTLIOCommandQueue?
+    /// Created once at init on devices whose transport writes file blobs:
+    /// tile loads materialize concurrently from their own tasks, so lazy
+    /// creation would race. nil where the transport is inline-only (no
+    /// Metal 3) and on creation failure, which fails the materialize into
+    /// the retry path. The simulator SDK has no MTLIO surface at all.
+    private let ioCommandQueue: MTLIOCommandQueue?
 #endif
 
     init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice
+#if !targetEnvironment(simulator)
+        if MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice) {
+            let descriptor = MTLIOCommandQueueDescriptor()
+            descriptor.type = .concurrent
+            self.ioCommandQueue = try? metalDevice.makeIOCommandQueue(descriptor: descriptor)
+        } else {
+            self.ioCommandQueue = nil
+        }
+#endif
     }
 
     /// nil when the backing allocation fails (memory pressure): the caller
@@ -91,7 +100,7 @@ final class MetalTileFactory {
                 _ = url
                 return .imageUnreadable
 #else
-                guard let queue = ensureIOCommandQueue() else {
+                guard let queue = ioCommandQueue else {
                     // Queue creation is device-level and should not fail on a
                     // Metal 3 device; treat it as transient rather than
                     // deleting a healthy cache entry.
@@ -320,17 +329,6 @@ final class MetalTileFactory {
             }
             ioCommandBuffer.commit()
         }
-    }
-
-    private func ensureIOCommandQueue() -> MTLIOCommandQueue? {
-        if let ioCommandQueue {
-            return ioCommandQueue
-        }
-        let descriptor = MTLIOCommandQueueDescriptor()
-        descriptor.type = .concurrent
-        let queue = try? metalDevice.makeIOCommandQueue(descriptor: descriptor)
-        ioCommandQueue = queue
-        return queue
     }
 #endif
 }

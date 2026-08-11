@@ -91,7 +91,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         return Data(bytes: buffer.contents(), count: buffer.length)
     }
 
-    func testFactoryArenaMatchesCodecBlobByteForByte() throws {
+    func testFactoryArenaMatchesImagePlanBlobByteForByte() throws {
         let device = try makeDevice()
         guard device.hasUnifiedMemory else {
             throw XCTSkip("Unified-memory GPU is required for direct buffer readback")

@@ -176,19 +176,9 @@ final class TileRenderStore: @unchecked Sendable {
             return false
         }
 
-        await MainActor.run {
-            self.memoryMetalTile.setTileData(
-                tile: metalTile,
-                forKey: preparedTile.tile
-            )
-            if awaitingRevalidation {
-                self.tilesAwaitingRevalidation.insert(preparedTile.tile)
-            } else {
-                self.tilesAwaitingRevalidation.remove(preparedTile.tile)
-            }
-
-            eventSink?.invalidate(.tileAvailable)
-        }
+        await publishMaterializedTile(metalTile,
+                                      forKey: preparedTile.tile,
+                                      awaitingRevalidation: awaitingRevalidation)
         tileTraceRecorder.record(.tileMaterializeSuccess(preparedTile.tile))
         return true
     }
@@ -212,21 +202,33 @@ final class TileRenderStore: @unchecked Sendable {
             return .imageUnreadable
         }
 
+        await publishMaterializedTile(metalTile,
+                                      forKey: image.tile,
+                                      awaitingRevalidation: awaitingRevalidation)
+        tileTraceRecorder.record(.tileMaterializeSuccess(image.tile))
+        return .materialized
+    }
+
+    /// Shared tail of both materialize paths: stores the tile, maintains the
+    /// awaiting-revalidation set, and invalidates a frame. The revalidation
+    /// bookkeeping is load-bearing (see `requestTiles`), so it lives in one
+    /// place.
+    private func publishMaterializedTile(_ metalTile: MetalTile,
+                                         forKey key: Tile,
+                                         awaitingRevalidation: Bool) async {
         await MainActor.run {
             self.memoryMetalTile.setTileData(
                 tile: metalTile,
-                forKey: image.tile
+                forKey: key
             )
             if awaitingRevalidation {
-                self.tilesAwaitingRevalidation.insert(image.tile)
+                self.tilesAwaitingRevalidation.insert(key)
             } else {
-                self.tilesAwaitingRevalidation.remove(image.tile)
+                self.tilesAwaitingRevalidation.remove(key)
             }
 
             eventSink?.invalidate(.tileAvailable)
         }
-        tileTraceRecorder.record(.tileMaterializeSuccess(image.tile))
-        return .materialized
     }
 
     /// The revalidation download confirmed (or knowingly accepted, for the
