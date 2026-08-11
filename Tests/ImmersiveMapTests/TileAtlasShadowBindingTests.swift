@@ -73,46 +73,12 @@ final class TileAtlasShadowBindingTests: XCTestCase {
 
     /// Minimal tile with one real ground triangle so `draw` reaches
     /// `drawIndexedPrimitives` (an empty layer returns before binding checks).
+    /// Built through the production factory so the arena layout is the real one.
     private func makeTriangleTileBuffers(device: MTLDevice) throws -> TileBuffers {
-        let vertices: [TilePipeline.VertexIn] = [
-            TilePipeline.VertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
-            TilePipeline.VertexIn(position: SIMD2<Int16>(4096, 0), styleIndex: 0),
-            TilePipeline.VertexIn(position: SIMD2<Int16>(0, 4096), styleIndex: 0)
-        ]
-        let indices: [UInt32] = [0, 1, 2]
-        let styles = [TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))]
-        let overviewMask: [Float] = [0]
-
-        let totalLength = TileBufferArena.alignedSize(of: vertices)
-            + TileBufferArena.alignedSize(of: indices)
-            + TileBufferArena.alignedSize(of: styles)
-            + TileBufferArena.alignedSize(of: overviewMask)
-        let arena = try XCTUnwrap(TileBufferArena(metalDevice: device, length: totalLength))
-
-        let ground = TileBuffers.GeometryLayer(vertices: arena.append(vertices),
-                                               indices: arena.append(indices),
-                                               styles: arena.append(styles),
-                                               overviewStyleMask: arena.append(overviewMask),
-                                               indexType: .uint32)
-        let emptyLayer = TileBuffersFixtures.emptyGeometryLayer()
-        let phases = RoadGeometryPhases(shadow: emptyLayer,
-                                        casing: emptyLayer,
-                                        fill: emptyLayer,
-                                        detail: emptyLayer,
-                                        overlay: emptyLayer)
-        return TileBuffers(backingBuffer: arena.backingBuffer,
-                           ground: ground,
-                           roads: RoadStructureBuckets(tunnel: phases,
-                                                       ground: phases,
-                                                       bridge: phases),
-                           bridgeOverlay: emptyLayer,
-                           extruded: TileBuffers.Extruded(vertices: nil,
-                                                          indices: nil,
-                                                          styles: nil,
-                                                          indexType: .uint32),
-                           textLabels: TileBuffers.TextLabels(full: TileBuffersFixtures.emptyTextLabelSet(),
-                                                               reduced: TileBuffersFixtures.emptyTextLabelSet(),
-                                                               minimal: TileBuffersFixtures.emptyTextLabelSet()),
-                           roadLabels: TileBuffersFixtures.emptyRoadLabels())
+        let preparedTile = PreparedTileCPUTestFixtures.withGroundTriangle(tile: Tile(x: 0, y: 0, z: 1))
+        let factory = MetalTileFactory(metalDevice: device)
+        let metalTile = try XCTUnwrap(factory.makeTile(from: preparedTile))
+        return metalTile.tileBuffers
     }
+
 }

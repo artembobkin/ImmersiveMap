@@ -213,6 +213,21 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         pruneIfNeeded()
     }
 
+    /// Indexes a file some other writer just produced (the geometry-blob
+    /// transport writes MTLIO containers itself), so quota accounting and
+    /// LRU pruning cover it like any entry.
+    func registerWrittenFile(at url: URL) {
+        let modificationDate = Date()
+        try? fileManager.setAttributes([.modificationDate: modificationDate], ofItemAtPath: url.path)
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path) else {
+            return
+        }
+        upsert(IndexedFile(url: url,
+                           byteCount: fileByteCount(attributes: attributes, fallback: 0),
+                           lastAccessDate: modificationDate))
+        pruneIfNeeded()
+    }
+
     private func pruneIfNeeded() {
         guard indexedByteCount > policy.byteQuota
                 || Date().timeIntervalSince(lastPruneDate) >= Self.pruneInterval else {
@@ -390,26 +405,29 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
 }
 
 final class PreparedTileDiskCaching {
-    static let preparedFormatVersion: UInt32 = 29
+    static let preparedFormatVersion: UInt32 = 30
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
     private let ioCoordinator: PreparedTileDiskIOCoordinator
     private let compressionEnabled: Bool
+    private let geometryTransport: any PreparedTileGeometryTransporting
 
     init(config: ImmersiveMapSettings,
          cacheIdentity: PreparedTileCacheIdentity,
+         geometryTransport: any PreparedTileGeometryTransporting = InlinePreparedTileGeometryTransport(),
          fileManager: FileManager = .default,
          baseCachesDirectory: URL? = nil) {
         self.cacheIdentity = cacheIdentity
         self.compressionEnabled = config.tiles.cache.preparedDiskCompressionEnabled
+        self.geometryTransport = geometryTransport
 
         let cachesDirectory = baseCachesDirectory
             ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let rootDirectory = cachesDirectory.appendingPathComponent("MapPreparedTiles")
         let currentDirectory = rootDirectory
             .appendingPathComponent("v\(cacheIdentity.preparedFormatVersion)")
-            .appendingPathComponent(cacheIdentity.namespaceComponent)
+            .appendingPathComponent("\(cacheIdentity.namespaceComponent)-\(geometryTransport.cacheNamespaceMarker)")
         self.cacheDirectory = currentDirectory
         self.ioCoordinator = PreparedTileDiskIOCoordinator.shared(rootDirectory: rootDirectory,
                                                                   fileManager: fileManager)
@@ -444,6 +462,8 @@ final class PreparedTileDiskCaching {
     /// other and behind saves.
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         let cachePath = cachePathFor(tile: tile)
+        let blobPath = blobPathFor(tile: tile)
+        let usesBlobFiles = geometryTransport.writesBlobFiles
         let data = await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
             ioCoordinator.enqueue { [self] in
                 guard let data = ioCoordinator.readFile(at: cachePath) else {
@@ -451,6 +471,11 @@ final class PreparedTileDiskCaching {
                     return
                 }
                 ioCoordinator.markAccessed(cachePath)
+                if usesBlobFiles {
+                    // The pair lives and dies together: refreshing both access
+                    // times keeps LRU pruning from splitting it.
+                    ioCoordinator.markAccessed(blobPath)
+                }
                 continuation.resume(returning: data)
             }
         }
@@ -462,15 +487,14 @@ final class PreparedTileDiskCaching {
             return try PreparedTileDiskCodec.decode(data: data,
                                                     expectedTile: tile,
                                                     cacheIdentity: cacheIdentity,
-                                                    expectedSourceETag: matchingETag)
+                                                    expectedSourceETag: matchingETag,
+                                                    blobFileURL: blobPath)
         } catch PreparedTileDiskCodecError.invalidMetadata {
             // Identity/ETag mismatches are benign. Keep the entry for an
             // offline fallback and let a fresh parse atomically replace it.
             return nil
         } catch {
-            ioCoordinator.enqueue { [self] in
-                ioCoordinator.removeFile(at: cachePath)
-            }
+            removeFromDisk(tile: tile)
             return nil
         }
     }
@@ -482,15 +506,16 @@ final class PreparedTileDiskCaching {
             return
         }
         // Encode + compress on the caller's task, mirroring the decode change:
-        // the shared serial queue carries only the file write, so disk-first
+        // the shared serial queue carries only the file writes, so disk-first
         // serves are not delayed behind multi-megabyte encodes of unrelated
         // saves.
-        let data: Data
+        let encoded: PreparedTileDiskCodec.EncodedPreparedTile
         do {
-            data = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
-                                                    cacheIdentity: cacheIdentity,
-                                                    sourceETag: sourceETag ?? "",
-                                                    compressionEnabled: compressionEnabled)
+            encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       sourceETag: sourceETag ?? "",
+                                                       compressionEnabled: compressionEnabled,
+                                                       blobTransport: geometryTransport.writesBlobFiles ? .file : .inline)
         } catch {
 #if DEBUG
             print("Failed to encode prepared tile \(tile): \(error)")
@@ -502,7 +527,17 @@ final class PreparedTileDiskCaching {
                 defer { continuation.resume() }
                 let cachePath = cachePathFor(tile: tile)
                 do {
-                    try ioCoordinator.writeFile(data, to: cachePath)
+                    // Blob first, metadata second: a reader pairs fresh
+                    // metadata with a fresh blob. The reverse order could
+                    // serve new metadata against the old container, which the
+                    // size-checked MTLIO load then rejects into a re-parse;
+                    // this order makes that window impossible.
+                    if geometryTransport.writesBlobFiles {
+                        let blobPath = blobPathFor(tile: tile)
+                        try geometryTransport.writeBlobFile(encoded.fileBlob, to: blobPath)
+                        ioCoordinator.registerWrittenFile(at: blobPath)
+                    }
+                    try ioCoordinator.writeFile(encoded.metadata, to: cachePath)
                 } catch {
 #if DEBUG
                     print("Failed to save prepared tile to \(cachePath.path): \(error)")
@@ -514,8 +549,10 @@ final class PreparedTileDiskCaching {
 
     func removeFromDisk(tile: Tile) {
         let cachePath = cachePathFor(tile: tile)
+        let blobPath = blobPathFor(tile: tile)
         ioCoordinator.enqueue { [ioCoordinator] in
             ioCoordinator.removeFile(at: cachePath)
+            ioCoordinator.removeFile(at: blobPath)
         }
     }
 
@@ -527,6 +564,12 @@ final class PreparedTileDiskCaching {
 
     func cachePathFor(tile: Tile) -> URL {
         let fileName = "\(tile.z)_\(tile.x)_\(tile.y).ptile"
+        return cacheDirectory.appendingPathComponent(fileName)
+    }
+
+    /// The sibling MTLIO container of a file-transport entry.
+    func blobPathFor(tile: Tile) -> URL {
+        let fileName = "\(tile.z)_\(tile.x)_\(tile.y).ptgeo"
         return cacheDirectory.appendingPathComponent(fileName)
     }
 }

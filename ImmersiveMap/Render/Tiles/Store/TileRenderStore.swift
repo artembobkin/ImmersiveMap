@@ -64,9 +64,14 @@ final class TileRenderStore: @unchecked Sendable {
         let maxCachedTilesMemory = config.tiles.cache.memoryCacheSizeInBytes
         memoryMetalTile = MemoryMetalTileCache(maxCacheSizeInBytes: maxCachedTilesMemory,
                                                tileTraceRecorder: tileTraceRecorder)
+        let geometryTransport: any PreparedTileGeometryTransporting =
+            MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice)
+                ? MTLIOPreparedTileGeometryTransport()
+                : InlinePreparedTileGeometryTransport()
         mapNeedsTile = ImmersiveMapNeedsTile(tileRenderStore: self,
                                              config: config,
                                              preparedTileCacheIdentity: preparedTileCacheIdentity,
+                                             geometryTransport: geometryTransport,
                                              tileTraceRecorder: tileTraceRecorder,
                                              tileLoadingStatusReporter: tileLoadingStatusReporter)
         // Backoff-window expiry wakes the on-demand renderer: the frame reruns
@@ -186,6 +191,42 @@ final class TileRenderStore: @unchecked Sendable {
         }
         tileTraceRecorder.record(.tileMaterializeSuccess(preparedTile.tile))
         return true
+    }
+
+    /// The arena-image sibling of `materializePreparedTile`: a disk hit is
+    /// blob bytes plus a span table, so the factory copies (or MTLIO-loads)
+    /// instead of rebuilding buffers from decoded arrays.
+    func materializeArenaImage(_ image: PreparedTileArenaImage,
+                               awaitingRevalidation: Bool = false) async -> PreparedTileImageMaterializeOutcome {
+        tileTraceRecorder.record(.tileMaterializeStart(image.tile))
+        let result = await metalTileFactory.makeTile(fromImage: image)
+        let metalTile: MetalTile
+        switch result {
+        case .tile(let tile):
+            metalTile = tile
+        case .allocationFailed:
+            tileTraceRecorder.record(.tileMaterializeFailed(image.tile))
+            return .allocationOrStoreFailed
+        case .imageUnreadable:
+            tileTraceRecorder.record(.tileMaterializeFailed(image.tile))
+            return .imageUnreadable
+        }
+
+        await MainActor.run {
+            self.memoryMetalTile.setTileData(
+                tile: metalTile,
+                forKey: image.tile
+            )
+            if awaitingRevalidation {
+                self.tilesAwaitingRevalidation.insert(image.tile)
+            } else {
+                self.tilesAwaitingRevalidation.remove(image.tile)
+            }
+
+            eventSink?.invalidate(.tileAvailable)
+        }
+        tileTraceRecorder.record(.tileMaterializeSuccess(image.tile))
+        return .materialized
     }
 
     /// The revalidation download confirmed (or knowingly accepted, for the
