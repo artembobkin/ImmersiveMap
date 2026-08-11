@@ -144,7 +144,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = offlineSettings(.default.earthScene(isEnabled: false).transparentSpace())
+        let settings = offlineSettings(.default.earthScene(isEnabled: false))
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -200,10 +200,10 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        // Transparent space for the same reason as the test above: the
-        // starfield twinkles with a scene time that varies between captures,
-        // and its noise dwarfs the route.
-        let settings = offlineSettings(.default.earthScene(isEnabled: false).transparentSpace())
+        // Space left opaque on purpose: the starfield is the part of the map
+        // most sensitive to where the clock stopped, so if captures are
+        // reproducible with stars on screen they are reproducible.
+        let settings = offlineSettings(.default.earthScene(isEnabled: false))
         let routes = [ImmersiveMapRoute(id: 1,
                                         path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
                                                                   to: GeoCoordinate(latitude: 0, longitude: 20),

@@ -42,14 +42,12 @@ import QuartzCore
 /// captured imagery.
 ///
 /// On repeatability: pin ``ImmersiveMapStillConfiguration/sceneDate`` and two
-/// captures of the same scene agree pixel for pixel, with one exception worth
-/// knowing about. The settling described above takes however many passes the
-/// scene needs, so the frame is taken at a scene time that varies between
-/// runs, and anything animated by that clock lands on a different phase. In
-/// practice that is the starfield, whose stars twinkle: captures that show
-/// space differ in the stars while the planet itself is identical. Turn the
-/// earth scene off, or make space transparent, for output that has to match
-/// byte for byte.
+/// captures of the same scene give the same picture. Settling takes however
+/// many passes the scene needs, but the frame that is returned is always
+/// rendered at one fixed scene time, so nothing animated by that clock (a
+/// twinkling starfield, a fade partway through) can land on a different phase
+/// between runs. Rasterization itself is not bit-identical on every GPU, so
+/// compare captures with a small tolerance rather than byte for byte.
 @MainActor
 public final class ImmersiveMapStillRecorder {
     public private(set) var isCapturing = false
@@ -111,6 +109,23 @@ final class ImmersiveMapStillRuntime {
     /// where every label is still at zero opacity". Eight passes is two
     /// seconds of scene time, past any fade the style can configure.
     private static let minimumSettlePasses = 8
+
+    /// Upper bound on settle passes, so scene time cannot outrun
+    /// ``finalSceneTime``.
+    private static let maximumSettlePasses = 200
+
+    /// Scene time the captured frame is always taken at.
+    ///
+    /// This is what makes two captures of the same scene the same picture.
+    /// Settling takes however many passes the scene needs, which depends on
+    /// when tiles are demanded and when meshes land, so the clock would
+    /// otherwise stop at a different place every run and everything animated
+    /// by it would be caught mid-stride: the starfield twinkling, a fade
+    /// halfway through. Pinning the last frame's time removes that.
+    ///
+    /// Chosen to sit past `maximumSettlePasses * sceneTimeStep`, since the
+    /// scripted clock only moves forward.
+    private static let finalSceneTime: TimeInterval = 60
 
     private final class StillAvatarSource: AvatarRenderSource {
         private let controller: ImmersiveMapAvatarsController?
@@ -319,6 +334,9 @@ final class ImmersiveMapStillRuntime {
             if passes >= Self.minimumSettlePasses, Date() >= deadline {
                 break
             }
+            if passes >= Self.maximumSettlePasses {
+                break
+            }
             // Invalidations are drained whatever is outstanding, not only when
             // tiles are: a scene model mesh finishing its load reports through
             // the same channel, and reading it only under a tile condition
@@ -328,9 +346,12 @@ final class ImmersiveMapStillRuntime {
             }
         }
 
-        // One more frame so globe-atlas changes staged by the last render are
-        // committed into the pixels that get read back.
-        advanceSceneTime()
+        // The frame that gets read back, taken at a time that does not depend
+        // on how long settling took, and one more render so globe-atlas
+        // changes staged by the previous pass are committed into these pixels.
+        clock.setTime(Self.finalSceneTime)
+        sceneTime = Self.finalSceneTime
+        try await renderOnce(into: texture)
         try await renderOnce(into: texture)
     }
 
