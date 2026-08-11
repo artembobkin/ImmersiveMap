@@ -29,8 +29,8 @@ platform-specific.
 - Platform-neutral shared logic: `ImmersiveMapHostRuntime`, the runtime graph,
   camera/selection/avatar/viewport/controls/render runtime controllers, and the
   `ImmersiveMapHostView` typealias that shared files reference.
-- Render loop pacing, the platform `DisplayLinkFactory`, and render driver
-  delegates.
+- Render loop pacing, the `CAMetalDisplayLink` render driver, and render
+  driver delegates.
 - Public UI-facing controller types.
 
 ## Must Not Contain

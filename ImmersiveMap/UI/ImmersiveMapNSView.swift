@@ -119,11 +119,10 @@ public class ImmersiveMapNSView: NSView {
                                               requestsLayout: { [weak self] in
                                                   self?.needsLayout = true
                                               })
-        // The NSView-created CADisplayLink is bound to the window's display and
-        // follows the window on its own when it moves between monitors.
-        hostRuntime.start(displayLinkFactory: { [unowned self] target, selector in
-            self.displayLink(target: target, selector: selector)
-        })
+        // The CAMetalDisplayLink is bound to the Metal layer itself, so the
+        // system paces it against the display that presents the layer and
+        // follows the window when it moves between monitors.
+        hostRuntime.start()
 
         startMemoryPressureMonitoring()
         needsLayout = true

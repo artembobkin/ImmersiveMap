@@ -75,9 +75,12 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.renderRuntime.applyPowerConstraintState(constraints)
     }
 
-    func start(displayLinkFactory: DisplayLinkFactory) {
+    /// Starts the render loop. The `CAMetalDisplayLink` is created from the
+    /// host layer here, after `init` has already built the renderer and
+    /// stamped the layer's Metal device.
+    func start() {
         runtimeGraph.renderRuntime.start(frameDelegate: runtimeGraph.frameRenderDelegate,
-                                         displayLinkFactory: displayLinkFactory)
+                                         layer: metalLayer)
     }
 
     func requestFrame() {

@@ -24,8 +24,9 @@ final class RenderFramePassEncoder {
             return nil
         }
 
-        // Acquired here, after the command-buffer guard, to preserve the live
-        // path's drawable-acquisition timing exactly.
+        // The closure only wraps a target the caller already holds (the live
+        // path's display-link drawable, the export path's texture); resolving
+        // it after the command-buffer guard keeps the skip diagnostics ordered.
         guard let target = acquireTarget() else {
             frameContext.services.diagnostics.recordSkipReason(.missingDrawable)
             return nil

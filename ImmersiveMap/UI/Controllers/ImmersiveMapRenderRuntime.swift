@@ -16,10 +16,11 @@ final class ImmersiveMapRenderRuntime {
         driver.cameraAnimationRenderingActive
     }
 
+    @MainActor
     func start(frameDelegate: ImmersiveMapRenderDriverFrameDelegate,
-               displayLinkFactory: DisplayLinkFactory) {
+               layer: CAMetalLayer) {
         driver.start(frameDelegate: frameDelegate,
-                     displayLinkFactory: displayLinkFactory)
+                     layer: layer)
     }
 
     func stop() {
@@ -103,8 +104,10 @@ final class ImmersiveMapRenderRuntime {
 
     @discardableResult
     func renderFrame(layer: CAMetalLayer,
+                     drawable: any CAMetalDrawable,
                      viewportRuntime: ImmersiveMapViewportRuntime) -> Bool {
         driver.renderFrame(layer: layer,
+                           drawable: drawable,
                            isRenderable: viewportRuntime.isRenderable)
     }
 }

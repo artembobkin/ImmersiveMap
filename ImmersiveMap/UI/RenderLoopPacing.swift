@@ -4,7 +4,7 @@
 import Foundation
 
 /// Keeps the reasons why the render loop must keep running.
-/// Picks the frame rate and pause state for the `CADisplayLink` based on render loop activity.
+/// Picks the frame rate and pause state for the `CAMetalDisplayLink` based on render loop activity.
 final class RenderLoopPacing {
     enum Activity: String, CaseIterable {
         case interaction = "interaction"

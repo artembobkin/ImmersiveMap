@@ -23,7 +23,8 @@ final class ImmersiveMapFrameRenderDelegate: ImmersiveMapRenderDriverFrameDelega
     }
 
     func renderDriverDidTick(_ driver: ImmersiveMapRenderDriver,
-                             currentTime: CFTimeInterval) {
+                             currentTime: CFTimeInterval,
+                             drawable: any CAMetalDrawable) {
         guard renderRuntime.beginFrame() else {
             return
         }
@@ -34,6 +35,7 @@ final class ImmersiveMapFrameRenderDelegate: ImmersiveMapRenderDriverFrameDelega
         }
 
         renderRuntime.renderFrame(layer: layer,
+                                  drawable: drawable,
                                   viewportRuntime: viewportRuntime)
     }
 

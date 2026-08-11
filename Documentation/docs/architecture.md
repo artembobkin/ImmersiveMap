@@ -37,7 +37,7 @@ Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsControll
 
 ## Frame loop and render pipeline
 
-Rendering is **on-demand**. `ImmersiveMapRenderDriver` drives a `CADisplayLink` that is normally paused; `RenderLoopPacing` resumes it for activities (interaction, label fades, camera/avatar animations) and one-shot `requestFrame(reason:)` invalidations. Any state change that should redraw must request a frame or register an activity.
+Rendering is **on-demand**. `ImmersiveMapRenderDriver` drives a `CAMetalDisplayLink` (built from the host view's `CAMetalLayer`, delivering each frame's drawable with the tick) that is normally paused; `RenderLoopPacing` resumes it for activities (interaction, label fades, camera/avatar animations) and one-shot `requestFrame(reason:)` invalidations. Any state change that should redraw must request a frame or register an activity.
 
 `RenderFrameEngine` runs per-frame stages:
 
