@@ -47,6 +47,9 @@
          <FileRef
             location = "group:Examples/macOS/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
          </FileRef>
+         <FileRef
+            location = "group:Examples/macOS/ImmersiveMapOfflineMac/ImmersiveMapOfflineMac.xcodeproj">
+         </FileRef>
       </Group>
    </Group>
    <Group

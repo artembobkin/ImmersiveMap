@@ -90,6 +90,6 @@ Both disk caches sit in the app's caches directory, so the system may evict them
 
 - `preparedDiskCacheSizeInBytes` is root-wide, not per map instance: the last map to initialize sets the policy for all of them.
 - Cache identity is the app's responsibility for custom providers and styles. A fingerprint that does not change when the output does produces stale tiles that look like rendering bugs.
-- There is no offline pre-download API: the caches fill from what the camera has actually looked at.
+- The caches fill from what the camera has actually looked at, and the system may evict them. To pre-download an area and keep it, use [offline regions](offline-tiles.md), which are a separate pinned store, not a cache policy.
 
 Running examples: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) raises the memory cache to 1 GiB so a looped tour does not re-upload tiles between laps; the **Diagnostics** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) turns the raw and prepared caches off one at a time, so the cost of the stage below each one is visible on screen.

@@ -39,7 +39,12 @@ final class TileRateLimitNotice: @unchecked Sendable {
     }
 }
 
-class TileDownloader {
+/// `@unchecked Sendable`: every stored property is immutable after `init`
+/// except `tileJSONTemplateTask`, which is written once in `init` and read
+/// only in `deinit`; `URLSession` and the URL providers are safe to share.
+/// The loader and the offline region downloader both call `downloadResult`
+/// from many concurrent tasks.
+class TileDownloader: @unchecked Sendable {
     private static let logger = Logger(subsystem: "ImmersiveMap", category: "Tiles")
 
     /// The sentence to show comes from the tile service, not from here. This

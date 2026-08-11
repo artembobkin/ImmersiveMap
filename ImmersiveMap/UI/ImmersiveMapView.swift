@@ -491,6 +491,23 @@ public extension ImmersiveMapView {
         return view
     }
 
+    public func offlineTileSettings(_ offline: ImmersiveMapSettings.TileSettings.OfflineSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.offlineTileSettings(offline)
+        return view
+    }
+
+    /// How the map uses regions downloaded through
+    /// `ImmersiveMapOfflineController`: `.automatic` (the default) falls back
+    /// to them whenever a tile request fails, `.offlineOnly` renders from them
+    /// without ever touching the network. Serving needs no other wiring; any
+    /// region downloaded for the same tile provider is found on disk.
+    public func offlineTileMode(_ mode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.offlineTileMode(mode)
+        return view
+    }
+
     public func labelSettings(_ labels: ImmersiveMapSettings.LabelSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.labelSettings(labels)
