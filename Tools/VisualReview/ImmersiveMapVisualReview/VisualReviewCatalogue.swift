@@ -12,11 +12,21 @@ import SwiftUI
 /// since you last approved them.
 struct VisualReviewScenario: Identifiable {
     enum Subject {
-        /// One frame.
-        case still(camera: ImmersiveMapCameraPosition)
+        /// One frame, optionally with routes drawn over it.
+        ///
+        /// Routes live here rather than on the scenario because video export
+        /// cannot draw them: its runtime hands the renderer an empty route
+        /// source. A scenario that carried routes for either subject would
+        /// render them in a still and silently omit them from a clip, and the
+        /// reviewer would be judging a picture the tool never claimed to make.
+        case still(camera: ImmersiveMapCameraPosition, routes: [ImmersiveMapRoute])
         /// A short clip. `establish` is where the camera starts, `shots` is
         /// the tour it then flies.
         case video(establish: ImmersiveMapCameraPosition, shots: [ImmersiveMapCameraTourShot])
+
+        static func still(camera: ImmersiveMapCameraPosition) -> Subject {
+            .still(camera: camera, routes: [])
+        }
     }
 
     /// Stable across runs and across renames of the title: it is the key the
@@ -29,8 +39,6 @@ struct VisualReviewScenario: Identifiable {
     let lookFor: String
     let settings: ImmersiveMapSettings
     let subject: Subject
-    /// Content the map itself does not carry: routes to draw over the scene.
-    let routes: [ImmersiveMapRoute]
 
     var isVideo: Bool {
         if case .video = subject { return true }
@@ -41,14 +49,12 @@ struct VisualReviewScenario: Identifiable {
          title: String,
          lookFor: String,
          settings: ImmersiveMapSettings,
-         subject: Subject,
-         routes: [ImmersiveMapRoute] = []) {
+         subject: Subject) {
         self.id = id
         self.title = title
         self.lookFor = lookFor
         self.settings = settings
         self.subject = subject
-        self.routes = routes
     }
 }
 
@@ -187,8 +193,7 @@ enum VisualReviewCatalogue {
             their length, and are hidden where they pass behind the planet.
             """,
             settings: .default.earthScene(isEnabled: false),
-            subject: .still(camera: Place.globe),
-            routes: [
+            subject: .still(camera: Place.globe, routes: [
                 ImmersiveMapRoute(id: 1,
                                   path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 40.64, longitude: -73.78),
                                                             to: GeoCoordinate(latitude: 51.47, longitude: -0.45),
@@ -203,7 +208,7 @@ enum VisualReviewCatalogue {
                                   color: SIMD4<Float>(0.2, 0.7, 1, 1),
                                   widthPoints: 5,
                                   progress: 0.6)
-            ]),
+            ])),
 
         VisualReviewScenario(
             id: "video.globe.to.street",

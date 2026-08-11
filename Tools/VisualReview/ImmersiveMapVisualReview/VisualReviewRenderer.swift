@@ -186,6 +186,7 @@ final class VisualReviewRenderer {
     /// Renders one still and writes it as a PNG into `directory`.
     func renderStill(_ scenario: VisualReviewScenario,
                      camera: ImmersiveMapCameraPosition,
+                     routes: [ImmersiveMapRoute],
                      into directory: URL) async throws -> VisualReviewArtifact {
         let configuration = ImmersiveMapStillConfiguration(
             width: Self.stillSize.width,
@@ -198,7 +199,7 @@ final class VisualReviewRenderer {
 
         let image = try await stillRecorder.capture(settings: scenario.settings,
                                                     camera: camera,
-                                                    routes: scenario.routes,
+                                                    routes: routes,
                                                     configuration: configuration)
         let url = directory.appending(path: "\(scenario.id).png")
         try write(image, to: url)
@@ -246,7 +247,13 @@ final class VisualReviewRenderer {
             }
         }
 
-        let fingerprint = await VisualReviewFingerprint.ofVideo(at: url) ?? ""
+        // No empty-string fallback: two artifacts whose fingerprint could not
+        // be computed would compare equal to each other and to any stored
+        // empty one, so a scene that changed would report itself unchanged.
+        // A fingerprint that cannot be taken is a failed render.
+        guard let fingerprint = await VisualReviewFingerprint.ofVideo(at: url) else {
+            throw VisualReviewError.couldNotFingerprint(url)
+        }
         return VisualReviewArtifact(scenarioID: scenario.id, url: url, fingerprint: fingerprint)
     }
 
@@ -268,11 +275,14 @@ final class VisualReviewRenderer {
 
 enum VisualReviewError: Error, CustomStringConvertible {
     case couldNotWriteImage(URL)
+    case couldNotFingerprint(URL)
 
     var description: String {
         switch self {
         case let .couldNotWriteImage(url):
             return "Could not write the rendered image to \(url.path)"
+        case let .couldNotFingerprint(url):
+            return "Could not fingerprint \(url.lastPathComponent), so it cannot be compared with its approval"
         }
     }
 }
