@@ -20,6 +20,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
     private var backdropPlaceTilesContext: PlaceTilesContext = .empty
+    private var shadowCasterPlaceTilesContext: PlaceTilesContext = .empty
     private var tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     private var demandGateFingerprint: Int?
@@ -82,11 +83,16 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // measures distances in target-zoom tiles and would discard the coarse
         // backdrop tiles. Its demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
+        // The sun-ward caster strip also bypasses the preprocessor: it is a
+        // thin band of exact-zoom tiles just past the frustum edge, and its
+        // demand rides at the tail of the priority order (shadows fill in
+        // after the visible map).
+        let shadowCasterTiles = visibleContent.shadowCasterTiles
         // `VisibleTile` includes `loop`, so flat-mode wrapped copies can produce
         // multiple placement targets that share the same content tile (`Tile`).
         // Deduplicate before storage request to avoid repeated cache lookup/request
         // for identical source bytes.
-        let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles,
+        let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles + shadowCasterTiles,
                                                                                   parentFallbackDepth: 2)
         // Demand order = network and parsing priority: tiles closest to the camera
         // start first. The placement hash uses the stable
@@ -95,7 +101,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(preprocessedVisibleTiles,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
-        let prioritizedDemand = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: prioritizedTargets + backdropTiles,
+        let prioritizedDemand = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: prioritizedTargets + backdropTiles + shadowCasterTiles,
                                                                                 parentFallbackDepth: 2)
         // Returns source-tile availability map for GPU rendering:
         // value contains Metal-ready tile buffers, or `nil` while still loading.
@@ -105,7 +111,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
         var hashBuilder = Hasher()
         hashBuilder.combine(PreprocessedVisibleTilesHasher.computePreprocessedVisibleTilesHash(
-            preprocessedVisibleTiles: preprocessedVisibleTiles + backdropTiles,
+            preprocessedVisibleTiles: preprocessedVisibleTiles + backdropTiles + shadowCasterTiles,
             demandedSourceTiles: demandedSourceTiles,
             readyTilesBySource: readyTilesBySource
         ))
@@ -126,6 +132,10 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                              readyTilesBySource: readyTilesBySource,
                                                                              zoom: tileZoomLevel,
                                                                              previousContext: backdropPlaceTilesContext)
+            shadowCasterPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: shadowCasterTiles,
+                                                                                 readyTilesBySource: readyTilesBySource,
+                                                                                 zoom: tileZoomLevel,
+                                                                                 previousContext: shadowCasterPlaceTilesContext)
             tileAtlasPlaceTilesContext = TileAtlasPlaceTilesPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
                                                                                          readyTilesBySource: readyTilesBySource,
                                                                                          baseZoom: tileZoomLevel,
@@ -198,6 +208,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
             backdropPlaceTilesContext: backdropPlaceTilesContext,
+            shadowCasterPlaceTilesContext: shadowCasterPlaceTilesContext,
             tileAtlasPlaceTilesContext: tileAtlasPlaceTilesContext,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
@@ -230,6 +241,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         tileRenderStore.evict()
         placeTilesContext = .empty
         backdropPlaceTilesContext = .empty
+        shadowCasterPlaceTilesContext = .empty
         tileAtlasPlaceTilesContext = .empty
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil

@@ -29,10 +29,13 @@ struct ShadowReceiverBinding {
 /// subsystem updates, when `sharedState` is final for the frame.
 enum ShadowPassGateResolver {
     static func resolve(frameContext: FrameContext) -> ShadowFrameState? {
-        resolve(shadowFrameState: frameContext.shadowFrameState,
-                hasBuildingCasters: hasBuildingCasters(
-                    placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext),
-                hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters)
+        let tilePlacementState = frameContext.sharedState.tilePlacementState
+        return resolve(shadowFrameState: frameContext.shadowFrameState,
+                       hasBuildingCasters: hasBuildingCasters(
+                           placeTilesContext: tilePlacementState.placeTilesContext)
+                           || hasBuildingCasters(
+                               placeTilesContext: tilePlacementState.shadowCasterPlaceTilesContext),
+                       hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters)
     }
 
     static func resolve(shadowFrameState: ShadowFrameState?,

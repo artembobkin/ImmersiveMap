@@ -13,7 +13,8 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
 
         let result = resolver.resolve(cameraFrameState: makeCameraFrameState(zoom: 1.74),
                                       resolvedPresentation: makePresentation(renderSurfaceMode: .spherical),
-                                      tileSettings: ImmersiveMapSettings.default.tiles)
+                                      tileSettings: ImmersiveMapSettings.default.tiles,
+                                      sceneSettings: ImmersiveMapSettings.default.scene)
 
         XCTAssertEqual(culling.targetZooms, [1])
         XCTAssertEqual(result.tileZoomLevel, 1)
@@ -26,7 +27,8 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
 
         let result = resolver.resolve(cameraFrameState: makeCameraFrameState(zoom: 1.74),
                                       resolvedPresentation: makePresentation(renderSurfaceMode: .flat),
-                                      tileSettings: ImmersiveMapSettings.default.tiles)
+                                      tileSettings: ImmersiveMapSettings.default.tiles,
+                                      sceneSettings: ImmersiveMapSettings.default.scene)
 
         XCTAssertEqual(culling.targetZooms, [1])
         XCTAssertEqual(result.tileZoomLevel, 1)
@@ -78,12 +80,14 @@ private final class RecordingTileCulling: TileCulling {
                                         cameraMatrix: matrix_float4x4?,
                                         cameraFrustum: Frustum?,
                                         cameraEye: SIMD3<Float>,
+                                        shadowCasterSweep: SIMD2<Float>? = nil,
                                         diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         targetZooms.append(targetZoom)
         return VisibleContentState(centerWorldMercator: cameraState.centerWorldMercator,
                                    center: Center(tileX: 0, tileY: 0),
                                    visibleTiles: [VisibleTile(x: targetZoom, y: targetZoom, z: targetZoom)],
                                    backdropTiles: [],
+                                   shadowCasterTiles: [],
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: UInt64(targetZoom))
     }

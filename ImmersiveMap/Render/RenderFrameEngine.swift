@@ -289,6 +289,7 @@ final class RenderFrameEngine {
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
+                                                        sceneSettings: settings.scene,
                                                         diagnostics: diagnostics)
         let shadowFrameState = ShadowFrameStateResolver.resolve(
             renderSurfaceMode: resolvedPresentation.renderSurfaceMode,

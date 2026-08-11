@@ -8,6 +8,10 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Shadows no longer pop in and out at the frustum edge while the camera pans. The cascade shadow maps rasterized casters only from the visible tile set, so a building standing just off-screen between the frame and the sun cast nothing into the frame, and panning made its shadow appear and vanish with the tile. Tile coverage now also resolves a sun-ward strip of off-screen tiles (the visible coverage polygon swept along the sun ray by the middle-cascade caster-height cap): those tiles are demanded at the tail of the priority order and rendered into the cascade maps only, never into the world pass, labels, or the backdrop. On the globe and with shadows disabled the strip is empty and nothing changes.
+
 ### Performance
 
 - All three shadow cascades render in one layered pass: the shadow map is a depth16Unorm texture array with one square slice per cascade, every caster draw carries `instanceCount = cascadeCount`, and the vertex stages route each instance to its cascade's slice via `[[render_target_array_index]]`, so building and model geometry is encoded once per frame instead of once per cascade. Layered rendering is supported by every GPU the package targets (Apple5 and later covers all iOS 18 hardware, mac2 covers every Mac). Receivers sample the array by cascade index and each cascade owns its full slice UV, which also retires the atlas seam insets and non-square texel handling.

@@ -44,10 +44,16 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
         if layer == .shadowCasters {
             guard let shadowState = frameContext.shadowFrameState else { return }
+            // Visible placements plus the off-screen sun-ward strip: buildings
+            // just past the frustum edge still cast into the frame, and without
+            // them their shadows pop in and out while the camera pans.
+            let tilePlacementState = frameContext.sharedState.tilePlacementState
+            let casterPlacements = tilePlacementState.placeTilesContext.tilePlacements
+                + tilePlacementState.shadowCasterPlaceTilesContext.tilePlacements
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
                 lightProjectionViews: shadowState.lightProjectionViews,
-                placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
+                placeTilesContext: PlaceTilesContext(tilePlacements: casterPlacements),
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
