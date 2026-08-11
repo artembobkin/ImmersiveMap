@@ -23,12 +23,14 @@ class TileCulling {
                                cameraMatrix: matrix_float4x4?,
                                cameraFrustum: Frustum?,
                                cameraEye: SIMD3<Float>,
+                               shadowCasterSweep: SIMD2<Float>? = nil,
                                diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let semanticCenterWorldMercator = cameraState.centerWorldMercator
         let center = makeCenter(centerWorldMercator: semanticCenterWorldMercator,
                                 targetZoom: targetZoom)
         let visibleTiles: [VisibleTile]
         let backdropTiles: [VisibleTile]
+        var shadowCasterTiles: [VisibleTile] = []
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
@@ -41,14 +43,23 @@ class TileCulling {
             backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:
-            visibleTiles = Array(iSeeTilesFlat(targetZoom: targetZoom,
-                                               center: center,
-                                               flatRenderState: resolvedPresentation.flatRenderState,
-                                               cameraMatrix: cameraMatrix))
+            let visibleSet = iSeeTilesFlat(targetZoom: targetZoom,
+                                           center: center,
+                                           flatRenderState: resolvedPresentation.flatRenderState,
+                                           cameraMatrix: cameraMatrix)
+            visibleTiles = Array(visibleSet)
             backdropTiles = resolveFlatBackdropTiles(centerWorldMercator: semanticCenterWorldMercator,
                                                      targetZoom: targetZoom,
                                                      flatRenderState: resolvedPresentation.flatRenderState,
                                                      cameraMatrix: cameraMatrix)
+            if let shadowCasterSweep {
+                shadowCasterTiles = resolveFlatShadowCasterTiles(targetZoom: targetZoom,
+                                                                 center: center,
+                                                                 flatRenderState: resolvedPresentation.flatRenderState,
+                                                                 cameraMatrix: cameraMatrix,
+                                                                 sweep: shadowCasterSweep,
+                                                                 visibleSet: visibleSet)
+            }
         }
 
         coverageVersion &+= 1
@@ -56,8 +67,36 @@ class TileCulling {
                                    center: center,
                                    visibleTiles: visibleTiles,
                                    backdropTiles: backdropTiles,
+                                   shadowCasterTiles: shadowCasterTiles,
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion)
+    }
+
+    /// The off-screen strip of tiles between the frame and the sun whose
+    /// buildings can cast into the frame: the visible coverage swept sun-ward
+    /// (see ShadowCasterSweepResolver), minus the visible tiles themselves.
+    /// Deterministic order keeps placement hashes stable.
+    private func resolveFlatShadowCasterTiles(targetZoom: Int,
+                                              center: Center,
+                                              flatRenderState: FlatRenderState,
+                                              cameraMatrix: matrix_float4x4?,
+                                              sweep: SIMD2<Float>,
+                                              visibleSet: Set<VisibleTile>) -> [VisibleTile] {
+        let sweptSet = FlatVisibleTileResolver.resolveVisibleTiles(targetZoom: targetZoom,
+                                                                   center: center,
+                                                                   flatRenderState: flatRenderState,
+                                                                   cameraMatrix: cameraMatrix,
+                                                                   sweep: sweep)
+        return sweptSet.subtracting(visibleSet)
+            .sorted { lhs, rhs in
+                if lhs.loop != rhs.loop {
+                    return lhs.loop < rhs.loop
+                }
+                if lhs.x != rhs.x {
+                    return lhs.x < rhs.x
+                }
+                return lhs.y < rhs.y
+            }
     }
 
     /// The backdrop is enumerated by the same flat resolver at a fixed coarse

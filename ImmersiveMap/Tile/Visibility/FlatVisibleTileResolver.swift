@@ -12,14 +12,22 @@ enum FlatVisibleTileResolver {
     private static let wrapLoops: [Int8] = [-1, 0, 1]
     static let planeIntersectionTolerance: Float = 1e-5
 
+    /// `sweep` widens the coverage by the polygon swept along that world-space
+    /// offset (Minkowski sum with the segment [0, sweep]): the shadow pass uses
+    /// it to also resolve the off-screen strip of tiles between the frame and
+    /// the sun, whose buildings cast into the frame.
     static func resolveVisibleTiles(targetZoom: Int,
                                     center: Center,
                                     flatRenderState: FlatRenderState,
                                     cameraMatrix: matrix_float4x4?,
-                                    maxRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance) -> Set<VisibleTile> {
+                                    maxRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance,
+                                    sweep: SIMD2<Float>? = nil) -> Set<VisibleTile> {
         guard targetZoom >= 0,
-              let coveragePolygon = makeCoveragePolygon(cameraMatrix: cameraMatrix) else {
+              var coveragePolygon = makeCoveragePolygon(cameraMatrix: cameraMatrix) else {
             return []
+        }
+        if let sweep {
+            coveragePolygon = sweptCoveragePolygon(coveragePolygon, offset: sweep)
         }
 
         let tilesCount = 1 << targetZoom
@@ -93,6 +101,52 @@ enum FlatVisibleTileResolver {
                 visibleTiles.insert(VisibleTile(x: x, y: y, z: targetZoom, loop: loop))
             }
         }
+    }
+
+    // The Minkowski sum of a convex polygon and a segment is convex, and its
+    // vertices are a subset of the original vertices plus their shifted
+    // copies, so the convex hull of both point sets is exactly the swept
+    // polygon. Convexity is what the row-scanline consumer relies on.
+    // Internal for tests.
+    static func sweptCoveragePolygon(_ polygon: CoveragePolygon,
+                                     offset: SIMD2<Float>) -> CoveragePolygon {
+        let sweptVertices = convexHull(polygon.vertices + polygon.vertices.map { $0 + offset })
+        guard sweptVertices.count >= 3 else {
+            return polygon
+        }
+        return CoveragePolygon(vertices: sweptVertices)
+    }
+
+    // Andrew's monotone chain; returns the hull in counterclockwise order.
+    private static func convexHull(_ points: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        let sorted = points.sorted { lhs, rhs in
+            lhs.x != rhs.x ? lhs.x < rhs.x : lhs.y < rhs.y
+        }
+        guard sorted.count >= 3 else {
+            return sorted
+        }
+
+        func cross(_ o: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+            (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+        }
+
+        var lower: [SIMD2<Float>] = []
+        for point in sorted {
+            while lower.count >= 2, cross(lower[lower.count - 2], lower[lower.count - 1], point) <= 0 {
+                lower.removeLast()
+            }
+            lower.append(point)
+        }
+
+        var upper: [SIMD2<Float>] = []
+        for point in sorted.reversed() {
+            while upper.count >= 2, cross(upper[upper.count - 2], upper[upper.count - 1], point) <= 0 {
+                upper.removeLast()
+            }
+            upper.append(point)
+        }
+
+        return lower.dropLast() + upper.dropLast()
     }
 
     // Internal for tests: property tests compare the scanline against the

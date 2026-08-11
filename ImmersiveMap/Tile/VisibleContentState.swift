@@ -13,6 +13,7 @@ struct VisibleContentState {
                                            center: Center(tileX: 0, tileY: 0),
                                            visibleTiles: [],
                                            backdropTiles: [],
+                                           shadowCasterTiles: [],
                                            tileZoomLevel: 0,
                                            coverageVersion: 0)
 
@@ -24,6 +25,13 @@ struct VisibleContentState {
     /// the true horizon so the coverage edge isn't "drawn in" when the target
     /// zoom changes. Labels are not extracted from them. Empty on the globe.
     let backdropTiles: [VisibleTile]
+    /// Flat-mode strip of off-screen tiles between the frame and the sun
+    /// (visible coverage swept sun-ward, minus the visible tiles): their
+    /// buildings cast shadows into the frame, so the shadow pass needs them
+    /// resolved and placed. Rendered into the cascade maps only - never into
+    /// the world pass, labels, or the backdrop. Empty on the globe and with
+    /// shadows disabled.
+    let shadowCasterTiles: [VisibleTile]
     let tileZoomLevel: Int
     let coverageVersion: UInt64
 }
