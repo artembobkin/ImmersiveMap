@@ -34,13 +34,13 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         XCTAssertGreaterThan(parsed.textLabels.count, 0, "point labels missing")
         XCTAssertGreaterThan(parsed.roadTextLabels.count, 0, "road labels missing")
 
-        let fullParse = Self.measure(label: "parse(full)", warmup: 2, iterations: 10) {
+        let fullParse = try Self.measure(warmup: 2, iterations: 10) {
             _ = try parser.parse(tile: tile, mvtData: mvtData)
         }
-        let zeroCopyDecode = Self.measure(label: "decode(zero-copy)", warmup: 2, iterations: 10) {
+        let zeroCopyDecode = try Self.measure(warmup: 2, iterations: 10) {
             _ = try MvtTileDecoder.decode(data: mvtData)
         }
-        let protobufDecode = Self.measure(label: "decode(swift-protobuf)", warmup: 2, iterations: 10) {
+        let protobufDecode = try Self.measure(warmup: 2, iterations: 10) {
             _ = try VectorTile_Tile(serializedBytes: mvtData)
         }
 
@@ -66,7 +66,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)
         XCTAssertGreaterThan(parsed.drawingPolygon.indices.count, 0, "overview polygons missing")
 
-        let fullParse = Self.measure(label: "parse(overview)", warmup: 2, iterations: 10) {
+        let fullParse = try Self.measure(warmup: 2, iterations: 10) {
             _ = try parser.parse(tile: tile, mvtData: mvtData)
         }
         print("[perf] overview payload: \(mvtData.count) bytes")
@@ -80,18 +80,17 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let median: TimeInterval
     }
 
-    private static func measure(label: String,
-                                warmup: Int,
+    private static func measure(warmup: Int,
                                 iterations: Int,
-                                _ body: () throws -> Void) -> Timings {
+                                _ body: () throws -> Void) rethrows -> Timings {
         for _ in 0..<warmup {
-            try? body()
+            try body()
         }
         var samples: [TimeInterval] = []
         samples.reserveCapacity(iterations)
         for _ in 0..<iterations {
             let start = DispatchTime.now().uptimeNanoseconds
-            try? body()
+            try body()
             let elapsed = DispatchTime.now().uptimeNanoseconds - start
             samples.append(TimeInterval(elapsed) / 1_000_000_000.0)
         }
@@ -103,33 +102,11 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         String(format: "%.2f ms", seconds * 1000.0)
     }
 
-    // MARK: - Deterministic pseudo-random source
-
-    private struct SplitMix64 {
-        private var state: UInt64
-
-        init(seed: UInt64) {
-            self.state = seed
-        }
-
-        mutating func next() -> UInt64 {
-            state &+= 0x9E37_79B9_7F4A_7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-            return z ^ (z >> 31)
-        }
-
-        mutating func int(_ range: ClosedRange<Int>) -> Int {
-            let span = UInt64(range.upperBound - range.lowerBound + 1)
-            return range.lowerBound + Int(next() % span)
-        }
-    }
 
     // MARK: - Tile construction
 
     static func makeDenseCityTile() -> VectorTile_Tile {
-        var generator = SplitMix64(seed: 0x1AB0_57E5)
+        var generator = SplitMix64Generator(seed: 0x1AB0_57E5)
         var tile = VectorTile_Tile()
         tile.layers.append(makeWaterLayer(generator: &generator))
         tile.layers.append(makeLandcoverLayer(generator: &generator))
@@ -144,7 +121,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
     }
 
     static func makeOceanOverviewTile() -> VectorTile_Tile {
-        var generator = SplitMix64(seed: 0x0CEA_0CEA)
+        var generator = SplitMix64Generator(seed: 0x0CEA_0CEA)
         var tile = VectorTile_Tile()
 
         var layer = layerTemplate(name: "water")
@@ -175,7 +152,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return tile
     }
 
-    private static func makeWaterLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeWaterLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "water")
         layer.keys = ["class"]
         layer.values = [stringValue("river"), stringValue("lake")]
@@ -204,7 +181,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeLandcoverLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeLandcoverLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "landcover")
         layer.keys = ["class", "subclass"]
         layer.values = [stringValue("grass"), stringValue("wood"), stringValue("park")]
@@ -226,7 +203,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeLanduseLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeLanduseLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "landuse")
         layer.keys = ["class"]
         layer.values = [stringValue("residential"), stringValue("commercial"), stringValue("industrial")]
@@ -248,7 +225,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeBuildingLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeBuildingLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "building")
         layer.keys = ["render_height", "render_min_height", "building:part", "hide_3d", "colour"]
         var values: [VectorTile_Tile.Value] = []
@@ -309,7 +286,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeTransportationLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeTransportationLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "transportation")
         layer.keys = ["class", "brunnel", "oneway", "layer", "subclass"]
         layer.values = [
@@ -350,7 +327,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeTransportationNameLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeTransportationNameLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "transportation_name")
         layer.keys = ["class", "name", "name:en", "name:ru", "ref"]
         var values: [VectorTile_Tile.Value] = [
@@ -393,7 +370,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makePoiLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makePoiLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "poi")
         layer.keys = ["class", "subclass", "name", "name:en", "rank"]
         var values: [VectorTile_Tile.Value] = [
@@ -430,7 +407,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makePlaceLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makePlaceLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "place")
         layer.keys = ["class", "name", "name:en", "name:ru", "rank", "capital"]
         var values: [VectorTile_Tile.Value] = [
@@ -468,7 +445,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeHousenumberLayer(generator: inout SplitMix64) -> VectorTile_Tile.Layer {
+    private static func makeHousenumberLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
         var layer = layerTemplate(name: "housenumber")
         layer.keys = ["housenumber"]
         var values: [VectorTile_Tile.Value] = []
@@ -504,7 +481,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
                                    centerY: Int32,
                                    radius: Int32,
                                    vertexCount: Int,
-                                   generator: inout SplitMix64) -> [(Int32, Int32)] {
+                                   generator: inout SplitMix64Generator) -> [(Int32, Int32)] {
         var ring: [(Int32, Int32)] = []
         ring.reserveCapacity(vertexCount)
         for vertexIndex in 0..<vertexCount {
@@ -530,7 +507,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
     private static func randomPolylines(count: Int,
                                         pointRange: ClosedRange<Int>,
-                                        generator: inout SplitMix64) -> [[(Int32, Int32)]] {
+                                        generator: inout SplitMix64Generator) -> [[(Int32, Int32)]] {
         var lines: [[(Int32, Int32)]] = []
         for _ in 0..<count {
             var points: [(Int32, Int32)] = []

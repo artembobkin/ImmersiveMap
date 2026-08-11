@@ -27,15 +27,26 @@ final class EarcutTessellationTests: XCTestCase {
     }
 
     func testThreeDimensionalInputIgnoresZ() {
-        let data: [Double] = [
-            0, 0, 0, 9, 0, 0, 6, 8, 0, 5, 3, 0, 2, 8, 0, 0, 8, 0,
-            6, 2, 0, 7, 1, 0, 7, 3, 0, 6, 3, 0, 5, 2, 0, 6, 2, 0
+        // Same polygon twice: flat 2D coordinates, and 3D coordinates with
+        // arbitrary non-zero z components. The triangulations must be
+        // identical because z is ignored entirely.
+        let flat: [Double] = [
+            0, 0, 9, 0, 6, 8, 5, 3, 2, 8, 0, 8,
+            6, 2, 7, 1, 7, 3, 6, 3, 5, 2, 6, 2
         ]
-        let triangles = Earcut.tessellate(data: data, holeIndices: [6], dim: 3)
+        var lifted: [Double] = []
+        for vertexIndex in 0..<(flat.count / 2) {
+            lifted.append(flat[vertexIndex * 2])
+            lifted.append(flat[vertexIndex * 2 + 1])
+            lifted.append(Double(vertexIndex) * 7.5 - 20.0)
+        }
 
-        XCTAssertEqual(triangles.count % 3, 0)
-        XCTAssertFalse(triangles.isEmpty)
-        XCTAssertLessThan(Earcut.deviation(data: data, holeIndices: [6], dim: 3, triangles: triangles), 1e-9)
+        let flatTriangles = Earcut.tessellate(data: flat, holeIndices: [6], dim: 2)
+        let liftedTriangles = Earcut.tessellate(data: lifted, holeIndices: [6], dim: 3)
+
+        XCTAssertFalse(flatTriangles.isEmpty)
+        XCTAssertEqual(liftedTriangles, flatTriangles)
+        XCTAssertLessThan(Earcut.deviation(data: lifted, holeIndices: [6], dim: 3, triangles: liftedTriangles), 1e-9)
     }
 
     func testPolygonWithHole() {
@@ -83,7 +94,7 @@ final class EarcutTessellationTests: XCTestCase {
     /// ear checks; this shape also carries enough holes to exercise hole
     /// elimination together with that path.
     func testLargeJaggedRingWithManyHoles() {
-        var generator = SplitMix64(seed: 0xEAC0)
+        var generator = SplitMix64Generator(seed: 0xEAC0)
         var data: [Double] = []
         var holeIndices: [Int] = []
 
@@ -123,7 +134,7 @@ final class EarcutTessellationTests: XCTestCase {
     }
 
     func testFuzzedStarPolygonsWithHoles() {
-        var generator = SplitMix64(seed: 0xF022)
+        var generator = SplitMix64Generator(seed: 0xF022)
 
         for round in 0..<300 {
             var data: [Double] = []
@@ -195,23 +206,4 @@ final class EarcutTessellationTests: XCTestCase {
         }
     }
 
-    private struct SplitMix64 {
-        private var state: UInt64
-
-        init(seed: UInt64) {
-            self.state = seed
-        }
-
-        mutating func next() -> UInt64 {
-            state &+= 0x9E37_79B9_7F4A_7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-            return z ^ (z >> 31)
-        }
-
-        mutating func unitDouble() -> Double {
-            Double(next() >> 11) * (1.0 / 9_007_199_254_740_992.0)
-        }
-    }
 }

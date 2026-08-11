@@ -104,15 +104,22 @@ extension TileMvtParser {
     func decodeAttributes(feature: MvtDecodedFeature,
                           layer: MvtDecodedLayer,
                           data: Data) -> [String: VectorTile_Tile.Value] {
+        data.withUnsafeBytes { bytes in
+            decodeAttributes(feature: feature, layer: layer, bytes: bytes)
+        }
+    }
+
+    func decodeAttributes(feature: MvtDecodedFeature,
+                          layer: MvtDecodedLayer,
+                          bytes: UnsafeRawBufferPointer) -> [String: VectorTile_Tile.Value] {
         var attributes: [String: VectorTile_Tile.Value] = [:]
         switch feature.tags {
         case .empty:
             break
         case .range(let range):
-            data.withUnsafeBytes { bytes in
-                var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
-                appendAttributes(reader: &reader, layer: layer, into: &attributes)
-            }
+            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { break }
+            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
+            appendAttributes(reader: &reader, layer: layer, into: &attributes)
         case .values(let values):
             var reader = MvtArrayUInt32Reader(values: values)
             appendAttributes(reader: &reader, layer: layer, into: &attributes)

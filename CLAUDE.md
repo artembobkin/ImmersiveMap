@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, avatar markers. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit) - no Mac Catalyst. Dependencies: SwiftEarcut (polygon triangulation) and swift-protobuf (MVT decoding).
+ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, avatar markers. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit) - no Mac Catalyst. Dependency: swift-protobuf (MVT schema and value types; tiles decode through the internal zero-copy wire decoder in `Tile/Parse/Mvt/`, and polygon triangulation is the internal earcut port in `Tile/Parse/Earcut.swift`).
 
 Because the repo is public: never commit tokens (Mapbox, bearer), credentials, `LocalSecrets.plist`-style files, or build artifacts (`.build/`, `DerivedData/`, `Traces/`).
 
@@ -67,7 +67,7 @@ Rendering is **on-demand**: `ImmersiveMapRenderDriver` (`UI/`) drives a `CADispl
 
 ### Tile pipeline
 
-Per-frame demand starts in `TileDemandPlacementSubsystem` → `TileRenderStore` (memory LRU cache of `MetalTile`s) → misses go to `ImmersiveMapNeedsTile` (`Tile/Loading`): bounded-concurrency async/await loading with dedup FIFO, retry/backoff, and two disk caches (raw and prepared). Parsing/tessellation: `TileMvtParser` + clippers/decoders + SwiftEarcut → `PreparedTileCPU` → `MetalTileFactory` → GPU `TileBuffers`. Completion invalidates a frame with `.tileAvailable`.
+Per-frame demand starts in `TileDemandPlacementSubsystem` → `TileRenderStore` (memory LRU cache of `MetalTile`s) → misses go to `ImmersiveMapNeedsTile` (`Tile/Loading`): bounded-concurrency async/await loading with dedup FIFO, retry/backoff, and two disk caches (raw and prepared). Parsing/tessellation: `TileMvtParser` + `MvtTileDecoder`/`MvtGeometryDecoder` + clippers + the internal `Earcut` port → `PreparedTileCPU` → `MetalTileFactory` → GPU `TileBuffers`. Completion invalidates a frame with `.tileAvailable`.
 
 ### Globe vs flat presentation
 

@@ -20,7 +20,7 @@ final class MvtTileDecoderTests: XCTestCase {
     }
 
     func testMatchesProtobufOnRandomizedTiles() throws {
-        var generator = SplitMix64(seed: 0xDEC0DE)
+        var generator = SplitMix64Generator(seed: 0xDEC0DE)
 
         for round in 0..<100 {
             var tile = VectorTile_Tile()
@@ -206,6 +206,35 @@ final class MvtTileDecoderTests: XCTestCase {
         XCTAssertTrue(decoded.layers.isEmpty)
     }
 
+    func testDanglingTagIndexIsIgnored() throws {
+        // An odd number of tag integers leaves a dangling key index; attribute
+        // decoding drops it and keeps the complete pairs, and the layer
+        // survives.
+        var featureBody = Data()
+        appendPackedVarintField(&featureBody, fieldNumber: 2, values: [0, 0, 1])
+        appendVarintField(&featureBody, fieldNumber: 3, value: 1)
+
+        let data = wrapFeatureInTile(featureBody: featureBody,
+                                     keys: ["kept", "dangling"],
+                                     values: ["value"])
+        let decoded = try MvtTileDecoder.decode(data: data)
+        XCTAssertEqual(decoded.layers.count, 1)
+
+        let config = ImmersiveMapSettings.default
+        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
+        let parser = TileMvtParser(
+            determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
+            labelProviderProfile: runtimeContext.labelProviderProfile,
+            config: config,
+            glyphCoverage: .legacyAtlasForTests
+        )
+        let attributes = parser.decodeAttributes(feature: decoded.layers[0].features[0],
+                                                 layer: decoded.layers[0],
+                                                 data: data)
+        XCTAssertEqual(attributes.count, 1)
+        XCTAssertEqual(attributes["kept"]?.stringValue, "value")
+    }
+
     func testInvalidGeometryTypeLeavesPreviousValue() throws {
         var featureBody = Data()
         appendVarintField(&featureBody, fieldNumber: 3, value: 2) // linestring
@@ -222,7 +251,7 @@ final class MvtTileDecoderTests: XCTestCase {
     // MARK: - Geometry reader equivalence
 
     func testRangeAndArrayGeometryReadersAgree() throws {
-        var generator = SplitMix64(seed: 0x6E0)
+        var generator = SplitMix64Generator(seed: 0x6E0)
 
         for _ in 0..<50 {
             var geometry: [UInt32] = []
@@ -297,13 +326,17 @@ final class MvtTileDecoderTests: XCTestCase {
         let reference = try VectorTile_Tile(serializedBytes: data)
         let decoded = try MvtTileDecoder.decode(data: data)
 
+        // Count mismatches record a failure and return early so the detailed
+        // loops below never index out of bounds.
         XCTAssertEqual(decoded.layers.count, reference.layers.count, "layer count \(context)", file: file, line: line)
+        guard decoded.layers.count == reference.layers.count else { return }
         for (layerIndex, referenceLayer) in reference.layers.enumerated() {
             let decodedLayer = decoded.layers[layerIndex]
             XCTAssertEqual(decodedLayer.name, referenceLayer.name, "layer name \(context)", file: file, line: line)
             XCTAssertEqual(decodedLayer.extent, referenceLayer.extent, "extent \(context)", file: file, line: line)
             XCTAssertEqual(decodedLayer.keys, referenceLayer.keys, "keys \(context)", file: file, line: line)
             XCTAssertEqual(decodedLayer.values.count, referenceLayer.values.count, "value count \(context)", file: file, line: line)
+            guard decodedLayer.values.count == referenceLayer.values.count else { return }
             for (valueIndex, referenceValue) in referenceLayer.values.enumerated() {
                 assertValuesEqual(decodedLayer.values[valueIndex], referenceValue,
                                   context: "\(context) layer \(layerIndex) value \(valueIndex)",
@@ -312,6 +345,7 @@ final class MvtTileDecoderTests: XCTestCase {
 
             XCTAssertEqual(decodedLayer.features.count, referenceLayer.features.count,
                            "feature count \(context)", file: file, line: line)
+            guard decodedLayer.features.count == referenceLayer.features.count else { return }
             for (featureIndex, referenceFeature) in referenceLayer.features.enumerated() {
                 let decodedFeature = decodedLayer.features[featureIndex]
                 XCTAssertEqual(decodedFeature.hasID, referenceFeature.hasID,
@@ -425,7 +459,7 @@ final class MvtTileDecoderTests: XCTestCase {
         return tileBody
     }
 
-    private func randomValue(_ generator: inout SplitMix64) -> VectorTile_Tile.Value {
+    private func randomValue(_ generator: inout SplitMix64Generator) -> VectorTile_Tile.Value {
         var value = VectorTile_Tile.Value()
         switch generator.next() % 7 {
         case 0: value.stringValue = "value_\(generator.next() % 1000)"
@@ -441,7 +475,7 @@ final class MvtTileDecoderTests: XCTestCase {
 
     private func appendZigZagDelta(_ geometry: inout [UInt32],
                                    _ cursor: inout (x: Int32, y: Int32),
-                                   _ generator: inout SplitMix64) {
+                                   _ generator: inout SplitMix64Generator) {
         let dx = Int32(generator.next() % 512) - 256
         let dy = Int32(generator.next() % 512) - 256
         cursor.x &+= dx
@@ -454,19 +488,4 @@ final class MvtTileDecoderTests: XCTestCase {
         UInt32(bitPattern: (value << 1) ^ (value >> 31))
     }
 
-    private struct SplitMix64 {
-        private var state: UInt64
-
-        init(seed: UInt64) {
-            self.state = seed
-        }
-
-        mutating func next() -> UInt64 {
-            state &+= 0x9E37_79B9_7F4A_7C15
-            var z = state
-            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-            return z ^ (z >> 31)
-        }
-    }
 }

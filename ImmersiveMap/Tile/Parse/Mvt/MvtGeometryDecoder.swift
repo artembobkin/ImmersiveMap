@@ -25,14 +25,19 @@ typealias MultiPoint = [Point]
 /// decoders: the feature drops, the tile survives.
 enum MvtGeometryDecoder {
     static func decodePolygons(_ field: MvtPackedField, in data: Data) -> MultiPolygon {
+        data.withUnsafeBytes { bytes in
+            decodePolygons(field, in: bytes)
+        }
+    }
+
+    static func decodePolygons(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPolygon {
         switch field {
         case .empty:
             return []
         case .range(let range):
-            return data.withUnsafeBytes { bytes in
-                var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
-                return decodePolygons(reader: &reader)
-            }
+            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { return [] }
+            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
+            return decodePolygons(reader: &reader)
         case .values(let values):
             var reader = MvtArrayUInt32Reader(values: values)
             return decodePolygons(reader: &reader)
@@ -40,14 +45,19 @@ enum MvtGeometryDecoder {
     }
 
     static func decodeLines(_ field: MvtPackedField, in data: Data) -> MultiLineString {
+        data.withUnsafeBytes { bytes in
+            decodeLines(field, in: bytes)
+        }
+    }
+
+    static func decodeLines(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiLineString {
         switch field {
         case .empty:
             return []
         case .range(let range):
-            return data.withUnsafeBytes { bytes in
-                var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
-                return decodeLines(reader: &reader)
-            }
+            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { return [] }
+            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
+            return decodeLines(reader: &reader)
         case .values(let values):
             var reader = MvtArrayUInt32Reader(values: values)
             return decodeLines(reader: &reader)
@@ -55,14 +65,19 @@ enum MvtGeometryDecoder {
     }
 
     static func decodePoints(_ field: MvtPackedField, in data: Data) -> MultiPoint {
+        data.withUnsafeBytes { bytes in
+            decodePoints(field, in: bytes)
+        }
+    }
+
+    static func decodePoints(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPoint {
         switch field {
         case .empty:
             return []
         case .range(let range):
-            return data.withUnsafeBytes { bytes in
-                var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
-                return decodePoints(reader: &reader)
-            }
+            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { return [] }
+            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
+            return decodePoints(reader: &reader)
         case .values(let values):
             var reader = MvtArrayUInt32Reader(values: values)
             return decodePoints(reader: &reader)
@@ -192,12 +207,17 @@ enum MvtGeometryDecoder {
         Int32(bitPattern: value >> 1) ^ -Int32(bitPattern: value & 1)
     }
 
+    /// Wrapping arithmetic: coordinates accumulate from wrapped Int32 cursor
+    /// deltas, so a crafted tile can place ring vertices anywhere in the Int32
+    /// range and the cross products can reach the Int64 boundary. Wrapping
+    /// keeps such garbage rings from trapping the parse; for any sane
+    /// geometry the sums are nowhere near overflow and the result is exact.
     private static func computeShoelace(_ points: [Point]) -> Int64 {
         guard points.count >= 3 else { return 0 }
         var sum: Int64 = 0
         var previous = points[points.count - 1]
         for point in points {
-            sum += Int64(previous.x) * Int64(point.y) - Int64(point.x) * Int64(previous.y)
+            sum &+= Int64(previous.x) &* Int64(point.y) &- Int64(point.x) &* Int64(previous.y)
             previous = point
         }
         return sum

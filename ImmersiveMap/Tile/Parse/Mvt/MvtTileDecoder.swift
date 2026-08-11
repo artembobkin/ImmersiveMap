@@ -29,8 +29,12 @@ enum MvtWireDecodeError: Error {
 /// packed and unpacked repeated encodings, split packed runs, last-one-wins
 /// scalars, unknown fields (including nested groups) skipped, truncated or
 /// malformed input throws, and a layer without the required `version`/`name`
-/// throws. The one deliberate divergence: invalid UTF-8 in strings decodes
-/// with replacement characters instead of failing the whole tile.
+/// throws. Two deliberate divergences: invalid UTF-8 in strings decodes with
+/// replacement characters instead of failing the whole tile, and a malformed
+/// varint inside a packed tags/geometry run surfaces later as a short read
+/// that drops the affected feature's geometry or trailing tags instead of
+/// failing the whole tile (swift-protobuf decodes those runs eagerly and
+/// throws).
 enum MvtTileDecoder {
     private static let lengthDelimitedWireType: UInt64 = 2
     private static let maximumGroupNestingDepth = 32
@@ -123,10 +127,10 @@ enum MvtTileDecoder {
                 feature.hasID = true
             case (2, lengthDelimitedWireType):
                 let packedRange = try readLengthDelimited(bytes, &offset, end: end)
-                feature.tags = appendPackedRun(to: feature.tags, run: packedRange, bytes: bytes)
+                appendPackedRun(to: &feature.tags, run: packedRange, bytes: bytes)
             case (2, 0):
                 let value = UInt32(truncatingIfNeeded: try readVarint(bytes, &offset, end: end))
-                feature.tags = appendUnpackedElement(to: feature.tags, value: value, bytes: bytes)
+                appendUnpackedElement(to: &feature.tags, value: value, bytes: bytes)
             case (3, 0):
                 let rawType = Int(truncatingIfNeeded: try readVarint(bytes, &offset, end: end))
                 // proto2 keeps unrecognized enum values out of the field, so
@@ -136,10 +140,10 @@ enum MvtTileDecoder {
                 }
             case (4, lengthDelimitedWireType):
                 let packedRange = try readLengthDelimited(bytes, &offset, end: end)
-                feature.geometry = appendPackedRun(to: feature.geometry, run: packedRange, bytes: bytes)
+                appendPackedRun(to: &feature.geometry, run: packedRange, bytes: bytes)
             case (4, 0):
                 let value = UInt32(truncatingIfNeeded: try readVarint(bytes, &offset, end: end))
-                feature.geometry = appendUnpackedElement(to: feature.geometry, value: value, bytes: bytes)
+                appendUnpackedElement(to: &feature.geometry, value: value, bytes: bytes)
             default:
                 try skipField(bytes, &offset, end: end, wireType: wireType)
             }
@@ -186,36 +190,41 @@ enum MvtTileDecoder {
 
     /// The first packed run stays a byte range; a second run (or a mix with
     /// unpacked elements) falls back to materializing, which the wire format
-    /// requires treating as one concatenated field.
-    private static func appendPackedRun(to field: MvtPackedField,
+    /// requires treating as one concatenated field. In the `.values` cases the
+    /// field is cleared before mutating so the array binding is uniquely
+    /// referenced; otherwise every append would copy the whole array and an
+    /// element-by-element unpacked encoding would decode quadratically.
+    private static func appendPackedRun(to field: inout MvtPackedField,
                                         run: Range<Int>,
-                                        bytes: UnsafeRawBufferPointer) -> MvtPackedField {
+                                        bytes: UnsafeRawBufferPointer) {
         switch field {
         case .empty:
-            return .range(run)
+            field = .range(run)
         case .range(let existing):
             var values = materialize(range: existing, bytes: bytes)
             appendVarints(from: run, bytes: bytes, into: &values)
-            return .values(values)
+            field = .values(values)
         case .values(var values):
+            field = .empty
             appendVarints(from: run, bytes: bytes, into: &values)
-            return .values(values)
+            field = .values(values)
         }
     }
 
-    private static func appendUnpackedElement(to field: MvtPackedField,
+    private static func appendUnpackedElement(to field: inout MvtPackedField,
                                               value: UInt32,
-                                              bytes: UnsafeRawBufferPointer) -> MvtPackedField {
+                                              bytes: UnsafeRawBufferPointer) {
         switch field {
         case .empty:
-            return .values([value])
+            field = .values([value])
         case .range(let existing):
             var values = materialize(range: existing, bytes: bytes)
             values.append(value)
-            return .values(values)
+            field = .values(values)
         case .values(var values):
+            field = .empty
             values.append(value)
-            return .values(values)
+            field = .values(values)
         }
     }
 

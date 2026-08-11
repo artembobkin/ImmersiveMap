@@ -25,6 +25,7 @@ enum MvtPackedField {
             return values
         case .range(let range):
             return data.withUnsafeBytes { bytes in
+                guard range.lowerBound >= 0, range.upperBound <= bytes.count else { return [] }
                 var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
                 var values: [UInt32] = []
                 values.reserveCapacity(range.count)

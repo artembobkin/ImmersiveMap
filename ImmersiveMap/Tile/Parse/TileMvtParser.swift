@@ -183,25 +183,29 @@ class TileMvtParser {
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
 
-        for (featureIndex, feature) in layer.features.enumerated() where feature.type == .linestring {
-            guard featureStyles[featureIndex].key != 0 else {
-                continue
-            }
-
-            let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: data), layer: layer)
-            var preparedLines: [PreparedRoadLine] = []
-            preparedLines.reserveCapacity(lines.count)
-            for line in lines {
-                let points = floatPoints(line)
-                let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
-                for fragment in fragments {
-                    for point in fragment.points {
-                        pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
-                    }
+        // One payload mapping for the whole pre-pass instead of one per
+        // feature geometry.
+        data.withUnsafeBytes { bytes in
+            for (featureIndex, feature) in layer.features.enumerated() where feature.type == .linestring {
+                guard featureStyles[featureIndex].key != 0 else {
+                    continue
                 }
-                preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
+
+                let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes), layer: layer)
+                var preparedLines: [PreparedRoadLine] = []
+                preparedLines.reserveCapacity(lines.count)
+                for line in lines {
+                    let points = floatPoints(line)
+                    let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
+                    for fragment in fragments {
+                        for point in fragment.points {
+                            pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
+                        }
+                    }
+                    preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
+                }
+                linesByFeatureIndex[featureIndex] = preparedLines
             }
-            linesByFeatureIndex[featureIndex] = preparedLines
         }
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
@@ -680,14 +684,16 @@ class TileMvtParser {
             featureAttributes.reserveCapacity(layer.features.count)
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
-            for feature in layer.features {
-                let attributes = decodeAttributes(feature: feature, layer: layer, data: mvtData)
-                featureAttributes.append(attributes)
-                featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
-                    layerName: layerName,
-                    properties: attributes,
-                    tile: tile
-                )))
+            mvtData.withUnsafeBytes { bytes in
+                for feature in layer.features {
+                    let attributes = decodeAttributes(feature: feature, layer: layer, bytes: bytes)
+                    featureAttributes.append(attributes)
+                    featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
+                        layerName: layerName,
+                        properties: attributes,
+                        tile: tile
+                    )))
+                }
             }
 
             let buildingPartInfo = layerName == "building"
@@ -1131,11 +1137,12 @@ class TileMvtParser {
                                       indexCount: inout Int) {
         let vertexOffset = UInt32(vertexCount)
         for position in polygon.vertices {
-            vertices[vertexCount] = TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex)
+            vertices.initializeElement(at: vertexCount,
+                                       to: TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex))
             vertexCount += 1
         }
         for index in polygon.indices {
-            indices[indexCount] = index &+ vertexOffset
+            indices.initializeElement(at: indexCount, to: index &+ vertexOffset)
             indexCount += 1
         }
     }
@@ -1326,8 +1333,9 @@ class TileMvtParser {
         } else {
             // One pass buckets every polygon by structure and pass role; the
             // old shape filtered the full array 15 times.
-            let roleCount = 5
-            var buckets = Array(repeating: [OrderedRoadPolygon](), count: 3 * roleCount)
+            let roleCount = RoadPassRole.allCases.count
+            var buckets = Array(repeating: [OrderedRoadPolygon](),
+                                count: RoadStructureKind.allCases.count * roleCount)
             for orderedPolygon in readingStageResult.orderedRoadPolygons {
                 buckets[orderedPolygon.structureKind.rawValue * roleCount + orderedPolygon.passRole.rawValue]
                     .append(orderedPolygon)

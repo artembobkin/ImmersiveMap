@@ -4,7 +4,7 @@
 import Foundation
 
 extension TileMvtParser {
-    enum RoadStructureKind: Int {
+    enum RoadStructureKind: Int, CaseIterable {
         case tunnel
         case ground
         case bridge
