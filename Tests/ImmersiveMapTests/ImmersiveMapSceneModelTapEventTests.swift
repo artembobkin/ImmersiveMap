@@ -32,7 +32,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         XCTAssertEqual(receivedEvents.first?.model.id, modelID)
         XCTAssertEqual(receivedEvents.first?.screenPoint, modelTapPoint)
         XCTAssertNil(environment.selectionHandler.currentMapSelection(),
-                     "Tap action без selection controller не должен создавать selection")
+                     "A tap action without a selection controller must not create a selection")
     }
 
     /// The event reports where the model was drawn, which mid-flight is not
@@ -82,7 +82,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
 
         XCTAssertEqual(tapEventCount, 2,
-                       "Tap event приходит на каждое нажатие, включая уже выбранную модель")
+                       "The tap event fires on every tap, including one on an already selected model")
         XCTAssertEqual(selectionChangeCount, 1)
         XCTAssertEqual(environment.selectionHandler.currentMapSelection(),
                        ImmersiveMapSelection(kind: .sceneModel, objectID: modelID))
@@ -163,7 +163,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
                                         entries: []))
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed,
-                       "Снимок старого кадра не должен вытеснять актуальный")
+                       "An older frame's snapshot must not displace the current one")
     }
 
     // MARK: - Helpers
