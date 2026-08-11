@@ -22,9 +22,14 @@ struct TileBufferView {
 /// arrays the write pass appends (the append preconditions catch any drift),
 /// create the arena with that length, then `append` in the same order.
 final class TileBufferArena {
-    /// Every span starts 16-byte aligned: covers vertex-attribute alignment
-    /// and Metal's index-buffer offset requirements with one rule.
-    static let spanAlignment = 16
+    /// Every span starts 256-byte aligned: constant-address-space binds
+    /// (the tile style and overview-mask pointers) require 256-byte
+    /// setVertexBuffer offsets on Mac-family GPUs, and one alignment rule for
+    /// every span keeps the measure and write passes trivially symmetric.
+    /// The worst-case tail per span is noise next to the ~70 page-rounded
+    /// allocations the arena replaces. (Same rule as the per-route buffer
+    /// offsets in RouteRenderSubsystem.)
+    static let spanAlignment = 256
 
     private let buffer: MTLBuffer
     private var cursor = 0
