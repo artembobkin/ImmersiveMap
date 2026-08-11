@@ -22,16 +22,33 @@ enum MetalTestEnvironment {
         ProcessInfo.processInfo.environment[requirementKey] == "1"
     }
 
-    /// Why a headless frame cannot run here, or nil when it can.
+    /// Why this build cannot run GPU code at all, or nil when it can.
     ///
-    /// `hasUnifiedMemory` is part of the answer because these tests read the
-    /// rendered texture back with `getBytes`, which needs shared storage.
+    /// Both conditions are facts about how the tests were built rather than
+    /// about the machine: a missing default library means the `.metal` sources
+    /// were not compiled into the bundle. That is what
+    /// `IMMERSIVE_MAP_REQUIRE_METAL` exists to refuse.
     static func unavailabilityReason() -> String? {
         guard let device = MTLCreateSystemDefaultDevice() else {
             return "Metal device is unavailable"
         }
         guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
             return "Compiled Metal library is unavailable in this test environment"
+        }
+        return nil
+    }
+
+    /// Why a rendered frame cannot be read back here, or nil when it can.
+    ///
+    /// Separate from ``unavailabilityReason()`` because this one is a property
+    /// of the hardware, not of the build: the iOS Simulator's GPU reports no
+    /// unified memory, so `getBytes` on a shared texture is not available
+    /// there however the tests were built. Requiring Metal cannot conjure a
+    /// GPU, so this stays a skip even under the requirement, and the offscreen
+    /// tests simply belong to the macOS run.
+    static func readbackUnavailabilityReason() -> String? {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            return "Metal device is unavailable"
         }
         guard device.hasUnifiedMemory else {
             return "Unified-memory GPU is required for direct texture readback"
@@ -41,12 +58,18 @@ enum MetalTestEnvironment {
 
     /// The Metal device for a GPU test, or the appropriate way out: `XCTSkip`
     /// normally, a thrown failure when the run declared it requires Metal.
+    ///
+    /// - Parameter needsReadback: whether the caller intends to read the
+    ///   rendered texture back on the CPU.
     @discardableResult
-    static func requireDevice() throws -> MTLDevice {
+    static func requireDevice(needsReadback: Bool = false) throws -> MTLDevice {
         if let reason = unavailabilityReason() {
             if isMetalRequired {
                 throw MissingMetalError(reason: reason)
             }
+            throw XCTSkip(reason)
+        }
+        if needsReadback, let reason = readbackUnavailabilityReason() {
             throw XCTSkip(reason)
         }
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -80,6 +103,6 @@ final class MetalTestEnvironmentTests: XCTestCase {
             """)
         }
         XCTAssertNil(MetalTestEnvironment.unavailabilityReason(),
-                     "The GPU suite was required to run, but this environment cannot render a headless frame")
+                     "The GPU suite was required to run, but this build cannot execute Metal code")
     }
 }

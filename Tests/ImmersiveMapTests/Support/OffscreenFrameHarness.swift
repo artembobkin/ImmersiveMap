@@ -107,15 +107,44 @@ final class OffscreenFrameHarness {
                            date: Date = Date(timeIntervalSinceReferenceDate: 0),
                            eventSink: RenderFrameEventSink = VideoExportRenderEventSink()) throws -> OffscreenFrameHarness {
         _ = try requireMetalDeviceOrSkip()
-        return try OffscreenFrameHarness(settings: settings, size: size, date: date, eventSink: eventSink)
+        return try OffscreenFrameHarness(settings: offline(settings),
+                                         size: size,
+                                         date: date,
+                                         eventSink: eventSink)
+    }
+
+    /// Points the tile provider at a port nothing listens on, so no frame this
+    /// harness renders can contain a tile it was not handed directly.
+    ///
+    /// Out of the box the engine streams from the hosted tile service, and a
+    /// test that renders two frames a sixtieth of a second apart would have
+    /// tiles landing between them: the picture changes for reasons the test
+    /// never asked for, and the whole GPU suite becomes a network client whose
+    /// results depend on a CDN. Every offscreen test states that it renders an
+    /// empty map; this makes that true.
+    ///
+    /// The provider type stays the same, so the map style, label profile and
+    /// cache namespace are unchanged and only the transport dies, immediately
+    /// and locally (connection refused on 127.0.0.1, no DNS, no traffic).
+    /// A test that wants tiles hands them to `tileRenderStore` itself.
+    private static func offline(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
+        var offlineSettings = settings
+        let unreachable = URL(string: "http://127.0.0.1:1/tiles")!
+        offlineSettings.tileProvider = AnyImmersiveMapTileProvider(
+            ImmersiveMapTilesProvider(tileBaseURL: unreachable))
+        return offlineSettings
     }
 
     /// The device a headless frame needs, or the way out: a skip normally, a
     /// failure when the run declared it requires Metal (see
     /// ``MetalTestEnvironment``).
+    ///
+    /// The harness reads its frames back on the CPU, so it needs a
+    /// unified-memory GPU: that rules out the iOS Simulator, where these tests
+    /// skip even under the requirement.
     @discardableResult
     static func requireMetalDeviceOrSkip() throws -> MTLDevice {
-        try MetalTestEnvironment.requireDevice()
+        try MetalTestEnvironment.requireDevice(needsReadback: true)
     }
 
     private init(settings: ImmersiveMapSettings,
@@ -187,6 +216,21 @@ final class OffscreenFrameHarness {
 
     // MARK: - Rendering
 
+    /// Scene time of the most recent frame. The scripted clock is monotonic,
+    /// so this is the floor for whatever a test renders next.
+    private(set) var lastFrameTime: TimeInterval = 0
+
+    /// Renders the next frame one interval after the last one, for tests that
+    /// continue after a wait whose length they did not choose.
+    ///
+    /// Deriving the time rather than naming it is what keeps the clock
+    /// monotonic: a literal picked to sit after today's `renderUntilSettled`
+    /// budget silently moves time backwards the day that budget grows.
+    @discardableResult
+    func renderNextFrame(after interval: TimeInterval = 1.0 / 60.0) async throws -> RenderedFrame {
+        try await renderFrame(at: lastFrameTime + interval)
+    }
+
     /// Renders one frame with scene time at `time` and reads the texture back.
     ///
     /// The scripted clock is monotonic, so `time` must never go backwards
@@ -194,6 +238,7 @@ final class OffscreenFrameHarness {
     @discardableResult
     func renderFrame(at time: TimeInterval = 0) async throws -> RenderedFrame {
         clock.setTime(time)
+        lastFrameTime = time
         let didComplete = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
             let request = RenderFrameOffscreenRequest(texture: texture,
                                                       drawSize: CGSize(width: size, height: size),
@@ -311,8 +356,13 @@ struct RenderedFrame: Equatable {
 
     /// How many bytes differ from `other`, for tests that only need to prove
     /// that two frames are not the same picture.
+    ///
+    /// Same-sized frames only: `zip` would otherwise compare the common prefix
+    /// and report a small difference for two pictures that are not even the
+    /// same shape.
     func differingByteCount(from other: RenderedFrame) -> Int {
-        zip(bytes, other.bytes).count { $0 != $1 }
+        precondition(size == other.size, "Frames of different sizes are not comparable")
+        return zip(bytes, other.bytes).count { $0 != $1 }
     }
 
     private func pixel(atByteOffset offset: Int) -> Pixel {

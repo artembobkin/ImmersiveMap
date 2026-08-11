@@ -59,13 +59,14 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         // model is awaited through the hit volume the frame publishes for it.
         var pixelsChanged = false
         var snapshot = SceneModelSelectionSnapshot.empty
-        for frameIndex in 1...200 where pixelsChanged == false || snapshot.entries.isEmpty {
+        for frameIndex in 1...200 {
             let frame = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(frameIndex))
             pixelsChanged = pixelsChanged || frame != baseline
             snapshot = eventSink.sceneModelSelectionSnapshot
-            if pixelsChanged == false || snapshot.entries.isEmpty {
-                try await Task.sleep(for: .milliseconds(20))
+            if pixelsChanged, snapshot.entries.isEmpty == false {
+                break
             }
+            try await Task.sleep(for: .milliseconds(20))
         }
 
         XCTAssertTrue(pixelsChanged,

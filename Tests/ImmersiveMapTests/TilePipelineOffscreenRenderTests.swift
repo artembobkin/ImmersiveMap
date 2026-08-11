@@ -64,11 +64,16 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     func testTheStyleDecidesTheColourOfTheParsedGeometry() async throws {
         let harness = try makeHarness()
         harness.setCameraPosition(Self.camera)
-        _ = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
         try await loadFixtureTiles(into: harness, layerName: "landcover")
         let painted = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(1))
 
+        // Both halves are needed. Without the first, a frame where the ground
+        // shader drew nothing at all would satisfy the second and the test
+        // would pass for the wrong reason.
+        XCTAssertNotEqual(painted, baseline,
+                          "The landcover tile must reach the frame and paint something")
         XCTAssertEqual(painted.count(where: isFixtureWater), 0,
                        "Only the water layer may take the water colour")
     }
@@ -118,17 +123,16 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     /// would be asserting on the policy instead of on the pipeline.
     @MainActor
     private func loadFixtureTiles(into harness: OffscreenFrameHarness, layerName: String) async throws {
-        let data = VectorTileFixture.fullCoverageTile(layerName: layerName,
-                                                      properties: ["class": layerName])
+        let data = try VectorTileFixture.fullCoverageTile(layerName: layerName,
+                                                          properties: ["class": layerName])
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
                                                                longitude: Self.camera.longitudeDegrees,
                                                                maximumZoom: Int(Self.renderZoom))
-        var materializedCount = 0
-        for tile in tiles where await harness.tileRenderStore.parseTile(tile: tile, data: data) {
-            materializedCount += 1
+        for tile in tiles {
+            let didMaterialize = await harness.tileRenderStore.parseTile(tile: tile, data: data)
+            XCTAssertTrue(didMaterialize,
+                          "Fixture tile \(tile.z)/\(tile.x)/\(tile.y) must parse and reach the GPU")
         }
-        XCTAssertEqual(materializedCount, tiles.count,
-                       "Every fixture tile must parse and reach the GPU")
     }
 
     /// Exact equality is deliberate: the ground shader paints the style colour

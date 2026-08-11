@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Reading the checkout is all any job here does. Artifact upload needs no
+# token scope of its own.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build & Test (SPM)

@@ -33,13 +33,15 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
     }
 
     /// The default globe paints space, and that must not change.
+    ///
+    /// Every pixel, not the corners: a transparent band between the corners
+    /// and the limb is exactly the kind of hole a corner check would miss.
     @MainActor
     func testOpaqueSpacePaintsTheWholeFrame() async throws {
         let frame = try await renderFrame(settings: .default, routeAlpha: 1.0)
 
-        for corner in frame.corners {
-            XCTAssertEqual(corner.alpha, 255)
-        }
+        XCTAssertEqual(frame.count(where: { $0.alpha != 255 }), 0,
+                       "The default map must leave no pixel unpainted")
     }
 
     /// FXAA writes the drawable in its own pass, so it is the one place where a

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Metal
 
 class MemoryMetalTileCache {
     /// Low-zoom world coverage is pinned lazily: once materialized,
@@ -280,6 +281,19 @@ class MemoryMetalTileCache {
     }
     
     private func estimateTileByteSize(_ tile: MetalTile) -> Int {
-        tile.tileBuffers.backingBuffer?.allocatedSize ?? 0
+        tile.tileBuffers.backingBuffer.map(Self.byteSize(of:)) ?? 0
+    }
+
+    /// What one buffer costs the cache.
+    ///
+    /// `allocatedSize` is the figure to use where it is available: it counts
+    /// the padding the driver added, which the requested length does not. The
+    /// iOS Simulator's GPU reports 0 for it, for every buffer at every size.
+    /// Taken at face value that puts every tile at cost 0, and a budget whose
+    /// total never exceeds the limit never evicts: the tile cache would grow
+    /// without bound for the whole run. The requested length is the honest
+    /// lower bound to fall back on.
+    private static func byteSize(of buffer: MTLBuffer) -> Int {
+        buffer.allocatedSize > 0 ? buffer.allocatedSize : buffer.length
     }
 }

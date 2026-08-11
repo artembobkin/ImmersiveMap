@@ -71,7 +71,8 @@ cat > .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata <<'XML'
    <FileRef location = "self:"></FileRef>
 </Workspace>
 XML
-xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap \
+IMMERSIVE_MAP_REQUIRE_METAL=1 TEST_RUNNER_IMMERSIVE_MAP_REQUIRE_METAL=1 \
+  xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap \
   -destination 'platform=macOS'
 ```
 
@@ -79,7 +80,7 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
 
 End-to-end rendering tests build on `OffscreenFrameHarness` (`Tests/ImmersiveMapTests/Support/`): it stands up a real `RenderFrameEngine` drawing into a texture on a scripted clock and hands the frame back as pixels. Assert on properties of the picture (a corner is unpainted, N pixels carry a colour, the frame got darker), not on a stored reference image: those differ between GPU families and would have to be regenerated on every shader tweak.
 
-The Xcode jobs set `IMMERSIVE_MAP_REQUIRE_METAL=1`, which turns "this machine cannot render" from a skip into a failure. A GPU suite that skips its way to green reports health it never checked.
+`IMMERSIVE_MAP_REQUIRE_METAL=1` (set above and by both Xcode jobs) turns "this build cannot run Metal code" from a skip into a failure. A GPU suite that skips its way to green reports health it never checked. Reading a rendered frame back on the CPU additionally needs a unified-memory GPU, which the iOS Simulator does not have, so the offscreen tests still skip there even under the requirement and belong to the macOS run.
 
 Claude reviews every pull request pushed to a branch in this repository and posts what it finds as inline comments, so a red "Claude review" check means the findings on the diff need an answer, either a fix or a follow-up push. The check is advisory: it does not gate the merge, and an unfinished review holds nothing up. `Build & Test (SPM)` is the only required check. A draft is reviewed once it is marked ready for review. A pull request from a fork gets no repository secrets, so the review is skipped there and a maintainer reads the branch by hand.
 

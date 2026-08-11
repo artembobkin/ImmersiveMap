@@ -51,14 +51,18 @@ final class ShadowOffscreenRenderTests: XCTestCase {
                                                              startingAt: OffscreenFrameHarness.frameTime(1))
         let shadowsOnSum = shadowsOn.brightnessSum
 
+        // The follow-up frames continue from wherever the wait ended rather
+        // than at a named time: the scripted clock is monotonic, and a literal
+        // chosen to clear today's settling budget would move time backwards
+        // the day that budget grows.
         harness.engine.applySettings(settings.shadows(isEnabled: false))
-        let shadowsOffSum = try await harness.renderFrame(at: 4.0).brightnessSum
+        let shadowsOffSum = try await harness.renderNextFrame().brightnessSum
 
         XCTAssertGreaterThan(shadowsOffSum, shadowsOnSum,
                              "Disabling shadows must brighten the slab north-east of the obelisk")
 
         harness.engine.applySettings(settings.shadows(isEnabled: true))
-        let shadowsBackSum = try await harness.renderFrame(at: 5.0).brightnessSum
+        let shadowsBackSum = try await harness.renderNextFrame().brightnessSum
         XCTAssertLessThan(shadowsBackSum, shadowsOffSum,
                           "Re-enabling shadows must darken the frame again")
     }

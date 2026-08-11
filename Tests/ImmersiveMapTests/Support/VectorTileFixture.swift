@@ -43,7 +43,7 @@ enum VectorTileFixture {
     /// the tile reached the frame at all.
     static func fullCoverageTile(layerName: String,
                                  properties: [String: String] = [:],
-                                 extent: UInt32 = 4096) -> Data {
+                                 extent: UInt32 = 4096) throws -> Data {
         var feature = VectorTile_Tile.Feature()
         feature.id = 1
         feature.type = .polygon
@@ -64,10 +64,10 @@ enum VectorTileFixture {
 
         var tile = VectorTile_Tile()
         tile.layers = [layer]
-        // `serializedData()` cannot fail for a message with every required
-        // field set, and a fixture that could throw would push handling into
-        // every call site for a case that never happens.
-        return (try? tile.serializedData()) ?? Data()
+        // Rethrown rather than turned into empty bytes: an encoding failure
+        // swallowed here would surface downstream as "the parser rejected the
+        // tile", pointing the reader at the wrong component.
+        return try tile.serializedData()
     }
 
     /// One closed square ring from (0,0) to (side,side), as MVT commands.
