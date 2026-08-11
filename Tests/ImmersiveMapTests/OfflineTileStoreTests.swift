@@ -73,7 +73,8 @@ final class OfflineTileStoreTests: XCTestCase {
                 isComplete: true,
                 storedTileCount: 12,
                 failedTileCount: 1,
-                byteCount: 34_567)
+                byteCount: 34_567,
+                wasBlockedByAuthorization: false)
         }
         try store.writeRegionRecord(makeRecord("b"))
         try store.writeRegionRecord(makeRecord("a"))
@@ -130,7 +131,8 @@ final class OfflineTileStoreTests: XCTestCase {
             isComplete: false,
             storedTileCount: 0,
             failedTileCount: 0,
-            byteCount: 0))
+            byteCount: 0,
+            wasBlockedByAuthorization: false))
 
         store.removeEverything()
 

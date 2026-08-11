@@ -167,7 +167,13 @@ struct OfflineRegionsPanel: View {
                 Text("\(status.storedTileCount) of \(status.expectedTileCount) tiles, \(byteText(status.byteCount))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if status.failedTileCount > 0 {
+                if status.isBlockedByAuthorization {
+                    // Resuming with the same credentials would stop the same
+                    // way, so the row explains instead of offering a retry.
+                    Text("authorization failed")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else if status.failedTileCount > 0 {
                     Text("\(status.failedTileCount) failed")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -178,7 +184,7 @@ struct OfflineRegionsPanel: View {
                         offlineController.cancelDownload(regionID: status.id)
                     }
                 } else {
-                    if status.phase == .incomplete {
+                    if status.phase == .incomplete, status.isBlockedByAuthorization == false {
                         Button("Resume") {
                             download(status.region)
                         }

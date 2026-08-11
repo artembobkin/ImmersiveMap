@@ -33,16 +33,13 @@ struct OfflineRegionDownloader: Sendable {
         }
     }
 
-    enum Outcome: Equatable, Sendable {
-        case complete(Progress)
-        case incomplete(Progress)
-
-        var progress: Progress {
-            switch self {
-            case let .complete(progress), let .incomplete(progress):
-                return progress
-            }
-        }
+    struct Summary: Equatable, Sendable {
+        var progress: Progress
+        var isComplete: Bool
+        /// The run stopped on 401/403/missing token. Every remaining tile
+        /// would fail the same way, so retrying without new credentials is
+        /// pointless; the status surfaces this so an app can say so.
+        var wasBlockedByAuthorization: Bool
     }
 
     private enum TileOutcome {
@@ -67,7 +64,7 @@ struct OfflineRegionDownloader: Sendable {
     var onProgress: @Sendable (Progress) -> Void = { _ in }
     var progressReportStride = 32
 
-    func run(tiles: [Tile]) async -> Outcome {
+    func run(tiles: [Tile]) async -> Summary {
         var progress = Progress(expectedTileCount: tiles.count)
         var aborted = false
         var cancelled = false
@@ -118,7 +115,9 @@ struct OfflineRegionDownloader: Sendable {
         }
         let isComplete = aborted == false && cancelled == false
             && progress.storedTileCount == progress.expectedTileCount
-        return isComplete ? .complete(progress) : .incomplete(progress)
+        return Summary(progress: progress,
+                       isComplete: isComplete,
+                       wasBlockedByAuthorization: aborted)
     }
 
     private func process(tile: Tile) async -> TileOutcome {
@@ -156,7 +155,11 @@ struct OfflineRegionDownloader: Sendable {
                 guard attempt < fetchAttemptsPerTile else {
                     return .failed
                 }
-                await pause(retryAfter ?? 2.0)
+                // A CDN may legally answer with a multi-minute Retry-After; a
+                // bulk download must not park one of its few fetch slots that
+                // long. Past the clamp the tile just counts as failed and a
+                // later download run picks it up.
+                await pause(min(max(retryAfter ?? 2.0, 0), 30.0))
             case .failure:
                 guard attempt < fetchAttemptsPerTile else {
                     return .failed

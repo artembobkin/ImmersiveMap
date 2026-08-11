@@ -13,6 +13,7 @@ struct OfflineStoredRegionRecord: Codable, Equatable, Sendable {
     var storedTileCount: Int
     var failedTileCount: Int
     var byteCount: Int64
+    var wasBlockedByAuthorization: Bool
 }
 
 /// On-disk home of downloaded tiles, namespaced by the tile source the bytes

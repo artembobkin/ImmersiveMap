@@ -110,8 +110,10 @@ final class DefaultTileLoadPipelineOfflineTests: XCTestCase {
         let store = makeStore()
         let tile = Tile(x: 5, y: 6, z: 7)
         try store.writeTile(tile, data: Data([9, 9]))
+        // The store is populated and handed over on purpose: the test proves
+        // the mode branch ignores it, not that a nil store serves nothing.
         let pipeline = makePipeline(downloader: ScriptedTileDownloader(result: .failure(.network)),
-                                    store: nil,
+                                    store: store,
                                     mode: .disabled)
 
         let result = await pipeline.download(tile: tile)

@@ -54,7 +54,15 @@ public final class ImmersiveMapOfflineController {
     // the TileJSON discovery request for a controller that only lists regions.
     private var fetchTile: OfflineRegionDownloader.FetchTile?
     private var records: [String: OfflineStoredRegionRecord] = [:]
-    private var downloadTasks: [String: Task<Void, Never>] = [:]
+    // Each run carries a generation so a drained task that outlives its
+    // region (cancelled by removal, superseded by a new download of the same
+    // id) can never clear or overwrite state a newer run owns.
+    private var downloadTasks: [String: (generation: UInt64, task: Task<Void, Never>)] = [:]
+    private var nextDownloadGeneration: UInt64 = 0
+    // Tail of the prune-sweep chain. Sweeps run one after another, and every
+    // download started after a sweep was scheduled waits for it, so a sweep's
+    // keep-set snapshot can never miss tiles being written concurrently.
+    private var pruneSweepTask: Task<Void, Never>?
     private var statuses: [String: ImmersiveMapOfflineRegionStatus] = [:]
 
     public convenience init<P: ImmersiveMapTileProvider>(tileProvider: P) {
@@ -126,7 +134,8 @@ public final class ImmersiveMapOfflineController {
                                                isComplete: false,
                                                storedTileCount: 0,
                                                failedTileCount: 0,
-                                               byteCount: 0)
+                                               byteCount: 0,
+                                               wasBlockedByAuthorization: false)
         try store.writeRegionRecord(record)
         records[region.id] = record
         statuses[region.id] = ImmersiveMapOfflineRegionStatus(region: clampedRegion,
@@ -134,7 +143,8 @@ public final class ImmersiveMapOfflineController {
                                                               expectedTileCount: expectedTileCount,
                                                               storedTileCount: 0,
                                                               failedTileCount: 0,
-                                                              byteCount: 0)
+                                                              byteCount: 0,
+                                                              isBlockedByAuthorization: false)
         publishRegions()
 
         // Redefining a region under the same id can strand tiles only the old
@@ -144,6 +154,8 @@ public final class ImmersiveMapOfflineController {
         }
 
         let regionID = clampedRegion.id
+        nextDownloadGeneration += 1
+        let generation = nextDownloadGeneration
         let downloader = OfflineRegionDownloader(
             store: store,
             fetchTile: resolvedFetchTile(),
@@ -151,23 +163,28 @@ public final class ImmersiveMapOfflineController {
             pause: pause,
             onProgress: { [weak self] progress in
                 Task { @MainActor [weak self] in
-                    self?.applyProgress(progress, regionID: regionID)
+                    self?.applyProgress(progress, regionID: regionID, generation: generation)
                 }
             },
             progressReportStride: progressReportStride)
-        downloadTasks[regionID] = Task.detached(priority: .utility) { [weak self] in
+        // Waiting out the sweep chain keeps this run's tiles from being
+        // written under a sweep whose keep-set snapshot predates the region.
+        let sweepToAwait = pruneSweepTask
+        let task = Task.detached(priority: .utility) { [weak self] in
+            await sweepToAwait?.value
             // Tile enumeration can be tens of thousands of values; it belongs
             // on this task, not on the main actor that spawned it.
             let tiles = OfflineRegionTileMath.tiles(in: clampedRegion)
-            let outcome = await downloader.run(tiles: tiles)
-            await self?.finishDownload(regionID: regionID, outcome: outcome)
+            let summary = await downloader.run(tiles: tiles)
+            await self?.finishDownload(regionID: regionID, generation: generation, summary: summary)
         }
+        downloadTasks[regionID] = (generation: generation, task: task)
     }
 
     /// Stops the region's download between tiles. Everything already stored
     /// stays; the region reports `.incomplete` and `download(_:)` resumes it.
     public func cancelDownload(regionID: String) {
-        downloadTasks[regionID]?.cancel()
+        downloadTasks[regionID]?.task.cancel()
     }
 
     /// Cancels any running download and deletes the region. Tiles also
@@ -176,20 +193,25 @@ public final class ImmersiveMapOfflineController {
         guard records[regionID] != nil else {
             return
         }
-        let activeTask = downloadTasks[regionID]
-        activeTask?.cancel()
+        let activeEntry = downloadTasks[regionID]
+        activeEntry?.task.cancel()
+        // Dropping the entry now lets a new download of the same id start
+        // immediately; the drained task's generation no longer matches, so
+        // its late finish and progress land nowhere.
+        downloadTasks[regionID] = nil
         records[regionID] = nil
         statuses[regionID] = nil
         store.removeRegionRecord(id: regionID)
-        schedulePruneSweep(afterWaitingFor: activeTask.map { [$0] } ?? [])
+        schedulePruneSweep(afterWaitingFor: activeEntry.map { [$0.task] } ?? [])
         publishRegions()
     }
 
     /// Cancels every download and deletes every region and tile of this
     /// controller's tile source.
     public func removeAllRegions() {
-        let activeTasks = Array(downloadTasks.values)
+        let activeTasks = downloadTasks.values.map(\.task)
         activeTasks.forEach { $0.cancel() }
+        downloadTasks = [:]
         for id in records.keys {
             store.removeRegionRecord(id: id)
         }
@@ -211,7 +233,8 @@ public final class ImmersiveMapOfflineController {
                 expectedTileCount: OfflineRegionTileMath.tileCount(in: record.region),
                 storedTileCount: record.storedTileCount,
                 failedTileCount: record.failedTileCount,
-                byteCount: record.byteCount)
+                byteCount: record.byteCount,
+                isBlockedByAuthorization: record.wasBlockedByAuthorization)
             if record.isComplete == false {
                 incompleteRecords.append(record)
             }
@@ -246,12 +269,16 @@ public final class ImmersiveMapOfflineController {
             expectedTileCount: status.expectedTileCount,
             storedTileCount: storedTileCount,
             failedTileCount: status.failedTileCount,
-            byteCount: byteCount)
+            byteCount: byteCount,
+            isBlockedByAuthorization: status.isBlockedByAuthorization)
         publishRegions()
     }
 
-    private func applyProgress(_ progress: OfflineRegionDownloader.Progress, regionID: String) {
-        guard let status = statuses[regionID], status.phase == .downloading else {
+    private func applyProgress(_ progress: OfflineRegionDownloader.Progress,
+                               regionID: String,
+                               generation: UInt64) {
+        guard downloadTasks[regionID]?.generation == generation,
+              let status = statuses[regionID], status.phase == .downloading else {
             return
         }
         statuses[regionID] = ImmersiveMapOfflineRegionStatus(region: status.region,
@@ -259,46 +286,54 @@ public final class ImmersiveMapOfflineController {
                                                              expectedTileCount: progress.expectedTileCount,
                                                              storedTileCount: progress.storedTileCount,
                                                              failedTileCount: progress.failedTileCount,
-                                                             byteCount: progress.byteCount)
+                                                             byteCount: progress.byteCount,
+                                                             isBlockedByAuthorization: false)
         publishRegions()
     }
 
-    private func finishDownload(regionID: String, outcome: OfflineRegionDownloader.Outcome) {
+    private func finishDownload(regionID: String,
+                                generation: UInt64,
+                                summary: OfflineRegionDownloader.Summary) {
+        // A mismatched generation means this run no longer owns the region:
+        // it was removed, or a newer download of the same id took over.
+        guard downloadTasks[regionID]?.generation == generation else {
+            return
+        }
         downloadTasks[regionID] = nil
         // The region may have been removed while the download was winding
         // down; writing the record back would resurrect it.
         guard var record = records[regionID] else {
             return
         }
-        let progress = outcome.progress
-        let isComplete: Bool
-        if case .complete = outcome {
-            isComplete = true
-        } else {
-            isComplete = false
-        }
-        record.isComplete = isComplete
+        let progress = summary.progress
+        record.isComplete = summary.isComplete
         record.storedTileCount = progress.storedTileCount
         record.failedTileCount = progress.failedTileCount
         record.byteCount = progress.byteCount
+        record.wasBlockedByAuthorization = summary.wasBlockedByAuthorization
         records[regionID] = record
         try? store.writeRegionRecord(record)
         statuses[regionID] = ImmersiveMapOfflineRegionStatus(region: record.region,
-                                                             phase: isComplete ? .complete : .incomplete,
+                                                             phase: summary.isComplete ? .complete : .incomplete,
                                                              expectedTileCount: progress.expectedTileCount,
                                                              storedTileCount: progress.storedTileCount,
                                                              failedTileCount: progress.failedTileCount,
-                                                             byteCount: progress.byteCount)
+                                                             byteCount: progress.byteCount,
+                                                             isBlockedByAuthorization: summary.wasBlockedByAuthorization)
         publishRegions()
     }
 
     /// Prunes tiles no remaining region covers, first waiting out cancelled
     /// downloads whose in-flight tiles could otherwise land after the sweep.
-    /// The kept set is read at sweep time, not capture time, so a download
-    /// started between scheduling and sweeping keeps its tiles.
+    /// The kept set is read at sweep time, not capture time, and sweeps are
+    /// chained: a new sweep waits for the previous one, and every download
+    /// started after a sweep was scheduled waits for the chain, so no tile is
+    /// ever written under a sweep that does not know its region.
     private func schedulePruneSweep(afterWaitingFor activeTasks: [Task<Void, Never>]) {
         let store = store
-        Task.detached(priority: .utility) { [weak self] in
+        let previousSweep = pruneSweepTask
+        pruneSweepTask = Task.detached(priority: .utility) { [weak self] in
+            await previousSweep?.value
             for task in activeTasks {
                 await task.value
             }
@@ -341,7 +376,11 @@ public final class ImmersiveMapOfflineController {
 
     #if DEBUG
     func activeDownloadTaskForTesting(regionID: String) -> Task<Void, Never>? {
-        downloadTasks[regionID]
+        downloadTasks[regionID]?.task
+    }
+
+    func pruneSweepTaskForTesting() -> Task<Void, Never>? {
+        pruneSweepTask
     }
     #endif
 }

@@ -8,6 +8,13 @@ import Foundation
 /// renderer (`ImmersiveMapProjection`): normalized x from longitude, y growing
 /// southward with tile row 0 at the north edge.
 enum OfflineRegionTileMath {
+    /// Hard ceiling on zoom arithmetic. Real tile sources stop far below it
+    /// (the deepest provider in the package serves z20), and past z30 the
+    /// per-zoom tile counts approach `Int.max`, so a nonsense zoom range in a
+    /// public `ImmersiveMapOfflineRegion` must clamp here rather than trap in
+    /// count arithmetic.
+    static let maximumSupportedZoomLevel = 30
+
     struct ZoomCoverage: Equatable, Sendable {
         let zoom: Int
         /// One range normally; two when the region crosses the antimeridian.
@@ -21,7 +28,13 @@ enum OfflineRegionTileMath {
     }
 
     static func coverage(of region: ImmersiveMapOfflineRegion) -> [ZoomCoverage] {
-        guard region.southWest.latitude <= region.northEast.latitude else {
+        // A non-finite coordinate would reach `Int(floor(...))` and trap;
+        // public input degrades to an empty region instead of crashing.
+        guard region.southWest.latitude.isFinite,
+              region.southWest.longitude.isFinite,
+              region.northEast.latitude.isFinite,
+              region.northEast.longitude.isFinite,
+              region.southWest.latitude <= region.northEast.latitude else {
             return []
         }
         let maximumLatitude = ImmersiveMapProjection.maxMercatorLatitude * 180.0 / .pi
@@ -35,12 +48,13 @@ enum OfflineRegionTileMath {
         let eastLongitude = normalizedEastLongitude(region.northEast.longitude)
         let crossesAntimeridian = coversFullWorld == false && eastLongitude < westLongitude
 
-        let lowestZoom = max(region.zoomLevels.lowerBound, 0)
-        guard lowestZoom <= region.zoomLevels.upperBound else {
+        let lowestZoom = min(max(region.zoomLevels.lowerBound, 0), Self.maximumSupportedZoomLevel)
+        let highestZoom = min(region.zoomLevels.upperBound, Self.maximumSupportedZoomLevel)
+        guard lowestZoom <= highestZoom else {
             return []
         }
 
-        return (lowestZoom...region.zoomLevels.upperBound).map { zoom in
+        return (lowestZoom...highestZoom).map { zoom in
             let tilesPerAxis = 1 << zoom
             let yRange = tileIndex(topY, tilesPerAxis: tilesPerAxis)...tileIndex(bottomY, tilesPerAxis: tilesPerAxis)
 

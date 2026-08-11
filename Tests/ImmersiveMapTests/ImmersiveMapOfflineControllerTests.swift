@@ -9,30 +9,13 @@ import XCTest
 /// what is missing, and removal that respects overlapping regions.
 @MainActor
 final class ImmersiveMapOfflineControllerTests: XCTestCase {
-    private var baseDirectory: URL!
+    // An immutable Sendable stored property so the nonisolated XCTestCase
+    // lifecycle (deinit) can reach it from outside the main actor.
+    private let baseDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("ImmersiveMapOfflineController-\(UUID().uuidString)")
 
-    override func setUpWithError() throws {
-        baseDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ImmersiveMapOfflineController-\(UUID().uuidString)")
-    }
-
-    override func tearDownWithError() throws {
+    deinit {
         try? FileManager.default.removeItem(at: baseDirectory)
-    }
-
-    private final class Locked<Value>: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: Value
-
-        init(_ value: Value) {
-            self.value = value
-        }
-
-        func withLock<R>(_ body: (inout Value) -> R) -> R {
-            lock.lock()
-            defer { lock.unlock() }
-            return body(&value)
-        }
     }
 
     private func makeController(maximumTileZoomLevel: Int? = 14,
@@ -220,7 +203,8 @@ final class ImmersiveMapOfflineControllerTests: XCTestCase {
                                                               isComplete: false,
                                                               storedTileCount: 0,
                                                               failedTileCount: 0,
-                                                              byteCount: 0))
+                                                              byteCount: 0,
+                                                              wasBlockedByAuthorization: false))
 
         let controller = makeController()
         let recounted = await waitUntil {
@@ -229,6 +213,85 @@ final class ImmersiveMapOfflineControllerTests: XCTestCase {
         XCTAssertTrue(recounted)
         XCTAssertEqual(controller.status(forRegionID: "world")?.storedTileCount, 5)
         XCTAssertEqual(controller.status(forRegionID: "world")?.byteCount, 10)
+    }
+
+    func testAuthorizationFailureIsSurfacedAndPersisted() async throws {
+        let controller = makeController(fetchTile: { _ in .failure(.unauthorized) })
+        try controller.download(makeWorldRegion())
+        await awaitDownload(controller, regionID: "world")
+
+        guard let status = controller.status(forRegionID: "world") else {
+            return XCTFail("Expected a status for the aborted region")
+        }
+        XCTAssertEqual(status.phase, .incomplete)
+        XCTAssertTrue(status.isBlockedByAuthorization)
+
+        // The cause survives a relaunch.
+        let reloaded = ImmersiveMapOfflineController(
+            network: ImmersiveMapSettings.default.tiles.network,
+            maximumTileZoomLevel: 14,
+            baseDirectory: baseDirectory,
+            makeFetchTile: { { _ in .failure(.network) } })
+        XCTAssertEqual(reloaded.regions.first?.isBlockedByAuthorization, true)
+
+        // A successful re-download clears it.
+        let recovered = ImmersiveMapOfflineController(
+            network: ImmersiveMapSettings.default.tiles.network,
+            maximumTileZoomLevel: 14,
+            baseDirectory: baseDirectory,
+            makeFetchTile: { { _ in .success(Data([1]), etag: nil) } },
+            pause: { _ in })
+        try recovered.download(makeWorldRegion())
+        await recovered.activeDownloadTaskForTesting(regionID: "world")?.value
+        XCTAssertEqual(recovered.status(forRegionID: "world")?.phase, .complete)
+        XCTAssertEqual(recovered.status(forRegionID: "world")?.isBlockedByAuthorization, false)
+    }
+
+    func testRemoveWhileDownloadingAllowsAnImmediateRedownload() async throws {
+        let gate = Locked(false)
+        let controller = makeController(fetchTile: { _ in
+            while gate.withLock({ $0 }) == false {
+                try? await Task.sleep(nanoseconds: 5_000_000)
+            }
+            return .success(Data([1]), etag: nil)
+        })
+
+        try controller.download(makeWorldRegion(zoomLevels: 0...1))
+        // Remove mid-download, then immediately download the same id again:
+        // the drained old task must neither block the new download nor
+        // clobber its state when it finishes.
+        controller.removeRegion(regionID: "world")
+        XCTAssertNil(controller.status(forRegionID: "world"))
+        try controller.download(makeWorldRegion(zoomLevels: 0...1))
+        XCTAssertEqual(controller.status(forRegionID: "world")?.phase, .downloading)
+
+        gate.withLock { $0 = true }
+        await awaitDownload(controller, regionID: "world")
+        let settled = await waitUntil {
+            controller.status(forRegionID: "world")?.phase == .complete
+        }
+        XCTAssertTrue(settled)
+        XCTAssertEqual(controller.status(forRegionID: "world")?.storedTileCount, 5)
+    }
+
+    func testDownloadStartedDuringPruneSweepKeepsItsTiles() async throws {
+        let controller = makeController()
+        try controller.download(makeWorldRegion(id: "first", zoomLevels: 0...2))
+        await awaitDownload(controller, regionID: "first")
+
+        // The removal sweep runs in the background; a download started while
+        // it is pending must wait it out rather than lose fresh tiles.
+        controller.removeRegion(regionID: "first")
+        try controller.download(makeWorldRegion(id: "second", zoomLevels: 0...2))
+        await controller.pruneSweepTaskForTesting()?.value
+        await awaitDownload(controller, regionID: "second")
+
+        XCTAssertEqual(controller.status(forRegionID: "second")?.phase, .complete)
+        let store = OfflineTileStore(network: ImmersiveMapSettings.default.tiles.network,
+                                     baseDirectory: baseDirectory)
+        for tile in OfflineRegionTileMath.tiles(in: makeWorldRegion(id: "second", zoomLevels: 0...2)) {
+            XCTAssertTrue(store.containsTile(tile), "Missing tile \(tile) after sweep")
+        }
     }
 
     func testDownloadWhileDownloadingIsANoOp() async throws {

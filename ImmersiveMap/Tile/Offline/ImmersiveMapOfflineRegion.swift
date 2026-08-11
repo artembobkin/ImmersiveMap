@@ -90,6 +90,11 @@ public struct ImmersiveMapOfflineRegionStatus: Equatable, Sendable, Identifiable
     /// Bytes of tile data on disk for this region. Tiles shared with an
     /// overlapping region are counted in both.
     public let byteCount: Int64
+    /// The last download run stopped because tile requests were not
+    /// authorized (401/403/missing token). Downloading again with the same
+    /// credentials will stop the same way; surface it instead of a retry
+    /// button.
+    public let isBlockedByAuthorization: Bool
 
     public var id: String { region.id }
 

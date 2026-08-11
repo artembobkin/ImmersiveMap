@@ -19,21 +19,6 @@ final class OfflineRegionDownloaderTests: XCTestCase {
         try? FileManager.default.removeItem(at: baseDirectory)
     }
 
-    private final class Locked<Value>: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: Value
-
-        init(_ value: Value) {
-            self.value = value
-        }
-
-        func withLock<R>(_ body: (inout Value) -> R) -> R {
-            lock.lock()
-            defer { lock.unlock() }
-            return body(&value)
-        }
-    }
-
     private func makeStore() -> OfflineTileStore {
         OfflineTileStore(network: ImmersiveMapSettings.default.tiles.network,
                          baseDirectory: baseDirectory)
@@ -63,14 +48,13 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             return .success(Data([UInt8(tile.x)]), etag: nil)
         }
 
-        let outcome = await downloader.run(tiles: makeTiles(count: 9))
+        let summary = await downloader.run(tiles: makeTiles(count: 9))
 
-        guard case let .complete(progress) = outcome else {
-            return XCTFail("Expected completion, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 9)
-        XCTAssertEqual(progress.failedTileCount, 0)
-        XCTAssertEqual(progress.byteCount, 9)
+        XCTAssertTrue(summary.isComplete)
+        XCTAssertFalse(summary.wasBlockedByAuthorization)
+        XCTAssertEqual(summary.progress.storedTileCount, 9)
+        XCTAssertEqual(summary.progress.failedTileCount, 0)
+        XCTAssertEqual(summary.progress.byteCount, 9)
         XCTAssertEqual(fetchCount.withLock { $0 }, 9)
         XCTAssertEqual(store.tileData(for: Tile(x: 3, y: 0, z: 10)), Data([3]))
     }
@@ -87,14 +71,12 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             return .success(Data([1]), etag: nil)
         }
 
-        let outcome = await downloader.run(tiles: tiles)
+        let summary = await downloader.run(tiles: tiles)
 
-        guard case let .complete(progress) = outcome else {
-            return XCTFail("Expected completion, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 6)
+        XCTAssertTrue(summary.isComplete)
+        XCTAssertEqual(summary.progress.storedTileCount, 6)
         // Skipped tiles still contribute their on-disk size to the total.
-        XCTAssertEqual(progress.byteCount, 2 + 4)
+        XCTAssertEqual(summary.progress.byteCount, 2 + 4)
         XCTAssertEqual(Set(fetched.withLock { $0 }), Set(tiles[2...]))
         // The already stored bytes were not overwritten.
         XCTAssertEqual(store.tileData(for: tiles[0]), Data([7, 7]))
@@ -106,12 +88,10 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             tile.x % 2 == 0 ? .failure(.notFound) : .success(Data([1]), etag: nil)
         }
 
-        let outcome = await downloader.run(tiles: makeTiles(count: 4))
+        let summary = await downloader.run(tiles: makeTiles(count: 4))
 
-        guard case let .complete(progress) = outcome else {
-            return XCTFail("Expected completion, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 4)
+        XCTAssertTrue(summary.isComplete)
+        XCTAssertEqual(summary.progress.storedTileCount, 4)
         XCTAssertEqual(store.tileData(for: Tile(x: 0, y: 0, z: 10)), Data())
         XCTAssertEqual(store.downloadResult(for: Tile(x: 0, y: 0, z: 10)), .failure(.notFound))
     }
@@ -127,12 +107,10 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             return attempt == 1 ? .failure(.network) : .success(Data([5]), etag: nil)
         }
 
-        let outcome = await downloader.run(tiles: makeTiles(count: 3))
+        let summary = await downloader.run(tiles: makeTiles(count: 3))
 
-        guard case let .complete(progress) = outcome else {
-            return XCTFail("Expected completion, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 3)
+        XCTAssertTrue(summary.isComplete)
+        XCTAssertEqual(summary.progress.storedTileCount, 3)
         XCTAssertEqual(attempts.withLock { $0.values.max() }, 2)
     }
 
@@ -148,13 +126,12 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             return .success(Data([1]), etag: nil)
         }
 
-        let outcome = await downloader.run(tiles: makeTiles(count: 5))
+        let summary = await downloader.run(tiles: makeTiles(count: 5))
 
-        guard case let .incomplete(progress) = outcome else {
-            return XCTFail("Expected incomplete, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 4)
-        XCTAssertEqual(progress.failedTileCount, 1)
+        XCTAssertFalse(summary.isComplete)
+        XCTAssertFalse(summary.wasBlockedByAuthorization)
+        XCTAssertEqual(summary.progress.storedTileCount, 4)
+        XCTAssertEqual(summary.progress.failedTileCount, 1)
         XCTAssertEqual(attempts.withLock { $0 }, 3)
         XCTAssertFalse(store.containsTile(failingTile))
     }
@@ -171,18 +148,46 @@ final class OfflineRegionDownloaderTests: XCTestCase {
                                                  pause: { _ in },
                                                  progressReportStride: 1)
 
-        let outcome = await downloader.run(tiles: makeTiles(count: 40))
+        let summary = await downloader.run(tiles: makeTiles(count: 40))
 
-        guard case .incomplete = outcome else {
-            return XCTFail("Expected incomplete, got \(outcome)")
-        }
+        XCTAssertFalse(summary.isComplete)
+        XCTAssertTrue(summary.wasBlockedByAuthorization)
         XCTAssertEqual(fetchCount.withLock { $0 }, 1)
+    }
+
+    func testRateLimitedRetryAfterIsClampedBeforePausing() async {
+        let store = makeStore()
+        let recordedPauses = Locked([TimeInterval]())
+        let attempts = Locked(0)
+        let downloader = OfflineRegionDownloader(
+            store: store,
+            fetchTile: { _ in
+                let attempt = attempts.withLock { count -> Int in
+                    count += 1
+                    return count
+                }
+                return attempt == 1
+                    ? .failure(.rateLimited(retryAfter: 3600))
+                    : .success(Data([1]), etag: nil)
+            },
+            maxConcurrentFetches: 1,
+            pause: { seconds in
+                recordedPauses.withLock { $0.append(seconds) }
+            },
+            progressReportStride: 1)
+
+        let summary = await downloader.run(tiles: makeTiles(count: 1))
+
+        XCTAssertTrue(summary.isComplete)
+        // The server asked for an hour; a bulk download slot never waits
+        // longer than the clamp.
+        XCTAssertEqual(recordedPauses.withLock { $0 }, [30.0])
     }
 
     func testCancellationStopsBetweenTilesAndKeepsStoredOnes() async {
         let store = makeStore()
         let fetchCount = Locked(0)
-        let parentTask = Locked<Task<OfflineRegionDownloader.Outcome, Never>?>(nil)
+        let parentTask = Locked<Task<OfflineRegionDownloader.Summary, Never>?>(nil)
         let downloader = OfflineRegionDownloader(store: store,
                                                  fetchTile: { tile in
                                                      let count = fetchCount.withLock { count -> Int in
@@ -190,6 +195,12 @@ final class OfflineRegionDownloaderTests: XCTestCase {
                                                          return count
                                                      }
                                                      if count == 3 {
+                                                         // The task handle is stored right after the
+                                                         // Task starts; wait for it so the cancel can
+                                                         // never be skipped by scheduling order.
+                                                         while parentTask.withLock({ $0 }) == nil {
+                                                             try? await Task.sleep(nanoseconds: 1_000_000)
+                                                         }
                                                          parentTask.withLock { $0 }?.cancel()
                                                      }
                                                      return .success(Data([1]), etag: nil)
@@ -203,12 +214,11 @@ final class OfflineRegionDownloaderTests: XCTestCase {
             await downloader.run(tiles: tiles)
         }
         parentTask.withLock { $0 = task }
-        let outcome = await task.value
+        let summary = await task.value
 
-        guard case let .incomplete(progress) = outcome else {
-            return XCTFail("Expected incomplete, got \(outcome)")
-        }
-        XCTAssertEqual(progress.storedTileCount, 3)
+        XCTAssertFalse(summary.isComplete)
+        XCTAssertFalse(summary.wasBlockedByAuthorization)
+        XCTAssertEqual(summary.progress.storedTileCount, 3)
         XCTAssertLessThan(fetchCount.withLock { $0 }, 20)
         XCTAssertTrue(store.containsTile(Tile(x: 0, y: 0, z: 10)))
     }

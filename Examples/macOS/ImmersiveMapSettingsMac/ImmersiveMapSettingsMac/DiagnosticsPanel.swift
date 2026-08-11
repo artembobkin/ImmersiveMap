@@ -72,7 +72,7 @@ struct DiagnosticsPanel: View {
                 .frame(maxWidth: 320)
             }
 
-            DeferredNote(text: "Cache switches rebuild the tile loader, so tiles on screen are fetched again. Offline only serves nothing but regions downloaded via ImmersiveMapOfflineController (see ImmersiveMapOfflineMac).")
+            DeferredNote(text: "Cache switches rebuild the tile loader, so tiles on screen are fetched again. Offline only never touches the network: it renders regions downloaded via ImmersiveMapOfflineController plus whatever the local caches still hold (see ImmersiveMapOfflineMac).")
         }
     }
 }

@@ -27,7 +27,7 @@ offline.onRegionsChanged = {
 }
 ```
 
-`cancelDownload(regionID:)` stops between tiles and keeps what landed. Downloading the same id again fetches only what is missing, which is also how a cancelled, interrupted, or partially failed region resumes. Tiles the source reports as empty (ocean at high zoom) are recorded as known empty and count toward completion. Authorization failures abort the run instead of failing tile by tile.
+`cancelDownload(regionID:)` stops between tiles and keeps what landed. Downloading the same id again fetches only what is missing, which is also how a cancelled, interrupted, or partially failed region resumes. Tiles the source reports as empty (ocean at high zoom) are recorded as known empty and count toward completion. Authorization failures abort the run instead of failing tile by tile, and the status carries `isBlockedByAuthorization` so the app can say "fix the key" instead of offering a retry that would stop the same way.
 
 ## Serving
 
@@ -38,7 +38,7 @@ ImmersiveMapView()
     .offlineTileMode(.offlineOnly)
 ```
 
-- `.automatic` (the default): tiles come from the network; any failed request (offline, server error, missing authorization) is answered from the downloaded regions instead. Nothing to configure, and with no connection the fallback is immediate.
+- `.automatic` (the default): tiles come from the network; a request that fails (offline, server error, missing authorization) is answered from the downloaded regions instead. The fallback happens only after the request fails: with no connection at all that is quick, but a stalled request on a degraded network waits out the transport timeout first. When local-only behavior must be guaranteed, use `.offlineOnly`.
 - `.offlineOnly`: the network is never touched, including the TileJSON discovery request. Only downloaded regions and the local caches render; tiles outside every region stay empty. This is the deterministic mode for airplane-mode UX and for verifying what a download actually covers.
 - `.disabled`: downloaded regions are ignored.
 

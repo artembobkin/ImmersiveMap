@@ -123,6 +123,50 @@ final class OfflineRegionTileMathTests: XCTestCase {
         XCTAssertEqual(Set(tiles).count, tiles.count)
     }
 
+    func testUnwrappedLongitudesBeyond180NormalizeToAnAntimeridianCrossing() {
+        // A caller may build "center plus offset" bounds near the
+        // antimeridian without wrapping; 179.72...180.08 must mean the same
+        // sliver as 179.72...-179.92.
+        let unwrapped = ImmersiveMapOfflineRegion(id: "sliver",
+                                                  southWest: GeoCoordinate(latitude: 60, longitude: 179.72),
+                                                  northEast: GeoCoordinate(latitude: 66, longitude: 180.08),
+                                                  zoomLevels: 4...4)
+        let wrapped = ImmersiveMapOfflineRegion(id: "sliver",
+                                                southWest: GeoCoordinate(latitude: 60, longitude: 179.72),
+                                                northEast: GeoCoordinate(latitude: 66, longitude: -179.92),
+                                                zoomLevels: 4...4)
+        XCTAssertEqual(OfflineRegionTileMath.coverage(of: unwrapped),
+                       OfflineRegionTileMath.coverage(of: wrapped))
+        XCTAssertEqual(OfflineRegionTileMath.coverage(of: unwrapped).first?.xRanges, [15...15, 0...0])
+    }
+
+    func testNonFiniteCoordinatesProduceNoTilesInsteadOfTrapping() {
+        for badValue in [Double.nan, .infinity, -.infinity] {
+            let region = ImmersiveMapOfflineRegion(id: "bad",
+                                                   southWest: GeoCoordinate(latitude: 0, longitude: badValue),
+                                                   northEast: GeoCoordinate(latitude: 1, longitude: 1),
+                                                   zoomLevels: 0...4)
+            XCTAssertEqual(OfflineRegionTileMath.tileCount(in: region), 0)
+        }
+        let badLatitude = ImmersiveMapOfflineRegion(id: "bad",
+                                                    southWest: GeoCoordinate(latitude: .nan, longitude: 0),
+                                                    northEast: GeoCoordinate(latitude: 1, longitude: 1),
+                                                    zoomLevels: 0...4)
+        XCTAssertEqual(OfflineRegionTileMath.tileCount(in: badLatitude), 0)
+    }
+
+    func testAbsurdZoomLevelsClampToTheSupportedCeilingInsteadOfOverflowing() {
+        let region = ImmersiveMapOfflineRegion(id: "deep",
+                                               southWest: GeoCoordinate(latitude: 51.5073, longitude: -0.1278),
+                                               northEast: GeoCoordinate(latitude: 51.5074, longitude: -0.1277),
+                                               zoomLevels: 0...64)
+        // Counting must not trap; the deepest zoom actually covered is the
+        // supported ceiling.
+        XCTAssertGreaterThan(OfflineRegionTileMath.tileCount(in: region), 0)
+        XCTAssertEqual(OfflineRegionTileMath.coverage(of: region).last?.zoom,
+                       OfflineRegionTileMath.maximumSupportedZoomLevel)
+    }
+
     func testZoomClampingDropsLevelsAboveProviderMaximum() {
         let region = ImmersiveMapOfflineRegion(id: "city",
                                                southWest: GeoCoordinate(latitude: 51, longitude: 0),
