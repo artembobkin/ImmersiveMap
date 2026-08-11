@@ -27,11 +27,6 @@ final class LineClipper {
         let endClipped: Bool
     }
 
-    func clip(line: LineString, tileExtent: Float, padding: Float = 0) -> [ClippedLineFragment] {
-        let points = line.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
-        return clip(points: points, tileExtent: tileExtent, padding: padding)
-    }
-
     func clip(points: [SIMD2<Float>], tileExtent: Float, padding: Float = 0) -> [ClippedLineFragment] {
         guard points.count >= 2 else { return [] }
         let bounds = ClipBounds(minX: -padding,
@@ -106,13 +101,15 @@ final class LineClipper {
         var t0: Float = 0.0
         var t1: Float = 1.0
 
-        let p: [Float] = [-delta.x, delta.x, -delta.y, delta.y]
-        let q: [Float] = [
+        // Liang-Barsky edge distances packed in SIMD lanes so the per-segment
+        // loop allocates nothing.
+        let p = SIMD4<Float>(-delta.x, delta.x, -delta.y, delta.y)
+        let q = SIMD4<Float>(
             start.x - bounds.minX,
             bounds.maxX - start.x,
             start.y - bounds.minY,
             bounds.maxY - start.y
-        ]
+        )
 
         for index in 0..<4 {
             let edgeP = p[index]
@@ -212,22 +209,6 @@ class ParseLine {
         let joinCount: Int
     }
 
-    func parse(line: LineString,
-               width: Double,
-               tileExtent: Float,
-               lineCapRound: Bool,
-               lineJoinRound: Bool) -> TileMvtParser.ParsedPolygon? {
-        let points = line.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
-        let startCapRound = lineCapRound && points.first.map { isStrictlyInsideTile($0, tileExtent: tileExtent) } == true
-        let endCapRound = lineCapRound && points.last.map { isStrictlyInsideTile($0, tileExtent: tileExtent) } == true
-        return parse(points: points,
-                     width: width,
-                     tileExtent: tileExtent,
-                     startCapRound: startCapRound,
-                     endCapRound: endCapRound,
-                     lineJoinRound: lineJoinRound)
-    }
-
     func parse(points: [SIMD2<Float>],
                width: Double,
                tileExtent: Float,
@@ -256,14 +237,6 @@ class ParseLine {
                         lineJoinRound: lineJoinRound,
                         vertices: &polygon.vertices,
                         indices: &polygon.indices)
-
-        if startCapRound == false && endCapRound == false && lineJoinRound == false {
-            appendSegments(precomputed: precomputed,
-                           halfWidth: halfWidth,
-                          vertices: &polygon.vertices,
-                          indices: &polygon.indices)
-            return finalizePolygon(polygon, tileExtent: tileExtent, clipGeometryToTileBounds: clipGeometryToTileBounds)
-        }
 
         appendSegments(precomputed: precomputed,
                        halfWidth: halfWidth,
@@ -562,14 +535,6 @@ class ParseLine {
         return SIMD2<Int16>(x, y)
     }
 
-    private func clipToTile(polygon: TileMvtParser.ParsedPolygon,
-                            tileExtent: Float) -> TileMvtParser.ParsedPolygon? {
-        var generated = GeneratedPolygon()
-        generated.vertices = polygon.vertices.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
-        generated.indices = polygon.indices
-        return clipToTile(polygon: generated, tileExtent: tileExtent)
-    }
-
     private func clipToTile(polygon: GeneratedPolygon,
                             tileExtent: Float) -> TileMvtParser.ParsedPolygon? {
         guard polygon.indices.isEmpty == false else { return nil }
@@ -682,9 +647,5 @@ class ParseLine {
 
     private func pointsEqual(_ lhs: SIMD2<Float>, _ rhs: SIMD2<Float>) -> Bool {
         abs(lhs.x - rhs.x) <= Self.epsilon && abs(lhs.y - rhs.y) <= Self.epsilon
-    }
-
-    private func isStrictlyInsideTile(_ point: SIMD2<Float>, tileExtent: Float) -> Bool {
-        point.x > 0.0 && point.x < tileExtent && point.y > 0.0 && point.y < tileExtent
     }
 }

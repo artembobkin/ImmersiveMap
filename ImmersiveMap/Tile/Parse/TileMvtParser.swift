@@ -75,6 +75,10 @@ class TileMvtParser {
         )
     }
 
+    private func floatPoints(_ line: LineString) -> [SIMD2<Float>] {
+        line.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
+    }
+
     private func linePath(points: [SIMD2<Float>]) -> [SIMD2<Int16>] {
         points.map { point in
             let clampedX = min(max(point.x, 0.0), Float(tileExtent))
@@ -176,7 +180,7 @@ class TileMvtParser {
 
             let lines = normalize(decodeLine.decode(geometry: feature.geometry), layer: layer)
             for line in lines {
-                let fragments = lineClipper.clip(line: line, tileExtent: Float(tileExtent))
+                let fragments = lineClipper.clip(points: floatPoints(line), tileExtent: Float(tileExtent))
                 for fragment in fragments {
                     for point in fragment.points {
                         pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
@@ -798,12 +802,13 @@ class TileMvtParser {
                     )
                     let lines = normalize(decodeLine.decode(geometry: geometry), layer: layer)
                     for line in lines {
-                        let exactClippedFragments = lineClipper.clip(line: line, tileExtent: Float(tileExtent))
+                        let linePoints = floatPoints(line)
+                        let exactClippedFragments = lineClipper.clip(points: linePoints, tileExtent: Float(tileExtent))
                         guard exactClippedFragments.isEmpty == false else {
                             continue
                         }
                         let sharedPaddedFragments = usesSeparateRoadRendering
-                            ? lineClipper.clip(line: line,
+                            ? lineClipper.clip(points: linePoints,
                                                tileExtent: Float(tileExtent),
                                                padding: sharedRoadPadding)
                             : []
@@ -900,7 +905,7 @@ class TileMvtParser {
                             let padding = Float(lineRenderPass.parseGeometryStyleData.lineWidth * 0.5)
                             let paddedFragments = usesSeparateRoadRendering
                                 ? sharedPaddedFragments
-                                : lineClipper.clip(line: line,
+                                : lineClipper.clip(points: linePoints,
                                                    tileExtent: Float(tileExtent),
                                                    padding: padding)
 
@@ -1068,13 +1073,30 @@ class TileMvtParser {
         )
     }
 
+    /// Bulk-appends one tessellated polygon into the unified vertex/index
+    /// streams. The buffers were sized exactly by the caller, so the writes
+    /// are raw pointer stores without per-append growth or uniqueness checks.
+    private static func appendPolygon(_ polygon: ParsedPolygon,
+                                      styleBufferIndex: UInt8,
+                                      vertices: inout UnsafeMutableBufferPointer<TilePipeline.VertexIn>,
+                                      indices: inout UnsafeMutableBufferPointer<UInt32>,
+                                      vertexCount: inout Int,
+                                      indexCount: inout Int) {
+        let vertexOffset = UInt32(vertexCount)
+        for position in polygon.vertices {
+            vertices[vertexCount] = TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex)
+            vertexCount += 1
+        }
+        for index in polygon.indices {
+            indices[indexCount] = index &+ vertexOffset
+            indexCount += 1
+        }
+    }
+
     private func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
                                    stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
                                                                            styles: [TilePolygonStyle],
                                                                            overviewStyleMasks: [Float]) {
-        var unifiedVertices: [TilePipeline.VertexIn] = []
-        var unifiedIndices: [UInt32] = []
-        var currentVertexOffset: UInt32 = 0
         var styles: [TilePolygonStyle] = []
         var overviewStyleMasks: [Float] = []
 
@@ -1088,9 +1110,6 @@ class TileMvtParser {
                 polygonPartial + polygon.indices.count
             }
         }
-
-        unifiedVertices.reserveCapacity(totalPolygonVertexCount)
-        unifiedIndices.reserveCapacity(totalPolygonIndexCount)
 
         let styleKeys = polygonByStyle.keys
             .filter { polygonByStyle[$0]?.isEmpty == false }
@@ -1107,20 +1126,33 @@ class TileMvtParser {
             styleIndexByKey[styleKey] = UInt8(index)
         }
 
-        for styleKey in styleKeys {
-            let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
-            if let polygons = polygonByStyle[styleKey] {
-                for polygon in polygons {
-                    for position in polygon.vertices {
-                        unifiedVertices.append(TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex))
+        var unifiedIndices: [UInt32] = []
+        let unifiedVertices = [TilePipeline.VertexIn](
+            unsafeUninitializedCapacity: totalPolygonVertexCount
+        ) { vertexBuffer, initializedVertexCount in
+            unifiedIndices = [UInt32](
+                unsafeUninitializedCapacity: totalPolygonIndexCount
+            ) { indexBuffer, initializedIndexCount in
+                var vertexCount = 0
+                var indexCount = 0
+                for styleKey in styleKeys {
+                    let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
+                    guard let polygons = polygonByStyle[styleKey] else { continue }
+                    for polygon in polygons {
+                        Self.appendPolygon(polygon,
+                                           styleBufferIndex: styleBufferIndex,
+                                           vertices: &vertexBuffer,
+                                           indices: &indexBuffer,
+                                           vertexCount: &vertexCount,
+                                           indexCount: &indexCount)
                     }
-                    for index in polygon.indices {
-                        unifiedIndices.append(index + currentVertexOffset)
-                    }
-                    currentVertexOffset += UInt32(polygon.vertices.count)
                 }
+                initializedVertexCount = vertexCount
+                initializedIndexCount = indexCount
             }
+        }
 
+        for styleKey in styleKeys {
             if let style = stylesByKey[styleKey] {
                 styles.append(TilePolygonStyle(color: style.color))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
@@ -1133,27 +1165,23 @@ class TileMvtParser {
                 overviewStyleMasks: overviewStyleMasks)
     }
 
-    private func unifyOrderedRoadLayer(orderedRoadPolygons: [OrderedRoadPolygon],
+    /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the
+    /// caller buckets and sorts once per structure/pass combination.
+    private func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
                                        stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
                                                                                styles: [TilePolygonStyle],
                                                                                overviewStyleMasks: [Float]) {
-        var unifiedVertices: [TilePipeline.VertexIn] = []
-        var unifiedIndices: [UInt32] = []
-        var currentVertexOffset: UInt32 = 0
         var styles: [TilePolygonStyle] = []
         var overviewStyleMasks: [Float] = []
 
-        let totalPolygonVertexCount = orderedRoadPolygons.reduce(0) { partial, polygon in
+        let totalPolygonVertexCount = sortedRoadPolygons.reduce(0) { partial, polygon in
             partial + polygon.polygon.vertices.count
         }
-        let totalPolygonIndexCount = orderedRoadPolygons.reduce(0) { partial, polygon in
+        let totalPolygonIndexCount = sortedRoadPolygons.reduce(0) { partial, polygon in
             partial + polygon.polygon.indices.count
         }
 
-        unifiedVertices.reserveCapacity(totalPolygonVertexCount)
-        unifiedIndices.reserveCapacity(totalPolygonIndexCount)
-
-        let styleKeys = Array(Set(orderedRoadPolygons.map(\.styleKey))).sorted()
+        let styleKeys = Array(Set(sortedRoadPolygons.map(\.styleKey))).sorted()
         var styleIndexByKey: [UInt8: UInt8] = [:]
         styleIndexByKey.reserveCapacity(styleKeys.count)
         styles.reserveCapacity(styleKeys.count)
@@ -1171,15 +1199,26 @@ class TileMvtParser {
             }
         }
 
-        for orderedPolygon in orderedRoadPolygons.sorted(by: OrderedRoadPolygon.sort) {
-            let styleBufferIndex = styleIndexByKey[orderedPolygon.styleKey] ?? 0
-            for position in orderedPolygon.polygon.vertices {
-                unifiedVertices.append(TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex))
+        var unifiedIndices: [UInt32] = []
+        let unifiedVertices = [TilePipeline.VertexIn](
+            unsafeUninitializedCapacity: totalPolygonVertexCount
+        ) { vertexBuffer, initializedVertexCount in
+            unifiedIndices = [UInt32](
+                unsafeUninitializedCapacity: totalPolygonIndexCount
+            ) { indexBuffer, initializedIndexCount in
+                var vertexCount = 0
+                var indexCount = 0
+                for orderedPolygon in sortedRoadPolygons {
+                    Self.appendPolygon(orderedPolygon.polygon,
+                                       styleBufferIndex: styleIndexByKey[orderedPolygon.styleKey] ?? 0,
+                                       vertices: &vertexBuffer,
+                                       indices: &indexBuffer,
+                                       vertexCount: &vertexCount,
+                                       indexCount: &indexCount)
+                }
+                initializedVertexCount = vertexCount
+                initializedIndexCount = indexCount
             }
-            for index in orderedPolygon.polygon.indices {
-                unifiedIndices.append(index + currentVertexOffset)
-            }
-            currentVertexOffset += UInt32(orderedPolygon.polygon.vertices.count)
         }
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
@@ -1238,13 +1277,20 @@ class TileMvtParser {
                                            overlay: emptyRoadLayer)
             )
         } else {
-            let orderedRoadPolygons = readingStageResult.orderedRoadPolygons
+            // One pass buckets every polygon by structure and pass role; the
+            // old shape filtered the full array 15 times.
+            let roleCount = 5
+            var buckets = Array(repeating: [OrderedRoadPolygon](), count: 3 * roleCount)
+            for orderedPolygon in readingStageResult.orderedRoadPolygons {
+                buckets[orderedPolygon.structureKind.rawValue * roleCount + orderedPolygon.passRole.rawValue]
+                    .append(orderedPolygon)
+            }
+
             func makeStructurePhases(_ structureKind: RoadStructureKind) -> RoadGeometryPhases<DrawingGeometryLayer> {
                 func makePhase(_ role: RoadPassRole) -> DrawingGeometryLayer {
+                    let bucket = buckets[structureKind.rawValue * roleCount + role.rawValue]
                     let layer = unifyOrderedRoadLayer(
-                        orderedRoadPolygons: orderedRoadPolygons.filter {
-                            $0.structureKind == structureKind && $0.passRole == role
-                        },
+                        sortedRoadPolygons: bucket.sorted(by: OrderedRoadPolygon.sort),
                         stylesByKey: readingStageResult.roadStyles
                     )
                     return makeDrawingGeometryLayer(drawing: layer.drawing,
@@ -1307,22 +1353,20 @@ class TileMvtParser {
             let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
-                    var surfaceIDRemap: [UInt32: UInt32] = [:]
-                    surfaceIDRemap.reserveCapacity(8)
+                    // Mesh-local surface IDs are allocated sequentially from 1
+                    // and appear in the vertex stream in that order, so the
+                    // first-appearance remap the old per-mesh dictionary
+                    // produced is exactly a constant offset.
+                    let surfaceIDBase = nextGlobalSurfaceID &- 1
+                    var maxLocalSurfaceID: UInt32 = 0
                     for vertex in extrudedMesh.vertices {
-                        let globalSurfaceID: UInt32
-                        if let existingSurfaceID = surfaceIDRemap[vertex.surfaceID] {
-                            globalSurfaceID = existingSurfaceID
-                        } else {
-                            globalSurfaceID = nextGlobalSurfaceID
-                            nextGlobalSurfaceID &+= 1
-                            surfaceIDRemap[vertex.surfaceID] = globalSurfaceID
-                        }
+                        maxLocalSurfaceID = max(maxLocalSurfaceID, vertex.surfaceID)
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
                                                                         normal: vertex.normal,
                                                                         styleIndex: styleBufferIndex,
-                                                                        surfaceID: globalSurfaceID))
+                                                                        surfaceID: surfaceIDBase &+ vertex.surfaceID))
                     }
+                    nextGlobalSurfaceID = surfaceIDBase &+ maxLocalSurfaceID &+ 1
                     for index in extrudedMesh.indices {
                         unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
                     }
