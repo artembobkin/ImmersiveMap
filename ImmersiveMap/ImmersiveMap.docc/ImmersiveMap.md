@@ -52,6 +52,12 @@ Drop ``ImmersiveMapView`` into a SwiftUI hierarchy to render a map out of the bo
 - ``ImmersiveMapTourVideoRecorder``
 - ``ImmersiveMapVideoExportConfiguration``
 
+### Still Capture
+
+- ``ImmersiveMapStillRecorder``
+- ``ImmersiveMapStillConfiguration``
+- ``ImmersiveMapStillCaptureError``
+
 ### Tile Providers and Styles
 
 - ``ImmersiveMapTileProvider``
