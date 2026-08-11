@@ -16,63 +16,40 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         return device
     }
 
-    /// A tile with two dedicated buffers (ground vertices and indices), so
-    /// purgeable-state assertions observe exactly the buffers of this tile.
-    /// Page-scale allocations: the driver suballocates tiny buffers from an
-    /// internal pool where purgeable-state transitions are a no-op, so the
-    /// fixture must use standalone allocations to observe them.
+    /// A tile whose backing arena is a page-scale standalone allocation: the
+    /// driver suballocates tiny buffers from an internal pool where
+    /// purgeable-state transitions are a no-op, so the fixture must be large
+    /// enough to observe them. The observed buffer IS the backing buffer.
     private func makeTile(device: MTLDevice, key: Tile) throws -> (MetalTile, MTLBuffer) {
-        let verticesBuffer = try XCTUnwrap(device.makeBuffer(length: 64 * 1024))
-        let indicesBuffer = try XCTUnwrap(device.makeBuffer(length: 64 * 1024))
-
-        let emptyLayer = TileBuffers.GeometryLayer(verticesBuffer: nil,
-                                                   indicesBuffer: nil,
-                                                   stylesBuffer: nil,
-                                                   overviewStyleMaskBuffer: nil,
-                                                   indicesCount: 0,
-                                                   verticesCount: 0,
-                                                   indexType: .uint16)
-        let ground = TileBuffers.GeometryLayer(verticesBuffer: verticesBuffer,
-                                               indicesBuffer: indicesBuffer,
-                                               stylesBuffer: nil,
-                                               overviewStyleMaskBuffer: nil,
-                                               indicesCount: 3,
-                                               verticesCount: 3,
+        let arena = try XCTUnwrap(TileBufferArena(metalDevice: device, length: 64 * 1024))
+        let vertices = Array(repeating: TilePipeline.VertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
+                             count: 3)
+        let ground = TileBuffers.GeometryLayer(vertices: arena.append(vertices),
+                                               indices: nil,
+                                               styles: nil,
+                                               overviewStyleMask: nil,
                                                indexType: .uint16)
+        let emptyLayer = TileBuffersFixtures.emptyGeometryLayer()
         let phases = RoadGeometryPhases(shadow: emptyLayer,
                                         casing: emptyLayer,
                                         fill: emptyLayer,
                                         detail: emptyLayer,
                                         overlay: emptyLayer)
-        let emptyTextLabelSet = TileBuffers.TextLabelSet(placementInputs: [],
-                                                         labelsByStyleRuns: [],
-                                                         poiIconRuns: [])
-        let buffers = TileBuffers(ground: ground,
+        let buffers = TileBuffers(backingBuffer: arena.backingBuffer,
+                                  ground: ground,
                                   roads: RoadStructureBuckets(tunnel: phases,
                                                               ground: phases,
                                                               bridge: phases),
                                   bridgeOverlay: emptyLayer,
-                                  extruded: TileBuffers.Extruded(verticesBuffer: nil,
-                                                                 indicesBuffer: nil,
-                                                                 stylesBuffer: nil,
-                                                                 indicesCount: 0,
-                                                                 verticesCount: 0,
+                                  extruded: TileBuffers.Extruded(vertices: nil,
+                                                                 indices: nil,
+                                                                 styles: nil,
                                                                  indexType: .uint16),
-                                  textLabels: TileBuffers.TextLabels(full: emptyTextLabelSet,
-                                                                     reduced: emptyTextLabelSet,
-                                                                     minimal: emptyTextLabelSet),
-                                  roadLabels: TileBuffers.RoadLabels(pathInputs: [],
-                                                                     pathRanges: [],
-                                                                     pathLabels: [],
-                                                                     labelStyle: nil,
-                                                                     localGlyphVerticesBuffer: nil,
-                                                                     localGlyphVertexCount: 0,
-                                                                     glyphBounds: [],
-                                                                     glyphBoundRanges: [],
-                                                                     sizes: [],
-                                                                     anchorRanges: [],
-                                                                     anchors: []))
-        return (MetalTile(tile: key, tileBuffers: buffers), verticesBuffer)
+                                  textLabels: TileBuffers.TextLabels(full: TileBuffersFixtures.emptyTextLabelSet(),
+                                                                     reduced: TileBuffersFixtures.emptyTextLabelSet(),
+                                                                     minimal: TileBuffersFixtures.emptyTextLabelSet()),
+                                  roadLabels: TileBuffersFixtures.emptyRoadLabels())
+        return (MetalTile(tile: key, tileBuffers: buffers), arena.backingBuffer)
     }
 
     private func currentPurgeableState(of buffer: MTLBuffer) -> MTLPurgeableState {
@@ -186,8 +163,8 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         cache.recordActiveTiles([], frameIndex: 100)
 
         // Simulate the OS reclaiming the volatile allocation.
-        tile.tileBuffers.forEachBuffer { buffer in
-            _ = buffer.setPurgeableState(.empty)
+        if let backingBuffer = tile.tileBuffers.backingBuffer {
+            _ = backingBuffer.setPurgeableState(.empty)
         }
 
         XCTAssertNil(cache.getTile(forKey: key),

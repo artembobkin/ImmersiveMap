@@ -336,9 +336,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                     drawBatches.append(DrawRoadLabels(placementBuffer: placementBuffer,
                                                       glyphInputBuffer: glyphInputsBuffer,
                                                       runtimeMetaBuffer: existingBatch.runtimeMetaBuffer,
-                                                      localGlyphVerticesBuffer: record.localGlyphVerticesBuffer,
+                                                      localGlyphVertices: record.localGlyphVertices,
                                                       glyphCount: record.glyphCount,
-                                                      localGlyphVertexCount: record.localGlyphVertexCount,
                                                       labelStyle: record.labelStyle))
                 }
             }
@@ -386,8 +385,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         frameContext.sharedState.roadLabelState.placementBuffer = drawBatches.first?.placementBuffer
         frameContext.sharedState.roadLabelState.glyphInputBuffer = drawBatches.first?.glyphInputBuffer
         frameContext.sharedState.roadLabelState.runtimeMetaBuffer = drawBatches.first?.runtimeMetaBuffer
-        frameContext.sharedState.roadLabelState.glyphVerticesBuffer = drawBatches.first?.localGlyphVerticesBuffer
-        frameContext.sharedState.roadLabelState.glyphVertexCount = drawBatches.first?.localGlyphVertexCount ?? 0
     }
 
     func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
@@ -1332,9 +1329,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             drawBatches.append(DrawRoadLabels(placementBuffer: nil,
                                               glyphInputBuffer: record.glyphInputsBuffer,
                                               runtimeMetaBuffer: runtimeMetaBuffer,
-                                              localGlyphVerticesBuffer: record.localGlyphVerticesBuffer,
+                                              localGlyphVertices: record.localGlyphVertices,
                                               glyphCount: record.glyphCount,
-                                              localGlyphVertexCount: record.localGlyphVertexCount,
                                               labelStyle: record.labelStyle))
             totalGlyphCount += record.glyphCount
         }
@@ -1356,8 +1352,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                               runtimeMetaBuffer: runtimeMetaBuffer,
                               placementBuffer: nil,
                               glyphInputBuffer: drawBatches.first?.glyphInputBuffer,
-                              glyphVerticesBuffer: drawBatches.first?.localGlyphVerticesBuffer,
-                              glyphVertexCount: drawBatches.first?.localGlyphVertexCount ?? 0,
                               drawLabels: drawBatches,
                               hasActiveFadeAnimations: fadeResolution.hasActiveAnimations)
     }

@@ -200,51 +200,7 @@ final class BaseLabelDetailTierTests: XCTestCase {
     }
 
     private func makeTileBuffers(textLabels: TileBuffers.TextLabels? = nil) throws -> TileBuffers {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal device is required for MetalTile test fixture.")
-        }
-
-        let value: UInt32 = 0
-        let buffer = device.makeBuffer(bytes: [value], length: MemoryLayout<UInt32>.stride)!
-        let ground = TileBuffers.GeometryLayer(verticesBuffer: buffer,
-                                               indicesBuffer: buffer,
-                                               stylesBuffer: buffer,
-                                               overviewStyleMaskBuffer: buffer,
-                                               indicesCount: 0,
-                                               verticesCount: 0,
-                                               indexType: .uint32)
-        let extruded = TileBuffers.Extruded(verticesBuffer: buffer,
-                                            indicesBuffer: buffer,
-                                            stylesBuffer: buffer,
-                                            indicesCount: 0,
-                                            verticesCount: 0,
-                                            indexType: .uint32)
-        let phases = RoadGeometryPhases(shadow: ground,
-                                        casing: ground,
-                                        fill: ground,
-                                        detail: ground,
-                                        overlay: ground)
-        let roads = RoadStructureBuckets(tunnel: phases,
-                                         ground: phases,
-                                         bridge: phases)
-        return TileBuffers(ground: ground,
-                           roads: roads,
-                           bridgeOverlay: ground,
-                           extruded: extruded,
-                           textLabels: textLabels ?? TileBuffers.TextLabels(full: emptyTextLabelSet(),
-                                                                             reduced: emptyTextLabelSet(),
-                                                                             minimal: emptyTextLabelSet()),
-                           roadLabels: TileBuffers.RoadLabels(pathInputs: [],
-                                                              pathRanges: [],
-                                                              pathLabels: [],
-                                                              labelStyle: nil,
-                                                              localGlyphVerticesBuffer: nil,
-                                                              localGlyphVertexCount: 0,
-                                                              glyphBounds: [],
-                                                              glyphBoundRanges: [],
-                                                              sizes: [],
-                                                              anchorRanges: [],
-                                                              anchors: []))
+        try TileBuffersFixtures.makeEmptyTileBuffers(textLabels: textLabels)
     }
 
     private func emptyTextLabelSet() -> TileBuffers.TextLabelSet {

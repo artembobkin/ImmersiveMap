@@ -104,7 +104,11 @@ enum FlatMapSurfaceDrawer {
                                               tile: Tile,
                                               placeIn: VisibleTile,
                                               flatRenderState: FlatRenderState) {
-        guard buffers.indicesCount > 0, let indicesBuffer = buffers.indicesBuffer else { return }
+        guard buffers.indicesCount > 0,
+              let indices = buffers.indices,
+              let vertices = buffers.vertices,
+              let styles = buffers.styles,
+              let overviewStyleMask = buffers.overviewStyleMask else { return }
 
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
@@ -114,9 +118,9 @@ enum FlatMapSurfaceDrawer {
                                                                          renderMapSize: flatRenderState.renderMapSize)
         let scale = originAndSize.z / 4096.0
 
-        renderEncoder.setVertexBuffer(buffers.verticesBuffer, offset: 0, index: 0)
-        renderEncoder.setVertexBuffer(buffers.stylesBuffer, offset: 0, index: 2)
-        renderEncoder.setVertexBuffer(buffers.overviewStyleMaskBuffer, offset: 0, index: 4)
+        renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
+        renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
+        renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
 
         // A retained substitution draws the source tile in full at its origin:
         // fragments outside the placeIn slot are discarded in the shader,
@@ -135,9 +139,9 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: buffers.indicesCount,
+                                            indexCount: indices.count,
                                             indexType: buffers.indexType,
-                                            indexBuffer: indicesBuffer,
-                                            indexBufferOffset: 0)
+                                            indexBuffer: indices.buffer,
+                                            indexBufferOffset: indices.offset)
     }
 }

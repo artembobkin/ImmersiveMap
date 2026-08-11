@@ -16,6 +16,7 @@ final class RendererLabelDrawer {
         var isPoiPipelineBound = false
         var fragmentTexture: ObjectIdentifier?
         var vertexBuffer0: ObjectIdentifier?
+        var vertexBuffer0Offset: Int?
         var labelShift: simd_int1?
         var textStyle: TextStyleUniform?
         var poiIconStyle: PoiIconStyleUniform?
@@ -38,7 +39,7 @@ final class RendererLabelDrawer {
 
         for drawBatch in baseLabelsDrawBatches {
             for poiIconRun in drawBatch.poiIconRuns {
-                guard let poiIconVerticesBuffer = poiIconRun.localVerticesBuffer,
+                guard let poiIconVertices = poiIconRun.localVertices,
                       poiIconRun.localVertexCount > 0 else {
                     continue
                 }
@@ -62,7 +63,7 @@ final class RendererLabelDrawer {
                                                    index: 0)
                     bindings.poiIconStyle = iconStyle
                 }
-                setVertexBuffer0(poiIconVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
+                setVertexBuffer0(poiIconVertices, renderEncoder: renderEncoder, bindings: &bindings)
                 setLabelShift(simd_int1(drawBatch.globalLabelStart), renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
@@ -107,7 +108,7 @@ final class RendererLabelDrawer {
             guard let placementBuffer = drawLabel.placementBuffer,
                   let glyphInputBuffer = drawLabel.glyphInputBuffer,
                   let runtimeMetaBuffer = drawLabel.runtimeMetaBuffer,
-                  let localGlyphVerticesBuffer = drawLabel.localGlyphVerticesBuffer,
+                  let localGlyphVertices = drawLabel.localGlyphVertices,
                   drawLabel.localGlyphVertexCount > 0 else {
                 continue
             }
@@ -115,7 +116,7 @@ final class RendererLabelDrawer {
             renderEncoder.setVertexBuffer(placementBuffer, offset: 0, index: 2)
             renderEncoder.setVertexBuffer(glyphInputBuffer, offset: 0, index: 3)
             renderEncoder.setVertexBuffer(runtimeMetaBuffer, offset: 0, index: 4)
-            setVertexBuffer0(localGlyphVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
+            setVertexBuffer0(localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
 
             let style = drawLabel.labelStyle
                 ?? LabelTextStyle(key: 0,
@@ -159,7 +160,7 @@ final class RendererLabelDrawer {
                                               bindings: inout EncoderBindings) {
         for drawBatch in baseLabelsDrawBatches {
             for run in drawBatch.labelsByStyleRuns {
-                guard let localGlyphVerticesBuffer = run.localGlyphVerticesBuffer,
+                guard let localGlyphVertices = run.localGlyphVertices,
                       run.localGlyphVertexCount > 0 else {
                     continue
                 }
@@ -180,7 +181,7 @@ final class RendererLabelDrawer {
 
                 setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
                 setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)
-                setVertexBuffer0(localGlyphVerticesBuffer, renderEncoder: renderEncoder, bindings: &bindings)
+                setVertexBuffer0(localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
                 setLabelShift(simd_int1(drawBatch.globalLabelStart), renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
@@ -199,13 +200,16 @@ final class RendererLabelDrawer {
         bindings.fragmentTexture = identity
     }
 
-    private static func setVertexBuffer0(_ buffer: MTLBuffer,
+    private static func setVertexBuffer0(_ view: TileBufferView,
                                          renderEncoder: MTLRenderCommandEncoder,
                                          bindings: inout EncoderBindings) {
-        let identity = ObjectIdentifier(buffer)
-        guard bindings.vertexBuffer0 != identity else { return }
-        renderEncoder.setVertexBuffer(buffer, offset: 0, index: 0)
+        // Views of different tiles share one backing buffer per tile, so the
+        // dedup key is (buffer, offset), not the buffer alone.
+        let identity = ObjectIdentifier(view.buffer)
+        guard bindings.vertexBuffer0 != identity || bindings.vertexBuffer0Offset != view.offset else { return }
+        renderEncoder.setVertexBuffer(view.buffer, offset: view.offset, index: 0)
         bindings.vertexBuffer0 = identity
+        bindings.vertexBuffer0Offset = view.offset
     }
 
     private static func setLabelShift(_ shift: simd_int1,

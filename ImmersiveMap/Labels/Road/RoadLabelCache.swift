@@ -48,9 +48,12 @@ final class RoadLabelTileRecord {
 
     let pathPointCount: Int
     let glyphCount: Int
-    let localGlyphVertexCount: Int
 
-    let localGlyphVerticesBuffer: MTLBuffer?
+    let localGlyphVertices: TileBufferView?
+
+    var localGlyphVertexCount: Int {
+        localGlyphVertices?.count ?? 0
+    }
     let pathInputsBuffer: MTLBuffer?
     let pathRangesBuffer: MTLBuffer?
     let anchorsBuffer: MTLBuffer?
@@ -90,8 +93,7 @@ final class RoadLabelTileRecord {
          anchors: [RoadLabelAnchorGpu],
          glyphInputs: [RoadGlyphInput],
          collisionInputs: [ScreenCollisionInput],
-         localGlyphVerticesBuffer: MTLBuffer?,
-         localGlyphVertexCount: Int) {
+         localGlyphVertices: TileBufferView?) {
         self.ownerKey = ownerKey
         self.metalTileIdentity = metalTileIdentity
         self.isRetained = isRetained
@@ -108,8 +110,7 @@ final class RoadLabelTileRecord {
         self.placementEncodedSlots = Array(repeating: false, count: InFlightFramePool.inFlightFramesCount)
         self.pathPointCount = pathInputs.count
         self.glyphCount = glyphInputs.count
-        self.localGlyphVertexCount = localGlyphVertexCount
-        self.localGlyphVerticesBuffer = localGlyphVerticesBuffer
+        self.localGlyphVertices = localGlyphVertices
         self.pathInputsBuffer = Self.makeBuffer(device: metalDevice, values: pathInputs)
         self.pathRangesBuffer = Self.makeBuffer(device: metalDevice, values: pathRanges)
         self.anchorsBuffer = Self.makeBuffer(device: metalDevice, values: anchors)
@@ -136,7 +137,7 @@ final class RoadLabelTileRecord {
     }
 
     var hasRenderableGlyphs: Bool {
-        glyphCount > 0 && localGlyphVerticesBuffer != nil && localGlyphVertexCount > 0
+        glyphCount > 0 && localGlyphVertexCount > 0
     }
 
     func updateVisibleTileIndex(_ value: UInt32) {
@@ -547,8 +548,7 @@ final class RoadLabelCache {
                                    anchors: anchors,
                                    glyphInputs: glyphInputs,
                                    collisionInputs: collisionInputs,
-                                   localGlyphVerticesBuffer: roadLabels.localGlyphVerticesBuffer,
-                                   localGlyphVertexCount: roadLabels.localGlyphVertexCount)
+                                   localGlyphVertices: roadLabels.localGlyphVertices)
     }
 
     // The anchor's world position as a projectable point: interpolated in tile
