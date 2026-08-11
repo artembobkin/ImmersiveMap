@@ -20,8 +20,11 @@ struct DrawRoadLabels {
     let placementBuffer: MTLBuffer?
     let glyphInputBuffer: MTLBuffer?
     let runtimeMetaBuffer: MTLBuffer?
-    let localGlyphVerticesBuffer: MTLBuffer?
+    let localGlyphVertices: TileBufferView?
     let glyphCount: Int
-    let localGlyphVertexCount: Int
     let labelStyle: LabelTextStyle?
+
+    var localGlyphVertexCount: Int {
+        localGlyphVertices?.count ?? 0
+    }
 }

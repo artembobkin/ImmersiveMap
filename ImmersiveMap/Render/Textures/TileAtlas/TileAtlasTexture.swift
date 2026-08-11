@@ -237,18 +237,21 @@ class TileAtlasTexture {
         // the placement metadata was added above - nothing to draw, but the
         // placement did happen.
         guard buffers.ground.indicesCount > 0,
-              let groundIndicesBuffer = buffers.ground.indicesBuffer else {
+              let groundIndices = buffers.ground.indices,
+              let groundVertices = buffers.ground.vertices,
+              let groundStyles = buffers.ground.styles,
+              let groundOverviewMask = buffers.ground.overviewStyleMask else {
             return true
         }
-        renderEncoder.setVertexBuffer(buffers.ground.verticesBuffer, offset: 0, index: 0)
-        renderEncoder.setVertexBuffer(buffers.ground.stylesBuffer, offset: 0, index: 2)
-        renderEncoder.setVertexBuffer(buffers.ground.overviewStyleMaskBuffer, offset: 0, index: 4)
+        renderEncoder.setVertexBuffer(groundVertices.buffer, offset: groundVertices.offset, index: 0)
+        renderEncoder.setVertexBuffer(groundStyles.buffer, offset: groundStyles.offset, index: 2)
+        renderEncoder.setVertexBuffer(groundOverviewMask.buffer, offset: groundOverviewMask.offset, index: 4)
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: buffers.ground.indicesCount,
+                                            indexCount: groundIndices.count,
                                             indexType: buffers.ground.indexType,
-                                            indexBuffer: groundIndicesBuffer,
-                                            indexBufferOffset: 0)
+                                            indexBuffer: groundIndices.buffer,
+                                            indexBufferOffset: groundIndices.offset)
 
         return true
     }

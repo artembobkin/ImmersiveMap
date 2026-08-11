@@ -83,63 +83,36 @@ final class TileAtlasShadowBindingTests: XCTestCase {
         let styles = [TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))]
         let overviewMask: [Float] = [0]
 
-        let verticesBuffer = try XCTUnwrap(device.makeBuffer(bytes: vertices,
-                                                             length: vertices.count * MemoryLayout<TilePipeline.VertexIn>.stride))
-        let indicesBuffer = try XCTUnwrap(device.makeBuffer(bytes: indices,
-                                                            length: indices.count * MemoryLayout<UInt32>.stride))
-        let stylesBuffer = try XCTUnwrap(device.makeBuffer(bytes: styles,
-                                                           length: styles.count * MemoryLayout<TilePolygonStyle>.stride))
-        let maskBuffer = try XCTUnwrap(device.makeBuffer(bytes: overviewMask,
-                                                         length: overviewMask.count * MemoryLayout<Float>.stride))
+        let totalLength = TileBufferArena.alignedSize(of: vertices)
+            + TileBufferArena.alignedSize(of: indices)
+            + TileBufferArena.alignedSize(of: styles)
+            + TileBufferArena.alignedSize(of: overviewMask)
+        let arena = try XCTUnwrap(TileBufferArena(metalDevice: device, length: totalLength))
 
-        let ground = TileBuffers.GeometryLayer(verticesBuffer: verticesBuffer,
-                                               indicesBuffer: indicesBuffer,
-                                               stylesBuffer: stylesBuffer,
-                                               overviewStyleMaskBuffer: maskBuffer,
-                                               indicesCount: indices.count,
-                                               verticesCount: vertices.count,
+        let ground = TileBuffers.GeometryLayer(vertices: arena.append(vertices),
+                                               indices: arena.append(indices),
+                                               styles: arena.append(styles),
+                                               overviewStyleMask: arena.append(overviewMask),
                                                indexType: .uint32)
-        let emptyLayer = TileBuffers.GeometryLayer(verticesBuffer: verticesBuffer,
-                                                   indicesBuffer: indicesBuffer,
-                                                   stylesBuffer: stylesBuffer,
-                                                   overviewStyleMaskBuffer: maskBuffer,
-                                                   indicesCount: 0,
-                                                   verticesCount: 0,
-                                                   indexType: .uint32)
-        let extruded = TileBuffers.Extruded(verticesBuffer: verticesBuffer,
-                                            indicesBuffer: indicesBuffer,
-                                            stylesBuffer: stylesBuffer,
-                                            indicesCount: 0,
-                                            verticesCount: 0,
-                                            indexType: .uint32)
+        let emptyLayer = TileBuffersFixtures.emptyGeometryLayer()
         let phases = RoadGeometryPhases(shadow: emptyLayer,
                                         casing: emptyLayer,
                                         fill: emptyLayer,
                                         detail: emptyLayer,
                                         overlay: emptyLayer)
-        let roads = RoadStructureBuckets(tunnel: phases,
-                                         ground: phases,
-                                         bridge: phases)
-        let emptyTextLabelSet = TileBuffers.TextLabelSet(placementInputs: [],
-                                                         labelsByStyleRuns: [],
-                                                         poiIconRuns: [])
-        return TileBuffers(ground: ground,
-                           roads: roads,
+        return TileBuffers(backingBuffer: arena.backingBuffer,
+                           ground: ground,
+                           roads: RoadStructureBuckets(tunnel: phases,
+                                                       ground: phases,
+                                                       bridge: phases),
                            bridgeOverlay: emptyLayer,
-                           extruded: extruded,
-                           textLabels: TileBuffers.TextLabels(full: emptyTextLabelSet,
-                                                               reduced: emptyTextLabelSet,
-                                                               minimal: emptyTextLabelSet),
-                           roadLabels: TileBuffers.RoadLabels(pathInputs: [],
-                                                              pathRanges: [],
-                                                              pathLabels: [],
-                                                              labelStyle: nil,
-                                                              localGlyphVerticesBuffer: nil,
-                                                              localGlyphVertexCount: 0,
-                                                              glyphBounds: [],
-                                                              glyphBoundRanges: [],
-                                                              sizes: [],
-                                                              anchorRanges: [],
-                                                              anchors: []))
+                           extruded: TileBuffers.Extruded(vertices: nil,
+                                                          indices: nil,
+                                                          styles: nil,
+                                                          indexType: .uint32),
+                           textLabels: TileBuffers.TextLabels(full: TileBuffersFixtures.emptyTextLabelSet(),
+                                                               reduced: TileBuffersFixtures.emptyTextLabelSet(),
+                                                               minimal: TileBuffersFixtures.emptyTextLabelSet()),
+                           roadLabels: TileBuffersFixtures.emptyRoadLabels())
     }
 }

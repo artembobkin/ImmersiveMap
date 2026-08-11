@@ -280,10 +280,6 @@ class MemoryMetalTileCache {
     }
     
     private func estimateTileByteSize(_ tile: MetalTile) -> Int {
-        var size = 0
-        tile.tileBuffers.forEachBuffer { buffer in
-            size += buffer.allocatedSize
-        }
-        return size
+        tile.tileBuffers.backingBuffer?.allocatedSize ?? 0
     }
 }

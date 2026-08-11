@@ -107,7 +107,9 @@ enum BuildingExtrusionDrawer {
             let placeIn = placeTile.placeIn
 
             guard buffers.extruded.indicesCount > 0,
-                  let extrudedIndicesBuffer = buffers.extruded.indicesBuffer else { continue }
+                  let extrudedIndices = buffers.extruded.indices,
+                  let extrudedVertices = buffers.extruded.vertices,
+                  let extrudedStyles = buffers.extruded.styles else { continue }
 
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,
@@ -117,8 +119,8 @@ enum BuildingExtrusionDrawer {
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0
 
-            renderEncoder.setVertexBuffer(buffers.extruded.verticesBuffer, offset: 0, index: 0)
-            renderEncoder.setVertexBuffer(buffers.extruded.stylesBuffer, offset: 0, index: 2)
+            renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
+            renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
 
             // Clip fragments to the placeIn slot: buildings of a retained parent
             // must not overlap neighboring exact tiles.
@@ -145,10 +147,10 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
             renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: buffers.extruded.indicesCount,
+                                                indexCount: extrudedIndices.count,
                                                 indexType: buffers.extruded.indexType,
-                                                indexBuffer: extrudedIndicesBuffer,
-                                                indexBufferOffset: 0,
+                                                indexBuffer: extrudedIndices.buffer,
+                                                indexBufferOffset: extrudedIndices.offset,
                                                 instanceCount: instanceCount)
         }
     }

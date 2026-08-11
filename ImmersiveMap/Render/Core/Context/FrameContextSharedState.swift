@@ -53,8 +53,6 @@ struct RoadLabelState {
                                       runtimeMetaBuffer: nil,
                                       placementBuffer: nil,
                                       glyphInputBuffer: nil,
-                                      glyphVerticesBuffer: nil,
-                                      glyphVertexCount: 0,
                                       drawLabels: [],
                                       hasActiveFadeAnimations: false)
 
@@ -64,8 +62,6 @@ struct RoadLabelState {
     var runtimeMetaBuffer: MTLBuffer?
     var placementBuffer: MTLBuffer?
     var glyphInputBuffer: MTLBuffer?
-    var glyphVerticesBuffer: MTLBuffer?
-    var glyphVertexCount: Int
     var drawLabels: [DrawRoadLabels]
     var hasActiveFadeAnimations: Bool
 }
