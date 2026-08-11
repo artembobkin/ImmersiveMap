@@ -124,7 +124,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
     // MARK: - Tile construction
 
-    private static func makeDenseCityTile() -> VectorTile_Tile {
+    static func makeDenseCityTile() -> VectorTile_Tile {
         var generator = SplitMix64(seed: 0x1AB0_57E5)
         var tile = VectorTile_Tile()
         tile.layers.append(makeWaterLayer(generator: &generator))
@@ -139,7 +139,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return tile
     }
 
-    private static func makeOceanOverviewTile() -> VectorTile_Tile {
+    static func makeOceanOverviewTile() -> VectorTile_Tile {
         var generator = SplitMix64(seed: 0x0CEA_0CEA)
         var tile = VectorTile_Tile()
 

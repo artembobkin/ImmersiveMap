@@ -10,9 +10,6 @@ class TileMvtParser {
     private static let minClippedRoadLabelFragmentLength: Float = 256.0
     static let complexOceanHoleSplitThreshold = 64
     let determineFeatureStyle               : DetermineFeatureStyle
-    private let decodePolygon               : DecodePolygon = DecodePolygon()
-    private let decodeLine                  : DecodeLine = DecodeLine()
-    private let decodePoint                 : DecodePoint = DecodePoint()
     private let config                      : ImmersiveMapSettings
     private let labelTextResolver           : VectorTileLabelTextResolver
     private let labelLanguagePreferences    : VectorTileLabelLanguagePreferences
@@ -55,8 +52,8 @@ class TileMvtParser {
         tile: Tile,
         mvtData: Data
     ) throws -> ParsedTile {
-        let vectorTile = try VectorTile_Tile(serializedBytes: mvtData)
-        let readingStageResult = readingStage(vectorTile: vectorTile, tile: tile)
+        let decodedTile = try MvtTileDecoder.decode(data: mvtData)
+        let readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
         let unificationResult = unificationStage(readingStageResult: readingStageResult)
 
         return ParsedTile(
@@ -179,9 +176,10 @@ class TileMvtParser {
         static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:], linesByFeatureIndex: [])
     }
 
-    private func buildHighZoomRoadPrecomputation(layer: VectorTile_Tile.Layer,
+    private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
                                                  featureStyles: [FeatureStyle],
-                                                 lineClipper: LineClipper) -> HighZoomRoadPrecomputation {
+                                                 lineClipper: LineClipper,
+                                                 data: Data) -> HighZoomRoadPrecomputation {
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
 
@@ -190,7 +188,7 @@ class TileMvtParser {
                 continue
             }
 
-            let lines = normalize(decodeLine.decode(geometry: feature.geometry), layer: layer)
+            let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: data), layer: layer)
             var preparedLines: [PreparedRoadLine] = []
             preparedLines.reserveCapacity(lines.count)
             for line in lines {
@@ -649,7 +647,8 @@ class TileMvtParser {
     }
 
     
-    func readingStage(vectorTile: VectorTile_Tile, tile: Tile) -> ReadingStageResult {
+    func readingStage(decodedTile: MvtDecodedTile, tile: Tile) -> ReadingStageResult {
+        let mvtData = decodedTile.sourceData
         let parsePolygon = ParsePolygon()
         let parseLine = ParseLine()
         let lineClipper = LineClipper()
@@ -668,7 +667,7 @@ class TileMvtParser {
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
         var layerTimings: [TileParseLayerTiming] = []
         
-        for layer in vectorTile.layers {
+        for layer in decodedTile.layers {
             let layerStart = DispatchTime.now().uptimeNanoseconds
             let layerName = layer.name
             let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
@@ -682,7 +681,7 @@ class TileMvtParser {
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
             for feature in layer.features {
-                let attributes = decodeAttributes(feature: feature, layer: layer)
+                let attributes = decodeAttributes(feature: feature, layer: layer, data: mvtData)
                 featureAttributes.append(attributes)
                 featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
                     layerName: layerName,
@@ -692,14 +691,15 @@ class TileMvtParser {
             }
 
             let buildingPartInfo = layerName == "building"
-                ? collectBuildingPartInfo(layer: layer, featureAttributes: featureAttributes)
+                ? collectBuildingPartInfo(layer: layer, featureAttributes: featureAttributes, data: mvtData)
                 : (partIds: Set<UInt64>(), footprintSignatures: Set<BuildingFootprintSignature>())
             let buildingPartIds = buildingPartInfo.partIds
             let buildingPartFootprintSignatures = buildingPartInfo.footprintSignatures
             let highZoomRoads = usesSeparateRoadRendering
                 ? buildHighZoomRoadPrecomputation(layer: layer,
                                                   featureStyles: featureStyles,
-                                                  lineClipper: lineClipper)
+                                                  lineClipper: lineClipper,
+                                                  data: mvtData)
                 : .empty
             let highZoomRoadSharedPointCounts = highZoomRoads.sharedPointCounts
             for (featureIndex, feature) in layer.features.enumerated() {
@@ -731,8 +731,8 @@ class TileMvtParser {
                 
                 
                 if feature.type == .polygon {
-                    let geometry: [UInt32] = feature.geometry
-                    let polygons = normalize(decodePolygon.decode(geometry: geometry), layer: layer)
+                    let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: mvtData),
+                                             layer: layer)
                     let shouldSplitComplexOceanHoles = layerName == "ocean"
                         && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
                     let extrudeFlag = attributes["extrude"].flatMap(parseBoolValue)
@@ -813,7 +813,6 @@ class TileMvtParser {
                     }
                     
                 } else if feature.type == .linestring {
-                    let geometry: [UInt32] = feature.geometry
                     let lineRenderPasses = style.resolvedLineRenderPasses.filter { $0.parseGeometryStyleData.lineWidth > 0 }
                     if lineRenderPasses.isEmpty {
                         continue
@@ -836,7 +835,8 @@ class TileMvtParser {
                     if usesSeparateRoadRendering {
                         preparedLines = highZoomRoads.linesByFeatureIndex[featureIndex]
                     } else {
-                        let lines = normalize(decodeLine.decode(geometry: geometry), layer: layer)
+                        let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: mvtData),
+                                              layer: layer)
                         var converted: [PreparedRoadLine] = []
                         converted.reserveCapacity(lines.count)
                         for line in lines {
@@ -1051,7 +1051,8 @@ class TileMvtParser {
                     }
                 } else if feature.type == .point {
                     guard let labelTextStyle = style.labelTextStyle else { continue }
-                    let points = normalize(decodePoint.decode(geometry: feature.geometry), layer: layer)
+                    let points = normalize(MvtGeometryDecoder.decodePoints(feature.geometry, in: mvtData),
+                                           layer: layer)
                     let featureID = feature.hasID ? feature.id : nil
                     let poiIcon = poiSpriteResolver.resolve(attributes: attributes, layerName: layerName)
                     for point in points where isPointInsideTile(point) {
