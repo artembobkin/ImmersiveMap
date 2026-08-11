@@ -7,6 +7,7 @@ Projects:
 - `NewYorkFlyover`: a slow cinematic pass over Manhattan's skyscrapers.
 - `BerlinNightDescent`: a straight fall from a globe view onto the colonnade of Berlin's Altes Museum, in the dark palette of the `ImmersiveMapSettingsMac` example.
 - `GlobeUnfurl`: the sphere unrolling into a plane and rolling back up, with a widened transition span and a hold on the half-unrolled state.
+- `CrowdBloom`: fifty avatar markers over Barcelona's Eixample, grouping into one flower cluster from the city, five from the neighbourhood, and none at street level.
 
 Every project references the package locally (`XCLocalSwiftPackageReference` with `relativePath = ../..`), so unpublished package changes run immediately. A new post project is a copy of a sibling with the names changed, keeping the shared scheme under `xcshareddata/xcschemes/`, plus a `FileRef` inside the `Posts` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`.
 

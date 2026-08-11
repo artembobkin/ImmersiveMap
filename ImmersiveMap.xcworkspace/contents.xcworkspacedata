@@ -64,5 +64,8 @@
       <FileRef
          location = "group:Posts/GlobeUnfurl/GlobeUnfurl.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Posts/CrowdBloom/CrowdBloom.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>
