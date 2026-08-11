@@ -28,17 +28,6 @@ extension NSBezierPath {
 }
 #endif
 
-enum PlatformDisplayScale {
-    /// Main screen scale; used by offline rasterization that has no view/window of its own.
-    static var main: CGFloat {
-        #if canImport(UIKit)
-        return max(UIScreen.main.scale, 1.0)
-        #elseif canImport(AppKit)
-        return max(NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
-        #endif
-    }
-}
-
 /// Cross-platform rasterization into a CGImage with a top-left coordinate system.
 /// On iOS mirrors `UIGraphicsImageRenderer`; on macOS configures the current
 /// `NSGraphicsContext` so that `NSBezierPath`, `NSImage.draw`, and text drawing work.

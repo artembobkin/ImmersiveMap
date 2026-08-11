@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Reading the checkout is all any job here does. Artifact upload needs no
+# token scope of its own.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build & Test (SPM)
@@ -26,3 +31,100 @@ jobs:
 
       - name: Test
         run: swift test
+
+  # SwiftPM does not compile the package's .metal sources for the test bundle,
+  # so every Metal-backed test skips itself under `swift test`: the whole
+  # rendering suite, including the end-to-end offscreen frames, is invisible to
+  # the job above. Building through Xcode compiles the shaders, which is the
+  # only way those tests run at all.
+  gpu-test:
+    name: Test with shaders (Xcode, macOS)
+    runs-on: macos-15
+
+    env:
+      # Turns "this machine cannot render" from a silent skip into a failure.
+      # A runner that loses Metal must make this job red rather than let it
+      # pass having rendered nothing. Set twice on purpose: the plain name is
+      # inherited by a macOS test process, the TEST_RUNNER_ prefixed one is the
+      # documented way to reach a test runner xcodebuild launches itself.
+      IMMERSIVE_MAP_REQUIRE_METAL: "1"
+      TEST_RUNNER_IMMERSIVE_MAP_REQUIRE_METAL: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Generate the package workspace
+        uses: ./.github/actions/package-workspace
+
+      - name: Test
+        shell: bash
+        run: .github/scripts/run-xcodebuild-test.sh 'platform=macOS' gpu
+
+      - name: Upload the result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-test-results
+          path: gpu-TestResults.xcresult
+          retention-days: 7
+
+  # The UIKit half of the platform layer (host view, gestures, display link)
+  # only compiles and runs on iOS, so the macOS jobs above never touch it.
+  ios-test:
+    name: Test (Xcode, iOS Simulator)
+    runs-on: macos-15
+
+    env:
+      IMMERSIVE_MAP_REQUIRE_METAL: "1"
+      TEST_RUNNER_IMMERSIVE_MAP_REQUIRE_METAL: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate the package workspace
+        uses: ./.github/actions/package-workspace
+
+      # The device list of a runner image is not something to hardcode: take
+      # whatever iPhone this image ships and fail loudly if it ships none.
+      #
+      # The UDID is what gets passed on, not the name. Device names contain
+      # parentheses ("iPhone SE (3rd generation)"), so anything that reads the
+      # human-readable listing risks handing xcodebuild a truncated name that
+      # matches no device.
+      - name: Pick a simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available --json | jq -r '
+            [ .devices
+              | to_entries[]
+              | select(.key | test("SimRuntime\\.iOS-"))
+              | .value[]
+              | select(.name | startswith("iPhone"))
+            ] | last // empty | "\(.udid)\t\(.name)"')
+          if [ -z "$device" ]; then
+            echo "No iPhone simulator is available on this runner image" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          udid=${device%%$'\t'*}
+          echo "Using ${device#*$'\t'} ($udid)"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        shell: bash
+        run: .github/scripts/run-xcodebuild-test.sh "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" ios
+
+      - name: Upload the result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ios-TestResults.xcresult
+          retention-days: 7

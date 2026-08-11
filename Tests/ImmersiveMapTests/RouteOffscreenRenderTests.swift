@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import Metal
-import QuartzCore
 import XCTest
 
 /// End-to-end: a route across the visible face of the globe must paint its
@@ -11,36 +9,17 @@ import XCTest
 /// must respect `progress`. Requires the compiled Metal library, so it skips
 /// under `swift test` and runs in the xcodebuild workspace suite.
 final class RouteOffscreenRenderTests: XCTestCase {
-    private final class StubAvatarSource: AvatarRenderSource {
-        var currentAvatarController: ImmersiveMapAvatarsController? { nil }
-    }
-
-    private final class StubMarkerSource: MarkerRenderSource {
-        var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
-    }
-
-    private final class StubSceneModelSource: SceneModelRenderSource {
-        var currentSceneModelsController: ImmersiveMapSceneModelsController? { nil }
-    }
-
-    private final class StubRouteSource: RouteRenderSource {
-        let controller = ImmersiveMapRoutesController()
-        var currentRoutesController: ImmersiveMapRoutesController? { controller }
-    }
-
-    private let size = 160
-
     @MainActor
     func testRouteOnTheGlobePaintsItsColour() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0)
+        let harness = try makeHarness(zoom: 1.0)
 
-        let baseline = try await renderFrame(context: context, time: 0)
-        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        let baseline = try await harness.renderFrame(at: frameTime(0))
+        harness.routes.add(makeArc(around: harness.cameraPosition, progress: 1))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
         XCTAssertNotEqual(painted, baseline, "A route across the globe must change the frame")
-        XCTAssertGreaterThan(redPixelCount(in: painted), 0,
+        XCTAssertGreaterThan(painted.count(where: isRedPixel),
+                             0,
                              "The route colour must reach the drawable")
     }
 
@@ -48,28 +27,26 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// plan rather than by a branch inside the subsystem.
     @MainActor
     func testRouteDrawsNothingOnTheFlatMap() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 15.0)
+        let harness = try makeHarness(zoom: 15.0)
 
-        let baseline = try await renderFrame(context: context, time: 0)
-        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        let baseline = try await harness.renderFrame(at: frameTime(0))
+        harness.routes.add(makeArc(around: harness.cameraPosition, progress: 1))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertEqual(redPixelCount(in: painted), 0)
+        XCTAssertEqual(painted.count(where: isRedPixel), 0)
         XCTAssertEqual(painted, baseline)
     }
 
     @MainActor
     func testProgressShortensTheDrawnRibbon() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0)
-        _ = try await renderFrame(context: context, time: 0)
+        let harness = try makeHarness(zoom: 1.0)
+        _ = try await harness.renderFrame(at: frameTime(0))
 
-        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
-        let full = redPixelCount(in: try await renderFrame(context: context, time: 1.0 / 60.0))
+        harness.routes.add(makeArc(around: harness.cameraPosition, progress: 1))
+        let full = try await harness.renderFrame(at: frameTime(1)).count(where: isRedPixel)
 
-        context.routeSource.controller.setProgress(id: 1, 0.25)
-        let quarter = redPixelCount(in: try await renderFrame(context: context, time: 2.0 / 60.0))
+        harness.routes.setProgress(id: 1, 0.25)
+        let quarter = try await harness.renderFrame(at: frameTime(2)).count(where: isRedPixel)
 
         XCTAssertGreaterThan(full, 0)
         XCTAssertGreaterThan(quarter, 0)
@@ -80,17 +57,16 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// while still covering the same stretch of globe.
     @MainActor
     func testDashLeavesGapsAlongTheLine() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0)
-        _ = try await renderFrame(context: context, time: 0)
+        let harness = try makeHarness(zoom: 1.0)
+        _ = try await harness.renderFrame(at: frameTime(0))
 
-        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
-        let solid = redPixelCount(in: try await renderFrame(context: context, time: 1.0 / 60.0))
+        harness.routes.add(makeArc(around: harness.cameraPosition, progress: 1))
+        let solid = try await harness.renderFrame(at: frameTime(1)).count(where: isRedPixel)
 
-        var dashed = makeRoute(around: context.renderCamera, progress: 1)
+        var dashed = makeArc(around: harness.cameraPosition, progress: 1)
         dashed.dash = ImmersiveMapRouteDash(dashPoints: 6, gapPoints: 6)
-        context.routeSource.controller.upsert([dashed])
-        let dashedCount = redPixelCount(in: try await renderFrame(context: context, time: 2.0 / 60.0))
+        harness.routes.upsert([dashed])
+        let dashedCount = try await harness.renderFrame(at: frameTime(2)).count(where: isRedPixel)
 
         XCTAssertGreaterThan(solid, 0)
         XCTAssertGreaterThan(dashedCount, 0, "A dashed route must still draw its dashes")
@@ -100,17 +76,16 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// A pattern whose gap is zero is a solid line, not a shimmering one.
     @MainActor
     func testDashWithoutAGapDrawsSolid() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0)
-        _ = try await renderFrame(context: context, time: 0)
+        let harness = try makeHarness(zoom: 1.0)
+        _ = try await harness.renderFrame(at: frameTime(0))
 
-        context.routeSource.controller.add(makeRoute(around: context.renderCamera, progress: 1))
-        let solid = redPixelCount(in: try await renderFrame(context: context, time: 1.0 / 60.0))
+        harness.routes.add(makeArc(around: harness.cameraPosition, progress: 1))
+        let solid = try await harness.renderFrame(at: frameTime(1)).count(where: isRedPixel)
 
-        var degenerate = makeRoute(around: context.renderCamera, progress: 1)
+        var degenerate = makeArc(around: harness.cameraPosition, progress: 1)
         degenerate.dash = ImmersiveMapRouteDash(dashPoints: 6, gapPoints: 0)
-        context.routeSource.controller.upsert([degenerate])
-        let degenerateCount = redPixelCount(in: try await renderFrame(context: context, time: 2.0 / 60.0))
+        harness.routes.upsert([degenerate])
+        let degenerateCount = try await harness.renderFrame(at: frameTime(2)).count(where: isRedPixel)
 
         XCTAssertEqual(degenerateCount, solid)
     }
@@ -126,18 +101,16 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// are the limb, the polar caps and the tilted horizon below.
     @MainActor
     func testRouteOnTheFarSideOfTheGlobeIsNotDrawn() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(
-            latitude: -center.latitudeDegrees,
-            longitude: center.longitudeDegrees + 180,
-            halfSpanDegrees: 20))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: -center.latitudeDegrees,
+                                     longitude: center.longitudeDegrees + 180,
+                                     halfSpanDegrees: 20))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertEqual(redPixelCount(in: painted), 0)
+        XCTAssertEqual(painted.count(where: isRedPixel), 0)
     }
 
     /// Just past the horizon (the visible cap ends at 77.4 degrees from the
@@ -146,18 +119,16 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// "the path is on the other side, why can I see it".
     @MainActor
     func testGroundRouteBeyondTheHorizonDoesNotSpillOverTheLimb() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(
-            latitude: center.latitudeDegrees - 80,
-            longitude: center.longitudeDegrees,
-            halfSpanDegrees: 5))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees - 80,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertEqual(redPixelCount(in: painted), 0)
+        XCTAssertEqual(painted.count(where: isRedPixel), 0)
     }
 
     /// The gate tests the point where it actually is, altitude included, so an
@@ -168,19 +139,17 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// with only the altitude profile changed.
     @MainActor
     func testLiftedArcStaysVisibleBeyondTheHorizon() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(
-            latitude: center.latitudeDegrees - 80,
-            longitude: center.longitudeDegrees,
-            halfSpanDegrees: 5,
-            baseAltitudeMeters: 2_500_000))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees - 80,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5,
+                                     baseAltitudeMeters: 2_500_000))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+        XCTAssertGreaterThan(painted.count(where: isRedPixel), 0)
     }
 
     /// The shadow a sphere casts is a cone, not a half space. This ribbon sits
@@ -190,19 +159,17 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// A plane test passes every other case here and fails only this one.
     @MainActor
     func testLiftedArcOutsideTheShadowConeStillPaints() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(
-            latitude: center.latitudeDegrees - 101,
-            longitude: center.longitudeDegrees,
-            halfSpanDegrees: 5,
-            baseAltitudeMeters: 600_000))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees - 101,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5,
+                                     baseAltitudeMeters: 600_000))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+        XCTAssertGreaterThan(painted.count(where: isRedPixel), 0)
     }
 
     /// The polar caps draw without depth writes, and the placeholder fill under
@@ -213,35 +180,32 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// remove the gate and this test paints again.
     @MainActor
     func testFarSideRouteDoesNotLeakThroughThePolarCap() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(
-            latitude: 0,
-            longitude: center.longitudeDegrees + 180,
-            halfSpanDegrees: 30))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: 0,
+                                     longitude: center.longitudeDegrees + 180,
+                                     halfSpanDegrees: 30))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertEqual(redPixelCount(in: painted), 0)
+        XCTAssertEqual(painted.count(where: isRedPixel), 0)
     }
 
     /// The control for all three: the same short ribbon on the visible face
     /// paints, so a zero above means "gated", not "never drawn".
     @MainActor
     func testShortRouteOnTheVisibleFacePaints() async throws {
-        let device = try makeDeviceOrSkip()
-        let context = try makeContext(device: device, zoom: 1.0, settings: Self.flatlitSettings)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        let harness = try makeHarness(zoom: 1.0, settings: Self.flatlitSettings)
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
 
-        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees,
-                                                     longitude: center.longitudeDegrees,
-                                                     halfSpanDegrees: 5))
-        let painted = try await renderFrame(context: context, time: 1.0 / 60.0)
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5))
+        let painted = try await harness.renderFrame(at: frameTime(1))
 
-        XCTAssertGreaterThan(redPixelCount(in: painted), 0)
+        XCTAssertGreaterThan(painted.count(where: isRedPixel), 0)
     }
 
     /// Tilt swings the eye off the axis (pitch rotates it about +x, so it moves
@@ -261,30 +225,28 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// turn this back into a test that cannot fail.
     @MainActor
     func testHorizonHoldsUnderCameraTilt() async throws {
-        let device = try makeDeviceOrSkip()
         // Pitch is released with zoom on the globe (globePitchUnlockZoom), so
         // the tilt only reaches its limit past that zoom.
-        let context = try makeContext(device: device,
-                                      zoom: 3.5,
+        let harness = try makeHarness(zoom: 3.5,
                                       settings: Self.flatlitSettings,
                                       pitch: ImmersiveMapSettings.default.camera.maximumPitch)
-        _ = try await renderFrame(context: context, time: 0)
-        let center = context.renderCamera.currentCameraPosition()
+        _ = try await harness.renderFrame(at: frameTime(0))
+        let center = harness.cameraPosition
         XCTAssertGreaterThan(center.pitch, 0.5, "The camera must actually be tilted")
 
-        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 17,
-                                                     longitude: center.longitudeDegrees,
-                                                     halfSpanDegrees: 5))
-        let beyondHorizon = try await renderFrame(context: context, time: 1.0 / 60.0)
-        XCTAssertEqual(redPixelCount(in: beyondHorizon), 0,
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees + 17,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5))
+        let beyondHorizon = try await harness.renderFrame(at: frameTime(1))
+        XCTAssertEqual(beyondHorizon.count(where: isRedPixel), 0,
                        "A tilted camera must not see a ground track beyond its horizon")
 
-        context.routeSource.controller.clear()
-        context.routeSource.controller.add(makeRoute(latitude: center.latitudeDegrees + 10,
-                                                     longitude: center.longitudeDegrees,
-                                                     halfSpanDegrees: 5))
-        let shortOfTheHorizon = try await renderFrame(context: context, time: 2.0 / 60.0)
-        XCTAssertGreaterThan(redPixelCount(in: shortOfTheHorizon), 0,
+        harness.routes.clear()
+        harness.routes.add(makeRoute(latitude: center.latitudeDegrees + 10,
+                                     longitude: center.longitudeDegrees,
+                                     halfSpanDegrees: 5))
+        let shortOfTheHorizon = try await harness.renderFrame(at: frameTime(2))
+        XCTAssertGreaterThan(shortOfTheHorizon.count(where: isRedPixel), 0,
                              "The same track short of that horizon must paint")
     }
 
@@ -293,6 +255,19 @@ final class RouteOffscreenRenderTests: XCTestCase {
     /// Flat lighting for the horizon tests: the terminator would sink a red
     /// ribbon into the night side, and the Sun's glow reads as red pixels.
     private static let flatlitSettings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+
+    @MainActor
+    private func makeHarness(zoom: Double,
+                             settings: ImmersiveMapSettings = .default,
+                             pitch: Float = 0) throws -> OffscreenFrameHarness {
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings)
+        harness.setZoom(zoom, pitch: pitch)
+        return harness
+    }
+
+    private func frameTime(_ index: Int) -> TimeInterval {
+        OffscreenFrameHarness.frameTime(index)
+    }
 
     /// A short ground ribbon centred on one coordinate, so a test states the
     /// angular distance from the camera it wants and nothing else.
@@ -311,63 +286,10 @@ final class RouteOffscreenRenderTests: XCTestCase {
                                  progress: 1)
     }
 
-    private struct Context {
-        let engine: RenderFrameEngine
-        let clock: RenderFrameScriptedClock
-        let texture: MTLTexture
-        let routeSource: StubRouteSource
-        let renderCamera: FrameCameraStateResolver
-    }
-
-    @MainActor
-    private func makeContext(device: MTLDevice,
-                             zoom: Double,
-                             settings: ImmersiveMapSettings = .default,
-                             pitch: Float = 0) throws -> Context {
-        let clock = RenderFrameScriptedClock()
-        let routeSource = StubRouteSource()
-        let renderCamera = FrameCameraStateResolver(settings: settings)
-        let start = renderCamera.currentCameraPosition()
-        renderCamera.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: start.latitudeDegrees,
-                                                                  longitudeDegrees: start.longitudeDegrees,
-                                                                  zoom: zoom,
-                                                                  pitch: pitch))
-        let layer = CAMetalLayer()
-        let engine = RenderFrameEngine(layer: layer,
-                                       avatarSource: StubAvatarSource(),
-                                       markerSource: StubMarkerSource(),
-                                       sceneModelSource: StubSceneModelSource(),
-                                       routeSource: routeSource,
-                                       providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
-                                       settings: settings,
-                                       renderCamera: renderCamera,
-                                       presentationStateResolver: MapPresentationStateController(settings: settings),
-                                       eventSink: VideoExportRenderEventSink(),
-                                       tileTraceRecorder: TileTraceRecorder(),
-                                       baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                       clock: clock)
-
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
-                                                                  width: size,
-                                                                  height: size,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .shared
-        let texture = try XCTUnwrap(try XCTUnwrap(layer.device).makeTexture(descriptor: descriptor))
-
-        return Context(engine: engine,
-                       clock: clock,
-                       texture: texture,
-                       routeSource: routeSource,
-                       renderCamera: renderCamera)
-    }
-
     /// A wide arc centred on the camera, lifted well off the surface so it
     /// cannot be swallowed by the globe's own depth.
-    @MainActor
-    private func makeRoute(around renderCamera: FrameCameraStateResolver,
-                           progress: Double) -> ImmersiveMapRoute {
-        let center = renderCamera.currentCameraPosition()
+    private func makeArc(around center: ImmersiveMapCameraPosition,
+                         progress: Double) -> ImmersiveMapRoute {
         let path = ImmersiveMapGeoPath(
             from: GeoCoordinate(latitude: center.latitudeDegrees, longitude: center.longitudeDegrees - 20),
             to: GeoCoordinate(latitude: center.latitudeDegrees, longitude: center.longitudeDegrees + 20),
@@ -381,54 +303,7 @@ final class RouteOffscreenRenderTests: XCTestCase {
 
     /// The map has no red anywhere in its default palette, so a saturated red
     /// pixel can only come from the route.
-    private func redPixelCount(in pixels: [UInt8]) -> Int {
-        var count = 0
-        for index in stride(from: 0, to: pixels.count, by: 4) {
-            let blue = Int(pixels[index])
-            let green = Int(pixels[index + 1])
-            let red = Int(pixels[index + 2])
-            if red > 150, green < 90, blue < 90 {
-                count += 1
-            }
-        }
-        return count
-    }
-
-    @MainActor
-    private func renderFrame(context: Context, time: TimeInterval) async throws -> [UInt8] {
-        context.clock.setTime(time)
-        let didComplete = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
-            let request = RenderFrameOffscreenRequest(texture: context.texture,
-                                                      drawSize: CGSize(width: size, height: size),
-                                                      pixelsPerPoint: 1) { success in
-                continuation.resume(returning: success)
-            }
-            if context.engine.render(offscreen: request) == false {
-                continuation.resume(returning: nil)
-            }
-        }
-        XCTAssertEqual(didComplete, true, "Offscreen frame must schedule and complete")
-
-        var pixels = [UInt8](repeating: 0, count: size * size * 4)
-        pixels.withUnsafeMutableBytes { buffer in
-            context.texture.getBytes(buffer.baseAddress!,
-                                     bytesPerRow: size * 4,
-                                     from: MTLRegionMake2D(0, 0, size, size),
-                                     mipmapLevel: 0)
-        }
-        return pixels
-    }
-
-    private func makeDeviceOrSkip() throws -> MTLDevice {
-        guard let probeDevice = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal device is unavailable")
-        }
-        guard (try? probeDevice.makeDefaultLibrary(bundle: .module)) != nil else {
-            throw XCTSkip("Compiled Metal library is unavailable in this test environment")
-        }
-        guard probeDevice.hasUnifiedMemory else {
-            throw XCTSkip("Unified-memory GPU is required for direct texture readback")
-        }
-        return probeDevice
+    private func isRedPixel(_ pixel: RenderedFrame.Pixel) -> Bool {
+        pixel.red > 150 && pixel.green < 90 && pixel.blue < 90
     }
 }

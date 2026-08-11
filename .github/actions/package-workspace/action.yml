@@ -1,0 +1,20 @@
+name: Generate the package workspace
+description: >-
+  Writes .swiftpm/xcode/package.xcworkspace, the workspace Xcode creates when a
+  Swift package is opened in the IDE. It is gitignored, so a fresh checkout has
+  to produce it before xcodebuild can address the package by workspace. The file
+  is a single self-reference; the ImmersiveMap scheme comes from Package.swift.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p .swiftpm/xcode/package.xcworkspace
+        cat > .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata <<'XML'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Workspace version = "1.0">
+           <FileRef location = "self:"></FileRef>
+        </Workspace>
+        XML

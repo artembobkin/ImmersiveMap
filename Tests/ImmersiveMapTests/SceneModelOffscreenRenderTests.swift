@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import Metal
-import QuartzCore
 import XCTest
 
 /// End-to-end: a scene model anchored at the camera center must change the
@@ -12,19 +10,6 @@ import XCTest
 /// compiled Metal library, so it skips under `swift test` and runs in the
 /// xcodebuild workspace suite.
 final class SceneModelOffscreenRenderTests: XCTestCase {
-    private final class StubAvatarSource: AvatarRenderSource {
-        var currentAvatarController: ImmersiveMapAvatarsController? { nil }
-    }
-
-    private final class StubMarkerSource: MarkerRenderSource {
-        var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
-    }
-
-    private final class StubSceneModelSource: SceneModelRenderSource {
-        let controller = ImmersiveMapSceneModelsController()
-        var currentSceneModelsController: ImmersiveMapSceneModelsController? { controller }
-    }
-
     /// Keeps the last selection snapshot the engine published; it arrives on
     /// the Metal completion thread, hence the lock.
     private final class RecordingEventSink: RenderFrameEventSink, @unchecked Sendable {
@@ -49,57 +34,20 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
 
     @MainActor
     func testAnchoredModelChangesRenderedPixels() async throws {
-        guard let probeDevice = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal device is unavailable")
-        }
-        guard (try? probeDevice.makeDefaultLibrary(bundle: .module)) != nil else {
-            throw XCTSkip("Compiled Metal library is unavailable in this test environment")
-        }
-        guard probeDevice.hasUnifiedMemory else {
-            throw XCTSkip("Unified-memory GPU is required for direct texture readback")
-        }
-
-        let settings = ImmersiveMapSettings.default
-        let clock = RenderFrameScriptedClock()
-        let eventSink = RecordingEventSink()
-        let renderCamera = FrameCameraStateResolver(settings: settings)
-        let presentation = MapPresentationStateController(settings: settings)
-        let sceneModelSource = StubSceneModelSource()
-        let layer = CAMetalLayer()
-        let engine = RenderFrameEngine(layer: layer,
-                                       avatarSource: StubAvatarSource(),
-                                       markerSource: StubMarkerSource(),
-                                       sceneModelSource: sceneModelSource,
-                                       routeSource: StubRouteSource(),
-                                       providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
-                                       settings: settings,
-                                       renderCamera: renderCamera,
-                                       presentationStateResolver: presentation,
-                                       eventSink: eventSink,
-                                       tileTraceRecorder: TileTraceRecorder(),
-                                       baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                       clock: clock)
-        let device = try XCTUnwrap(layer.device)
-
         let size = 128
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
-                                                                  width: size,
-                                                                  height: size,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .shared
-        let texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+        let eventSink = RecordingEventSink()
+        let harness = try OffscreenFrameHarness.makeOrSkip(size: size, eventSink: eventSink)
 
-        let baseline = try await renderFrame(engine: engine, clock: clock, texture: texture, time: 0, size: size)
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
         // A continent-sized obelisk at the camera center: visible at any zoom,
         // so the test does not depend on the resolver's default position.
-        let cameraPosition = renderCamera.currentCameraPosition()
+        let cameraPosition = harness.cameraPosition
         let objURL = try writeCubeOBJ()
         defer { try? FileManager.default.removeItem(at: objURL) }
         let modelCoordinate = GeoCoordinate(latitude: cameraPosition.latitudeDegrees,
                                             longitude: cameraPosition.longitudeDegrees)
-        sceneModelSource.controller.add(ImmersiveMapSceneModel(
+        harness.sceneModels.add(ImmersiveMapSceneModel(
             id: 1,
             source: ImmersiveMapSceneModel.Source(url: objURL),
             coordinate: modelCoordinate,
@@ -111,17 +59,14 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         // model is awaited through the hit volume the frame publishes for it.
         var pixelsChanged = false
         var snapshot = SceneModelSelectionSnapshot.empty
-        for frameIndex in 1...200 where pixelsChanged == false || snapshot.entries.isEmpty {
-            let pixels = try await renderFrame(engine: engine,
-                                               clock: clock,
-                                               texture: texture,
-                                               time: TimeInterval(frameIndex) / 60.0,
-                                               size: size)
-            pixelsChanged = pixelsChanged || pixels != baseline
+        for frameIndex in 1...200 {
+            let frame = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(frameIndex))
+            pixelsChanged = pixelsChanged || frame != baseline
             snapshot = eventSink.sceneModelSelectionSnapshot
-            if pixelsChanged == false || snapshot.entries.isEmpty {
-                try await Task.sleep(nanoseconds: 20_000_000)
+            if pixelsChanged, snapshot.entries.isEmpty == false {
+                break
             }
+            try await Task.sleep(for: .milliseconds(20))
         }
 
         XCTAssertTrue(pixelsChanged,
@@ -147,35 +92,6 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
                                         minimumTouchSizePixels: 0)?.id,
                        1,
                        "A tap at the model's own projected center must hit it")
-    }
-
-    @MainActor
-    private func renderFrame(engine: RenderFrameEngine,
-                             clock: RenderFrameScriptedClock,
-                             texture: MTLTexture,
-                             time: TimeInterval,
-                             size: Int) async throws -> [UInt8] {
-        clock.setTime(time)
-        let didComplete = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
-            let request = RenderFrameOffscreenRequest(texture: texture,
-                                                      drawSize: CGSize(width: size, height: size),
-                                                      pixelsPerPoint: 1) { success in
-                continuation.resume(returning: success)
-            }
-            if engine.render(offscreen: request) == false {
-                continuation.resume(returning: nil)
-            }
-        }
-        XCTAssertEqual(didComplete, true, "Offscreen frame must schedule and complete")
-
-        var pixels = [UInt8](repeating: 0, count: size * size * 4)
-        pixels.withUnsafeMutableBytes { buffer in
-            texture.getBytes(buffer.baseAddress!,
-                             bytesPerRow: size * 4,
-                             from: MTLRegionMake2D(0, 0, size, size),
-                             mipmapLevel: 0)
-        }
-        return pixels
     }
 
     private func writeCubeOBJ() throws -> URL {
@@ -207,8 +123,4 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         try obj.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
-}
-
-private final class StubRouteSource: RouteRenderSource {
-    var currentRoutesController: ImmersiveMapRoutesController? { nil }
 }
