@@ -11,6 +11,9 @@
 /Traces/
 # xcodebuild test result bundles (CI uploads them as artifacts on failure)
 *.xcresult
+# Visual review renders: large, machine specific, regenerated on demand.
+# The verdicts next to them (Tools/VisualReview/verdicts.json) are committed.
+/Tools/VisualReview/Output/
 /ImmersiveMapMacDevelop/
 /ImmersiveMapIOSDevelop/
 /ImmersiveMap.local.xcworkspace/

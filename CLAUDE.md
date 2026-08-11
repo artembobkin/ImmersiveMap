@@ -44,6 +44,7 @@ Every example and post scheme runs the app in `Release`, not `Debug`: these proj
 Offline tooling (not part of the SwiftPM build):
 
 - `Tools/TextAtlas/generate_text_atlas.sh`: regenerates the committed MSDF text atlases in `ImmersiveMap/Text/Resources/` (requires `msdf-atlas-gen` and local Noto Sans fonts; fonts are never committed).
+- `Tools/VisualReview/`: the `ImmersiveMapVisualReview` macOS app, run by hand before a release. It renders a catalogue of fixed scenes to PNGs and short clips and walks a person through them for a verdict, which is where judgements about how the rendering *looks* belong: the automated suite only asserts what a machine can decide. Verdicts live in `Tools/VisualReview/verdicts.json` (committed) and renders in `Tools/VisualReview/Output/` (gitignored). A coarse fingerprint per artifact keeps a pass short by showing only what changed since it was approved. Never part of CI. A launch with `IMMERSIVE_VISUAL_REVIEW_RENDER=1` renders and exits without the UI, optionally filtered by `IMMERSIVE_VISUAL_REVIEW_ONLY=<ids>`. A user-visible rendering feature that ships without a scenario there does not get looked at before a release.
 
 ## Architecture
 

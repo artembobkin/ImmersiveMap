@@ -62,4 +62,11 @@
          location = "group:Posts/GlobeUnfurl/GlobeUnfurl.xcodeproj">
       </FileRef>
    </Group>
+   <Group
+      location = "container:"
+      name = "Tools">
+      <FileRef
+         location = "group:Tools/VisualReview/ImmersiveMapVisualReview.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>
