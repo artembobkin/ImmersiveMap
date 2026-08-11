@@ -40,6 +40,16 @@ import QuartzCore
 /// Metal, so a capture cannot contain them. The attribution badge is host-view
 /// chrome and does not appear either; add attribution before publishing
 /// captured imagery.
+///
+/// On repeatability: pin ``ImmersiveMapStillConfiguration/sceneDate`` and two
+/// captures of the same scene agree pixel for pixel, with one exception worth
+/// knowing about. The settling described above takes however many passes the
+/// scene needs, so the frame is taken at a scene time that varies between
+/// runs, and anything animated by that clock lands on a different phase. In
+/// practice that is the starfield, whose stars twinkle: captures that show
+/// space differ in the stars while the planet itself is identical. Turn the
+/// earth scene off, or make space transparent, for output that has to match
+/// byte for byte.
 @MainActor
 public final class ImmersiveMapStillRecorder {
     public private(set) var isCapturing = false

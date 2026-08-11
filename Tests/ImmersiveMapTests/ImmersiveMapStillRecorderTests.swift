@@ -144,7 +144,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = offlineSettings(.default.earthScene(isEnabled: false))
+        let settings = offlineSettings(.default.earthScene(isEnabled: false).transparentSpace())
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -167,7 +167,19 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // identical, so anything that differs is the route, and the claim
         // survives whatever a given GPU and colour pipeline do to the exact
         // shade that comes back.
-        XCTAssertGreaterThan(try differingPixelCount(withoutRoute, withRoute), 100,
+        // The noise floor, measured rather than assumed: two captures of the
+        // same scene. It has to be zero for the comparison below to mean
+        // anything, and an earlier version of this test failed on CI for
+        // exactly that reason. Space is transparent here because the starfield
+        // twinkles with scene time, and the settle loop does not always take
+        // the same number of passes, so with stars on screen two captures
+        // differ by thousands of pixels that have nothing to do with routes.
+        let secondBaseline = try await ImmersiveMapStillRecorder().capture(settings: settings,
+                                                                            camera: camera,
+                                                                            configuration: configuration)
+        XCTAssertEqual(try differingPixelCount(withoutRoute, secondBaseline), 0,
+                       "Two captures of the same scene must be identical, or the comparison below is noise")
+        XCTAssertGreaterThan(try differingPixelCount(withoutRoute, withRoute), 20,
                              "A route across the globe must reach the captured image")
     }
 
@@ -188,7 +200,10 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = offlineSettings(.default.earthScene(isEnabled: false))
+        // Transparent space for the same reason as the test above: the
+        // starfield twinkles with a scene time that varies between captures,
+        // and its noise dwarfs the route.
+        let settings = offlineSettings(.default.earthScene(isEnabled: false).transparentSpace())
         let routes = [ImmersiveMapRoute(id: 1,
                                         path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
                                                                   to: GeoCoordinate(latitude: 0, longitude: 20),
@@ -210,8 +225,8 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                 routes: routes,
                                                 configuration: configuration)
 
-        XCTAssertGreaterThan(try differingPixelCount(baseline, first), 100)
-        XCTAssertGreaterThan(try differingPixelCount(baseline, second), 100,
+        XCTAssertGreaterThan(try differingPixelCount(baseline, first), 20)
+        XCTAssertGreaterThan(try differingPixelCount(baseline, second), 20,
                              "The second capture of the same content must still draw it")
     }
 
