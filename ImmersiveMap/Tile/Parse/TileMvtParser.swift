@@ -3,7 +3,6 @@
 
 import Foundation
 import MetalKit
-internal import SwiftEarcut
 
 
 class TileMvtParser {

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import MetalKit
-internal import SwiftEarcut
 
 class ParsePolygon {
     private let clipper = Clipper()
@@ -146,13 +145,7 @@ class ParsePolygon {
                                               dim: 2)
         guard earcutIndices.isEmpty == false else { return nil }
 
-        var indices: [UInt32] = []
-        indices.reserveCapacity(earcutIndices.count)
-        for index in earcutIndices {
-            indices.append(UInt32(index))
-        }
-
-        return TileMvtParser.ParsedPolygon(vertices: Array(earcutVertices), indices: indices)
+        return TileMvtParser.ParsedPolygon(vertices: Array(earcutVertices), indices: earcutIndices)
     }
 
     private func appendRing(_ ring: [SIMD2<Float>]) {
