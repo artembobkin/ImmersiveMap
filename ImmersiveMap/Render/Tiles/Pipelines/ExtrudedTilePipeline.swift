@@ -77,6 +77,9 @@ class ExtrudedTilePipeline {
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
         shadowDescriptor.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        // Required for layered rendering: the vertex stage routes instances
+        // to cascade slices via [[render_target_array_index]].
+        shadowDescriptor.inputPrimitiveTopology = .triangle
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         self.compositePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: compositeDescriptor)

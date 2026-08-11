@@ -6,9 +6,10 @@ import simd
 /// One shadow cascade's sampling parameters; the layout mirrors `ShadowCascade`
 /// in RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 ///
-/// `worldToShadowTexture` maps flat world space straight to the cascade's half
-/// of the 2:1 shadow atlas: xy is the atlas UV (u compressed to the half and
-/// offset, v flipped for Metal's top-left origin), z the comparison depth.
+/// `worldToShadowTexture` maps flat world space straight to the cascade's
+/// slice of the shadow texture array: xy is the slice UV (v flipped for
+/// Metal's top-left origin), z the comparison depth; the slice index equals
+/// the cascade's position in `ShadowUniform.cascades`.
 struct ShadowCascadeUniform {
     var worldToShadowTexture: matrix_float4x4
     /// Reserved (kept for layout stability); the tent PCF footprint is a
@@ -19,8 +20,8 @@ struct ShadowCascadeUniform {
     /// Cap for the receiver-plane depth gradient (normalized depth per UV);
     /// bounds garbage screen-space derivatives on silhouette quads.
     var gradientClamp: Float
-    /// Valid atlas-UV rectangle of this cascade, inset by the kernel reach so
-    /// taps never bleed into the neighboring half.
+    /// Valid slice-UV rectangle of this cascade, inset by the kernel reach so
+    /// taps never leave the fitted window.
     var uvMinimum: SIMD2<Float>
     var uvMaximum: SIMD2<Float>
     /// World-space distance receivers with normals shift their sample point
@@ -31,9 +32,9 @@ struct ShadowCascadeUniform {
     /// sub-texel, while occluders farther than the cap still shadow it.
     var normalOffsetWorld: Float
     var _padding0: Float = 0
-    /// One texel of this cascade in atlas UV (u is a half of the texture):
-    /// feeds the per-tap slope-proportional bias that covers the bilinear
-    /// compare footprint on steep receivers.
+    /// One texel of this cascade in slice UV: feeds the per-tap
+    /// slope-proportional bias that covers the bilinear compare footprint on
+    /// steep receivers.
     var texelSizeUV: SIMD2<Float>
 
     static let disabled = ShadowCascadeUniform(worldToShadowTexture: matrix_identity_float4x4,

@@ -74,15 +74,14 @@ enum ShadowFrameStateResolver {
     static let normalOffsetMetersCap = 2.5
     // (The PCF filter is a fixed 3x3 Castaño tent in the shader, an
     // orientation-independent ~2-texel edge; no per-cascade kernel radius.)
-    /// Sampling-rectangle inset per cascade, in texels: keeps kernel taps from
-    /// bleeding across the atlas seam or the window border.
+    /// Sampling-rectangle inset per cascade, in texels: keeps kernel taps
+    /// inside the fitted window of the cascade's array slice.
     static let uvInsetTexels: Float = 4.0
     static let mapResolutionRange: ClosedRange<Int> = 256...4096
 
     private struct CascadeSpec {
         let radius: Float
         let maxCasterHeight: Float
-        let atlasIndex: Int
     }
 
     static func resolve(renderSurfaceMode: ViewMode,
@@ -132,14 +131,11 @@ enum ShadowFrameStateResolver {
         let middleRadius = min(middleCascadeRadiusCameraDistances * cameraDistance, farRadius)
         let specs = [
             CascadeSpec(radius: nearRadius,
-                        maxCasterHeight: Float(nearCascadeMaxCasterHeightMeters * unitsPerMeter),
-                        atlasIndex: 0),
+                        maxCasterHeight: Float(nearCascadeMaxCasterHeightMeters * unitsPerMeter)),
             CascadeSpec(radius: middleRadius,
-                        maxCasterHeight: Float(middleCascadeMaxCasterHeightMeters * unitsPerMeter),
-                        atlasIndex: 1),
+                        maxCasterHeight: Float(middleCascadeMaxCasterHeightMeters * unitsPerMeter)),
             CascadeSpec(radius: farRadius,
-                        maxCasterHeight: Float(farCascadeMaxCasterHeightMeters * unitsPerMeter),
-                        atlasIndex: 2)
+                        maxCasterHeight: Float(farCascadeMaxCasterHeightMeters * unitsPerMeter))
         ]
 
         var lightProjectionViews: [matrix_float4x4] = []
@@ -276,17 +272,15 @@ enum ShadowFrameStateResolver {
                                                              far: far)
         let lightProjectionView = lightProjection * lightView
 
-        // NDC → atlas slot `atlasIndex` of `cascadeCount`: the slot spans
-        // 1/count of the atlas U, so u = x·(0.5/count) + (index + 0.5)/count;
+        // NDC → the cascade's full array slice: u = 0.5x + 0.5,
         // v = -0.5y + 0.5 (Metal texture origin is top-left); z passes
-        // through as the comparison depth.
-        let slotWidth = 1.0 / Float(ShadowCascadeAtlas.cascadeCount)
-        let uOffset = (Float(spec.atlasIndex) + 0.5) * slotWidth
+        // through as the comparison depth. The slice itself is selected by
+        // the cascade index at sampling time, not encoded in the UV.
         let uvBias = matrix_float4x4(
-            SIMD4<Float>(0.5 * slotWidth, 0.0, 0.0, 0.0),
+            SIMD4<Float>(0.5, 0.0, 0.0, 0.0),
             SIMD4<Float>(0.0, -0.5, 0.0, 0.0),
             SIMD4<Float>(0.0, 0.0, 1.0, 0.0),
-            SIMD4<Float>(uOffset, 0.5, 0.0, 1.0)
+            SIMD4<Float>(0.5, 0.5, 0.0, 1.0)
         )
 
         // Receiver bias, normalized by the depth window. Scaled by the wall
@@ -299,16 +293,14 @@ enum ShadowFrameStateResolver {
         let depthBias = (receiverBiasTexels * min(steepestSlope, 2.0) + receiverBiasFloorTexels)
             * texelWorldSize / depthWindow
         // Anything above the cap is a derivative artifact. Units: normalized
-        // depth per atlas U: the window extent maps to `0.5 · slotWidth` of
-        // the atlas U axis, so one full U spans extent / (0.5 · slotWidth)
-        // world units.
-        let worldPerAtlasU = extent / (0.5 * slotWidth)
-        let gradientClamp = gradientClampMaxSlope * worldPerAtlasU / depthWindow
+        // depth per slice U: the window extent maps to the full U axis, so
+        // one full U spans `extent` world units.
+        let gradientClamp = gradientClampMaxSlope * extent / depthWindow
 
-        let texelUV = SIMD2<Float>(slotWidth / Float(mapResolution), 1.0 / Float(mapResolution))
+        let texelUV = SIMD2<Float>(repeating: 1.0 / Float(mapResolution))
         let inset = uvInsetTexels * texelUV
-        let uvMinimum = SIMD2<Float>(slotWidth * Float(spec.atlasIndex), 0) + inset
-        let uvMaximum = SIMD2<Float>(slotWidth * Float(spec.atlasIndex + 1), 1) - inset
+        let uvMinimum = inset
+        let uvMaximum = SIMD2<Float>(1, 1) - inset
         let normalOffsetWorld = min(normalOffsetTexels * texelWorldSize,
                                     Float(normalOffsetMetersCap * unitsPerMeter))
         let uniform = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,

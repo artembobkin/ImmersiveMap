@@ -261,10 +261,12 @@ final class SharedRenderResources {
     // MARK: - Shadow fallback
 
     private static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ShadowCascadeAtlas.depthPixelFormat,
-                                                                  width: 1,
-                                                                  height: 1,
-                                                                  mipmapped: false)
+        let descriptor = MTLTextureDescriptor()
+        descriptor.textureType = .type2DArray
+        descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        descriptor.width = 1
+        descriptor.height = 1
+        descriptor.arrayLength = ShadowCascadeAtlas.cascadeCount
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
         let texture = device.makeTexture(descriptor: descriptor)!
@@ -275,6 +277,8 @@ final class SharedRenderResources {
         passDescriptor.depthAttachment.loadAction = .clear
         passDescriptor.depthAttachment.storeAction = .store
         passDescriptor.depthAttachment.clearDepth = 1.0
+        // Clears every cascade slice in the one no-draw pass.
+        passDescriptor.renderTargetArrayLength = ShadowCascadeAtlas.cascadeCount
         // A throwaway queue: the clear runs once per process, before any view
         // samples the texture.
         if let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer(),

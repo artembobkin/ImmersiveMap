@@ -49,18 +49,19 @@ class SceneModelPipeline {
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
-        let depthOnlyVertexFunction = library.makeFunction(name: "sceneModelShadowVertexShader")
-
         let shadowDescriptor = MTLRenderPipelineDescriptor()
-        shadowDescriptor.vertexFunction = depthOnlyVertexFunction
+        shadowDescriptor.vertexFunction = library.makeFunction(name: "sceneModelShadowVertexShader")
         shadowDescriptor.fragmentFunction = nil
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
         shadowDescriptor.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        // Required for layered rendering: the vertex stage routes instances
+        // to cascade slices via [[render_target_array_index]].
+        shadowDescriptor.inputPrimitiveTopology = .triangle
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
 
         let occlusionDescriptor = MTLRenderPipelineDescriptor()
-        occlusionDescriptor.vertexFunction = depthOnlyVertexFunction
+        occlusionDescriptor.vertexFunction = library.makeFunction(name: "sceneModelDepthOnlyVertexShader")
         occlusionDescriptor.fragmentFunction = nil
         occlusionDescriptor.vertexDescriptor = vertexDescriptor
         occlusionDescriptor.rasterSampleCount = 1

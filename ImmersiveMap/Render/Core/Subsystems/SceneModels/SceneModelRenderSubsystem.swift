@@ -161,7 +161,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                   shadowCasterItems.isEmpty == false else { return }
             SceneModelDrawer.drawShadowCasters(renderEncoder: encoder,
                                                lightProjectionViews: shadowState.lightProjectionViews,
-                                               mapResolution: shadowState.mapResolution,
                                                items: shadowCasterItems,
                                                pipeline: pipeline,
                                                extrudedDepthState: extrudedDepthState)

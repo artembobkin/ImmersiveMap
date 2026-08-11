@@ -33,6 +33,13 @@ final class ShadowUniformLayoutTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 368)
     }
 
+    func testCasterUniformMatchesMetalLayout() {
+        XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.stride, 192)
+        XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.offset(of: \.near), 0)
+        XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.offset(of: \.middle), 64)
+        XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.offset(of: \.far), 128)
+    }
+
     func testDisabledUniformHasZeroStrengthAndEmptyRects() {
         XCTAssertEqual(ShadowUniform.disabled.strength, 0)
         // Empty rectangle: minimum > maximum, so containment always fails.

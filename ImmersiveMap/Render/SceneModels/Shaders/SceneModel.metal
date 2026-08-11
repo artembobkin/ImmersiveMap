@@ -43,11 +43,31 @@ vertex SceneModelVertexOut sceneModelVertexShader(SceneModelVertexIn vertexIn [[
 }
 
 // Depth-only vertex of the shadow map pass; the pipeline has no fragment
-// function, the rasterizer writes bare depth.
-vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_in]],
-                                           constant Camera& lightCamera [[buffer(1)]],
-                                           constant float4x4& modelMatrix [[buffer(2)]]) {
-    return lightCamera.matrix * (modelMatrix * float4(vertexIn.position, 1.0));
+// function, the rasterizer writes bare depth. All cascades render in one
+// pass: instanceCount = cascade count, each instance projects through its
+// cascade's light matrix into the matching array slice.
+struct SceneModelShadowVertexOut {
+    float4 position [[position]];
+    uint layer [[render_target_array_index]];
+};
+
+vertex SceneModelShadowVertexOut sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_in]],
+                                                              uint instanceID [[instance_id]],
+                                                              constant ShadowCasterMatrices& casters [[buffer(1)]],
+                                                              constant float4x4& modelMatrix [[buffer(2)]]) {
+    SceneModelShadowVertexOut out;
+    out.position = casters.lightProjectionViews[instanceID] * (modelMatrix * float4(vertexIn.position, 1.0));
+    out.layer = instanceID;
+    return out;
+}
+
+// Depth-only vertex of the overlay label-occlusion prepass: a plain camera
+// projection into a non-layered depth attachment, so it must not carry a
+// [[render_target_array_index]] output.
+vertex float4 sceneModelDepthOnlyVertexShader(SceneModelVertexIn vertexIn [[stage_in]],
+                                              constant Camera& camera [[buffer(1)]],
+                                              constant float4x4& modelMatrix [[buffer(2)]]) {
+    return camera.matrix * (modelMatrix * float4(vertexIn.position, 1.0));
 }
 
 // No analytic lighting model, matching the building extrusion
@@ -58,7 +78,7 @@ fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
                                         constant SceneModelMaterial& material [[buffer(3)]],
                                         constant Shadow& shadow [[buffer(4)]],
                                         texture2d<half> baseColorTexture [[texture(0)]],
-                                        depth2d<float> shadowMap [[texture(1)]],
+                                        depth2d_array<float> shadowMap [[texture(1)]],
                                         sampler baseColorSampler [[sampler(0)]]) {
     half4 base = baseColorTexture.sample(baseColorSampler, in.uv) * half4(material.baseColor);
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal));
