@@ -4,6 +4,8 @@
 
 ![ImmersiveMap demo](Documentation/Assets/immersive-map-demo.gif)
 
+Video: [CrowdBloom](https://youtu.be/fU4HzPMEyD8), fifty avatar markers over Barcelona clustering and coming apart across sixteen zoom levels, rendered in 4K by the engine itself (`Posts/CrowdBloom`).
+
 Native Swift + Metal map rendering engine for SwiftUI apps.
 
 ImmersiveMap is a **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms. Pure Swift and Metal, with no native SDK wrapped in a Swift API.
