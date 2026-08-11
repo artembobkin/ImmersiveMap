@@ -56,7 +56,7 @@ TileRenderStore (in-memory LRU of MetalTiles)
    ↓  miss
 ImmersiveMapNeedsTile (bounded-concurrency async loading, dedup, retry/backoff, disk caches)
    ↓
-TileMvtParser + clippers/decoders + SwiftEarcut → PreparedTileCPU
+TileMvtParser + MvtTileDecoder/MvtGeometryDecoder + clippers + internal Earcut port → PreparedTileCPU
    ↓
 MetalTileFactory → GPU TileBuffers
 ```

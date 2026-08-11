@@ -11,7 +11,7 @@ enum LinePlacement {
     case bridgeOverlay
 }
 
-enum RoadPassRole: Int {
+enum RoadPassRole: Int, CaseIterable {
     case shadow
     case casing
     case fill

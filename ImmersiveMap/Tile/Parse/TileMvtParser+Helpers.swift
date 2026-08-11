@@ -101,22 +101,43 @@ extension TileMvtParser {
     private static let labelKeySeed: UInt64 = 1469598103934665603
     private static let labelKeyPrime: UInt64 = 1099511628211
 
-    func decodeAttributes(feature: VectorTile_Tile.Feature,
-                          layer: VectorTile_Tile.Layer) -> [String: VectorTile_Tile.Value] {
+    func decodeAttributes(feature: MvtDecodedFeature,
+                          layer: MvtDecodedLayer,
+                          data: Data) -> [String: VectorTile_Tile.Value] {
+        data.withUnsafeBytes { bytes in
+            decodeAttributes(feature: feature, layer: layer, bytes: bytes)
+        }
+    }
+
+    func decodeAttributes(feature: MvtDecodedFeature,
+                          layer: MvtDecodedLayer,
+                          bytes: UnsafeRawBufferPointer) -> [String: VectorTile_Tile.Value] {
         var attributes: [String: VectorTile_Tile.Value] = [:]
-        for i in stride(from: 0, to: feature.tags.count, by: 2) {
-            guard i + 1 < feature.tags.count else { break }
-            let keyIndex = Int(feature.tags[i])
-            let valueIndex = Int(feature.tags[i + 1])
-
-            guard keyIndex < layer.keys.count,
-                  valueIndex < layer.values.count else { continue }
-
-            let key = layer.keys[keyIndex]
-            let value = layer.values[valueIndex]
-            attributes[key] = value
+        switch feature.tags {
+        case .empty:
+            break
+        case .range(let range):
+            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { break }
+            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
+            appendAttributes(reader: &reader, layer: layer, into: &attributes)
+        case .values(let values):
+            var reader = MvtArrayUInt32Reader(values: values)
+            appendAttributes(reader: &reader, layer: layer, into: &attributes)
         }
         return attributes
+    }
+
+    private func appendAttributes<Reader: MvtUInt32Reading>(reader: inout Reader,
+                                                            layer: MvtDecodedLayer,
+                                                            into attributes: inout [String: VectorTile_Tile.Value]) {
+        while let keyIndex = reader.next() {
+            guard let valueIndex = reader.next() else { break }
+
+            guard Int(keyIndex) < layer.keys.count,
+                  Int(valueIndex) < layer.values.count else { continue }
+
+            attributes[layer.keys[Int(keyIndex)]] = layer.values[Int(valueIndex)]
+        }
     }
 
     func parseBoolValue(_ value: VectorTile_Tile.Value) -> Bool? {
@@ -247,35 +268,30 @@ extension TileMvtParser {
         return featureId
     }
 
-    func collectBuildingPartIds(layer: VectorTile_Tile.Layer) -> Set<UInt64> {
+    /// One pass over a building layer collecting both the part identifiers and
+    /// the part footprint signatures, from attributes the caller already
+    /// decoded.
+    func collectBuildingPartInfo(layer: MvtDecodedLayer,
+                                 featureAttributes: [[String: VectorTile_Tile.Value]],
+                                 data: Data)
+        -> (partIds: Set<UInt64>, footprintSignatures: Set<BuildingFootprintSignature>) {
         var partIds = Set<UInt64>()
-        for feature in layer.features {
-            let attributes = decodeAttributes(feature: feature, layer: layer)
-            if isTruthy(attributes["building:part"]) {
-                let id = buildingIdentifier(attributes: attributes, featureId: feature.id)
-                partIds.insert(id)
-            }
-        }
-        return partIds
-    }
-
-    func collectBuildingPartFootprintSignatures(layer: VectorTile_Tile.Layer) -> Set<BuildingFootprintSignature> {
         var signatures = Set<BuildingFootprintSignature>()
-        let polygonDecoder = DecodePolygon()
-        for feature in layer.features {
-            let attributes = decodeAttributes(feature: feature, layer: layer)
+        for (featureIndex, feature) in layer.features.enumerated() {
+            let attributes = featureAttributes[featureIndex]
             guard isTruthy(attributes["building:part"]) else { continue }
-            let polygons = normalize(polygonDecoder.decode(geometry: feature.geometry), layer: layer)
+            partIds.insert(buildingIdentifier(attributes: attributes, featureId: feature.id))
+            let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: data), layer: layer)
             for polygon in polygons {
                 if let signature = buildingFootprintSignature(for: polygon) {
                     signatures.insert(signature)
                 }
             }
         }
-        return signatures
+        return (partIds, signatures)
     }
 
-    func normalize(_ polygons: MultiPolygon, layer: VectorTile_Tile.Layer) -> MultiPolygon {
+    func normalize(_ polygons: MultiPolygon, layer: MvtDecodedLayer) -> MultiPolygon {
         let scale = coordinateScale(for: layer)
         guard scale != 1 else {
             return polygons
@@ -286,7 +302,7 @@ extension TileMvtParser {
         }
     }
 
-    func normalize(_ lines: MultiLineString, layer: VectorTile_Tile.Layer) -> MultiLineString {
+    func normalize(_ lines: MultiLineString, layer: MvtDecodedLayer) -> MultiLineString {
         let scale = coordinateScale(for: layer)
         guard scale != 1 else {
             return lines
@@ -294,7 +310,7 @@ extension TileMvtParser {
         return lines.map { normalize($0, scale: scale) }
     }
 
-    func normalize(_ points: MultiPoint, layer: VectorTile_Tile.Layer) -> MultiPoint {
+    func normalize(_ points: MultiPoint, layer: MvtDecodedLayer) -> MultiPoint {
         let scale = coordinateScale(for: layer)
         guard scale != 1 else {
             return points
@@ -302,7 +318,7 @@ extension TileMvtParser {
         return normalize(points, scale: scale)
     }
 
-    private func coordinateScale(for layer: VectorTile_Tile.Layer) -> Double {
+    private func coordinateScale(for layer: MvtDecodedLayer) -> Double {
         guard layer.extent > 0 else {
             return 1
         }
