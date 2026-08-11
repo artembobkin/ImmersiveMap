@@ -49,6 +49,15 @@ class MemoryMetalTileCache {
         return mutationVersion
     }
 
+    /// Test hook: the number of activity stamps currently tracked. Must stay
+    /// bounded by the cache contents; a stamp for a tile that never
+    /// materialized would otherwise leak for the process lifetime.
+    var trackedActivityStampCount: Int {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return lastActiveFrame.count
+    }
+
     func updateProtectedTiles(_ tiles: Set<Tile>) {
         let result: (evicted: [LRUMemoryCache<Tile, MetalTile>.Entry], totalCost: Int, count: Int)
         stateLock.lock()
@@ -87,10 +96,15 @@ class MemoryMetalTileCache {
     func recordActiveTiles(_ activeTiles: Set<Tile>, frameIndex: UInt64) {
         var markedVolatile: [Tile] = []
         stateLock.lock()
-        for tile in activeTiles {
+        // Stamp only tiles that live in the cache: the demanded set contains
+        // tiles that may never materialize (404s, parse failures, requests
+        // dropped when the camera moves on) and placements can retain a tile
+        // past its eviction. Guarding on membership keeps lastActiveFrame a
+        // subset of the cache keys, so the eviction paths bound its growth.
+        for tile in activeTiles where cache.cost(forKey: tile) != nil {
             lastActiveFrame[tile] = frameIndex
         }
-        for tile in protectedTiles {
+        for tile in protectedTiles where cache.cost(forKey: tile) != nil {
             lastActiveFrame[tile] = frameIndex
         }
         for key in cache.keys {

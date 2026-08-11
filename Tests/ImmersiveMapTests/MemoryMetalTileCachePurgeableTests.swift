@@ -148,6 +148,32 @@ final class MemoryMetalTileCachePurgeableTests: XCTestCase {
         XCTAssertEqual(currentPurgeableState(of: observedBuffer), .volatile)
     }
 
+    /// Activity stamps must stay a subset of the cache keys: the demanded set
+    /// contains tiles that may never materialize, and stamping those would
+    /// grow the bookkeeping for the process lifetime.
+    func testActivityStampsStayBoundedByCacheContents() throws {
+        let device = try makeDevice()
+        let cache = MemoryMetalTileCache(maxCacheSizeInBytes: 64 * 1024 * 1024,
+                                         tileTraceRecorder: TileTraceRecorder())
+
+        let phantomTiles = Set((0..<100).map { Tile(x: $0, y: 0, z: 12) })
+        cache.updateProtectedTiles(phantomTiles)
+        cache.recordActiveTiles(phantomTiles, frameIndex: 100)
+        XCTAssertEqual(cache.trackedActivityStampCount, 0,
+                       "Demanded-but-never-materialized tiles must leave no stamp")
+
+        let key = Tile(x: 1, y: 1, z: 10)
+        let (tile, _) = try makeTile(device: device, key: key)
+        cache.setTileData(tile: tile, forKey: key)
+        cache.updateProtectedTiles([])
+        cache.recordActiveTiles([key], frameIndex: 101)
+        XCTAssertEqual(cache.trackedActivityStampCount, 1)
+
+        cache.removeAll()
+        XCTAssertEqual(cache.trackedActivityStampCount, 0,
+                       "Removal must drop the stamps with the entries")
+    }
+
     func testReclaimedTileDropsOutAsMiss() throws {
         let device = try makeDevice()
         let key = Tile(x: 5, y: 6, z: 10)
