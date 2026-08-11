@@ -40,6 +40,7 @@ let package = Package(
                 "Routes/README.md",
                 "SceneModels/README.md",
                 "Starfield/README.md",
+                "StillCapture/README.md",
                 "Text/README.md",
                 "Tile/README.md",
                 "UI/README.md",

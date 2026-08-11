@@ -74,6 +74,14 @@ final class RouteOffscreenRenderTests: XCTestCase {
     }
 
     /// A pattern whose gap is zero is a solid line, not a shimmering one.
+    ///
+    /// Compared within a tolerance rather than exactly. The dash shader
+    /// computes coverage per segment, so a zero gap still evaluates a boundary
+    /// at every dash edge and antialiasing there rounds a handful of pixels
+    /// differently from an unpatterned line. CI caught this at 155 against
+    /// 159: visually the same line, four pixels apart. The claim worth making
+    /// is that no gaps opened up, and a gap of any size would remove far more
+    /// than a few percent.
     @MainActor
     func testDashWithoutAGapDrawsSolid() async throws {
         let harness = try makeHarness(zoom: 1.0)
@@ -87,7 +95,9 @@ final class RouteOffscreenRenderTests: XCTestCase {
         harness.routes.upsert([degenerate])
         let degenerateCount = try await harness.renderFrame(at: frameTime(2)).count(where: isRedPixel)
 
-        XCTAssertEqual(degenerateCount, solid)
+        XCTAssertGreaterThan(solid, 0)
+        XCTAssertEqual(Double(degenerateCount), Double(solid), accuracy: Double(solid) * 0.05,
+                       "A zero gap must leave the line whole, give or take the dash edges")
     }
 
     // MARK: - Horizon

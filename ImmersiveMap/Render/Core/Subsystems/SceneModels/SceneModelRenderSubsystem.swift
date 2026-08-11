@@ -65,10 +65,14 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             drawItems = []
             shadowCasterItems = []
             _ = meshStore.requestMeshes(for: [])
+            frameContext.services.diagnostics.setCounter(.pendingSceneModelMeshes, value: 0)
             return
         }
 
-        let readyMeshes = meshStore.requestMeshes(for: Set(presented.map(\.source.url)))
+        let requestedURLs = Set(presented.map(\.source.url))
+        let readyMeshes = meshStore.requestMeshes(for: requestedURLs)
+        frameContext.services.diagnostics.setCounter(.pendingSceneModelMeshes,
+                                                     value: requestedURLs.count - readyMeshes.count)
         guard readyMeshes.isEmpty == false else {
             drawItems = []
             shadowCasterItems = []

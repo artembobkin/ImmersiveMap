@@ -36,16 +36,27 @@ run_xcodebuild() {
     fi
 }
 
-# A compile error reaches the formatted log as "Command SwiftCompile failed
-# with a nonzero exit code" and nothing else: the diagnostics live in the
-# result bundle, and reading them meant downloading an artifact. Print them
-# here so a red job says what broke and where.
+# A failure reaches the formatted log as "Command SwiftCompile failed with a
+# nonzero exit code" or a bare list of test names, and nothing else: the
+# diagnostics live in the result bundle, and reading them meant downloading an
+# artifact. Print them here so a red job says what broke and why.
+#
+# Build errors and test failures live in different reports, so both are asked
+# for: a compile error leaves the test report empty, and a failed assertion
+# leaves the build report empty.
 report_errors() {
     [ -d "${result_bundle}" ] || return 0
-    echo "::group::Errors from ${result_bundle}"
+
+    echo "::group::Build errors from ${result_bundle}"
     xcrun xcresulttool get build-results --path "${result_bundle}" 2>/dev/null \
         | jq -r '.errors[]? | "\(.issueType // "Error"): \(.message)\n  \(.sourceURL // "no source location")"' \
-        || echo "Could not read the result bundle"
+        || echo "Could not read the build report"
+    echo "::endgroup::"
+
+    echo "::group::Test failures from ${result_bundle}"
+    xcrun xcresulttool get test-results summary --path "${result_bundle}" 2>/dev/null \
+        | jq -r '.testFailures[]? | "\(.testIdentifierString)\n  \(.failureText)"' \
+        || echo "Could not read the test report"
     echo "::endgroup::"
 }
 
