@@ -92,6 +92,7 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | [Camera travelling along a path](Documentation/docs/camera-path-follow.md) | Available |
 | [Tour video export](Documentation/docs/tour-video-export.md) | Available |
 | [Disk / memory tile cache](Documentation/docs/tile-cache.md) | Available |
+| [Offline regions: download once, render without a network](Documentation/docs/offline-tiles.md) | Available |
 | [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md) | Available |
 
 ## App size
