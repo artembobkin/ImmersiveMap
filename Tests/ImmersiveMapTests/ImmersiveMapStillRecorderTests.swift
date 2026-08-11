@@ -337,20 +337,29 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         pixels[(y * width + x) * 4 + 3]
     }
 
-    /// How many pixels differ between two captures of the same size.
-    private func differingPixelCount(_ lhs: CGImage, _ rhs: CGImage) throws -> Int {
+    /// How many pixels differ visibly between two captures of the same size.
+    ///
+    /// Visibly, not exactly: rasterization is not bit-reproducible on every
+    /// GPU, and comparing byte for byte counted about half the frame as
+    /// changed on a CI runner for two captures of the same scene. The
+    /// tolerance is far below anything a person could see and far above that
+    /// noise, so what it counts is content, not rounding.
+    private func differingPixelCount(_ lhs: CGImage,
+                                     _ rhs: CGImage,
+                                     tolerance: UInt8 = 12) throws -> Int {
         let left = try readPixels(from: lhs)
         let right = try readPixels(from: rhs)
         var differing = 0
         for index in stride(from: 0, to: min(left.count, right.count), by: 4) {
-            let sameRed = left[index] == right[index]
-            let sameGreen = left[index + 1] == right[index + 1]
-            let sameBlue = left[index + 2] == right[index + 2]
-            let sameAlpha = left[index + 3] == right[index + 3]
-            if sameRed && sameGreen && sameBlue && sameAlpha {
-                continue
+            var isDifferent = false
+            for channel in 0..<4 where isDifferent == false {
+                let a = left[index + channel]
+                let b = right[index + channel]
+                isDifferent = (a > b ? a - b : b - a) > tolerance
             }
-            differing += 1
+            if isDifferent {
+                differing += 1
+            }
         }
         return differing
     }
