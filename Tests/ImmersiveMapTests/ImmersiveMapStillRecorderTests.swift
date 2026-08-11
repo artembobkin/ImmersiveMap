@@ -34,8 +34,8 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         XCTAssertEqual(reason(ImmersiveMapStillConfiguration(width: 0))?.contains("width"), true)
         XCTAssertEqual(reason(ImmersiveMapStillConfiguration(height: 20_000))?.contains("height"), true)
         XCTAssertEqual(reason(ImmersiveMapStillConfiguration(pixelsPerPoint: 0))?.contains("pixelsPerPoint"), true)
-        XCTAssertEqual(reason(ImmersiveMapStillConfiguration(tileReadinessTimeout: -1))?
-            .contains("tileReadinessTimeout"), true)
+        XCTAssertEqual(reason(ImmersiveMapStillConfiguration(settleTimeout: -1))?
+            .contains("settleTimeout"), true)
     }
 
     /// Odd sizes are allowed, unlike video: there is no encoder demanding even
@@ -71,7 +71,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         let configuration = ImmersiveMapStillConfiguration(width: 64,
                                                            height: 64,
                                                            pixelsPerPoint: 1,
-                                                           tileReadinessTimeout: 0,
+                                                           settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
         // Both run on the main actor, so the second call gets its turn while
@@ -113,7 +113,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         let configuration = ImmersiveMapStillConfiguration(width: 160,
                                                            height: 160,
                                                            pixelsPerPoint: 1,
-                                                           tileReadinessTimeout: 0,
+                                                           settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
         let image = try await recorder.capture(settings: offlineSettings(.default.transparentSpace()),
@@ -141,7 +141,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         let configuration = ImmersiveMapStillConfiguration(width: 128,
                                                            height: 128,
                                                            pixelsPerPoint: 1,
-                                                           tileReadinessTimeout: 0,
+                                                           settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
         let settings = offlineSettings(.default.earthScene(isEnabled: false))
@@ -185,7 +185,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         let configuration = ImmersiveMapStillConfiguration(width: 128,
                                                            height: 128,
                                                            pixelsPerPoint: 1,
-                                                           tileReadinessTimeout: 0,
+                                                           settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
         let settings = offlineSettings(.default.earthScene(isEnabled: false))
@@ -216,6 +216,75 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// A scene model handed to a capture is in the frame it returns.
+    ///
+    /// A smoke test, not a proof: it cannot fail the race it is about. A mesh
+    /// this small loads inside the settle floor whether or not the loop waits
+    /// for it, which was verified by removing the wait and watching this still
+    /// pass. What the capture actually waits on is asserted where it is
+    /// decidable, in `SceneModelPendingMeshDiagnosticsTests`.
+    @MainActor
+    func testSceneModelsReachTheCapturedImage() async throws {
+        try MetalTestEnvironment.requireDevice()
+        let configuration = ImmersiveMapStillConfiguration(width: 128,
+                                                           height: 128,
+                                                           pixelsPerPoint: 1,
+                                                           settleTimeout: 10,
+                                                           sceneDate: Date(timeIntervalSinceReferenceDate: 0))
+        let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 16)
+        let settings = offlineSettings()
+
+        let withoutModel = try await ImmersiveMapStillRecorder().capture(settings: settings,
+                                                                         camera: camera,
+                                                                         configuration: configuration)
+
+        let objURL = try writeCubeOBJ()
+        defer { try? FileManager.default.removeItem(at: objURL) }
+        let model = ImmersiveMapSceneModel(id: 1,
+                                           source: ImmersiveMapSceneModel.Source(url: objURL),
+                                           coordinate: GeoCoordinate(latitude: 0, longitude: 0),
+                                           fitDiameterMeters: 400)
+        let withModel = try await ImmersiveMapStillRecorder().capture(settings: settings,
+                                                                      camera: camera,
+                                                                      sceneModels: [model],
+                                                                      configuration: configuration)
+
+        // No polling here on purpose: the capture is supposed to have done the
+        // waiting. A single comparison is what proves it did.
+        XCTAssertGreaterThan(try differingPixelCount(withoutModel, withModel), 100,
+                             "The scene model must be in the frame the capture returned")
+    }
+
+    private func writeCubeOBJ() throws -> URL {
+        let obj = """
+        v -1 0 -1
+        v 1 0 -1
+        v 1 2 -1
+        v -1 2 -1
+        v -1 0 1
+        v 1 0 1
+        v 1 2 1
+        v -1 2 1
+        f 1 3 2
+        f 1 4 3
+        f 5 6 7
+        f 5 7 8
+        f 1 2 6
+        f 1 6 5
+        f 2 3 7
+        f 2 7 6
+        f 3 4 8
+        f 3 8 7
+        f 4 1 5
+        f 4 5 8
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("still-scene-model-\(UUID().uuidString)")
+            .appendingPathExtension("obj")
+        try obj.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
 
     /// Settings whose tile provider points at a port nothing listens on.
     ///

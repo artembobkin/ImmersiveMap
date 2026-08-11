@@ -161,7 +161,12 @@ enum VisualReviewFingerprint {
 
         var digests: [String] = []
         for index in 0 ..< sampleCount {
-            let fraction = Double(index) / Double(max(1, sampleCount - 1))
+            // The half-open range, so the last sample lands inside the movie
+            // rather than at its duration. A frame's presentation interval
+            // ends at `duration`, so no frame contains that instant, and with
+            // the zero tolerances above the generator would return nothing for
+            // it.
+            let fraction = Double(index) / Double(max(1, sampleCount))
             let time = CMTime(seconds: duration.seconds * fraction, preferredTimescale: 600)
             guard let image = try? await generator.image(at: time).image,
                   let digest = of(image) else {
@@ -211,7 +216,7 @@ final class VisualReviewRenderer {
             pixelsPerPoint: 2,
             // Generous on purpose: an unfinished tile is the one thing that
             // would make a reviewer reject a frame the renderer got right.
-            tileReadinessTimeout: 30,
+            settleTimeout: 30,
             sceneDate: VisualReviewCatalogue.sceneDate)
 
         let image = try await stillRecorder.capture(settings: scenario.settings,

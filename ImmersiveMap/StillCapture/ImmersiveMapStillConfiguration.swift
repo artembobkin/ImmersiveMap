@@ -25,13 +25,16 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
     /// Retina screen of that width would show.
     public var pixelsPerPoint: CGFloat
 
-    /// How long the capture may wait for outstanding tiles before the frame is
-    /// taken with whatever has loaded.
+    /// How long the capture may wait for the scene to finish arriving before
+    /// the frame is taken with whatever is there.
     ///
-    /// A still has no next frame to correct itself, so this matters more than
-    /// it does for video: at zero the capture returns the first frame, which
-    /// on a cold cache is an empty map.
-    public var tileReadinessTimeout: TimeInterval
+    /// Covers everything that reaches the renderer late: tiles over the
+    /// network, scene model meshes off a background task, and label fades
+    /// converging. A still has no next frame to correct itself, so this
+    /// matters more than the equivalent does for video: at zero the capture
+    /// takes what a handful of frames produced, which on a cold cache is an
+    /// empty map and for a scene model is usually no model at all.
+    public var settleTimeout: TimeInterval
 
     /// Wall date used for the earth scene, meaning the sun position and the
     /// night side. `nil` uses the moment the capture starts, which makes the
@@ -41,12 +44,12 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
     public init(width: Int = 1920,
                 height: Int = 1080,
                 pixelsPerPoint: CGFloat = 2,
-                tileReadinessTimeout: TimeInterval = 10,
+                settleTimeout: TimeInterval = 10,
                 sceneDate: Date? = nil) {
         self.width = width
         self.height = height
         self.pixelsPerPoint = pixelsPerPoint
-        self.tileReadinessTimeout = tileReadinessTimeout
+        self.settleTimeout = settleTimeout
         self.sceneDate = sceneDate
     }
 
@@ -63,8 +66,8 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
             throw ImmersiveMapStillCaptureError
                 .invalidConfiguration("pixelsPerPoint must be greater than 0 and at most 8")
         }
-        guard tileReadinessTimeout >= 0 else {
-            throw ImmersiveMapStillCaptureError.invalidConfiguration("tileReadinessTimeout must not be negative")
+        guard settleTimeout >= 0 else {
+            throw ImmersiveMapStillCaptureError.invalidConfiguration("settleTimeout must not be negative")
         }
     }
 }

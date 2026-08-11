@@ -15,6 +15,11 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         case readyTiles
         case renderedTiles
         case retainedTiles
+        /// Scene models the frame wanted to draw whose mesh has not finished
+        /// loading. Meshes arrive on a detached task and raise no animation
+        /// activity, so without this counter nothing downstream can tell
+        /// "there are no models" from "the models are not here yet".
+        case pendingSceneModelMeshes
         case baseLabelCount
         case baseLabelFullTileCount
         case baseLabelReducedTileCount

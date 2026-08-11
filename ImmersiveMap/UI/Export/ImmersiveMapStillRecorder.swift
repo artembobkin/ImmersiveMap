@@ -96,7 +96,7 @@ final class ImmersiveMapStillRuntime {
 
     /// Settle passes that run whatever the timeout says.
     ///
-    /// `tileReadinessTimeout` bounds waiting on the network, and a caller who
+    /// `settleTimeout` bounds waiting on the network, and a caller who
     /// sets it to zero means "do not wait for tiles", not "hand me a frame
     /// where every label is still at zero opacity". Eight passes is two
     /// seconds of scene time, past any fade the style can configure.
@@ -166,12 +166,25 @@ final class ImmersiveMapStillRuntime {
         self.eventSink = eventSink
 
         let renderCamera = FrameCameraStateResolver(settings: settings)
-        if let camera {
-            renderCamera.setCameraPosition(camera)
-        }
         self.renderCamera = renderCamera
         let presentationStateResolver = MapPresentationStateController(settings: settings)
         self.presentationStateResolver = presentationStateResolver
+
+        // Position, then the presentation-derived clamp, in that order and
+        // never one without the other. `setCameraPosition` limits zoom and the
+        // global pitch ceiling but takes bearing verbatim; the globe's own
+        // bearing and pitch limits are reachable only through
+        // `applyConstraints`, and nothing later re-applies them. Without this,
+        // a capture at zoom 2 with bearing 120 would render 120 degrees where
+        // the live map and a video export both render 70, so the same
+        // `ImmersiveMapCameraPosition` would give a different picture
+        // depending on which of the three drew it.
+        if let camera {
+            renderCamera.setCameraPosition(camera)
+            let constraints = presentationStateResolver
+                .cameraConstraints(cameraState: renderCamera.currentCameraState())
+            renderCamera.applyConstraints(constraints)
+        }
 
         // Controllers built here and owned by this capture alone: their
         // snapshots are one-shot diffs, and sharing one with a live map would
@@ -276,7 +289,7 @@ final class ImmersiveMapStillRuntime {
     /// cycle, which is the same condition the video export pre-roll uses
     /// before it starts capturing.
     private func renderSettledFrame(into texture: MTLTexture) async throws {
-        let deadline = Date().addingTimeInterval(configuration.tileReadinessTimeout)
+        let deadline = Date().addingTimeInterval(configuration.settleTimeout)
         var passes = 0
         while true {
             try checkCancelled()
@@ -284,9 +297,9 @@ final class ImmersiveMapStillRuntime {
             try await renderOnce(into: texture)
             passes += 1
 
-            let hasPendingTiles = requestedTilesCount > 0
+            let hasPendingWork = requestedTilesCount > 0 || pendingSceneModelMeshCount > 0
             let activity = eventSink.activityState
-            let isSettled = hasPendingTiles == false
+            let isSettled = hasPendingWork == false
                 && activity.labelFadeRenderingActive == false
                 && activity.labelVisibilityCycleRenderingActive == false
                 && activity.avatarAnimationRenderingActive == false
@@ -296,7 +309,11 @@ final class ImmersiveMapStillRuntime {
             if passes >= Self.minimumSettlePasses, Date() >= deadline {
                 break
             }
-            if hasPendingTiles, eventSink.consumePendingInvalidation() == false {
+            // Invalidations are drained whatever is outstanding, not only when
+            // tiles are: a scene model mesh finishing its load reports through
+            // the same channel, and reading it only under a tile condition
+            // would leave the loop sleeping through the news.
+            if hasPendingWork, eventSink.consumePendingInvalidation() == false {
                 try await sleep(milliseconds: 50)
             }
         }
@@ -355,6 +372,17 @@ final class ImmersiveMapStillRuntime {
 
     private var requestedTilesCount: Int {
         engine.currentDiagnostics?.counterValue(.requestedTiles) ?? 0
+    }
+
+    /// Scene models whose mesh has not arrived yet.
+    ///
+    /// Meshes load on a detached task and raise no animation activity, and a
+    /// still places its models statically, so nothing else in the settle
+    /// condition would notice them missing: the capture would return the map
+    /// without the models it was asked to draw, per model, silently. Video
+    /// export sidesteps the same hazard by refusing scene models outright.
+    private var pendingSceneModelMeshCount: Int {
+        engine.currentDiagnostics?.counterValue(.pendingSceneModelMeshes) ?? 0
     }
 
     private func checkCancelled() throws {
