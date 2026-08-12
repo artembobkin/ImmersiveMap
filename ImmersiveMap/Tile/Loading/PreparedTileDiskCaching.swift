@@ -512,11 +512,13 @@ final class PreparedTileDiskCaching {
         guard preparedTile.tile == tile else {
             return
         }
-        // Encode, compress, and stage on the caller's task: the shared serial
+        // Encode, compress, and stage before enqueueing: the shared serial
         // queue carries only cheap file operations (the staged-blob rename and
         // the metadata write), so disk-first serves are never delayed behind
         // the LZFSE pass of an unrelated save, and a queued save closure holds
-        // no uncompressed arena.
+        // no uncompressed arena. (The MTLIO transport still serializes
+        // container writes among themselves, on its own queue; see
+        // MTLIOPreparedTileGeometryTransport.containerWriteQueue.)
         let encoded: PreparedTileDiskCodec.EncodedPreparedTile
         do {
             encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,

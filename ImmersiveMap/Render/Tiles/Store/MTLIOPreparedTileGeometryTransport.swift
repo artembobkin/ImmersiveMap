@@ -27,6 +27,20 @@ struct MTLIOPreparedTileGeometryTransport: PreparedTileGeometryTransporting {
         .file(compressionEnabled ? .lzfseContainer : .raw)
     }
 
+    /// MTLIO compression containers are written strictly one at a time,
+    /// process-wide. Before v31 that serialization fell out of running the
+    /// writes on the shared cache IO queue; when staging moved onto the
+    /// loading tasks, concurrent MTLIOCompressionContext writes alongside
+    /// in-flight MTLIOCommandQueue loads empirically wedged the IOGPU driver
+    /// (loads parked in IOGPUIOCommandQueuePerformIO and never completed;
+    /// macOS 15, Apple M2). This queue restores the proven one-writer
+    /// behavior without putting the CPU work back where cache reads would
+    /// wait behind it.
+    private static let containerWriteQueue = DispatchQueue(
+        label: "ImmersiveMap.MTLIOPreparedTileGeometryTransport.containerWrite",
+        qos: .utility
+    )
+
     /// The simulator lacks the MTLIO fast path and Intel Macs lack Metal 3;
     /// both fall back to the inline transport. The full capability decision
     /// belongs to `MetalTileFactory.loadsFileBlobs`, which also covers IO
@@ -52,19 +66,21 @@ struct MTLIOPreparedTileGeometryTransport: PreparedTileGeometryTransporting {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)
         if compressionEnabled {
-            guard let context = MTLIOCreateCompressionContext(stagedURL.path,
-                                                              .lzfse,
-                                                              MTLIOCompressionContextDefaultChunkSize()) else {
-                throw PreparedTileDiskCodecError.corruptedPayload("Could not open the MTLIO compression context.")
-            }
-            blob.withUnsafeBytes { bytes in
-                if let baseAddress = bytes.baseAddress, bytes.count > 0 {
-                    MTLIOCompressionContextAppendData(context, baseAddress, bytes.count)
+            try Self.containerWriteQueue.sync {
+                guard let context = MTLIOCreateCompressionContext(stagedURL.path,
+                                                                  .lzfse,
+                                                                  MTLIOCompressionContextDefaultChunkSize()) else {
+                    throw PreparedTileDiskCodecError.corruptedPayload("Could not open the MTLIO compression context.")
                 }
-            }
-            guard MTLIOFlushAndDestroyCompressionContext(context) == .complete else {
-                try? FileManager.default.removeItem(at: stagedURL)
-                throw PreparedTileDiskCodecError.corruptedPayload("Could not write the MTLIO compression container.")
+                blob.withUnsafeBytes { bytes in
+                    if let baseAddress = bytes.baseAddress, bytes.count > 0 {
+                        MTLIOCompressionContextAppendData(context, baseAddress, bytes.count)
+                    }
+                }
+                guard MTLIOFlushAndDestroyCompressionContext(context) == .complete else {
+                    try? FileManager.default.removeItem(at: stagedURL)
+                    throw PreparedTileDiskCodecError.corruptedPayload("Could not write the MTLIO compression container.")
+                }
             }
         } else {
             do {
