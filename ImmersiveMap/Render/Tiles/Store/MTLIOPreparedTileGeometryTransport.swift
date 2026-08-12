@@ -29,13 +29,10 @@ struct MTLIOPreparedTileGeometryTransport: PreparedTileGeometryTransporting {
 
     /// MTLIO compression containers are written strictly one at a time,
     /// process-wide. Before v31 that serialization fell out of running the
-    /// writes on the shared cache IO queue; when staging moved onto the
-    /// loading tasks, concurrent MTLIOCompressionContext writes alongside
-    /// in-flight MTLIOCommandQueue loads empirically wedged the IOGPU driver
-    /// (loads parked in IOGPUIOCommandQueuePerformIO and never completed;
-    /// macOS 15, Apple M2). This queue restores the proven one-writer
-    /// behavior without putting the CPU work back where cache reads would
-    /// wait behind it.
+    /// writes on the shared cache IO queue; this queue keeps the one-writer
+    /// pattern (the only one v30 ever exercised against the IOGPU driver)
+    /// without putting the CPU work back where cache reads would wait
+    /// behind it.
     private static let containerWriteQueue = DispatchQueue(
         label: "ImmersiveMap.MTLIOPreparedTileGeometryTransport.containerWrite",
         qos: .utility

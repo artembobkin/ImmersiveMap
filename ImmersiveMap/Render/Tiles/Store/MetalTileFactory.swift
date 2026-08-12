@@ -11,7 +11,10 @@ import MetalKit
 /// the same `TileBufferView`s from the span table. The reader verifies every
 /// span take against the schema slot it expects, so a traversal that drifts
 /// from the schema fails instead of binding bytes to the wrong destination.
-final class MetalTileFactory {
+/// `@unchecked Sendable`: both stored properties are immutable references to
+/// thread-safe Metal objects, and concurrent tile loads already call
+/// `makeTile` from independent tasks through the render store.
+final class MetalTileFactory: @unchecked Sendable {
     private let metalDevice: MTLDevice
 #if !targetEnvironment(simulator)
     /// Created once at init on Metal 3 devices: tile loads materialize

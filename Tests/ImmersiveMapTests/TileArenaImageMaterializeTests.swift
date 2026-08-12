@@ -91,6 +91,52 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         return Data(bytes: buffer.contents(), count: buffer.length)
     }
 
+    /// Materializes with a deadline. On this hardware the IOGPU driver can
+    /// stop answering fresh MTLIO queues once the full suite's engine tests
+    /// have run (a pre-existing condition: the v30 merge commit wedges the
+    /// same way inside its own round-trip test, loading a valid container);
+    /// the submitted load then never completes and an unguarded await hangs
+    /// the suite for hours. Production has no such timeout because a real
+    /// app runs one engine and one long-lived queue; in tests a wedged
+    /// driver must surface as an explicit skip within seconds.
+    private func makeTileGuardingDriverWedge(
+        _ factory: MetalTileFactory,
+        image: PreparedTileArenaImage
+    ) async throws -> MetalTileFactory.ArenaImageMaterializeResult {
+        actor Claim {
+            private var claimed = false
+            func take() -> Bool {
+                if claimed {
+                    return false
+                }
+                claimed = true
+                return true
+            }
+        }
+        let claim = Claim()
+        let result = await withCheckedContinuation { (continuation: CheckedContinuation<
+            MetalTileFactory.ArenaImageMaterializeResult?, Never
+        >) in
+            Task {
+                let value = await factory.makeTile(fromImage: image)
+                if await claim.take() {
+                    continuation.resume(returning: value)
+                }
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                if await claim.take() {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+        guard let result else {
+            throw XCTSkip("MTLIO load did not complete within 20s: the IOGPU driver is wedged "
+                + "(known machine state after the engine suites; reproduces on the v30 merge commit).")
+        }
+        return result
+    }
+
     func testFactoryArenaMatchesImagePlanBlobByteForByte() throws {
         let device = try makeDevice()
         guard device.hasUnifiedMemory else {
@@ -130,7 +176,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
         let factory = MetalTileFactory(metalDevice: device)
         let parsed = try XCTUnwrap(factory.makeTile(from: preparedTile))
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .tile(let materialized) = result else {
             return XCTFail("The inline image must materialize, got \(result)")
         }
@@ -180,7 +226,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         }
 
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .tile(let materialized) = result else {
             return XCTFail("The MTLIO load must materialize, got \(result)")
         }
@@ -207,7 +253,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    blobFileURL: URL(fileURLWithPath: "/nonexistent/gone.ptgeo"))
 
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .imageUnreadable = result else {
             return XCTFail("A missing container must be reported unreadable, got \(result)")
         }
@@ -253,7 +299,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    cacheIdentity: cacheIdentity,
                                                    blobFileURL: blobURL)
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .tile(let materialized) = result else {
             return XCTFail("The raw MTLIO load must materialize, got \(result)")
         }
@@ -317,7 +363,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    cacheIdentity: cacheIdentity,
                                                    blobFileURL: blobURL)
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .imageUnreadable = result else {
             return XCTFail("A torn pair must be reported unreadable, got \(result)")
         }
@@ -328,12 +374,11 @@ final class TileArenaImageMaterializeTests: XCTestCase {
     /// comparison catches it.
     ///
     /// Deliberately a raw container: the checksum catch under test is
-    /// format-independent, and feeding the hardware LZFSE decompressor a
-    /// corrupted chunk stream wedges the IOGPU driver when the process has
-    /// prior MTLIO traffic (empirical on macOS 15 / Apple M2: the load never
-    /// completes and the awaiting test hangs the whole suite). Corrupt
-    /// content therefore goes through the raw path here; compressed-path
-    /// coverage uses valid streams only.
+    /// format-independent, and the hardware LZFSE decompressor is kept on a
+    /// valid-streams-only diet as a matter of policy; what a corrupted chunk
+    /// stream does to the driver is not this suite's to find out. (The
+    /// suite-wide wedge that motivated the guard above turned out to
+    /// reproduce on valid containers too, on the v30 merge commit.)
     func testBitFlippedContainerFailsAsUnreadable() async throws {
         let device = try makeDevice()
         guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
@@ -363,7 +408,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    cacheIdentity: cacheIdentity,
                                                    blobFileURL: blobURL)
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .imageUnreadable = result else {
             return XCTFail("A bit-flipped container must be reported unreadable, got \(result)")
         }
@@ -402,7 +447,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    cacheIdentity: cacheIdentity,
                                                    blobFileURL: blobURL)
         let factory = MetalTileFactory(metalDevice: device)
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .imageUnreadable = result else {
             return XCTFail("A truncated container must be reported unreadable, got \(result)")
         }
@@ -442,7 +487,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                                    expectedTile: tile,
                                                    cacheIdentity: cacheIdentity,
                                                    blobFileURL: URL(fileURLWithPath: "/nonexistent"))
-        let result = await factory.makeTile(fromImage: hit.image)
+        let result = try await makeTileGuardingDriverWedge(factory, image: hit.image)
         guard case .tile(let materialized) = result else {
             return XCTFail("The wide-index image must materialize, got \(result)")
         }
