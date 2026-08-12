@@ -11,14 +11,6 @@ class TilePipeline {
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
 
-    struct VertexIn {
-        let position: SIMD2<Int16>
-        let styleIndex: UInt8
-        let _padding0: UInt8 = 0
-        let _padding1: UInt8 = 0
-        let _padding2: UInt8 = 0
-    }
-    
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
@@ -34,7 +26,7 @@ class TilePipeline {
         vertexDescriptor.attributes[1].format = .uchar
         vertexDescriptor.attributes[1].offset = MemoryLayout<SIMD2<Int16>>.size
         vertexDescriptor.attributes[1].bufferIndex = 0
-        vertexDescriptor.layouts[0].stride = MemoryLayout<VertexIn>.stride
+        vertexDescriptor.layouts[0].stride = MemoryLayout<TileVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
         
         

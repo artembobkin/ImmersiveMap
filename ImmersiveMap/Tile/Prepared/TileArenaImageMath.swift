@@ -34,7 +34,7 @@ struct TileArenaSpan: Equatable, Sendable {
 /// fresh arena without any per-array decoding.
 struct TileArenaImagePlan {
     enum Payload {
-        case tileVertices([TilePipeline.VertexIn])
+        case tileVertices([TileVertexIn])
         case extrudedVertices([TileMvtParser.ExtrudedVertexIn])
         case indicesUInt16([UInt16])
         case indicesUInt32([UInt32])
@@ -187,7 +187,7 @@ enum TileArenaImageMath {
         private func measure(_ payload: TileArenaImagePlan.Payload) -> (byteCount: Int, elementCount: Int) {
             switch payload {
             case .tileVertices(let values):
-                return (values.count * MemoryLayout<TilePipeline.VertexIn>.stride, values.count)
+                return (values.count * MemoryLayout<TileVertexIn>.stride, values.count)
             case .extrudedVertices(let values):
                 return (values.count * MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride, values.count)
             case .indicesUInt16(let values):

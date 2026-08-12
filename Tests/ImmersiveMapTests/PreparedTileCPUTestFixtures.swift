@@ -19,9 +19,9 @@ enum PreparedTileCPUTestFixtures {
     static func withGroundTriangle(tile: Tile) -> PreparedTileCPU {
         withGround(tile: tile, ground: PreparedTileCPU.GeometryLayer(
             vertices: [
-                TilePipeline.VertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
-                TilePipeline.VertexIn(position: SIMD2<Int16>(4096, 0), styleIndex: 0),
-                TilePipeline.VertexIn(position: SIMD2<Int16>(0, 4096), styleIndex: 0)
+                TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
+                TileVertexIn(position: SIMD2<Int16>(4096, 0), styleIndex: 0),
+                TileVertexIn(position: SIMD2<Int16>(0, 4096), styleIndex: 0)
             ],
             indices: [0, 1, 2],
             styles: [TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))],
@@ -33,7 +33,7 @@ enum PreparedTileCPUTestFixtures {
     /// backing allocation for tests that need page-scale buffers.
     static func withGroundVertexCount(_ vertexCount: Int, tile: Tile) -> PreparedTileCPU {
         withGround(tile: tile, ground: PreparedTileCPU.GeometryLayer(
-            vertices: Array(repeating: TilePipeline.VertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
+            vertices: Array(repeating: TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
                             count: vertexCount),
             indices: [],
             styles: [],

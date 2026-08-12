@@ -9,7 +9,7 @@ import simd
 /// can be separated from the final MTLBuffer creation stage.
 struct PreparedTileCPU: Sendable {
     struct GeometryLayer {
-        let vertices: [TilePipeline.VertexIn]
+        let vertices: [TileVertexIn]
         let indices: [UInt32]
         let styles: [TilePolygonStyle]
         let overviewStyleMasks: [Float]

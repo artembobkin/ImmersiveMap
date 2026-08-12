@@ -1131,14 +1131,14 @@ class TileMvtParser {
     /// are raw pointer stores without per-append growth or uniqueness checks.
     private static func appendPolygon(_ polygon: ParsedPolygon,
                                       styleBufferIndex: UInt8,
-                                      vertices: inout UnsafeMutableBufferPointer<TilePipeline.VertexIn>,
+                                      vertices: inout UnsafeMutableBufferPointer<TileVertexIn>,
                                       indices: inout UnsafeMutableBufferPointer<UInt32>,
                                       vertexCount: inout Int,
                                       indexCount: inout Int) {
         let vertexOffset = UInt32(vertexCount)
         for position in polygon.vertices {
             vertices.initializeElement(at: vertexCount,
-                                       to: TilePipeline.VertexIn(position: position, styleIndex: styleBufferIndex))
+                                       to: TileVertexIn(position: position, styleIndex: styleBufferIndex))
             vertexCount += 1
         }
         for index in polygon.indices {
@@ -1181,7 +1181,7 @@ class TileMvtParser {
         }
 
         var unifiedIndices: [UInt32] = []
-        let unifiedVertices = [TilePipeline.VertexIn](
+        let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
             unifiedIndices = [UInt32](
@@ -1254,7 +1254,7 @@ class TileMvtParser {
         }
 
         var unifiedIndices: [UInt32] = []
-        let unifiedVertices = [TilePipeline.VertexIn](
+        let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
             unifiedIndices = [UInt32](

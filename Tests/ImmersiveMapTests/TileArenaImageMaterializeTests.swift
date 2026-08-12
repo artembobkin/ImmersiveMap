@@ -22,13 +22,13 @@ final class TileArenaImageMaterializeTests: XCTestCase {
     /// extruded geometry, glyph and icon runs, road label glyphs.
     private func makeRichPreparedTile(tile: Tile) -> PreparedTileCPU {
         let ground = PreparedTileCPU.GeometryLayer(
-            vertices: (0..<7).map { TilePipeline.VertexIn(position: SIMD2<Int16>(Int16($0), Int16($0 * 2)), styleIndex: 0) },
+            vertices: (0..<7).map { TileVertexIn(position: SIMD2<Int16>(Int16($0), Int16($0 * 2)), styleIndex: 0) },
             indices: [0, 1, 2, 2, 3, 4, 4, 5, 6],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.2, 0.4, 0.6, 1))],
             overviewStyleMasks: [1]
         )
         let roadFill = PreparedTileCPU.GeometryLayer(
-            vertices: (0..<4).map { TilePipeline.VertexIn(position: SIMD2<Int16>(Int16($0 * 3), 9), styleIndex: 0) },
+            vertices: (0..<4).map { TileVertexIn(position: SIMD2<Int16>(Int16($0 * 3), 9), styleIndex: 0) },
             indices: [0, 1, 2, 1, 2, 3],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.5, 0.5, 0.5, 1))],
             overviewStyleMasks: [0]

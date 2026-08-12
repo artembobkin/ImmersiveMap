@@ -5,7 +5,7 @@ import Foundation
 
 extension TileMvtParser {
     struct DrawingPolygonBytes {
-        var vertices: [TilePipeline.VertexIn]
+        var vertices: [TileVertexIn]
         var indices: [UInt32]
     }
 }

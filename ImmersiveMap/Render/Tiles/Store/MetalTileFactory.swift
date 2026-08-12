@@ -207,7 +207,7 @@ final class MetalTileFactory {
     }
 
     private static func takeGeometryLayer(_ cursor: inout SpanCursor) -> TileBuffers.GeometryLayer {
-        let vertices = cursor.takeView(elementStride: MemoryLayout<TilePipeline.VertexIn>.stride)
+        let vertices = cursor.takeView(elementStride: MemoryLayout<TileVertexIn>.stride)
         let indices = cursor.takeIndexView()
         return TileBuffers.GeometryLayer(vertices: vertices,
                                          indices: indices.view,
