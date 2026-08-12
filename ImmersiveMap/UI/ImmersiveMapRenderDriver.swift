@@ -118,6 +118,11 @@ final class ImmersiveMapRenderDriver: NSObject {
     var debugCameraSample: (zoom: Double, centerX: Double, centerY: Double)? {
         renderer?.debugCameraSample
     }
+
+    /// See `RenderFrameEngine.debugFrameSkipCounts`.
+    var debugFrameCounters: (scheduled: Int, skips: [String: Int]) {
+        (renderer?.debugScheduledFrameCount ?? 0, renderer?.debugFrameSkipCounts ?? [:])
+    }
     #endif
 
     func beginFrame() -> Bool {

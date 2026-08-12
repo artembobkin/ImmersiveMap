@@ -281,7 +281,12 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         let anchorPoint = mapView.convert(event.locationInWindow, from: nil)
         let isTrackpadGesture = event.phase != [] || event.momentumPhase != []
         if isTrackpadGesture {
-            if event.phase.contains(.began) {
+            // The momentum half of the gesture moves the camera just as the
+            // finger-down half does, so it counts as interaction too; see
+            // ScrollZoomInteractionPhaseResolver.
+            let transition = ScrollZoomInteractionPhaseResolver.transition(phase: event.phase,
+                                                                           momentumPhase: event.momentumPhase)
+            if transition == .begin {
                 setInteractionActive(true,
                                      source: .scrollZoom)
             }
@@ -289,7 +294,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
                             divisor: ScrollZoom.preciseDivisor,
                             anchorPoint: anchorPoint,
                             in: mapView)
-            if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            if transition == .end {
                 setInteractionActive(false,
                                      source: .scrollZoom)
             }

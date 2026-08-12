@@ -26,6 +26,14 @@ final class RenderFrameEngine {
         let state = renderCamera.currentCameraState()
         return (state.zoom, state.centerWorldMercator.x, state.centerWorldMercator.y)
     }
+
+    /// Frames the engine refused to render at all, by reason, counted since
+    /// launch. Distinct from the skip reasons a rendered frame's diagnostics
+    /// carry, which are per-layer ("this layer had nothing to draw") and say
+    /// nothing about whether the frame reached the screen.
+    private(set) var debugFrameSkipCounts: [String: Int] = [:]
+    /// Frames the engine scheduled: the counterpart of the above.
+    private(set) var debugScheduledFrameCount = 0
     #endif
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
@@ -135,7 +143,15 @@ final class RenderFrameEngine {
                                       onGPUComplete: nil)
         if didSchedule == false {
             inFlightFramePool.release(slot: frameSlotIndex)
+            #if DEBUG
+            debugFrameSkipCounts["notScheduled", default: 0] += 1
+            #endif
         }
+        #if DEBUG
+        if didSchedule {
+            debugScheduledFrameCount += 1
+        }
+        #endif
         return didSchedule
     }
 
@@ -437,6 +453,9 @@ final class RenderFrameEngine {
     // MARK: - Diagnostics
 
     private func recordSkippedFrame(reason: RenderSkipReason) {
+        #if DEBUG
+        debugFrameSkipCounts[reason.rawValue, default: 0] += 1
+        #endif
         let frameTick = clock.nextFrameTick()
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameDeltaTime: frameTick.deltaTime)
         diagnostics.recordSkipReason(reason)

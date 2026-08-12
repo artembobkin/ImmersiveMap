@@ -33,6 +33,13 @@ final class RenderPresentTimingProbe {
         let zoom: Double
         let centerX: Double
         let centerY: Double
+        /// Whether the engine actually scheduled a frame for this tick, and
+        /// the reason it did not. A tick can fail to reach the screen two
+        /// ways, and they need different fixes: the engine refused to render
+        /// it, or it rendered and the drawable's presented callback never
+        /// came.
+        let didSchedule: Bool
+        let skipReason: String?
         var presented: CFTimeInterval?
     }
 
@@ -72,12 +79,14 @@ final class RenderPresentTimingProbe {
 
     private let storage = Storage()
     private let sampleCount: Int
+    private let isPassive: Bool
     private var tickIndex = 0
     private var isCollecting = false
     private weak var driver: ImmersiveMapRenderDriver?
 
-    private init(sampleCount: Int) {
+    private init(sampleCount: Int, isPassive: Bool) {
         self.sampleCount = sampleCount
+        self.isPassive = isPassive
     }
 
     /// Enabled either by `IMMERSIVE_MAP_PRESENT_TIMING` in the environment or
@@ -92,7 +101,10 @@ final class RenderPresentTimingProbe {
             return nil
         }
         let requested = Int(value) ?? 0
-        return RenderPresentTimingProbe(sampleCount: requested > 0 ? requested : 240)
+        let isPassive = ProcessInfo.processInfo.environment["IMMERSIVE_MAP_PRESENT_TIMING_PASSIVE"] != nil
+            || UserDefaults.standard.bool(forKey: "immersiveMapPresentTimingPassive")
+        return RenderPresentTimingProbe(sampleCount: requested > 0 ? requested : 240,
+                                        isPassive: isPassive)
     }
 
     private static var summaryPath: String? {
@@ -111,8 +123,16 @@ final class RenderPresentTimingProbe {
             return
         }
         isCollecting = true
-        driver.setActivity(.interaction, active: true)
-        print("=== ImmersiveMap present timing: collecting \(sampleCount) frames ===")
+        // Holding the activity is what makes an unattended run produce frames
+        // at all, but it also forces the continuous mode, which hides how the
+        // loop behaves when it is left on demand. Passive mode measures the
+        // app's own pacing and therefore only collects while something else
+        // drives frames (a gesture).
+        if isPassive == false {
+            driver.setActivity(.interaction, active: true)
+        }
+        print("=== ImmersiveMap present timing: collecting \(sampleCount) frames"
+            + (isPassive ? " (passive: the app's own pacing)" : "") + " ===")
         fflush(stdout)
     }
 
@@ -125,7 +145,18 @@ final class RenderPresentTimingProbe {
                     frameWork: () -> Void) {
         begin(driver: driver)
 
+        // Engine counters are read either side of the frame, so this tick's
+        // outcome is the difference rather than a snapshot of whatever the
+        // last frame happened to leave behind.
+        let countersBefore = driver.debugFrameCounters
+
         frameWork()
+
+        let countersAfter = driver.debugFrameCounters
+        let didSchedule = countersAfter.scheduled > countersBefore.scheduled
+        let skipReason = countersAfter.skips.first { reason, count in
+            count > (countersBefore.skips[reason] ?? 0)
+        }?.key
 
         let index = tickIndex
         tickIndex += 1
@@ -136,6 +167,8 @@ final class RenderPresentTimingProbe {
                               zoom: camera.zoom,
                               centerX: camera.centerX,
                               centerY: camera.centerY,
+                              didSchedule: didSchedule,
+                              skipReason: skipReason,
                               presented: nil))
         let storage = self.storage
         drawable.addPresentedHandler { presentedDrawable in
@@ -196,6 +229,33 @@ final class RenderPresentTimingProbe {
         lines.append(describe("presented - target (refreshes)", values: presentedMinusTarget))
         lines.append(describe("target - cpuEnd  (refreshes)", values: targetMinusCPU))
         lines.append("presented out of render order: \(outOfOrderCount)")
+
+        // The two ways a tick fails to reach the screen, kept apart: the
+        // engine refused the frame (with its reason), or it scheduled one
+        // whose presented callback never came.
+        let notScheduled = samples.filter { $0.didSchedule == false }
+        let scheduledButUnpresented = samples.filter { $0.didSchedule && ($0.presented ?? 0) <= 0 }
+        var reasonCounts: [String: Int] = [:]
+        for sample in notScheduled {
+            reasonCounts[sample.skipReason ?? "(no reason recorded)", default: 0] += 1
+        }
+        let reasonSummary = reasonCounts.isEmpty
+            ? "none"
+            : reasonCounts.sorted { $0.value > $1.value }.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+        lines.append("engine refused the frame: \(notScheduled.count) (\(reasonSummary))")
+        lines.append("scheduled but never reported presented: \(scheduledButUnpresented.count)")
+
+        // How evenly ticks arrive. A loop rendering continuously ticks once
+        // per refresh; one that has fallen back to one-shot requests (the
+        // display link paused and unpaused per frame) shows gaps of several
+        // refreshes, which is the stutter.
+        let orderedByIndex = samples.sorted { $0.index < $1.index }
+        var gaps: [Double] = []
+        for index in 1..<max(orderedByIndex.count, 1) {
+            gaps.append((orderedByIndex[index].cpuEnd - orderedByIndex[index - 1].cpuEnd) / refreshInterval)
+        }
+        lines.append(describe("tick gap (refreshes)", values: gaps))
+        lines.append("gaps over 1.5 refreshes: \(gaps.filter { $0 > 1.5 }.count) of \(gaps.count)")
         lines.append(cameraMotionSummary(samples: samples))
         lines.append("Reading: markers reach the screen at the first vsync after cpuEnd. "
             + "If 'presented - target' is ~0 and 'target - cpuEnd' is in (0, 1], both halves "
