@@ -113,6 +113,13 @@ final class ImmersiveMapRenderDriver: NSObject {
         displayLinkDelegate = nil
     }
 
+    #if DEBUG
+    /// See `RenderFrameEngine.debugCameraSample`.
+    var debugCameraSample: (zoom: Double, centerX: Double, centerY: Double)? {
+        renderer?.debugCameraSample
+    }
+    #endif
+
     func beginFrame() -> Bool {
         guard pacing.needsFrameRendering else {
             applyDisplayLinkState()

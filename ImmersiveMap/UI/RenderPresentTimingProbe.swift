@@ -27,6 +27,12 @@ final class RenderPresentTimingProbe {
         let index: Int
         let target: CFTimeInterval
         let cpuEnd: CFTimeInterval
+        /// Camera state the frame was drawn from, sampled after its
+        /// main-thread work. A judder that shows in the picture but not here
+        /// is a delivery problem; one that shows in both is a camera problem.
+        let zoom: Double
+        let centerX: Double
+        let centerY: Double
         var presented: CFTimeInterval?
     }
 
@@ -123,7 +129,14 @@ final class RenderPresentTimingProbe {
 
         let index = tickIndex
         tickIndex += 1
-        storage.append(Sample(index: index, target: target, cpuEnd: CACurrentMediaTime(), presented: nil))
+        let camera = driver.debugCameraSample ?? (zoom: .nan, centerX: .nan, centerY: .nan)
+        storage.append(Sample(index: index,
+                              target: target,
+                              cpuEnd: CACurrentMediaTime(),
+                              zoom: camera.zoom,
+                              centerX: camera.centerX,
+                              centerY: camera.centerY,
+                              presented: nil))
         let storage = self.storage
         drawable.addPresentedHandler { presentedDrawable in
             storage.recordPresented(index: index, time: presentedDrawable.presentedTime)
@@ -183,10 +196,45 @@ final class RenderPresentTimingProbe {
         lines.append(describe("presented - target (refreshes)", values: presentedMinusTarget))
         lines.append(describe("target - cpuEnd  (refreshes)", values: targetMinusCPU))
         lines.append("presented out of render order: \(outOfOrderCount)")
+        lines.append(cameraMotionSummary(samples: samples))
         lines.append("Reading: markers reach the screen at the first vsync after cpuEnd. "
             + "If 'presented - target' is ~0 and 'target - cpuEnd' is in (0, 1], both halves "
             + "share a vsync and nothing needs to change. A 'presented - target' of ~1 means "
             + "the map trails the markers by that many refreshes.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Whether the camera state the frames were drawn from moved steadily.
+    /// A reversal here means the camera itself stepped backwards between two
+    /// rendered frames; a picture that jumps while this stays monotone means
+    /// the states are fine and the frames carrying them are not.
+    private static func cameraMotionSummary(samples: [Sample]) -> String {
+        let ordered = samples.sorted { $0.index < $1.index }.filter { $0.zoom.isNaN == false }
+        guard ordered.count > 2 else {
+            return "camera: no samples"
+        }
+        var zoomReversals: [String] = []
+        var movingFrameCount = 0
+        var previousDirection = 0
+        for index in 1..<ordered.count {
+            let delta = ordered[index].zoom - ordered[index - 1].zoom
+            guard abs(delta) > 1e-9 else {
+                continue
+            }
+            movingFrameCount += 1
+            let direction = delta > 0 ? 1 : -1
+            if previousDirection != 0, direction != previousDirection, zoomReversals.count < 12 {
+                zoomReversals.append(String(format: "frame %d: %.5f -> %.5f (%+.5f)",
+                                            ordered[index].index,
+                                            ordered[index - 1].zoom,
+                                            ordered[index].zoom,
+                                            delta))
+            }
+            previousDirection = direction
+        }
+        var lines = ["camera: \(movingFrameCount) of \(ordered.count) frames moved the zoom, "
+            + "\(zoomReversals.count) direction reversals"]
+        lines.append(contentsOf: zoomReversals.map { "  " + $0 })
         return lines.joined(separator: "\n")
     }
 

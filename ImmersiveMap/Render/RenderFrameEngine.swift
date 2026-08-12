@@ -17,6 +17,15 @@ final class RenderFrameEngine {
     var persistentContextForTesting: RenderPersistentContext {
         persistentContext
     }
+
+    /// Camera state as the next frame would collect it. Read by
+    /// `RenderPresentTimingProbe` so a recorded frame carries the state it was
+    /// drawn from, which is what separates "the camera moved backwards" from
+    /// "the picture moved backwards".
+    var debugCameraSample: (zoom: Double, centerX: Double, centerY: Double) {
+        let state = renderCamera.currentCameraState()
+        return (state.zoom, state.centerWorldMercator.x, state.centerWorldMercator.y)
+    }
     #endif
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
