@@ -17,24 +17,55 @@ import MetalKit
 final class MetalTileFactory: @unchecked Sendable {
     private let metalDevice: MTLDevice
 #if !targetEnvironment(simulator)
-    /// Created once at init on Metal 3 devices: tile loads materialize
-    /// concurrently from their own tasks, so lazy creation would race. The
-    /// simulator SDK has no MTLIO surface at all.
+    /// Resolved at init on Metal 3 devices (see `sharedIOCommandQueue`): tile
+    /// loads materialize concurrently from their own tasks, so lazy creation
+    /// would race. The simulator SDK has no MTLIO surface at all.
     private let ioCommandQueue: MTLIOCommandQueue?
 #endif
 
     init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice
 #if !targetEnvironment(simulator)
-        if MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice) {
-            let descriptor = MTLIOCommandQueueDescriptor()
-            descriptor.type = .concurrent
-            self.ioCommandQueue = try? metalDevice.makeIOCommandQueue(descriptor: descriptor)
-        } else {
-            self.ioCommandQueue = nil
-        }
+        self.ioCommandQueue = MetalTileFactory.sharedIOCommandQueue(for: metalDevice)
 #endif
     }
+
+#if !targetEnvironment(simulator)
+    private static let ioCommandQueueLock = NSLock()
+    nonisolated(unsafe) private static var ioCommandQueuesByDevice: [ObjectIdentifier: MTLIOCommandQueue] = [:]
+
+    /// One IO command queue per device, shared by every factory.
+    ///
+    /// The queue is a device-level object, and an app runs one engine, so
+    /// per-factory queues bought nothing. They cost, though: each queue
+    /// spawns its own IO threads and holds kernel-side resources for as long
+    /// as it lives. A process that builds engines in a loop (the test suite
+    /// creates dozens through `ImmersiveMapStillRecorder` and the video
+    /// export; a host app that recreates its renderer does the same) piles
+    /// those up, and past some count the IOGPU driver stops servicing
+    /// submissions on freshly created queues entirely: loads park in
+    /// `IOGPUIOCommandQueuePerformIO` and their completion handlers never
+    /// run. Sharing keeps the count at one per device no matter how many
+    /// engines come and go.
+    private static func sharedIOCommandQueue(for metalDevice: MTLDevice) -> MTLIOCommandQueue? {
+        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice) else {
+            return nil
+        }
+        let key = ObjectIdentifier(metalDevice)
+        ioCommandQueueLock.lock()
+        defer { ioCommandQueueLock.unlock() }
+        if let existing = ioCommandQueuesByDevice[key] {
+            return existing
+        }
+        let descriptor = MTLIOCommandQueueDescriptor()
+        descriptor.type = .concurrent
+        guard let queue = try? metalDevice.makeIOCommandQueue(descriptor: descriptor) else {
+            return nil
+        }
+        ioCommandQueuesByDevice[key] = queue
+        return queue
+    }
+#endif
 
     /// Whether this factory can DMA-load `.file` geometry blobs: Metal 3
     /// support and a successfully created IO command queue. The render store
