@@ -144,7 +144,11 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 1)
-        let settings = offlineSettings(.default.earthScene(isEnabled: false))
+        // Tile-free, not merely provider-less: the noise-floor assertion below
+        // requires two captures of the same scene to be identical, and a tile
+        // arriving in one of them but not the other breaks that by thousands
+        // of pixels.
+        let settings = tileFreeSettings(.default.earthScene(isEnabled: false))
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -307,11 +311,31 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
     /// and how warm the local disk cache happens to be, which is three ways
     /// for the same assertion to mean something different on a laptop and on
     /// a runner. Nothing here is about tiles.
+    /// Points the provider at a dead port. Note that this assigns the field
+    /// rather than going through the `tileProvider` builder, so the tile
+    /// *settings* still carry the default source: downloads and the
+    /// prepared-tile cache namespace are the real ones, and a capture here
+    /// can still be served real tiles. Cases that must not depend on which
+    /// tiles happen to arrive use `tileFreeSettings` instead.
     private func offlineSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
         var offline = settings
         offline.tileProvider = AnyImmersiveMapTileProvider(
             ImmersiveMapTilesProvider(tileBaseURL: URL(string: "http://127.0.0.1:1/tiles")!))
         return offline
+    }
+
+    /// Settings under which no tile can ever reach the frame: the builder
+    /// points the tile settings at the dead port too, so the downloader has
+    /// nowhere to go and the prepared-tile cache gets a namespace of its own
+    /// that nothing else populates.
+    ///
+    /// A capture is then a pure function of the scene, which is what any case
+    /// comparing two captures needs. Sharing the default namespace made those
+    /// comparisons depend on what ran before them and on how far a tile load
+    /// had progressed between the two captures.
+    private func tileFreeSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
+        settings.tileProvider(
+            ImmersiveMapTilesProvider(tileBaseURL: URL(string: "http://127.0.0.1:1/tiles")!))
     }
 
     /// Redraws the image into a known layout, so the assertions do not depend
