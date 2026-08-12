@@ -204,11 +204,17 @@ protocol ImmersiveMapRenderDriverFrameDelegate: AnyObject {
 private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDisplayLinkDelegate {
     private weak var driver: ImmersiveMapRenderDriver?
     private weak var frameDelegate: ImmersiveMapRenderDriverFrameDelegate?
+    #if DEBUG
+    private let presentTimingProbe = RenderPresentTimingProbe.makeIfEnabled()
+    #endif
 
     init(driver: ImmersiveMapRenderDriver,
          frameDelegate: ImmersiveMapRenderDriverFrameDelegate) {
         self.driver = driver
         self.frameDelegate = frameDelegate
+        #if DEBUG
+        presentTimingProbe?.begin(driver: driver)
+        #endif
     }
 
     func metalDisplayLink(_ link: CAMetalDisplayLink,
@@ -219,8 +225,20 @@ private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDis
         // this frame is predicted to appear on the display), not at "now"
         // and not at targetTimestamp, which is the deadline for finishing
         // the render: that is the time the frame is going to be seen at.
-        frameDelegate?.renderDriverDidTick(driver,
-                                           currentTime: update.targetPresentationTimestamp,
-                                           drawable: update.drawable)
+        let renderFrame: () -> Void = { [frameDelegate] in
+            frameDelegate?.renderDriverDidTick(driver,
+                                               currentTime: update.targetPresentationTimestamp,
+                                               drawable: update.drawable)
+        }
+        #if DEBUG
+        if let presentTimingProbe {
+            presentTimingProbe.recordTick(target: update.targetPresentationTimestamp,
+                                          drawable: update.drawable,
+                                          driver: driver,
+                                          frameWork: renderFrame)
+            return
+        }
+        #endif
+        renderFrame()
     }
 }
