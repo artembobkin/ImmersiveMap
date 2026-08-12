@@ -323,8 +323,17 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         }
     }
 
-    /// Single-bit corruption inside the container: MTLIO reports the load
-    /// complete, so only the checksum comparison catches it.
+    /// Single-bit corruption inside the container: the DMA load reports
+    /// complete and delivers the flipped byte, so only the checksum
+    /// comparison catches it.
+    ///
+    /// Deliberately a raw container: the checksum catch under test is
+    /// format-independent, and feeding the hardware LZFSE decompressor a
+    /// corrupted chunk stream wedges the IOGPU driver when the process has
+    /// prior MTLIO traffic (empirical on macOS 15 / Apple M2: the load never
+    /// completes and the awaiting test hangs the whole suite). Corrupt
+    /// content therefore goes through the raw path here; compressed-path
+    /// coverage uses valid streams only.
     func testBitFlippedContainerFailsAsUnreadable() async throws {
         let device = try makeDevice()
         guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
@@ -340,8 +349,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
-                                                       blobTransport: .file(.lzfseContainer))
-        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+                                                       blobTransport: .file(.raw))
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: false)
         let stagedURL = try transport.stageBlobFile(try XCTUnwrap(encoded.fileBlob), near: blobURL)
         try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
 
@@ -362,7 +371,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
     /// A truncated container (torn write, disk-full): the load can still
     /// complete with a short or zero-filled tail, and the checksum must
-    /// reject it.
+    /// reject it. Raw for the same driver-safety reason as the bit-flip
+    /// test above.
     func testTruncatedContainerFailsAsUnreadable() async throws {
         let device = try makeDevice()
         guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
@@ -378,8 +388,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
-                                                       blobTransport: .file(.lzfseContainer))
-        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+                                                       blobTransport: .file(.raw))
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: false)
         let stagedURL = try transport.stageBlobFile(try XCTUnwrap(encoded.fileBlob), near: blobURL)
         try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
 
