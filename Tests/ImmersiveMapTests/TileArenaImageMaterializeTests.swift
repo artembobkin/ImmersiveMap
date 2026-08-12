@@ -213,6 +213,234 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         }
     }
 
+    func testMTLIOTransportFormatFollowsCompressionSetting() {
+        XCTAssertEqual(MTLIOPreparedTileGeometryTransport(compressionEnabled: true).blobTransport,
+                       .file(.lzfseContainer))
+        XCTAssertEqual(MTLIOPreparedTileGeometryTransport(compressionEnabled: false).blobTransport,
+                       .file(.raw),
+                       "preparedDiskCompressionEnabled must reach the bytes that dominate the entry")
+    }
+
+    func testRawContainerRoundTripsWhenCompressionDisabled() async throws {
+        let device = try makeDevice()
+        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
+            throw XCTSkip("MTLIO requires a Metal 3 device outside the simulator")
+        }
+        guard device.hasUnifiedMemory else {
+            throw XCTSkip("Unified-memory GPU is required for direct buffer readback")
+        }
+        let tile = Tile(x: 13, y: 14, z: 12)
+        let preparedTile = makeRichPreparedTile(tile: tile)
+        let cacheIdentity = makeCacheIdentity()
+
+        let blobURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TileArenaImage-raw-\(UUID().uuidString).ptgeo")
+        defer { try? FileManager.default.removeItem(at: blobURL) }
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobTransport: .file(.raw))
+        let fileBlob = try XCTUnwrap(encoded.fileBlob)
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: false)
+        let stagedURL = try transport.stageBlobFile(fileBlob, near: blobURL)
+        try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
+
+        XCTAssertEqual(try Data(contentsOf: blobURL), fileBlob,
+                       "With compression disabled the container is the raw arena bytes")
+
+        let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                   expectedTile: tile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   blobFileURL: blobURL)
+        let factory = MetalTileFactory(metalDevice: device)
+        let result = await factory.makeTile(fromImage: hit.image)
+        guard case .tile(let materialized) = result else {
+            return XCTFail("The raw MTLIO load must materialize, got \(result)")
+        }
+        XCTAssertEqual(try arenaBytes(of: materialized), fileBlob)
+    }
+
+    /// The torn-pair scenario: metadata from one save next to the container
+    /// of another (a crash between the pair's two writes, or a second engine
+    /// on the same namespace). The MTLIO load itself completes; only the
+    /// checksum stored in the metadata can tell, and it must fail the
+    /// materialize into removal instead of serving foreign bytes.
+    func testTornMetadataContainerPairFailsAsUnreadable() async throws {
+        let device = try makeDevice()
+        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
+            throw XCTSkip("MTLIO requires a Metal 3 device outside the simulator")
+        }
+        let tile = Tile(x: 15, y: 16, z: 12)
+        let cacheIdentity = makeCacheIdentity()
+        let originalTile = makeRichPreparedTile(tile: tile)
+        // Same structure, different content: the sizes match, so nothing but
+        // the checksum distinguishes the pair.
+        var replacementGround = makeRichPreparedTile(tile: tile)
+        replacementGround = PreparedTileCPU(
+            tile: tile,
+            ground: PreparedTileCPU.GeometryLayer(
+                vertices: replacementGround.ground.vertices.map { _ in
+                    TileVertexIn(position: SIMD2<Int16>(31, 41), styleIndex: 0)
+                },
+                indices: replacementGround.ground.indices,
+                styles: replacementGround.ground.styles,
+                overviewStyleMasks: replacementGround.ground.overviewStyleMasks
+            ),
+            roads: replacementGround.roads,
+            bridgeOverlay: replacementGround.bridgeOverlay,
+            extruded: replacementGround.extruded,
+            textLabels: replacementGround.textLabels,
+            roadLabels: replacementGround.roadLabels
+        )
+
+        let blobURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TileArenaImage-torn-\(UUID().uuidString).ptgeo")
+        defer { try? FileManager.default.removeItem(at: blobURL) }
+
+        let originalEncoded = try PreparedTileDiskCodec.encode(preparedTile: originalTile,
+                                                               cacheIdentity: cacheIdentity,
+                                                               blobTransport: .file(.lzfseContainer))
+        let replacementEncoded = try PreparedTileDiskCodec.encode(preparedTile: replacementGround,
+                                                                  cacheIdentity: cacheIdentity,
+                                                                  blobTransport: .file(.lzfseContainer))
+        XCTAssertEqual(originalEncoded.fileBlob?.count, replacementEncoded.fileBlob?.count,
+                       "The torn pair must not be distinguishable by size alone")
+
+        // The container on disk is the replacement's; the metadata is the
+        // original's.
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+        let stagedURL = try transport.stageBlobFile(try XCTUnwrap(replacementEncoded.fileBlob), near: blobURL)
+        try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
+
+        let hit = try PreparedTileDiskCodec.decode(data: originalEncoded.metadata,
+                                                   expectedTile: tile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   blobFileURL: blobURL)
+        let factory = MetalTileFactory(metalDevice: device)
+        let result = await factory.makeTile(fromImage: hit.image)
+        guard case .imageUnreadable = result else {
+            return XCTFail("A torn pair must be reported unreadable, got \(result)")
+        }
+    }
+
+    /// Single-bit corruption inside the container: MTLIO reports the load
+    /// complete, so only the checksum comparison catches it.
+    func testBitFlippedContainerFailsAsUnreadable() async throws {
+        let device = try makeDevice()
+        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
+            throw XCTSkip("MTLIO requires a Metal 3 device outside the simulator")
+        }
+        let tile = Tile(x: 17, y: 18, z: 12)
+        let preparedTile = makeRichPreparedTile(tile: tile)
+        let cacheIdentity = makeCacheIdentity()
+
+        let blobURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TileArenaImage-flip-\(UUID().uuidString).ptgeo")
+        defer { try? FileManager.default.removeItem(at: blobURL) }
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobTransport: .file(.lzfseContainer))
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+        let stagedURL = try transport.stageBlobFile(try XCTUnwrap(encoded.fileBlob), near: blobURL)
+        try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
+
+        var containerBytes = try Data(contentsOf: blobURL)
+        containerBytes[containerBytes.count / 2] ^= 0x40
+        try containerBytes.write(to: blobURL)
+
+        let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                   expectedTile: tile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   blobFileURL: blobURL)
+        let factory = MetalTileFactory(metalDevice: device)
+        let result = await factory.makeTile(fromImage: hit.image)
+        guard case .imageUnreadable = result else {
+            return XCTFail("A bit-flipped container must be reported unreadable, got \(result)")
+        }
+    }
+
+    /// A truncated container (torn write, disk-full): the load can still
+    /// complete with a short or zero-filled tail, and the checksum must
+    /// reject it.
+    func testTruncatedContainerFailsAsUnreadable() async throws {
+        let device = try makeDevice()
+        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: device) else {
+            throw XCTSkip("MTLIO requires a Metal 3 device outside the simulator")
+        }
+        let tile = Tile(x: 19, y: 20, z: 12)
+        let preparedTile = makeRichPreparedTile(tile: tile)
+        let cacheIdentity = makeCacheIdentity()
+
+        let blobURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TileArenaImage-trunc-\(UUID().uuidString).ptgeo")
+        defer { try? FileManager.default.removeItem(at: blobURL) }
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobTransport: .file(.lzfseContainer))
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+        let stagedURL = try transport.stageBlobFile(try XCTUnwrap(encoded.fileBlob), near: blobURL)
+        try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
+
+        var containerBytes = try Data(contentsOf: blobURL)
+        containerBytes.removeLast(min(300, containerBytes.count / 2))
+        try containerBytes.write(to: blobURL)
+
+        let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                   expectedTile: tile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   blobFileURL: blobURL)
+        let factory = MetalTileFactory(metalDevice: device)
+        let result = await factory.makeTile(fromImage: hit.image)
+        guard case .imageUnreadable = result else {
+            return XCTFail("A truncated container must be reported unreadable, got \(result)")
+        }
+    }
+
+    /// The uint32 index path through the real factory: geometry above the
+    /// narrowing ceiling must materialize identically from a parse and from
+    /// a decoded image, with 32-bit index views on both.
+    func testWideIndexGeometryMaterializesIdenticallyFromImage() async throws {
+        let device = try makeDevice()
+        guard device.hasUnifiedMemory else {
+            throw XCTSkip("Unified-memory GPU is required for direct buffer readback")
+        }
+        let tile = Tile(x: 21, y: 22, z: 12)
+        let vertexCount = IndexStorageMath.maximumNarrowableVertexCount + 1
+        let preparedTile = PreparedTileCPUTestFixtures.withGround(
+            tile: tile,
+            ground: PreparedTileCPU.GeometryLayer(
+                vertices: (0..<vertexCount).map {
+                    TileVertexIn(position: SIMD2<Int16>(Int16(truncatingIfNeeded: $0), 7), styleIndex: 0)
+                },
+                indices: [0, UInt32(vertexCount - 1), 65_534],
+                styles: [TilePolygonStyle(color: SIMD4<Float>(1, 0, 1, 1))],
+                overviewStyleMasks: [0]
+            )
+        )
+        let cacheIdentity = makeCacheIdentity()
+
+        let factory = MetalTileFactory(metalDevice: device)
+        let parsed = try XCTUnwrap(factory.makeTile(from: preparedTile))
+        XCTAssertEqual(parsed.tileBuffers.ground.indexType, .uint32,
+                       "Geometry above the narrowing ceiling must keep 32-bit indices")
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity)
+        let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                   expectedTile: tile,
+                                                   cacheIdentity: cacheIdentity,
+                                                   blobFileURL: URL(fileURLWithPath: "/nonexistent"))
+        let result = await factory.makeTile(fromImage: hit.image)
+        guard case .tile(let materialized) = result else {
+            return XCTFail("The wide-index image must materialize, got \(result)")
+        }
+        XCTAssertEqual(materialized.tileBuffers.ground.indexType, .uint32)
+        XCTAssertEqual(materialized.tileBuffers.ground.indicesCount, parsed.tileBuffers.ground.indicesCount)
+        XCTAssertEqual(try arenaBytes(of: materialized), try arenaBytes(of: parsed))
+    }
+
     private func makeCacheIdentity() -> PreparedTileCacheIdentity {
         PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
                                   styleRevision: 1,

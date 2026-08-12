@@ -793,6 +793,124 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
 
         XCTAssertEqual(pipeline.savedETag(for: tile), .some("C"))
     }
+
+    func testUnreadableDiskImageOnServeRemovesThePair() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let serveStarted = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(serveStarted)
+        // The disk-first serve reads a corrupt entry (bad blob, checksum
+        // mismatch, torn pair): the pair must be deleted so the tile
+        // re-parses instead of failing the same way on every retry.
+        pipeline.completeMaterialize(tile, outcome: .imageUnreadable)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(pipeline.hasRemovedFromDisk(tile))
+
+        pipeline.completeDownload(tile, result: .failure(.network))
+    }
+
+    /// Regression: transient memory pressure while materializing an
+    /// ETag-matched entry used to delete the healthy pair (and did so outside
+    /// the generation gate). The entry must survive and the load must fall
+    /// through to parsing the downloaded bytes.
+    func testAllocationFailureOnETagMatchedEntryKeepsTheDiskPair() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let serveStarted = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(serveStarted)
+        // The disk-first serve fails transiently, so the download result is
+        // not a confirmation and the CPU stage runs.
+        pipeline.completeMaterialize(tile, outcome: .allocationOrStoreFailed)
+
+        pipeline.completeDownload(tile, result: .success(Data([1]), etag: "A"))
+        // The CPU stage retries the ETag-matched entry and hits memory
+        // pressure again.
+        let retried = await pipeline.waitUntilMaterializeCount(2, for: tile)
+        XCTAssertTrue(retried)
+        pipeline.completeMaterialize(tile, outcome: .allocationOrStoreFailed)
+
+        // The healthy pair stays on disk; the fresh bytes parse instead.
+        let reparsed = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(reparsed)
+        XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
+
+        pipeline.completePrepare(tile)
+        let swapped = await pipeline.waitUntilMaterializeCount(3, for: tile)
+        XCTAssertTrue(swapped)
+        pipeline.completeMaterialize(tile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
+        XCTAssertEqual(pipeline.savedETag(for: tile), .some("A"))
+    }
+
+    func testUnreadableETagMatchedEntryRemovesThePairAndReparses() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let serveStarted = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(serveStarted)
+        pipeline.completeMaterialize(tile, outcome: .allocationOrStoreFailed)
+
+        pipeline.completeDownload(tile, result: .success(Data([1]), etag: "A"))
+        let retried = await pipeline.waitUntilMaterializeCount(2, for: tile)
+        XCTAssertTrue(retried)
+        // This time the entry is genuinely corrupt: it must be removed and
+        // the downloaded bytes parsed.
+        pipeline.completeMaterialize(tile, outcome: .imageUnreadable)
+
+        let reparsed = await pipeline.waitUntilPrepared(tile)
+        XCTAssertTrue(reparsed)
+        XCTAssertTrue(pipeline.hasRemovedFromDisk(tile))
+
+        pipeline.completePrepare(tile)
+        let swapped = await pipeline.waitUntilMaterializeCount(3, for: tile)
+        XCTAssertTrue(swapped)
+        pipeline.completeMaterialize(tile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(pipeline.savedETag(for: tile), .some("A"))
+    }
+
+    /// A superseded load that read a corrupt entry must not delete the fresh
+    /// pair its replacement may have just saved: cancellation wins over the
+    /// unreadable outcome.
+    func testCancelledLoadDoesNotRemoveThePairForUnreadableImage() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: settings, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        pipeline.setDiskEntry(tile, etag: "A")
+
+        loader.request(tiles: [tile])
+        let serveStarted = await pipeline.waitUntilMaterialized(tile)
+        XCTAssertTrue(serveStarted)
+
+        loader.cancelAll()
+        pipeline.completeMaterialize(tile, outcome: .imageUnreadable)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
+    }
 }
 
 private final class RecordingRetryWakeScheduler {
@@ -993,6 +1111,8 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     func removePreparedFromDisk(tile: Tile) {
         lock.lock()
         removedFromDiskTiles.insert(tile)
+        // Mirror the real cache: a removed pair stops being served.
+        diskEntries[tile] = nil
         lock.unlock()
     }
 

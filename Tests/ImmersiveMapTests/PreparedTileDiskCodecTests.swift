@@ -550,6 +550,152 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         }
     }
 
+    /// Layout oracle independent of the code under test: every expected
+    /// offset and byte below is written out by hand from the format rules
+    /// (schema order, 256-byte alignment, 16-bit narrowing, little-endian
+    /// element layouts), not computed through plan/writeBlob, so a mirrored
+    /// mistake shared by the writer and the reader cannot satisfy it.
+    func testArenaBlobLayoutMatchesHandComputedBytes() throws {
+        let tile = Tile(x: 2, y: 3, z: 7)
+        let preparedTile = PreparedTileCPUTestFixtures.withGroundTriangle(tile: tile)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       compressionEnabled: false)
+        let decoded = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
+        let blob = try XCTUnwrap(inlineBlob(of: decoded.image))
+        let spans = decoded.image.spans
+
+        // The vertex layout is a binding contract (vertex descriptor, arena
+        // strides); pin the ABI before trusting stride-derived expectations.
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 8)
+
+        // Slot sequence: 4 ground + 15 road phases x 4 + 4 bridge overlay
+        // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs.
+        XCTAssertEqual(spans.count, 72)
+
+        // Ground vertices: 3 elements at offset 0, 24 bytes. The three
+        // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0 and three
+        // padding bytes; 4096 is 0x1000, little-endian [0x00, 0x10].
+        XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 24, elementCount: 3, indexWidth: nil))
+        XCTAssertEqual(blob[0..<24], Data([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                           0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                           0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00]))
+
+        // Ground indices: [0, 1, 2] narrowed to UInt16 (3 vertices are far
+        // below the 65535-vertex ceiling), 6 bytes at the next 256 boundary.
+        XCTAssertEqual(spans[1], TileArenaSpan(byteOffset: 256, byteCount: 6, elementCount: 3, indexWidth: .uint16))
+        XCTAssertEqual(blob[256..<262], Data([0x00, 0x00, 0x01, 0x00, 0x02, 0x00]))
+
+        // Ground styles: the one red style, byte-equal to the source value.
+        let styleStride = MemoryLayout<TilePolygonStyle>.stride
+        XCTAssertEqual(spans[2],
+                       TileArenaSpan(byteOffset: 512, byteCount: styleStride, elementCount: 1, indexWidth: nil))
+        var expectedStyleBytes = Data(count: styleStride)
+        expectedStyleBytes.withUnsafeMutableBytes { bytes in
+            bytes.storeBytes(of: preparedTile.ground.styles[0], toByteOffset: 0, as: TilePolygonStyle.self)
+        }
+        XCTAssertEqual(blob[512..<(512 + styleStride)], expectedStyleBytes)
+
+        // Ground overview masks: one Float zero.
+        XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 4, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[768..<772], Data([0x00, 0x00, 0x00, 0x00]))
+
+        // Everything after the ground layer is empty: zero-length spans do
+        // not advance the cursor, so the arena ends at the mask span's
+        // 256-byte boundary and the padding between contents stays zeroed.
+        for span in spans[4...] {
+            XCTAssertEqual(span.byteOffset, 1024)
+            XCTAssertEqual(span.byteCount, 0)
+        }
+        XCTAssertEqual(decoded.image.arenaByteCount, 1024)
+        XCTAssertEqual(blob.count, 1024)
+        XCTAssertEqual(blob[24..<256], Data(count: 232), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[772..<1024], Data(count: 252), "Span padding must be deterministic zeros")
+    }
+
+    func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {
+        let tile = Tile(x: 9, y: 9, z: 11)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        // One vertex above the narrowing ceiling forces the uint32 path: the
+        // dense-city geometry the cache exists to speed up.
+        let vertexCount = IndexStorageMath.maximumNarrowableVertexCount + 1
+        let preparedTile = PreparedTileCPUTestFixtures.withGround(
+            tile: tile,
+            ground: PreparedTileCPU.GeometryLayer(
+                vertices: Array(repeating: TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
+                                count: vertexCount),
+                indices: [0, UInt32(vertexCount - 1), 12_345],
+                styles: [TilePolygonStyle(color: SIMD4<Float>(0, 1, 0, 1))],
+                overviewStyleMasks: [0]
+            )
+        )
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       compressionEnabled: false)
+        let decoded = try PreparedTileDiskCodec.decode(data: encoded.metadata,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
+
+        let indexSpan = decoded.image.spans[1]
+        XCTAssertEqual(indexSpan.indexWidth, .uint32,
+                       "Geometry above the narrowing ceiling must keep 32-bit indices")
+        XCTAssertEqual(indexSpan.elementCount, 3)
+        XCTAssertEqual(indexSpan.byteCount, 12)
+
+        // Hand-computed little-endian UInt32 bytes: 0, 65535 (0x0000FFFF),
+        // 12345 (0x00003039); independent of the narrowing implementation.
+        let blob = try XCTUnwrap(inlineBlob(of: decoded.image))
+        let start = indexSpan.byteOffset
+        XCTAssertEqual(blob[start..<(start + 12)],
+                       Data([0x00, 0x00, 0x00, 0x00,
+                             0xff, 0xff, 0x00, 0x00,
+                             0x39, 0x30, 0x00, 0x00]))
+    }
+
+    /// Regression for a crash-loop: a forged span table claiming byte counts
+    /// near Int.max used to pass every guard and then trap on arithmetic
+    /// overflow inside validation, before the removal path could run. It must
+    /// throw like any other corruption.
+    func testForgedSpanTableNearIntMaxFailsInsteadOfTrapping() throws {
+        let tile = Tile(x: 6, y: 7, z: 8)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: makePreparedTile(tile: tile),
+                                                       cacheIdentity: cacheIdentity,
+                                                       compressionEnabled: false).metadata
+        let payload = try PreparedTileDiskEnvelope.decode(data: encoded)
+        guard var entry = try PropertyListSerialization.propertyList(from: payload,
+                                                                     options: [],
+                                                                     format: nil) as? [String: Any] else {
+            return XCTFail("The entry must decode as a property-list dictionary")
+        }
+        entry["arenaByteCount"] = Int.max
+        entry["spanTable"] = [["byteOffset": 0, "byteCount": Int.max, "elementCount": 1]]
+        let forgedPayload = try PropertyListSerialization.data(fromPropertyList: entry,
+                                                               format: .binary,
+                                                               options: 0)
+        let forged = try PreparedTileDiskEnvelope.encode(payload: forgedPayload)
+
+        XCTAssertThrowsError(
+            try PreparedTileDiskCodec.decode(data: forged,
+                                             expectedTile: tile,
+                                             cacheIdentity: cacheIdentity,
+                                             blobFileURL: Self.testBlobURL)
+        ) { error in
+            guard let codecError = error as? PreparedTileDiskCodecError,
+                  case .corruptedPayload = codecError else {
+                return XCTFail("Expected a corrupted-payload error, got \(error).")
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     /// File transport stand-in that writes the raw blob bytes: cache-level
