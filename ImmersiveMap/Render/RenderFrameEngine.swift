@@ -110,15 +110,9 @@ final class RenderFrameEngine {
     /// with its update. The drawable arrives pre-acquired and already sized,
     /// so the frame is measured against the texture it actually renders into
     /// and never blocks in `nextDrawable()` mid-encode.
-    ///
-    /// `presentAt` is the update's target presentation time: the moment this
-    /// frame is predicted to appear. Animations already sample at it, and the
-    /// drawable is scheduled for it (see `presentFrame`), so the frame is
-    /// shown at the time it was computed for.
     @discardableResult
-    func render(to layer: CAMetalLayer,
-                drawable: any CAMetalDrawable,
-                presentAt: CFTimeInterval) -> Bool {
+    func render(to layer: CAMetalLayer, drawable: any CAMetalDrawable) -> Bool {
+        updatePresentationSyncMode(layer: layer)
         guard let frameSlotIndex = inFlightFramePool.tryAcquire() else {
             recordSkippedFrame(reason: .inFlightSlotsExhausted)
             return false
@@ -128,13 +122,27 @@ final class RenderFrameEngine {
                                                        height: drawable.texture.height),
                                       pixelsPerPoint: layer.contentsScale,
                                       frameSlotIndex: frameSlotIndex,
-                                      presentAt: presentAt,
                                       acquireTarget: { FrameRenderTarget(drawable: drawable) },
                                       onGPUComplete: nil)
         if didSchedule == false {
             inFlightFramePool.release(slot: frameSlotIndex)
         }
         return didSchedule
+    }
+
+    /// SwiftUI markers are platform views above the Metal layer: their frames
+    /// commit with the main-thread CATransaction, while a free-running drawable
+    /// presents on its own once the GPU finishes, typically one vsync apart, so
+    /// markers visibly detach from their geo points while the camera moves.
+    /// While markers exist, the drawable must present inside the transaction
+    /// (see `presentFrame`) so map and markers reach the screen in the same
+    /// commit; without markers the cheaper free-running present stays.
+    private func updatePresentationSyncMode(layer: CAMetalLayer) {
+        let needsTransactionSync = persistentContext.markerSource
+            .currentMarkerProjectionInput.entries.isEmpty == false
+        if layer.presentsWithTransaction != needsTransactionSync {
+            layer.presentsWithTransaction = needsTransactionSync
+        }
     }
 
     /// Renders one frame into a caller-supplied offscreen texture. Used by the
@@ -150,7 +158,6 @@ final class RenderFrameEngine {
         let didSchedule = renderFrame(drawSize: request.drawSize,
                                       pixelsPerPoint: request.pixelsPerPoint,
                                       frameSlotIndex: frameSlotIndex,
-                                      presentAt: nil,
                                       acquireTarget: { FrameRenderTarget(texture: request.texture) },
                                       onGPUComplete: request.onGPUComplete)
         if didSchedule == false {
@@ -191,7 +198,6 @@ final class RenderFrameEngine {
     private func renderFrame(drawSize: CGSize,
                              pixelsPerPoint: CGFloat,
                              frameSlotIndex: Int,
-                             presentAt: CFTimeInterval?,
                              acquireTarget: () -> FrameRenderTarget?,
                              onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
         let signposter = MapSignposts.render
@@ -229,7 +235,6 @@ final class RenderFrameEngine {
         let didSchedule = presentFrame(frameContext: frameContext,
                                        target: target,
                                        frameSlotIndex: frameSlotIndex,
-                                       presentAt: presentAt,
                                        onGPUComplete: onGPUComplete)
         frameContext.diagnostics.recordStage(.presentFrame, duration: CACurrentMediaTime() - presentStart)
         signposter.endInterval("stage", presentSignpostState)
@@ -382,7 +387,6 @@ final class RenderFrameEngine {
     private func presentFrame(frameContext: FrameContext,
                               target: FrameRenderTarget?,
                               frameSlotIndex: Int,
-                              presentAt: CFTimeInterval?,
                               onGPUComplete: (@Sendable (Bool) -> Void)?) -> Bool {
         guard let commandBuffer = frameContext.commandBuffer,
               let target else {
@@ -402,25 +406,18 @@ final class RenderFrameEngine {
             onGPUComplete?(completedBuffer.error == nil)
         }
         if let drawable = target.drawable {
-            // One presentation path for every live frame. The drawable is
-            // scheduled for the same instant the frame was computed for (the
-            // display link update's target presentation time, which the
-            // animations also sampled at), rather than shown whenever the GPU
-            // happens to finish. That is what keeps the map and the SwiftUI
-            // marker views together: the marker snapshot for this frame is
-            // applied to the views on this same main-thread turn, so both
-            // halves of the frame are bound to one time instead of to two
-            // independent pipelines. It also makes the order frames reach the
-            // screen follow the order they were rendered in.
-            //
-            // A time in the past (a frame that missed its slot) presents at
-            // the next opportunity, which is the old free-running behavior.
-            if let presentAt {
-                commandBuffer.present(drawable, atTime: presentAt)
+            if drawable.layer.presentsWithTransaction {
+                // Markers are on screen: commit, wait until the buffer is
+                // scheduled, then present, so the drawable rides the current
+                // CATransaction together with the marker view frames set right
+                // after `presentFrame` (Apple's transaction-synced pattern).
+                commandBuffer.commit()
+                commandBuffer.waitUntilScheduled()
+                drawable.present()
             } else {
                 commandBuffer.present(drawable)
+                commandBuffer.commit()
             }
-            commandBuffer.commit()
         } else {
             commandBuffer.commit()
         }

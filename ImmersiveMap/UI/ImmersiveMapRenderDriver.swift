@@ -134,16 +134,13 @@ final class ImmersiveMapRenderDriver: NSObject {
     @discardableResult
     func renderFrame(layer: CAMetalLayer,
                      drawable: any CAMetalDrawable,
-                     presentAt: CFTimeInterval,
                      isRenderable: Bool) -> Bool {
         guard isRenderable else {
             applyDisplayLinkState()
             return false
         }
 
-        let didSchedule = renderer?.render(to: layer,
-                                           drawable: drawable,
-                                           presentAt: presentAt) ?? false
+        let didSchedule = renderer?.render(to: layer, drawable: drawable) ?? false
         if didSchedule {
             pacing.consumeOneFrameRequest()
         }

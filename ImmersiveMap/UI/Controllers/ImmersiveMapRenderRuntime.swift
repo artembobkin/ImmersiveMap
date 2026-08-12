@@ -105,11 +105,9 @@ final class ImmersiveMapRenderRuntime {
     @discardableResult
     func renderFrame(layer: CAMetalLayer,
                      drawable: any CAMetalDrawable,
-                     presentAt: CFTimeInterval,
                      viewportRuntime: ImmersiveMapViewportRuntime) -> Bool {
         driver.renderFrame(layer: layer,
                            drawable: drawable,
-                           presentAt: presentAt,
                            isRenderable: viewportRuntime.isRenderable)
     }
 }
