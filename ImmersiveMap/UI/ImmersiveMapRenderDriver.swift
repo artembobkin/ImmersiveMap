@@ -216,7 +216,7 @@ protocol ImmersiveMapRenderDriverFrameDelegate: AnyObject {
 private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDisplayLinkDelegate {
     private weak var driver: ImmersiveMapRenderDriver?
     private weak var frameDelegate: ImmersiveMapRenderDriverFrameDelegate?
-    #if DEBUG
+    #if DEBUG && os(macOS)
     private let presentTimingProbe = RenderPresentTimingProbe.makeIfEnabled()
     #endif
 
@@ -224,7 +224,7 @@ private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDis
          frameDelegate: ImmersiveMapRenderDriverFrameDelegate) {
         self.driver = driver
         self.frameDelegate = frameDelegate
-        #if DEBUG
+        #if DEBUG && os(macOS)
         presentTimingProbe?.begin(driver: driver)
         #endif
     }
@@ -242,7 +242,7 @@ private final class MetalDisplayLinkBridge: NSObject, @preconcurrency CAMetalDis
                                                currentTime: update.targetPresentationTimestamp,
                                                drawable: update.drawable)
         }
-        #if DEBUG
+        #if DEBUG && os(macOS)
         if let presentTimingProbe {
             presentTimingProbe.recordTick(target: update.targetPresentationTimestamp,
                                           drawable: update.drawable,

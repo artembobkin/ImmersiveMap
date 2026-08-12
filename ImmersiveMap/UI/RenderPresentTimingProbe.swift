@@ -1,9 +1,14 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-#if DEBUG
+// macOS only: the probe's whole point is the drawable's actual presented
+// time, and `addPresentedHandler` is absent from the iOS SDK's MTLDrawable
+// (the macOS header declares it as available on iOS, but the iOS one does not
+// declare it at all).
+#if DEBUG && os(macOS)
 
 import Foundation
+import Metal
 import QuartzCore
 
 /// Measures where the two halves of a frame actually land on screen.
@@ -171,7 +176,11 @@ final class RenderPresentTimingProbe {
                               skipReason: skipReason,
                               presented: nil))
         let storage = self.storage
-        drawable.addPresentedHandler { presentedDrawable in
+        // Through MTLDrawable: the presentation callback is declared there,
+        // and the iOS SDK does not surface it on the CAMetalDrawable
+        // existential.
+        let presentable: any MTLDrawable = drawable
+        presentable.addPresentedHandler { presentedDrawable in
             storage.recordPresented(index: index, time: presentedDrawable.presentedTime)
         }
 
