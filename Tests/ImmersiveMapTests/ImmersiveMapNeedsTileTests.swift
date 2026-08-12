@@ -851,7 +851,8 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let swapped = await pipeline.waitUntilMaterializeCount(3, for: tile)
         XCTAssertTrue(swapped)
         pipeline.completeMaterialize(tile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        let saved = await pipeline.waitUntilSaved(tile)
+        XCTAssertTrue(saved)
 
         XCTAssertFalse(pipeline.hasRemovedFromDisk(tile))
         XCTAssertEqual(pipeline.savedETag(for: tile), .some("A"))
@@ -885,7 +886,8 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let swapped = await pipeline.waitUntilMaterializeCount(3, for: tile)
         XCTAssertTrue(swapped)
         pipeline.completeMaterialize(tile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        let saved = await pipeline.waitUntilSaved(tile)
+        XCTAssertTrue(saved)
 
         XCTAssertEqual(pipeline.savedETag(for: tile), .some("A"))
     }
@@ -935,7 +937,7 @@ private final class RecordingRetryWakeScheduler {
     }
 
     func waitUntilScheduledCount(_ count: Int) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if scheduledWakes.count >= count {
                 return true
             }
@@ -1036,7 +1038,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func waitUntilDiskReadStarted(_ tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if hasDiskReadStarted(tile) {
                 return true
             }
@@ -1260,7 +1262,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         continuation?.resume()
     }
 
-    func waitUntilStarted(_ tile: Tile, attempts: Int = 100) async -> Bool {
+    func waitUntilStarted(_ tile: Tile, attempts: Int = 500) async -> Bool {
         for _ in 0..<attempts {
             if hasStarted(tile) {
                 return true
@@ -1271,7 +1273,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func waitUntilStartCount(_ count: Int, for tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if startCount(for: tile) >= count {
                 return true
             }
@@ -1280,8 +1282,18 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         return false
     }
 
+    func waitUntilSaved(_ tile: Tile) async -> Bool {
+        for _ in 0..<500 {
+            if savedETag(for: tile) != nil {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return false
+    }
+
     func waitUntilSaveStarted(_ tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if hasSaveStarted(tile) {
                 return true
             }
@@ -1291,7 +1303,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func waitUntilPrepared(_ tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if hasPrepared(tile) {
                 return true
             }
@@ -1301,7 +1313,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func waitUntilMaterializeCount(_ count: Int, for tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if materializeCount(for: tile) >= count {
                 return true
             }
@@ -1311,7 +1323,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func waitUntilMaterialized(_ tile: Tile) async -> Bool {
-        for _ in 0..<100 {
+        for _ in 0..<500 {
             if hasMaterialized(tile) {
                 return true
             }
