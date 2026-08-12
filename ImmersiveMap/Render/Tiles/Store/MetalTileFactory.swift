@@ -4,19 +4,19 @@
 import MetalKit
 
 /// Turns a parsed tile into GPU state. Every buffer of the tile lives in one
-/// backing allocation whose byte layout is the canonical
-/// `TileArenaImageMath` plan, so a freshly parsed tile and a disk-cached
-/// arena image produce identical arenas: the parse path writes the plan into
-/// the buffer, the cache path copies (or MTLIO-loads) the stored blob, and
-/// both rebuild the same `TileBufferView`s from the span table.
+/// backing allocation whose byte layout is the canonical `TileArenaSchema`
+/// slot sequence, so a freshly parsed tile and a disk-cached arena image
+/// produce identical arenas: the parse path writes the plan into the buffer,
+/// the cache path copies (or MTLIO-loads) the stored blob, and both rebuild
+/// the same `TileBufferView`s from the span table. The reader verifies every
+/// span take against the schema slot it expects, so a traversal that drifts
+/// from the schema fails instead of binding bytes to the wrong destination.
 final class MetalTileFactory {
     private let metalDevice: MTLDevice
 #if !targetEnvironment(simulator)
-    /// Created once at init on devices whose transport writes file blobs:
-    /// tile loads materialize concurrently from their own tasks, so lazy
-    /// creation would race. nil where the transport is inline-only (no
-    /// Metal 3) and on creation failure, which fails the materialize into
-    /// the retry path. The simulator SDK has no MTLIO surface at all.
+    /// Created once at init on Metal 3 devices: tile loads materialize
+    /// concurrently from their own tasks, so lazy creation would race. The
+    /// simulator SDK has no MTLIO surface at all.
     private let ioCommandQueue: MTLIOCommandQueue?
 #endif
 
@@ -33,11 +33,30 @@ final class MetalTileFactory {
 #endif
     }
 
-    /// nil when the backing allocation fails (memory pressure): the caller
-    /// fails the materialize so the load records a retryable failure instead
-    /// of caching a permanently blank tile.
-    func makeTile(from preparedTile: PreparedTileCPU) -> MetalTile? {
-        let plan = TileArenaImageMath.plan(for: preparedTile)
+    /// Whether this factory can DMA-load `.file` geometry blobs: Metal 3
+    /// support and a successfully created IO command queue. The render store
+    /// derives the geometry transport from this one answer, so a
+    /// queue-creation failure degrades the whole session to the inline
+    /// transport before any file entry exists, instead of saving entries no
+    /// hit could ever load.
+    var loadsFileBlobs: Bool {
+#if targetEnvironment(simulator)
+        return false
+#else
+        return ioCommandQueue != nil
+#endif
+    }
+
+    /// nil when the backing allocation fails (memory pressure) or the arena
+    /// traversal does not match the schema (a programming error, asserted):
+    /// the caller fails the materialize so the load records a retryable
+    /// failure instead of caching a permanently blank tile.
+    ///
+    /// `plan` is the arena plan of this exact tile when the caller already
+    /// built one (the loader shares it with the disk save); nil computes it.
+    func makeTile(from preparedTile: PreparedTileCPU,
+                  plan providedPlan: TileArenaImagePlan? = nil) -> MetalTile? {
+        let plan = providedPlan ?? TileArenaImageMath.plan(for: preparedTile)
 
         var backingBuffer: MTLBuffer?
         if plan.totalByteCount > 0 {
@@ -56,10 +75,10 @@ final class MetalTileFactory {
             minimal: Self.textLabelSetMeta(from: preparedTile.textLabels.minimal),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels)
         ) else {
-            // The plan and the builder share one traversal, so a mismatch here
-            // is a programming error, but failing into the retry path beats
-            // publishing a blank tile.
-            assertionFailure("Arena plan and tile builder disagreed on the span traversal")
+            // The plan and the reader both walk the schema's slot sequence,
+            // so a mismatch here is a programming error, but failing into
+            // the retry path beats publishing a blank tile.
+            assertionFailure("The arena reader disagreed with the schema slot sequence")
             return nil
         }
         return MetalTile(tile: preparedTile.tile, tileBuffers: tileBuffers)
@@ -76,9 +95,9 @@ final class MetalTileFactory {
     }
 
     /// Materializes a disk-cached arena image: allocates the arena, fills it
-    /// from the blob (CPU copy for inline blobs, `MTLIOCommandQueue` load
-    /// with hardware LZFSE for file blobs), and rebuilds the buffer views
-    /// from the span table.
+    /// from the blob (CPU copy for inline blobs, `MTLIOCommandQueue` load for
+    /// file blobs), verifies the file blob against the checksum stored in the
+    /// metadata, and rebuilds the buffer views from the span table.
     func makeTile(fromImage image: PreparedTileArenaImage) async -> ArenaImageMaterializeResult {
         var backingBuffer: MTLBuffer?
         if image.arenaByteCount > 0 {
@@ -93,23 +112,40 @@ final class MetalTileFactory {
                 blob.withUnsafeBytes { bytes in
                     buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
                 }
-            case .file(let url):
+            case .file(let url, let format, let checksum):
 #if targetEnvironment(simulator)
                 // The simulator writes and reads inline entries only (its own
                 // cache namespace); a file blob here is foreign data.
                 _ = url
+                _ = format
+                _ = checksum
                 return .imageUnreadable
 #else
                 guard let queue = ioCommandQueue else {
-                    // Queue creation is device-level and should not fail on a
-                    // Metal 3 device; treat it as transient rather than
-                    // deleting a healthy cache entry.
+                    // Unreachable through production wiring: the store selects
+                    // the file transport from `loadsFileBlobs`, so a session
+                    // without a queue never sees file entries. Kept transient
+                    // so an exotic caller cannot delete a healthy entry.
                     return .allocationFailed
                 }
                 guard await loadFileBlob(from: url,
+                                         format: format,
                                          into: buffer,
                                          byteCount: image.arenaByteCount,
                                          queue: queue) else {
+                    return .imageUnreadable
+                }
+                // A .complete status proves the DMA finished, not that these
+                // are the bytes the metadata describes: a bit-flipped or
+                // truncated container still loads "complete", and a crash (or
+                // a second engine writing the same namespace) can pair old
+                // metadata with a newer container. The checksum stored in the
+                // metadata binds the pair; a mismatch fails into removal and
+                // a clean re-parse.
+                let loadedChecksum = PreparedTileBlobChecksum.checksum(
+                    UnsafeRawBufferPointer(start: buffer.contents(), count: image.arenaByteCount)
+                )
+                guard loadedChecksum == checksum else {
                     return .imageUnreadable
                 }
 #endif
@@ -152,37 +188,43 @@ final class MetalTileFactory {
                                               anchors: roadLabels.anchors)
     }
 
-    /// Rebuilds `TileBuffers` by walking the span table in the same canonical
-    /// order `TileArenaImageMath.plan` wrote it. nil when the table does not
-    /// structurally match the metadata (wrong span count, out-of-bounds span,
-    /// missing index width): cached tables are untrusted input.
+    /// Rebuilds `TileBuffers` by walking the span table against the schema's
+    /// slot sequence (derived from the same metadata). nil when the table
+    /// does not match (wrong span count, out-of-bounds span, wrong stride,
+    /// a take out of schema order): cached tables are untrusted input, and
+    /// the parse path shares the check as its final defense.
     private static func buildTileBuffers(spans: [TileArenaSpan],
                                          backingBuffer: MTLBuffer?,
                                          full: PreparedTileArenaImage.TextLabelSetMeta,
                                          reduced: PreparedTileArenaImage.TextLabelSetMeta,
                                          minimal: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta) -> TileBuffers? {
-        var cursor = SpanCursor(spans: spans, backingBuffer: backingBuffer)
+        let expectedSlots = TileArenaSchema.slots(full: TileArenaSchema.runCounts(of: full),
+                                                  reduced: TileArenaSchema.runCounts(of: reduced),
+                                                  minimal: TileArenaSchema.runCounts(of: minimal))
+        var cursor = SpanCursor(spans: spans,
+                                expectedSlots: expectedSlots,
+                                backingBuffer: backingBuffer)
 
-        let ground = takeGeometryLayer(&cursor)
+        let ground = takeGeometryLayer(.ground, cursor: &cursor)
         let roads = RoadStructureBuckets(
-            tunnel: takeRoadPhases(&cursor),
-            ground: takeRoadPhases(&cursor),
-            bridge: takeRoadPhases(&cursor)
+            tunnel: takeRoadPhases(.tunnel, cursor: &cursor),
+            ground: takeRoadPhases(.ground, cursor: &cursor),
+            bridge: takeRoadPhases(.bridge, cursor: &cursor)
         )
-        let bridgeOverlay = takeGeometryLayer(&cursor)
+        let bridgeOverlay = takeGeometryLayer(.bridgeOverlay, cursor: &cursor)
 
-        let extrudedVertices = cursor.takeView(elementStride: MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride)
-        let extrudedIndices = cursor.takeIndexView()
+        let extrudedVertices = cursor.takeView(.extrudedVertices)
+        let extrudedIndices = cursor.takeIndexView(.extrudedIndices)
         let extruded = TileBuffers.Extruded(vertices: extrudedVertices,
                                             indices: extrudedIndices.view,
-                                            styles: cursor.takeView(elementStride: MemoryLayout<TilePolygonStyle>.stride),
+                                            styles: cursor.takeView(.extrudedStyles),
                                             indexType: extrudedIndices.indexType)
 
-        let textLabels = TileBuffers.TextLabels(full: takeTextLabelSet(full, cursor: &cursor),
-                                                reduced: takeTextLabelSet(reduced, cursor: &cursor),
-                                                minimal: takeTextLabelSet(minimal, cursor: &cursor))
-        let roadGlyphVertices = cursor.takeView(elementStride: MemoryLayout<LabelVertex>.stride)
+        let textLabels = TileBuffers.TextLabels(full: takeTextLabelSet(full, tier: .full, cursor: &cursor),
+                                                reduced: takeTextLabelSet(reduced, tier: .reduced, cursor: &cursor),
+                                                minimal: takeTextLabelSet(minimal, tier: .minimal, cursor: &cursor))
+        let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)
         let roadLabelBuffers = TileBuffers.RoadLabels(pathInputs: roadLabels.pathInputs,
                                                       pathRanges: roadLabels.pathRanges,
                                                       pathLabels: roadLabels.pathLabels,
@@ -206,67 +248,85 @@ final class MetalTileFactory {
                            roadLabels: roadLabelBuffers)
     }
 
-    private static func takeGeometryLayer(_ cursor: inout SpanCursor) -> TileBuffers.GeometryLayer {
-        let vertices = cursor.takeView(elementStride: MemoryLayout<TileVertexIn>.stride)
-        let indices = cursor.takeIndexView()
+    private static func takeGeometryLayer(_ layerID: TileArenaGeometryLayerID,
+                                          cursor: inout SpanCursor) -> TileBuffers.GeometryLayer {
+        let vertices = cursor.takeView(.geometryVertices(layerID))
+        let indices = cursor.takeIndexView(.geometryIndices(layerID))
         return TileBuffers.GeometryLayer(vertices: vertices,
                                          indices: indices.view,
-                                         styles: cursor.takeView(elementStride: MemoryLayout<TilePolygonStyle>.stride),
-                                         overviewStyleMask: cursor.takeView(elementStride: MemoryLayout<Float>.stride),
+                                         styles: cursor.takeView(.geometryStyles(layerID)),
+                                         overviewStyleMask: cursor.takeView(.geometryOverviewStyleMasks(layerID)),
                                          indexType: indices.indexType)
     }
 
-    private static func takeRoadPhases(_ cursor: inout SpanCursor) -> RoadGeometryPhases<TileBuffers.GeometryLayer> {
-        RoadGeometryPhases(shadow: takeGeometryLayer(&cursor),
-                           casing: takeGeometryLayer(&cursor),
-                           fill: takeGeometryLayer(&cursor),
-                           detail: takeGeometryLayer(&cursor),
-                           overlay: takeGeometryLayer(&cursor))
+    private static func takeRoadPhases(_ structureKind: TileMvtParser.RoadStructureKind,
+                                       cursor: inout SpanCursor) -> RoadGeometryPhases<TileBuffers.GeometryLayer> {
+        RoadGeometryPhases(shadow: takeGeometryLayer(.road(structureKind, .shadow), cursor: &cursor),
+                           casing: takeGeometryLayer(.road(structureKind, .casing), cursor: &cursor),
+                           fill: takeGeometryLayer(.road(structureKind, .fill), cursor: &cursor),
+                           detail: takeGeometryLayer(.road(structureKind, .detail), cursor: &cursor),
+                           overlay: takeGeometryLayer(.road(structureKind, .overlay), cursor: &cursor))
     }
 
     private static func takeTextLabelSet(_ meta: PreparedTileArenaImage.TextLabelSetMeta,
+                                         tier: BaseLabelDetailTier,
                                          cursor: inout SpanCursor) -> TileBuffers.TextLabelSet {
-        let glyphRuns = meta.glyphRunStyles.map { style in
+        let glyphRuns = meta.glyphRunStyles.enumerated().map { run, style in
             LabelsByStyleRun(style: style,
-                             localGlyphVertices: cursor.takeView(elementStride: MemoryLayout<LabelVertex>.stride))
+                             localGlyphVertices: cursor.takeView(.glyphRunVertices(tier: tier, run: run)))
         }
-        let poiIconRuns = meta.poiIconRunStyles.map { style in
+        let poiIconRuns = meta.poiIconRunStyles.enumerated().map { run, style in
             PoiIconRunBuffer(style: style,
-                             localVertices: cursor.takeView(elementStride: MemoryLayout<LabelVertex>.stride))
+                             localVertices: cursor.takeView(.poiIconRunVertices(tier: tier, run: run)))
         }
         return TileBuffers.TextLabelSet(placementInputs: meta.placementInputs,
                                         labelsByStyleRuns: glyphRuns,
                                         poiIconRuns: poiIconRuns)
     }
 
-    /// Sequential reader over the span table. Any structural violation
-    /// (running past the table, a span outside the arena, a missing index
-    /// width) latches `failed`; the builder checks `isConsistent` once at
-    /// the end so the traversal code stays linear.
+    /// Sequential reader over the span table, pinned to the schema's slot
+    /// sequence: every take names the slot it is reading for and the cursor
+    /// verifies the claim, so bytes can only bind to the destination the
+    /// schema says they belong to. Any violation (a take out of order, a span
+    /// outside the arena, a stride mismatch) latches `failed`; the builder
+    /// checks `isConsistent` once at the end so the traversal stays linear.
     private struct SpanCursor {
         private let spans: [TileArenaSpan]
+        private let expectedSlots: [TileArenaSlot]
         private let backingBuffer: MTLBuffer?
         private var index = 0
         private var failed = false
 
-        init(spans: [TileArenaSpan], backingBuffer: MTLBuffer?) {
+        init(spans: [TileArenaSpan],
+             expectedSlots: [TileArenaSlot],
+             backingBuffer: MTLBuffer?) {
             self.spans = spans
+            self.expectedSlots = expectedSlots
             self.backingBuffer = backingBuffer
         }
 
         var isConsistent: Bool {
-            failed == false && index == spans.count
+            failed == false && index == spans.count && index == expectedSlots.count
         }
 
-        mutating func takeView(elementStride: Int) -> TileBufferView? {
-            makeView(from: takeSpan(), elementStride: elementStride)
+        mutating func takeView(_ slot: TileArenaSlot) -> TileBufferView? {
+            guard let span = takeSpan(claiming: slot) else {
+                return nil
+            }
+            guard let elementStride = TileArenaSchema.elementStride(of: slot),
+                  span.indexWidth == nil else {
+                failed = true
+                return nil
+            }
+            return makeView(from: span, elementStride: elementStride)
         }
 
-        mutating func takeIndexView() -> (view: TileBufferView?, indexType: MTLIndexType) {
-            guard let span = takeSpan() else {
+        mutating func takeIndexView(_ slot: TileArenaSlot) -> (view: TileBufferView?, indexType: MTLIndexType) {
+            guard let span = takeSpan(claiming: slot) else {
                 return (nil, .uint32)
             }
-            guard let indexWidth = span.indexWidth else {
+            guard TileArenaSchema.elementStride(of: slot) == nil,
+                  let indexWidth = span.indexWidth else {
                 failed = true
                 return (nil, .uint32)
             }
@@ -278,8 +338,10 @@ final class MetalTileFactory {
             }
         }
 
-        private mutating func takeSpan() -> TileArenaSpan? {
-            guard index < spans.count else {
+        private mutating func takeSpan(claiming slot: TileArenaSlot) -> TileArenaSpan? {
+            guard index < spans.count,
+                  index < expectedSlots.count,
+                  expectedSlots[index] == slot else {
                 failed = true
                 return nil
             }
@@ -288,9 +350,9 @@ final class MetalTileFactory {
             return span
         }
 
-        private mutating func makeView(from span: TileArenaSpan?,
+        private mutating func makeView(from span: TileArenaSpan,
                                        elementStride: Int) -> TileBufferView? {
-            guard let span, span.elementCount > 0 else {
+            guard span.elementCount > 0 else {
                 return nil
             }
             // The stride check pins byteCount to the slot's element type, so a
@@ -311,10 +373,18 @@ final class MetalTileFactory {
 
 #if !targetEnvironment(simulator)
     private func loadFileBlob(from url: URL,
+                              format: PreparedTileFileBlobFormat,
                               into buffer: MTLBuffer,
                               byteCount: Int,
                               queue: MTLIOCommandQueue) async -> Bool {
-        guard let fileHandle = try? metalDevice.makeIOFileHandle(url: url, compressionMethod: .lzfse) else {
+        let fileHandle: MTLIOFileHandle?
+        switch format {
+        case .raw:
+            fileHandle = try? metalDevice.makeIOFileHandle(url: url)
+        case .lzfseContainer:
+            fileHandle = try? metalDevice.makeIOFileHandle(url: url, compressionMethod: .lzfse)
+        }
+        guard let fileHandle else {
             return false
         }
         let ioCommandBuffer = queue.makeCommandBuffer()

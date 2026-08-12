@@ -405,7 +405,10 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
 }
 
 final class PreparedTileDiskCaching {
-    static let preparedFormatVersion: UInt32 = 30
+    /// v31: file-transport entries carry the blob's checksum and container
+    /// format in the metadata (binding a `.ptile` to its `.ptgeo` content),
+    /// and the span table is validated against the arena schema at decode.
+    static let preparedFormatVersion: UInt32 = 31
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
@@ -463,7 +466,7 @@ final class PreparedTileDiskCaching {
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         let cachePath = cachePathFor(tile: tile)
         let blobPath = blobPathFor(tile: tile)
-        let usesBlobFiles = geometryTransport.writesBlobFiles
+        let usesBlobFiles = geometryTransport.blobTransport != .inline
         let data = await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
             ioCoordinator.enqueue { [self] in
                 guard let data = ioCoordinator.readFile(at: cachePath) else {
@@ -504,40 +507,54 @@ final class PreparedTileDiskCaching {
 
     func saveOnDisk(tile: Tile,
                     preparedTile: PreparedTileCPU,
+                    plan: TileArenaImagePlan? = nil,
                     sourceETag: String?) async {
         guard preparedTile.tile == tile else {
             return
         }
-        // Encode + compress on the caller's task, mirroring the decode change:
-        // the shared serial queue carries only the file writes, so disk-first
-        // serves are not delayed behind multi-megabyte encodes of unrelated
-        // saves.
+        // Encode, compress, and stage on the caller's task: the shared serial
+        // queue carries only cheap file operations (the staged-blob rename and
+        // the metadata write), so disk-first serves are never delayed behind
+        // the LZFSE pass of an unrelated save, and a queued save closure holds
+        // no uncompressed arena.
         let encoded: PreparedTileDiskCodec.EncodedPreparedTile
         do {
             encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
                                                        sourceETag: sourceETag ?? "",
                                                        compressionEnabled: compressionEnabled,
-                                                       blobTransport: geometryTransport.writesBlobFiles ? .file : .inline)
+                                                       blobTransport: geometryTransport.blobTransport,
+                                                       plan: plan)
         } catch {
 #if DEBUG
             print("Failed to encode prepared tile \(tile): \(error)")
 #endif
             return
         }
+        var stagedBlobURL: URL?
+        if let fileBlob = encoded.fileBlob {
+            do {
+                stagedBlobURL = try geometryTransport.stageBlobFile(fileBlob, near: blobPathFor(tile: tile))
+            } catch {
+#if DEBUG
+                print("Failed to stage prepared tile blob for \(tile): \(error)")
+#endif
+                return
+            }
+        }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             ioCoordinator.enqueue { [self] in
                 defer { continuation.resume() }
                 let cachePath = cachePathFor(tile: tile)
                 do {
-                    // Blob first, metadata second: a reader pairs fresh
-                    // metadata with a fresh blob. The reverse order could
-                    // serve new metadata against the old container, which the
-                    // size-checked MTLIO load then rejects into a re-parse;
-                    // this order makes that window impossible.
-                    if geometryTransport.writesBlobFiles {
+                    // Blob first, metadata second, so a crash between the two
+                    // leaves old metadata beside the new container instead of
+                    // new metadata beside the old one; either torn pair fails
+                    // the checksum stored in the metadata and is removed into
+                    // a clean re-parse rather than served.
+                    if let stagedBlobURL {
                         let blobPath = blobPathFor(tile: tile)
-                        try geometryTransport.writeBlobFile(encoded.fileBlob, to: blobPath)
+                        try geometryTransport.commitStagedBlobFile(at: stagedBlobURL, to: blobPath)
                         ioCoordinator.registerWrittenFile(at: blobPath)
                     }
                     try ioCoordinator.writeFile(encoded.metadata, to: cachePath)

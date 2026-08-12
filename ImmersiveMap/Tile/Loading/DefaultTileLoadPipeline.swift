@@ -72,9 +72,13 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         return await tileDownloader.downloadResult(tile: tile)
     }
 
-    func savePreparedOnDisk(tile: Tile, preparedTile: PreparedTileCPU, sourceETag: String?) async {
+    func savePreparedOnDisk(tile: Tile,
+                            preparedTile: PreparedTileCPU,
+                            plan: TileArenaImagePlan?,
+                            sourceETag: String?) async {
         await preparedTileDiskCaching?.saveOnDisk(tile: tile,
                                                   preparedTile: preparedTile,
+                                                  plan: plan,
                                                   sourceETag: sourceETag)
     }
 
@@ -89,16 +93,22 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         return await tileRenderStore.prepareTile(tile: tile, data: data)
     }
 
-    func materialize(preparedTile: PreparedTileCPU, awaitingRevalidation: Bool) async -> Bool {
+    func materialize(preparedTile: PreparedTileCPU,
+                     plan: TileArenaImagePlan?,
+                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
         guard let tileRenderStore else {
-            return false
+            return .allocationOrStoreFailed
         }
-        return await tileRenderStore.materializePreparedTile(preparedTile,
-                                                             awaitingRevalidation: awaitingRevalidation)
+        let isMaterialized = await tileRenderStore.materializePreparedTile(
+            preparedTile,
+            plan: plan,
+            awaitingRevalidation: awaitingRevalidation
+        )
+        return isMaterialized ? .materialized : .allocationOrStoreFailed
     }
 
     func materialize(image: PreparedTileArenaImage,
-                     awaitingRevalidation: Bool) async -> PreparedTileImageMaterializeOutcome {
+                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
         guard let tileRenderStore else {
             return .allocationOrStoreFailed
         }
@@ -114,6 +124,8 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         guard let result = await prepare(tile: tile, data: data) else {
             return false
         }
-        return await materialize(preparedTile: result.preparedTile, awaitingRevalidation: false)
+        return await materialize(preparedTile: result.preparedTile,
+                                 plan: nil,
+                                 awaitingRevalidation: false) == .materialized
     }
 }

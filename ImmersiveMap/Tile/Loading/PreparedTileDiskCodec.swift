@@ -70,7 +70,7 @@ enum PreparedTileDiskEnvelope {
         encoded.append(algorithm.rawValue)
         encoded.append(0) // flags, reserved for future envelope revisions
         appendLittleEndian(UInt64(payload.count), to: &encoded)
-        appendLittleEndian(checksum(payload), to: &encoded)
+        appendLittleEndian(PreparedTileBlobChecksum.checksum(payload), to: &encoded)
         encoded.append(storedPayload)
         return encoded
     }
@@ -129,7 +129,7 @@ enum PreparedTileDiskEnvelope {
 
         let computedChecksum = version == byteChecksumVersion
             ? byteChecksum(payload)
-            : checksum(payload)
+            : PreparedTileBlobChecksum.checksum(payload)
         guard payload.count == Int(decodedByteCount), computedChecksum == expectedChecksum else {
             throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile envelope checksum mismatch.")
         }
@@ -172,32 +172,6 @@ enum PreparedTileDiskEnvelope {
             value |= T(data[offset + byteOffset]) << (byteOffset * 8)
         }
         return value
-    }
-
-    /// FNV-1a over little-endian 8-byte words, used as a fast corruption
-    /// check, not as a security primitive. The zero-padded tail cannot
-    /// collide with genuine trailing zero bytes because the header stores the
-    /// payload length and decode compares it before trusting the checksum.
-    private static func checksum(_ data: Data) -> UInt64 {
-        data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> UInt64 in
-            var hash: UInt64 = 14_695_981_039_346_656_037
-            let wordCount = buffer.count / 8
-            for wordIndex in 0..<wordCount {
-                let word = buffer.loadUnaligned(fromByteOffset: wordIndex * 8, as: UInt64.self)
-                hash ^= UInt64(littleEndian: word)
-                hash &*= 1_099_511_628_211
-            }
-            let tailStart = wordCount * 8
-            if tailStart < buffer.count {
-                var tail: UInt64 = 0
-                for byteIndex in tailStart..<buffer.count {
-                    tail |= UInt64(buffer[byteIndex]) << (UInt64(byteIndex - tailStart) * 8)
-                }
-                hash ^= tail
-                hash &*= 1_099_511_628_211
-            }
-            return hash
-        }
     }
 
     /// The byte-wise FNV-1a that version-1 envelopes were written with.
@@ -288,6 +262,38 @@ enum PreparedTileDiskEnvelope {
 #endif
 }
 
+/// FNV-1a over little-endian 8-byte words: the corruption check shared by the
+/// metadata envelope and the file-transport geometry blob (computed at encode
+/// time, stored in the metadata, verified after every MTLIO load). A fast
+/// integrity check, not a security primitive. The zero-padded tail cannot
+/// collide with genuine trailing zero bytes because both users compare an
+/// exact byte count before trusting the checksum.
+enum PreparedTileBlobChecksum {
+    static func checksum(_ data: Data) -> UInt64 {
+        data.withUnsafeBytes { checksum($0) }
+    }
+
+    static func checksum(_ buffer: UnsafeRawBufferPointer) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        let wordCount = buffer.count / 8
+        for wordIndex in 0..<wordCount {
+            let word = buffer.loadUnaligned(fromByteOffset: wordIndex * 8, as: UInt64.self)
+            hash ^= UInt64(littleEndian: word)
+            hash &*= 1_099_511_628_211
+        }
+        let tailStart = wordCount * 8
+        if tailStart < buffer.count {
+            var tail: UInt64 = 0
+            for byteIndex in tailStart..<buffer.count {
+                tail |= UInt64(buffer[byteIndex]) << (UInt64(byteIndex - tailStart) * 8)
+            }
+            hash ^= tail
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
+}
+
 enum PreparedTileDiskCodec {
     struct Entry: Codable {
         let preparedFormatVersion: UInt32
@@ -312,10 +318,19 @@ enum PreparedTileDiskCodec {
         // per-array fields.
         let arenaByteCount: UInt64
         let spanTable: [SpanValue]
+        /// 0 inline, 1 file; see `PreparedTileGeometryBlobTransport`.
         let geometryTransportRawValue: UInt8
         /// The arena image for the inline transport; empty when the blob
-        /// lives in the sibling MTLIO container file.
+        /// lives in the sibling container file.
         let geometryBlob: Data
+        /// The sibling container's encoding and the word-wise FNV-1a of the
+        /// arena bytes inside it, present exactly when the transport is
+        /// `file`. The checksum is what binds this metadata to the container
+        /// content it was saved with: it is verified after every load, so a
+        /// torn pair, bit rot, or a truncated container fails into removal
+        /// and a re-parse instead of rendering garbage.
+        let fileBlobFormatRawValue: UInt8?
+        let fileBlobChecksum: UInt64?
         let textFull: TextLabelSetMetaValue
         let textReduced: TextLabelSetMetaValue
         let textMinimal: TextLabelSetMetaValue
@@ -331,16 +346,6 @@ enum PreparedTileDiskCodec {
         let roadSizeCount: UInt32
         let roadAnchorRanges: [RoadLabelAnchorRangeValue]
         let roadAnchors: [RoadLabelAnchorValue]
-    }
-
-    /// How the geometry blob of an entry is stored.
-    enum GeometryBlobTransport: UInt8 {
-        /// Inside the metadata envelope (`Entry.geometryBlob`); readable on
-        /// every device, materialized with one CPU copy.
-        case inline = 0
-        /// As an MTLIO compression container in the sibling `.ptgeo` file,
-        /// loaded straight into the arena buffer by `MTLIOCommandQueue`.
-        case file = 1
     }
 
     struct SpanValue: Codable {
@@ -585,24 +590,46 @@ enum PreparedTileDiskCodec {
     /// The two artifacts of one encoded prepared tile: the metadata envelope
     /// (identity, span table, CPU-only label structures, and the blob itself
     /// for the inline transport) and the raw arena-image bytes for the file
-    /// transport (empty for inline; the caller writes it as an MTLIO
-    /// compression container next to the metadata).
+    /// transport (nil for inline; the caller stages them as the sibling
+    /// container next to the metadata).
     struct EncodedPreparedTile {
         let metadata: Data
-        let fileBlob: Data
+        let fileBlob: Data?
     }
 
     static func encode(preparedTile: PreparedTileCPU,
                        cacheIdentity: PreparedTileCacheIdentity,
                        sourceETag: String = "",
                        compressionEnabled: Bool = true,
-                       blobTransport: GeometryBlobTransport = .inline) throws -> EncodedPreparedTile {
-        let plan = TileArenaImageMath.plan(for: preparedTile)
+                       blobTransport: PreparedTileGeometryBlobTransport = .inline,
+                       plan providedPlan: TileArenaImagePlan? = nil) throws -> EncodedPreparedTile {
+        // The loader hands in the plan it already built for the materialize
+        // of the same parse; callers without one let the codec compute it.
+        let plan = providedPlan ?? TileArenaImageMath.plan(for: preparedTile)
+        guard plan.totalByteCount <= TileArenaImageMath.maximumArenaByteCount else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Prepared-tile arena is too large.")
+        }
+        // Data(count:) arrives zero-filled, so only the payload copies run.
         var blob = Data(count: plan.totalByteCount)
         if plan.totalByteCount > 0 {
             blob.withUnsafeMutableBytes { bytes in
-                TileArenaImageMath.writeBlob(plan: plan, into: bytes.baseAddress!)
+                TileArenaImageMath.writePayloads(plan: plan, into: bytes.baseAddress!)
             }
+        }
+
+        // The one place the transport choice fans out into entry fields.
+        let inlineBlob: Data
+        let fileBlob: Data?
+        let fileBlobFormat: PreparedTileFileBlobFormat?
+        switch blobTransport {
+        case .inline:
+            inlineBlob = blob
+            fileBlob = nil
+            fileBlobFormat = nil
+        case .file(let format):
+            inlineBlob = Data()
+            fileBlob = blob
+            fileBlobFormat = format
         }
 
         let entry = try Entry(
@@ -622,8 +649,10 @@ enum PreparedTileDiskCodec {
             sourceETag: sourceETag,
             arenaByteCount: UInt64(plan.totalByteCount),
             spanTable: plan.spans.map(SpanValue.init),
-            geometryTransportRawValue: blobTransport.rawValue,
-            geometryBlob: blobTransport == .inline ? blob : Data(),
+            geometryTransportRawValue: transportRawValue(blobTransport),
+            geometryBlob: inlineBlob,
+            fileBlobFormatRawValue: fileBlobFormat?.rawValue,
+            fileBlobChecksum: fileBlob.map(PreparedTileBlobChecksum.checksum),
             textFull: TextLabelSetMetaValue(preparedTile.textLabels.full),
             textReduced: TextLabelSetMetaValue(preparedTile.textLabels.reduced),
             textMinimal: TextLabelSetMetaValue(preparedTile.textLabels.minimal),
@@ -646,8 +675,16 @@ enum PreparedTileDiskCodec {
         let payload = try encoder.encode(entry)
         let metadata = try PreparedTileDiskEnvelope.encode(payload: payload,
                                                            compressionEnabled: compressionEnabled)
-        return EncodedPreparedTile(metadata: metadata,
-                                   fileBlob: blobTransport == .file ? blob : Data())
+        return EncodedPreparedTile(metadata: metadata, fileBlob: fileBlob)
+    }
+
+    private static func transportRawValue(_ transport: PreparedTileGeometryBlobTransport) -> UInt8 {
+        switch transport {
+        case .inline:
+            return 0
+        case .file:
+            return 1
+        }
     }
 
     static func decode(data: Data,
@@ -683,28 +720,44 @@ enum PreparedTileDiskCodec {
             throw PreparedTileDiskCodecError.invalidMetadata
         }
 
-        guard entry.arenaByteCount <= UInt64(Int.max) else {
-            throw PreparedTileDiskCodecError.corruptedPayload("Arena byte count does not fit the platform word.")
+        // The cap bounds what a forged entry can make the factory allocate:
+        // the envelope's 64 MiB ceiling covers only the metadata bytes, not
+        // a claimed arena size.
+        guard entry.arenaByteCount <= UInt64(TileArenaImageMath.maximumArenaByteCount) else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Arena byte count is implausibly large.")
         }
         let arenaByteCount = Int(entry.arenaByteCount)
+        let expectedSlots = TileArenaSchema.slots(
+            full: TileArenaTextRunCounts(glyphRunCount: entry.textFull.glyphRunStyles.count,
+                                         poiIconRunCount: entry.textFull.poiIconRunStyles.count),
+            reduced: TileArenaTextRunCounts(glyphRunCount: entry.textReduced.glyphRunStyles.count,
+                                            poiIconRunCount: entry.textReduced.poiIconRunStyles.count),
+            minimal: TileArenaTextRunCounts(glyphRunCount: entry.textMinimal.glyphRunStyles.count,
+                                            poiIconRunCount: entry.textMinimal.poiIconRunStyles.count))
         let spans = try entry.spanTable.map { try $0.runtimeValue() }
-        try validate(spans: spans, arenaByteCount: arenaByteCount)
+        try validate(spans: spans, slots: expectedSlots, arenaByteCount: arenaByteCount)
 
-        guard let transport = GeometryBlobTransport(rawValue: entry.geometryTransportRawValue) else {
-            throw PreparedTileDiskCodecError.corruptedPayload("Unknown geometry blob transport.")
-        }
         let blob: PreparedTileArenaImage.GeometryBlob
-        switch transport {
-        case .inline:
+        switch entry.geometryTransportRawValue {
+        case 0: // inline
             guard entry.geometryBlob.count == arenaByteCount else {
                 throw PreparedTileDiskCodecError.corruptedPayload("Inline geometry blob size mismatch.")
             }
             blob = .inline(entry.geometryBlob)
-        case .file:
+        case 1: // file
             guard entry.geometryBlob.isEmpty else {
                 throw PreparedTileDiskCodecError.corruptedPayload("File-transport entry carries an inline blob.")
             }
-            blob = .file(blobFileURL)
+            guard let formatRawValue = entry.fileBlobFormatRawValue,
+                  let format = PreparedTileFileBlobFormat(rawValue: formatRawValue),
+                  let checksum = entry.fileBlobChecksum else {
+                throw PreparedTileDiskCodecError.corruptedPayload(
+                    "File-transport entry is missing its blob format or checksum."
+                )
+            }
+            blob = .file(url: blobFileURL, format: format, checksum: checksum)
+        default:
+            throw PreparedTileDiskCodecError.corruptedPayload("Unknown geometry blob transport.")
         }
 
         let image = PreparedTileArenaImage(
@@ -740,22 +793,57 @@ enum PreparedTileDiskCodec {
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)
     }
 
-    /// Structural validation of an untrusted span table: spans must ascend
-    /// without overlap, start aligned, and stay inside the arena. Element
-    /// strides are checked later by the factory, which knows each span's
-    /// slot type.
-    private static func validate(spans: [TileArenaSpan], arenaByteCount: Int) throws {
+    /// Structural validation of an untrusted span table against the schema
+    /// derived from the same entry's metadata: exactly one span per slot,
+    /// spans ascending without overlap or gaps, 256-byte aligned, inside the
+    /// arena, and sized as their slot's element stride times the element
+    /// count (for index slots, the index width recorded in the span). All
+    /// arithmetic is overflow-checked: a forged byteCount near Int.max must
+    /// fail into removal and a clean re-parse, never trap, so the entry
+    /// cannot crash-loop the app on every visit to its tile.
+    private static func validate(spans: [TileArenaSpan],
+                                 slots: [TileArenaSlot],
+                                 arenaByteCount: Int) throws {
+        guard spans.count == slots.count, arenaByteCount >= 0 else {
+            throw PreparedTileDiskCodecError.corruptedPayload("Arena span table does not match the schema.")
+        }
         var expectedNextOffset = 0
-        for span in spans {
+        for (span, slot) in zip(spans, slots) {
             guard span.byteOffset == expectedNextOffset,
                   span.byteCount >= 0,
                   span.elementCount >= 0,
-                  (span.elementCount == 0) == (span.byteCount == 0),
                   span.byteOffset % TileArenaImageMath.spanAlignment == 0,
                   span.byteCount <= arenaByteCount - span.byteOffset else {
                 throw PreparedTileDiskCodecError.corruptedPayload("Invalid arena span table.")
             }
-            expectedNextOffset = span.byteOffset + TileArenaImageMath.alignedByteCount(span.byteCount)
+            let elementStride: Int
+            if let slotStride = TileArenaSchema.elementStride(of: slot) {
+                guard span.indexWidth == nil else {
+                    throw PreparedTileDiskCodecError.corruptedPayload(
+                        "Arena span carries an index width outside an index slot."
+                    )
+                }
+                elementStride = slotStride
+            } else {
+                guard let indexWidth = span.indexWidth else {
+                    throw PreparedTileDiskCodecError.corruptedPayload("Arena index span is missing its index width.")
+                }
+                elementStride = indexWidth.elementStride
+            }
+            // elementCount is transport-bounded by UInt32.max and strides are
+            // two-digit, so the product stays far inside a 64-bit Int.
+            guard span.byteCount == span.elementCount * elementStride else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Arena span size does not match its slot stride.")
+            }
+            // byteCount <= arenaByteCount - byteOffset keeps the content end
+            // inside the arena, but rounding a forged size up to the next
+            // 256-byte boundary could still overflow, so it is checked.
+            let contentEnd = span.byteOffset + span.byteCount
+            let (paddedEnd, overflow) = contentEnd.addingReportingOverflow(TileArenaImageMath.spanAlignment - 1)
+            guard overflow == false else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Invalid arena span table.")
+            }
+            expectedNextOffset = paddedEnd & ~(TileArenaImageMath.spanAlignment - 1)
         }
         guard expectedNextOffset == arenaByteCount else {
             throw PreparedTileDiskCodecError.corruptedPayload("Arena span table does not cover the arena.")

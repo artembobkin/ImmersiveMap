@@ -64,9 +64,14 @@ final class TileRenderStore: @unchecked Sendable {
         let maxCachedTilesMemory = config.tiles.cache.memoryCacheSizeInBytes
         memoryMetalTile = MemoryMetalTileCache(maxCacheSizeInBytes: maxCachedTilesMemory,
                                                tileTraceRecorder: tileTraceRecorder)
+        // The factory owns the MTLIO capability decision: the transport that
+        // writes file entries is selected only when the queue that loads them
+        // actually exists, so a queue-creation failure degrades to inline
+        // entries instead of a cache no hit can read.
         let geometryTransport: any PreparedTileGeometryTransporting =
-            MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice)
-                ? MTLIOPreparedTileGeometryTransport()
+            metalTileFactory.loadsFileBlobs
+                ? MTLIOPreparedTileGeometryTransport(
+                    compressionEnabled: config.tiles.cache.preparedDiskCompressionEnabled)
                 : InlinePreparedTileGeometryTransport()
         mapNeedsTile = ImmersiveMapNeedsTile(tileRenderStore: self,
                                              config: config,
@@ -164,11 +169,14 @@ final class TileRenderStore: @unchecked Sendable {
     /// `awaitingRevalidation` marks a disk-first serve: content that is shown
     /// before its ETag is checked against the network. The store keeps such
     /// tiles requestable (see `requestTiles`) until a later materialize or
-    /// `markTileRevalidated` clears the flag.
+    /// `markTileRevalidated` clears the flag. `plan` is the tile's arena plan
+    /// when the caller already built one (the loader shares it with the disk
+    /// save so the layout work runs once).
     func materializePreparedTile(_ preparedTile: PreparedTileCPU,
+                                 plan: TileArenaImagePlan? = nil,
                                  awaitingRevalidation: Bool = false) async -> Bool {
         tileTraceRecorder.record(.tileMaterializeStart(preparedTile.tile))
-        guard let metalTile = metalTileFactory.makeTile(from: preparedTile) else {
+        guard let metalTile = metalTileFactory.makeTile(from: preparedTile, plan: plan) else {
             // Backing allocation failed (memory pressure): report a
             // materialize failure so the loader's retry path owns the tile
             // instead of the cache holding a permanently blank one.
@@ -187,7 +195,7 @@ final class TileRenderStore: @unchecked Sendable {
     /// blob bytes plus a span table, so the factory copies (or MTLIO-loads)
     /// instead of rebuilding buffers from decoded arrays.
     func materializeArenaImage(_ image: PreparedTileArenaImage,
-                               awaitingRevalidation: Bool = false) async -> PreparedTileImageMaterializeOutcome {
+                               awaitingRevalidation: Bool = false) async -> PreparedTileMaterializeOutcome {
         tileTraceRecorder.record(.tileMaterializeStart(image.tile))
         let result = await metalTileFactory.makeTile(fromImage: image)
         let metalTile: MetalTile

@@ -9,11 +9,20 @@ import Foundation
 enum TileArenaIndexWidth: UInt8, Codable, Sendable {
     case uint16 = 0
     case uint32 = 1
+
+    var elementStride: Int {
+        switch self {
+        case .uint16:
+            return MemoryLayout<UInt16>.stride
+        case .uint32:
+            return MemoryLayout<UInt32>.stride
+        }
+    }
 }
 
-/// One span of a tile's arena image, in canonical traversal order.
-/// `byteCount` is the unpadded content size; the next span starts at the
-/// next `TileArenaImageMath.spanAlignment` boundary after it.
+/// One span of a tile's arena image, in the canonical `TileArenaSchema`
+/// order. `byteCount` is the unpadded content size; the next span starts at
+/// the next `TileArenaImageMath.spanAlignment` boundary after it.
 struct TileArenaSpan: Equatable, Sendable {
     let byteOffset: Int
     let byteCount: Int
@@ -24,16 +33,17 @@ struct TileArenaSpan: Equatable, Sendable {
 }
 
 /// The byte-exact plan of one tile's arena: every GPU-bound array of
-/// `PreparedTileCPU` laid out in the canonical traversal order with
-/// 256-byte-aligned spans and 16-bit index narrowing already applied.
+/// `PreparedTileCPU` laid out in the canonical `TileArenaSchema` slot order
+/// with 256-byte-aligned spans and 16-bit index narrowing already applied.
 ///
-/// This is the single source of truth shared by `MetalTileFactory` (which
-/// writes the plan straight into the tile's backing `MTLBuffer`) and the
-/// prepared-tile disk codec (which writes the identical bytes into the cached
-/// geometry blob), so a cached blob can be copied, or DMA-loaded, into a
-/// fresh arena without any per-array decoding.
-struct TileArenaImagePlan {
-    enum Payload {
+/// This is the value shared by `MetalTileFactory` (which writes the plan
+/// straight into the tile's backing `MTLBuffer`) and the prepared-tile disk
+/// codec (which writes the identical bytes into the cached geometry blob), so
+/// a cached blob can be copied, or DMA-loaded, into a fresh arena without any
+/// per-array decoding. The loader computes it once per parsed tile and hands
+/// the same plan to both consumers.
+struct TileArenaImagePlan: Sendable {
+    enum Payload: Sendable {
         case tileVertices([TileVertexIn])
         case extrudedVertices([TileMvtParser.ExtrudedVertexIn])
         case indicesUInt16([UInt16])
@@ -43,8 +53,8 @@ struct TileArenaImagePlan {
         case labelVertices([LabelVertex])
     }
 
-    /// Payloads and spans run in lockstep: `payloads[i]` is described by
-    /// `spans[i]`.
+    /// Payloads and spans run in lockstep with the schema's slot sequence:
+    /// `payloads[i]` is described by `spans[i]` and fills slot `i`.
     let payloads: [Payload]
     let spans: [TileArenaSpan]
     let totalByteCount: Int
@@ -58,45 +68,48 @@ enum TileArenaImageMath {
     /// (Same rule as the per-route buffer offsets in RouteRenderSubsystem.)
     static let spanAlignment = 256
 
+    /// Upper bound of a plausible arena. Real dense-city tiles stay in the
+    /// single-digit megabytes; the same 64 MiB ceiling that bounds the
+    /// metadata envelope caps what a forged `arenaByteCount` can make the
+    /// factory allocate, so corruption fails at decode instead of surviving
+    /// as a giant "transient" allocation that is retried forever.
+    static let maximumArenaByteCount = 64 * 1_024 * 1_024
+
     static func alignedByteCount(_ byteCount: Int) -> Int {
         (byteCount + spanAlignment - 1) & ~(spanAlignment - 1)
     }
 
-    /// Builds the canonical plan for one prepared tile. The traversal order
-    /// is the format: ground, road buckets (tunnel, ground, bridge) each with
-    /// phases (shadow, casing, fill, detail, overlay), bridge overlay,
-    /// extruded, text label sets (full, reduced, minimal; glyph runs then POI
-    /// icon runs), road label glyphs. Changing the order, the alignment, or
-    /// the narrowing rule is a prepared-cache format change: bump
-    /// `PreparedTileDiskCaching.preparedFormatVersion`.
+    /// Builds the canonical plan for one prepared tile by iterating the
+    /// `TileArenaSchema` slot sequence and plucking each slot's array through
+    /// the semantic accessors, so this function owns no ordering of its own.
     static func plan(for preparedTile: PreparedTileCPU) -> TileArenaImagePlan {
         var builder = PlanBuilder()
-
-        appendGeometryLayer(preparedTile.ground, to: &builder)
-        for bucket in preparedTile.roads.drawOrderBuckets {
-            for phase in bucket.drawOrderLayers {
-                appendGeometryLayer(phase, to: &builder)
+        for slot in TileArenaSchema.slots(for: preparedTile) {
+            switch slot {
+            case .geometryVertices(let layerID):
+                builder.append(.tileVertices(geometryLayer(layerID, of: preparedTile).vertices))
+            case .geometryIndices(let layerID):
+                let layer = geometryLayer(layerID, of: preparedTile)
+                builder.appendIndices(layer.indices, vertexCount: layer.vertices.count)
+            case .geometryStyles(let layerID):
+                builder.append(.styles(geometryLayer(layerID, of: preparedTile).styles))
+            case .geometryOverviewStyleMasks(let layerID):
+                builder.append(.overviewStyleMasks(geometryLayer(layerID, of: preparedTile).overviewStyleMasks))
+            case .extrudedVertices:
+                builder.append(.extrudedVertices(preparedTile.extruded.vertices))
+            case .extrudedIndices:
+                builder.appendIndices(preparedTile.extruded.indices,
+                                      vertexCount: preparedTile.extruded.vertices.count)
+            case .extrudedStyles:
+                builder.append(.styles(preparedTile.extruded.styles))
+            case .glyphRunVertices(let tier, let run):
+                builder.append(.labelVertices(preparedTile.textLabels.set(for: tier).glyphRuns[run].localGlyphVertices))
+            case .poiIconRunVertices(let tier, let run):
+                builder.append(.labelVertices(preparedTile.textLabels.set(for: tier).poiIconRuns[run].localIconVertices))
+            case .roadLabelGlyphVertices:
+                builder.append(.labelVertices(preparedTile.roadLabels.localGlyphVertices))
             }
         }
-        appendGeometryLayer(preparedTile.bridgeOverlay, to: &builder)
-
-        builder.append(.extrudedVertices(preparedTile.extruded.vertices))
-        builder.appendIndices(preparedTile.extruded.indices,
-                              vertexCount: preparedTile.extruded.vertices.count)
-        builder.append(.styles(preparedTile.extruded.styles))
-
-        for labelSet in [preparedTile.textLabels.full,
-                         preparedTile.textLabels.reduced,
-                         preparedTile.textLabels.minimal] {
-            for run in labelSet.glyphRuns {
-                builder.append(.labelVertices(run.localGlyphVertices))
-            }
-            for run in labelSet.poiIconRuns {
-                builder.append(.labelVertices(run.localIconVertices))
-            }
-        }
-        builder.append(.labelVertices(preparedTile.roadLabels.localGlyphVertices))
-
         return builder.finish()
     }
 
@@ -107,6 +120,13 @@ enum TileArenaImageMath {
         if plan.totalByteCount > 0 {
             base.initializeMemory(as: UInt8.self, repeating: 0, count: plan.totalByteCount)
         }
+        writePayloads(plan: plan, into: base)
+    }
+
+    /// The copy half of `writeBlob`, for destinations that are already
+    /// zero-filled (a fresh `Data(count:)`), where the upfront memset would
+    /// run twice over a multi-megabyte arena.
+    static func writePayloads(plan: TileArenaImagePlan, into base: UnsafeMutableRawPointer) {
         for (payload, span) in zip(plan.payloads, plan.spans) where span.byteCount > 0 {
             let destination = base.advanced(by: span.byteOffset)
             withPayloadBytes(payload) { bytes in
@@ -135,12 +155,16 @@ enum TileArenaImageMath {
         }
     }
 
-    private static func appendGeometryLayer(_ layer: PreparedTileCPU.GeometryLayer,
-                                            to builder: inout PlanBuilder) {
-        builder.append(.tileVertices(layer.vertices))
-        builder.appendIndices(layer.indices, vertexCount: layer.vertices.count)
-        builder.append(.styles(layer.styles))
-        builder.append(.overviewStyleMasks(layer.overviewStyleMasks))
+    private static func geometryLayer(_ layerID: TileArenaGeometryLayerID,
+                                      of preparedTile: PreparedTileCPU) -> PreparedTileCPU.GeometryLayer {
+        switch layerID {
+        case .ground:
+            return preparedTile.ground
+        case .road(let structureKind, let passRole):
+            return preparedTile.roads.bucket(for: structureKind).layer(for: passRole)
+        case .bridgeOverlay:
+            return preparedTile.bridgeOverlay
+        }
     }
 
     private struct PlanBuilder {

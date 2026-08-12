@@ -496,12 +496,11 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                     }
                     return
                 }
-                // Keep a valid entry if we were merely cancelled; only a genuine
-                // materialize failure invalidates it.
-                if Task.isCancelled {
-                    return
-                }
-                loadPipeline.removePreparedFromDisk(tile: tile)
+                // A failed materialize of the matching entry falls through to
+                // parsing the downloaded bytes. Disk cleanup is owned by
+                // materializeDiskImage: it removes the pair only for a
+                // genuinely unreadable image, behind the generation gate; a
+                // transient allocation failure keeps the healthy entry.
             }
             if Task.isCancelled {
                 return
@@ -522,8 +521,14 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             if Task.isCancelled {
                 return
             }
+            // One plan for the whole tail of the load: the GPU materialize
+            // writes it into the tile's backing buffer and the disk save
+            // encodes it into the cached blob, so the span measure walk and
+            // the index narrowing run once instead of twice.
+            let plan = TileArenaImageMath.plan(for: preparedFromNetwork.preparedTile)
             let materializedFromNetwork = await materializePreparedTile(
                 preparedFromNetwork.preparedTile,
+                plan: plan,
                 expectedTile: tile,
                 generation: generation
             )
@@ -545,6 +550,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 }
                 await loadPipeline.savePreparedOnDisk(tile: tile,
                                                       preparedTile: preparedFromNetwork.preparedTile,
+                                                      plan: plan,
                                                       sourceETag: etag)
             } else {
                 if wasServedFromDiskFirst == false {
@@ -610,81 +616,77 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         return result
     }
 
-    /// Disk-hit sibling of `materializePreparedTile`. On a genuinely
-    /// unreadable image (corrupt blob or span table, not cancellation and not
-    /// memory pressure) the entry is removed, mirroring the codec's cleanup
-    /// of corrupt metadata one stage earlier, so a broken pair cannot fail
+    /// Disk-hit materialize. On a genuinely unreadable image (corrupt blob,
+    /// checksum mismatch, or span table, not cancellation and not memory
+    /// pressure) the entry is removed, mirroring the codec's cleanup of
+    /// corrupt metadata one stage earlier, so a broken pair cannot fail
     /// every retry forever.
     private func materializeDiskImage(_ image: PreparedTileArenaImage,
                                       expectedTile: Tile,
                                       generation: UInt64,
                                       awaitingRevalidation: Bool = false) async -> Bool {
+        await runMaterialize(tile: expectedTile,
+                             generation: generation,
+                             tileMatchesExpected: image.tile == expectedTile) {
+            await loadPipeline.materialize(image: image,
+                                           awaitingRevalidation: awaitingRevalidation)
+        }
+    }
+
+    private func materializePreparedTile(_ preparedTile: PreparedTileCPU,
+                                         plan: TileArenaImagePlan?,
+                                         expectedTile: Tile,
+                                         generation: UInt64,
+                                         awaitingRevalidation: Bool = false) async -> Bool {
+        await runMaterialize(tile: expectedTile,
+                             generation: generation,
+                             tileMatchesExpected: preparedTile.tile == expectedTile) {
+            await loadPipeline.materialize(preparedTile: preparedTile,
+                                           plan: plan,
+                                           awaitingRevalidation: awaitingRevalidation)
+        }
+    }
+
+    /// Shared wrapper of both materialize flavors: honors cancellation, runs
+    /// the generation-gated started/succeeded/failed reporting around the
+    /// operation, and owns the disk cleanup. Removal fires only for
+    /// `.imageUnreadable` (a corrupt entry), never for the transient
+    /// `.allocationOrStoreFailed`, and only behind the generation gate: a
+    /// superseded task that read a corrupt entry must not delete the fresh
+    /// pair its replacement may have just saved.
+    private func runMaterialize(tile: Tile,
+                                generation: UInt64,
+                                tileMatchesExpected: Bool,
+                                operation: () async -> PreparedTileMaterializeOutcome) async -> Bool {
         if Task.isCancelled {
             return false
         }
-        guard image.tile == expectedTile else {
+        guard tileMatchesExpected else {
             return false
         }
-        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
-            tileLoadingStatusReporter?.recordMaterializationStarted(tile: expectedTile)
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
+            tileLoadingStatusReporter?.recordMaterializationStarted(tile: tile)
         }) else {
             return false
         }
-        let outcome = await loadPipeline.materialize(image: image,
-                                                     awaitingRevalidation: awaitingRevalidation)
+        let outcome = await operation()
         if Task.isCancelled {
             return false
         }
-        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
+        guard recordCurrentTaskEvent(tile: tile, generation: generation, event: {
             if outcome == .materialized {
-                tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: expectedTile)
+                tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: tile)
             } else {
-                tileLoadingStatusReporter?.recordMaterializationFailed(tile: expectedTile,
-                                                                      reason: "materialize_failed")
+                tileLoadingStatusReporter?.recordMaterializationFailed(tile: tile,
+                                                                       reason: "materialize_failed")
             }
         }) else {
             return false
         }
         if outcome == .imageUnreadable {
-            // Behind the generation gate above: a superseded task that read a
-            // corrupt entry must not delete the fresh pair its replacement
-            // may have just saved.
-            loadPipeline.removePreparedFromDisk(tile: expectedTile)
+            loadPipeline.removePreparedFromDisk(tile: tile)
         }
         return outcome == .materialized
-    }
-
-    private func materializePreparedTile(_ preparedTile: PreparedTileCPU,
-                                         expectedTile: Tile,
-                                         generation: UInt64,
-                                         awaitingRevalidation: Bool = false) async -> Bool {
-        if Task.isCancelled {
-            return false
-        }
-        guard preparedTile.tile == expectedTile else {
-            return false
-        }
-        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
-            tileLoadingStatusReporter?.recordMaterializationStarted(tile: expectedTile)
-        }) else {
-            return false
-        }
-        let isMaterialized = await loadPipeline.materialize(preparedTile: preparedTile,
-                                                            awaitingRevalidation: awaitingRevalidation)
-        if Task.isCancelled {
-            return false
-        }
-        guard recordCurrentTaskEvent(tile: expectedTile, generation: generation, event: {
-            if isMaterialized {
-                tileLoadingStatusReporter?.recordMaterializationSucceeded(tile: expectedTile)
-            } else {
-                tileLoadingStatusReporter?.recordMaterializationFailed(tile: expectedTile,
-                                                                      reason: "materialize_failed")
-            }
-        }) else {
-            return false
-        }
-        return isMaterialized
     }
 
     @discardableResult

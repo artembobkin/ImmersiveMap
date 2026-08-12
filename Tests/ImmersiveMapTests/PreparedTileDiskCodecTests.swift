@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 30)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 31)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -60,20 +60,24 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
-                                                       blobTransport: .file)
+                                                       blobTransport: .file(.raw))
 
-        XCTAssertEqual(encoded.fileBlob, makeBlobData(for: preparedTile),
+        let fileBlob = try XCTUnwrap(encoded.fileBlob)
+        XCTAssertEqual(fileBlob, makeBlobData(for: preparedTile),
                        "The file blob must be the same arena image the inline transport embeds")
 
         let decoded = try PreparedTileDiskCodec.decode(data: encoded.metadata,
                                                        expectedTile: tile,
                                                        cacheIdentity: cacheIdentity,
                                                        blobFileURL: Self.testBlobURL)
-        guard case .file(let url) = decoded.image.blob else {
+        guard case .file(let url, let format, let checksum) = decoded.image.blob else {
             return XCTFail("A file-transport entry must resolve to a file blob")
         }
         XCTAssertEqual(url, Self.testBlobURL)
-        XCTAssertEqual(decoded.image.arenaByteCount, encoded.fileBlob.count)
+        XCTAssertEqual(format, .raw)
+        XCTAssertEqual(checksum, PreparedTileBlobChecksum.checksum(fileBlob),
+                       "The stored checksum must cover the file blob bytes")
+        XCTAssertEqual(decoded.image.arenaByteCount, fileBlob.count)
     }
 
     func testPreparedTileCodecRejectsTamperedSpanTable() throws {
@@ -333,7 +337,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                       "The file transport must write the sibling blob")
 
         let loaded = await cache.requestPreparedDiskCached(tile: tile, matchingETag: "pair-etag")
-        guard case .file(let url) = loaded?.image.blob else {
+        guard case .file(let url, _, _) = loaded?.image.blob else {
             return XCTFail("A file-transport hit must reference the sibling blob")
         }
         XCTAssertEqual(url, cache.blobPathFor(tile: tile))
@@ -553,12 +557,18 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     /// MTLIO container, which only the render-side transport can produce.
     private struct PlainFileGeometryTransport: PreparedTileGeometryTransporting {
         let cacheNamespaceMarker = "btest"
-        let writesBlobFiles = true
+        let blobTransport = PreparedTileGeometryBlobTransport.file(.raw)
 
-        func writeBlobFile(_ blob: Data, to url: URL) throws {
+        func stageBlobFile(_ blob: Data, near url: URL) throws -> URL {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
-            try blob.write(to: url, options: .atomic)
+            let stagedURL = makeStagingURL(near: url)
+            try blob.write(to: stagedURL)
+            return stagedURL
+        }
+
+        func commitStagedBlobFile(at stagedURL: URL, to url: URL) throws {
+            try replaceFile(at: url, withStagedFileAt: stagedURL)
         }
     }
 

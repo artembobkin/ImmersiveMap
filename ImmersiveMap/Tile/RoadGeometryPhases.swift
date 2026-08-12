@@ -32,8 +32,16 @@ struct RoadGeometryPhases<Layer> {
     }
 
     var drawOrderLayers: [Layer] {
-        [shadow, casing, fill, detail, overlay]
+        RoadPassRole.drawOrder.map(layer(for:))
     }
+}
+
+extension RoadPassRole {
+    /// Draw order of the road phases inside one structure bucket. This list is
+    /// also the arena-image span order (`TileArenaSchema` iterates it), so
+    /// changing it is a prepared-cache format change: bump
+    /// `PreparedTileDiskCaching.preparedFormatVersion`.
+    static let drawOrder: [RoadPassRole] = [.shadow, .casing, .fill, .detail, .overlay]
 }
 
 extension RoadGeometryPhases: Equatable where Layer: Equatable {}
@@ -62,8 +70,16 @@ struct RoadStructureBuckets<Bucket> {
     }
 
     var drawOrderBuckets: [Bucket] {
-        [tunnel, ground, bridge]
+        TileMvtParser.RoadStructureKind.drawOrder.map(bucket(for:))
     }
+}
+
+extension TileMvtParser.RoadStructureKind {
+    /// Draw order of the road structure buckets. This list is also the
+    /// arena-image span order (`TileArenaSchema` iterates it), so changing it
+    /// is a prepared-cache format change: bump
+    /// `PreparedTileDiskCaching.preparedFormatVersion`.
+    static let drawOrder: [TileMvtParser.RoadStructureKind] = [.tunnel, .ground, .bridge]
 }
 
 extension RoadStructureBuckets: Equatable where Bucket: Equatable {}

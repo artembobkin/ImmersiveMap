@@ -847,7 +847,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     private var diskEntries: [Tile: String?] = [:]
     private var downloadContinuations: [Tile: CheckedContinuation<TileDownloader.DownloadResult, Never>] = [:]
     private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
-    private var materializeContinuations: [Tile: CheckedContinuation<Bool, Never>] = [:]
+    private var materializeContinuations: [Tile: CheckedContinuation<PreparedTileMaterializeOutcome, Never>] = [:]
     private var saveContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
 
     init(suspendsSaves: Bool = false, suspendsDiskReads: Bool = false) {
@@ -978,6 +978,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
 
     func savePreparedOnDisk(tile: Tile,
                             preparedTile _: PreparedTileCPU,
+                            plan _: TileArenaImagePlan?,
                             sourceETag: String?) async {
         recordSavedETag(tile: tile, sourceETag: sourceETag)
         guard suspendsSaves else { return }
@@ -1007,7 +1008,9 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         }
     }
 
-    func materialize(preparedTile: PreparedTileCPU, awaitingRevalidation: Bool) async -> Bool {
+    func materialize(preparedTile: PreparedTileCPU,
+                     plan _: TileArenaImagePlan?,
+                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
         recordMaterializeFlag(tile: preparedTile.tile, awaitingRevalidation: awaitingRevalidation)
         return await withCheckedContinuation { continuation in
             recordMaterializeStarted(tile: preparedTile.tile, continuation: continuation)
@@ -1015,14 +1018,11 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     }
 
     func materialize(image: PreparedTileArenaImage,
-                     awaitingRevalidation: Bool) async -> PreparedTileImageMaterializeOutcome {
+                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
         recordMaterializeFlag(tile: image.tile, awaitingRevalidation: awaitingRevalidation)
-        let materialized = await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             recordMaterializeStarted(tile: image.tile, continuation: continuation)
         }
-        // The stub maps false to the transient failure: existing tests assert
-        // the explicit call-site removal semantics, not the corrupt-image one.
-        return materialized ? .materialized : .allocationOrStoreFailed
     }
 
     func markRevalidated(tile: Tile) async {
@@ -1118,12 +1118,18 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         continuation?.resume(returning: nil)
     }
 
+    /// Boolean convenience for the many tests that only distinguish success
+    /// from a transient failure; false maps to `.allocationOrStoreFailed`.
     func completeMaterialize(_ tile: Tile, result: Bool) {
-        let continuation: CheckedContinuation<Bool, Never>?
+        completeMaterialize(tile, outcome: result ? .materialized : .allocationOrStoreFailed)
+    }
+
+    func completeMaterialize(_ tile: Tile, outcome: PreparedTileMaterializeOutcome) {
+        let continuation: CheckedContinuation<PreparedTileMaterializeOutcome, Never>?
         lock.lock()
         continuation = materializeContinuations.removeValue(forKey: tile)
         lock.unlock()
-        continuation?.resume(returning: result)
+        continuation?.resume(returning: outcome)
     }
 
     func completeSave(_ tile: Tile) {
@@ -1217,7 +1223,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
 
     private func recordMaterializeStarted(
         tile: Tile,
-        continuation: CheckedContinuation<Bool, Never>
+        continuation: CheckedContinuation<PreparedTileMaterializeOutcome, Never>
     ) {
         lock.lock()
         materializedTiles.insert(tile)

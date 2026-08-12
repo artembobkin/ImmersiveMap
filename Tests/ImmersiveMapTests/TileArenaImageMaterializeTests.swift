@@ -165,8 +165,11 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
-                                                       blobTransport: .file)
-        try MTLIOPreparedTileGeometryTransport().writeBlobFile(encoded.fileBlob, to: blobURL)
+                                                       blobTransport: .file(.lzfseContainer))
+        let fileBlob = try XCTUnwrap(encoded.fileBlob)
+        let transport = MTLIOPreparedTileGeometryTransport(compressionEnabled: true)
+        let stagedURL = try transport.stageBlobFile(fileBlob, near: blobURL)
+        try transport.commitStagedBlobFile(at: stagedURL, to: blobURL)
 
         let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
                                                    expectedTile: tile,
@@ -182,7 +185,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
             return XCTFail("The MTLIO load must materialize, got \(result)")
         }
 
-        XCTAssertEqual(try arenaBytes(of: materialized), encoded.fileBlob,
+        XCTAssertEqual(try arenaBytes(of: materialized), fileBlob,
                        "The DMA-loaded arena must byte-match the blob the container was written from")
     }
 
@@ -197,7 +200,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
 
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
                                                        cacheIdentity: cacheIdentity,
-                                                       blobTransport: .file)
+                                                       blobTransport: .file(.lzfseContainer))
         let hit = try PreparedTileDiskCodec.decode(data: encoded.metadata,
                                                    expectedTile: tile,
                                                    cacheIdentity: cacheIdentity,
