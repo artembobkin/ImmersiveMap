@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
-## [Unreleased]
+## [0.5.1] - 2026-08-12
 
 ### Added
 
@@ -237,6 +237,7 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
+[0.5.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.4.1...0.5.0
 [0.4.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.3.0...0.4.0
