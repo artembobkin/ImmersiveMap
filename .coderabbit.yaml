@@ -119,7 +119,11 @@ reviews:
         request already touches it.
 
   auto_review:
-    enabled: true
+    # Off: pull requests are reviewed by people here, and an automated pass
+    # that nobody asked for costs the plan's quota and buries the human
+    # comments. A review can still be requested explicitly on a pull request
+    # with `@coderabbitai review`.
+    enabled: false
     drafts: false
     # Review the pull request when it opens, then stay quiet. Re-reviewing every
     # push spends the plan's review quota on intermediate states nobody reads,
