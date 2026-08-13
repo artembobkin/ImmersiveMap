@@ -252,7 +252,18 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 10,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 0, longitudeDegrees: 0, zoom: 16)
-        let settings = offlineSettings()
+        // A model needs a map under it: with no tiles at all the flat frame
+        // has no tile origin and nothing in the world pass is drawn, model
+        // included (measured: the two captures came back identical). The
+        // tiles come from a local fixture server rather than the live tile
+        // service, so the case does not depend on the network, on rate
+        // limiting, or on tiles arriving inside the settle window.
+        let server = try LocalTileServer(tileBody: VectorTileFixture.fullCoverageTile(layerName: "water",
+                                                                                      properties: ["class": "water"]))
+        defer { server.stop() }
+        let settings = ImmersiveMapSettings.default.tileProvider(
+            ImmersiveMapTilesProvider(tileBaseURL: try XCTUnwrap(server.tileBaseURL))
+        )
 
         let withoutModel = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,

@@ -8,6 +8,13 @@ import Synchronization
 import XCTest
 
 final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
+    /// Every wait here is for in-process async work with an injected loader,
+    /// so nothing waits out this budget on a passing run: an expectation ends
+    /// the wait the moment it is fulfilled. It only has to be long enough for
+    /// a loaded CI runner to get around to the continuation, which one second
+    /// was not (this test failed the iOS job that way).
+    private static let expectationTimeout: TimeInterval = 10.0
+
     func testRemoteImageSourceInitializerStoresURLAndUsesPlaceholderImage() throws {
         let url = try XCTUnwrap(URL(string: "https://example.com/avatar.png"))
 
@@ -42,7 +49,7 @@ final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
                          image: .remote(url, placeholder: placeholderImage))
         )
 
-        await fulfillment(of: [loadStarted], timeout: 1.0)
+        await fulfillment(of: [loadStarted], timeout: Self.expectationTimeout)
         let initialSnapshot = try XCTUnwrap(controller.consumeSnapshot())
         XCTAssertEqual(initialSnapshot.markers.first?.image.width, 1)
 
@@ -51,7 +58,7 @@ final class AvatarMarkerRemoteImageSourceTests: XCTestCase {
         }, owner: self)
         loadContinuation.withLock { $0 }?.resume(returning: loadedImage)
 
-        await fulfillment(of: [updatePublished], timeout: 1.0)
+        await fulfillment(of: [updatePublished], timeout: Self.expectationTimeout)
         let updatedSnapshot = try XCTUnwrap(controller.consumeSnapshot())
         XCTAssertEqual(updatedSnapshot.markers.first?.image.width, 2)
         XCTAssertEqual(Set(updatedSnapshot.imageUpdateIds), [1])
