@@ -633,7 +633,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                                        horizonVisibility: baseProjection.horizonVisibility,
                                                                        fadeAlphas: fadeResolution.fadeAlphas,
                                                                        overviewFadeAlpha: overviewFadeAlpha,
-                                                                       collisionCandidates: baseLabelCache.labelCollisionAABBInputs) : nil
+                                                                       collisionCandidates: baseLabelCache.labelCollisionAABBInputs,
+                                                                       screenScale: frameContext.screenScale) : nil
         let cycle = visibilityCycle
         baseLabelTraceRecorder.record(.baseLabelFrame(frameIndex: frameContext.frameIndex,
                                                       zoom: frameContext.zoom,
@@ -672,6 +673,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         index < publishedBaseCollisionVisibility.count ? publishedBaseCollisionVisibility[index] : .unknown
     }
 
+    /// The cache holds collision boxes in layout points while the positions
+    /// beside them are device pixels, so the trace converts: a reader comparing
+    /// a box against a position has to be looking at one space.
     private static func makeBaseLabelTraceLabels(inputs: [BaseLabelPresentationInput],
                                                  screenPoints: [ScreenPointOutput],
                                                  collisionVisibility: [BaseLabelCollisionVisibility],
@@ -679,7 +683,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                  horizonVisibility: [Bool],
                                                  fadeAlphas: [Float],
                                                  overviewFadeAlpha: Float,
-                                                 collisionCandidates: [ScreenCollisionCandidate]) -> String {
+                                                 collisionCandidates: [ScreenCollisionCandidate],
+                                                 screenScale: ScreenScale) -> String {
         guard inputs.isEmpty == false else {
             return ""
         }
@@ -697,7 +702,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                            fadeAlphas: fadeAlphas,
                                            overviewFadeAlpha: overviewFadeAlpha)
             let position = point?.position ?? .zero
-            let halfSize = candidate?.halfSize ?? .zero
+            let halfSize = screenScale.pixels(candidate?.halfSize ?? .zero)
             let screenVisible = point?.visible != 0
             let priority = candidate?.priority ?? Int.max
             let secondaryPriority = candidate?.secondaryPriority ?? Int.max
