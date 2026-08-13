@@ -89,11 +89,18 @@ final class VisualReviewModel {
     var selectedID: String?
     var isRendering = false
     var progressText = ""
+    /// How far through the queue the run is, so the progress can be shown as
+    /// a bar rather than as a sentence that changes every half minute.
+    var renderedCount = 0
+    var renderQueueCount = 0
     /// The scenario whose map has to be on screen for a video export. The
     /// video recorder only works attached to a live view, so rendering a clip
     /// means showing that scene while it records.
     var videoScenarioOnScreen: VisualReviewScenario?
     var showsOnlyAttention = false
+    /// Set when the verdict file could not be written, so the failure is on
+    /// screen instead of only in the return value nobody reads.
+    var verdictWriteFailure: String?
 
     private var store: VisualReviewVerdictStore
     private let renderer = VisualReviewRenderer()
@@ -136,14 +143,21 @@ final class VisualReviewModel {
             isRendering = false
             videoScenarioOnScreen = nil
             progressText = ""
+            renderedCount = 0
+            renderQueueCount = 0
         }
 
         let directory = VisualReviewPaths.outputDirectory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let queue = ids.map { wanted in items.filter { wanted.contains($0.id) } } ?? items
+        renderQueueCount = queue.count
+        renderedCount = 0
         for (index, item) in queue.enumerated() {
-            progressText = "Rendering \(index + 1) of \(queue.count): \(item.scenario.title)"
+            renderedCount = index
+            progressText = item.scenario.isVideo
+                ? "\(item.scenario.title) (a video, this takes longer)"
+                : item.scenario.title
             item.state = .rendering
             do {
                 switch item.scenario.subject {
@@ -173,6 +187,7 @@ final class VisualReviewModel {
             } catch {
                 item.state = .failed(String(describing: error))
             }
+            renderedCount = index + 1
         }
         selectedID = items.first(where: \.needsAttention)?.id ?? selectedID
     }
@@ -218,7 +233,18 @@ final class VisualReviewModel {
                                           fingerprint: artifact.fingerprint,
                                           commit: VisualReviewPaths.currentCommit())
         item.verdict = verdict
-        try? store.record(verdict, for: item.scenario.id)
+        // Surfaced rather than swallowed. Writing the file is the one thing
+        // this whole tool exists to do, and a discarded error means the row
+        // turns green, the selection advances, and nothing was recorded: the
+        // pass would look complete and leave no record of itself.
+        do {
+            try store.record(verdict, for: item.scenario.id)
+            verdictWriteFailure = nil
+        } catch {
+            verdictWriteFailure = "Could not write \(VisualReviewPaths.verdictsURL.path): "
+                + String(describing: error)
+            return
+        }
         advanceSelection(from: item)
     }
 
@@ -233,12 +259,35 @@ final class VisualReviewModel {
 struct VisualReviewScreen: View {
     @State private var model = VisualReviewModel()
     @State private var note = ""
+    @FocusState private var noteIsFocused: Bool
 
+    /// A plain split rather than `NavigationSplitView`.
+    ///
+    /// Under `NavigationSplitView` on macOS 15 this window drew neither
+    /// column's content: the scenario list was an empty black panel and the
+    /// review controls under the artifact never appeared, while the view
+    /// bodies were being evaluated normally (the item counts were right). The
+    /// same views in a plain `HSplitView` draw correctly, so the tool does not
+    /// use the container that breaks them. Nothing here needs what it offered:
+    /// there is one fixed list, no navigation stack and no collapsing.
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
+        // The progress strip is a sibling of the split rather than a
+        // `safeAreaInset` on it. `HSplitView` is backed by `NSSplitView` and
+        // does not pass a bottom safe-area inset down to its columns: the strip
+        // came out floating over the review panel, cutting the verdict buttons
+        // off the bottom of the window while a run was in flight. A stack
+        // reserves the space it takes.
+        VStack(spacing: 0) {
+            HSplitView {
+                sidebar
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
+                detail
+                    .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if model.isRendering {
+                Divider()
+                renderingBanner
+            }
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -247,17 +296,16 @@ struct VisualReviewScreen: View {
                 } label: {
                     Label("Render all", systemImage: "photo.on.rectangle.angled")
                 }
+                .labelStyle(.titleAndIcon)
                 .disabled(model.isRendering)
+                .help("Render every scenario in the catalogue. Stills take a moment each, videos longer.")
             }
             ToolbarItem {
                 Toggle(isOn: $model.showsOnlyAttention) {
                     Label("Needs a look (\(model.attentionCount))", systemImage: "eye")
                 }
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if model.isRendering {
-                renderingBanner
+                .labelStyle(.titleAndIcon)
+                .help("Show only scenarios whose render differs from the one they were approved for.")
             }
         }
         // The map a video export attaches to. The export renders in its own
@@ -324,22 +372,56 @@ struct VisualReviewScreen: View {
     }
 
     private var sidebar: some View {
-        List(model.visibleItems, selection: $model.selectedID) { item in
-            HStack(spacing: 8) {
-                Image(systemName: item.statusSymbol)
-                    .foregroundStyle(item.statusColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.scenario.title)
-                    if item.scenario.isVideo {
-                        Text("video")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            scenarioList
+            Divider()
+            // The counts are the sidebar's own witness: an empty list is then
+            // always accompanied by the reason it is empty, instead of a
+            // styled blank panel that looks the same whether the catalogue is
+            // missing or the filter simply matched nothing.
+            HStack {
+                Text("\(model.items.count) scenarios")
+                Spacer()
+                Text("\(model.attentionCount) need a look")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var scenarioList: some View {
+        List(selection: $model.selectedID) {
+            ForEach(model.visibleItems) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.statusSymbol)
+                        .foregroundStyle(item.statusColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.scenario.title)
+                        if item.scenario.isVideo {
+                            Text("video")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
-            .tag(item.id)
         }
-        .navigationSplitViewColumnWidth(min: 260, ideal: 300)
+        .overlay {
+            if model.visibleItems.isEmpty {
+                if model.items.isEmpty {
+                    ContentUnavailableView("No scenarios",
+                                           systemImage: "exclamationmark.triangle",
+                                           description: Text("The catalogue is empty, which is a programming error."))
+                } else {
+                    ContentUnavailableView("Nothing needs a look",
+                                           systemImage: "checkmark.seal",
+                                           description: Text("Every scenario matches the render it was approved for. "
+                                               + "Turn off \"Needs a look\" to see all \(model.items.count)."))
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -408,25 +490,38 @@ struct VisualReviewScreen: View {
             HStack(spacing: 12) {
                 TextField("What is wrong with it", text: $note)
                     .textFieldStyle(.roundedBorder)
+                    .focused($noteIsFocused)
 
                 Button {
                     model.record(.ok, note: "", for: item)
                     note = ""
                 } label: {
-                    Label("Looks right", systemImage: "checkmark")
+                    Label("Approve (A)", systemImage: "checkmark")
                 }
-                .keyboardShortcut("k", modifiers: [])
+                // The shortcut carries no modifier, so it would swallow the
+                // letter while a note is being typed; it is withdrawn for as
+                // long as the field has focus.
+                .verdictShortcut("a", isEnabled: noteIsFocused == false)
                 .disabled(item.artifact == nil)
+                .help("Record that this render looks right (A)")
 
                 Button(role: .destructive) {
                     model.record(.notOk, note: note, for: item)
                     note = ""
                 } label: {
-                    Label("Not right", systemImage: "xmark")
+                    Label("Reject (R)", systemImage: "xmark")
                 }
-                .keyboardShortcut("j", modifiers: [])
+                .verdictShortcut("r", isEnabled: noteIsFocused == false)
                 // A rejection without a description is a note to nobody.
                 .disabled(item.artifact == nil || note.trimmingCharacters(in: .whitespaces).isEmpty)
+                .help("Record that this render is wrong (R). Needs a description first.")
+            }
+
+            if let failure = model.verdictWriteFailure {
+                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -440,32 +535,79 @@ struct VisualReviewScreen: View {
     }
 
     private var renderingBanner: some View {
-        HStack(spacing: 10) {
-            ProgressView().controlSize(.small)
-            Text(model.progressText)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Rendering \(min(model.renderedCount + 1, max(model.renderQueueCount, 1))) "
+                    + "of \(model.renderQueueCount)")
+                    .font(.callout.weight(.medium))
+                    .monospacedDigit()
+                Text(model.progressText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+            }
+            ProgressView(value: Double(model.renderedCount),
+                         total: Double(max(model.renderQueueCount, 1)))
         }
-        .padding(10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+}
+
+private extension View {
+    /// A plain-letter shortcut that is withdrawn while text is being typed.
+    ///
+    /// Without a modifier the key reaches the button even when a `TextField`
+    /// has focus, so leaving it installed would make the rejection note
+    /// impossible to write: pressing "r" would reject rather than type.
+    @ViewBuilder
+    func verdictShortcut(_ key: KeyEquivalent, isEnabled: Bool) -> some View {
+        if isEnabled {
+            keyboardShortcut(key, modifiers: [])
+        } else {
+            self
+        }
     }
 }
 
 /// The ground behind a render, so transparent space reads as transparent
 /// rather than as whatever colour the window happens to be.
 private struct CheckerboardBackground: View {
-    var body: some View {
-        Canvas { context, size in
-            let square = 12.0
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white.opacity(0.9)))
-            for row in 0...Int(size.height / square) {
-                for column in 0...Int(size.width / square) where (row + column).isMultiple(of: 2) {
-                    let rect = CGRect(x: Double(column) * square,
-                                      y: Double(row) * square,
-                                      width: square,
-                                      height: square)
-                    context.fill(Path(rect), with: .color(.black.opacity(0.08)))
+    /// Drawn as a plain `Shape` rather than in a `Canvas`.
+    ///
+    /// The `Canvas` version painted over the view it was a background of: the
+    /// artifact and the "not rendered yet" placeholder both came out washed
+    /// under a 90% white veil. A shape composites where a background is
+    /// supposed to, behind its content.
+    private struct CheckerSquares: Shape {
+        let square: Double
+
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            let columns = Int(ceil(rect.width / square))
+            let rows = Int(ceil(rect.height / square))
+            guard columns > 0, rows > 0 else {
+                return path
+            }
+            for row in 0..<rows {
+                for column in 0..<columns where (row + column).isMultiple(of: 2) {
+                    path.addRect(CGRect(x: Double(column) * square,
+                                        y: Double(row) * square,
+                                        width: square,
+                                        height: square))
                 }
             }
+            return path
         }
+    }
+
+    var body: some View {
+        Color.white.opacity(0.9)
+            .overlay {
+                CheckerSquares(square: 12)
+                    .fill(Color.black.opacity(0.08))
+            }
     }
 }

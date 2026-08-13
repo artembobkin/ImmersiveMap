@@ -20,8 +20,10 @@ and run. It is not part of CI and never runs on a pull request.
 1. **Render all** renders every scenario in the catalogue. Stills go through
    `ImmersiveMapStillRecorder` with nothing on screen; each video takes a turn
    with a live map, because the video recorder only works attached to one.
-2. Walk the list. `K` marks the current scene right, `J` marks it wrong (a
-   rejection needs a description, since a note to nobody helps nobody).
+2. Walk the list. `A` approves the current scene, `R` rejects it (a rejection
+   needs a description, since a note to nobody helps nobody). Both bindings are
+   printed on the buttons under the render, and both stand down while the note
+   field has focus, so a rejection can be typed without triggering them.
 3. Verdicts are written to `verdicts.json` next to this file, and that file is
    committed.
 
