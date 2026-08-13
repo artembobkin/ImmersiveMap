@@ -72,8 +72,8 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
             key: 1,
             fillColor: SIMD3<Float>(0.1, 0.1, 0.1),
             strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-            strokeWidthPx: 2,
-            sizePx: 12,
+            haloEm: 0.15,
+            sizePoints: 12,
             weight: .thin
         )
 

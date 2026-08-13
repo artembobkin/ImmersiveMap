@@ -13,5 +13,7 @@ struct LabelRuntimeMeta {
     var visibleTileIndex: UInt32
     var fadeAlpha: Float = 0
     var _padding1: Float = 0
-    var labelSizePx: SIMD2<Float> = .zero
+    /// Collision box in layout points; the label shaders scale it with the
+    /// frame's pixels-per-point alongside the glyph geometry.
+    var labelSizePoints: SIMD2<Float> = .zero
 }

@@ -53,8 +53,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         let style = LabelTextStyle(key: 1,
                                    fillColor: SIMD3<Float>(1, 1, 1),
                                    strokeColor: SIMD3<Float>(0, 0, 0),
-                                   strokeWidthPx: 1,
-                                   sizePx: 14,
+                                   haloEm: 0.1,
+                                   sizePoints: 14,
                                    weight: .bold)
         let fullSet = PreparedTileCPU.TextLabelSet(
             placementInputs: [],

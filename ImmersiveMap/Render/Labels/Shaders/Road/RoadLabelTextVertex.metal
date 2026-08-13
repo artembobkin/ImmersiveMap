@@ -18,7 +18,8 @@ vertex VertexOut roadLabelTextVertex(LabelVertexIn in [[stage_in]],
                                      const device RoadGlyphInput* glyphInputs [[buffer(3)]],
                                      const device LabelRuntimeMeta* runtimeMeta [[buffer(4)]],
                                      constant int& globalGlyphShift [[buffer(5)]],
-                                     constant float2& screenOffset [[buffer(6)]]) {
+                                     constant float2& screenOffset [[buffer(6)]],
+                                     constant float& pixelsPerPoint [[buffer(7)]]) {
     VertexOut out;
     int glyphIndex = in.labelIndex + globalGlyphShift;
     RoadGlyphPlacementOutput placement = placements[glyphIndex];
@@ -26,7 +27,9 @@ vertex VertexOut roadLabelTextVertex(LabelVertexIn in [[stage_in]],
     uint instanceIndex = glyphInput.labelInstanceIndex;
     LabelRuntimeMeta meta = runtimeMeta[instanceIndex];
 
-    float2 local = in.position - float2(glyphInput.glyphCenter, glyphInput.labelCenterY);
+    // Glyph geometry is in layout points; the placement the glyph hangs off was
+    // resolved along a path that is already in device pixels.
+    float2 local = (in.position - float2(glyphInput.glyphCenter, glyphInput.labelCenterY)) * pixelsPerPoint;
     float s = sin(placement.angle);
     float c = cos(placement.angle);
     float2 rotated = float2(local.x * c - local.y * s, local.x * s + local.y * c);

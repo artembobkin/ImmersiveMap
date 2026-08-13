@@ -22,8 +22,8 @@ final class GenericVectorTileStyleLabelTests: XCTestCase {
         XCTAssertEqual(featureStyle.parseGeometryStyleData.lineWidth, 0)
         XCTAssertEqual(featureStyle.labelTextStyle?.fillColor, SIMD3<Float>(0.2, 0.2, 0.18))
         XCTAssertEqual(featureStyle.labelTextStyle?.strokeColor, SIMD3<Float>(1.0, 0.98, 0.92))
-        XCTAssertEqual(featureStyle.labelTextStyle?.strokeWidthPx, 2)
-        XCTAssertEqual(featureStyle.labelTextStyle?.sizePx, 14)
+        XCTAssertEqual(featureStyle.labelTextStyle?.haloEm, 0.15)
+        XCTAssertEqual(featureStyle.labelTextStyle?.sizePoints, 14)
         XCTAssertEqual(featureStyle.labelTextStyle?.weight, .bold)
         XCTAssertNil(featureStyle.roadLabelTextStyle)
     }
@@ -47,8 +47,8 @@ final class GenericVectorTileStyleLabelTests: XCTestCase {
         XCTAssertNil(featureStyle.labelTextStyle)
         XCTAssertEqual(featureStyle.roadLabelTextStyle?.fillColor, SIMD3<Float>(0.42, 0.41, 0.39))
         XCTAssertEqual(featureStyle.roadLabelTextStyle?.strokeColor, SIMD3<Float>(1.0, 0.98, 0.92))
-        XCTAssertEqual(featureStyle.roadLabelTextStyle?.strokeWidthPx, 2)
-        XCTAssertEqual(featureStyle.roadLabelTextStyle?.sizePx, 11)
+        XCTAssertEqual(featureStyle.roadLabelTextStyle?.haloEm, 0.15)
+        XCTAssertEqual(featureStyle.roadLabelTextStyle?.sizePoints, 11)
         XCTAssertEqual(featureStyle.roadLabelTextStyle?.weight, .thin)
     }
 }
@@ -65,8 +65,8 @@ private struct CustomLabelVectorTileStyle: ImmersiveMapVectorTileStyle {
                 ImmersiveMapLabelTextStyle(
                     fillColor: SIMD3<Float>(0.2, 0.2, 0.18),
                     strokeColor: SIMD3<Float>(1.0, 0.98, 0.92),
-                    strokeWidthPx: 2,
-                    sizePx: 14,
+                    haloEm: 0.15,
+                    sizePoints: 14,
                     weight: .bold
                 )
             )
@@ -77,8 +77,8 @@ private struct CustomLabelVectorTileStyle: ImmersiveMapVectorTileStyle {
                 textStyle: ImmersiveMapLabelTextStyle(
                     fillColor: SIMD3<Float>(0.42, 0.41, 0.39),
                     strokeColor: SIMD3<Float>(1.0, 0.98, 0.92),
-                    strokeWidthPx: 2,
-                    sizePx: 11,
+                    haloEm: 0.15,
+                    sizePoints: 11,
                     weight: .thin
                 )
             )

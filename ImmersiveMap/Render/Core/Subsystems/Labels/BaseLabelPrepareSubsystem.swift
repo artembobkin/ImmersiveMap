@@ -29,7 +29,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let fadeInSeconds: TimeInterval
     private let fadeOutSeconds: TimeInterval
     private let maxGlyphTurnRadians: Float
-    private let collisionGridCellSizePx: Float
+    private let collisionGridCellSizePoints: Float
     private let collisionsEnabled: Bool = true
     private let visibilityRefreshInterval: TimeInterval = 0.2
     private let collisionGroupBudgetPerFrame: Int = 256
@@ -98,7 +98,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.fadeInSeconds = settings.base.fadeInSeconds
         self.fadeOutSeconds = settings.base.fadeOutSeconds
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
-        self.collisionGridCellSizePx = max(8.0, settings.base.gridCellSizePx)
+        self.collisionGridCellSizePoints = max(4.0, settings.base.gridCellSizePoints)
     }
 
     func update(frameContext: FrameContext) {
@@ -208,7 +208,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         frameContext.sharedState.baseLabelDebugBoxesState = makeDebugBoxesState(
             baseProjection: baseProjection,
             fadeAlphas: fadeResolution.fadeAlphas,
-            cameraZoom: Float(frameContext.zoom)
+            cameraZoom: Float(frameContext.zoom),
+            screenScale: frameContext.screenScale
         )
         // visibilityCycle != nil: an unfinished cycle must keep frames alive,
         // otherwise with a static camera (the fingerprint is published by the
@@ -379,7 +380,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
 
         // Encoder 2: glyph placement for all records of the frame.
-        roadPlacementCalculator.run(commandBuffer: commandBuffer, dispatches: placementDispatches)
+        roadPlacementCalculator.run(commandBuffer: commandBuffer,
+                                    screenScale: frameContext.screenScale,
+                                    dispatches: placementDispatches)
 
         frameContext.sharedState.roadLabelState.drawLabels = drawBatches
         frameContext.sharedState.roadLabelState.placementBuffer = drawBatches.first?.placementBuffer
@@ -449,7 +452,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// are enabled by separate toggles.
     private func makeDebugBoxesState(baseProjection: TilePointScreenProjectionResult,
                                      fadeAlphas: [Float],
-                                     cameraZoom: Float) -> BaseLabelDebugBoxesState {
+                                     cameraZoom: Float,
+                                     screenScale: ScreenScale) -> BaseLabelDebugBoxesState {
         guard let controls = debugOverlayControls?.snapshot(),
               controls.baseLabelBoundsEnabled || controls.roadLabelBoundsEnabled else {
             return .empty
@@ -475,7 +479,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 }
                 let alpha = index < fadeAlphas.count ? fadeAlphas[index] : 0.0
                 boxes.append(BaseLabelDebugBox(center: screenPoint.position,
-                                               halfSize: candidate.halfSize,
+                                               halfSize: screenScale.pixels(candidate.halfSize),
                                                isVisible: alpha > 0.01))
             }
         }
@@ -629,7 +633,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                                        horizonVisibility: baseProjection.horizonVisibility,
                                                                        fadeAlphas: fadeResolution.fadeAlphas,
                                                                        overviewFadeAlpha: overviewFadeAlpha,
-                                                                       collisionCandidates: baseLabelCache.labelCollisionAABBInputs) : nil
+                                                                       collisionCandidates: baseLabelCache.labelCollisionAABBInputs,
+                                                                       screenScale: frameContext.screenScale) : nil
         let cycle = visibilityCycle
         baseLabelTraceRecorder.record(.baseLabelFrame(frameIndex: frameContext.frameIndex,
                                                       zoom: frameContext.zoom,
@@ -668,6 +673,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         index < publishedBaseCollisionVisibility.count ? publishedBaseCollisionVisibility[index] : .unknown
     }
 
+    /// The cache holds collision boxes in layout points while the positions
+    /// beside them are device pixels, so the trace converts: a reader comparing
+    /// a box against a position has to be looking at one space.
     private static func makeBaseLabelTraceLabels(inputs: [BaseLabelPresentationInput],
                                                  screenPoints: [ScreenPointOutput],
                                                  collisionVisibility: [BaseLabelCollisionVisibility],
@@ -675,7 +683,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                  horizonVisibility: [Bool],
                                                  fadeAlphas: [Float],
                                                  overviewFadeAlpha: Float,
-                                                 collisionCandidates: [ScreenCollisionCandidate]) -> String {
+                                                 collisionCandidates: [ScreenCollisionCandidate],
+                                                 screenScale: ScreenScale) -> String {
         guard inputs.isEmpty == false else {
             return ""
         }
@@ -693,7 +702,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                            fadeAlphas: fadeAlphas,
                                            overviewFadeAlpha: overviewFadeAlpha)
             let position = point?.position ?? .zero
-            let halfSize = candidate?.halfSize ?? .zero
+            let halfSize = screenScale.pixels(candidate?.halfSize ?? .zero)
             let screenVisible = point?.visible != 0
             let priority = candidate?.priority ?? Int.max
             let secondaryPriority = candidate?.secondaryPriority ?? Int.max
@@ -946,7 +955,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             horizonVisibility: baseProjection.horizonVisibility,
             currentAlphas: currentBaseAlphas,
             minCameraZooms: baseLabelCache.presentationInputs.map(\.minCameraZoom),
-            cameraZoom: Float(frameContext.zoom)
+            cameraZoom: Float(frameContext.zoom),
+            screenScale: frameContext.screenScale
         )
 
         let roadPreparation = prepareRoadInstances(frameContext: frameContext,
@@ -969,7 +979,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                seededGroups: seededBaseGroups + seededRoadGroups,
                                resolvedHiddenBaseIndices: collisionGroups.disabledBaseIndices,
                                resolvedHiddenRoadIndices: roadPreparation.hiddenInstanceIndices,
-                               cellSizePx: collisionGridCellSizePx)
+                               cellSizePx: frameContext.screenScale.pixels(collisionGridCellSizePoints))
     }
 
     static func makeSeededBaseCollisionGroups(candidates: [ScreenCollisionCandidate],
@@ -1121,6 +1131,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             guard RoadLabelNearCameraFilter.shouldKeepTile(clipCorners: tileClipCorners,
                                                            viewportWidth: viewportWidth,
                                                            viewportHeight: viewportHeight,
+                                                           screenScale: frameContext.screenScale,
                                                            underzoomLevels: max(0, frameContext.visibleContent.tileZoomLevel - record.ownerKey.z)) else {
                 nearCameraCulledPathCount += record.entries.count
                 appendRoadRecordInstanceIndices(record: record,
@@ -1321,7 +1332,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                             isRetained: roadLabelCache.instanceRetainedFlags[index],
                                             visibleTileIndex: 0,
                                             fadeAlpha: alpha,
-                                            labelSizePx: roadLabelCache.instanceLabelSizes[index])
+                                            labelSizePoints: roadLabelCache.instanceLabelSizes[index])
                 runtimeMeta.append(meta)
                 aggregatedRuntimeMeta.append(meta)
             }

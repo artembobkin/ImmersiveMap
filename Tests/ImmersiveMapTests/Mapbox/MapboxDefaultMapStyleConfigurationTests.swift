@@ -20,21 +20,21 @@ final class MapboxDefaultMapStyleConfigurationTests: XCTestCase {
 
         XCTAssertEqual(style.labels.district.fillColor, SIMD3<Float>(0.44, 0.43, 0.41))
         XCTAssertEqual(style.labels.district.strokeColor, SIMD3<Float>(1.0, 1.0, 1.0))
-        XCTAssertEqual(style.labels.district.strokeWidthPx, 2.7, accuracy: 0.0001)
+        XCTAssertEqual(style.labels.district.haloEm, 0.113, accuracy: 0.0001)
         XCTAssertEqual(style.labels.district.weight, .thin)
     }
 
     func testLabelUpdateReturnsModifiedCopyWithoutMutatingOriginal() {
         let original = MapboxDefaultMapStyleConfiguration.mapboxDefault
         let updated = original.labels { labels in
-            labels.district.strokeWidthPx = 1.5
-            labels.poi.strokeWidthPx = 4.0
+            labels.district.haloEm = 0.15
+            labels.poi.haloEm = 0.4
         }
 
-        XCTAssertEqual(original.labels.district.strokeWidthPx, 2.7, accuracy: 0.0001)
-        XCTAssertEqual(original.labels.poi.strokeWidthPx, 7.2, accuracy: 0.0001)
-        XCTAssertEqual(updated.labels.district.strokeWidthPx, 1.5, accuracy: 0.0001)
-        XCTAssertEqual(updated.labels.poi.strokeWidthPx, 4.0, accuracy: 0.0001)
+        XCTAssertEqual(original.labels.district.haloEm, 0.113, accuracy: 0.0001)
+        XCTAssertEqual(original.labels.poi.haloEm, 0.300, accuracy: 0.0001)
+        XCTAssertEqual(updated.labels.district.haloEm, 0.15, accuracy: 0.0001)
+        XCTAssertEqual(updated.labels.poi.haloEm, 0.4, accuracy: 0.0001)
     }
 
     func testFeatureUpdateReturnsModifiedCopyWithoutMutatingOriginal() {
@@ -50,7 +50,7 @@ final class MapboxDefaultMapStyleConfigurationTests: XCTestCase {
     func testCacheFingerprintChangesWhenPreparedStyleTokensChange() {
         let original = MapboxDefaultMapStyleConfiguration.mapboxDefault
         let updated = original.labels { labels in
-            labels.district.strokeWidthPx = 1.5
+            labels.district.haloEm = 0.15
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
@@ -58,10 +58,10 @@ final class MapboxDefaultMapStyleConfigurationTests: XCTestCase {
 
     func testCacheFingerprintCanonicalizesSignedZeroFloatValues() {
         let positiveZero = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.continent.strokeWidthPx = 0.0
+            labels.continent.haloEm = 0.0
         }
         let negativeZero = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.continent.strokeWidthPx = -0.0
+            labels.continent.haloEm = -0.0
         }
 
         XCTAssertEqual(positiveZero, negativeZero)
@@ -72,7 +72,7 @@ final class MapboxDefaultMapStyleConfigurationTests: XCTestCase {
         let defaultSettings = ImmersiveMapSettings.default.style
         let defaultConfiguration = MapboxDefaultMapStyleConfiguration.mapboxDefault
         let customConfiguration = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.district.strokeWidthPx = 1.0
+            labels.district.haloEm = 0.1
         }
 
         let defaultRevision = MapboxDefaultMapStyle(configuration: defaultConfiguration,

@@ -7,16 +7,19 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable, Sendable {
     public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
-        public var strokeWidthPx: Float
+        /// Halo width as a fraction of the em. The class's em size comes from
+        /// the tile zoom, so an absolute width would make the halo dominate the
+        /// glyphs at the low end of each class's range.
+        public var haloEm: Float
         public var weight: LabelFontWeight
 
         public init(fillColor: SIMD3<Float>,
                     strokeColor: SIMD3<Float>,
-                    strokeWidthPx: Float,
+                    haloEm: Float,
                     weight: LabelFontWeight) {
             self.fillColor = fillColor
             self.strokeColor = strokeColor
-            self.strokeWidthPx = strokeWidthPx
+            self.haloEm = haloEm
             self.weight = weight
         }
     }
@@ -276,7 +279,7 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable, Sendable {
     private func mix(_ appearance: LabelAppearance, into hash: inout UInt64) {
         mix(appearance.fillColor, into: &hash)
         mix(appearance.strokeColor, into: &hash)
-        mix(appearance.strokeWidthPx, into: &hash)
+        mix(appearance.haloEm, into: &hash)
         mix(UInt64(appearance.weight.rawValue), into: &hash)
     }
 
@@ -357,50 +360,58 @@ public struct MapboxDefaultMapStyleConfiguration: Equatable, Sendable {
 }
 
 public extension MapboxDefaultMapStyleConfiguration.LabelStyles {
+    /// Halo widths are the pixel widths this palette used before halos carried a
+    /// unit, divided by the middle of each class's em-size range, so a label at
+    /// the middle of its range keeps the halo it had.
+    ///
+    /// Water is the exception: its width was already size-relative, capped at
+    /// `min(5.4, size * 0.14)`, so it converts to that ratio directly. The cap
+    /// bound only the largest sea label, which now gets 5.6 device pixels of
+    /// halo at the reference scale instead of 5.4.
     static let standard = MapboxDefaultMapStyleConfiguration.LabelStyles(
         city: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.38, 0.37, 0.35),
                                                             strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                            strokeWidthPx: 5.4,
+                                                            haloEm: 0.159,
                                                             weight: .thin),
         smallSettlement: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.38, 0.37, 0.35),
                                                                        strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                                       strokeWidthPx: 5.4,
+                                                                       haloEm: 0.180,
                                                                        weight: .thin),
         district: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.44, 0.43, 0.41),
                                                                 strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                                strokeWidthPx: 2.7,
+                                                                haloEm: 0.113,
                                                                 weight: .thin),
         capital: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.30, 0.29, 0.27),
                                                                strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                               strokeWidthPx: 5.4,
+                                                               haloEm: 0.120,
                                                                weight: .thin),
         nationalCapital: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.30, 0.29, 0.27),
                                                                        strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                                       strokeWidthPx: 7.8,
+                                                                       haloEm: 0.159,
                                                                        weight: .bold),
         poi: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
                                                            strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                           strokeWidthPx: 7.2,
+                                                           haloEm: 0.300,
                                                            weight: .thin),
         landmark: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
                                                                 strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                                strokeWidthPx: 7.8,
+                                                                haloEm: 0.325,
                                                                 weight: .thin),
         road: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
                                                             strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                            strokeWidthPx: 2.6,
+                                                            haloEm: 0.072,
                                                             weight: .thin),
         water: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.10, 0.28, 0.72),
                                                              strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                             strokeWidthPx: 5.4,
+                                                             haloEm: 0.140,
                                                              weight: .bold),
         continent: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.35, 0.35, 0.35),
                                                                  strokeColor: SIMD3<Float>(0.35, 0.35, 0.35),
-                                                                 strokeWidthPx: 0.0,
+                                                                 haloEm: 0.0,
                                                                  weight: .bold),
         houseNumber: MapboxDefaultMapStyleConfiguration.LabelAppearance(fillColor: SIMD3<Float>(0.47, 0.46, 0.44),
                                                                    strokeColor: SIMD3<Float>(1.0, 1.0, 1.0),
-                                                                   strokeWidthPx: 8.1,
+                                                                   haloEm: 0.312,
                                                                    weight: .thin)
     )
 }

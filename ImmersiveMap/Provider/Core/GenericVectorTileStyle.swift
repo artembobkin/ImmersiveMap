@@ -95,8 +95,8 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             key: key,
             fillColor: style.fillColor,
             strokeColor: style.strokeColor,
-            strokeWidthPx: style.strokeWidthPx,
-            sizePx: style.sizePx,
+            haloEm: style.haloEm,
+            sizePoints: LabelTypeScale.clamped(style.sizePoints),
             weight: style.weight
         )
     }
@@ -140,8 +140,8 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
     private static func combine(_ textStyle: ImmersiveMapLabelTextStyle, into hasher: inout StableFNV1aHasher) {
         combine(textStyle.fillColor, into: &hasher)
         combine(textStyle.strokeColor, into: &hasher)
-        hasher.combine(UInt64(textStyle.strokeWidthPx.bitPattern))
-        hasher.combine(UInt64(textStyle.sizePx.bitPattern))
+        hasher.combine(UInt64(textStyle.haloEm.bitPattern))
+        hasher.combine(UInt64(textStyle.sizePoints.bitPattern))
         hasher.combine(UInt64(textStyle.weight.rawValue))
     }
 

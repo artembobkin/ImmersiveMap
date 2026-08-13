@@ -88,8 +88,8 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
         return ImmersiveMapLabelTextStyle(
             fillColor: SIMD3<Float>(0.93, 0.94, 0.97),
             strokeColor: SIMD3<Float>(0.03, 0.04, 0.06),
-            strokeWidthPx: 2.0,
-            sizePx: isMajor ? 15 : 12,
+            haloEm: 0.13,
+            sizePoints: isMajor ? 16 : 12,
             weight: isMajor ? .bold : .thin)
     }
 }

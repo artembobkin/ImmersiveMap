@@ -24,15 +24,20 @@ final class RendererLabelDrawer {
 
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
+                               screenScale: ScreenScale,
                                textRenderer: TextRenderer,
                                poiSpriteAtlas: PoiSpriteAtlas,
                                screenPositionsBuffer: MTLBuffer,
                                labelRuntimeMetaBuffer: MTLBuffer,
                                baseLabelsDrawBatches: [BaseLabelDrawBatch]) {
         var screenMatrixValue = screenMatrix
+        // Label geometry is authored in layout points; this is the one place the
+        // base label pass converts it to the device pixels the screen matrix maps.
+        var pixelsPerPoint = screenScale.pixelsPerPoint
 
         renderEncoder.setVertexBytes(&screenMatrixValue, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
         renderEncoder.setVertexBuffer(screenPositionsBuffer, offset: 0, index: 2)
+        renderEncoder.setVertexBytes(&pixelsPerPoint, length: MemoryLayout<Float>.stride, index: 7)
         renderEncoder.setVertexBuffer(labelRuntimeMetaBuffer, offset: 0, index: 6)
 
         var bindings = EncoderBindings()
@@ -73,11 +78,13 @@ final class RendererLabelDrawer {
 
         renderEncoder.setRenderPipelineState(textRenderer.labelPipelineState)
         drawBaseLabelTextPass(renderEncoder: renderEncoder,
+                              screenScale: screenScale,
                               textRenderer: textRenderer,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
                               pass: .outline,
                               bindings: &bindings)
         drawBaseLabelTextPass(renderEncoder: renderEncoder,
+                              screenScale: screenScale,
                               textRenderer: textRenderer,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
                               pass: .fill,
@@ -86,6 +93,7 @@ final class RendererLabelDrawer {
 
     static func drawRoadLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
+                               screenScale: ScreenScale,
                                textRenderer: TextRenderer,
                                roadDrawLabels: [DrawRoadLabels]) {
         guard roadDrawLabels.isEmpty == false else {
@@ -102,6 +110,8 @@ final class RendererLabelDrawer {
         renderEncoder.setVertexBytes(&screenOffset,
                                      length: MemoryLayout<SIMD2<Float>>.stride,
                                      index: 6)
+        var pixelsPerPoint = screenScale.pixelsPerPoint
+        renderEncoder.setVertexBytes(&pixelsPerPoint, length: MemoryLayout<Float>.stride, index: 7)
 
         var bindings = EncoderBindings()
         for drawLabel in roadDrawLabels {
@@ -118,20 +128,15 @@ final class RendererLabelDrawer {
             renderEncoder.setVertexBuffer(runtimeMetaBuffer, offset: 0, index: 4)
             setVertexBuffer0(localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
 
-            let style = drawLabel.labelStyle
-                ?? LabelTextStyle(key: 0,
-                                  fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
-                                  strokeColor: SIMD3<Float>(0.54, 0.54, 0.52),
-                                  strokeWidthPx: 0.0,
-                                  sizePx: 36.0,
-                                  weight: .thin)
+            let style = drawLabel.labelStyle ?? RoadLabelCache.fallbackStyle
             let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
             setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
 
-            if style.strokeWidthPx > 0.0 {
+            let haloWidthPx = style.haloWidthPixels(screenScale: screenScale)
+            if haloWidthPx > 0.0 {
                 let outlineStyle = TextStyleUniform(textColor: style.strokeColor,
                                                     strokeColor: style.strokeColor,
-                                                    strokeWidthPx: style.strokeWidthPx)
+                                                    strokeWidthPx: haloWidthPx)
                 setTextStyle(outlineStyle, renderEncoder: renderEncoder, bindings: &bindings)
                 renderEncoder.drawPrimitives(type: .triangle,
                                              vertexStart: 0,
@@ -154,6 +159,7 @@ final class RendererLabelDrawer {
     }
 
     private static func drawBaseLabelTextPass(renderEncoder: MTLRenderCommandEncoder,
+                                              screenScale: ScreenScale,
                                               textRenderer: TextRenderer,
                                               baseLabelsDrawBatches: [BaseLabelDrawBatch],
                                               pass: BaseLabelTextPass,
@@ -172,7 +178,7 @@ final class RendererLabelDrawer {
                 case .outline:
                     textStyle = TextStyleUniform(textColor: style.strokeColor,
                                                  strokeColor: style.strokeColor,
-                                                 strokeWidthPx: style.strokeWidthPx)
+                                                 strokeWidthPx: style.haloWidthPixels(screenScale: screenScale))
                 case .fill:
                     textStyle = TextStyleUniform(textColor: style.fillColor,
                                                  strokeColor: style.fillColor,

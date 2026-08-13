@@ -21,14 +21,14 @@ enum LabelTextAlignment {
 }
 
 struct LabelWrapOptions {
-    let maxWidthPx: Float
+    let maxWidth: Float
     let maxLines: Int
     let alignment: LabelTextAlignment
 
-    init(maxWidthPx: Float,
+    init(maxWidth: Float,
          maxLines: Int,
          alignment: LabelTextAlignment = .left) {
-        self.maxWidthPx = maxWidthPx
+        self.maxWidth = maxWidth
         self.maxLines = maxLines
         self.alignment = alignment
     }
@@ -127,7 +127,8 @@ struct TextEntry {
 }
 
 class TextRenderer {
-    static let preparedTileTextRevisionValue: UInt32 = 6
+    // 7: glyph quads are baked in layout points rather than device pixels.
+    static let preparedTileTextRevisionValue: UInt32 = 7
 
     private struct LabelLineLayout {
         let vertices: [LabelVertex]
@@ -215,7 +216,7 @@ class TextRenderer {
                               weight: LabelFontWeight = .bold) -> TextMetrics {
         if let wrap,
            wrap.maxLines > 1,
-           wrap.maxWidthPx > 0 {
+           wrap.maxWidth > 0 {
             let wrapped = collectWrappedLabelVertices(for: text,
                                                       labelIndex: labelIndex,
                                                       scale: scale,
@@ -605,7 +606,7 @@ class TextRenderer {
                 }
 
                 let candidate = currentLine + segmentText
-                if measureTextWidth(for: candidate, scale: scale, weight: weight) <= wrap.maxWidthPx {
+                if measureTextWidth(for: candidate, scale: scale, weight: weight) <= wrap.maxWidth {
                     currentLine = candidate
                 } else {
                     let normalized = trimTrailingWhitespace(in: currentLine)

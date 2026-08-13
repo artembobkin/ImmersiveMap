@@ -75,8 +75,8 @@ private final class RoadLabelStyle: ImmersiveMapStyle {
     private let roadLabelTextStyle = LabelTextStyle(key: 1,
                                                     fillColor: SIMD3<Float>(1, 1, 1),
                                                     strokeColor: SIMD3<Float>(0, 0, 0),
-                                                    strokeWidthPx: 1,
-                                                    sizePx: 12,
+                                                    haloEm: 0.1,
+                                                    sizePoints: 12,
                                                     weight: .thin)
 
     func getMapBaseColors() -> ImmersiveMapBaseColors {

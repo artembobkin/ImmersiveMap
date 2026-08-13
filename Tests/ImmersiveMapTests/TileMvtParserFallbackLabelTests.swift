@@ -345,14 +345,14 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
     private let oceanLabelTextStyle = LabelTextStyle(key: 3,
                                                      fillColor: SIMD3<Float>(0, 0, 1),
                                                      strokeColor: SIMD3<Float>(1, 1, 1),
-                                                     strokeWidthPx: 1,
-                                                     sizePx: 12,
+                                                     haloEm: 0.1,
+                                                     sizePoints: 12,
                                                      weight: .bold)
     private let seaLabelTextStyle = LabelTextStyle(key: 4,
                                                    fillColor: SIMD3<Float>(0, 0, 1),
                                                    strokeColor: SIMD3<Float>(1, 1, 1),
-                                                   strokeWidthPx: 1,
-                                                   sizePx: 10,
+                                                   haloEm: 0.1,
+                                                   sizePoints: 10,
                                                    weight: .thin)
 
     func getMapBaseColors() -> ImmersiveMapBaseColors {

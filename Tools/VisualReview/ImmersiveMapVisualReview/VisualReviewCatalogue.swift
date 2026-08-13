@@ -29,6 +29,28 @@ struct VisualReviewScenario: Identifiable {
         }
     }
 
+    /// The canvas a still is rendered onto.
+    ///
+    /// Both halves matter and neither can be inferred from the other: the pixel
+    /// dimensions decide how much map is in frame, and the scale decides how
+    /// big a point is, which is what sizes the labels. A phone is not a small
+    /// desktop window; it is a small window with a dense display, and only
+    /// rendering both together shows what a reader actually gets.
+    struct Output {
+        let width: Int
+        let height: Int
+        let pixelsPerPoint: CGFloat
+
+        /// Big enough to judge label legibility and building edges, small
+        /// enough that a full pass is quick.
+        static let desktop = Output(width: 1600, height: 1000, pixelsPerPoint: 2)
+
+        /// A 3x phone in portrait, at the point dimensions of a current large
+        /// iPhone. The densest display the engine targets and the smallest
+        /// canvas, so it is where undersized type shows up first.
+        static let phone = Output(width: 1206, height: 2622, pixelsPerPoint: 3)
+    }
+
     /// Stable across runs and across renames of the title: it is the key the
     /// verdict file is written under, so changing it forgets the verdict.
     let id: String
@@ -39,6 +61,7 @@ struct VisualReviewScenario: Identifiable {
     let lookFor: String
     let settings: ImmersiveMapSettings
     let subject: Subject
+    let output: Output
 
     var isVideo: Bool {
         if case .video = subject { return true }
@@ -49,12 +72,14 @@ struct VisualReviewScenario: Identifiable {
          title: String,
          lookFor: String,
          settings: ImmersiveMapSettings,
-         subject: Subject) {
+         subject: Subject,
+         output: Output = .desktop) {
         self.id = id
         self.title = title
         self.lookFor = lookFor
         self.settings = settings
         self.subject = subject
+        self.output = output
     }
 }
 
@@ -95,6 +120,34 @@ enum VisualReviewCatalogue {
     }
 
     static let scenarios: [VisualReviewScenario] = [
+        VisualReviewScenario(
+            id: "labels.phone.streets",
+            title: "Street labels on a 3x phone",
+            lookFor: """
+            Read them, do not just see them. Street names, POIs and house \
+            numbers should all be comfortably readable at arm's length, with \
+            open counters in a, e and o rather than letters closed up by their \
+            halo. Nothing should be so large that the map disappears under the \
+            type, and labels should be thinned out enough to leave the streets \
+            visible between them.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.manhattanFlat),
+            output: .phone),
+
+        VisualReviewScenario(
+            id: "labels.phone.overview",
+            title: "Settlement labels on a 3x phone",
+            lookFor: """
+            City, town and water labels at an overview zoom on a small dense \
+            screen. Sizes should step visibly between the classes, the halo \
+            should separate the type from the landcover without swallowing it, \
+            and neighbouring labels should not overlap.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.sanFrancisco),
+            output: .phone),
+
         VisualReviewScenario(
             id: "globe.default",
             title: "Globe, default style",

@@ -5,9 +5,13 @@ import simd
 
 final class TileRoadLabelsBuilder {
     private let textRenderer: TextRenderer
-    private let roadLabelRepeatDistancePx: Float = 100.0
+    private let roadLabelRepeatDistancePoints: Float = 50.0
     private let tileExtent: Float = 4096.0
-    private let tilePixelSize: Float = 512.0
+    /// Screen size of one tile at the reference scale, in layout points. Anchor
+    /// spacing is decided in tile units at bake time, so a screen distance has
+    /// to cross into tile space through this; it is the point-space counterpart
+    /// of the 512 device pixels a tile covers on a 2x display.
+    private let tileScreenPointSize: Float = 256.0
     private let maxAnchorsPerPath: Int = 7
     init(textRenderer: TextRenderer) {
         self.textRenderer = textRenderer
@@ -59,7 +63,7 @@ final class TileRoadLabelsBuilder {
             // the first label). Each label's geometry is built with that same weight:
             // bold and thin atlases have different UVs for the same codepoint, so a
             // glyph built against the other atlas would sample the wrong region = garbage
-            // (the same class of bug that was fixed for base labels). `sizePx` stays
+            // (the same class of bug that was fixed for base labels). `sizePoints` stays
             // per-label though - scale varies safely, it is baked into the geometry
             // together with its anchor extents.
             let atlasWeight = labelStyle?.weight ?? roadLabel.textStyle.weight
@@ -67,7 +71,7 @@ final class TileRoadLabelsBuilder {
                    "Road labels in one tile must share a font weight: the tile binds a single atlas texture per draw.")
             let textMetrics = textRenderer.collectLabelVertices(for: roadLabel.text,
                                                                 labelIndex: simd_int1(0),
-                                                                scale: roadLabel.textStyle.sizePx,
+                                                                scale: roadLabel.textStyle.sizePoints,
                                                                 normalizeY: false,
                                                                 weight: atlasWeight)
             roadLabelSizes.append(SIMD2<Float>(textMetrics.size.width, textMetrics.size.height))
@@ -97,8 +101,8 @@ final class TileRoadLabelsBuilder {
             let anchorStart = roadLabelAnchors.count
             var anchorCount = 0
             if glyphCount > 0 && count > 1 {
-                let spacingTile = roadLabelRepeatDistancePx * (tileExtent / tilePixelSize)
-                let labelWidthTile = textMetrics.size.width * (tileExtent / tilePixelSize)
+                let spacingTile = roadLabelRepeatDistancePoints * (tileExtent / tileScreenPointSize)
+                let labelWidthTile = textMetrics.size.width * (tileExtent / tileScreenPointSize)
                 let anchors = buildAnchors(path: roadLabel.path,
                                            labelWidthTile: labelWidthTile,
                                            spacingTile: spacingTile,
@@ -278,8 +282,8 @@ final class TileRoadLabelsBuilder {
         hasher.combine(style.strokeColor.x.bitPattern)
         hasher.combine(style.strokeColor.y.bitPattern)
         hasher.combine(style.strokeColor.z.bitPattern)
-        hasher.combine(style.strokeWidthPx.bitPattern)
-        hasher.combine(style.sizePx.bitPattern)
+        hasher.combine(style.haloEm.bitPattern)
+        hasher.combine(style.sizePoints.bitPattern)
         hasher.combine(style.weight.rawValue)
         hasher.combine(path.count)
         for point in path {
@@ -388,8 +392,8 @@ private struct MergeKey: Hashable {
     let styleKey: Int
     let fillColor: SIMD3<UInt32>
     let strokeColor: SIMD3<UInt32>
-    let strokeWidthPx: UInt32
-    let sizePx: UInt32
+    let haloEm: UInt32
+    let sizePoints: UInt32
     let weightRawValue: UInt8
 
     init(text: String, style: LabelTextStyle) {
@@ -401,8 +405,8 @@ private struct MergeKey: Hashable {
         self.strokeColor = SIMD3<UInt32>(style.strokeColor.x.bitPattern,
                                          style.strokeColor.y.bitPattern,
                                          style.strokeColor.z.bitPattern)
-        self.strokeWidthPx = style.strokeWidthPx.bitPattern
-        self.sizePx = style.sizePx.bitPattern
+        self.haloEm = style.haloEm.bitPattern
+        self.sizePoints = style.sizePoints.bitPattern
         self.weightRawValue = style.weight.rawValue
     }
 
@@ -416,11 +420,11 @@ private struct MergeKey: Hashable {
         if lhs.weightRawValue != rhs.weightRawValue {
             return lhs.weightRawValue < rhs.weightRawValue
         }
-        if lhs.sizePx != rhs.sizePx {
-            return lhs.sizePx < rhs.sizePx
+        if lhs.sizePoints != rhs.sizePoints {
+            return lhs.sizePoints < rhs.sizePoints
         }
-        if lhs.strokeWidthPx != rhs.strokeWidthPx {
-            return lhs.strokeWidthPx < rhs.strokeWidthPx
+        if lhs.haloEm != rhs.haloEm {
+            return lhs.haloEm < rhs.haloEm
         }
         if lhs.fillColor.x != rhs.fillColor.x {
             return lhs.fillColor.x < rhs.fillColor.x

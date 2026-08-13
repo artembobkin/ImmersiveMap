@@ -19,7 +19,7 @@ struct LabelRuntimeMeta {
     uint visibleTileIndex;
     float fadeAlpha;
     float _padding1;
-    float2 labelSizePx;
+    float2 labelSizePoints;
 };
 
 #endif

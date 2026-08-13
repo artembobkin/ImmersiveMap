@@ -185,7 +185,7 @@ final class BaseLabelCache {
                                                            isRetained: 0,
                                                            visibleTileIndex: 0,
                                                            fadeAlpha: 0,
-                                                           labelSizePx: .zero)
+                                                           labelSizePoints: .zero)
         }
         for index in labelCollisionAABBInputs.indices {
             labelCollisionAABBInputs[index] = ScreenCollisionCandidate(position: .zero,
@@ -212,7 +212,7 @@ final class BaseLabelCache {
                                                                 isRetained: 0,
                                                                 visibleTileIndex: 0,
                                                                 fadeAlpha: 0,
-                                                                labelSizePx: .zero),
+                                                                labelSizePoints: .zero),
                                     count: rangeCapacity)
             var aabbs = Array(repeating: ScreenCollisionCandidate(position: .zero,
                                                                   halfSize: .zero,
@@ -234,7 +234,7 @@ final class BaseLabelCache {
                                                       isRetained: sourceEntry.isRetained ? 1 : 0,
                                                       visibleTileIndex: 0,
                                                       fadeAlpha: 0,
-                                                      labelSizePx: labelSize)
+                                                      labelSizePoints: labelSize)
                 aabbs[index] = ScreenCollisionCandidate(position: .zero,
                                                         halfSize: SIMD2<Float>(labelSize.x * 0.5,
                                                                                labelSize.y * 0.5),
@@ -308,7 +308,7 @@ final class BaseLabelCache {
                 existingRecord.labelKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.key)
                 existingRecord.labelSortKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey)
                 existingRecord.labelCollisionPriorities = selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority)
-                existingRecord.labelSizes = selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePx)
+                existingRecord.labelSizes = selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints)
                 existingRecord.labelMinCameraZooms = selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom)
                 existingRecord.labelsByStyleRuns = selectedTextLabelSet.labelsByStyleRuns
                 existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
@@ -335,7 +335,7 @@ final class BaseLabelCache {
                                                            labelKeys: selectedTextLabelSet.placementInputs.map(\.placementMeta.key),
                                                            labelSortKeys: selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey),
                                                            labelCollisionPriorities: selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority),
-                                                           labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePx),
+                                                           labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints),
                                                            labelMinCameraZooms: selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom),
                                                            labelsByStyleRuns: selectedTextLabelSet.labelsByStyleRuns,
                                                            poiIconRuns: selectedTextLabelSet.poiIconRuns)
@@ -398,7 +398,7 @@ final class BaseLabelCache {
                                                isRetained: 0,
                                                visibleTileIndex: 0,
                                                fadeAlpha: 0,
-                                               labelSizePx: .zero)
+                                               labelSizePoints: .zero)
         if labelRuntimeMetaData.count < count {
             labelRuntimeMetaData.append(contentsOf: repeatElement(zeroRuntimeMeta, count: count - labelRuntimeMetaData.count))
         } else if labelRuntimeMetaData.count > count {

@@ -7,7 +7,7 @@ import XCTest
 final class ImmersiveMapProviderSettingsTests: XCTestCase {
     func testMapboxTileProviderAndMapStyleConfigureSourceAndStyleSeparately() {
         let style = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.district.strokeWidthPx = 1.25
+            labels.district.haloEm = 0.125
         }
 
         let settings = ImmersiveMapSettings.default

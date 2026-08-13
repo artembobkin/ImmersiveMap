@@ -63,10 +63,10 @@ The settlement ceilings exist because a city name is noise once the street grid 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `base.gridCellSizePx` | 32 | Cell size of the collision grid for point labels, in pixels. Bigger cells mean fewer labels survive and cheaper collision. |
+| `base.gridCellSizePoints` | 16 | Cell size of the collision grid for point labels, in layout points. Bigger cells mean fewer labels survive and cheaper collision. Points rather than pixels so that label density per unit of perceived screen area is the same on every display. |
 | `base.fadeInSeconds` | 0.15 | How long a label takes to appear once it wins its space. |
 | `base.fadeOutSeconds` | 0.25 | How long it takes to disappear once it loses it. |
-| `road.gridCellSizePx` | 32 | The same grid for labels placed along roads. |
+| `road.gridCellSizePoints` | 16 | The same grid for labels placed along roads. |
 | `road.maxGlyphTurnRadians` | `pi / 6` | How sharply a road label may bend between consecutive glyphs before the placement is rejected. Lower keeps text readable on winding roads by dropping more candidates. |
 
 Fades are why labels do not flicker while panning: a label that loses its cell for one frame fades rather than vanishing. The fade also drives the render loop, which is why label activity keeps the display link running for its duration, see [render loop](performance-and-debug.md).
@@ -81,7 +81,7 @@ Label colors and sizes are not part of `LabelSettings`: they belong to the map s
 
 ## Limitations
 
-- Label sizes are defined in pixels by the style, so their apparent size scales with the drawable resolution. A 4K [video export](tour-video-export.md) therefore shows relatively smaller labels than a 1080p one.
+- Label sizes are defined in layout points by the style, so a label reads at the same physical size on a 2x desktop display and a 3x phone, and a 4K [video export](tour-video-export.md) is a sharper 1080p export rather than one with relatively smaller labels. A style value under 11 points is raised to it, the floor for type that is meant to be read.
 - Which names exist at all is a property of the tile source, not the engine. A source that carries no `name:ja` will fall back however the policy says, in every language you ask for.
 - Changing the language reloads prepared tiles.
 

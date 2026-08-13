@@ -43,14 +43,13 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
 
     private func makeLabelTextStyle(key: Int,
                                     appearance: MapboxDefaultMapStyleConfiguration.LabelAppearance,
-                                    strokeWidthPx: Float? = nil,
-                                    sizePx: Float) -> LabelTextStyle {
+                                    sizePoints: Float) -> LabelTextStyle {
         LabelTextStyle(
             key: key,
             fillColor: appearance.fillColor,
             strokeColor: appearance.strokeColor,
-            strokeWidthPx: strokeWidthPx ?? appearance.strokeWidthPx,
-            sizePx: sizePx,
+            haloEm: appearance.haloEm,
+            sizePoints: LabelTypeScale.clamped(sizePoints),
             weight: appearance.weight
         )
     }
@@ -98,29 +97,23 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 1,
                 appearance: labelStyles.continent,
-                sizePx: continentLabelSize(for: tileZoom)
+                sizePoints: continentLabelSize(for: tileZoom)
             )
         }
 
         if isOcean {
-            let size = oceanLabelSize(for: tileZoom)
-            let appearance = labelStyles.water
             return makeLabelTextStyle(
                 key: 3,
-                appearance: appearance,
-                strokeWidthPx: min(appearance.strokeWidthPx, waterLabelStrokeWidth(for: size)),
-                sizePx: size
+                appearance: labelStyles.water,
+                sizePoints: oceanLabelSize(for: tileZoom)
             )
         }
 
         if isSea {
-            let size = seaLabelSize(for: tileZoom)
-            let appearance = labelStyles.water
             return makeLabelTextStyle(
                 key: 4,
-                appearance: appearance,
-                strokeWidthPx: min(appearance.strokeWidthPx, waterLabelStrokeWidth(for: size)),
-                sizePx: size
+                appearance: labelStyles.water,
+                sizePoints: seaLabelSize(for: tileZoom)
             )
         }
 
@@ -128,7 +121,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 2,
                 appearance: labelStyles.nationalCapital,
-                sizePx: capitalSize(level: capitalLevel, tileZoom: tileZoom)
+                sizePoints: capitalSize(level: capitalLevel, tileZoom: tileZoom)
             )
         }
 
@@ -137,7 +130,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 20 + min(capitalLevel, 9),
                 appearance: labelStyles.capital,
-                sizePx: size
+                sizePoints: size
             )
         }
 
@@ -145,7 +138,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 30,
                 appearance: labelStyles.city,
-                sizePx: cityLabelSize(for: tileZoom)
+                sizePoints: cityLabelSize(for: tileZoom)
             )
         }
 
@@ -153,7 +146,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 31,
                 appearance: labelStyles.smallSettlement,
-                sizePx: smallSettlementLabelSize(for: tileZoom)
+                sizePoints: smallSettlementLabelSize(for: tileZoom)
             )
         }
 
@@ -161,7 +154,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 40,
                 appearance: labelStyles.district,
-                sizePx: districtLabelSize(for: tileZoom)
+                sizePoints: districtLabelSize(for: tileZoom)
             )
         }
 
@@ -169,7 +162,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             return makeLabelTextStyle(
                 key: 43,
                 appearance: labelStyles.houseNumber,
-                sizePx: houseNumberLabelSize(for: tileZoom)
+                sizePoints: houseNumberLabelSize(for: tileZoom)
             )
         }
 
@@ -192,7 +185,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
         return makeLabelTextStyle(
             key: 80,
             appearance: labelStyles.road,
-            sizePx: 36.0
+            sizePoints: 18.0
         )
     }
 
@@ -200,7 +193,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
         makeLabelTextStyle(
             key: 41,
             appearance: labelStyles.landmark,
-            sizePx: landmarkLabelSize(for: tileZoom)
+            sizePoints: landmarkLabelSize(for: tileZoom)
         )
     }
 
@@ -211,8 +204,8 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             key: appearance.key,
             fillColor: appearance.fillColor,
             strokeColor: labelStyles.poi.strokeColor,
-            strokeWidthPx: labelStyles.poi.strokeWidthPx,
-            sizePx: poiLabelSize(for: tileZoom),
+            haloEm: labelStyles.poi.haloEm,
+            sizePoints: LabelTypeScale.clamped(poiLabelSize(for: tileZoom)),
             weight: labelStyles.poi.weight
         )
     }
@@ -1112,41 +1105,42 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             || layerValue < 0
     }
 
+    // Em sizes in layout points. Each curve is the pixel curve this style used
+    // before labels carried a unit, divided by the 2x reference scale it was
+    // authored against. Values that land under `LabelTypeScale.minimumSizePoints`
+    // are raised to it by `makeLabelTextStyle`, so the curves below stay a
+    // statement of the design rather than of the floor.
     private func continentLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...9:
-            return 52.0
+            return 26.0
         case 10:
-            return 56.0
+            return 28.0
         default:
-            return 60.0
+            return 30.0
         }
     }
 
     private func oceanLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...1:
-            return 27.0
+            return 13.5
         case 2:
-            return 24.0
+            return 12.0
         default:
-            return 18.0
+            return 9.0
         }
     }
 
     private func seaLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...1:
-            return 40.0
+            return 20.0
         case 2:
-            return 34.0
+            return 17.0
         default:
-            return 26.0
+            return 13.0
         }
-    }
-
-    private func waterLabelStrokeWidth(for sizePx: Float) -> Float {
-        sizePx * 0.14
     }
 
     private func capitalSize(level: Int, tileZoom: Int) -> Float {
@@ -1155,115 +1149,115 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
         let minimumSize: Float
         switch tileZoom {
         case ...9:
-            baseSize = 52.0
-            minimumSize = 40.0
+            baseSize = 26.0
+            minimumSize = 20.0
         case 10:
-            baseSize = 56.0
-            minimumSize = 42.0
+            baseSize = 28.0
+            minimumSize = 21.0
         case 11:
-            baseSize = 52.0
-            minimumSize = 40.0
+            baseSize = 26.0
+            minimumSize = 20.0
         case 12:
-            baseSize = 48.0
-            minimumSize = 38.0
+            baseSize = 24.0
+            minimumSize = 19.0
         case 13:
-            baseSize = 44.0
-            minimumSize = 36.0
+            baseSize = 22.0
+            minimumSize = 18.0
         default:
-            baseSize = 42.0
-            minimumSize = 34.0
+            baseSize = 21.0
+            minimumSize = 17.0
         }
         if normalized <= 2 {
             return baseSize
         }
-        return max(minimumSize, baseSize - Float(normalized - 2) * 4.0)
+        return max(minimumSize, baseSize - Float(normalized - 2) * 2.0)
     }
 
     private func cityLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...9:
-            return 30.0
+            return 15.0
         case 10:
-            return 34.0
+            return 17.0
         case 11:
-            return 38.0
+            return 19.0
         case 12:
-            return 38.0
+            return 19.0
         case 13:
-            return 36.0
+            return 18.0
         default:
-            return 34.0
+            return 17.0
         }
     }
 
     private func smallSettlementLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...9:
-            return 22.0
+            return 11.0
         case 10:
-            return 26.0
+            return 13.0
         case 11:
-            return 30.0
+            return 15.0
         case 12:
-            return 34.0
+            return 17.0
         default:
-            return 38.0
+            return 19.0
         }
     }
 
     private func districtLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...9:
-            return 18.0
+            return 9.0
         case 10:
-            return 22.0
+            return 11.0
         case 11:
-            return 24.0
+            return 12.0
         case 12:
-            return 26.0
+            return 13.0
         case 13:
-            return 28.0
+            return 14.0
         default:
-            return 30.0
+            return 15.0
         }
     }
 
     private func landmarkLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...9:
-            return 18.0
+            return 9.0
         case 10:
-            return 22.0
+            return 11.0
         case 11...12:
-            return 26.0
+            return 13.0
         case 13:
-            return 28.0
+            return 14.0
         default:
-            return 30.0
+            return 15.0
         }
     }
 
     private func poiLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...12:
-            return 20.0
+            return 10.0
         case 13:
-            return 24.0
+            return 12.0
         case 14:
-            return 26.0
+            return 13.0
         default:
-            return 28.0
+            return 14.0
         }
     }
 
     private func houseNumberLabelSize(for tileZoom: Int) -> Float {
         switch tileZoom {
         case ...16:
-            return 24.0
+            return 12.0
         case 17:
-            return 26.0
+            return 13.0
         default:
-            return 28.0
+            return 14.0
         }
     }
     

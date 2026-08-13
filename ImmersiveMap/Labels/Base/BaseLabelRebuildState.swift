@@ -49,7 +49,7 @@ final class BaseLabelRebuildState {
                 runtimeMeta.append(LabelRuntimeMeta(duplicate: duplicateFlag,
                                                     isRetained: retainedFlag,
                                                     visibleTileIndex: 0,
-                                                    labelSizePx: meta.labelSizePx))
+                                                    labelSizePoints: meta.labelSizePoints))
                 seenLabelKeys.insert(meta.key)
             }
 

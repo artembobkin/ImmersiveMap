@@ -152,7 +152,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         let newSettings = ImmersiveMapSettings.default
             .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
             .mapStyle(MapboxMapStyle(configuration: .mapboxDefault.labels { labels in
-                labels.district.strokeWidthPx = 1.1
+                labels.district.haloEm = 0.11
             }))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
