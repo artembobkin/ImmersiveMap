@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [0.6.1] - 2026-08-13
+
+### Fixed
+
+- An app using the package no longer crashes at launch in the iOS Simulator. The cascade shadow maps rasterize through layered rendering (one pass writing three slices, with the caster vertex stages routing instances by `[[render_target_array_index]]`), and the simulator does not support it: a render pass asking for more than one slice fails Metal validation, which aborts the process rather than returning an error. Clearing the shadow fallback texture encoded exactly such a pass while the shared render resources were being built, so the crash landed before the first frame. Where layered rendering is missing, the fallback texture is now cleared one slice per pass and the frame renders without shadows, with a one-time console warning naming the reason so the difference from a device build is not mistaken for a rendering bug. Real hardware is unaffected: Apple5 and later covers every iOS 18 device, and mac2 covers every Mac.
+
 ## [0.6.0] - 2026-08-12
 
 ### Added
@@ -237,6 +243,7 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
+[0.6.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.4.1...0.5.0
 [0.4.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.4.0...0.4.1
