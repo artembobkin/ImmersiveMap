@@ -11,6 +11,10 @@
 		D30000000000000000000023 /* VisualReviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30000000000000000000022 /* VisualReviewRenderer.swift */; };
 		D30000000000000000000025 /* VisualReviewCatalogue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30000000000000000000024 /* VisualReviewCatalogue.swift */; };
 		D30000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = D30000000000000000000004 /* ImmersiveMap */; };
+		D3000000000000000000003A /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = D30000000000000000000039 /* ImmersiveMap */; };
+		D3000000000000000000003B /* ImmersiveMapVisualReviewApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30000000000000000000020 /* ImmersiveMapVisualReviewApp.swift */; };
+		D3000000000000000000003C /* VisualReviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30000000000000000000022 /* VisualReviewRenderer.swift */; };
+		D3000000000000000000003D /* VisualReviewCatalogue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30000000000000000000024 /* VisualReviewCatalogue.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +22,7 @@
 		D30000000000000000000022 /* VisualReviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualReviewRenderer.swift; sourceTree = "<group>"; };
 		D30000000000000000000024 /* VisualReviewCatalogue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualReviewCatalogue.swift; sourceTree = "<group>"; };
 		D30000000000000000000005 /* ImmersiveMapVisualReview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapVisualReview.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D30000000000000000000030 /* ImmersiveMapVisualReviewIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapVisualReviewIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -26,6 +31,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				D30000000000000000000003 /* ImmersiveMap in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D30000000000000000000036 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3000000000000000000003A /* ImmersiveMap in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				D30000000000000000000005 /* ImmersiveMapVisualReview.app */,
+				D30000000000000000000030 /* ImmersiveMapVisualReviewIOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -81,6 +95,27 @@
 			productReference = D30000000000000000000005 /* ImmersiveMapVisualReview.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D30000000000000000000031 /* ImmersiveMapVisualReviewIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D30000000000000000000032 /* Build configuration list for PBXNativeTarget "ImmersiveMapVisualReviewIOS" */;
+			buildPhases = (
+				D30000000000000000000035 /* Sources */,
+				D30000000000000000000036 /* Frameworks */,
+				D30000000000000000000037 /* Resources */,
+				D30000000000000000000038 /* Stamp the commit into Info.plist */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ImmersiveMapVisualReviewIOS;
+			packageProductDependencies = (
+				D30000000000000000000039 /* ImmersiveMap */,
+			);
+			productName = ImmersiveMapVisualReviewIOS;
+			productReference = D30000000000000000000030 /* ImmersiveMapVisualReviewIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -92,6 +127,9 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					D3000000000000000000000A = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					D30000000000000000000031 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -113,6 +151,7 @@
 			projectRoot = "";
 			targets = (
 				D3000000000000000000000A /* ImmersiveMapVisualReview */,
+				D30000000000000000000031 /* ImmersiveMapVisualReviewIOS */,
 			);
 		};
 /* End PBXProject section */
@@ -126,7 +165,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D30000000000000000000037 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D30000000000000000000038 /* Stamp the commit into Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Stamp the commit into Info.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/info-plist-stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Two facts the generated Info.plist cannot carry.\n#\n# The commit records which checkout this build came from, so a verdict\n# made on a device says what it judged: there is no git on the phone to\n# ask later. UIFileSharingEnabled puts the renders and the verdict file in\n# the Files app, a second way off the device besides the share sheet, and\n# is not one of the keys an INFOPLIST_KEY_ setting can express.\n#\n# The built plist is declared as this phase's input on purpose: it is what\n# orders the phase after the task that generates it. Without that the\n# phase ran first and every key written here was overwritten.\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n[ -f \"$PLIST\" ] || exit 1\n\nset_key() {\n  if ! /usr/libexec/PlistBuddy -c \"Set :$1 $3\" \"$PLIST\" 2>/dev/null; then\n    /usr/libexec/PlistBuddy -c \"Add :$1 $2 $3\" \"$PLIST\"\n  fi\n}\n\nCOMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || true)\nif [ -n \"$COMMIT\" ]; then set_key ImmersiveMapCommit string \"$COMMIT\"; fi\nset_key UIFileSharingEnabled bool true\n\nmkdir -p \"$DERIVED_FILE_DIR\"\ntouch \"$DERIVED_FILE_DIR/info-plist-stamp\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D3000000000000000000000C /* Sources */ = {
@@ -136,6 +206,16 @@
 				D30000000000000000000021 /* ImmersiveMapVisualReviewApp.swift in Sources */,
 				D30000000000000000000023 /* VisualReviewRenderer.swift in Sources */,
 				D30000000000000000000025 /* VisualReviewCatalogue.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D30000000000000000000035 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3000000000000000000003B /* ImmersiveMapVisualReviewApp.swift in Sources */,
+				D3000000000000000000003C /* VisualReviewRenderer.swift in Sources */,
+				D3000000000000000000003D /* VisualReviewCatalogue.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -237,6 +317,62 @@
 			};
 			name = Release;
 		};
+		D30000000000000000000033 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapVisualReviewIOS;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D30000000000000000000034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapVisualReviewIOS;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -258,6 +394,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D30000000000000000000032 /* Build configuration list for PBXNativeTarget "ImmersiveMapVisualReviewIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D30000000000000000000033 /* Debug */,
+				D30000000000000000000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -269,6 +414,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		D30000000000000000000004 /* ImmersiveMap */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D30000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
+			productName = ImmersiveMap;
+		};
+		D30000000000000000000039 /* ImmersiveMap */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D30000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
 			productName = ImmersiveMap;

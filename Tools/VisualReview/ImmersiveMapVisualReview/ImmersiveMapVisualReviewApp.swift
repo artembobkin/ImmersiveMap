@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import AVKit
+import CoreGraphics
+import ImageIO
 import ImmersiveMap
 import SwiftUI
 
 @main
 struct ImmersiveMapVisualReviewApp: App {
+    #if os(macOS)
     var body: some Scene {
         WindowGroup("ImmersiveMap Visual Review") {
             VisualReviewScreen()
@@ -14,6 +17,13 @@ struct ImmersiveMapVisualReviewApp: App {
         }
         .windowResizability(.contentMinSize)
     }
+    #else
+    var body: some Scene {
+        WindowGroup("ImmersiveMap Visual Review") {
+            VisualReviewScreen()
+        }
+    }
+    #endif
 }
 
 /// What the tool knows about one scenario right now.
@@ -101,6 +111,12 @@ final class VisualReviewModel {
     /// Set when the verdict file could not be written, so the failure is on
     /// screen instead of only in the return value nobody reads.
     var verdictWriteFailure: String?
+
+    /// When the last verdict was recorded, to tell a decision from a key that
+    /// is simply still held down. Well under the pace of someone looking at
+    /// each picture, well over the system's auto-repeat interval.
+    private var lastVerdictDate: Date?
+    private static let minimumTimeBetweenVerdicts: TimeInterval = 0.4
 
     private var store: VisualReviewVerdictStore
     private let renderer = VisualReviewRenderer()
@@ -227,6 +243,18 @@ final class VisualReviewModel {
 
     func record(_ ruling: VisualReviewVerdict.Ruling, note: String, for item: VisualReviewItem) {
         guard let artifact = item.artifact else { return }
+        // A verdict is a decision, and a held key is not twelve of them.
+        //
+        // Approving advances the selection, so with the shortcut on a bare
+        // letter the system's key auto-repeat walks the entire catalogue: one
+        // leaned-on "A" approved all twelve scenarios inside two seconds,
+        // which is a record of nothing. Repeats inside the window are dropped,
+        // and the list shows what did register.
+        let now = Date()
+        if let last = lastVerdictDate, now.timeIntervalSince(last) < Self.minimumTimeBetweenVerdicts {
+            return
+        }
+        lastVerdictDate = now
         let verdict = VisualReviewVerdict(ruling: ruling,
                                           note: note,
                                           decidedAt: Date(),
@@ -261,6 +289,43 @@ struct VisualReviewScreen: View {
     @State private var note = ""
     @FocusState private var noteIsFocused: Bool
 
+    /// Set while the review screen is pushed on a phone, where the list and the
+    /// artifact cannot share a screen. Verdicts advance the selection, so the
+    /// pushed screen follows the catalogue and one push covers the whole pass.
+    @State private var isReviewing = false
+
+    var body: some View {
+        platformBody
+            // The map a video export attaches to. The export renders in its own
+            // headless engine, so this one never has to be looked at; it exists
+            // only because the recorder binds to a live view and reads the
+            // settings from it. Hence a real frame (SwiftUI must instantiate
+            // it) at an opacity that keeps it out of the way.
+            .background {
+                if let scenario = model.videoScenarioOnScreen {
+                    ImmersiveMapView()
+                        .applying(scenario.settings)
+                        .tourVideoRecorder(model.videoRecorder)
+                        .frame(width: 640, height: 360)
+                        .opacity(0.001)
+                        .allowsHitTesting(false)
+                }
+            }
+            // Selection drives the note field, and it has to be here rather
+            // than on the detail view: the detail is rebuilt on selection
+            // change, so a modifier inside it would miss the transition it is
+            // meant to observe and leave the previous scenario's note in the
+            // box.
+            .task(id: model.selectedID) {
+                note = model.selectedItem?.verdict?.note ?? ""
+            }
+            .task {
+                await model.adoptExistingRenders()
+                await runHeadlessRenderIfRequested()
+            }
+    }
+
+    #if os(macOS)
     /// A plain split rather than `NavigationSplitView`.
     ///
     /// Under `NavigationSplitView` on macOS 15 this window drew neither
@@ -270,7 +335,7 @@ struct VisualReviewScreen: View {
     /// same views in a plain `HSplitView` draw correctly, so the tool does not
     /// use the container that breaks them. Nothing here needs what it offered:
     /// there is one fixed list, no navigation stack and no collapsing.
-    var body: some View {
+    private var platformBody: some View {
         // The progress strip is a sibling of the split rather than a
         // `safeAreaInset` on it. `HSplitView` is backed by `NSSplitView` and
         // does not pass a bottom safe-area inset down to its columns: the strip
@@ -290,50 +355,81 @@ struct VisualReviewScreen: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    Task { await model.renderAll() }
-                } label: {
-                    Label("Render all", systemImage: "photo.on.rectangle.angled")
+            ToolbarItem(placement: .navigation) { renderAllButton }
+            ToolbarItem { attentionToggle }
+            ToolbarItem { shareVerdictsButton }
+        }
+    }
+    #else
+    /// One screen at a time on a phone: the catalogue, then the picture.
+    ///
+    /// A 1600 by 1000 render and a list of twelve scenarios do not share a
+    /// phone screen, and the review screen is the one that has to be big: the
+    /// whole point of a device pass is judging the rendering on the hardware
+    /// that produced it.
+    private var platformBody: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                scenarioList
+                Divider()
+                countsFooter
+                if model.isRendering {
+                    Divider()
+                    renderingBanner
                 }
-                .labelStyle(.titleAndIcon)
-                .disabled(model.isRendering)
-                .help("Render every scenario in the catalogue. Stills take a moment each, videos longer.")
             }
-            ToolbarItem {
-                Toggle(isOn: $model.showsOnlyAttention) {
-                    Label("Needs a look (\(model.attentionCount))", systemImage: "eye")
-                }
-                .labelStyle(.titleAndIcon)
-                .help("Show only scenarios whose render differs from the one they were approved for.")
+            .navigationTitle("Visual Review")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { renderAllButton }
+                ToolbarItem(placement: .topBarTrailing) { attentionToggle }
+                ToolbarItem(placement: .topBarTrailing) { shareVerdictsButton }
             }
-        }
-        // The map a video export attaches to. The export renders in its own
-        // headless engine, so this one never has to be looked at; it exists
-        // only because the recorder binds to a live view and reads the
-        // settings from it. Hence a real frame (SwiftUI must instantiate it)
-        // at an opacity that keeps it out of the way.
-        .background {
-            if let scenario = model.videoScenarioOnScreen {
-                ImmersiveMapView()
-                    .applying(scenario.settings)
-                    .tourVideoRecorder(model.videoRecorder)
-                    .frame(width: 640, height: 360)
-                    .opacity(0.001)
-                    .allowsHitTesting(false)
+            .navigationDestination(isPresented: $isReviewing) {
+                detail
+                    .navigationTitle(model.selectedItem?.scenario.title ?? "Review")
+                    .navigationBarTitleDisplayMode(.inline)
             }
         }
-        // Selection drives the note field, and it has to be here rather than
-        // on the detail view: the detail is rebuilt on selection change, so a
-        // modifier inside it would miss the transition it is meant to observe
-        // and leave the previous scenario's note in the box.
-        .task(id: model.selectedID) {
-            note = model.selectedItem?.verdict?.note ?? ""
+    }
+    #endif
+
+    // MARK: - Controls
+
+    private var renderAllButton: some View {
+        Button {
+            Task { await model.renderAll() }
+        } label: {
+            Label("Render all", systemImage: "photo.on.rectangle.angled")
         }
-        .task {
-            await model.adoptExistingRenders()
-            await runHeadlessRenderIfRequested()
+        .labelStyle(.titleAndIcon)
+        .disabled(model.isRendering)
+        .help("Render every scenario in the catalogue. Stills take a moment each, videos longer.")
+    }
+
+    private var attentionToggle: some View {
+        Toggle(isOn: $model.showsOnlyAttention) {
+            Label("Needs a look (\(model.attentionCount))", systemImage: "eye")
         }
+        .toolbarLabelStyle()
+        .help("Show only scenarios whose render differs from the one they were approved for.")
+    }
+
+    /// How a pass leaves the device.
+    ///
+    /// On a phone the verdict file lives in the app's own container, which the
+    /// checkout it belongs in cannot reach, so the file itself goes to the
+    /// share sheet: AirDrop it to the Mac, or save it into Files and move it
+    /// into `Tools/VisualReview/`. On a Mac it is already in the checkout and
+    /// this is just a quick way to send it to someone.
+    private var shareVerdictsButton: some View {
+        ShareLink(item: VisualReviewPaths.verdictsURL) {
+            Label("Share verdicts", systemImage: "square.and.arrow.up")
+        }
+        .toolbarLabelStyle()
+        // Nothing has been written yet, so there is no file to hand over.
+        .disabled(model.items.allSatisfy { $0.verdict == nil })
+        .help("Send \(VisualReviewPaths.verdictsFileName) somewhere: AirDrop to the Mac, or save it to Files.")
     }
 
     /// Batch hook, in the shape the `Posts/` apps already use: launching with
@@ -371,55 +467,93 @@ struct VisualReviewScreen: View {
         exit(failures == 0 ? 0 : 1)
     }
 
+    #if os(macOS)
     private var sidebar: some View {
         VStack(spacing: 0) {
             scenarioList
             Divider()
-            // The counts are the sidebar's own witness: an empty list is then
-            // always accompanied by the reason it is empty, instead of a
-            // styled blank panel that looks the same whether the catalogue is
-            // missing or the filter simply matched nothing.
-            HStack {
-                Text("\(model.items.count) scenarios")
-                Spacer()
-                Text("\(model.attentionCount) need a look")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            countsFooter
         }
+    }
+    #endif
+
+    /// The counts are the list's own witness: an empty list is then always
+    /// accompanied by the reason it is empty, instead of a styled blank panel
+    /// that looks the same whether the catalogue is missing or the filter
+    /// simply matched nothing.
+    private var countsFooter: some View {
+        HStack {
+            Text("\(model.items.count) scenarios")
+            Spacer()
+            Text("\(model.attentionCount) need a look")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private var scenarioList: some View {
+        #if os(macOS)
         List(selection: $model.selectedID) {
             ForEach(model.visibleItems) { item in
-                HStack(spacing: 8) {
-                    Image(systemName: item.statusSymbol)
-                        .foregroundStyle(item.statusColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.scenario.title)
-                        if item.scenario.isVideo {
-                            Text("video")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                scenarioRow(for: item)
+            }
+        }
+        .overlay { listEmptyState }
+        #else
+        // Tapping pushes the review screen rather than selecting in place:
+        // `List(selection:)` on iOS is multi-select in edit mode, not a
+        // pointer to what the detail should show.
+        List {
+            ForEach(model.visibleItems) { item in
+                Button {
+                    model.selectedID = item.id
+                    isReviewing = true
+                } label: {
+                    HStack {
+                        scenarioRow(for: item)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay { listEmptyState }
+        #endif
+    }
+
+    private func scenarioRow(for item: VisualReviewItem) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: item.statusSymbol)
+                .foregroundStyle(item.statusColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.scenario.title)
+                if item.scenario.isVideo {
+                    Text("video")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .overlay {
-            if model.visibleItems.isEmpty {
-                if model.items.isEmpty {
-                    ContentUnavailableView("No scenarios",
-                                           systemImage: "exclamationmark.triangle",
-                                           description: Text("The catalogue is empty, which is a programming error."))
-                } else {
-                    ContentUnavailableView("Nothing needs a look",
-                                           systemImage: "checkmark.seal",
-                                           description: Text("Every scenario matches the render it was approved for. "
-                                               + "Turn off \"Needs a look\" to see all \(model.items.count)."))
-                }
+    }
+
+    @ViewBuilder
+    private var listEmptyState: some View {
+        if model.visibleItems.isEmpty {
+            if model.items.isEmpty {
+                ContentUnavailableView("No scenarios",
+                                       systemImage: "exclamationmark.triangle",
+                                       description: Text("The catalogue is empty, which is a programming error."))
+            } else {
+                ContentUnavailableView("Nothing needs a look",
+                                       systemImage: "checkmark.seal",
+                                       description: Text("Every scenario matches the render it was approved for. "
+                                           + "Turn off \"Needs a look\" to see all \(model.items.count)."))
             }
         }
     }
@@ -458,8 +592,8 @@ struct VisualReviewScreen: View {
             if let artifact = item.artifact {
                 if item.scenario.isVideo {
                     VideoPlayer(player: AVPlayer(url: artifact.url))
-                } else if let image = NSImage(contentsOf: artifact.url) {
-                    Image(nsImage: image)
+                } else if let image = VisualReviewArtifactImage.load(artifact.url) {
+                    image
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                 } else {
@@ -556,7 +690,34 @@ struct VisualReviewScreen: View {
     }
 }
 
+/// Loads a rendered artifact as a SwiftUI image.
+///
+/// Through `CGImageSource` rather than `NSImage` or `UIImage`, so both
+/// platforms take the same path. The tool renders the same catalogue on a Mac
+/// and on a phone, and a picture that arrives on screen differently between
+/// them is exactly what a visual review must not introduce itself.
+enum VisualReviewArtifactImage {
+    static func load(_ url: URL) -> Image? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return nil
+        }
+        return Image(decorative: image, scale: 1)
+    }
+}
+
 private extension View {
+    /// Titles on a Mac, where the toolbar has room for them, icons on a phone,
+    /// where three of them do not fit across the top of the screen.
+    @ViewBuilder
+    func toolbarLabelStyle() -> some View {
+        #if os(macOS)
+        labelStyle(.titleAndIcon)
+        #else
+        labelStyle(.iconOnly)
+        #endif
+    }
+
     /// A plain-letter shortcut that is withdrawn while text is being typed.
     ///
     /// Without a modifier the key reaches the button even when a `TextField`

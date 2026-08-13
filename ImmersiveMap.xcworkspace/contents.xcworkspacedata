@@ -74,5 +74,8 @@
       <FileRef
          location = "group:Tools/VisualReview/ImmersiveMapVisualReview.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>

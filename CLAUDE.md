@@ -26,6 +26,16 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
+A physical iPhone needs a different route. SwiftPM test targets are tool-hosted, and `xcodebuild` rejects them on a device destination ("Tool-hosted testing is unavailable on device destinations"), so the suite runs there through `Tools/DeviceTests/`, a host app plus a test bundle that takes its sources straight from `Tests/ImmersiveMapTests` through a synchronized folder reference (no second file list to keep in step):
+
+```sh
+xcrun xctrace list devices                                   # find the device id
+xcodebuild test -project Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj \
+  -scheme ImmersiveMapDeviceTests -destination 'id=<device-id>'
+```
+
+Reach for it when the question is about hardware: layered rendering, which the cascade shadow maps rasterize through, does not exist in the simulator, so the shadow path is skipped there rather than exercised. The tests that read `.metal` source off the checkout to assert on shader logic cannot pass on a device, where there is no checkout; filter them out with `-only-testing:` rather than treating them as failures.
+
 To run the map in an app, open `ImmersiveMap.xcworkspace`. `Examples/` holds one host app per integration scenario, each its own scheme, split by platform: `Examples/ImmersiveMapIOS` (the only iOS one, a minimal host rather than a feature demo) and, under `Examples/macOS/`, `ImmersiveMapCameraTourMac`, `ImmersiveMapMarkersMac`, `ImmersiveMapAvatarsMac`, `ImmersiveMapSceneModelsMac`, `ImmersiveMapRoutesMac`, `ImmersiveMapOfflineMac`, `ImmersiveMapSettingsMac`, `ImmersiveMapMapboxMac`, `ImmersiveMapCustomTilesMac`. Everything that is a field on `ImmersiveMapSettings` (labels, scene, style, presentation, tiles, debug) belongs in `ImmersiveMapSettingsMac`, which has a sidebar section per branch: add a section there instead of a new project. All reference the package locally, so unpublished package changes run immediately. Native macOS build from the CLI:
 
 ```sh
@@ -44,7 +54,8 @@ Every example and post scheme runs the app in `Release`, not `Debug`: these proj
 Offline tooling (not part of the SwiftPM build):
 
 - `Tools/TextAtlas/generate_text_atlas.sh`: regenerates the committed MTSDF text atlases in `ImmersiveMap/Text/Resources/` (`atlas` and `atlas_thin`: RGB carries the MSDF the label fill samples, alpha the plain SDF the halo/stroke coverage is derived from). Requires `msdf-atlas-gen` and local Noto Sans fonts; fonts are never committed. The PNG and its JSON are regenerated together, so a half-updated pair means the shader samples a channel that is not there.
-- `Tools/VisualReview/`: the `ImmersiveMapVisualReview` macOS app, run by hand before a release. It renders a catalogue of fixed scenes to PNGs and short clips and walks a person through them for a verdict, which is where judgements about how the rendering *looks* belong: the automated suite only asserts what a machine can decide. Verdicts live in `Tools/VisualReview/verdicts.json` (committed) and renders in `Tools/VisualReview/Output/` (gitignored). A coarse fingerprint per artifact keeps a pass short by showing only what changed since it was approved. Never part of CI. A launch with `IMMERSIVE_VISUAL_REVIEW_RENDER=1` renders and exits without the UI, optionally filtered by `IMMERSIVE_VISUAL_REVIEW_ONLY=<ids>`. A user-visible rendering feature that ships without a scenario there does not get looked at before a release.
+- `Tools/DeviceTests/`: the `ImmersiveMapDeviceTests` project, which is only how the XCTest suite reaches a physical iPhone (see Commands above). Two targets: a host app that exists solely to be loaded into, and the test bundle. Never part of CI.
+- `Tools/VisualReview/`: the `ImmersiveMapVisualReview` macOS app, run by hand before a release. It renders a catalogue of fixed scenes to PNGs and short clips and walks a person through them for a verdict, which is where judgements about how the rendering *looks* belong: the automated suite only asserts what a machine can decide. The same sources also build as `ImmersiveMapVisualReviewIOS`, a second scheme in the same project that runs the catalogue on an iPhone, which is the only place the iOS shadow path can be looked at. Verdicts live in `Tools/VisualReview/verdicts.json` (committed) and renders in `Tools/VisualReview/Output/` (gitignored); a device pass keeps its own `verdicts.ios.json`, because the two platforms render different pixels and one file would have each overwriting the other's judgements. On a phone both live in the app container instead, and leave it through the toolbar's share button. A coarse fingerprint per artifact keeps a pass short by showing only what changed since it was approved. Never part of CI. A launch with `IMMERSIVE_VISUAL_REVIEW_RENDER=1` renders and exits without the UI, optionally filtered by `IMMERSIVE_VISUAL_REVIEW_ONLY=<ids>`. A user-visible rendering feature that ships without a scenario there does not get looked at before a release.
 
 ## Architecture
 

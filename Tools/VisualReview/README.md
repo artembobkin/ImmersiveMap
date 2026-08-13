@@ -17,6 +17,12 @@ instead of hoping someone notices.
 Open `ImmersiveMap.xcworkspace`, pick the **ImmersiveMapVisualReview** scheme
 and run. It is not part of CI and never runs on a pull request.
 
+There is a second scheme, **ImmersiveMapVisualReviewIOS**, that runs the same
+catalogue on an iPhone. Same sources, one screen at a time: the list, then the
+picture. It exists because a Mac cannot answer every question. Shadows
+rasterize through layered rendering, which the iOS simulator does not have, so
+the only place the iOS shadow path can be looked at is a device.
+
 1. **Render all** renders every scenario in the catalogue. Stills go through
    `ImmersiveMapStillRecorder` with nothing on screen; each video takes a turn
    with a live map, because the video recorder only works attached to one.
@@ -26,6 +32,21 @@ and run. It is not part of CI and never runs on a pull request.
    field has focus, so a rejection can be typed without triggering them.
 3. Verdicts are written to `verdicts.json` next to this file, and that file is
    committed.
+
+## Two verdict files, one per platform
+
+A Mac pass writes `verdicts.json`; a phone pass writes `verdicts.ios.json`.
+They are separate on purpose. The two render on different GPUs at different
+sizes, so a scenario's fingerprint from one never matches the other: sharing a
+file would make every entry read as changed, and merging a phone pass back into
+the checkout would overwrite a Mac verdict with a judgement about a picture
+nobody looked at on a Mac. Both files are committed.
+
+On a phone there is no checkout to write into, so the renders and the verdict
+file live in the app's own container. **Share verdicts** in the toolbar hands
+the file to the share sheet: AirDrop it to the Mac, or save it to Files, then
+move it next to this README. The container is also visible in the Files app, so
+the rendered PNGs and clips can be pulled off the same way.
 
 ## What the fingerprint is for
 

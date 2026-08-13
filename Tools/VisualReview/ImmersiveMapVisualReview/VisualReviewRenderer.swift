@@ -319,6 +319,11 @@ enum VisualReviewPaths {
     /// development tool built from the repository it inspects, so the path is
     /// known and stable; falling back to the user's Documents folder keeps a
     /// copied binary from crashing.
+    ///
+    /// Mac only, deliberately. On the iOS simulator `#filePath` does resolve,
+    /// and that is worse than not resolving: a phone pass would write its
+    /// renders into the Mac's checkout and collide with the pass made there.
+    #if !os(iOS)
     static var repositoryRoot: URL {
         // .../Tools/VisualReview/ImmersiveMapVisualReview/VisualReviewRenderer.swift
         let source = URL(fileURLWithPath: #filePath)
@@ -333,20 +338,58 @@ enum VisualReviewPaths {
         return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appending(path: "ImmersiveMapVisualReview")
     }
+    #endif
+
+    /// The folder holding the renders and the verdict file: the tool's own
+    /// folder in the checkout on a Mac, the app's Documents container on a
+    /// phone, where there is no checkout to write into.
+    static var reviewDirectory: URL {
+        #if os(iOS)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        #else
+        return repositoryRoot.appending(path: "Tools/VisualReview")
+        #endif
+    }
 
     /// Gitignored: renders are large, machine specific, and regenerated on
     /// demand.
     static var outputDirectory: URL {
-        repositoryRoot.appending(path: "Tools/VisualReview/Output")
+        reviewDirectory.appending(path: "Output")
     }
 
     /// Committed: the verdicts are the record of what a person approved.
     static var verdictsURL: URL {
-        repositoryRoot.appending(path: "Tools/VisualReview/verdicts.json")
+        reviewDirectory.appending(path: verdictsFileName)
+    }
+
+    /// A Mac pass and a phone pass are judgements about different pictures.
+    ///
+    /// The two render on different GPUs at different sizes, so a scenario's
+    /// fingerprint from one never matches the other. Sharing a file would make
+    /// every entry read as changed, and worse, merging a phone pass back into
+    /// the checkout would overwrite the Mac's verdict for the same scenario id
+    /// with a verdict about a picture nobody looked at on a Mac. They are kept
+    /// apart, and both are committed.
+    static var verdictsFileName: String {
+        #if os(iOS)
+        return "verdicts.ios.json"
+        #else
+        return "verdicts.json"
+        #endif
     }
 
     /// Short commit hash of the checkout, for the record in a verdict.
+    ///
+    /// On a phone there is no checkout and no `Process` to run `git` with, so
+    /// the commit is stamped into the app's Info.plist by a build phase and
+    /// read back from the bundle. Without it a verdict from a device pass
+    /// would not say what it judged, which is most of what makes the record
+    /// worth committing.
     static func currentCommit() -> String? {
+        #if os(iOS)
+        let stamped = Bundle.main.object(forInfoDictionaryKey: "ImmersiveMapCommit") as? String
+        return stamped?.isEmpty == false ? stamped : nil
+        #else
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", repositoryRoot.path, "rev-parse", "--short", "HEAD"]
@@ -362,5 +405,6 @@ enum VisualReviewPaths {
             return nil
         }
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        #endif
     }
 }

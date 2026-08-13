@@ -1,0 +1,394 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D4000000000000000000000B /* ImmersiveMapDeviceTestHostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000000000000000000000A /* ImmersiveMapDeviceTestHostApp.swift */; };
+		D4000000000000000000001E /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = D4000000000000000000001D /* ImmersiveMap */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D4000000000000000000001B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D4000000000000000000000C;
+			remoteInfo = ImmersiveMapDeviceTestHost;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		D40000000000000000000008 /* ImmersiveMapDeviceTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapDeviceTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D40000000000000000000009 /* ImmersiveMapDeviceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ImmersiveMapDeviceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4000000000000000000000A /* ImmersiveMapDeviceTestHostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapDeviceTestHostApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D4000000000000000000001F /* ImmersiveMapTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ../../Tests/ImmersiveMapTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D40000000000000000000011 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D40000000000000000000018 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4000000000000000000001E /* ImmersiveMap in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D40000000000000000000005 = {
+			isa = PBXGroup;
+			children = (
+				D40000000000000000000007 /* Host */,
+				D4000000000000000000001F /* ImmersiveMapTests */,
+				D40000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D40000000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D40000000000000000000008 /* ImmersiveMapDeviceTestHost.app */,
+				D40000000000000000000009 /* ImmersiveMapDeviceTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000007 /* Host */ = {
+			isa = PBXGroup;
+			children = (
+				D4000000000000000000000A /* ImmersiveMapDeviceTestHostApp.swift */,
+			);
+			path = Host;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D4000000000000000000000C /* ImmersiveMapDeviceTestHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4000000000000000000000D /* Build configuration list for PBXNativeTarget "ImmersiveMapDeviceTestHost" */;
+			buildPhases = (
+				D40000000000000000000010 /* Sources */,
+				D40000000000000000000011 /* Frameworks */,
+				D40000000000000000000012 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ImmersiveMapDeviceTestHost;
+			productName = ImmersiveMapDeviceTestHost;
+			productReference = D40000000000000000000008 /* ImmersiveMapDeviceTestHost.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D40000000000000000000013 /* ImmersiveMapDeviceTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D40000000000000000000014 /* Build configuration list for PBXNativeTarget "ImmersiveMapDeviceTests" */;
+			buildPhases = (
+				D40000000000000000000017 /* Sources */,
+				D40000000000000000000018 /* Frameworks */,
+				D40000000000000000000019 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4000000000000000000001A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D4000000000000000000001F /* ImmersiveMapTests */,
+			);
+			name = ImmersiveMapDeviceTests;
+			packageProductDependencies = (
+				D4000000000000000000001D /* ImmersiveMap */,
+			);
+			productName = ImmersiveMapDeviceTests;
+			productReference = D40000000000000000000009 /* ImmersiveMapDeviceTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D40000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					D4000000000000000000000C = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					D40000000000000000000013 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = D4000000000000000000000C;
+					};
+				};
+			};
+			buildConfigurationList = D40000000000000000000002 /* Build configuration list for PBXProject "ImmersiveMapDeviceTests" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D40000000000000000000005;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D4000000000000000000001C /* XCLocalSwiftPackageReference "../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D40000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D4000000000000000000000C /* ImmersiveMapDeviceTestHost */,
+				D40000000000000000000013 /* ImmersiveMapDeviceTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D40000000000000000000012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D40000000000000000000019 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D40000000000000000000010 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4000000000000000000000B /* ImmersiveMapDeviceTestHostApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D40000000000000000000017 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D4000000000000000000001A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D4000000000000000000000C /* ImmersiveMapDeviceTestHost */;
+			targetProxy = D4000000000000000000001B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D40000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D40000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_TESTABILITY = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D4000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTestHost;
+			};
+			name = Debug;
+		};
+		D4000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTestHost;
+			};
+			name = Release;
+		};
+		D40000000000000000000015 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImmersiveMapDeviceTestHost.app/ImmersiveMapDeviceTestHost";
+			};
+			name = Debug;
+		};
+		D40000000000000000000016 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = B2MWFA6UQ8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImmersiveMapDeviceTestHost.app/ImmersiveMapDeviceTestHost";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D40000000000000000000002 /* Build configuration list for PBXProject "ImmersiveMapDeviceTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D40000000000000000000003 /* Debug */,
+				D40000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D4000000000000000000000D /* Build configuration list for PBXNativeTarget "ImmersiveMapDeviceTestHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4000000000000000000000E /* Debug */,
+				D4000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D40000000000000000000014 /* Build configuration list for PBXNativeTarget "ImmersiveMapDeviceTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D40000000000000000000015 /* Debug */,
+				D40000000000000000000016 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D4000000000000000000001C /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D4000000000000000000001D /* ImmersiveMap */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4000000000000000000001C /* XCLocalSwiftPackageReference "../.." */;
+			productName = ImmersiveMap;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D40000000000000000000001 /* Project object */;
+}
