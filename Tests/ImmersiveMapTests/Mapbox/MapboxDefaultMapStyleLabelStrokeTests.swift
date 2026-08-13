@@ -12,17 +12,17 @@ final class MapboxDefaultMapStyleLabelStrokeTests: XCTestCase {
                        accuracy: 0.0001)
         XCTAssertEqual(baseLabelHaloEm(layerName: "place_label",
                                        properties: ["capital": intValue(2)]),
-                       0.156,
+                       0.159,
                        accuracy: 0.0001)
         XCTAssertEqual(baseLabelHaloEm(layerName: "poi_label",
                                        properties: ["type": stringValue("restaurant")]),
                        0.300,
                        accuracy: 0.0001)
         XCTAssertEqual(baseLabelHaloEm(layerName: "airport_label"),
-                       0.300,
+                       0.325,
                        accuracy: 0.0001)
         XCTAssertEqual(baseLabelHaloEm(layerName: "housenum_label"),
-                       0.311,
+                       0.312,
                        accuracy: 0.0001)
     }
 
