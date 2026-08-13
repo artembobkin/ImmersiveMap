@@ -45,9 +45,16 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
     /// follow the same per-frame projection (including the globe-horizon fade)
     /// as on screen.
     public var includesMarkers: Bool
-    /// Rasterization scale of SwiftUI markers, in pixels per point. The
-    /// default `2` sizes markers as on a Retina display whose drawable matches
-    /// the export resolution. Allowed range 0.5...8.
+    /// Rasterization scale of SwiftUI markers, in pixels per point, against the
+    /// export's own reference canvas rather than against its pixel dimensions.
+    ///
+    /// A marker view is laid out in points, exactly like a label, so it has to
+    /// grow with the export the way the map does: the runtime multiplies this
+    /// by the ratio between the export's pixels-per-point and the 2x reference.
+    /// At the default `2` a marker therefore rasterizes at the same scale the
+    /// map renders at, and keeps its size relative to the labels beside it in a
+    /// 1080p and a 4K export alike. Raise it to oversample a marker whose
+    /// artwork needs more resolution than the map. Allowed range 0.5...8.
     public var markerScale: Double
 
     public static let `default` = ImmersiveMapVideoExportConfiguration()

@@ -61,6 +61,7 @@ final class ImmersiveMapVideoExportRuntime {
     private var exportPixelsPerPoint: CGFloat {
         ExportScreenScaleMath.pixelsPerPoint(forOutputSize: drawSize)
     }
+
     private let writer: VideoExportAssetWriter
     private let clock: RenderFrameScriptedClock
     private let eventSink: VideoExportRenderEventSink
@@ -87,10 +88,15 @@ final class ImmersiveMapVideoExportRuntime {
          outputURL: URL) throws {
         self.configuration = configuration
         self.settings = settings
-        self.drawSize = CGSize(width: configuration.width, height: configuration.height)
+        let drawSize = CGSize(width: configuration.width, height: configuration.height)
+        self.drawSize = drawSize
         self.writer = try VideoExportAssetWriter(url: outputURL, configuration: configuration)
+        // Local rather than the computed property: the markers rasterize here,
+        // before the rest of `self` exists.
+        let markerScale = ExportScreenScaleMath.markerRasterizationScale(markerScale: configuration.markerScale,
+                                                                         outputSize: drawSize)
         self.markerOverlay = markerContent.flatMap {
-            VideoExportMarkerOverlay(content: $0, scale: configuration.markerScale)
+            VideoExportMarkerOverlay(content: $0, scale: markerScale)
         }
 
         let clock = RenderFrameScriptedClock(date: configuration.sceneDate ?? Date())

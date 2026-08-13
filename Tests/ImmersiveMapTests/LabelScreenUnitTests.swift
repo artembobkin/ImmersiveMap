@@ -228,6 +228,31 @@ final class LabelScreenUnitTests: XCTestCase {
                        accuracy: 0.0001)
     }
 
+    /// A SwiftUI marker is laid out in points, like a label, so it has to grow
+    /// with the export the way the map does. Held at a fixed scale it would
+    /// take a quarter of the frame fraction at 4K that it takes at 1080p.
+    func testExportMarkersRasterizeAtTheMapScale() {
+        let hd = CGSize(width: 1920, height: 1080)
+        let uhd = CGSize(width: 3840, height: 2160)
+
+        // The default states the reference scale, so it lands on the map's own.
+        XCTAssertEqual(ExportScreenScaleMath.markerRasterizationScale(markerScale: 2, outputSize: hd),
+                       Double(ExportScreenScaleMath.pixelsPerPoint(forOutputSize: hd)),
+                       accuracy: 0.0001)
+        XCTAssertEqual(ExportScreenScaleMath.markerRasterizationScale(markerScale: 2, outputSize: uhd),
+                       Double(ExportScreenScaleMath.pixelsPerPoint(forOutputSize: uhd)),
+                       accuracy: 0.0001)
+
+        // A 1080p export is unchanged from before markers followed the map.
+        XCTAssertEqual(ExportScreenScaleMath.markerRasterizationScale(markerScale: 2, outputSize: hd),
+                       2,
+                       accuracy: 0.0001)
+        // Above the default it oversamples, in step with the map rather than instead of it.
+        XCTAssertEqual(ExportScreenScaleMath.markerRasterizationScale(markerScale: 3, outputSize: uhd),
+                       6,
+                       accuracy: 0.0001)
+    }
+
     // MARK: - Helpers
 
     /// The builder bakes through `TextRenderer`, which needs the compiled Metal

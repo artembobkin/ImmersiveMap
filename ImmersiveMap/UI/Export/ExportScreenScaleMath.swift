@@ -26,6 +26,20 @@ enum ExportScreenScaleMath {
     /// for.
     static let supportedRange: ClosedRange<CGFloat> = 1...8
 
+    /// Pixels per point a SwiftUI marker view rasterizes at.
+    ///
+    /// Markers are point-sized on the live map, so an export has to grow them
+    /// with its own scale or they shrink against the labels beside them: at 4K
+    /// the map renders at 4 pixels per point, and a marker held at 2 would take
+    /// a quarter of the frame fraction it takes at 1080p. `markerScale` is
+    /// stated against the reference canvas, so its default of 2 lands exactly
+    /// on the map's scale and anything above it oversamples.
+    static func markerRasterizationScale(markerScale: Double, outputSize: CGSize) -> Double {
+        let mapScale = pixelsPerPoint(forOutputSize: outputSize)
+        let referenceScale = CGFloat(ScreenScale.reference.pixelsPerPoint)
+        return Double(mapScale / referenceScale) * markerScale
+    }
+
     static func pixelsPerPoint(forOutputSize size: CGSize) -> CGFloat {
         let shortSidePixels = min(size.width, size.height)
         guard shortSidePixels.isFinite, shortSidePixels > 0 else {
