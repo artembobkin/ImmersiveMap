@@ -53,6 +53,9 @@ final class RenderFrameEngine {
     private let inFlightFramePool = InFlightFramePool(slotsCount: InFlightFramePool.inFlightFramesCount)
     private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
+    /// Cascade shadow maps need layered rendering; where it is missing the
+    /// frame is drawn without shadows (see `ShadowCascadeAtlas`).
+    private let supportsShadowCascades: Bool
 
     /// GPU duration of the most recently completed frame, written on the Metal
     /// completion thread and read on the main thread when the next frame's
@@ -107,6 +110,13 @@ final class RenderFrameEngine {
                                                                   attachments.currentShadowMapTexture
                                                               })
 
+        let supportsShadowCascades = ShadowCascadeAtlas.supportsLayeredRendering(
+            device: persistentContext.metalContext.device
+        )
+        if supportsShadowCascades == false {
+            ShadowCascadeAtlas.warnAboutMissingLayeredRenderingOnce()
+        }
+        self.supportsShadowCascades = supportsShadowCascades
         self.settings = settings
         self.debugOverlayControls = debugOverlayControls
         self.clock = clock
@@ -321,14 +331,20 @@ final class RenderFrameEngine {
                                                         tileSettings: settings.tiles,
                                                         sceneSettings: settings.scene,
                                                         diagnostics: diagnostics)
-        let shadowFrameState = ShadowFrameStateResolver.resolve(
-            renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
-            cameraEye: cameraFrameState.cameraEye,
-            centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
-            flatRenderPan: resolvedPresentation.flatRenderState.pan,
-            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
-            scene: settings.scene
-        )
+        // Resolved once here, so the pass injection and every receiver bind
+        // site take the same answer from `ShadowPassGateResolver`: a device
+        // without layered rendering renders the frame without shadows rather
+        // than failing validation when the cascade pass is encoded.
+        let shadowFrameState = supportsShadowCascades
+            ? ShadowFrameStateResolver.resolve(
+                renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
+                cameraEye: cameraFrameState.cameraEye,
+                centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+                flatRenderPan: resolvedPresentation.flatRenderState.pan,
+                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
+                scene: settings.scene
+            )
+            : nil
 
         return FrameContext(frameIndex: frameTick.index,
                             frameSlotIndex: frameSlotIndex,
