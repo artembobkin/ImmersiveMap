@@ -216,7 +216,7 @@ final class BaseLabelDetailTierTests: XCTestCase {
                                     placementMeta: LabelPlacementMeta(key: key,
                                                                       sortKey: index,
                                                                       collisionPriority: index,
-                                                                      labelSizePx: SIMD2<Float>(10 + Float(index), 6),
+                                                                      labelSizePoints: SIMD2<Float>(10 + Float(index), 6),
                                                                       minCameraZoom: 0))
         }
         return TileBuffers.TextLabelSet(placementInputs: placementInputs,

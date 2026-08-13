@@ -199,10 +199,6 @@ struct VisualReviewArtifact: Identifiable {
 /// a compression artifact and wondering whether the renderer made it.
 @MainActor
 final class VisualReviewRenderer {
-    /// Stills are rendered at this size. Big enough to judge label legibility
-    /// and building edges, small enough that a full pass is quick.
-    static let stillSize = (width: 1600, height: 1000)
-
     private let stillRecorder = ImmersiveMapStillRecorder()
 
     /// Renders one still and writes it as a PNG into `directory`.
@@ -211,9 +207,9 @@ final class VisualReviewRenderer {
                      routes: [ImmersiveMapRoute],
                      into directory: URL) async throws -> VisualReviewArtifact {
         let configuration = ImmersiveMapStillConfiguration(
-            width: Self.stillSize.width,
-            height: Self.stillSize.height,
-            pixelsPerPoint: 2,
+            width: scenario.output.width,
+            height: scenario.output.height,
+            pixelsPerPoint: scenario.output.pixelsPerPoint,
             // Generous on purpose: an unfinished tile is the one thing that
             // would make a reviewer reject a frame the renderer got right.
             settleTimeout: 30,

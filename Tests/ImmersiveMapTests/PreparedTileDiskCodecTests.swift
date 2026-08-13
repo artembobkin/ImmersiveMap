@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 31)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 32)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -795,7 +795,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
             placementMeta: LabelPlacementMeta(key: UInt64(seed + 100),
                                               sortKey: Int(seed + 200),
                                               collisionPriority: Int(seed + 300),
-                                              labelSizePx: SIMD2<Float>(Float(seed) + 10.1, Float(seed) + 20.2),
+                                              labelSizePoints: SIMD2<Float>(Float(seed) + 10.1, Float(seed) + 20.2),
                                               minCameraZoom: Float(seed) + 0.5)
         )
         let glyphVertex = makeLabelVertex(seed: seed, labelIndex: seed + 400, spriteSeed: 0)
@@ -814,8 +814,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         LabelTextStyle(key: Int(seed + 600),
                        fillColor: SIMD3<Float>(Float(seed) + 0.01, Float(seed) + 0.02, Float(seed) + 0.03),
                        strokeColor: SIMD3<Float>(Float(seed) + 0.04, Float(seed) + 0.05, Float(seed) + 0.06),
-                       strokeWidthPx: Float(seed) + 1.5,
-                       sizePx: Float(seed) + 12.5,
+                       haloEm: Float(seed) + 1.5,
+                       sizePoints: Float(seed) + 12.5,
                        weight: seed.isMultiple(of: 2) ? .thin : .bold)
     }
 
@@ -860,7 +860,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        expected.placementMeta.collisionPriority,
                        file: file,
                        line: line)
-        XCTAssertEqual(actual.placementMeta.labelSizePx, expected.placementMeta.labelSizePx, file: file, line: line)
+        XCTAssertEqual(actual.placementMeta.labelSizePoints, expected.placementMeta.labelSizePoints, file: file, line: line)
         XCTAssertEqual(actual.placementMeta.minCameraZoom, expected.placementMeta.minCameraZoom, file: file, line: line)
     }
 
@@ -871,8 +871,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.key, expected.key, file: file, line: line)
         XCTAssertEqual(actual.fillColor, expected.fillColor, file: file, line: line)
         XCTAssertEqual(actual.strokeColor, expected.strokeColor, file: file, line: line)
-        XCTAssertEqual(actual.strokeWidthPx, expected.strokeWidthPx, file: file, line: line)
-        XCTAssertEqual(actual.sizePx, expected.sizePx, file: file, line: line)
+        XCTAssertEqual(actual.haloEm, expected.haloEm, file: file, line: line)
+        XCTAssertEqual(actual.sizePoints, expected.sizePoints, file: file, line: line)
         XCTAssertEqual(actual.weight, expected.weight, file: file, line: line)
     }
 }

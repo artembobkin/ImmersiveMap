@@ -41,6 +41,13 @@ struct FrameContext {
         CameraUniform(matrix: cameraMatrices.projectionView, eye: cameraEye, padding: 0)
     }
 
+    /// `pixelsPerPoint` in the form the label, marker and collision code takes
+    /// it: the single conversion from the points a style is authored in to the
+    /// pixels a frame is rasterized in.
+    var screenScale: ScreenScale {
+        ScreenScale(contentsScale: pixelsPerPoint)
+    }
+
     var mapPresentationState: ImmersiveMapPresentationState {
         resolvedPresentation.presentationState
     }

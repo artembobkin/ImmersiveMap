@@ -16,6 +16,7 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
                                      constant uint& glyphCount [[buffer(6)]],
                                      const device ScreenCollisionInput* collisionInputs [[buffer(7)]],
                                      device RoadGlyphCollisionOutput* collisionAabb [[buffer(8)]],
+                                     constant float& pixelsPerPoint [[buffer(9)]],
                                      uint gid [[thread_position_in_grid]]) {
     if (gid >= glyphCount) {
         return;
@@ -105,13 +106,15 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
         return;
     }
 
-    float glyphOffset = input.glyphCenter - input.labelWidth * 0.5;
+    // Glyph metrics are in layout points; the path arc length they are placed
+    // along was accumulated from screen positions, which are device pixels.
+    float glyphOffset = (input.glyphCenter - input.labelWidth * 0.5) * pixelsPerPoint;
     if (reverse) {
         glyphOffset = -glyphOffset;
     }
 
     float targetDistance = anchorDistance + glyphOffset;
-    bool canDraw = (totalLength >= input.minLength);
+    bool canDraw = (totalLength >= input.minLength * pixelsPerPoint);
 
     placement.visible = 0;
     float2 position = float2(0.0);
@@ -179,7 +182,7 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
 
     if (placement.visible != 0) {
         ScreenCollisionInput collisionInput = collisionInputs[gid];
-        float2 halfSize = collisionInput.halfSize;
+        float2 halfSize = collisionInput.halfSize * pixelsPerPoint;
         float s = sin(placement.angle);
         float c = cos(placement.angle);
         collisionOut.halfSizeAABB = float2(abs(c) * halfSize.x + abs(s) * halfSize.y,

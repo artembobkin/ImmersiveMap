@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 31
+    private static let implementationRevision: UInt32 = 32
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
@@ -417,7 +417,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             appearance = configuration.labels.country
         case "state", "province":
             var a = configuration.labels.country
-            a.sizePx -= 4
+            a.sizePoints -= 2
             appearance = a
         case "city":
             appearance = configuration.labels.city
@@ -425,12 +425,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             appearance = configuration.labels.town
         default: // village, hamlet, suburb, quarter, neighbourhood, ...
             var a = configuration.labels.town
-            a.sizePx -= 3
+            a.sizePoints -= 1.5
             a.weight = .thin
             appearance = a
         }
         if isCapital(props) {
-            appearance.sizePx += 3
+            appearance.sizePoints += 1.5
             appearance.weight = .bold
         }
         return pointLabel(key: 70, appearance: appearance)
@@ -440,9 +440,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         var appearance = configuration.labels.water
         switch props["class"]?.stringValue.lowercased() {
         case "ocean":
-            appearance.sizePx += 6
+            appearance.sizePoints += 3
         case "sea":
-            appearance.sizePx += 3
+            appearance.sizePoints += 1.5
         default:
             break
         }
@@ -575,7 +575,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func houseNumberAppearance() -> ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance {
         var appearance = configuration.labels.poi
-        appearance.sizePx = 12
+        // The densest label class, and the one the readable floor moves most:
+        // 6 points was decoration rather than information, and at the floor each
+        // one is legible while collision thins out the rest.
+        appearance.sizePoints = 6
         appearance.fillColor = SIMD3<Float>(0.55, 0.53, 0.50)
         return appearance
     }
@@ -674,8 +677,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         LabelTextStyle(key: key,
                        fillColor: appearance.fillColor,
                        strokeColor: appearance.strokeColor,
-                       strokeWidthPx: appearance.strokeWidthPx,
-                       sizePx: appearance.sizePx,
+                       haloEm: appearance.haloEm,
+                       sizePoints: LabelTypeScale.clamped(appearance.sizePoints),
                        weight: appearance.weight)
     }
 

@@ -70,6 +70,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawBaseLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
+                                           screenScale: frameContext.screenScale,
                                            textRenderer: textRenderer,
                                            poiSpriteAtlas: poiSpriteAtlas,
                                            screenPositionsBuffer: screenPositionsBuffer,

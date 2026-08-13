@@ -606,10 +606,10 @@ final class RoadLabelCache {
         return hash
     }
 
-    private static let fallbackStyle = LabelTextStyle(key: 0,
-                                                      fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
-                                                      strokeColor: SIMD3<Float>(0.54, 0.54, 0.52),
-                                                      strokeWidthPx: 0.0,
-                                                      sizePx: 36.0,
-                                                      weight: .thin)
+    static let fallbackStyle = LabelTextStyle(key: 0,
+                                              fillColor: SIMD3<Float>(0.54, 0.54, 0.52),
+                                              strokeColor: SIMD3<Float>(0.54, 0.54, 0.52),
+                                              haloEm: 0.0,
+                                              sizePoints: 18.0,
+                                              weight: .thin)
 }

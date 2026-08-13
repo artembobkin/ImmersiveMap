@@ -59,6 +59,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
+                                           screenScale: frameContext.screenScale,
                                            textRenderer: textRenderer,
                                            roadDrawLabels: roadLabelState.drawLabels)
         encoder.setDepthStencilState(depthDisabledState)

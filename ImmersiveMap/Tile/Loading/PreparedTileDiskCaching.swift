@@ -408,7 +408,11 @@ final class PreparedTileDiskCaching {
     /// v31: file-transport entries carry the blob's checksum and container
     /// format in the metadata (binding a `.ptile` to its `.ptgeo` content),
     /// and the span table is validated against the arena schema at decode.
-    static let preparedFormatVersion: UInt32 = 31
+    // 32: label and marker geometry moved from device pixels to layout points.
+    // A version-31 record is structurally valid but numerically means something
+    // else, and nothing in the payload encodes its unit, so the version is the
+    // only thing keeping a warm cache from rendering half-size labels.
+    static let preparedFormatVersion: UInt32 = 32
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -1,5 +1,5 @@
 {
-  "originHash" : "ece4fbee292d0dc76a863fab388cd6c9e764237449a1700584ceafe5f07cdec5",
+  "originHash" : "41b42a522981fddbfc509e800e8a5c8a370a514dbe4e3e1ff51b3831ca59c509",
   "pins" : [
     {
       "identity" : "swift-protobuf",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "f6506eaa86ed2e01cb0ae14a75035b7fdbf0918f",
         "version" : "1.38.0"
-      }
-    },
-    {
-      "identity" : "swiftearcut",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/measuredweighed/SwiftEarcut.git",
-      "state" : {
-        "revision" : "f72356da8b873da27d869120c08d4a3009b6bf12",
-        "version" : "1.0.0"
       }
     }
   ],

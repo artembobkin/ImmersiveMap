@@ -84,6 +84,20 @@ struct LabelsPanel: View {
                 }
             }
 
+            PanelRow {
+                // Points, not pixels: the cell keeps its perceived size on every
+                // display, so a dense screen does not quietly pack more labels
+                // into the same physical area.
+                DeferredValueSlider("Collision grid, pt",
+                                    value: Double(settings.labels.base.gridCellSizePoints),
+                                    range: 8...48,
+                                    step: 1,
+                                    format: "%.0f") { newValue in
+                    settings.labels.base.gridCellSizePoints = Float(newValue)
+                    settings.labels.road.gridCellSizePoints = Float(newValue)
+                }
+            }
+
             DeferredNote(text: "Label sliders commit when you let go: every value re-prepares the visible tiles.")
         }
     }

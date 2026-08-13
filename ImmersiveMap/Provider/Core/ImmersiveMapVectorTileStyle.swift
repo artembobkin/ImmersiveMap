@@ -99,19 +99,24 @@ public struct ImmersiveMapFeatureStyleContext {
 public struct ImmersiveMapLabelTextStyle: Equatable {
     public var fillColor: SIMD3<Float>
     public var strokeColor: SIMD3<Float>
-    public var strokeWidthPx: Float
-    public var sizePx: Float
+    /// Halo width as a fraction of the em, so it tracks the text size.
+    public var haloEm: Float
+    /// Em size in layout points, not device pixels: the engine multiplies by the
+    /// display's pixels-per-point at render time, so one value reads at the same
+    /// physical size on a 2x desktop display and a 3x phone. Sizes below
+    /// `11` are raised to it, the floor for type that is meant to be read.
+    public var sizePoints: Float
     public var weight: LabelFontWeight
 
     public init(fillColor: SIMD3<Float>,
                 strokeColor: SIMD3<Float>,
-                strokeWidthPx: Float,
-                sizePx: Float,
+                haloEm: Float,
+                sizePoints: Float,
                 weight: LabelFontWeight) {
         self.fillColor = fillColor
         self.strokeColor = strokeColor
-        self.strokeWidthPx = strokeWidthPx
-        self.sizePx = sizePx
+        self.haloEm = haloEm
+        self.sizePoints = sizePoints
         self.weight = weight
     }
 }

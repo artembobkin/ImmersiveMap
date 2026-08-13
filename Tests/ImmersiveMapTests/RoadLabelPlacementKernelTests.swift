@@ -157,7 +157,9 @@ final class RoadLabelPlacementKernelTests: XCTestCase {
             )
 
             let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            calculator.run(commandBuffer: commandBuffer, dispatches: [dispatch])
+            calculator.run(commandBuffer: commandBuffer,
+                           screenScale: .identity,
+                           dispatches: [dispatch])
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
 

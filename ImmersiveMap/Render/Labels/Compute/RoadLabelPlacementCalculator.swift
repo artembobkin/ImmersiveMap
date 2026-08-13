@@ -25,7 +25,9 @@ final class RoadLabelPlacementCalculator {
 
     // All records of the frame are encoded into one compute encoder: the pipeline
     // state is set once, dispatches differ only in buffers and glyph count.
-    func run(commandBuffer: MTLCommandBuffer, dispatches: [RecordDispatch]) {
+    func run(commandBuffer: MTLCommandBuffer,
+             screenScale: ScreenScale,
+             dispatches: [RecordDispatch]) {
         let activeDispatches = dispatches.filter { $0.glyphCount > 0 }
         guard activeDispatches.isEmpty == false else {
             return
@@ -44,6 +46,11 @@ final class RoadLabelPlacementCalculator {
             height: 1,
             depth: 1
         )
+        // Glyph advances and collision boxes arrive in layout points, the
+        // projected path they are placed along is in device pixels: the kernel
+        // converts the former with this.
+        var pixelsPerPoint = screenScale.pixelsPerPoint
+        encoder.setBytes(&pixelsPerPoint, length: MemoryLayout<Float>.stride, index: 9)
 
         for recordDispatch in activeDispatches {
             var count = UInt32(recordDispatch.glyphCount)

@@ -23,9 +23,19 @@ struct LabelTextStyle {
     let key: Int
     let fillColor: SIMD3<Float>
     let strokeColor: SIMD3<Float>
-    let strokeWidthPx: Float
-    let sizePx: Float
+    /// Halo width as a fraction of the em, so that it tracks the text size
+    /// instead of drifting: an absolute width makes the smallest labels carry
+    /// the widest halo relative to their strokes.
+    let haloEm: Float
+    /// Em size in layout points. Converted to device pixels once, at the render
+    /// boundary (see `ScreenScale`).
+    let sizePoints: Float
     let weight: LabelFontWeight
+
+    /// Halo width in device pixels for this style at a given screen scale.
+    func haloWidthPixels(screenScale: ScreenScale) -> Float {
+        screenScale.pixels(haloEm * sizePoints)
+    }
 }
 
 struct LineRenderPass {

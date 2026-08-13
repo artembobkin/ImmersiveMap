@@ -436,16 +436,16 @@ enum PreparedTileDiskCodec {
         let key: Int32
         let fillColor: [Float]
         let strokeColor: [Float]
-        let strokeWidthPx: Float
-        let sizePx: Float
+        let haloEm: Float
+        let sizePoints: Float
         let weightRawValue: UInt8
 
         init(_ style: LabelTextStyle) throws {
             self.key = try encodeInt32(style.key, field: "LabelTextStyle.key")
             self.fillColor = [style.fillColor.x, style.fillColor.y, style.fillColor.z]
             self.strokeColor = [style.strokeColor.x, style.strokeColor.y, style.strokeColor.z]
-            self.strokeWidthPx = style.strokeWidthPx
-            self.sizePx = style.sizePx
+            self.haloEm = style.haloEm
+            self.sizePoints = style.sizePoints
             self.weightRawValue = style.weight.rawValue
         }
 
@@ -459,8 +459,8 @@ enum PreparedTileDiskCodec {
             return LabelTextStyle(key: Int(key),
                                   fillColor: SIMD3<Float>(fillColor[0], fillColor[1], fillColor[2]),
                                   strokeColor: SIMD3<Float>(strokeColor[0], strokeColor[1], strokeColor[2]),
-                                  strokeWidthPx: strokeWidthPx,
-                                  sizePx: sizePx,
+                                  haloEm: haloEm,
+                                  sizePoints: sizePoints,
                                   weight: weight)
         }
     }
@@ -475,8 +475,8 @@ enum PreparedTileDiskCodec {
         let key: UInt64
         let sortKey: Int32
         let collisionPriority: Int32
-        let labelWidthPx: Float
-        let labelHeightPx: Float
+        let labelWidthPoints: Float
+        let labelHeightPoints: Float
         let minCameraZoom: Float
 
         init(_ input: TextLabelPlacementInput) throws {
@@ -489,8 +489,8 @@ enum PreparedTileDiskCodec {
             key = input.placementMeta.key
             sortKey = try encodeInt32(input.placementMeta.sortKey, field: "LabelPlacementMeta.sortKey")
             collisionPriority = try encodeInt32(input.placementMeta.collisionPriority, field: "LabelPlacementMeta.collisionPriority")
-            labelWidthPx = input.placementMeta.labelSizePx.x
-            labelHeightPx = input.placementMeta.labelSizePx.y
+            labelWidthPoints = input.placementMeta.labelSizePoints.x
+            labelHeightPoints = input.placementMeta.labelSizePoints.y
             minCameraZoom = input.placementMeta.minCameraZoom
         }
 
@@ -502,7 +502,7 @@ enum PreparedTileDiskCodec {
                 placementMeta: LabelPlacementMeta(key: key,
                                                   sortKey: Int(sortKey),
                                                   collisionPriority: Int(collisionPriority),
-                                                  labelSizePx: SIMD2<Float>(labelWidthPx, labelHeightPx),
+                                                  labelSizePoints: SIMD2<Float>(labelWidthPoints, labelHeightPoints),
                                                   minCameraZoom: minCameraZoom)
             )
         }

@@ -117,7 +117,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                     horizonVisibility: [false],
                                                                     currentAlphas: [0.4],
                                                                     minCameraZooms: [0],
-                                                                    cameraZoom: 14)
+                                                                    cameraZoom: 14,
+                                                                    screenScale: .identity)
 
         XCTAssertEqual(result[0].position, SIMD2<Float>(40, 50))
         XCTAssertTrue(result[0].isEnabled)
@@ -142,7 +143,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                     horizonVisibility: [false],
                                                                     currentAlphas: [0],
                                                                     minCameraZooms: [0],
-                                                                    cameraZoom: 14)
+                                                                    cameraZoom: 14,
+                                                                    screenScale: .identity)
 
         XCTAssertFalse(result[0].isEnabled)
     }
@@ -166,7 +168,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                     horizonVisibility: [true],
                                                                     currentAlphas: [1],
                                                                     minCameraZooms: [0],
-                                                                    cameraZoom: 14)
+                                                                    cameraZoom: 14,
+                                                                    screenScale: .identity)
 
         XCTAssertFalse(result[0].isEnabled)
     }
@@ -185,7 +188,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                     horizonVisibility: [true],
                                                                     currentAlphas: [1],
                                                                     minCameraZooms: [0],
-                                                                    cameraZoom: 14)
+                                                                    cameraZoom: 14,
+                                                                    screenScale: .identity)
 
         XCTAssertFalse(result[0].isEnabled)
     }
@@ -211,7 +215,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                          horizonVisibility: [true],
                                                                          currentAlphas: [0],
                                                                          minCameraZooms: [16],
-                                                                         cameraZoom: 14)
+                                                                         cameraZoom: 14,
+                                                                    screenScale: .identity)
         XCTAssertFalse(suppressed[0].isEnabled)
 
         // The same label is still fading (alpha > 0) - keeps holding its space.
@@ -220,7 +225,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                                      horizonVisibility: [true],
                                                                      currentAlphas: [0.5],
                                                                      minCameraZooms: [16],
-                                                                     cameraZoom: 14)
+                                                                     cameraZoom: 14,
+                                                                    screenScale: .identity)
         XCTAssertTrue(fading[0].isEnabled)
     }
 

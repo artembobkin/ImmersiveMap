@@ -14,7 +14,7 @@ final class TileTextLabelsBuilder {
         /// Icon-only representation for degradation in the middle tier: the icon at
         /// the origin and its square box. Empty for labels without an icon.
         let iconOnlyVertices: [LabelVertex]
-        let iconOnlySizePx: SIMD2<Float>
+        let iconOnlySizePoints: SIMD2<Float>
 
         init(placementInput: TextLabelPlacementInput,
              style: LabelTextStyle,
@@ -22,14 +22,14 @@ final class TileTextLabelsBuilder {
              iconVertices: [LabelVertex],
              detailCategory: VectorTileLabelDetailCategory = .anchor,
              iconOnlyVertices: [LabelVertex] = [],
-             iconOnlySizePx: SIMD2<Float> = .zero) {
+             iconOnlySizePoints: SIMD2<Float> = .zero) {
             self.placementInput = placementInput
             self.style = style
             self.textVertices = textVertices
             self.iconVertices = iconVertices
             self.detailCategory = detailCategory
             self.iconOnlyVertices = iconOnlyVertices
-            self.iconOnlySizePx = iconOnlySizePx
+            self.iconOnlySizePoints = iconOnlySizePoints
         }
     }
 
@@ -70,8 +70,11 @@ final class TileTextLabelsBuilder {
             let weight = style.weight
             let labelIndex = simd_int1(sortedIndex)
             let contentScale = label.poiIcon == nil ? 1.0 : Self.poiCombinedLabelScale
-            let textScale = style.sizePx * contentScale
-            let wrap = LabelWrapOptions(maxWidthPx: textScale * 10.0,
+            // Geometry is baked in layout points, which is what keeps a prepared
+            // tile independent of the display it was built on; the shaders scale
+            // it by the frame's pixels-per-point.
+            let textScale = style.sizePoints * contentScale
+            let wrap = LabelWrapOptions(maxWidth: textScale * 10.0,
                                         maxLines: Self.baseLabelWrapLineCount,
                                         alignment: .left)
             let textMetrics = textRenderer.collectLabelVertices(for: label.text,
@@ -92,7 +95,7 @@ final class TileTextLabelsBuilder {
                 placementMeta: LabelPlacementMeta(key: label.key,
                                                   sortKey: label.sortKey,
                                                   collisionPriority: label.collisionPriority,
-                                                  labelSizePx: geometry.size,
+                                                  labelSizePoints: geometry.size,
                                                   minCameraZoom: label.minCameraZoom)
             )
             builtLabels.append(BuiltBaseLabel(placementInput: placementInput,
@@ -101,7 +104,7 @@ final class TileTextLabelsBuilder {
                                              iconVertices: geometry.iconVertices,
                                              detailCategory: label.detailCategory,
                                              iconOnlyVertices: geometry.iconOnlyVertices,
-                                             iconOnlySizePx: geometry.iconOnlySize))
+                                             iconOnlySizePoints: geometry.iconOnlySize))
         }
 
         return Self.makeTextLabels(from: builtLabels)
@@ -250,14 +253,14 @@ final class TileTextLabelsBuilder {
             placementMeta: LabelPlacementMeta(key: meta.key,
                                               sortKey: meta.sortKey,
                                               collisionPriority: meta.collisionPriority,
-                                              labelSizePx: builtLabel.iconOnlySizePx,
+                                              labelSizePoints: builtLabel.iconOnlySizePoints,
                                               minCameraZoom: meta.minCameraZoom)
         )
     }
 
     /// Identity of a homogeneous glyph/icon run: everything the label drawing code
     /// applies at encoding time - the atlas texture (via `weight`) and the uniform fill/stroke colors.
-    /// `sizePx` is deliberately excluded: it is already baked into the vertex geometry and is not
+    /// `sizePoints` is deliberately excluded: it is already baked into the vertex geometry and is not
     /// re-applied at draw time, so labels differing only in size stay
     /// in the same run.
     ///
@@ -271,14 +274,17 @@ final class TileTextLabelsBuilder {
         let weight: LabelFontWeight
         let fillColor: SIMD3<Float>
         let strokeColor: SIMD3<Float>
-        let strokeWidthPx: Float
+        /// Halo width in device pixels is resolved at draw time from `haloEm`
+        /// and the em size, so two labels that share an em ratio but not a size
+        /// no longer share a run.
+        let haloWidthPoints: Float
 
         init(_ style: LabelTextStyle) {
             self.key = style.key
             self.weight = style.weight
             self.fillColor = style.fillColor
             self.strokeColor = style.strokeColor
-            self.strokeWidthPx = style.strokeWidthPx
+            self.haloWidthPoints = style.haloEm * style.sizePoints
         }
 
         /// Deterministic draw order: first by `key` (matches the previous
@@ -287,7 +293,7 @@ final class TileTextLabelsBuilder {
         static func orderedBefore(_ lhs: LabelRunStyleIdentity, _ rhs: LabelRunStyleIdentity) -> Bool {
             if lhs.key != rhs.key { return lhs.key < rhs.key }
             if lhs.weight.rawValue != rhs.weight.rawValue { return lhs.weight.rawValue < rhs.weight.rawValue }
-            if lhs.strokeWidthPx != rhs.strokeWidthPx { return lhs.strokeWidthPx < rhs.strokeWidthPx }
+            if lhs.haloWidthPoints != rhs.haloWidthPoints { return lhs.haloWidthPoints < rhs.haloWidthPoints }
             for index in 0..<3 where lhs.fillColor[index] != rhs.fillColor[index] {
                 return lhs.fillColor[index] < rhs.fillColor[index]
             }
@@ -390,11 +396,14 @@ final class TileTextLabelsBuilder {
         ]
     }
 
+    /// Icon side in layout points: proportional to the text it sits next to,
+    /// over a narrow band of sizes so a POI pin stays a recognizable target
+    /// rather than growing with every step of the type scale.
     private func poiIconSize(for textStyle: LabelTextStyle, contentScale: Float) -> Float {
-        min(max(textStyle.sizePx, 18.0), 24.0) * 2.6 * contentScale
+        min(max(textStyle.sizePoints, 9.0), 12.0) * 2.6 * contentScale
     }
 
     private func poiIconGap(for textStyle: LabelTextStyle, contentScale: Float) -> Float {
-        max(6.0, floor(textStyle.sizePx * 0.2)) * contentScale
+        max(3.0, textStyle.sizePoints * 0.2) * contentScale
     }
 }

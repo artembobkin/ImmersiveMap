@@ -76,8 +76,14 @@ struct PoiSpriteAtlasDescriptor {
     let symbolWeight: NSFont.Weight
     #endif
 
-    static let `default` = PoiSpriteAtlasDescriptor(cellSize: 64,
-                                                    cellPadding: 8,
+    /// The cell is a texture resolution, not a layout size: it stays in device
+    /// pixels while the quad it fills is sized in points. It has to cover the
+    /// largest quad the type scale can ask for on the densest display, which is
+    /// a 12 point POI label's icon at 3x, or about 131 pixels; 128 pixels of
+    /// cell less 16 of padding leaves 96 drawable, a gentler magnification than
+    /// the 64 pixel cell gave at the sizes that shipped before.
+    static let `default` = PoiSpriteAtlasDescriptor(cellSize: 128,
+                                                    cellPadding: 16,
                                                     minimumColumns: 4,
                                                     symbolWeight: .semibold)
 }

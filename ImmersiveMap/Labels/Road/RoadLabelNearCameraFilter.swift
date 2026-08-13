@@ -9,16 +9,18 @@ import simd
 /// So a near tile whose corners go behind the camera is judged fairly by its
 /// huge visible part rather than by a degenerate projection of its corners.
 enum RoadLabelNearCameraFilter {
-    /// Minimum visible area: below the equivalent of a 300x300 px square the
+    /// Minimum visible area: below the equivalent of a 150x150 point square the
     /// tile occupies too little of the screen for its road labels to be readable.
-    private static let minimumVisibleAreaPx: Float = 300 * 300
+    /// The threshold is about readability, so it is in points: a denser display
+    /// gives the same tile more pixels without giving the reader more to see.
+    private static let minimumVisibleAreaPoints: Float = 150 * 150
 
     /// Minimum visible area PER TARGET-ZOOM TILE EQUIVALENT
     /// (visible area / 4^underzoom). A coarse parent of a distant strip may
     /// take half the screen, but the world inside it is compressed 4^N times
     /// and labels along its roads are degenerate. The normalization is
     /// zoom-agnostic and survives a change of the source maxzoom.
-    private static let minimumVisibleAreaPerNativeTilePx: Float = 200 * 200
+    private static let minimumVisibleAreaPerNativeTilePoints: Float = 100 * 100
 
     /// Minimum compression ratio of the visible polygon (area / long edge
     /// squared): a perspective-flattened ribbon is rejected regardless of
@@ -29,6 +31,7 @@ enum RoadLabelNearCameraFilter {
     static func shouldKeepTile(clipCorners: [SIMD4<Float>],
                                viewportWidth: Float,
                                viewportHeight: Float,
+                               screenScale: ScreenScale = .reference,
                                underzoomLevels: Int = 0) -> Bool {
         guard clipCorners.count == 4,
               viewportWidth.isFinite,
@@ -54,11 +57,14 @@ enum RoadLabelNearCameraFilter {
             return false
         }
 
+        // The polygon is in device pixels, so an area threshold stated in points
+        // squared scales by the square of the pixels-per-point.
+        let pixelsPerPointSquared = screenScale.pixelsPerPoint * screenScale.pixelsPerPoint
         let visibleArea = polygonArea(points: screenPoints)
         let contentScale = Float(1 << (2 * min(max(underzoomLevels, 0), 10)))
         let compressionRatio = visibleArea / (longestEdge * longestEdge)
-        return visibleArea >= minimumVisibleAreaPx
-            && visibleArea / contentScale >= minimumVisibleAreaPerNativeTilePx
+        return visibleArea >= minimumVisibleAreaPoints * pixelsPerPointSquared
+            && visibleArea / contentScale >= minimumVisibleAreaPerNativeTilePoints * pixelsPerPointSquared
             && compressionRatio >= minimumProjectedCompressionRatio
     }
 

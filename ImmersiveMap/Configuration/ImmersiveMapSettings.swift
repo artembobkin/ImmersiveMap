@@ -474,26 +474,31 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         public struct BaseSettings: Equatable, Sendable {
-            public var gridCellSizePx: Float
+            /// Collision grid cell in layout points. In points rather than device
+            /// pixels so that label density per unit of perceived screen area is
+            /// the same on every display: in pixels, a 3x phone would pack 2.25
+            /// times as many labels into a physically smaller screen.
+            public var gridCellSizePoints: Float
             public var fadeInSeconds: TimeInterval
             public var fadeOutSeconds: TimeInterval
 
-            public init(gridCellSizePx: Float,
+            public init(gridCellSizePoints: Float,
                         fadeInSeconds: TimeInterval,
                         fadeOutSeconds: TimeInterval) {
-                self.gridCellSizePx = gridCellSizePx
+                self.gridCellSizePoints = gridCellSizePoints
                 self.fadeInSeconds = fadeInSeconds
                 self.fadeOutSeconds = fadeOutSeconds
             }
         }
 
         public struct RoadSettings: Equatable, Sendable {
-            public var gridCellSizePx: Float
+            /// Collision grid cell in layout points, as for `BaseSettings`.
+            public var gridCellSizePoints: Float
             public var maxGlyphTurnRadians: Float
 
-            public init(gridCellSizePx: Float,
+            public init(gridCellSizePoints: Float,
                         maxGlyphTurnRadians: Float) {
-                self.gridCellSizePx = gridCellSizePx
+                self.gridCellSizePoints = gridCellSizePoints
                 self.maxGlyphTurnRadians = maxGlyphTurnRadians
             }
         }
@@ -1018,10 +1023,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                                                                cityMaximumZoom: 12,
                                                                                                smallSettlementMaximumZoom: 12),
                               landmarks: LabelSettings.LandmarkSettings(minimumZoom: 15),
-                              base: LabelSettings.BaseSettings(gridCellSizePx: 32.0,
+                              base: LabelSettings.BaseSettings(gridCellSizePoints: 16.0,
                                                                fadeInSeconds: 0.15,
                                                                fadeOutSeconds: 0.25),
-                              road: LabelSettings.RoadSettings(gridCellSizePx: 32.0,
+                              road: LabelSettings.RoadSettings(gridCellSizePoints: 16.0,
                                                                maxGlyphTurnRadians: .pi / 6.0)),
         scene: SceneSettings(mapClearColor: SIMD4<Double>(1.0, 1.0, 1.0, 1.0),
                              space: SpaceSettings(clearColor: SIMD4<Double>(0.008, 0.012, 0.032, 1.0)),
@@ -1034,7 +1039,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           far: 6000.0,
                                                           radiusScale: 10.5),
                              earth: EarthSceneSettings()),
-        style: StyleSettings(preparedTileStyleRevision: 85,
+        style: StyleSettings(preparedTileStyleRevision: 86,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
                              buildingExtrusionMode: .translucent,

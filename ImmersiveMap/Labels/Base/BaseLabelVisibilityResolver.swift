@@ -53,13 +53,22 @@ enum BaseLabelVisibilityResolver {
         }
     }
 
+    /// Turns the cache's per-label boxes into the frame's collision candidates.
+    ///
+    /// The cached boxes are in layout points, because that is what a prepared
+    /// tile stores; the screen positions they are paired with are device pixels.
+    /// This is where the two meet, so this is where the boxes convert.
     static func collisionCandidates(baseCandidates: [ScreenCollisionCandidate],
                                     screenPoints: [ScreenPointOutput],
                                     horizonVisibility: [Bool],
                                     currentAlphas: [Float],
                                     minCameraZooms: [Float],
-                                    cameraZoom: Float) -> [ScreenCollisionCandidate] {
+                                    cameraZoom: Float,
+                                    screenScale: ScreenScale) -> [ScreenCollisionCandidate] {
         var candidates = baseCandidates
+        for index in candidates.indices {
+            candidates[index].halfSize = screenScale.pixels(candidates[index].halfSize)
+        }
         let count = min(candidates.count, screenPoints.count)
 
         for index in 0..<count {

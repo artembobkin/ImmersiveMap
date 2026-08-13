@@ -10,19 +10,23 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
-        public var strokeWidthPx: Float
-        public var sizePx: Float
+        /// Halo width as a fraction of the em, so it tracks the text size.
+        public var haloEm: Float
+        /// Em size in layout points, not device pixels: the engine multiplies by
+        /// the display's pixels-per-point at render time, so a value here reads
+        /// at the same physical size on a 2x desktop display and a 3x phone.
+        public var sizePoints: Float
         public var weight: LabelFontWeight
 
         public init(fillColor: SIMD3<Float>,
                     strokeColor: SIMD3<Float>,
-                    strokeWidthPx: Float,
-                    sizePx: Float,
+                    haloEm: Float,
+                    sizePoints: Float,
                     weight: LabelFontWeight) {
             self.fillColor = fillColor
             self.strokeColor = strokeColor
-            self.strokeWidthPx = strokeWidthPx
-            self.sizePx = sizePx
+            self.haloEm = haloEm
+            self.sizePoints = sizePoints
             self.weight = weight
         }
     }
@@ -270,7 +274,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         func add(_ v: SIMD3<Float>) { out.append(contentsOf: [v.x, v.y, v.z]) }
         func add(_ a: LabelAppearance) {
             add(a.fillColor); add(a.strokeColor)
-            out.append(contentsOf: [a.strokeWidthPx, a.sizePx, Float(a.weight.rawValue)])
+            out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue)])
         }
         add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
         add(layers.farmland); add(layers.ice); add(layers.sand); add(layers.wetland)
@@ -357,24 +361,34 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles {
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles {
+    /// Sizes are layout points: the pixel size this style used before labels
+    /// carried a unit, divided by the 2x reference scale the palette was
+    /// authored against.
+    ///
+    /// The curve below is the design, not the final size. Sizes are raised to
+    /// `LabelTypeScale.minimumSizePoints` where they fall under the floor for
+    /// readable type, and that happens once, where a style is resolved, so that
+    /// a class derived from another (an ocean label is the water appearance a
+    /// few points larger) is measured against the floor after its own
+    /// adjustment rather than on top of a base that was already lifted.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles(
         city: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.20, 0.20, 0.22), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 4.6, sizePx: 30, weight: .bold),
+            haloEm: 0.153, sizePoints: 15, weight: .bold),
         town: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 3.8, sizePx: 22, weight: .thin),
+            haloEm: 0.173, sizePoints: 11, weight: .thin),
         country: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 4.2, sizePx: 26, weight: .bold),
+            haloEm: 0.162, sizePoints: 13, weight: .bold),
         poi: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 3.6, sizePx: 16, weight: .thin),
+            haloEm: 0.225, sizePoints: 8, weight: .thin),
         water: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.24, 0.44, 0.68), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 3.2, sizePx: 19, weight: .thin),
+            haloEm: 0.168, sizePoints: 9.5, weight: .thin),
         road: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
-            strokeWidthPx: 3.6, sizePx: 34, weight: .bold)
+            haloEm: 0.106, sizePoints: 17, weight: .bold)
     )
 }

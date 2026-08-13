@@ -40,7 +40,7 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
         XCTAssertEqual(result.reduced.placementInputs.map { $0.placementMeta.key },
                        [UInt64(1), UInt64(2), UInt64(3), UInt64(4)])
         let degraded = result.reduced.placementInputs[3]
-        XCTAssertEqual(degraded.placementMeta.labelSizePx, minorIconPoi.iconOnlySizePx)
+        XCTAssertEqual(degraded.placementMeta.labelSizePoints, minorIconPoi.iconOnlySizePoints)
         let reducedGlyphIndices = Set(result.reduced.glyphRuns.flatMap { $0.localGlyphVertices }.map { Int($0.labelIndex) })
         XCTAssertFalse(reducedGlyphIndices.contains(3), "An icon-only label must carry no text vertices")
         let reducedIconIndices = Set(result.reduced.poiIconRuns.flatMap { $0.localIconVertices }.map { Int($0.labelIndex) })
@@ -127,8 +127,8 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
         let style = LabelTextStyle(key: key,
                                    fillColor: fillColor,
                                    strokeColor: SIMD3<Float>(1, 1, 1),
-                                   strokeWidthPx: 2,
-                                   sizePx: 20,
+                                   haloEm: 0.15,
+                                   sizePoints: 20,
                                    weight: weight)
         let iconVertex = LabelVertex(position: SIMD2<Float>(0, 0),
                                      uv: SIMD2<Float>(0.5, 0.5),
@@ -142,7 +142,7 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
                 placementMeta: LabelPlacementMeta(key: UInt64(index + 1),
                                                   sortKey: index,
                                                   collisionPriority: index,
-                                                  labelSizePx: SIMD2<Float>(10, 4),
+                                                  labelSizePoints: SIMD2<Float>(10, 4),
                                                   minCameraZoom: minCameraZoom)
             ),
             style: style,
@@ -155,7 +155,7 @@ final class TileTextLabelsBuilderTierTests: XCTestCase {
             iconVertices: withIcon ? [iconVertex] : [],
             detailCategory: detailCategory,
             iconOnlyVertices: withIcon ? [iconVertex] : [],
-            iconOnlySizePx: withIcon ? SIMD2<Float>(24, 24) : .zero
+            iconOnlySizePoints: withIcon ? SIMD2<Float>(24, 24) : .zero
         )
     }
 }

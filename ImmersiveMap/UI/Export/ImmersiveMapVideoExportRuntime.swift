@@ -58,6 +58,9 @@ final class ImmersiveMapVideoExportRuntime {
     private let settings: ImmersiveMapSettings
     private let initialPosition: ImmersiveMapCameraPosition
     private let drawSize: CGSize
+    private var exportPixelsPerPoint: CGFloat {
+        ExportScreenScaleMath.pixelsPerPoint(forOutputSize: drawSize)
+    }
     private let writer: VideoExportAssetWriter
     private let clock: RenderFrameScriptedClock
     private let eventSink: VideoExportRenderEventSink
@@ -267,12 +270,13 @@ final class ImmersiveMapVideoExportRuntime {
         while true {
             try checkCancelled()
             let scheduled: Bool? = await withCheckedContinuation { continuation in
-                // The export target is sized in output pixels, so a point is
-                // a pixel here; routes, the only point-sized style today, are
-                // excluded from export anyway.
+                // The export target is sized in output pixels and has no display
+                // to ask how big a point is, so it composes for a fixed point
+                // canvas and spends the rest of the resolution on detail: a 4K
+                // export is a sharper 1080p export, not a wider one.
                 let request = RenderFrameOffscreenRequest(texture: texture,
                                                           drawSize: drawSize,
-                                                          pixelsPerPoint: 1) { success in
+                                                          pixelsPerPoint: exportPixelsPerPoint) { success in
                     continuation.resume(returning: success)
                 }
                 if engine.render(offscreen: request) == false {

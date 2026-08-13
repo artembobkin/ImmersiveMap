@@ -10,7 +10,11 @@ final class RendererLabelDrawerPassTests: XCTestCase {
 
         XCTAssertTrue(baseDrawSource.contains("pass: .outline"))
         XCTAssertTrue(baseDrawSource.contains("pass: .fill"))
-        XCTAssertTrue(source.contains("strokeWidthPx: style.strokeWidthPx"))
+        // The halo reaches the shader in device pixels, resolved from the
+        // style's em ratio and the frame's scale. The shader's own math is
+        // derivative-based and genuinely pixel-space, so this conversion has to
+        // happen here and nowhere else.
+        XCTAssertTrue(source.contains("strokeWidthPx: style.haloWidthPixels(screenScale: screenScale)"))
         XCTAssertTrue(source.contains("textColor: style.fillColor"))
         XCTAssertTrue(source.contains("strokeWidthPx: 0.0"))
         let outlineRange = try XCTUnwrap(baseDrawSource.range(of: "pass: .outline"))

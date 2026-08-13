@@ -72,7 +72,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
 
     func testTileProviderAndMapStyleSettingsModifiersStoreMapboxConfiguration() {
         let style = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.district.strokeWidthPx = 1.25
+            labels.district.haloEm = 0.125
         }
 
         let tileProvider = MapboxTileProvider(accessToken: "mapbox-token")
@@ -88,7 +88,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
 
     func testTileProviderAndMapStyleViewModifiersStoreMapboxConfiguration() throws {
         let style = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.poi.strokeWidthPx = 3.5
+            labels.poi.haloEm = 0.35
         }
         let tileProvider = MapboxTileProvider(accessToken: "mapbox-token")
         let mapStyle = MapboxMapStyle(configuration: style)

@@ -525,8 +525,8 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         let style = LabelTextStyle(key: 30,
                                    fillColor: SIMD3<Float>(0.1, 0.2, 0.3),
                                    strokeColor: SIMD3<Float>(1, 1, 1),
-                                   strokeWidthPx: 2,
-                                   sizePx: 24,
+                                   haloEm: 0.15,
+                                   sizePoints: 24,
                                    weight: .thin)
         let profile = MapboxVectorTileLabelProviderProfile(settings: .default)
         let engine = VectorTileLabelDecisionEngine(profile: profile,
@@ -554,15 +554,15 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                                         layerName: "place_label",
                                         featureID: 7))
         XCTAssertEqual(decision?.style.key, style.key)
-        XCTAssertEqual(decision?.style.sizePx, style.sizePx)
+        XCTAssertEqual(decision?.style.sizePoints, style.sizePoints)
     }
 
     func testTextLabelCanUseDecisionRuntimeKey() {
         let style = LabelTextStyle(key: 31,
                                    fillColor: SIMD3<Float>(0.1, 0.2, 0.3),
                                    strokeColor: SIMD3<Float>(1, 1, 1),
-                                   strokeWidthPx: 2,
-                                   sizePx: 24,
+                                   haloEm: 0.15,
+                                   sizePoints: 24,
                                    weight: .bold)
         let identity = VectorTileLabelIdentity.tileLocal(tile: Tile(x: 1, y: 2, z: 3),
                                                          layerName: "poi_label",
