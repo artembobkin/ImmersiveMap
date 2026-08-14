@@ -24,6 +24,9 @@
          location = "container:"
          name = "macOS">
          <FileRef
+            location = "group:Examples/macOS/ImmersiveMapMac/ImmersiveMapMac.xcodeproj">
+         </FileRef>
+         <FileRef
             location = "group:Examples/macOS/ImmersiveMapCameraTourMac/ImmersiveMapCameraTourMac.xcodeproj">
          </FileRef>
          <FileRef
