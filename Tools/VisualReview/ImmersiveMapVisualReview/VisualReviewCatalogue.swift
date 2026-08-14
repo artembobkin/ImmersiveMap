@@ -198,8 +198,10 @@ enum VisualReviewCatalogue {
             analytic antialiasing keeps their edges. Border dashes should have \
             soft, even edges with no stair-steps, their cut ends softened the \
             same as their sides, and the line should hold one width along its \
-            length instead of rippling. Roads are hairlines here; they should \
-            be faint but smooth, not broken into dots.
+            length instead of rippling. Borders are point-locked: zooming \
+            within a level must not visibly fatten them and then snap them \
+            thin at the next level. Roads are hairlines here; they should be \
+            faint but smooth, not broken into dots.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

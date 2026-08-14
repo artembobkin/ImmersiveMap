@@ -63,8 +63,10 @@ class TileMvtParser {
             drawingExtruded: unificationResult.drawingExtruded,
             styles: unificationResult.styles,
             overviewStyleMasks: unificationResult.overviewStyleMasks,
+            lineWidthPoints: unificationResult.lineWidthPoints,
             bridgeStyles: unificationResult.bridgeStyles,
             bridgeOverviewStyleMasks: unificationResult.bridgeOverviewStyleMasks,
+            bridgeLineWidthPoints: unificationResult.bridgeLineWidthPoints,
             tile: tile,
             textLabels: readingStageResult.textLabels,
             roadTextLabels: readingStageResult.roadTextLabels,
@@ -874,6 +876,7 @@ class TileMvtParser {
                                 key: lineRenderPass.key,
                                 color: lineRenderPass.color,
                                 lowZoomFadeMask: lineRenderPass.lowZoomFadeMask,
+                                lineWidthPoints: lineRenderPass.lineWidthPoints,
                                 parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
                                 includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
                                 linePlacement: lineRenderPass.placement,
@@ -1163,9 +1166,11 @@ class TileMvtParser {
     private func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
                                    stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
                                                                            styles: [TilePolygonStyle],
-                                                                           overviewStyleMasks: [Float]) {
+                                                                           overviewStyleMasks: [Float],
+                                                                           lineWidthPoints: [Float]) {
         var styles: [TilePolygonStyle] = []
         var overviewStyleMasks: [Float] = []
+        var lineWidthPoints: [Float] = []
 
         let totalPolygonVertexCount = polygonByStyle.values.reduce(0) { partial, polygons in
             partial + polygons.reduce(0) { polygonPartial, polygon in
@@ -1223,13 +1228,15 @@ class TileMvtParser {
             if let style = stylesByKey[styleKey] {
                 styles.append(TilePolygonStyle(color: style.color))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
+                lineWidthPoints.append(style.lineWidthPoints)
             }
         }
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
                                              indices: unifiedIndices),
                 styles: styles,
-                overviewStyleMasks: overviewStyleMasks)
+                overviewStyleMasks: overviewStyleMasks,
+                lineWidthPoints: lineWidthPoints)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the
@@ -1237,9 +1244,11 @@ class TileMvtParser {
     private func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
                                        stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
                                                                                styles: [TilePolygonStyle],
-                                                                               overviewStyleMasks: [Float]) {
+                                                                               overviewStyleMasks: [Float],
+                                                                               lineWidthPoints: [Float]) {
         var styles: [TilePolygonStyle] = []
         var overviewStyleMasks: [Float] = []
+        var lineWidthPoints: [Float] = []
 
         let totalPolygonVertexCount = sortedRoadPolygons.reduce(0) { partial, polygon in
             partial + polygon.polygon.vertices.count
@@ -1263,6 +1272,7 @@ class TileMvtParser {
             if let style = stylesByKey[styleKey] {
                 styles.append(TilePolygonStyle(color: style.color))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
+                lineWidthPoints.append(style.lineWidthPoints)
             }
         }
 
@@ -1291,23 +1301,27 @@ class TileMvtParser {
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
                                              indices: unifiedIndices),
                 styles: styles,
-                overviewStyleMasks: overviewStyleMasks)
+                overviewStyleMasks: overviewStyleMasks,
+                lineWidthPoints: lineWidthPoints)
     }
 
     private func makeDrawingGeometryLayer(
         drawing: DrawingPolygonBytes,
         styles: [TilePolygonStyle],
-        overviewStyleMasks: [Float]
+        overviewStyleMasks: [Float],
+        lineWidthPoints: [Float]
     ) -> DrawingGeometryLayer {
         DrawingGeometryLayer(drawing: drawing,
                              styles: styles,
-                             overviewStyleMasks: overviewStyleMasks)
+                             overviewStyleMasks: overviewStyleMasks,
+                             lineWidthPoints: lineWidthPoints)
     }
 
     private func makeEmptyDrawingGeometryLayer() -> DrawingGeometryLayer {
         makeDrawingGeometryLayer(drawing: DrawingPolygonBytes(vertices: [], indices: []),
                                  styles: [],
-                                 overviewStyleMasks: [])
+                                 overviewStyleMasks: [],
+                                 lineWidthPoints: [])
     }
     
     func unificationStage(readingStageResult: ReadingStageResult) -> UnificationStageResult {
@@ -1334,7 +1348,8 @@ class TileMvtParser {
                                            casing: emptyRoadLayer,
                                            fill: makeDrawingGeometryLayer(drawing: unifiedRoadLayer.drawing,
                                                                          styles: unifiedRoadLayer.styles,
-                                                                         overviewStyleMasks: unifiedRoadLayer.overviewStyleMasks),
+                                                                         overviewStyleMasks: unifiedRoadLayer.overviewStyleMasks,
+                                                                         lineWidthPoints: unifiedRoadLayer.lineWidthPoints),
                                            detail: emptyRoadLayer,
                                            overlay: emptyRoadLayer),
                 bridge: RoadGeometryPhases(shadow: emptyRoadLayer,
@@ -1363,7 +1378,8 @@ class TileMvtParser {
                     )
                     return makeDrawingGeometryLayer(drawing: layer.drawing,
                                                     styles: layer.styles,
-                                                    overviewStyleMasks: layer.overviewStyleMasks)
+                                                    overviewStyleMasks: layer.overviewStyleMasks,
+                                                    lineWidthPoints: layer.lineWidthPoints)
                 }
 
                 return RoadGeometryPhases(shadow: makePhase(.shadow),
@@ -1454,8 +1470,10 @@ class TileMvtParser {
             ),
             styles: groundLayer.styles,
             overviewStyleMasks: groundLayer.overviewStyleMasks,
+            lineWidthPoints: groundLayer.lineWidthPoints,
             bridgeStyles: bridgeLayer.styles,
-            bridgeOverviewStyleMasks: bridgeLayer.overviewStyleMasks
+            bridgeOverviewStyleMasks: bridgeLayer.overviewStyleMasks,
+            bridgeLineWidthPoints: bridgeLayer.lineWidthPoints
         )
     }
 }

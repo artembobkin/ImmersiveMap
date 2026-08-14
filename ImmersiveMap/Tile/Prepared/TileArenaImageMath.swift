@@ -50,6 +50,7 @@ struct TileArenaImagePlan: Sendable {
         case indicesUInt32([UInt32])
         case styles([TilePolygonStyle])
         case overviewStyleMasks([Float])
+        case lineWidthPoints([Float])
         case labelVertices([LabelVertex])
     }
 
@@ -95,6 +96,8 @@ enum TileArenaImageMath {
                 builder.append(.styles(geometryLayer(layerID, of: preparedTile).styles))
             case .geometryOverviewStyleMasks(let layerID):
                 builder.append(.overviewStyleMasks(geometryLayer(layerID, of: preparedTile).overviewStyleMasks))
+            case .geometryLineWidthPoints(let layerID):
+                builder.append(.lineWidthPoints(geometryLayer(layerID, of: preparedTile).lineWidthPoints))
             case .extrudedVertices:
                 builder.append(.extrudedVertices(preparedTile.extruded.vertices))
             case .extrudedIndices:
@@ -149,6 +152,8 @@ enum TileArenaImageMath {
         case .styles(let values):
             values.withUnsafeBytes(body)
         case .overviewStyleMasks(let values):
+            values.withUnsafeBytes(body)
+        case .lineWidthPoints(let values):
             values.withUnsafeBytes(body)
         case .labelVertices(let values):
             values.withUnsafeBytes(body)
@@ -221,6 +226,8 @@ enum TileArenaImageMath {
             case .styles(let values):
                 return (values.count * MemoryLayout<TilePolygonStyle>.stride, values.count)
             case .overviewStyleMasks(let values):
+                return (values.count * MemoryLayout<Float>.stride, values.count)
+            case .lineWidthPoints(let values):
                 return (values.count * MemoryLayout<Float>.stride, values.count)
             case .labelVertices(let values):
                 return (values.count * MemoryLayout<LabelVertex>.stride, values.count)

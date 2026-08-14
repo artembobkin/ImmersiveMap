@@ -42,6 +42,13 @@ struct LineRenderPass {
     let key: UInt8
     let color: SIMD4<Float>
     let lowZoomFadeMask: Float
+    /// Point-locked visible line width (full width, layout points). Zero keeps
+    /// the world-locked behavior: the visible edge is the tessellated width.
+    /// Non-zero resolves the edge in screen space at render time, so the width
+    /// holds steady through fractional zoom instead of pumping with the tile's
+    /// on-screen scale; the tessellated width then only bounds how wide the
+    /// line can get. See `tileLineCoverage` in Tile.metal.
+    let lineWidthPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let placement: LinePlacement
@@ -50,6 +57,7 @@ struct LineRenderPass {
     init(key: UInt8,
          color: SIMD4<Float>,
          lowZoomFadeMask: Float = 0.0,
+         lineWidthPoints: Float = 0.0,
          parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
          placement: LinePlacement = .ground,
@@ -57,6 +65,7 @@ struct LineRenderPass {
         self.key = key
         self.color = color
         self.lowZoomFadeMask = lowZoomFadeMask
+        self.lineWidthPoints = lineWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.placement = placement
@@ -68,6 +77,9 @@ struct FeatureStyle {
     let key: UInt8
     let color: SIMD4<Float>
     let lowZoomFadeMask: Float
+    /// See `LineRenderPass.lineWidthPoints`; zero for world-locked lines and
+    /// for all polygon geometry.
+    let lineWidthPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let linePlacement: LinePlacement
@@ -93,6 +105,7 @@ struct FeatureStyle {
         key: UInt8,
         color: SIMD4<Float>,
         lowZoomFadeMask: Float = 0.0,
+        lineWidthPoints: Float = 0.0,
         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
         linePlacement: LinePlacement = .ground,
@@ -111,6 +124,7 @@ struct FeatureStyle {
         self.key = key
         self.color = color
         self.lowZoomFadeMask = lowZoomFadeMask
+        self.lineWidthPoints = lineWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.linePlacement = linePlacement
@@ -135,6 +149,7 @@ struct FeatureStyle {
             LineRenderPass(key: key,
                            color: color,
                            lowZoomFadeMask: lowZoomFadeMask,
+                           lineWidthPoints: lineWidthPoints,
                            parseGeometryStyleData: parseGeometryStyleData,
                            includeRoadLabelPath: includeRoadLabelPath,
                            placement: linePlacement,

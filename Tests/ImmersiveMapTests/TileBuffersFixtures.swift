@@ -14,6 +14,7 @@ enum TileBuffersFixtures {
                                   indices: nil,
                                   styles: nil,
                                   overviewStyleMask: nil,
+                                  lineWidthPoints: nil,
                                   indexType: .uint16)
     }
 

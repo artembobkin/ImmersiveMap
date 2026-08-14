@@ -355,18 +355,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         )
     }
 
-    /// Multiplier applied to the boundary widths so admin borders read thin on the
-    /// globe (low-zoom tiles are magnified) and reach full width at regional zoom.
-    private func boundaryWidthScale(tileZoom: Int) -> Double {
-        switch tileZoom {
-        case ...3: return 0.35
-        case 4: return 0.5
-        case 5: return 0.7
-        case 6: return 0.85
-        default: return 1.0
-        }
-    }
-
     /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
     /// at country/regional zooms and reach full width at street level.
     private func roadWidthScale(tileZoom: Int) -> Double {
@@ -387,19 +375,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         guard adminLevel <= 4 else {
             return hiddenStyle
         }
-        // Line width is baked in tile coordinates, so on the globe (low-zoom
-        // tiles are heavily stretched) a fixed width looks disproportionately
-        // fat. Thin the borders at low zooms and ramp up to full thickness by
-        // regional zoom, like roadWidthScale for roads but with a higher floor:
-        // borders must stay more prominent than roads.
-        let scale = boundaryWidthScale(tileZoom: tileZoom)
-        let width: Double = (adminLevel <= 2 ? 7.8 : 3.4) * scale
+        // Borders are point-locked: the visible width is resolved in screen
+        // space at render time (lineWidthPoints), so it holds steady through
+        // fractional zoom instead of pumping with the tile's on-screen scale.
+        // The tessellated width below is only the geometry ceiling the shader
+        // can place the edge inside; it stays at full width at every zoom so
+        // the ceiling never undercuts the requested points. Dashes end in
+        // feathered butt cuts rather than round caps: at one or two points of
+        // width the difference is invisible, and caps would eat into the dash
+        // gaps by their radius.
+        let width: Double = adminLevel <= 2 ? 7.8 : 3.4
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
         return FeatureStyle(
             key: key,
             color: configuration.layers.boundary,
             lowZoomFadeMask: 1.0,
-            parseGeometryStyleData: makeDashedRoadGeometry(width: width, dashLength: 8, dashGap: 6),
+            lineWidthPoints: adminLevel <= 2 ? 1.4 : 0.8,
+            parseGeometryStyleData: makeDashedRoadGeometry(width: width,
+                                                           dashLength: 8,
+                                                           dashGap: 6,
+                                                           capRound: false),
             // Borders are drawn as lines only. Some features (Native American
             // reservations) arrive as polygons; their area must not be filled,
             // otherwise you get solid purple blobs.
@@ -664,9 +659,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func makeDashedRoadGeometry(width: Double,
                                         dashLength: Double,
-                                        dashGap: Double) -> TileMvtParser.ParseGeometryStyleData {
+                                        dashGap: Double,
+                                        capRound: Bool = true) -> TileMvtParser.ParseGeometryStyleData {
         TileMvtParser.ParseGeometryStyleData(lineWidth: width,
-                                             lineCapRound: true,
+                                             lineCapRound: capRound,
                                              lineJoinRound: false,
                                              dashLength: dashLength,
                                              dashGap: dashGap)

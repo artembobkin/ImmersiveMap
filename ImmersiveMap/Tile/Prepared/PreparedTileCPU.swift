@@ -13,6 +13,23 @@ struct PreparedTileCPU: Sendable {
         let indices: [UInt32]
         let styles: [TilePolygonStyle]
         let overviewStyleMasks: [Float]
+        /// Point-locked visible line width per style, lockstep with `styles`;
+        /// zero entries are world-locked. See `LineRenderPass.lineWidthPoints`.
+        let lineWidthPoints: [Float]
+
+        init(vertices: [TileVertexIn],
+             indices: [UInt32],
+             styles: [TilePolygonStyle],
+             overviewStyleMasks: [Float],
+             lineWidthPoints: [Float]? = nil) {
+            self.vertices = vertices
+            self.indices = indices
+            self.styles = styles
+            self.overviewStyleMasks = overviewStyleMasks
+            // nil defaults to all-world-locked while keeping the array in
+            // lockstep with `styles`: the vertex shader indexes it per style.
+            self.lineWidthPoints = lineWidthPoints ?? Array(repeating: 0, count: styles.count)
+        }
     }
 
     struct Extruded {

@@ -135,7 +135,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
 
             tilesTexture.setOverviewFadeAlphas(overviewAlpha: overviewFadeAlpha,
                                                roadAlpha: roadFadeAlpha,
-                                               landuseAlpha: landuseFadeAlpha)
+                                               landuseAlpha: landuseFadeAlpha,
+                                               pixelsPerPoint: Float(frameContext.pixelsPerPoint))
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {

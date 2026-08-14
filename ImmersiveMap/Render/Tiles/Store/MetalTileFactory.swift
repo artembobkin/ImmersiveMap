@@ -290,6 +290,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                          indices: indices.view,
                                          styles: cursor.takeView(.geometryStyles(layerID)),
                                          overviewStyleMask: cursor.takeView(.geometryOverviewStyleMasks(layerID)),
+                                         lineWidthPoints: cursor.takeView(.geometryLineWidthPoints(layerID)),
                                          indexType: indices.indexType)
     }
 

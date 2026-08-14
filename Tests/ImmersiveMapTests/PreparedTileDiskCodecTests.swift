@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 34)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 35)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -574,9 +574,9 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // strides); pin the ABI before trusting stride-derived expectations.
         XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 8)
 
-        // Slot sequence: 4 ground + 15 road phases x 4 + 4 bridge overlay
+        // Slot sequence: 5 ground + 15 road phases x 5 + 5 bridge overlay
         // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs.
-        XCTAssertEqual(spans.count, 72)
+        XCTAssertEqual(spans.count, 89)
 
         // Ground vertices: 3 elements at offset 0, 24 bytes. The three
         // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0 and three
@@ -605,18 +605,24 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 4, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[768..<772], Data([0x00, 0x00, 0x00, 0x00]))
 
+        // Ground line widths: one Float zero (the fixture style is
+        // world-locked).
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 4, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[1024..<1028], Data([0x00, 0x00, 0x00, 0x00]))
+
         // Everything after the ground layer is empty: zero-length spans do
-        // not advance the cursor, so the arena ends at the mask span's
+        // not advance the cursor, so the arena ends at the width span's
         // 256-byte boundary and the padding between contents stays zeroed.
-        for span in spans[4...] {
-            XCTAssertEqual(span.byteOffset, 1024)
+        for span in spans[5...] {
+            XCTAssertEqual(span.byteOffset, 1280)
             XCTAssertEqual(span.byteCount, 0)
         }
-        XCTAssertEqual(decoded.image.arenaByteCount, 1024)
-        XCTAssertEqual(blob.count, 1024)
+        XCTAssertEqual(decoded.image.arenaByteCount, 1280)
+        XCTAssertEqual(blob.count, 1280)
         XCTAssertEqual(blob[24..<256], Data(count: 232), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[772..<1024], Data(count: 252), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[1028..<1280], Data(count: 252), "Span padding must be deterministic zeros")
     }
 
     func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {

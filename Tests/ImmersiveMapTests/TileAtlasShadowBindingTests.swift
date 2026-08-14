@@ -62,7 +62,7 @@ final class TileAtlasShadowBindingTests: XCTestCase {
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         XCTAssertTrue(atlas.beginPageEncoding(commandBuffer: commandBuffer, pageIndex: 0))
         atlas.selectTilePipeline()
-        atlas.setOverviewFadeAlphas(overviewAlpha: 1, roadAlpha: 1, landuseAlpha: 1)
+        atlas.setOverviewFadeAlphas(overviewAlpha: 1, roadAlpha: 1, landuseAlpha: 1, pixelsPerPoint: 2)
         XCTAssertTrue(atlas.draw(allocation: allocation),
                       "The atlas draw with non-empty ground geometry must encode")
         atlas.endEncoding()

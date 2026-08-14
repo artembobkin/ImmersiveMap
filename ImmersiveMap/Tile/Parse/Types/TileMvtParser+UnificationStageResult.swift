@@ -11,7 +11,9 @@ extension TileMvtParser {
         var drawingExtruded: DrawingExtrudedBytes
         var styles: [TilePolygonStyle]
         var overviewStyleMasks: [Float]
+        var lineWidthPoints: [Float]
         var bridgeStyles: [TilePolygonStyle]
         var bridgeOverviewStyleMasks: [Float]
+        var bridgeLineWidthPoints: [Float]
     }
 }

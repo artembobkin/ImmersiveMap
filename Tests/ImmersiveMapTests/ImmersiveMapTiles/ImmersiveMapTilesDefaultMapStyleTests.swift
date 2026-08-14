@@ -184,6 +184,31 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertFalse(makeStyle(style, layerName: "water", zoom: 6).suppressPolygonFill)
     }
 
+    func testBoundaryWidthIsPointLockedWithFeatheredButtDashes() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+
+        // Borders resolve their visible width in screen space, so they hold a
+        // designed point width instead of pumping with the tile scale, and at
+        // every tile zoom the request is the same.
+        for zoom in [2, 4, 8, 12] {
+            let boundary = makeStyle(style, layerName: "boundary", zoom: zoom)
+            XCTAssertEqual(boundary.lineWidthPoints, 0.8, "admin_level defaults to 4 at z\(zoom)")
+        }
+
+        // Dashes end in feathered butt cuts, not round caps: caps would eat
+        // into the dash gaps by their radius.
+        let boundary = makeStyle(style, layerName: "boundary", zoom: 5)
+        XCTAssertFalse(boundary.parseGeometryStyleData.lineCapRound)
+
+        // Roads stay world-locked: their width growing with zoom is the
+        // designed behavior at street level.
+        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 12)
+        XCTAssertEqual(motorway.lineWidthPoints, 0)
+        for pass in motorway.resolvedLineRenderPasses {
+            XCTAssertEqual(pass.lineWidthPoints, 0)
+        }
+    }
+
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,
                            layerName: String,
                            className: String? = nil,

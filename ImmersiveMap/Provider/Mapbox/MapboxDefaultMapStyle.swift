@@ -1453,12 +1453,16 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
             )
 
         case "admin":
+            // Point-locked widths: the shader resolves the visible edge in
+            // screen space, so borders hold their width through fractional
+            // zoom; the tessellated width is only the geometry ceiling.
             if let adminLevel = properties["admin_level"]?.uintValue {
                 if adminLevel == 1 {
                     return FeatureStyle(
                         key: 102, // Above water
                         color: colors["admin_level_1"]!,
                         lowZoomFadeMask: 1.0,
+                        lineWidthPoints: 1.4,
                         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 6)
                     )
                 } else if adminLevel == 2 {
@@ -1466,6 +1470,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                         key: 101,
                         color: colors["admin_boundary"]!,
                         lowZoomFadeMask: 1.0,
+                        lineWidthPoints: 1.4,
                         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 6)
                     )
                 }
@@ -1474,6 +1479,7 @@ class MapboxDefaultMapStyle: ImmersiveMapStyle {
                 key: 100,
                 color: colors["admin_boundary"]!,
                 lowZoomFadeMask: 1.0,
+                lineWidthPoints: 0.8,
                 parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 7.5)
             )
 

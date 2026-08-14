@@ -8,6 +8,7 @@ extension TileMvtParser {
         let drawing: DrawingPolygonBytes
         let styles: [TilePolygonStyle]
         let overviewStyleMasks: [Float]
+        let lineWidthPoints: [Float]
     }
 
     class ParsedTile {
@@ -17,13 +18,15 @@ extension TileMvtParser {
         let drawingExtruded: DrawingExtrudedBytes
         let styles: [TilePolygonStyle]
         let overviewStyleMasks: [Float]
+        let lineWidthPoints: [Float]
         let bridgeStyles: [TilePolygonStyle]
         let bridgeOverviewStyleMasks: [Float]
+        let bridgeLineWidthPoints: [Float]
         let tile: Tile
         let textLabels: [TextLabel]
         let roadTextLabels: [RoadTextLabel]
         let parseLayerTimings: [TileParseLayerTiming]
-        
+
         init(
             drawingPolygon: DrawingPolygonBytes,
             drawingRoadPhases: RoadStructureBuckets<RoadGeometryPhases<DrawingGeometryLayer>>,
@@ -31,8 +34,10 @@ extension TileMvtParser {
             drawingExtruded: DrawingExtrudedBytes,
             styles: [TilePolygonStyle],
             overviewStyleMasks: [Float],
+            lineWidthPoints: [Float],
             bridgeStyles: [TilePolygonStyle],
             bridgeOverviewStyleMasks: [Float],
+            bridgeLineWidthPoints: [Float],
             tile: Tile,
             textLabels: [TextLabel],
             roadTextLabels: [RoadTextLabel],
@@ -44,8 +49,10 @@ extension TileMvtParser {
             self.drawingExtruded = drawingExtruded
             self.styles = styles
             self.overviewStyleMasks = overviewStyleMasks
+            self.lineWidthPoints = lineWidthPoints
             self.bridgeStyles = bridgeStyles
             self.bridgeOverviewStyleMasks = bridgeOverviewStyleMasks
+            self.bridgeLineWidthPoints = bridgeLineWidthPoints
             self.tile = tile
             self.textLabels = textLabels
             self.roadTextLabels = roadTextLabels

@@ -422,7 +422,10 @@ final class PreparedTileDiskCaching {
     // byte carries the longitudinal end distance, so free butt ends (dash
     // cuts) feather too. A version-33 arena would have its 16-bit distance
     // misread as two 8-bit fields.
-    static let preparedFormatVersion: UInt32 = 34
+    // 35: every geometry layer grew a fifth span, the per-style point-locked
+    // line widths, and the arena slot sequence changed with it, so a
+    // version-34 span table no longer matches the schema traversal.
+    static let preparedFormatVersion: UInt32 = 35
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

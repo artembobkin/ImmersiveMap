@@ -8,6 +8,11 @@ class TileAtlasTexture {
         var overviewAlpha: Float
         var roadAlpha: Float
         var landuseAlpha: Float
+        /// Converts point-locked line widths into raster units. The atlas
+        /// rasterizes in atlas texels, and the placement sizes a slot to the
+        /// tile's device-pixel screen footprint, so a texel approximates a
+        /// device pixel and the same conversion holds.
+        var pixelsPerPoint: Float
     }
 
     struct TileData {
@@ -152,11 +157,15 @@ class TileAtlasTexture {
         activePageIndex = nil
     }
 
-    func setOverviewFadeAlphas(overviewAlpha: Float, roadAlpha: Float, landuseAlpha: Float) {
+    func setOverviewFadeAlphas(overviewAlpha: Float,
+                               roadAlpha: Float,
+                               landuseAlpha: Float,
+                               pixelsPerPoint: Float) {
         guard let renderEncoder else { return }
         var uniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
                                               roadAlpha: roadAlpha,
-                                              landuseAlpha: landuseAlpha)
+                                              landuseAlpha: landuseAlpha,
+                                              pixelsPerPoint: pixelsPerPoint)
         renderEncoder.setFragmentBytes(&uniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)
@@ -240,12 +249,14 @@ class TileAtlasTexture {
               let groundIndices = buffers.ground.indices,
               let groundVertices = buffers.ground.vertices,
               let groundStyles = buffers.ground.styles,
-              let groundOverviewMask = buffers.ground.overviewStyleMask else {
+              let groundOverviewMask = buffers.ground.overviewStyleMask,
+              let groundLineWidthPoints = buffers.ground.lineWidthPoints else {
             return true
         }
         renderEncoder.setVertexBuffer(groundVertices.buffer, offset: groundVertices.offset, index: 0)
         renderEncoder.setVertexBuffer(groundStyles.buffer, offset: groundStyles.offset, index: 2)
         renderEncoder.setVertexBuffer(groundOverviewMask.buffer, offset: groundOverviewMask.offset, index: 4)
+        renderEncoder.setVertexBuffer(groundLineWidthPoints.buffer, offset: groundLineWidthPoints.offset, index: 5)
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: groundIndices.count,
