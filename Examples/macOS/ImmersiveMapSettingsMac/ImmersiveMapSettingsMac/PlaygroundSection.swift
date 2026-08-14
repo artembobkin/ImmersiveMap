@@ -13,6 +13,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
     case earthScene
     case style
     case presentation
+    case camera
     case diagnostics
 
     var id: String { rawValue }
@@ -24,6 +25,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         case .earthScene: "Earth scene"
         case .style: "Style"
         case .presentation: "Presentation"
+        case .camera: "Camera"
         case .diagnostics: "Diagnostics"
         }
     }
@@ -35,6 +37,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         case .earthScene: "sun.max"
         case .style: "paintpalette"
         case .presentation: "globe"
+        case .camera: "camera.aperture"
         case .diagnostics: "speedometer"
         }
     }
@@ -67,8 +70,16 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         case .presentation:
             """
             `settings.presentation` decides where the globe unfurls into a plane \
-            and how large the globe is; `settings.camera` decides how far the \
-            camera may go. Zoom across the window and watch the readout.
+            and how large the globe is. Zoom across the window and watch the \
+            readout; the zoom limits that can pin either surface live in the \
+            Camera section.
+            """
+        case .camera:
+            """
+            `settings.camera` is every limit on where the camera may go: the \
+            zoom range, the tilt floor and ceiling, and how far it may rotate \
+            away from north. Commands are clamped, not refused, and the globe \
+            still eases tilt and rotation in with zoom on top of these limits.
             """
         case .diagnostics:
             """
@@ -113,6 +124,14 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
                                        zoom: 6.4,
                                        bearing: 0,
                                        pitch: 0.3)
+        case .camera:
+            // Midtown Manhattan with tilt and rotation already applied, so the
+            // floor, ceiling and bearing cap all have something visible to bite.
+            ImmersiveMapCameraPosition(latitudeDegrees: 40.7527,
+                                       longitudeDegrees: -73.9772,
+                                       zoom: 15.6,
+                                       bearing: 0.6,
+                                       pitch: 0.95)
         case .diagnostics:
             ImmersiveMapCameraPosition(latitudeDegrees: 51.5072,
                                        longitudeDegrees: -0.1276,

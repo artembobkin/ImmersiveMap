@@ -125,7 +125,7 @@ final class ImmersiveMapCameraRuntime {
 
     func currentMaximumAbsoluteBearing() -> Float {
         guard let cameraState = renderCamera?.currentCameraState() else {
-            return .pi
+            return min(max(settings.camera.maximumAbsoluteBearing ?? .pi, 0), .pi)
         }
 
         return currentCameraConstraints(cameraState: cameraState).bearing.maximumAbsoluteBearing ?? .pi
@@ -152,6 +152,14 @@ final class ImmersiveMapCameraRuntime {
         }
 
         return currentCameraConstraints(cameraState: cameraState).pitch.maximumPitch
+    }
+
+    func currentMinimumPitch() -> Float {
+        guard let cameraState = renderCamera?.currentCameraState() else {
+            return min(max(settings.camera.minimumPitch, 0), max(settings.camera.maximumPitch, 0))
+        }
+
+        return currentCameraConstraints(cameraState: cameraState).pitch.clampedMinimumPitch
     }
 
     func isSphericalRenderSurfaceActive() -> Bool {
@@ -370,6 +378,7 @@ final class ImmersiveMapCameraRuntime {
             ?? appliedCameraPosition
             ?? initialCameraPosition
         controlsRuntime.syncPitch(cameraPosition: currentCameraPosition,
+                                  minimumPitch: currentMinimumPitch(),
                                   maximumPitch: currentMaximumPitch())
     }
 

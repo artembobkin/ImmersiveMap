@@ -66,14 +66,18 @@ final class PitchControlZone {
     }
 
     func syncValue(cameraPosition: ImmersiveMapCameraPosition?,
+                   minimumPitch: Float,
                    maximumPitch: Float) {
         if let cameraPosition {
             setControlValue(PitchControlMath.controlValue(forActualPitch: cameraPosition.pitch,
+                                                          minimumPitch: minimumPitch,
                                                           maximumPitch: maximumPitch),
+                            minimumPitch: minimumPitch,
                             maximumPitch: maximumPitch,
                             updateCamera: false)
         } else {
             setControlValue(maximumPitch,
+                            minimumPitch: minimumPitch,
                             maximumPitch: maximumPitch,
                             updateCamera: false)
         }
@@ -87,14 +91,17 @@ final class PitchControlZone {
             gesture.setTranslation(.zero, in: view)
             setInteractionActive(true)
         case .changed:
+            let minimumPitch = currentMinimumPitch()
             let maximumPitch = currentMaximumPitch()
             let translation = gesture.translation(in: view)
             let delta = PitchControlMath.controlValueDelta(
                 forVerticalTranslation: translation.y,
                 interactionHeight: view.bounds.height,
+                minimumPitch: minimumPitch,
                 maximumPitch: maximumPitch
             )
             setControlValue(controlValue + delta,
+                            minimumPitch: minimumPitch,
                             maximumPitch: maximumPitch,
                             updateCamera: true)
             gesture.setTranslation(.zero, in: view)
@@ -121,11 +128,14 @@ final class PitchControlZone {
     }
 
     private func setControlValue(_ value: Float,
+                                 minimumPitch: Float,
                                  maximumPitch: Float,
                                  updateCamera: Bool) {
         guard let mapView else { return }
 
-        let clampedValue = PitchControlMath.clampedControlValue(value, maximumPitch: maximumPitch)
+        let clampedValue = PitchControlMath.clampedControlValue(value,
+                                                                minimumPitch: minimumPitch,
+                                                                maximumPitch: maximumPitch)
         controlValue = clampedValue
 
         guard updateCamera,
@@ -134,6 +144,7 @@ final class PitchControlZone {
         }
 
         mapView.cameraAnimationRuntime.setPitchTarget(PitchControlMath.actualPitch(forControlValue: clampedValue,
+                                                                                   minimumPitch: minimumPitch,
                                                                                    maximumPitch: maximumPitch))
     }
 
@@ -142,6 +153,13 @@ final class PitchControlZone {
             return 0
         }
         return mapView.cameraRuntime.currentMaximumPitch()
+    }
+
+    private func currentMinimumPitch() -> Float {
+        guard let mapView else {
+            return 0
+        }
+        return mapView.cameraRuntime.currentMinimumPitch()
     }
 }
 

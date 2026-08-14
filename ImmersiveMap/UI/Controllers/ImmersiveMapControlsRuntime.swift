@@ -98,9 +98,11 @@ final class ImmersiveMapControlsRuntime {
     }
 
     func syncPitch(cameraPosition: ImmersiveMapCameraPosition?,
+                   minimumPitch: Float,
                    maximumPitch: Float) {
         #if canImport(UIKit)
         pitchControlZone.syncValue(cameraPosition: cameraPosition,
+                                   minimumPitch: minimumPitch,
                                    maximumPitch: maximumPitch)
         #endif
     }

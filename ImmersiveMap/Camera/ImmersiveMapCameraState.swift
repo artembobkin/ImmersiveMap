@@ -42,7 +42,7 @@ struct ImmersiveMapCameraState {
         self.init(centerWorldMercator: centerWorldMercator,
                   zoom: clampedZoom,
                   bearing: cameraPosition.bearing,
-                  pitch: min(max(0, cameraPosition.pitch), cameraSettings.maximumReachablePitch(at: clampedZoom)))
+                  pitch: cameraSettings.clampPitch(cameraPosition.pitch, at: clampedZoom))
     }
 
     func cameraPosition() -> ImmersiveMapCameraPosition {

@@ -130,6 +130,8 @@ private struct SettingsPlaygroundScreen: View {
             StylePanel(settings: $settings)
         case .presentation:
             PresentationPanel(settings: $settings, camera: camera)
+        case .camera:
+            CameraPanel(settings: $settings)
         case .diagnostics:
             DiagnosticsPanel(settings: $settings)
         }

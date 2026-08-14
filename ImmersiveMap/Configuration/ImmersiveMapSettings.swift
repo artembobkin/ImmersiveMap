@@ -91,12 +91,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         public var maximumPitch: Float
+        /// The lowest pitch the camera can reach, in radians from straight down.
+        /// Zero (the default) allows the top-down view. On the globe the pitch
+        /// ceiling eases toward zero as the camera zooms out; a floor above that
+        /// ceiling yields to it, so a zoomed-out globe still levels off.
+        public var minimumPitch: Float
         /// The lowest zoom the camera can reach. Gestures, zoom commands and
         /// camera flights are all clamped to it, so raising it keeps the map from
         /// ever showing the whole globe.
         public var minimumZoom: Double
         public var maximumZoom: Double
         public var focusedMarkerZoom: Double
+        /// How far the camera may rotate away from north, in radians, symmetric
+        /// around it; `nil` (the default) leaves rotation unbounded. On the flat
+        /// map the cap applies directly. On the globe the bearing window still
+        /// opens with zoom (see `globeBearingUnlockZoom`), and the cap becomes
+        /// the widest that window opens instead of the full half turn.
+        public var maximumAbsoluteBearing: Float?
         public var globeMinimumAbsoluteBearing: Float
         public var globeBearingUnlockZoom: Double
         public var globePitchUnlockZoom: Double
@@ -131,9 +142,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var controlZones: ControlZoneSettings
 
         public init(maximumPitch: Float,
+                    minimumPitch: Float = 0,
                     minimumZoom: Double = 0,
                     maximumZoom: Double,
                     focusedMarkerZoom: Double,
+                    maximumAbsoluteBearing: Float? = nil,
                     globeMinimumAbsoluteBearing: Float,
                     globeBearingUnlockZoom: Double,
                     globePitchUnlockZoom: Double = 3.0,
@@ -165,9 +178,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     bearingFollowHalfLife: Double = 0.06,
                     controlZones: ControlZoneSettings = ControlZoneSettings()) {
             self.maximumPitch = maximumPitch
+            self.minimumPitch = minimumPitch
             self.minimumZoom = minimumZoom
             self.maximumZoom = maximumZoom
             self.focusedMarkerZoom = focusedMarkerZoom
+            self.maximumAbsoluteBearing = maximumAbsoluteBearing
             self.globeMinimumAbsoluteBearing = globeMinimumAbsoluteBearing
             self.globeBearingUnlockZoom = globeBearingUnlockZoom
             self.globePitchUnlockZoom = globePitchUnlockZoom
@@ -225,6 +240,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         func maximumReachablePitch(at zoom: Double) -> Float {
             max(maximumPitch, 0) + pitchExtension(at: zoom)
+        }
+
+        /// The pitch floor in force at a zoom: the configured minimum, but never
+        /// above the ceiling that applies there, so an inverted range collapses
+        /// to the ceiling instead of deadlocking the camera.
+        func minimumReachablePitch(at zoom: Double) -> Float {
+            min(max(minimumPitch, 0), maximumReachablePitch(at: zoom))
+        }
+
+        /// Clamps a pitch to the configured range at a zoom.
+        func clampPitch(_ pitch: Float, at zoom: Double) -> Float {
+            min(max(pitch, minimumReachablePitch(at: zoom)), maximumReachablePitch(at: zoom))
         }
 
         private func interpolatedPitchExtension(at zoom: Double,

@@ -36,23 +36,6 @@ struct PresentationPanel: View {
                 ValueSlider("Globe radius",
                             value: $settings.presentation.globeRadiusScale,
                             range: 0.05...0.4)
-
-                Divider().frame(height: 20)
-
-                // A minimum above the transition window keeps the map flat for
-                // good, which is how an app ships a flat-only map.
-                ValueSlider("Zoom min",
-                            value: $settings.camera.minimumZoom,
-                            range: 0...12,
-                            step: 0.5,
-                            format: "%.1f",
-                            width: 110)
-                ValueSlider("Zoom max",
-                            value: $settings.camera.maximumZoom,
-                            range: 12...22,
-                            step: 0.5,
-                            format: "%.1f",
-                            width: 110)
             }
 
             readout

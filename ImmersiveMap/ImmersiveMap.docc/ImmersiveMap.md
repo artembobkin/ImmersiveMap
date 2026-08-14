@@ -50,7 +50,7 @@ Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-
 
 ### Camera
 
-``ImmersiveMapCameraController`` jumps, flies (with cinematic van Wijk and Nuij overview arcs for long flights), travels along an ``ImmersiveMapGeoPath``, and reports every camera change back to the app. ``ImmersiveMapCameraTourController`` chains flights and holds into a scripted tour. Gestures are cursor-anchored, with pan inertia, double-tap zoom, optional on-screen controls, and zoom, pitch and bearing limits that follow the presentation.
+``ImmersiveMapCameraController`` jumps, flies (with cinematic van Wijk and Nuij overview arcs for long flights), travels along an ``ImmersiveMapGeoPath``, and reports every camera change back to the app. ``ImmersiveMapCameraTourController`` chains flights and holds into a scripted tour. Gestures are cursor-anchored, with pan inertia, double-tap zoom, optional on-screen controls, and configurable zoom, pitch and bearing limits that follow the presentation.
 
 ### Map data
 

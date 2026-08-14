@@ -10,6 +10,8 @@ once the public API stabilizes.
 
 ### Added
 
+- Camera constraints are fully configurable, where two of them used to be hardcoded. `CameraSettings.minimumPitch` sets a tilt floor, so a map can be kept perpetually tilted instead of always allowing the straight-down view, and `CameraSettings.maximumAbsoluteBearing` caps how far the camera may rotate away from north, where rotation on the flat map was unbounded. Both compose with the globe's zoom-eased limits rather than fighting them: the bearing cap is the widest the globe's bearing window opens instead of the full half turn, and a tilt floor above the globe's zoomed-out ceiling yields to it, so a whole-globe view still levels off. New `ImmersiveMapView` modifiers `.pitchRange(minimum:maximum:)` and `.bearingLimit(_:)` sit next to `.zoomRange(minimum:maximum:)`. The read side follows: `ImmersiveMapCameraSnapshot.pitchLimits.minimum` reports the floor in force instead of a constant zero, the built-in control panel sizes its tilt slider from it, and the one-thumb tilt zone maps its drag to the reachable span rather than leaving a dead stretch. `ImmersiveMapSettingsMac` gains a Camera sidebar section with every limit on a live slider; the zoom range moved there from the Presentation section.
+
 - New example `Examples/macOS/ImmersiveMapMac`: the plain map on macOS, with the built-in tile provider, `.enableCameraUIControls()` and `.debugPanel()` and nothing else on screen. Every other Mac example documents one API and puts a panel of switches over the map; this one is the map itself, which is what to open to fly around, to read the HUD while something in the engine is being changed, or to see what the defaults look like before any setting is touched.
 
 ### Changed

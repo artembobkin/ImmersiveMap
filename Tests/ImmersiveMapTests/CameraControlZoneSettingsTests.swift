@@ -40,17 +40,40 @@ final class CameraControlZoneSettingsTests: XCTestCase {
         XCTAssertEqual(camera.maximumZoom, ImmersiveMapSettings.default.camera.maximumZoom)
     }
 
+    func testPitchRangeModifierLeavesTheOmittedBoundAlone() {
+        let camera = ImmersiveMapView()
+            .pitchRange(minimum: 0.2)
+            .settings
+            .camera
+
+        XCTAssertEqual(camera.minimumPitch, 0.2)
+        XCTAssertEqual(camera.maximumPitch, ImmersiveMapSettings.default.camera.maximumPitch)
+    }
+
+    func testBearingLimitModifierSetsAndClearsTheCap() {
+        let capped = ImmersiveMapView().bearingLimit(.pi / 2).settings.camera
+        XCTAssertEqual(capped.maximumAbsoluteBearing, .pi / 2)
+
+        let cleared = ImmersiveMapView().bearingLimit(.pi / 2).bearingLimit(nil).settings.camera
+        XCTAssertNil(cleared.maximumAbsoluteBearing)
+    }
+
     func testCameraModifiersDoNotOverwriteEachOther() {
-        // Both modifiers rewrite CameraSettings, so a later one must not silently
+        // All of these rewrite CameraSettings, so a later one must not silently
         // undo an earlier one.
         let camera = ImmersiveMapView()
             .cameraControlZones(pitch: false)
             .zoomRange(minimum: 4, maximum: 17)
+            .pitchRange(minimum: 0.1, maximum: 1.2)
+            .bearingLimit(.pi / 3)
             .settings
             .camera
 
         XCTAssertEqual(camera.minimumZoom, 4)
         XCTAssertEqual(camera.maximumZoom, 17)
+        XCTAssertEqual(camera.minimumPitch, 0.1)
+        XCTAssertEqual(camera.maximumPitch, 1.2)
+        XCTAssertEqual(camera.maximumAbsoluteBearing, .pi / 3)
         XCTAssertTrue(camera.controlZones.isZoomZoneEnabled)
         XCTAssertFalse(camera.controlZones.isPitchZoneEnabled)
     }

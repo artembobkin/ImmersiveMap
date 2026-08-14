@@ -21,11 +21,21 @@ struct CameraBearingConstraint {
 }
 
 struct CameraPitchConstraint {
+    let minimumPitch: Float
     let maximumPitch: Float
 
+    var clampedMaximumPitch: Float {
+        max(maximumPitch, 0)
+    }
+
+    /// The floor never rises above the ceiling, so an inverted range collapses
+    /// to the ceiling instead of deadlocking the camera.
+    var clampedMinimumPitch: Float {
+        min(max(minimumPitch, 0), clampedMaximumPitch)
+    }
+
     func apply(to pitch: Float) -> Float {
-        let clampedMaximumPitch = max(maximumPitch, 0)
-        return min(max(pitch, 0), clampedMaximumPitch)
+        min(max(pitch, clampedMinimumPitch), clampedMaximumPitch)
     }
 }
 
@@ -49,7 +59,7 @@ enum CameraBearingConstraintResolver {
                         cameraSettings: ImmersiveMapSettings.CameraSettings,
                         renderSurfaceMode: ViewMode) -> CameraBearingConstraint {
         guard renderSurfaceMode == .spherical else {
-            return CameraBearingConstraint(maximumAbsoluteBearing: nil)
+            return CameraBearingConstraint(maximumAbsoluteBearing: cameraSettings.maximumAbsoluteBearing)
         }
 
         return CameraBearingConstraint(
@@ -60,14 +70,17 @@ enum CameraBearingConstraintResolver {
 
     static func globeMaximumAbsoluteBearing(zoom: Double,
                                             cameraSettings: ImmersiveMapSettings.CameraSettings) -> Float {
-        let minimumBearing = min(max(cameraSettings.globeMinimumAbsoluteBearing, 0), .pi)
+        // The configured cap is the widest the globe's bearing window opens; a
+        // cap below the window's floor collapses the window to the cap.
+        let ceiling = min(max(cameraSettings.maximumAbsoluteBearing ?? .pi, 0), .pi)
+        let minimumBearing = min(max(cameraSettings.globeMinimumAbsoluteBearing, 0), ceiling)
         let unlockZoom = max(cameraSettings.globeBearingUnlockZoom, 0)
         guard unlockZoom > Double.leastNonzeroMagnitude else {
-            return .pi
+            return ceiling
         }
 
         let progress = min(max(zoom / unlockZoom, 0), 1)
-        return minimumBearing + (Float.pi - minimumBearing) * Float(progress)
+        return minimumBearing + (ceiling - minimumBearing) * Float(progress)
     }
 
     static func normalized(_ bearing: Float) -> Float {
@@ -85,10 +98,12 @@ enum CameraPitchConstraintResolver {
                         cameraSettings: ImmersiveMapSettings.CameraSettings,
                         renderSurfaceMode: ViewMode) -> CameraPitchConstraint {
         guard renderSurfaceMode == .spherical else {
-            return CameraPitchConstraint(maximumPitch: cameraSettings.maximumReachablePitch(at: cameraState.zoom))
+            return CameraPitchConstraint(minimumPitch: cameraSettings.minimumPitch,
+                                         maximumPitch: cameraSettings.maximumReachablePitch(at: cameraState.zoom))
         }
 
         return CameraPitchConstraint(
+            minimumPitch: cameraSettings.minimumPitch,
             maximumPitch: globeMaximumPitch(zoom: cameraState.zoom,
                                             cameraSettings: cameraSettings)
         )

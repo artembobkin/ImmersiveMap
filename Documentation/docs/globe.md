@@ -55,7 +55,7 @@ Because gestures, camera commands and flights are all clamped to the same range,
 
 ## Camera limits on the globe
 
-A zoomed-out globe limits how far the camera may rotate and tilt, so a small drag does not spin the planet into a disorienting angle. The thresholds are `CameraSettings.globeBearingUnlockZoom` and `globePitchUnlockZoom` (zoom 6 by default for bearing). Commands are clamped rather than refused: a flight or a [path follow](camera-path-follow.md) that asks for more turn than the zoom allows simply turns as far as it can.
+A zoomed-out globe limits how far the camera may rotate and tilt, so a small drag does not spin the planet into a disorienting angle. The thresholds are `CameraSettings.globeBearingUnlockZoom` and `globePitchUnlockZoom` (zoom 6 by default for bearing). What the unlock opens up to is itself configurable: [`bearingLimit`](camera.md) caps the widest the bearing window opens, and [`pitchRange`](camera.md) sets the tilt floor and ceiling, with a floor above the globe's zoomed-out ceiling yielding to it. Commands are clamped rather than refused: a flight or a [path follow](camera-path-follow.md) that asks for more turn than the zoom allows simply turns as far as it can.
 
 ## Limitations
 

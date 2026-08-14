@@ -29,9 +29,11 @@ class CameraStateController {
 
     init(settings: ImmersiveMapSettings.CameraSettings) {
         self.settings = settings
-        // The default state starts at zoom 0; a configured minimumZoom must
-        // hold from the very first frame, not from the first gesture.
+        // The default state starts at zoom 0 and pitch 0; a configured
+        // minimumZoom or minimumPitch must hold from the very first frame,
+        // not from the first gesture.
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
+        cameraState.pitch = settings.clampPitch(cameraState.pitch, at: cameraState.zoom)
     }
 
     convenience init(config: ImmersiveMapSettings) {
@@ -41,7 +43,7 @@ class CameraStateController {
     func apply(settings: ImmersiveMapSettings.CameraSettings) {
         self.settings = settings
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
-        cameraState.pitch = min(max(0, cameraState.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
+        cameraState.pitch = settings.clampPitch(cameraState.pitch, at: cameraState.zoom)
     }
 
     /// The horizontal latitude pan compensation ramps in as the camera zooms in:
@@ -175,11 +177,7 @@ class CameraStateController {
     }
 
     func setPitch(_ pitch: Float) {
-        cameraState.pitch = min(max(0, pitch), settings.maximumReachablePitch(at: cameraState.zoom))
-    }
-
-    func rotatePitch(pitch: Float) {
-        setPitch(settings.maximumPitch - pitch)
+        cameraState.pitch = settings.clampPitch(pitch, at: cameraState.zoom)
     }
 
     func zoom(scale: Double, velocity: Double = 0) {
@@ -212,7 +210,7 @@ class CameraStateController {
                                                                       longitude: longitudeRadians)
         cameraState.zoom = settings.clampZoom(cameraPosition.zoom)
         cameraState.bearing = cameraPosition.bearing
-        cameraState.pitch = min(max(0, cameraPosition.pitch), settings.maximumReachablePitch(at: cameraState.zoom))
+        cameraState.pitch = settings.clampPitch(cameraPosition.pitch, at: cameraState.zoom)
     }
 
     func currentCameraState() -> ImmersiveMapCameraState {
@@ -224,7 +222,7 @@ class CameraStateController {
         self.cameraState = ImmersiveMapCameraState(centerWorldMercator: cameraState.centerWorldMercator,
                                           zoom: clampedZoom,
                                           bearing: cameraState.bearing,
-                                          pitch: min(max(0, cameraState.pitch), settings.maximumReachablePitch(at: clampedZoom)))
+                                          pitch: settings.clampPitch(cameraState.pitch, at: clampedZoom))
     }
 
     private func applyZoomDelta(_ delta: Double) {

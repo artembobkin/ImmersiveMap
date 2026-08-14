@@ -6,8 +6,8 @@ enum ImmersiveMapCameraSnapshotResolver {
                         constraints: CameraConstraints,
                         isSphericalSurfaceActive: Bool) -> ImmersiveMapCameraSnapshot {
         let bearingLimits = ImmersiveMapCameraBearingLimits(maximumAbsoluteBearing: constraints.bearing.maximumAbsoluteBearing ?? .pi)
-        let pitchLimits = ImmersiveMapCameraAngleLimits(minimum: 0,
-                                                        maximum: max(0, constraints.pitch.maximumPitch))
+        let pitchLimits = ImmersiveMapCameraAngleLimits(minimum: constraints.pitch.clampedMinimumPitch,
+                                                        maximum: constraints.pitch.clampedMaximumPitch)
         let snapshot = ImmersiveMapCameraSnapshot(position: position,
                                                   bearingLimits: bearingLimits,
                                                   pitchLimits: pitchLimits,

@@ -72,7 +72,7 @@ final class ImmersiveMapCameraAnimationRuntime {
     /// Accepts a target pitch. Instead of applying instantly, it sets a goal toward which the actual
     /// pitch is eased per frame (smoothing). If follow is disabled, applies instantly.
     func setPitchTarget(_ pitch: Float, currentTime: CFTimeInterval = CACurrentMediaTime()) {
-        let clampedTarget = min(max(0, pitch), cameraRuntime.currentMaximumPitch())
+        let clampedTarget = min(max(cameraRuntime.currentMinimumPitch(), pitch), cameraRuntime.currentMaximumPitch())
         guard cameraPitchFollow.retarget(clampedTarget, currentTime: currentTime) else {
             cameraPitchFollowIsActive = false
             cameraRuntime.setCameraPitch(clampedTarget)

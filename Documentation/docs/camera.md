@@ -37,7 +37,7 @@ public struct ImmersiveMapCameraPosition: Equatable, Sendable {
 }
 ```
 
-`bearing` and `pitch` are in **radians**, unlike the degrees used by markers and scene models: the camera is the engine's own coordinate frame, not a geographic annotation. Pitch is clamped by `CameraSettings.maximumPitch` (and further by the zoom-dependent limits described below), so a position asking for more tilt than the current zoom allows is accepted and clamped rather than rejected.
+`bearing` and `pitch` are in **radians**, unlike the degrees used by markers and scene models: the camera is the engine's own coordinate frame, not a geographic annotation. Pitch is clamped into `CameraSettings.minimumPitch ... maximumPitch` (and further by the zoom-dependent limits described below), so a position asking for more tilt than the current zoom allows is accepted and clamped rather than rejected.
 
 ## Moving the camera
 
@@ -95,19 +95,24 @@ public var onCameraSnapshotChanged: ((ImmersiveMapCameraSnapshot) -> Void)?
 ```swift
 func enableCameraUIControls(_ isEnabled: Bool = true, maximumPitch: Float = …) -> ImmersiveMapView
 func zoomRange(minimum: Double? = nil, maximum: Double? = nil) -> ImmersiveMapView
+func pitchRange(minimum: Float? = nil, maximum: Float? = nil) -> ImmersiveMapView
+func bearingLimit(_ maximumAbsoluteBearing: Float?) -> ImmersiveMapView
 func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapView
 ```
 
 - `enableCameraUIControls` adds the built-in control panel (`ImmersiveMapCameraControlPanel`, itself public if you want to place it yourself).
 - `zoomRange` clamps gestures, camera commands and flights alike. A minimum above the globe-to-flat transition window keeps the map flat for good, see [globe rendering](globe.md).
+- `pitchRange` clamps tilt the same way, in radians from straight down. A minimum keeps the map perpetually tilted; on the globe the tilt ceiling still eases in with zoom, and a minimum above that easing ceiling yields to it, so a zoomed-out globe still levels off.
+- `bearingLimit` caps how far the camera may rotate away from north, symmetric around it; `nil` (the default) leaves rotation unbounded. On the globe the cap becomes the widest the zoom-eased bearing window opens instead of the full half turn.
 - `cameraControlZones` turns on the invisible one-thumb drag zones in the bottom corners (leading tilts, trailing zooms). Both are off by default because a zone captures drags that would otherwise pan the map and nothing on screen announces it. Touch platforms only; accepted and ignored on macOS.
 
 Everything else about gesture feel lives on `ImmersiveMapSettings.CameraSettings` and is attached with `.cameraSettings(_:)`. The fields worth knowing:
 
 | Field | Meaning |
 |---|---|
-| `maximumPitch` | Hard tilt ceiling, in radians. |
+| `minimumPitch` / `maximumPitch` | The tilt range, in radians from straight down. What `pitchRange` writes. |
 | `minimumZoom` / `maximumZoom` | What `zoomRange` writes. |
+| `maximumAbsoluteBearing` | How far the camera may rotate away from north; `nil` means unbounded. What `bearingLimit` writes. |
 | `globeBearingUnlockZoom` / `globePitchUnlockZoom` | Below these zooms the globe limits how far the camera may rotate and tilt. This is also what clamps a `.course` path follow on a zoomed-out globe. |
 | `highZoomPitchExtension…` / `extraHighZoomPitchExtension…` | Extra tilt earned back as the camera comes down to street level. |
 | `globePanInertia…` | Whether and how a flick keeps the globe spinning. |
@@ -148,4 +153,4 @@ The same shot list can be rendered to a file instead of the screen, see [tour vi
 - Pitch and bearing limits are zoom-dependent on the globe. Commands are clamped rather than refused, so a flight to a heavily tilted globe position lands level and gains its tilt as it zooms in.
 - The tour controller is `@MainActor`; the camera controller is not, but its callbacks are delivered on the main thread.
 
-Running example: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) plays a ten-shot cinematic that exercises every route and altitude style, and exports the same list to a video file.
+Running example: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) plays a ten-shot cinematic that exercises every route and altitude style, and exports the same list to a video file. The Camera section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) puts every camera limit on a live slider.

@@ -16,6 +16,7 @@
 		B10000000000000000000047 /* StylePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* StylePanel.swift */; };
 		B10000000000000000000048 /* PresentationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038 /* PresentationPanel.swift */; };
 		B10000000000000000000049 /* DiagnosticsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000039 /* DiagnosticsPanel.swift */; };
+		B1000000000000000000004A /* CameraPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000003A /* CameraPanel.swift */; };
 		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
 /* End PBXBuildFile section */
 
@@ -29,6 +30,7 @@
 		B10000000000000000000037 /* StylePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylePanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000038 /* PresentationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationPanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000039 /* DiagnosticsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsPanel.swift; sourceTree = "<group>"; };
+		B1000000000000000000003A /* CameraPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* ImmersiveMapSettingsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapSettingsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -63,6 +65,7 @@
 				B10000000000000000000036 /* EarthScenePanel.swift */,
 				B10000000000000000000037 /* StylePanel.swift */,
 				B10000000000000000000038 /* PresentationPanel.swift */,
+				B1000000000000000000003A /* CameraPanel.swift */,
 				B10000000000000000000039 /* DiagnosticsPanel.swift */,
 			);
 			path = ImmersiveMapSettingsMac;
@@ -159,6 +162,7 @@
 				B10000000000000000000046 /* EarthScenePanel.swift in Sources */,
 				B10000000000000000000047 /* StylePanel.swift in Sources */,
 				B10000000000000000000048 /* PresentationPanel.swift in Sources */,
+				B1000000000000000000004A /* CameraPanel.swift in Sources */,
 				B10000000000000000000049 /* DiagnosticsPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

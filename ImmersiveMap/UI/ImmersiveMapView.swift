@@ -289,6 +289,46 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Restricts the tilt angles the camera can reach, in radians from straight
+    /// down. Gestures, camera commands and flights are all clamped to the range.
+    /// On the globe the tilt ceiling still eases in with zoom
+    /// (`CameraSettings.globePitchUnlockZoom`), and a minimum above that easing
+    /// ceiling yields to it, so a zoomed-out globe still levels off.
+    ///
+    ///     ImmersiveMapView()
+    ///         .pitchRange(minimum: 0.3, maximum: 1.1)
+    ///
+    /// An omitted bound is left as configured.
+    func pitchRange(minimum: Float? = nil, maximum: Float? = nil) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        if let minimum {
+            camera.minimumPitch = minimum
+        }
+        if let maximum {
+            camera.maximumPitch = maximum
+        }
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
+    /// Caps how far the camera may rotate away from north, in radians, symmetric
+    /// around it. `nil` (the default) leaves rotation unbounded on the flat map.
+    /// The globe still opens its bearing window with zoom
+    /// (`CameraSettings.globeBearingUnlockZoom`), and the cap becomes the widest
+    /// that window opens instead of the full half turn.
+    ///
+    ///     ImmersiveMapView()
+    ///         .bearingLimit(.pi / 2)   // at most a quarter turn from north
+    ///         .bearingLimit(nil)       // unbounded again
+    func bearingLimit(_ maximumAbsoluteBearing: Float?) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.maximumAbsoluteBearing = maximumAbsoluteBearing
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
     /// Controls reuse of dismantled map views (on by default). When the screen
     /// with this map goes away, the platform view (renderer, GPU tile cache,
     /// atlas pages) is parked briefly and the next `ImmersiveMapView` adopts
