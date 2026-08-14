@@ -14,6 +14,9 @@
 # Visual review renders: large, machine specific, regenerated on demand.
 # The verdicts next to them (Tools/VisualReview/verdicts.json) are committed.
 /Tools/VisualReview/Output/
+# Reports a reviewer hands back: the renders again, plus a copy of the
+# judgements that the verdict file already carries.
+/Tools/VisualReview/Reports/
 /ImmersiveMapMacDevelop/
 /ImmersiveMapIOSDevelop/
 /ImmersiveMap.local.xcworkspace/

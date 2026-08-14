@@ -353,6 +353,14 @@ enum VisualReviewPaths {
         reviewDirectory.appending(path: "Output")
     }
 
+    /// Where a finished pass is assembled into the one file it is handed back
+    /// as. Gitignored on a Mac, and inside the app's own Documents on a phone,
+    /// where `UIFileSharingEnabled` makes it visible in the Files app as a
+    /// second way off the device besides the share sheet.
+    static var reportsDirectory: URL {
+        reviewDirectory.appending(path: "Reports")
+    }
+
     /// Committed: the verdicts are the record of what a person approved.
     static var verdictsURL: URL {
         reviewDirectory.appending(path: verdictsFileName)

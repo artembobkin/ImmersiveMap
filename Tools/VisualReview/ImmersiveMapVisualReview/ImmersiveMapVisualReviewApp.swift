@@ -111,6 +111,10 @@ final class VisualReviewModel {
     /// Set when the verdict file could not be written, so the failure is on
     /// screen instead of only in the return value nobody reads.
     var verdictWriteFailure: String?
+    /// The zip a finished pass is handed back as, once it has been built.
+    var reportURL: URL?
+    var isPreparingReport = false
+    var reportFailure: String?
 
     /// When the last verdict was recorded, to tell a decision from a key that
     /// is simply still held down. Well under the pace of someone looking at
@@ -142,6 +146,50 @@ final class VisualReviewModel {
         items.filter(\.needsAttention).count
     }
 
+    /// Whether anything has been rendered at all, which is what separates a
+    /// session that has not started from one that is under way.
+    var hasAnyRender: Bool {
+        items.contains { $0.artifact != nil }
+    }
+
+    /// The next thing the guided pass should put in front of the reviewer: the
+    /// first scenario, in catalogue order, whose render nobody has judged yet.
+    var nextNeedingAttention: VisualReviewItem? {
+        items.first(where: \.needsAttention)
+    }
+
+    /// Renders that never happened, which the finish screen has to say out
+    /// loud: a scenario that failed to render was not judged, and a pass that
+    /// quietly omits it reads as a clean sheet.
+    var failedItems: [VisualReviewItem] {
+        items.filter { if case .failed = $0.state { return true } else { return false } }
+    }
+
+    var rejectedItems: [VisualReviewItem] {
+        items.filter { $0.verdict?.ruling == .notOk && $0.isUnchangedSinceVerdict }
+    }
+
+    var approvedCount: Int {
+        items.filter { $0.verdict?.ruling == .ok && $0.isUnchangedSinceVerdict }.count
+    }
+
+    // MARK: - Report
+
+    /// Assembles the pass into one zip: the judgements, the pictures they were
+    /// made about, and the machine that rendered them.
+    func prepareReport() async {
+        guard isPreparingReport == false else { return }
+        isPreparingReport = true
+        defer { isPreparingReport = false }
+        do {
+            reportURL = try await VisualReviewReportBuilder.makeReport(for: items)
+            reportFailure = nil
+        } catch {
+            reportURL = nil
+            reportFailure = String(describing: error)
+        }
+    }
+
     // MARK: - Rendering
 
     /// Renders everything, stills first.
@@ -155,6 +203,9 @@ final class VisualReviewModel {
     func renderAll(only ids: Set<String>? = nil) async {
         guard isRendering == false else { return }
         isRendering = true
+        // The pictures are about to change, so a report built from the old ones
+        // describes a pass that no longer exists.
+        reportURL = nil
         defer {
             isRendering = false
             videoScenarioOnScreen = nil
@@ -241,8 +292,13 @@ final class VisualReviewModel {
 
     // MARK: - Verdicts
 
-    func record(_ ruling: VisualReviewVerdict.Ruling, note: String, for item: VisualReviewItem) {
-        guard let artifact = item.artifact else { return }
+    /// - Returns: whether the verdict was actually recorded. A guided pass
+    ///   advances on that answer rather than on the button having been pressed:
+    ///   a dropped key repeat or a failed write must not move the reviewer on
+    ///   from a scenario nothing was written about.
+    @discardableResult
+    func record(_ ruling: VisualReviewVerdict.Ruling, note: String, for item: VisualReviewItem) -> Bool {
+        guard let artifact = item.artifact else { return false }
         // A verdict is a decision, and a held key is not twelve of them.
         //
         // Approving advances the selection, so with the shortcut on a bare
@@ -252,7 +308,7 @@ final class VisualReviewModel {
         // and the list shows what did register.
         let now = Date()
         if let last = lastVerdictDate, now.timeIntervalSince(last) < Self.minimumTimeBetweenVerdicts {
-            return
+            return false
         }
         lastVerdictDate = now
         let verdict = VisualReviewVerdict(ruling: ruling,
@@ -271,9 +327,12 @@ final class VisualReviewModel {
         } catch {
             verdictWriteFailure = "Could not write \(VisualReviewPaths.verdictsURL.path): "
                 + String(describing: error)
-            return
+            return false
         }
+        // Any report built before this verdict no longer describes the pass.
+        reportURL = nil
         advanceSelection(from: item)
+        return true
     }
 
     private func advanceSelection(from item: VisualReviewItem) {
@@ -293,6 +352,11 @@ struct VisualReviewScreen: View {
     /// artifact cannot share a screen. Verdicts advance the selection, so the
     /// pushed screen follows the catalogue and one push covers the whole pass.
     @State private var isReviewing = false
+
+    /// Set when the reviewer asks to see the catalogue after a finished pass,
+    /// so the finish screen steps aside instead of reappearing the moment
+    /// everything is judged.
+    @State private var isBrowsing = false
 
     var body: some View {
         platformBody
@@ -358,32 +422,47 @@ struct VisualReviewScreen: View {
             ToolbarItem(placement: .navigation) { renderAllButton }
             ToolbarItem { attentionToggle }
             ToolbarItem { shareVerdictsButton }
+            ToolbarItem { reportToolbarControl }
         }
     }
     #else
-    /// One screen at a time on a phone: the catalogue, then the picture.
+    /// One screen at a time on a phone, and one thing to do on each of them.
     ///
-    /// A 1600 by 1000 render and a list of twelve scenarios do not share a
+    /// A helper who agreed to spend half an hour on this should not have to
+    /// know what the catalogue is, which button starts a render, or where the
+    /// verdict file ends up. The phone build is therefore a guided pass: press
+    /// start, wait, judge each picture as it comes, send the report. The
+    /// catalogue list is still there behind it for a session that was
+    /// interrupted, but nobody has to go through it to finish a pass.
+    ///
+    /// A 1600 by 1000 render and a list of twelve scenarios also do not share a
     /// phone screen, and the review screen is the one that has to be big: the
     /// whole point of a device pass is judging the rendering on the hardware
     /// that produced it.
     private var platformBody: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                scenarioList
-                Divider()
-                countsFooter
+            Group {
                 if model.isRendering {
-                    Divider()
-                    renderingBanner
+                    renderingScreen
+                } else if model.hasAnyRender == false {
+                    welcomeScreen
+                } else if model.attentionCount == 0 && isBrowsing == false {
+                    finishScreen
+                } else {
+                    VStack(spacing: 0) {
+                        scenarioList
+                        Divider()
+                        countsFooter
+                    }
                 }
             }
-            .navigationTitle("Visual Review")
+            .navigationTitle("ImmersiveMap check")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { renderAllButton }
-                ToolbarItem(placement: .topBarTrailing) { attentionToggle }
-                ToolbarItem(placement: .topBarTrailing) { shareVerdictsButton }
+                if model.hasAnyRender, model.isRendering == false {
+                    ToolbarItem(placement: .topBarLeading) { renderAllButton }
+                    ToolbarItem(placement: .topBarTrailing) { attentionToggle }
+                }
             }
             .navigationDestination(isPresented: $isReviewing) {
                 detail
@@ -392,7 +471,197 @@ struct VisualReviewScreen: View {
             }
         }
     }
+
+    /// The first screen a helper sees, and the only instruction they need.
+    private var welcomeScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Thank you for looking at this")
+                    .font(.title2.weight(.semibold))
+                Text("The map engine renders \(model.items.count) fixed scenes on this phone. "
+                    + "Nobody can tell from a test whether a shadow looks like a shadow or a "
+                    + "label is readable, so a person has to look.")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    step(1, "Press start and leave the phone alone for a few minutes while it renders.")
+                    step(2, "You then get one picture at a time, with a sentence saying what to look at. "
+                        + "Approve it, or reject it and say what is wrong.")
+                    step(3, "At the end, send the report back. It is one file.")
+                }
+                Button {
+                    startGuidedPass()
+                } label: {
+                    Label("Start the check", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                Text("Keep the app in the foreground and the phone plugged in if you can. "
+                    + "Rendering is the part that takes a while; judging is quick.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(20)
+        }
+    }
+
+    private func step(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.headline)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.accentColor.opacity(0.15)))
+            Text(text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// While the catalogue renders, which is minutes rather than seconds.
+    private var renderingScreen: some View {
+        VStack(spacing: 20) {
+            ProgressView(value: Double(model.renderedCount),
+                         total: Double(max(model.renderQueueCount, 1)))
+                .progressViewStyle(.linear)
+            Text("Rendering \(min(model.renderedCount + 1, max(model.renderQueueCount, 1))) "
+                + "of \(model.renderQueueCount)")
+                .font(.headline)
+                .monospacedDigit()
+            Text(model.progressText)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Text("The review starts by itself when this finishes.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(28)
+    }
+
+    /// The end of a pass: what was decided, and the one file to send back.
+    private var finishScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text(model.rejectedItems.isEmpty && model.failedItems.isEmpty
+                    ? "Everything looked right"
+                    : "That is everything")
+                    .font(.title2.weight(.semibold))
+                Text("\(model.approvedCount) approved, \(model.rejectedItems.count) rejected, "
+                    + "\(model.failedItems.count) failed to render, "
+                    + "out of \(model.items.count) scenes.")
+                    .foregroundStyle(.secondary)
+
+                ForEach(model.rejectedItems) { item in
+                    Label("\(item.scenario.title): \(item.verdict?.note ?? "")",
+                          systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+                ForEach(model.failedItems) { item in
+                    Label("\(item.scenario.title) did not render",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                }
+
+                reportControl
+
+                Button {
+                    isBrowsing = true
+                } label: {
+                    Label("Look at the scenes again", systemImage: "list.bullet")
+                }
+                Button {
+                    startGuidedPass()
+                } label: {
+                    Label("Render everything again", systemImage: "arrow.clockwise")
+                }
+            }
+            .padding(20)
+        }
+    }
     #endif
+
+    #if os(macOS)
+    /// The same two steps as on a phone, folded into one toolbar item. A Mac
+    /// pass is made by whoever owns the checkout, and the renders are already
+    /// sitting in it, but a report is still the way to send a pass to someone
+    /// else without describing where the files are.
+    @ViewBuilder
+    private var reportToolbarControl: some View {
+        if let url = model.reportURL {
+            ShareLink(item: url) {
+                Label("Send the report", systemImage: "square.and.arrow.up.on.square")
+            }
+            .toolbarLabelStyle()
+        } else {
+            Button {
+                Task { await model.prepareReport() }
+            } label: {
+                Label(model.isPreparingReport ? "Packing the report" : "Make the report",
+                      systemImage: "shippingbox")
+            }
+            .toolbarLabelStyle()
+            .disabled(model.isPreparingReport || model.hasAnyRender == false)
+            .help("Pack the judgements, the renders and the build they came from into one zip.")
+        }
+    }
+    #endif
+
+    /// Builds the report, then hands it to the share sheet.
+    ///
+    /// Two steps rather than one because a zip of a dozen renders takes a
+    /// moment to write, and `ShareLink` needs the file before it can offer it.
+    /// Both steps say what they are, which is the part that matters.
+    @ViewBuilder
+    private var reportControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let url = model.reportURL {
+                ShareLink(item: url) {
+                    Label("Send the report", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                Text("\(url.lastPathComponent): the judgements, every render they were "
+                    + "made about, and which device and build produced them.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    Task { await model.prepareReport() }
+                } label: {
+                    Label(model.isPreparingReport ? "Packing the report" : "Make the report",
+                          systemImage: "shippingbox")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.isPreparingReport || model.hasAnyRender == false)
+            }
+            if let failure = model.reportFailure {
+                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Renders the whole catalogue and walks straight into the review.
+    ///
+    /// The two are one action on purpose. A pass that renders and then waits to
+    /// be told to continue is a pass that gets left half done on a phone that
+    /// went to sleep on a table.
+    private func startGuidedPass() {
+        isBrowsing = false
+        Task {
+            await model.renderAll()
+            model.showsOnlyAttention = false
+            guard let next = model.nextNeedingAttention else { return }
+            model.selectedID = next.id
+            isReviewing = true
+        }
+    }
 
     // MARK: - Controls
 
@@ -463,6 +732,21 @@ struct VisualReviewScreen: View {
                 continue
             }
         }
+        // `IMMERSIVE_VISUAL_REVIEW_REPORT=1` packs the result the same way the
+        // button does. Nothing has been judged in a headless run, so the report
+        // is a record of what rendered rather than of a pass, which is what
+        // makes it worth having: it is how a render made on one machine gets
+        // sent to the person who will look at it on another.
+        if environment["IMMERSIVE_VISUAL_REVIEW_REPORT"] == "1" {
+            await model.prepareReport()
+            if let url = model.reportURL {
+                print("report  \(url.path)")
+            } else {
+                failures += 1
+                print("FAILED  report: \(model.reportFailure ?? "unknown")")
+            }
+        }
+
         print(failures == 0 ? "All requested scenarios rendered." : "\(failures) scenario(s) failed.")
         exit(failures == 0 ? 0 : 1)
     }
@@ -627,8 +911,7 @@ struct VisualReviewScreen: View {
                     .focused($noteIsFocused)
 
                 Button {
-                    model.record(.ok, note: "", for: item)
-                    note = ""
+                    recordVerdict(.ok, note: "", for: item)
                 } label: {
                     Label("Approve (A)", systemImage: "checkmark")
                 }
@@ -640,8 +923,7 @@ struct VisualReviewScreen: View {
                 .help("Record that this render looks right (A)")
 
                 Button(role: .destructive) {
-                    model.record(.notOk, note: note, for: item)
-                    note = ""
+                    recordVerdict(.notOk, note: note, for: item)
                 } label: {
                     Label("Reject (R)", systemImage: "xmark")
                 }
@@ -658,6 +940,29 @@ struct VisualReviewScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Records a verdict and, on a phone, moves the guided pass along.
+    ///
+    /// The advance is conditional on the verdict having been written. A key
+    /// repeat that was dropped, or a verdict file that could not be saved,
+    /// leaves the reviewer on the scene they are looking at rather than pushing
+    /// them past a picture nothing was recorded about.
+    private func recordVerdict(_ ruling: VisualReviewVerdict.Ruling,
+                               note text: String,
+                               for item: VisualReviewItem) {
+        let recorded = model.record(ruling, note: text, for: item)
+        guard recorded else { return }
+        note = ""
+        #if !os(macOS)
+        if let next = model.nextNeedingAttention {
+            model.selectedID = next.id
+        } else {
+            // Nothing left to judge: back out to the finish screen, which is
+            // where the report is made.
+            isReviewing = false
+        }
+        #endif
     }
 
     private func verdictSummary(_ verdict: VisualReviewVerdict, unchanged: Bool) -> String {

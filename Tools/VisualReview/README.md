@@ -12,16 +12,41 @@ orbit reads as smooth, is judged by the person at the screen. This tool exists
 to put those judgements in front of that person on purpose, on a schedule,
 instead of hoping someone notices.
 
+## If you were asked to help test
+
+You need a Mac with Xcode and an iPhone. Everything else the app does for you.
+
+1. Clone the repository, open `ImmersiveMap.xcworkspace`.
+2. Pick the **ImmersiveMapVisualReviewIOS** scheme, choose your iPhone as the
+   destination, press Run. Xcode may ask you to trust the developer on the
+   phone the first time (Settings, General, VPN & Device Management).
+3. In the app, press **Start the check** and leave the phone alone for a few
+   minutes. It renders every scene in the catalogue on your hardware.
+4. It then shows you one picture at a time with a sentence saying what to look
+   at. Approve it, or reject it and write what is wrong. It moves on by itself.
+5. At the end, press **Make the report**, then **Send the report**, and AirDrop
+   or message the zip back. That one file has the judgements, every picture
+   they were made about, and which phone, GPU and commit produced them.
+
+Nothing needs to be committed, and nothing needs to be found in a folder.
+
 ## Running it
 
 Open `ImmersiveMap.xcworkspace`, pick the **ImmersiveMapVisualReview** scheme
 and run. It is not part of CI and never runs on a pull request.
 
 There is a second scheme, **ImmersiveMapVisualReviewIOS**, that runs the same
-catalogue on an iPhone. Same sources, one screen at a time: the list, then the
-picture. It exists because a Mac cannot answer every question. Shadows
-rasterize through layered rendering, which the iOS simulator does not have, so
-the only place the iOS shadow path can be looked at is a device.
+catalogue on an iPhone. Same sources, one screen at a time. It exists because a
+Mac cannot answer every question. Shadows rasterize through layered rendering,
+which the iOS simulator does not have, so the only place the iOS shadow path
+can be looked at is a device.
+
+The phone build is a guided pass rather than a tool: one start button, then one
+picture at a time, then a report. That shape is deliberate. A pass is worth
+much more when somebody else can make it, and somebody else will not learn what
+a catalogue is, which button renders, or where a verdict file ends up. The
+catalogue list is still behind the finish screen for a session that was
+interrupted, but no part of a complete pass requires going through it.
 
 1. **Render all** renders every scenario in the catalogue. Stills go through
    `ImmersiveMapStillRecorder` with nothing on screen; each video takes a turn
@@ -43,10 +68,31 @@ the checkout would overwrite a Mac verdict with a judgement about a picture
 nobody looked at on a Mac. Both files are committed.
 
 On a phone there is no checkout to write into, so the renders and the verdict
-file live in the app's own container. **Share verdicts** in the toolbar hands
-the file to the share sheet: AirDrop it to the Mac, or save it to Files, then
-move it next to this README. The container is also visible in the Files app, so
-the rendered PNGs and clips can be pulled off the same way.
+file live in the app's own container. They come back inside the report zip, and
+`verdicts.ios.json` in it is the file to move next to this README. The
+container is also visible in the Files app, so anything can be pulled off that
+way too.
+
+## The report
+
+**Make the report** packs a pass into one zip, on both platforms:
+
+- `report.json`: one entry per scenario with the outcome (approved, rejected,
+  not reviewed, failed to render), the note, the fingerprint, the path of the
+  render inside the zip, and whether that render still matches the approval
+  committed in the checkout. Alongside it, the environment: model identifier,
+  OS version, Metal device name, commit and app version.
+- `README.txt`: the same thing as a page of text, for whoever opens the zip
+  first.
+- `verdicts.json` or `verdicts.ios.json`, unchanged, so a pass made on someone
+  else's phone drops straight into this folder instead of being retyped.
+- `Renders/`: every picture the judgements were made about.
+
+Reports are written to `Reports/` next to this file on a Mac, and into the
+app's Documents container on a phone, where the Files app can also reach them.
+They are gitignored: the report is a copy of state that already lives in the
+checkout, plus renders, which is not something to accumulate in git. Only the
+newest is kept.
 
 ## What the fingerprint is for
 
