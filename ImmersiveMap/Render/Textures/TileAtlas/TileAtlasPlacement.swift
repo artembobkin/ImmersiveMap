@@ -66,6 +66,31 @@ struct TileAtlasAllocation: Hashable {
     var placeTile: PlaceTile {
         candidate.placeTile
     }
+
+    /// Atlas texels per on-screen pixel for this slot, log-quantized to
+    /// eighth-of-an-octave steps (about 9 percent).
+    ///
+    /// Point-locked line widths bake into the atlas in texels, but the baked
+    /// page is then magnified on screen by the fractional-zoom dolly, which
+    /// the bake cannot see: converting points to texels through this ratio is
+    /// what keeps the on-screen width steady while the camera closes in, and
+    /// continuous across an integer zoom (the demand halves exactly as the
+    /// next level's tiles take over, so the products cancel). Quantized so
+    /// the value can sit in the atlas redraw hash without re-baking every
+    /// frame: a step costs one redraw, and a sub-step drift of a few percent
+    /// of a line's width is invisible. Clamped, so a degenerate footprint
+    /// cannot demand an absurd bake width.
+    var lineWidthRasterScale: Float {
+        Self.lineWidthRasterScale(cellSizePx: cellSizePx,
+                                  screenDemandPx: candidate.screenDemandPx)
+    }
+
+    static func lineWidthRasterScale(cellSizePx: Int, screenDemandPx: Float) -> Float {
+        let raw = Float(cellSizePx) / max(screenDemandPx, 1.0)
+        let clamped = min(max(raw, 0.25), 4.0)
+        let stepped = (log2(clamped) * 8.0).rounded() / 8.0
+        return exp2(stepped)
+    }
 }
 
 struct TileAtlasPageSummary: Equatable {

@@ -36,6 +36,49 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 256, pageSizePx: 4096), .depth4)
     }
 
+    func testLineWidthRasterScaleIsContinuousAcrossAnIntegerZoom() {
+        // At an integer zoom crossing the next level's tiles take over with
+        // exactly half the screen demand, in the slot the halved demand
+        // derives. Widths bake as points x scale and appear on screen at
+        // demand/cell of that, so the two sides must produce identical
+        // on-screen widths: cell tracking demand keeps the raw ratio equal,
+        // and where the depth is capped the exact halving lands on the same
+        // log2 quantization grid.
+        func onScreenPerTargetWidth(demand: Float) -> Float {
+            let cell = TileAtlasSlotDepth.desired(forScreenDemandPx: demand, pageSizePx: 4096)
+                .cellSize(pageSizePx: 4096)
+            return TileAtlasAllocation.lineWidthRasterScale(cellSizePx: cell, screenDemandPx: demand)
+                * (demand / Float(cell))
+        }
+
+        for demand: Float in [5600, 4100, 3000, 2333, 1700, 1200] {
+            XCTAssertEqual(onScreenPerTargetWidth(demand: demand),
+                           onScreenPerTargetWidth(demand: demand / 2),
+                           accuracy: 1e-4,
+                           "demand \(demand)")
+        }
+    }
+
+    func testLineWidthRasterScaleStaysWithinHalfAQuantizationStep() {
+        // The on-screen width error is the distance to the nearest eighth-of-
+        // an-octave step: at most 2^(1/16), about 4.4 percent, invisible on a
+        // one-to-two-point line.
+        let maximumRatio = exp2(Float(1.0 / 16.0)) + 1e-4
+        var demand: Float = 1100
+        while demand <= 8000 {
+            let scale = TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 4096, screenDemandPx: demand)
+            let onScreenPerTarget = scale * (demand / 4096)
+            XCTAssertLessThanOrEqual(max(onScreenPerTarget, 1 / onScreenPerTarget), maximumRatio,
+                                     "demand \(demand)")
+            demand *= 1.037
+        }
+    }
+
+    func testLineWidthRasterScaleClampsDegenerateFootprints() {
+        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 4096, screenDemandPx: 1), 4.0)
+        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 256, screenDemandPx: 8000), 0.25)
+    }
+
     func testSingleCandidateUpscalesToFullPageWithinExistingPageBudget() throws {
         let candidate = try makeCandidate(index: 0,
                                           source: Tile(x: 0, y: 0, z: 0),

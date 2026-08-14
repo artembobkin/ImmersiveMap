@@ -62,6 +62,12 @@ class TileAtlasTexture {
     private var previousShiftX: Float? = nil
     private var previousShiftY: Float? = nil
     private var previousScale: Float? = nil
+    /// Last state given to `setOverviewFadeAlphas`, rebound per allocation in
+    /// `draw` with the slot's own texel-per-pixel width scale folded in.
+    private var activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: 1,
+                                                            roadAlpha: 1,
+                                                            landuseAlpha: 1,
+                                                            pixelsPerPoint: 1)
     
     init(metalDevice: MTLDevice,
          tilePipeline: TilePipeline,
@@ -162,10 +168,13 @@ class TileAtlasTexture {
                                landuseAlpha: Float,
                                pixelsPerPoint: Float) {
         guard let renderEncoder else { return }
-        var uniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
-                                              roadAlpha: roadAlpha,
-                                              landuseAlpha: landuseAlpha,
-                                              pixelsPerPoint: pixelsPerPoint)
+        // Kept for the per-allocation rebind in draw(): each slot converts
+        // point-locked line widths through its own texel-per-pixel ratio.
+        activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
+                                                    roadAlpha: roadAlpha,
+                                                    landuseAlpha: landuseAlpha,
+                                                    pixelsPerPoint: pixelsPerPoint)
+        var uniform = activeFadeUniform
         renderEncoder.setFragmentBytes(&uniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)
@@ -257,6 +266,19 @@ class TileAtlasTexture {
         renderEncoder.setVertexBuffer(groundStyles.buffer, offset: groundStyles.offset, index: 2)
         renderEncoder.setVertexBuffer(groundOverviewMask.buffer, offset: groundOverviewMask.offset, index: 4)
         renderEncoder.setVertexBuffer(groundLineWidthPoints.buffer, offset: groundLineWidthPoints.offset, index: 5)
+
+        // The bake rasterizes in atlas texels while the point-locked widths
+        // are stated for screen pixels, and the two drift apart as the
+        // fractional-zoom dolly magnifies the page: fold the slot's own
+        // texel-per-pixel ratio into the conversion so the width lands right
+        // for the scale this slot is actually shown at. The ratio also sits
+        // in the atlas redraw hash, which is what re-bakes the page when the
+        // dolly moves it a step.
+        var fadeUniform = activeFadeUniform
+        fadeUniform.pixelsPerPoint *= allocation.lineWidthRasterScale
+        renderEncoder.setFragmentBytes(&fadeUniform,
+                                       length: MemoryLayout<TileOverviewFadeUniform>.stride,
+                                       index: 0)
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: groundIndices.count,

@@ -221,6 +221,11 @@ final class TileAtlasSubsystem: RenderSubsystem {
             hasher.combine(allocation.placeTile.metalTile.tile)
             hasher.combine(allocation.placeTile.placeIn.tile)
             hasher.combine(allocation.placeTile.lodKind)
+            // Quantized, so the fractional-zoom dolly re-bakes the pages in
+            // coarse steps: point-locked line widths bake in texels through
+            // this ratio, and a stale ratio is exactly the on-screen width
+            // pump the point lock exists to remove.
+            hasher.combine(allocation.lineWidthRasterScale.bitPattern)
         }
     }
 }
