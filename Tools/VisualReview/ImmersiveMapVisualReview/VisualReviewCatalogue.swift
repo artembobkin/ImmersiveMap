@@ -114,6 +114,9 @@ enum VisualReviewCatalogue {
         static let europe = ImmersiveMapCameraPosition(latitudeDegrees: 48.0,
                                                        longitudeDegrees: 10.0,
                                                        zoom: 4)
+        static let easternEurope = ImmersiveMapCameraPosition(latitudeDegrees: 56.35,
+                                                              longitudeDegrees: 38.0,
+                                                              zoom: 4.5)
         static let globe = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                       longitudeDegrees: 10.0,
                                                       zoom: 1)
@@ -186,6 +189,19 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.europe)),
+
+        VisualReviewScenario(
+            id: "lines.globe.borders",
+            title: "Country borders on the globe",
+            lookFor: """
+            Thin lines on the sphere, where the atlas has no MSAA and only the \
+            analytic antialiasing keeps their edges. Border dashes should have \
+            soft, even edges with no stair-steps, and the line should hold one \
+            width along its length instead of rippling. Roads are hairlines \
+            here; they should be faint but smooth, not broken into dots.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.easternEurope)),
 
         VisualReviewScenario(
             id: "terrain.alps",

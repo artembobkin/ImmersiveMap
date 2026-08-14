@@ -1136,9 +1136,13 @@ class TileMvtParser {
                                       vertexCount: inout Int,
                                       indexCount: inout Int) {
         let vertexOffset = UInt32(vertexCount)
-        for position in polygon.vertices {
+        let hasLineDistances = polygon.lineDistances.count == polygon.vertices.count
+        for (index, position) in polygon.vertices.enumerated() {
             vertices.initializeElement(at: vertexCount,
-                                       to: TileVertexIn(position: position, styleIndex: styleBufferIndex))
+                                       to: TileVertexIn(position: position,
+                                                        styleIndex: styleBufferIndex,
+                                                        lineEdgeThreshold: polygon.lineEdgeThreshold,
+                                                        lineDistance: hasLineDistances ? polygon.lineDistances[index] : 0))
             vertexCount += 1
         }
         for index in polygon.indices {

@@ -412,7 +412,13 @@ final class PreparedTileDiskCaching {
     // A version-31 record is structurally valid but numerically means something
     // else, and nothing in the payload encodes its unit, so the version is the
     // only thing keeping a warm cache from rendering half-size labels.
-    static let preparedFormatVersion: UInt32 = 32
+    // 33: `TileVertexIn`'s padding bytes became the analytic line-antialiasing
+    // attributes (edge threshold and normalized centerline distance), and line
+    // geometry is extruded wider by the antialiasing feather. A version-32
+    // arena decodes cleanly but its zeroed padding marks every line as plain
+    // polygon geometry, so a warm cache would keep serving hard-edged lines
+    // forever.
+    static let preparedFormatVersion: UInt32 = 33
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
