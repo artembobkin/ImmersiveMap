@@ -32,11 +32,13 @@ enum FlatMapSurfaceDrawer {
             renderEncoder.setTriangleFillMode(.lines)
         }
         var cameraUniformValue = cameraUniform
+        // The taper thins point-locked widths toward planet zooms; continuous
+        // in camera zoom, so it cannot reintroduce integer-zoom width jumps.
         var overviewFadeUniform = TileOverviewFadeUniform(
             overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
             roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
-            pixelsPerPoint: pixelsPerPoint
+            pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom)
         )
         var horizonFogValue = horizonFog
         var shadowUniformValue = shadowBinding.uniform

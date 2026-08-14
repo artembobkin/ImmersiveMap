@@ -44,18 +44,40 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         // on-screen widths: cell tracking demand keeps the raw ratio equal,
         // and where the depth is capped the exact halving lands on the same
         // log2 quantization grid.
-        func onScreenPerTargetWidth(demand: Float) -> Float {
+        func onScreenPerTargetWidth(demand: Float, zoomTaper: Float) -> Float {
             let cell = TileAtlasSlotDepth.desired(forScreenDemandPx: demand, pageSizePx: 4096)
                 .cellSize(pageSizePx: 4096)
-            return TileAtlasAllocation.lineWidthRasterScale(cellSizePx: cell, screenDemandPx: demand)
+            return TileAtlasAllocation.lineWidthRasterScale(cellSizePx: cell,
+                                                            screenDemandPx: demand,
+                                                            zoomTaper: zoomTaper)
                 * (demand / Float(cell))
         }
 
-        for demand: Float in [5600, 4100, 3000, 2333, 1700, 1200] {
-            XCTAssertEqual(onScreenPerTargetWidth(demand: demand),
-                           onScreenPerTargetWidth(demand: demand / 2),
-                           accuracy: 1e-4,
-                           "demand \(demand)")
+        // The taper is identical on both sides of the crossing instant, so it
+        // must not break the alignment either.
+        for zoomTaper: Float in [1.0, 0.63] {
+            for demand: Float in [5600, 4100, 3000, 2333, 1700, 1200] {
+                XCTAssertEqual(onScreenPerTargetWidth(demand: demand, zoomTaper: zoomTaper),
+                               onScreenPerTargetWidth(demand: demand / 2, zoomTaper: zoomTaper),
+                               accuracy: 1e-4,
+                               "demand \(demand), taper \(zoomTaper)")
+            }
+        }
+    }
+
+    func testLineWidthZoomTaperThinsPlanetZoomsAndReleasesByRegionalZoom() {
+        XCTAssertEqual(LineWidthZoomTaper.scale(for: 0.0), 0.5)
+        XCTAssertEqual(LineWidthZoomTaper.scale(for: 2.0), 0.5)
+        XCTAssertEqual(LineWidthZoomTaper.scale(for: 5.0), 1.0)
+        XCTAssertEqual(LineWidthZoomTaper.scale(for: 12.0), 1.0)
+        // Strictly monotone through the ramp: a plateau or dip would read as
+        // a width hiccup while zooming.
+        var previous = LineWidthZoomTaper.scale(for: 2.0)
+        for step in 1...30 {
+            let zoom = 2.0 + Double(step) * 0.1
+            let value = LineWidthZoomTaper.scale(for: zoom)
+            XCTAssertGreaterThan(value, previous, "zoom \(zoom)")
+            previous = value
         }
     }
 
@@ -76,7 +98,9 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
 
     func testLineWidthRasterScaleClampsDegenerateFootprints() {
         XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 4096, screenDemandPx: 1), 4.0)
-        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 256, screenDemandPx: 8000), 0.25)
+        // The floor sits below the taper's half-scale so the taper still has
+        // headroom at the smallest realistic ratios.
+        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 256, screenDemandPx: 8000), 0.125)
     }
 
     func testSingleCandidateUpscalesToFullPageWithinExistingPageBudget() throws {

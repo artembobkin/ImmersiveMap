@@ -189,8 +189,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
 
         // Borders resolve their visible width in screen space, so they hold a
         // designed point width instead of pumping with the tile scale, and at
-        // every tile zoom the request is the same.
-        for zoom in [2, 4, 8, 12] {
+        // every tile zoom where they draw the request is the same.
+        for zoom in [4, 8, 12] {
             let boundary = makeStyle(style, layerName: "boundary", zoom: zoom)
             XCTAssertEqual(boundary.lineWidthPoints, 0.8, "admin_level defaults to 4 at z\(zoom)")
         }
@@ -209,10 +209,33 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
     }
 
+    func testPlanetZoomBoundariesShowSolidCountriesOnly() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+
+        // Regional (admin 3-4) borders are clutter over a planet or continent
+        // view: hidden below the detail zoom, present from it on.
+        for zoom in [0, 2, 3] {
+            XCTAssertEqual(makeStyle(style, layerName: "boundary", zoom: zoom).key, 0,
+                           "admin_level 4 must hide at z\(zoom)")
+        }
+        XCTAssertNotEqual(makeStyle(style, layerName: "boundary", zoom: 4).key, 0)
+
+        // Country borders stay, but solid: at planet zooms a dash is a few
+        // pixels long and degenerates into a chain of dots.
+        let countryPlanet = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 2)
+        XCTAssertNotEqual(countryPlanet.key, 0)
+        XCTAssertEqual(countryPlanet.lineWidthPoints, 1.4)
+        XCTAssertFalse(countryPlanet.parseGeometryStyleData.usesDashPattern)
+
+        let countryRegional = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 5)
+        XCTAssertTrue(countryRegional.parseGeometryStyleData.usesDashPattern)
+    }
+
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,
                            layerName: String,
                            className: String? = nil,
                            rank: Int? = nil,
+                           adminLevel: Int? = nil,
                            zoom: Int) -> FeatureStyle {
         var properties: [String: VectorTile_Tile.Value] = [:]
         if let className {
@@ -222,6 +245,11 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             var rankValue = VectorTile_Tile.Value()
             rankValue.intValue = Int64(rank)
             properties["rank"] = rankValue
+        }
+        if let adminLevel {
+            var adminLevelValue = VectorTile_Tile.Value()
+            adminLevelValue.intValue = Int64(adminLevel)
+            properties["admin_level"] = adminLevelValue
         }
         return style.makeStyle(
             data: DetFeatureStyleData(layerName: layerName,

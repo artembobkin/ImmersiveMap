@@ -23,6 +23,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
     private var overviewFadeAlpha: Float = 1.0
     private var roadFadeAlpha: Float = 0.0
     private var landuseFadeAlpha: Float = 0.0
+    private var lineWidthZoomTaper: Float = 1.0
     private var tileAtlasDebugSummary: TileAtlasDebugSummary?
     private var pageRetention = TileAtlasPageRetention()
 
@@ -40,6 +41,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
         overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .overviewFeatures)
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
         landuseFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .landuse)
+        lineWidthZoomTaper = LineWidthZoomTaper.scale(for: frameContext.zoom)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
         refreshDebugSummaryIfNeeded(frameContext: frameContext)
@@ -136,7 +138,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
             tilesTexture.setOverviewFadeAlphas(overviewAlpha: overviewFadeAlpha,
                                                roadAlpha: roadFadeAlpha,
                                                landuseAlpha: landuseFadeAlpha,
-                                               pixelsPerPoint: Float(frameContext.pixelsPerPoint))
+                                               pixelsPerPoint: Float(frameContext.pixelsPerPoint),
+                                               lineWidthZoomTaper: lineWidthZoomTaper)
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {
@@ -223,9 +226,14 @@ final class TileAtlasSubsystem: RenderSubsystem {
             hasher.combine(allocation.placeTile.lodKind)
             // Quantized, so the fractional-zoom dolly re-bakes the pages in
             // coarse steps: point-locked line widths bake in texels through
-            // this ratio, and a stale ratio is exactly the on-screen width
-            // pump the point lock exists to remove.
-            hasher.combine(allocation.lineWidthRasterScale.bitPattern)
+            // this ratio (with the low-zoom taper folded in), and a stale
+            // ratio is exactly the on-screen width pump the point lock exists
+            // to remove.
+            hasher.combine(TileAtlasAllocation.lineWidthRasterScale(
+                cellSizePx: allocation.cellSizePx,
+                screenDemandPx: allocation.candidate.screenDemandPx,
+                zoomTaper: lineWidthZoomTaper
+            ).bitPattern)
         }
     }
 }

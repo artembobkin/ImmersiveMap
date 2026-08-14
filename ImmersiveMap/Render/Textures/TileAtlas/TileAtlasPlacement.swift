@@ -80,14 +80,15 @@ struct TileAtlasAllocation: Hashable {
     /// frame: a step costs one redraw, and a sub-step drift of a few percent
     /// of a line's width is invisible. Clamped, so a degenerate footprint
     /// cannot demand an absurd bake width.
-    var lineWidthRasterScale: Float {
-        Self.lineWidthRasterScale(cellSizePx: cellSizePx,
-                                  screenDemandPx: candidate.screenDemandPx)
-    }
-
-    static func lineWidthRasterScale(cellSizePx: Int, screenDemandPx: Float) -> Float {
-        let raw = Float(cellSizePx) / max(screenDemandPx, 1.0)
-        let clamped = min(max(raw, 0.25), 4.0)
+    /// `zoomTaper` is `LineWidthZoomTaper` for the frame's camera zoom, folded
+    /// in before quantization so the taper and the texel ratio step together;
+    /// quantizing them separately would leave a continuous product that would
+    /// re-bake the atlas every frame.
+    static func lineWidthRasterScale(cellSizePx: Int,
+                                     screenDemandPx: Float,
+                                     zoomTaper: Float = 1.0) -> Float {
+        let raw = Float(cellSizePx) / max(screenDemandPx, 1.0) * zoomTaper
+        let clamped = min(max(raw, 0.125), 4.0)
         let stepped = (log2(clamped) * 8.0).rounded() / 8.0
         return exp2(stepped)
     }

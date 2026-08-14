@@ -68,6 +68,7 @@ class TileAtlasTexture {
                                                             roadAlpha: 1,
                                                             landuseAlpha: 1,
                                                             pixelsPerPoint: 1)
+    private var activeLineWidthZoomTaper: Float = 1.0
     
     init(metalDevice: MTLDevice,
          tilePipeline: TilePipeline,
@@ -166,10 +167,13 @@ class TileAtlasTexture {
     func setOverviewFadeAlphas(overviewAlpha: Float,
                                roadAlpha: Float,
                                landuseAlpha: Float,
-                               pixelsPerPoint: Float) {
+                               pixelsPerPoint: Float,
+                               lineWidthZoomTaper: Float = 1.0) {
         guard let renderEncoder else { return }
         // Kept for the per-allocation rebind in draw(): each slot converts
-        // point-locked line widths through its own texel-per-pixel ratio.
+        // point-locked line widths through its own texel-per-pixel ratio,
+        // with the low-zoom taper folded into that quantized ratio.
+        activeLineWidthZoomTaper = lineWidthZoomTaper
         activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
                                                     roadAlpha: roadAlpha,
                                                     landuseAlpha: landuseAlpha,
@@ -275,7 +279,11 @@ class TileAtlasTexture {
         // in the atlas redraw hash, which is what re-bakes the page when the
         // dolly moves it a step.
         var fadeUniform = activeFadeUniform
-        fadeUniform.pixelsPerPoint *= allocation.lineWidthRasterScale
+        fadeUniform.pixelsPerPoint *= TileAtlasAllocation.lineWidthRasterScale(
+            cellSizePx: allocation.cellSizePx,
+            screenDemandPx: allocation.candidate.screenDemandPx,
+            zoomTaper: activeLineWidthZoomTaper
+        )
         renderEncoder.setFragmentBytes(&fadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)

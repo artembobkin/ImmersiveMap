@@ -157,7 +157,9 @@ enum VisualReviewCatalogue {
             lookFor: """
             The planet is round with no seam down the middle, the coastlines are \
             clean, and the terminator falls where the pinned date puts it. Stars \
-            behind it, no banding in the space gradient.
+            behind it, no banding in the space gradient. Country borders are \
+            thin, solid, unobtrusive lines: no regional borders, no chains of \
+            fat dots.
             """,
             settings: .default,
             subject: .still(camera: Place.globe)),
