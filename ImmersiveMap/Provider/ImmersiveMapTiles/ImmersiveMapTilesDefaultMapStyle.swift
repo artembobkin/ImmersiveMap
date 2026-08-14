@@ -7,9 +7,12 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 34
+    private static let implementationRevision: UInt32 = 35
 
     private let fallbackKey: UInt8 = 0
+    /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
+    /// classes ease in over the globe instead of popping with the z4 tiles.
+    private let roadLowZoomFadeMask: Float = 2.0
     private let landuseMinimumZoom = 6
     private let massiveOverviewMaximumZoom = 2
     private let globalLandcoverMaximumZoom = 9
@@ -173,27 +176,48 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// Keys stay below `water` (20) so oceans/lakes cover landcover.
     private func globalLandcoverStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
         let colors = configuration.globalLandcover
-        let usesMassiveOverview = tileZoom <= massiveOverviewMaximumZoom
-        let overviewVegetation = colors.grass
-        let overviewForest = blend(overviewVegetation, toward: colors.forest, amount: 0.25)
+        let vegetationBase = colors.grass
+        // The WorldCover polygons are raster-derived blobs; at overview zooms
+        // full-contrast categorical fills read as blotches, so the vegetation
+        // classes blend toward one shared tone, fully merged over the globe
+        // and releasing gradually to the unmixed palette by z9. Forests keep
+        // a quarter of their distance so the big woodlands stay legible, the
+        // same proportion the full merge always used. Barren and snow are
+        // real geographic edges (deserts, ice caps) and stay unblended.
+        let amount = Self.vegetationBlendAmount(tileZoom: tileZoom)
         switch cls {
         case "land":
-            return polygon(key: 2, color: usesMassiveOverview ? overviewVegetation : colors.land)
+            return polygon(key: 2, color: blend(colors.land, toward: vegetationBase, amount: amount))
         case "barren":
             return polygon(key: 3, color: colors.barren)
         case "grass", "shrub", "moss":
             return polygon(key: 4, color: colors.grass)
         case "crop":
-            return polygon(key: 5, color: usesMassiveOverview ? overviewVegetation : colors.crop)
+            return polygon(key: 5, color: blend(colors.crop, toward: vegetationBase, amount: amount))
         case "forest":
-            return polygon(key: 6, color: usesMassiveOverview ? overviewForest : colors.forest)
+            return polygon(key: 6, color: blend(colors.forest, toward: vegetationBase, amount: amount * 0.75))
         case "wetland", "mangroves":
-            return polygon(key: 7, color: usesMassiveOverview ? overviewVegetation : colors.wetland)
+            return polygon(key: 7, color: blend(colors.wetland, toward: vegetationBase, amount: amount))
         case "snow":
             return polygon(key: 8, color: colors.snow)
         default:
             // urban / water: leave to the background and water layers.
             return hiddenStyle
+        }
+    }
+
+    /// How far the vegetation classes blend toward the shared tone at a tile
+    /// zoom: 1 is the full massive-overview merge, 0 the unmixed palette.
+    private static func vegetationBlendAmount(tileZoom: Int) -> Float {
+        switch tileZoom {
+        case ...2: return 1.0
+        case 3: return 0.65
+        case 4: return 0.5
+        case 5: return 0.4
+        case 6: return 0.3
+        case 7: return 0.2
+        case 8: return 0.1
+        default: return 0.0
         }
     }
 
@@ -251,6 +275,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let isTunnel = brunnel == "tunnel"
         let subclass = props["subclass"]?.stringValue.lowercased()
         let roads = configuration.layers.roads
+        // A class draws only from the zoom where it can carry meaning: over a
+        // country or regional view every road the tile ships is a sub-pixel
+        // hairline, and drawing all of them just greys the map. Majors appear
+        // first, the minor network fills in toward street level.
+        guard tileZoom >= Self.roadClassMinimumZoom(cls) else {
+            return hiddenStyle
+        }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
         let s = roadWidthScale(tileZoom: tileZoom)
@@ -271,12 +302,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "service":
             return roadStyle(fillKey: 42, color: roads.service, width: 5.6 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
         case "path", "track":
-            // Park alleys and walkways (footway/path/track). Shown only at
-            // street zoom and as a thin solid line: no dashes, which used to
-            // read as noise over water/parks.
-            guard tileZoom >= 14 else {
-                return hiddenStyle
-            }
+            // Park alleys and walkways (footway/path/track): a thin solid
+            // line, no dashes, which used to read as noise over water/parks.
             return roadStyle(fillKey: 40, color: roads.path, width: 3.2 * s, priority: 35, casing: false, tunnel: isTunnel)
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
@@ -284,6 +311,48 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
             return roadStyle(fillKey: 43, color: roads.minor, width: 6.0 * s, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel)
+        }
+    }
+
+    /// The tile zoom a road class first draws at. Majors carry a country
+    /// view; the minor network only means something near street level. The
+    /// OpenMapTiles source ships most classes far earlier than they can read.
+    private static func roadClassMinimumZoom(_ cls: String?) -> Int {
+        switch cls {
+        case "motorway", "trunk":
+            return 0
+        case "primary":
+            return 7
+        case "ferry":
+            return 8
+        case "secondary":
+            return 9
+        case "tertiary", "rail", "transit":
+            return 10
+        case "service":
+            return 13
+        case "path", "track":
+            return 14
+        default:
+            // minor and unknown classes.
+            return 12
+        }
+    }
+
+    /// Casing keys sort below every road fill (and above buildings at 30):
+    /// below the separate-road zoom the generic ground path draws by
+    /// ascending key, so this is what puts every casing under every fill,
+    /// the same layering the separate-road phases produce at street zoom.
+    private static func roadCasingKey(forFillKey fillKey: UInt8) -> UInt8 {
+        switch fillKey {
+        case 56: return 39
+        case 54: return 38
+        case 52: return 37
+        case 50: return 36
+        case 48: return 35
+        case 44: return 34
+        case 43: return 33
+        default: return 32
         }
     }
 
@@ -300,8 +369,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         var passes: [LineRenderPass] = []
         if casing, tunnel == false {
             passes.append(
-                LineRenderPass(key: fillKey &+ 80,
+                LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                                color: roadCasingColor(from: color),
+                               lowZoomFadeMask: roadLowZoomFadeMask,
                                parseGeometryStyleData: makeRoadGeometry(width: width * 1.5),
                                includeRoadLabelPath: false,
                                roadPassRole: .casing)
@@ -310,6 +380,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         passes.append(
             LineRenderPass(key: fillKey,
                            color: color,
+                           lowZoomFadeMask: roadLowZoomFadeMask,
                            parseGeometryStyleData: fillGeometry,
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
@@ -318,6 +389,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return FeatureStyle(
             key: fillKey,
             color: color,
+            lowZoomFadeMask: roadLowZoomFadeMask,
             parseGeometryStyleData: fillGeometry,
             lineRenderPasses: passes,
             roadClassPriority: priority
@@ -350,6 +422,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return FeatureStyle(
             key: 46,
             color: configuration.layers.roads.rail,
+            lowZoomFadeMask: roadLowZoomFadeMask,
             parseGeometryStyleData: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
             roadClassPriority: 30
         )

@@ -42,20 +42,32 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  className: "forest",
                                  zoom: 2).color,
                        overviewForest)
+        // Past the full merge the blend releases gradually instead of
+        // snapping to the raw palette: at z3 vegetation still sits 65 percent
+        // of the way toward the shared tone (forests three quarters of that),
+        // and only from z9 is the palette unmixed.
+        func blended(_ base: SIMD4<Float>, amount: Float) -> SIMD4<Float> {
+            base + (colors.grass - base) * amount
+        }
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "land",
                                  zoom: 3).color,
-                       colors.land)
+                       blended(colors.land, amount: 0.65))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "crop",
                                  zoom: 3).color,
-                       colors.crop)
+                       blended(colors.crop, amount: 0.65))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 3).color,
+                       blended(colors.forest, amount: 0.65 * 0.75))
+        XCTAssertEqual(makeStyle(style,
+                                 layerName: "globallandcover",
+                                 className: "forest",
+                                 zoom: 9).color,
                        colors.forest)
     }
 
@@ -63,6 +75,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let colors = configuration.globalLandcover
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        // z9 is the last globallandcover zoom and the blend has fully
+        // released there: the raw soft-biome palette, one key per class.
         let expected: [(String, UInt8, SIMD4<Float>)] = [
             ("land", 2, colors.land),
             ("barren", 3, colors.barren),
@@ -80,10 +94,67 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             let featureStyle = makeStyle(style,
                                          layerName: "globallandcover",
                                          className: className,
-                                         zoom: 5)
+                                         zoom: 9)
             XCTAssertEqual(featureStyle.key, key, "Unexpected key for \(className)")
             XCTAssertEqual(featureStyle.color, color, "Unexpected color for \(className)")
         }
+    }
+
+    func testRoadClassesAppearByZoom() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+
+        func key(_ className: String, zoom: Int) -> UInt8 {
+            makeStyle(style, layerName: "transportation", className: className, zoom: zoom).key
+        }
+
+        // Majors carry the country view from the first tile they ship in;
+        // each further class joins at the zoom it can carry meaning.
+        XCTAssertNotEqual(key("motorway", zoom: 4), 0)
+        XCTAssertNotEqual(key("trunk", zoom: 4), 0)
+        for (className, minimumZoom) in [("primary", 7), ("ferry", 8), ("secondary", 9),
+                                         ("tertiary", 10), ("rail", 10), ("minor", 12),
+                                         ("service", 13), ("path", 14)] {
+            XCTAssertEqual(key(className, zoom: minimumZoom - 1), 0,
+                           "\(className) must hide below z\(minimumZoom)")
+            XCTAssertNotEqual(key(className, zoom: minimumZoom), 0,
+                              "\(className) must draw from z\(minimumZoom)")
+        }
+    }
+
+    func testRoadsFadeInThroughTheRoadBand() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 4)
+        XCTAssertEqual(motorway.lowZoomFadeMask, 2.0)
+        for pass in motorway.resolvedLineRenderPasses {
+            XCTAssertEqual(pass.lowZoomFadeMask, 2.0)
+        }
+        let rail = makeStyle(style, layerName: "transportation", className: "rail", zoom: 10)
+        XCTAssertEqual(rail.lowZoomFadeMask, 2.0)
+    }
+
+    func testRoadCasingKeysSortBelowEveryFill() {
+        // Below the separate-road zoom the generic ground path draws by
+        // ascending key, and the intent is casing first with the fill
+        // overdrawing it, so every casing key must sort below every fill key
+        // (and above the building footprints at 30). Keys stay distinct so
+        // classes keep their relative layering.
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        var fillKeys: [UInt8] = []
+        var casingKeys: [UInt8] = []
+        for className in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
+            let roadStyle = makeStyle(style, layerName: "transportation", className: className, zoom: 14)
+            for pass in roadStyle.resolvedLineRenderPasses {
+                if pass.roadPassRole == .casing {
+                    casingKeys.append(pass.key)
+                } else if pass.roadPassRole == .fill {
+                    fillKeys.append(pass.key)
+                }
+            }
+        }
+        XCTAssertFalse(casingKeys.isEmpty)
+        XCTAssertEqual(Set(casingKeys).count, casingKeys.count, "Casing keys must stay distinct")
+        XCTAssertLessThan(casingKeys.max()!, fillKeys.min()!)
+        XCTAssertGreaterThan(casingKeys.min()!, 30)
     }
 
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {

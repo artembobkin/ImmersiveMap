@@ -1059,12 +1059,17 @@ extension TileMvtParser {
     
     func addBackground(
         polygonByStyle: inout [UInt8: [ParsedPolygon]],
-        styles: inout [UInt8: FeatureStyle]
+        styles: inout [UInt8: FeatureStyle],
+        tile: Tile
     ) {
+        // The real tile, not a placeholder: the background color is
+        // zoom-banded (overview grass, land base, street land), and a
+        // hardcoded z0 froze every tile on the overview branch, painting the
+        // vegetation tone under the whole map at every zoom.
         let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "background",
             properties: [:],
-            tile: Tile(x: 0, y: 0, z: 0))
+            tile: tile)
         )
         
         let numSegments: Int = 64 // Adjustable number of segments per side; change as needed

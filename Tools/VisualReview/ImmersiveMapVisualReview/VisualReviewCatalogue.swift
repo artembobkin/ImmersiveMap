@@ -204,8 +204,9 @@ enum VisualReviewCatalogue {
             point-locked: zooming within a level must not visibly fatten it, \
             nor snap it at the next level. The dash pattern is anchored to \
             the map: panning or rotating must not make the dashes crawl along \
-            the border. Roads are hairlines here; they should be faint but \
-            smooth, not broken into dots.
+            the border. Only motorways and trunks show at this zoom, fading \
+            in as faint smooth hairlines with their casing under the fill, \
+            not a grey net of every road the tiles ship.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

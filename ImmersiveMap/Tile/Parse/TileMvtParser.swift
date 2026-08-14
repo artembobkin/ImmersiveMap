@@ -1107,7 +1107,7 @@ class TileMvtParser {
 
         appendFallbackLowZoomWaterLabels(into: &textLabels, tile: tile)
         
-        addBackground(polygonByStyle: &polygonByStyle, styles: &styles)
+        addBackground(polygonByStyle: &polygonByStyle, styles: &styles, tile: tile)
         if config.tiles.parsing.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }
 
         let resolvedBuildingExtrusions = resolveExteriorBuildingExtrusions(buildingExtrusionCandidates)
