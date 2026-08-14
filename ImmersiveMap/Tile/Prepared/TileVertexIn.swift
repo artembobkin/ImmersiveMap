@@ -12,30 +12,29 @@ import simd
 struct TileVertexIn: Sendable {
     let position: SIMD2<Int16>
     let styleIndex: UInt8
-    /// Analytic line antialiasing, packed into what used to be padding.
-    /// `lineDistance` is the signed distance from the line's centerline,
-    /// normalized so the extruded geometry rim is ±`Int8.max`;
-    /// `lineEdgeThreshold` is where the visible edge sits inside that field
-    /// (the styled half-width over the extruded half-width, as a 0...255
-    /// fraction). `lineEndDistance` is the longitudinal counterpart for butt
-    /// ends: the signed distance past the styled cut in feather units, so a
-    /// dash end fades over the same one-pixel ramp as the sides; interior
-    /// vertices and continuation cuts hold it at `Int8.max`. Zero threshold
-    /// marks non-line geometry: the fragment shader skips coverage for it
-    /// entirely, so plain polygons render as before.
-    let lineEdgeThreshold: UInt8
+    /// Analytic line antialiasing: the signed distance from the line's
+    /// centerline, normalized so the extruded geometry rim is ±`Int8.max`.
+    /// Where the styled edge sits inside that field, and whether the style is
+    /// a line at all, lives in the per-style `TileLineStyle`.
     let lineDistance: Int8
-    let lineEndDistance: Int8
+    /// Longitudinal line parameter, interpreted by the style:
+    /// - a solid style reads it as the signed distance past a free butt end,
+    ///   in feather units, normalized so one feather is `Int16.max`, and
+    ///   saturated everywhere the end must stay hard;
+    /// - a point-dashed style (`TileLineStyle.dashLengthPoints > 0`) reads it
+    ///   as the arc length along the line in half tile units, from which the
+    ///   fragment shader cuts the dash pattern at a stable on-screen size.
+    /// Attribute-less polygon geometry saturates it, so a polygon that shares
+    /// a line style (road decorations) reads as line interior.
+    let lineParameter: Int16
 
     init(position: SIMD2<Int16>,
          styleIndex: UInt8,
-         lineEdgeThreshold: UInt8 = 0,
          lineDistance: Int8 = 0,
-         lineEndDistance: Int8 = 0) {
+         lineParameter: Int16 = Int16.max) {
         self.position = position
         self.styleIndex = styleIndex
-        self.lineEdgeThreshold = lineEdgeThreshold
         self.lineDistance = lineDistance
-        self.lineEndDistance = lineEndDistance
+        self.lineParameter = lineParameter
     }
 }

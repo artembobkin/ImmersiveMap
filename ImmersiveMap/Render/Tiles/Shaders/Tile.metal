@@ -9,9 +9,8 @@ using namespace metal;
 struct VertexIn {
     short2 position [[attribute(0)]];
     unsigned char styleIndex [[attribute(1)]];
-    unsigned char lineEdgeThreshold [[attribute(2)]];
-    char lineDistance [[attribute(3)]];
-    char lineEndDistance [[attribute(4)]];
+    char lineDistance [[attribute(2)]];
+    short lineParameter [[attribute(3)]];
 };
 
 // color and the fade mask are unit-range, so they interpolate as half: fewer
@@ -19,7 +18,9 @@ struct VertexIn {
 // the starfield shader uses). Positions stay float.
 // The line distances stay float: the antialiasing band can be a small
 // fraction of the normalized field on wide lines, below half's precision
-// near 1.0.
+// near 1.0, and the arc parameter spans thousands of tile units.
+// lineStyle packs the per-style constants (edge threshold, width points,
+// dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
     float4 position [[position]];
     float2 localPosition;
@@ -27,13 +28,20 @@ struct VertexOut {
     half4 color;
     half lowZoomFadeMask;
     float lineDistance;
-    float lineEndDistance;
-    half lineEdgeThreshold;
-    half lineWidthPoints;
+    float lineParameter;
+    half4 lineStyle;
 };
 
 struct Style {
     float4 color;
+};
+
+/// Mirror of the Swift `TileLineStyle`; indexed per style alongside `Style`.
+struct LineStyle {
+    float widthPoints;
+    float dashLengthPoints;
+    float dashGapPoints;
+    float edgeThreshold;
 };
 
 struct OverviewFadeUniform {
@@ -48,7 +56,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant Style* styles [[buffer(2)]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
-                                  constant float* lineWidthPoints [[buffer(5)]]) {
+                                  constant LineStyle* lineStyles [[buffer(5)]]) {
     
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
@@ -62,10 +70,18 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.worldPos = worldPosition.xyz;
     out.color = half4(style.color);
     out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
+    LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
     out.lineDistance = float(vertexIn.lineDistance) / 127.0;
-    out.lineEndDistance = float(vertexIn.lineEndDistance) / 127.0;
-    out.lineEdgeThreshold = half(vertexIn.lineEdgeThreshold) / 255.0h;
-    out.lineWidthPoints = half(lineWidthPoints[vertexIn.styleIndex]);
+    // The longitudinal parameter is style-interpreted (see TileVertexIn): a
+    // point-dashed style stores arc length in half tile units, a solid one
+    // the normalized end-feather distance.
+    out.lineParameter = lineStyle.dashLengthPoints > 0.0
+        ? float(vertexIn.lineParameter) * 0.5
+        : float(vertexIn.lineParameter) / 32767.0;
+    out.lineStyle = half4(lineStyle.edgeThreshold,
+                          lineStyle.widthPoints,
+                          lineStyle.dashLengthPoints,
+                          lineStyle.dashGapPoints);
     return out;
 }
 
@@ -81,34 +97,70 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 /// discard: fwidth evaluates screen-space derivatives.
 ///
 /// Where the visible edge sits comes in two flavors. A world-locked style
-/// (lineWidthPoints == 0) puts it on the `lineEdgeThreshold` isoline: the
-/// width the tessellator baked, scaling with the tile on screen. A
-/// point-locked style resolves the edge in raster units instead: the field's
-/// per-pixel gradient converts the requested half-width into an isoline each
-/// frame, so the line holds its designed width through fractional zoom
-/// instead of pumping with the tile scale, and the baked (extruded) geometry
-/// only bounds how wide it can get. The half-pixel inset keeps the edge
-/// feathered even when the request exceeds the geometry; past the rim the
-/// clamp goes negative and the line fades out instead of aliasing.
+/// (widthPoints == 0) puts it on the edge-threshold isoline: the width the
+/// tessellator baked, scaling with the tile on screen. A point-locked style
+/// resolves the edge in raster units instead: the field's per-pixel gradient
+/// converts the requested half-width into an isoline each frame, so the line
+/// holds its designed width through fractional zoom instead of pumping with
+/// the tile scale, and the baked (extruded) geometry only bounds how wide it
+/// can get. The half-pixel inset keeps the edge feathered even when the
+/// request exceeds the geometry; past the rim the clamp goes negative and
+/// the line fades out instead of aliasing.
+///
+/// The longitudinal parameter is style-interpreted. A point-dashed style
+/// carries arc length in tile units, and the dash pattern is cut here, per
+/// fragment: the parameter's own screen-space derivative converts the
+/// pattern's point lengths into tile units locally, so dashes hold their
+/// on-screen size at every zoom and on both raster paths, and their cuts get
+/// the same one-pixel ramp as the sides. A solid style carries the
+/// end-feather distance whose zero isoline is a free butt end's styled cut.
 static inline half tileLineCoverage(float lineDistance,
-                                    float lineEndDistance,
-                                    half lineEdgeThreshold,
-                                    half lineWidthPoints,
+                                    float lineParameter,
+                                    half4 lineStyle,
                                     float pixelsPerPoint) {
     // The derivatives are taken before the threshold test: fwidth needs the
     // whole 2x2 quad, so it must not sit behind potentially divergent flow.
     float sideSpan = max(fwidth(lineDistance), 1e-5);
-    float endSpan = max(fwidth(lineEndDistance), 1e-5);
-    if (lineEdgeThreshold <= 0.0h) {
+    float parameterSpan = fwidth(lineParameter);
+    half edgeThreshold = lineStyle.x;
+    if (edgeThreshold <= 0.0h) {
         return 1.0h;
     }
     float rimPx = 1.0 / sideSpan;
-    float edgePx = lineWidthPoints > 0.0h
-        ? min(float(lineWidthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5)
-        : float(lineEdgeThreshold) * rimPx;
+    half widthPoints = lineStyle.y;
+    float edgePx = widthPoints > 0.0h
+        ? min(float(widthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5)
+        : float(edgeThreshold) * rimPx;
     float sideDistancePx = edgePx - abs(lineDistance) * rimPx;
-    float endDistancePx = lineEndDistance / endSpan;
-    return half(smoothstep(-0.5, 0.5, sideDistancePx) * smoothstep(-0.5, 0.5, endDistancePx));
+    float coverage = smoothstep(-0.5, 0.5, sideDistancePx);
+
+    half dashLengthPoints = lineStyle.z;
+    if (dashLengthPoints > 0.0h) {
+        // A vanishing gradient means the parameter is saturated (polygon
+        // decoration sharing the style) rather than a real arc: skip the
+        // pattern instead of dividing by noise.
+        float unitsPerPixel = parameterSpan;
+        float dashUnits = float(dashLengthPoints) * pixelsPerPoint * unitsPerPixel;
+        float gapUnits = float(lineStyle.w) * pixelsPerPoint * unitsPerPixel;
+        float period = dashUnits + gapUnits;
+        if (unitsPerPixel > 1e-5 && dashUnits > 0.0 && gapUnits > 0.0) {
+            // Signed distance to the nearest dash boundary, wrapped around
+            // the period (the route renderer's construction), so both edges
+            // of every dash carry the full antialiasing band.
+            float phase = fmod(lineParameter, period);
+            if (phase < 0.0) {
+                phase += period;
+            }
+            float centered = phase - dashUnits * 0.5;
+            centered -= period * round(centered / period);
+            float distanceToEdgeUnits = dashUnits * 0.5 - abs(centered);
+            coverage *= smoothstep(-0.5, 0.5, distanceToEdgeUnits / unitsPerPixel);
+        }
+    } else {
+        float endDistancePx = lineParameter / max(parameterSpan, 1e-5);
+        coverage *= smoothstep(-0.5, 0.5, endDistancePx);
+    }
+    return half(coverage);
 }
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
@@ -125,9 +177,8 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     // divergent discard (MSL spec), so the clip discard must not precede them.
     float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
     half lineCoverage = tileLineCoverage(in.lineDistance,
-                                         in.lineEndDistance,
-                                         in.lineEdgeThreshold,
-                                         in.lineWidthPoints,
+                                         in.lineParameter,
+                                         in.lineStyle,
                                          overviewFade.pixelsPerPoint);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {

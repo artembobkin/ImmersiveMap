@@ -27,21 +27,21 @@ final class TilePreparedDataBuilder {
                                                   indices: parsedTile.drawingPolygon.indices,
                                                   styles: parsedTile.styles,
                                                   overviewStyleMasks: parsedTile.overviewStyleMasks,
-                                                  lineWidthPoints: parsedTile.lineWidthPoints),
+                                                  lineStyles: parsedTile.lineStyles),
             roads: parsedTile.drawingRoadPhases.map { structureBucket in
                 structureBucket.map { phase in
                     PreparedTileCPU.GeometryLayer(vertices: phase.drawing.vertices,
                                                  indices: phase.drawing.indices,
                                                  styles: phase.styles,
                                                  overviewStyleMasks: phase.overviewStyleMasks,
-                                                 lineWidthPoints: phase.lineWidthPoints)
+                                                 lineStyles: phase.lineStyles)
                 }
             },
             bridgeOverlay: PreparedTileCPU.GeometryLayer(vertices: parsedTile.drawingBridgePolygon.vertices,
                                                          indices: parsedTile.drawingBridgePolygon.indices,
                                                          styles: parsedTile.bridgeStyles,
                                                          overviewStyleMasks: parsedTile.bridgeOverviewStyleMasks,
-                                                         lineWidthPoints: parsedTile.bridgeLineWidthPoints),
+                                                         lineStyles: parsedTile.bridgeLineStyles),
             extruded: PreparedTileCPU.Extruded(vertices: parsedTile.drawingExtruded.vertices,
                                                indices: parsedTile.drawingExtruded.indices,
                                                styles: parsedTile.drawingExtruded.styles),

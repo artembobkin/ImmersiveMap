@@ -197,13 +197,14 @@ enum VisualReviewCatalogue {
             title: "Country borders on the globe",
             lookFor: """
             Thin lines on the sphere, where the atlas has no MSAA and only the \
-            analytic antialiasing keeps their edges. Border dashes should have \
-            soft, even edges with no stair-steps, their cut ends softened the \
-            same as their sides, and the line should hold one width along its \
-            length instead of rippling. Borders are point-locked: zooming \
-            within a level must not visibly fatten them and then snap them \
-            thin at the next level. Roads are hairlines here; they should be \
-            faint but smooth, not broken into dots.
+            analytic antialiasing keeps their edges. Border dashes should read \
+            as clean, evenly spaced dashes with soft edges and softened cut \
+            ends, not dots or a smeared quasi-solid line, and the line should \
+            hold one width along its length instead of rippling. Width and \
+            dash size are both point-locked: zooming within a level must not \
+            visibly fatten or stretch them, nor snap them at the next level. \
+            Roads are hairlines here; they should be faint but smooth, not \
+            broken into dots.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

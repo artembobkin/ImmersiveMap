@@ -425,7 +425,12 @@ final class PreparedTileDiskCaching {
     // 35: every geometry layer grew a fifth span, the per-style point-locked
     // line widths, and the arena slot sequence changed with it, so a
     // version-34 span table no longer matches the schema traversal.
-    static let preparedFormatVersion: UInt32 = 35
+    // 36: the fifth span widened into the TileLineStyle struct (width, point
+    // dash pattern, edge threshold), the edge threshold left the vertex, and
+    // the freed byte rejoined the longitudinal parameter as a 16-bit value
+    // that point-dashed styles fill with arc length. A version-35 record's
+    // strides and vertex bytes both mean something else.
+    static let preparedFormatVersion: UInt32 = 36
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

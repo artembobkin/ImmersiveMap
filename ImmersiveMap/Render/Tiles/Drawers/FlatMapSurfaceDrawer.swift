@@ -118,7 +118,7 @@ enum FlatMapSurfaceDrawer {
               let vertices = buffers.vertices,
               let styles = buffers.styles,
               let overviewStyleMask = buffers.overviewStyleMask,
-              let lineWidthPoints = buffers.lineWidthPoints else { return }
+              let lineStyles = buffers.lineStyles else { return }
 
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
@@ -131,7 +131,7 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
         renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
         renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
-        renderEncoder.setVertexBuffer(lineWidthPoints.buffer, offset: lineWidthPoints.offset, index: 5)
+        renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
 
         // A retained substitution draws the source tile in full at its origin:
         // fragments outside the placeIn slot are discarded in the shader,

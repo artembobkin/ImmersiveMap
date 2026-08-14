@@ -35,9 +35,9 @@ struct TileBuffers {
         let indices: TileBufferView?
         let styles: TileBufferView?
         let overviewStyleMask: TileBufferView?
-        /// Per-style point-locked visible line widths (zero = world-locked),
-        /// lockstep with `styles`; see `LineRenderPass.lineWidthPoints`.
-        let lineWidthPoints: TileBufferView?
+        /// Per-style line parameters (point-locked width, point dash pattern,
+        /// edge threshold), lockstep with `styles`; see `TileLineStyle`.
+        let lineStyles: TileBufferView?
         /// Element width of `indices`: layers within the 16-bit vertex range
         /// are narrowed at build time, oversized ones stay 32-bit.
         let indexType: MTLIndexType

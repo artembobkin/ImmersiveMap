@@ -49,6 +49,13 @@ struct LineRenderPass {
     /// on-screen scale; the tessellated width then only bounds how wide the
     /// line can get. See `tileLineCoverage` in Tile.metal.
     let lineWidthPoints: Float
+    /// Point-locked dash pattern (layout points), cut per fragment from the
+    /// vertices' arc-length parameter, so dashes hold their on-screen size at
+    /// every zoom. Zero dash length draws solid. A pass with a point dash is
+    /// tessellated as a continuous line: the unit-based dash fields of
+    /// `parseGeometryStyleData` must stay zero for it.
+    let dashLengthPoints: Float
+    let dashGapPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let placement: LinePlacement
@@ -58,6 +65,8 @@ struct LineRenderPass {
          color: SIMD4<Float>,
          lowZoomFadeMask: Float = 0.0,
          lineWidthPoints: Float = 0.0,
+         dashLengthPoints: Float = 0.0,
+         dashGapPoints: Float = 0.0,
          parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
          placement: LinePlacement = .ground,
@@ -66,6 +75,8 @@ struct LineRenderPass {
         self.color = color
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
+        self.dashLengthPoints = dashLengthPoints
+        self.dashGapPoints = dashGapPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.placement = placement
@@ -80,6 +91,9 @@ struct FeatureStyle {
     /// See `LineRenderPass.lineWidthPoints`; zero for world-locked lines and
     /// for all polygon geometry.
     let lineWidthPoints: Float
+    /// See `LineRenderPass.dashLengthPoints`.
+    let dashLengthPoints: Float
+    let dashGapPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let linePlacement: LinePlacement
@@ -106,6 +120,8 @@ struct FeatureStyle {
         color: SIMD4<Float>,
         lowZoomFadeMask: Float = 0.0,
         lineWidthPoints: Float = 0.0,
+        dashLengthPoints: Float = 0.0,
+        dashGapPoints: Float = 0.0,
         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
         linePlacement: LinePlacement = .ground,
@@ -125,6 +141,8 @@ struct FeatureStyle {
         self.color = color
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
+        self.dashLengthPoints = dashLengthPoints
+        self.dashGapPoints = dashGapPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.linePlacement = linePlacement
@@ -150,6 +168,8 @@ struct FeatureStyle {
                            color: color,
                            lowZoomFadeMask: lowZoomFadeMask,
                            lineWidthPoints: lineWidthPoints,
+                           dashLengthPoints: dashLengthPoints,
+                           dashGapPoints: dashGapPoints,
                            parseGeometryStyleData: parseGeometryStyleData,
                            includeRoadLabelPath: includeRoadLabelPath,
                            placement: linePlacement,

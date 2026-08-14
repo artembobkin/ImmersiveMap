@@ -195,10 +195,14 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             XCTAssertEqual(boundary.lineWidthPoints, 0.8, "admin_level defaults to 4 at z\(zoom)")
         }
 
-        // Dashes end in feathered butt cuts, not round caps: caps would eat
-        // into the dash gaps by their radius.
+        // The dash pattern is point-locked and shader-cut: the tessellation
+        // stays a continuous solid ribbon (no unit dashes, no caps), and the
+        // dash lengths live in points on the style.
         let boundary = makeStyle(style, layerName: "boundary", zoom: 5)
+        XCTAssertFalse(boundary.parseGeometryStyleData.usesDashPattern)
         XCTAssertFalse(boundary.parseGeometryStyleData.lineCapRound)
+        XCTAssertGreaterThan(boundary.dashLengthPoints, 0)
+        XCTAssertGreaterThan(boundary.dashGapPoints, 0)
 
         // Roads stay world-locked: their width growing with zoom is the
         // designed behavior at street level.
@@ -225,10 +229,10 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let countryPlanet = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 2)
         XCTAssertNotEqual(countryPlanet.key, 0)
         XCTAssertEqual(countryPlanet.lineWidthPoints, 1.4)
-        XCTAssertFalse(countryPlanet.parseGeometryStyleData.usesDashPattern)
+        XCTAssertEqual(countryPlanet.dashLengthPoints, 0)
 
         let countryRegional = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 5)
-        XCTAssertTrue(countryRegional.parseGeometryStyleData.usesDashPattern)
+        XCTAssertGreaterThan(countryRegional.dashLengthPoints, 0)
     }
 
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,

@@ -263,13 +263,13 @@ class TileAtlasTexture {
               let groundVertices = buffers.ground.vertices,
               let groundStyles = buffers.ground.styles,
               let groundOverviewMask = buffers.ground.overviewStyleMask,
-              let groundLineWidthPoints = buffers.ground.lineWidthPoints else {
+              let groundLineStyles = buffers.ground.lineStyles else {
             return true
         }
         renderEncoder.setVertexBuffer(groundVertices.buffer, offset: groundVertices.offset, index: 0)
         renderEncoder.setVertexBuffer(groundStyles.buffer, offset: groundStyles.offset, index: 2)
         renderEncoder.setVertexBuffer(groundOverviewMask.buffer, offset: groundOverviewMask.offset, index: 4)
-        renderEncoder.setVertexBuffer(groundLineWidthPoints.buffer, offset: groundLineWidthPoints.offset, index: 5)
+        renderEncoder.setVertexBuffer(groundLineStyles.buffer, offset: groundLineStyles.offset, index: 5)
 
         // The bake rasterizes in atlas texels while the point-locked widths
         // are stated for screen pixels, and the two drift apart as the

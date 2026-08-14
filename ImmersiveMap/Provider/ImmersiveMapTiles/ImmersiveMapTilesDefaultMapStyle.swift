@@ -385,16 +385,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         if adminLevel > 2, isDetailZoom == false {
             return hiddenStyle
         }
-        // Borders are point-locked: the visible width is resolved in screen
-        // space at render time (lineWidthPoints, thinned toward planet zooms
-        // by LineWidthZoomTaper), so it holds steady through fractional zoom
-        // instead of pumping with the tile's on-screen scale. The tessellated
-        // width below is only the geometry ceiling the shader can place the
-        // edge inside; it stays at full width at every zoom so the ceiling
-        // never undercuts the requested points. Dashes end in feathered butt
-        // cuts rather than round caps: at one or two points of width the
-        // difference is invisible, and caps would eat into the dash gaps by
-        // their radius.
+        // Borders are fully point-locked: the visible width comes from
+        // lineWidthPoints (thinned toward planet zooms by LineWidthZoomTaper)
+        // and the dash pattern from dash/gap points, both resolved in screen
+        // space at render time, so neither pumps with the tile's on-screen
+        // scale. The geometry is a continuous solid ribbon carrying arc
+        // length; the tessellated width below is only the ceiling the shader
+        // can place the edge inside, at full width at every zoom so it never
+        // undercuts the requested points. Below the detail zoom the dashes
+        // are off entirely: countries draw solid over a planet view.
         let width: Double = adminLevel <= 2 ? 7.8 : 3.4
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
         return FeatureStyle(
@@ -402,12 +401,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             color: configuration.layers.boundary,
             lowZoomFadeMask: 1.0,
             lineWidthPoints: adminLevel <= 2 ? 1.4 : 0.8,
-            parseGeometryStyleData: isDetailZoom
-                ? makeDashedRoadGeometry(width: width,
-                                         dashLength: 8,
-                                         dashGap: 6,
-                                         capRound: false)
-                : TileMvtParser.ParseGeometryStyleData(lineWidth: width),
+            dashLengthPoints: isDetailZoom ? 7.0 : 0.0,
+            dashGapPoints: isDetailZoom ? 3.5 : 0.0,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width),
             // Borders are drawn as lines only. Some features (Native American
             // reservations) arrive as polygons; their area must not be filled,
             // otherwise you get solid purple blobs.
@@ -672,10 +668,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func makeDashedRoadGeometry(width: Double,
                                         dashLength: Double,
-                                        dashGap: Double,
-                                        capRound: Bool = true) -> TileMvtParser.ParseGeometryStyleData {
+                                        dashGap: Double) -> TileMvtParser.ParseGeometryStyleData {
         TileMvtParser.ParseGeometryStyleData(lineWidth: width,
-                                             lineCapRound: capRound,
+                                             lineCapRound: true,
                                              lineJoinRound: false,
                                              dashLength: dashLength,
                                              dashGap: dashGap)

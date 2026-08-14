@@ -50,7 +50,7 @@ struct TileArenaImagePlan: Sendable {
         case indicesUInt32([UInt32])
         case styles([TilePolygonStyle])
         case overviewStyleMasks([Float])
-        case lineWidthPoints([Float])
+        case lineStyles([TileLineStyle])
         case labelVertices([LabelVertex])
     }
 
@@ -96,8 +96,8 @@ enum TileArenaImageMath {
                 builder.append(.styles(geometryLayer(layerID, of: preparedTile).styles))
             case .geometryOverviewStyleMasks(let layerID):
                 builder.append(.overviewStyleMasks(geometryLayer(layerID, of: preparedTile).overviewStyleMasks))
-            case .geometryLineWidthPoints(let layerID):
-                builder.append(.lineWidthPoints(geometryLayer(layerID, of: preparedTile).lineWidthPoints))
+            case .geometryLineStyles(let layerID):
+                builder.append(.lineStyles(geometryLayer(layerID, of: preparedTile).lineStyles))
             case .extrudedVertices:
                 builder.append(.extrudedVertices(preparedTile.extruded.vertices))
             case .extrudedIndices:
@@ -153,7 +153,7 @@ enum TileArenaImageMath {
             values.withUnsafeBytes(body)
         case .overviewStyleMasks(let values):
             values.withUnsafeBytes(body)
-        case .lineWidthPoints(let values):
+        case .lineStyles(let values):
             values.withUnsafeBytes(body)
         case .labelVertices(let values):
             values.withUnsafeBytes(body)
@@ -227,8 +227,8 @@ enum TileArenaImageMath {
                 return (values.count * MemoryLayout<TilePolygonStyle>.stride, values.count)
             case .overviewStyleMasks(let values):
                 return (values.count * MemoryLayout<Float>.stride, values.count)
-            case .lineWidthPoints(let values):
-                return (values.count * MemoryLayout<Float>.stride, values.count)
+            case .lineStyles(let values):
+                return (values.count * MemoryLayout<TileLineStyle>.stride, values.count)
             case .labelVertices(let values):
                 return (values.count * MemoryLayout<LabelVertex>.stride, values.count)
             }

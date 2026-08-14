@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 35)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 36)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -579,12 +579,13 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(spans.count, 89)
 
         // Ground vertices: 3 elements at offset 0, 24 bytes. The three
-        // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0 and three
-        // padding bytes; 4096 is 0x1000, little-endian [0x00, 0x10].
+        // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0, a zero
+        // line distance and the saturated line parameter (0x7FFF little-endian
+        // [0xFF, 0x7F]); 4096 is 0x1000, little-endian [0x00, 0x10].
         XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 24, elementCount: 3, indexWidth: nil))
-        XCTAssertEqual(blob[0..<24], Data([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00]))
+        XCTAssertEqual(blob[0..<24], Data([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F,
+                                           0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F,
+                                           0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0xFF, 0x7F]))
 
         // Ground indices: [0, 1, 2] narrowed to UInt16 (3 vertices are far
         // below the 65535-vertex ceiling), 6 bytes at the next 256 boundary.
@@ -605,10 +606,10 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 4, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[768..<772], Data([0x00, 0x00, 0x00, 0x00]))
 
-        // Ground line widths: one Float zero (the fixture style is
-        // world-locked).
-        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 4, elementCount: 1, indexWidth: nil))
-        XCTAssertEqual(blob[1024..<1028], Data([0x00, 0x00, 0x00, 0x00]))
+        // Ground line styles: one all-zero TileLineStyle (the fixture style
+        // is a plain polygon).
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 16, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[1024..<1040], Data(count: 16))
 
         // Everything after the ground layer is empty: zero-length spans do
         // not advance the cursor, so the arena ends at the width span's
@@ -622,7 +623,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(blob[24..<256], Data(count: 232), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[772..<1024], Data(count: 252), "Span padding must be deterministic zeros")
-        XCTAssertEqual(blob[1028..<1280], Data(count: 252), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[1040..<1280], Data(count: 240), "Span padding must be deterministic zeros")
     }
 
     func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {
