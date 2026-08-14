@@ -99,13 +99,13 @@ struct TileAtlasAllocation: Hashable {
     /// atlas derives from the tile as a whole (the demand-based texel ratio
     /// for widths, the nominal display scale for dash patterns) average over
     /// that stretch. The center of the globe face, where the eye rests, is
-    /// denser than the average: about twice at z0, fading out by z3, so lines
+    /// denser than the average: about threefold at z0, fading out by z3, so lines
     /// there rendered magnified by that factor and visibly changed size
     /// across z0-z2. A function of the source tile zoom only, so it steps
     /// with the tile set and never follows the live camera.
     static func coarseTileLineScale(sourceTileZoom: Int) -> Float {
         switch sourceTileZoom {
-        case ...0: return 0.5
+        case ...0: return 0.35
         case 1: return 0.7
         case 2: return 0.9
         default: return 1.0
