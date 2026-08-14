@@ -235,7 +235,9 @@ final class TileAtlasSubsystem: RenderSubsystem {
             hasher.combine(TileAtlasAllocation.lineWidthRasterScale(
                 cellSizePx: allocation.cellSizePx,
                 screenDemandPx: allocation.candidate.screenDemandPx,
-                zoomTaper: lineWidthZoomTaper
+                zoomTaper: lineWidthZoomTaper * TileAtlasAllocation.coarseTileLineScale(
+                    sourceTileZoom: allocation.placeTile.metalTile.tile.z
+                )
             ).bitPattern)
         }
     }

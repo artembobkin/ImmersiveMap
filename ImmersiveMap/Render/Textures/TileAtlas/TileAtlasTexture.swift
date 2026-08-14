@@ -299,11 +299,14 @@ class TileAtlasTexture {
         // for the scale this slot is actually shown at. The ratio also sits
         // in the atlas redraw hash, which is what re-bakes the page when the
         // dolly moves it a step.
+        let coarseTileLineScale = TileAtlasAllocation.coarseTileLineScale(
+            sourceTileZoom: metalTile.tile.z
+        )
         var fadeUniform = activeFadeUniform
         fadeUniform.pixelsPerPoint *= TileAtlasAllocation.lineWidthRasterScale(
             cellSizePx: allocation.cellSizePx,
             screenDemandPx: allocation.candidate.screenDemandPx,
-            zoomTaper: activeLineWidthZoomTaper
+            zoomTaper: activeLineWidthZoomTaper * coarseTileLineScale
         )
         renderEncoder.setFragmentBytes(&fadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
@@ -312,11 +315,13 @@ class TileAtlasTexture {
         // Dash anchor: a substitute spans more world than the tile it stands
         // in for, by one factor of two per missing level, so its units get
         // proportionally fewer per pixel and its dashes keep the same size on
-        // screen. Camera-independent by design (see LineDashNominalScale).
+        // screen. Camera-independent by design (see LineDashNominalScale);
+        // the coarse-tile scale compensates the sphere magnification of z0-z2
+        // tiles the same way it does for widths.
         let sourceTileWorldSize = activeNativeTileWorldSize
             * powf(2.0, Float(placeIn.z - metalTile.tile.z))
         var lineDashUniform = LineDashUniform(
-            unitsPerPoint: activeDashPixelsPerPoint * LineDashNominalScale.unitsPerPixel(
+            unitsPerPoint: coarseTileLineScale * activeDashPixelsPerPoint * LineDashNominalScale.unitsPerPixel(
                 sourceTileWorldSize: sourceTileWorldSize,
                 drawableHeightPx: activeDrawableHeightPx
             )
