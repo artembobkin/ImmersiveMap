@@ -102,7 +102,7 @@ Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`,
 | Part | Size |
 |---|---|
 | **App bundle, total** | **6.7 MB** |
-| Binary (engine, SwiftEarcut, SwiftProtobuf) | 3.9 MB |
+| Binary (engine, SwiftProtobuf) | 3.9 MB |
 | Resources | 2.8 MB |
 | ├ MSDF font atlases, two weights | 2.2 MB |
 | ├ Compiled Metal library | 276 KB |
@@ -148,7 +148,7 @@ Bug reports and feature requests belong in [Issues](https://github.com/artembobk
 
 ## License
 
-ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE).
+ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE). The internal earcut triangulator is a port of ISC-licensed Mapbox code; its notice, ready to copy into an app's acknowledgements screen, is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Commercial Support
 
