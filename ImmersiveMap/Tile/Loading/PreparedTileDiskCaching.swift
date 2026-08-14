@@ -418,7 +418,11 @@ final class PreparedTileDiskCaching {
     // arena decodes cleanly but its zeroed padding marks every line as plain
     // polygon geometry, so a warm cache would keep serving hard-edged lines
     // forever.
-    static let preparedFormatVersion: UInt32 = 33
+    // 34: the transverse distance narrowed from Int16 to Int8 and the freed
+    // byte carries the longitudinal end distance, so free butt ends (dash
+    // cuts) feather too. A version-33 arena would have its 16-bit distance
+    // misread as two 8-bit fields.
+    static let preparedFormatVersion: UInt32 = 34
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

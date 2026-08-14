@@ -29,9 +29,12 @@ class TilePipeline {
         vertexDescriptor.attributes[2].format = .uchar
         vertexDescriptor.attributes[2].offset = MemoryLayout<SIMD2<Int16>>.size + 1
         vertexDescriptor.attributes[2].bufferIndex = 0
-        vertexDescriptor.attributes[3].format = .short
+        vertexDescriptor.attributes[3].format = .char
         vertexDescriptor.attributes[3].offset = MemoryLayout<SIMD2<Int16>>.size + 2
         vertexDescriptor.attributes[3].bufferIndex = 0
+        vertexDescriptor.attributes[4].format = .char
+        vertexDescriptor.attributes[4].offset = MemoryLayout<SIMD2<Int16>>.size + 3
+        vertexDescriptor.attributes[4].bufferIndex = 0
         vertexDescriptor.layouts[0].stride = MemoryLayout<TileVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
         

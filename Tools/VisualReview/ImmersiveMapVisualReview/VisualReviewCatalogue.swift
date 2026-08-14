@@ -196,9 +196,10 @@ enum VisualReviewCatalogue {
             lookFor: """
             Thin lines on the sphere, where the atlas has no MSAA and only the \
             analytic antialiasing keeps their edges. Border dashes should have \
-            soft, even edges with no stair-steps, and the line should hold one \
-            width along its length instead of rippling. Roads are hairlines \
-            here; they should be faint but smooth, not broken into dots.
+            soft, even edges with no stair-steps, their cut ends softened the \
+            same as their sides, and the line should hold one width along its \
+            length instead of rippling. Roads are hairlines here; they should \
+            be faint but smooth, not broken into dots.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

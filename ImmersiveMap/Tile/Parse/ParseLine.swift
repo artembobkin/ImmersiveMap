@@ -202,13 +202,18 @@ class ParseLine {
         /// Normalized signed centerline distances, lockstep with `vertices`:
         /// ±1 at the extruded rim, 0 on the centerline.
         var distances: [Float] = []
+        /// Normalized longitudinal distances past the styled cut of a free
+        /// butt end, lockstep with `vertices`: -1 at the feathered tip, 0 at
+        /// the styled cut, saturated at 1 everywhere the end stays hard.
+        var endDistances: [Float] = []
         var indices: [UInt32] = []
     }
 
-    /// One clipped-ring vertex with its interpolated distance attribute.
+    /// One clipped-ring vertex with its interpolated distance attributes.
     private struct AttributedPoint {
         var position: SIMD2<Float>
         var distance: Float
+        var endDistance: Float
     }
 
     private struct PrecomputedLine {
@@ -222,12 +227,20 @@ class ParseLine {
         let joinCount: Int
     }
 
+    /// `featherStart`/`featherEnd` mark an endpoint as a genuine free butt end
+    /// (a dash cut, or a line simply ending), whose cut may be antialiased
+    /// longitudinally. They must stay false for continuations that have to
+    /// meet adjacent geometry flush (tile-seam cuts, road junctions); when the
+    /// matching round cap is on, the cap's radial field wins and the flag is
+    /// ignored.
     func parse(points: [SIMD2<Float>],
                width: Double,
                tileExtent: Float,
                startCapRound: Bool,
                endCapRound: Bool,
                lineJoinRound: Bool,
+               featherStart: Bool = false,
+               featherEnd: Bool = false,
                extendClippedStart: Bool = false,
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
@@ -256,9 +269,12 @@ class ParseLine {
                         vertices: &polygon.vertices,
                         indices: &polygon.indices)
         polygon.distances.reserveCapacity(polygon.vertices.capacity)
+        polygon.endDistances.reserveCapacity(polygon.vertices.capacity)
 
         appendSegments(precomputed: precomputed,
                        extrudedHalfWidth: extrudedHalfWidth,
+                       featherStart: featherStart && startCapRound == false,
+                       featherEnd: featherEnd && endCapRound == false,
                        polygon: &polygon)
 
         if lineJoinRound {
@@ -461,34 +477,67 @@ class ParseLine {
         indices.reserveCapacity(segmentIndices + joinIndices + capCount * capIndicesPerCap)
     }
 
+    /// Emits each segment as a strip of full-width rows. A plain segment is
+    /// two rows (the old single quad); a feathered free end adds a tip row
+    /// one feather past the styled cut and a ring row one feather inside it,
+    /// so the longitudinal field ramps -1...1 across the cut with the styled
+    /// end on its zero isoline. A segment shorter than the feather pulls the
+    /// ring to its midpoint, keeping the ramp's gradient exact rather than
+    /// compressing it.
     private func appendSegments(precomputed: PrecomputedLine,
                                 extrudedHalfWidth: Float,
+                                featherStart: Bool,
+                                featherEnd: Bool,
                                 polygon: inout GeneratedPolygon) {
+        let feather = Self.featherTileUnits
         for index in 0..<precomputed.segmentLengths.count {
-            if precomputed.segmentLengths[index] <= Self.epsilon {
+            let segmentLength = precomputed.segmentLengths[index]
+            if segmentLength <= Self.epsilon {
                 continue
             }
 
             let start = precomputed.points[index]
             let end = precomputed.points[index + 1]
+            let direction = precomputed.segmentDirections[index]
             let offset = precomputed.segmentNormals[index] * extrudedHalfWidth
+            let featherThisStart = featherStart && index == precomputed.firstValidSegmentIndex
+            let featherThisEnd = featherEnd && index == precomputed.lastValidSegmentIndex
+
+            var rows: [(position: SIMD2<Float>, endDistance: Float)] = []
+            if featherThisStart {
+                let inset = min(feather, segmentLength * 0.5)
+                rows.append((start - direction * feather, -1.0))
+                rows.append((start + direction * inset, inset / feather))
+            } else {
+                rows.append((start, 1.0))
+            }
+            if featherThisEnd {
+                let inset = min(feather, segmentLength * 0.5)
+                rows.append((end - direction * inset, inset / feather))
+                rows.append((end + direction * feather, -1.0))
+            } else {
+                rows.append((end, 1.0))
+            }
 
             let base = UInt32(polygon.vertices.count)
-            polygon.vertices.append(start + offset)
-            polygon.vertices.append(start - offset)
-            polygon.vertices.append(end + offset)
-            polygon.vertices.append(end - offset)
-            polygon.distances.append(1.0)
-            polygon.distances.append(-1.0)
-            polygon.distances.append(1.0)
-            polygon.distances.append(-1.0)
+            for row in rows {
+                polygon.vertices.append(row.position + offset)
+                polygon.vertices.append(row.position - offset)
+                polygon.distances.append(1.0)
+                polygon.distances.append(-1.0)
+                polygon.endDistances.append(row.endDistance)
+                polygon.endDistances.append(row.endDistance)
+            }
 
-            polygon.indices.append(base)
-            polygon.indices.append(base + 2)
-            polygon.indices.append(base + 1)
-            polygon.indices.append(base + 1)
-            polygon.indices.append(base + 2)
-            polygon.indices.append(base + 3)
+            for rowIndex in 0..<(rows.count - 1) {
+                let rowBase = base + UInt32(rowIndex * 2)
+                polygon.indices.append(rowBase)
+                polygon.indices.append(rowBase + 2)
+                polygon.indices.append(rowBase + 1)
+                polygon.indices.append(rowBase + 1)
+                polygon.indices.append(rowBase + 2)
+                polygon.indices.append(rowBase + 3)
+            }
         }
     }
 
@@ -523,6 +572,9 @@ class ParseLine {
             polygon.distances.append(0.0)
             polygon.distances.append(1.0)
             polygon.distances.append(1.0)
+            polygon.endDistances.append(1.0)
+            polygon.endDistances.append(1.0)
+            polygon.endDistances.append(1.0)
 
             polygon.indices.append(base)
             polygon.indices.append(base + 1)
@@ -541,10 +593,12 @@ class ParseLine {
         let base = UInt32(polygon.vertices.count)
         polygon.vertices.append(center)
         polygon.distances.append(0.0)
+        polygon.endDistances.append(1.0)
         for point in Self.capUnitSemicircle {
             let transformed = center + (forward * point.x + right * point.y) * radius
             polygon.vertices.append(transformed)
             polygon.distances.append(1.0)
+            polygon.endDistances.append(1.0)
         }
 
         for index in 1..<Self.capUnitSemicircle.count {
@@ -569,7 +623,8 @@ class ParseLine {
         }
 
         var clippedVertices: [SIMD2<Int16>] = []
-        var clippedDistances: [Int16] = []
+        var clippedDistances: [Int8] = []
+        var clippedEndDistances: [Int8] = []
         var clippedIndices: [UInt32] = []
 
         for triangleStart in stride(from: 0, to: polygon.indices.count, by: 3) {
@@ -583,9 +638,15 @@ class ParseLine {
             }
 
             let triangle = [
-                AttributedPoint(position: polygon.vertices[i0], distance: polygon.distances[i0]),
-                AttributedPoint(position: polygon.vertices[i1], distance: polygon.distances[i1]),
-                AttributedPoint(position: polygon.vertices[i2], distance: polygon.distances[i2])
+                AttributedPoint(position: polygon.vertices[i0],
+                                distance: polygon.distances[i0],
+                                endDistance: polygon.endDistances[i0]),
+                AttributedPoint(position: polygon.vertices[i1],
+                                distance: polygon.distances[i1],
+                                endDistance: polygon.endDistances[i1]),
+                AttributedPoint(position: polygon.vertices[i2],
+                                distance: polygon.distances[i2],
+                                endDistance: polygon.endDistances[i2])
             ]
 
             let clippedRing = sanitizeClippedRing(clipRingToTile(triangle, tileExtent: tileExtent),
@@ -598,6 +659,7 @@ class ParseLine {
             for point in clippedRing {
                 clippedVertices.append(toShortVector(point.position))
                 clippedDistances.append(Self.quantizeDistance(point.distance))
+                clippedEndDistances.append(Self.quantizeDistance(point.endDistance))
             }
 
             let isClockwise = signedArea(of: clippedRing.map(\.position)) < 0
@@ -617,6 +679,7 @@ class ParseLine {
         return TileMvtParser.ParsedPolygon(vertices: clippedVertices,
                                            indices: clippedIndices,
                                            lineDistances: clippedDistances,
+                                           lineEndDistances: clippedEndDistances,
                                            lineEdgeThreshold: edgeThreshold)
     }
 
@@ -641,7 +704,8 @@ class ParseLine {
                     let t = previousDistance / (previousDistance - currentDistance)
                     result.append(AttributedPoint(
                         position: previousPoint.position + (currentPoint.position - previousPoint.position) * t,
-                        distance: previousPoint.distance + (currentPoint.distance - previousPoint.distance) * t))
+                        distance: previousPoint.distance + (currentPoint.distance - previousPoint.distance) * t,
+                        endDistance: previousPoint.endDistance + (currentPoint.endDistance - previousPoint.endDistance) * t))
                 }
                 if currentInside {
                     result.append(currentPoint)
@@ -661,11 +725,12 @@ class ParseLine {
         TileMvtParser.ParsedPolygon(vertices: polygon.vertices.map(toShortVector),
                                     indices: polygon.indices,
                                     lineDistances: polygon.distances.map(Self.quantizeDistance),
+                                    lineEndDistances: polygon.endDistances.map(Self.quantizeDistance),
                                     lineEdgeThreshold: edgeThreshold)
     }
 
-    private static func quantizeDistance(_ value: Float) -> Int16 {
-        Int16(clamping: Int((value * Float(Int16.max)).rounded()))
+    private static func quantizeDistance(_ value: Float) -> Int8 {
+        Int8(clamping: Int((value * Float(Int8.max)).rounded()))
     }
 
     private func sanitizeClippedRing(_ ring: [AttributedPoint], tileExtent: Float) -> [AttributedPoint] {
@@ -678,7 +743,9 @@ class ParseLine {
             if let last = sanitized.last, pointsEqual(last.position, clamped) {
                 continue
             }
-            sanitized.append(AttributedPoint(position: clamped, distance: point.distance))
+            sanitized.append(AttributedPoint(position: clamped,
+                                             distance: point.distance,
+                                             endDistance: point.endDistance))
         }
 
         if sanitized.count >= 2,

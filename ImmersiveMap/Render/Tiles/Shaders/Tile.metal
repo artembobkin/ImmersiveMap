@@ -10,14 +10,16 @@ struct VertexIn {
     short2 position [[attribute(0)]];
     unsigned char styleIndex [[attribute(1)]];
     unsigned char lineEdgeThreshold [[attribute(2)]];
-    short lineDistance [[attribute(3)]];
+    char lineDistance [[attribute(3)]];
+    char lineEndDistance [[attribute(4)]];
 };
 
 // color and the fade mask are unit-range, so they interpolate as half: fewer
 // interpolant registers and double-rate ALU on A-series GPUs (the same split
 // the starfield shader uses). Positions stay float.
-// lineDistance stays float: the antialiasing band can be a small fraction of
-// the normalized field on wide lines, below half's precision near 1.0.
+// The line distances stay float: the antialiasing band can be a small
+// fraction of the normalized field on wide lines, below half's precision
+// near 1.0.
 struct VertexOut {
     float4 position [[position]];
     float2 localPosition;
@@ -25,6 +27,7 @@ struct VertexOut {
     half4 color;
     half lowZoomFadeMask;
     float lineDistance;
+    float lineEndDistance;
     half lineEdgeThreshold;
 };
 
@@ -56,7 +59,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.worldPos = worldPosition.xyz;
     out.color = half4(style.color);
     out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
-    out.lineDistance = float(vertexIn.lineDistance) / 32767.0;
+    out.lineDistance = float(vertexIn.lineDistance) / 127.0;
+    out.lineEndDistance = float(vertexIn.lineEndDistance) / 127.0;
     out.lineEdgeThreshold = half(vertexIn.lineEdgeThreshold) / 255.0h;
     return out;
 }
@@ -64,19 +68,26 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 /// Analytic coverage of line geometry: the tessellator extrudes lines wider
 /// than their styled width and stores a signed distance field in the vertices
 /// (see `TileVertexIn`), so the visible edge is the `lineEdgeThreshold`
-/// isoline of the interpolated field, feathered over one screen pixel. This
-/// is the only edge antialiasing lines get on the globe, whose atlas pages
-/// render without MSAA. Must be called before any divergent discard: fwidth
-/// evaluates screen-space derivatives.
-static inline half tileLineCoverage(float lineDistance, half lineEdgeThreshold) {
-    // The derivative is taken before the threshold test: fwidth needs the
+/// isoline of the interpolated field, feathered over one screen pixel. The
+/// longitudinal field does the same for free butt ends (dash cuts, line
+/// ends): its zero isoline is the styled cut, and it sits saturated at 1
+/// everywhere the end must stay hard (interior vertices, tile-seam and
+/// road-junction continuations). This is the only edge antialiasing lines
+/// get on the globe, whose atlas pages render without MSAA. Must be called
+/// before any divergent discard: fwidth evaluates screen-space derivatives.
+static inline half tileLineCoverage(float lineDistance,
+                                    float lineEndDistance,
+                                    half lineEdgeThreshold) {
+    // The derivatives are taken before the threshold test: fwidth needs the
     // whole 2x2 quad, so it must not sit behind potentially divergent flow.
-    float pixelSpan = max(fwidth(lineDistance), 1e-5);
+    float sideSpan = max(fwidth(lineDistance), 1e-5);
+    float endSpan = max(fwidth(lineEndDistance), 1e-5);
     if (lineEdgeThreshold <= 0.0h) {
         return 1.0h;
     }
-    float edgeDistancePx = (float(lineEdgeThreshold) - abs(lineDistance)) / pixelSpan;
-    return half(smoothstep(-0.5, 0.5, edgeDistancePx));
+    float sideDistancePx = (float(lineEdgeThreshold) - abs(lineDistance)) / sideSpan;
+    float endDistancePx = lineEndDistance / endSpan;
+    return half(smoothstep(-0.5, 0.5, sideDistancePx) * smoothstep(-0.5, 0.5, endDistancePx));
 }
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
@@ -92,7 +103,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     // screen-space derivatives, which are undefined in any 2x2 quad after a
     // divergent discard (MSL spec), so the clip discard must not precede them.
     float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
-    half lineCoverage = tileLineCoverage(in.lineDistance, in.lineEdgeThreshold);
+    half lineCoverage = tileLineCoverage(in.lineDistance, in.lineEndDistance, in.lineEdgeThreshold);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
         discard_fragment();

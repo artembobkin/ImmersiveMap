@@ -989,14 +989,19 @@ class TileMvtParser {
                                         && ((renderFragment.endClipped && shouldExtendClippedRoadEndpoint(renderFragment.points.last))
                                             || (endBoundaryContinuation && shouldExtendRoadBoundaryEndpoint(renderFragment.points.last)))
 
-                                    let startCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound
-                                        && startContinuation == false
+                                    // A free end is a genuine end of the line: not a cut that
+                                    // continues into a neighboring tile, not a shared road
+                                    // junction, and not sitting on the tile boundary. Free ends
+                                    // are the ones that may be capped or feathered; every other
+                                    // cut must stay hard so it meets adjacent geometry flush.
+                                    let startFree = startContinuation == false
                                         && startConnected == false
                                         && renderFragment.points.first.map { isPointStrictlyInsideTile($0) } == true
-                                    let endCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound
-                                        && endContinuation == false
+                                    let endFree = endContinuation == false
                                         && endConnected == false
                                         && renderFragment.points.last.map { isPointStrictlyInsideTile($0) } == true
+                                    let startCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && startFree
+                                    let endCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && endFree
 
                                     if let linePolygon = parseLine.parse(points: renderFragment.points,
                                                                          width: lineRenderPass.parseGeometryStyleData.lineWidth,
@@ -1004,6 +1009,8 @@ class TileMvtParser {
                                                                          startCapRound: startCapRound,
                                                                          endCapRound: endCapRound,
                                                                          lineJoinRound: lineRenderPass.parseGeometryStyleData.lineJoinRound,
+                                                                         featherStart: startFree,
+                                                                         featherEnd: endFree,
                                                                          extendClippedStart: shouldExtendStart,
                                                                          extendClippedEnd: shouldExtendEnd,
                                                                          clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
@@ -1137,12 +1144,14 @@ class TileMvtParser {
                                       indexCount: inout Int) {
         let vertexOffset = UInt32(vertexCount)
         let hasLineDistances = polygon.lineDistances.count == polygon.vertices.count
+            && polygon.lineEndDistances.count == polygon.vertices.count
         for (index, position) in polygon.vertices.enumerated() {
             vertices.initializeElement(at: vertexCount,
                                        to: TileVertexIn(position: position,
                                                         styleIndex: styleBufferIndex,
                                                         lineEdgeThreshold: polygon.lineEdgeThreshold,
-                                                        lineDistance: hasLineDistances ? polygon.lineDistances[index] : 0))
+                                                        lineDistance: hasLineDistances ? polygon.lineDistances[index] : 0,
+                                                        lineEndDistance: hasLineDistances ? polygon.lineEndDistances[index] : 0))
             vertexCount += 1
         }
         for index in polygon.indices {
