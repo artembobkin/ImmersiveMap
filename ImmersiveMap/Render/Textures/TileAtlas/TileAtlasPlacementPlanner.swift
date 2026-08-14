@@ -88,11 +88,21 @@ struct TileAtlasPlacementPlanner {
             }
 
             let demand = Self.screenDemandPx(boundsPx: footprint.bounds)
+            // A coarse tile's center is denser than its footprint average
+            // (the mismatch coarseTileLineScale compensates), so the slot is
+            // sized for the center: without the boost a z0 tile lands in a
+            // slot whose texels are magnified severalfold at the disc center,
+            // and a point-locked line width bottoms out at one blurry texel
+            // there instead of thinning. Only the slot choice is boosted; the
+            // stored demand keeps describing the real footprint.
+            let depthDemand = demand / TileAtlasAllocation.coarseTileLineScale(
+                sourceTileZoom: placeTile.placeTile.metalTile.tile.z
+            )
             return TileAtlasCandidate(placementIndex: index,
                                        placeTile: placeTile.placeTile,
                                        screenDemandPx: demand,
                                        distanceToCamera: footprint.minimumDepth,
-                                       desiredDepth: TileAtlasSlotDepth.desired(forScreenDemandPx: demand,
+                                       desiredDepth: TileAtlasSlotDepth.desired(forScreenDemandPx: depthDemand,
                                                                                  pageSizePx: pageSizePx,
                                                                                  qualityScale: qualityScale))
         }
@@ -238,7 +248,10 @@ struct TileAtlasPlacementPlanner {
 
     private func desiredDepth(for candidate: TileAtlasCandidate) -> TileAtlasSlotDepth {
         guard qualityScale != 1.0 else { return candidate.desiredDepth }
-        return TileAtlasSlotDepth.desired(forScreenDemandPx: candidate.screenDemandPx,
+        let depthDemand = candidate.screenDemandPx / TileAtlasAllocation.coarseTileLineScale(
+            sourceTileZoom: candidate.placeTile.metalTile.tile.z
+        )
+        return TileAtlasSlotDepth.desired(forScreenDemandPx: depthDemand,
                                            pageSizePx: pageSizePx,
                                            qualityScale: qualityScale)
     }

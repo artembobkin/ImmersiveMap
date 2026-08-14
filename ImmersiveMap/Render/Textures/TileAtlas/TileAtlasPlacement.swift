@@ -111,6 +111,14 @@ struct TileAtlasAllocation: Hashable {
         default: return 1.0
         }
     }
+
+    /// The dash counterpart of `coarseTileLineScale`, floored: a dash pattern
+    /// shortened as aggressively as the width degenerates into stubs at z0,
+    /// and long dashes over a planet view read well, so the pattern keeps at
+    /// least the z1 proportion everywhere.
+    static func coarseTileDashScale(sourceTileZoom: Int) -> Float {
+        max(coarseTileLineScale(sourceTileZoom: sourceTileZoom), 0.7)
+    }
 }
 
 struct TileAtlasPageSummary: Equatable {

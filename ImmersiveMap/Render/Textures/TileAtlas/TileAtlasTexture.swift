@@ -316,12 +316,16 @@ class TileAtlasTexture {
         // in for, by one factor of two per missing level, so its units get
         // proportionally fewer per pixel and its dashes keep the same size on
         // screen. Camera-independent by design (see LineDashNominalScale);
-        // the coarse-tile scale compensates the sphere magnification of z0-z2
-        // tiles the same way it does for widths.
+        // the coarse-tile dash scale compensates the sphere magnification of
+        // z0-z2 tiles, floored so dashes stay long instead of turning into
+        // stubs at z0.
         let sourceTileWorldSize = activeNativeTileWorldSize
             * powf(2.0, Float(placeIn.z - metalTile.tile.z))
+        let coarseTileDashScale = TileAtlasAllocation.coarseTileDashScale(
+            sourceTileZoom: metalTile.tile.z
+        )
         var lineDashUniform = LineDashUniform(
-            unitsPerPoint: coarseTileLineScale * activeDashPixelsPerPoint * LineDashNominalScale.unitsPerPixel(
+            unitsPerPoint: coarseTileDashScale * activeDashPixelsPerPoint * LineDashNominalScale.unitsPerPixel(
                 sourceTileWorldSize: sourceTileWorldSize,
                 drawableHeightPx: activeDrawableHeightPx
             )

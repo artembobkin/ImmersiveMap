@@ -75,6 +75,13 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 2), 0.9)
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 3), 1.0)
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 14), 1.0)
+
+        // The dash counterpart is floored: shortening the pattern as
+        // aggressively as the width turns z0 dashes into stubs.
+        XCTAssertEqual(TileAtlasAllocation.coarseTileDashScale(sourceTileZoom: 0), 0.7)
+        XCTAssertEqual(TileAtlasAllocation.coarseTileDashScale(sourceTileZoom: 1), 0.7)
+        XCTAssertEqual(TileAtlasAllocation.coarseTileDashScale(sourceTileZoom: 2), 0.9)
+        XCTAssertEqual(TileAtlasAllocation.coarseTileDashScale(sourceTileZoom: 3), 1.0)
     }
 
     func testLineDashNominalScaleIsAConstantOfTileAndViewport() {
