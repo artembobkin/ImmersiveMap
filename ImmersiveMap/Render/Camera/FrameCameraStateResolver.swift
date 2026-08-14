@@ -112,6 +112,16 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
+    /// Moves only the map center, leaving zoom, bearing and pitch untouched.
+    /// The zoom anchor compensation must use this instead of `setCameraState`:
+    /// re-submitting the whole state would re-apply the settings-level pitch
+    /// floor, which is surface-blind and on the globe can sit above the
+    /// zoom-eased ceiling the constraints have already enforced.
+    func setCameraCenterWorldMercator(_ centerWorldMercator: SIMD2<Double>) {
+        cameraStateController.setCenterWorldMercator(centerWorldMercator)
+        requestRenderCameraUpdate()
+    }
+
     func currentCameraPosition() -> ImmersiveMapCameraPosition {
         let latLon = cameraStateController.getLatLonDeg()
         return ImmersiveMapCameraPosition(latitudeDegrees: latLon.latDeg,

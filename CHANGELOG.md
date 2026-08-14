@@ -24,7 +24,13 @@ once the public API stabilizes.
 
 - The prepared-tile disk format is version 32 and the text revision is 7. A version-31 record is structurally valid but its geometry now means something else, and nothing in the payload encodes its unit, so the version is what keeps a warm cache from rendering half-size labels; the first launch after upgrading re-prepares tiles.
 
+- `Tools/VisualReview` on iPhone is a guided pass that produces a report, so a visual review can be made by somebody who has never seen the repository. The phone build now opens on a start screen, renders the catalogue, walks straight into the pictures one at a time and ends on a summary with one button: **Make the report** packs the pass into a zip (`report.json` with the outcome, note, fingerprint and render path per scenario plus the device model, OS, Metal device name and commit; a plain-text `README.txt`; the verdict file unchanged so it drops back into the checkout; and `Renders/` with every picture judged), and **Send the report** hands that single file to the share sheet. The Mac build gets the same report from a toolbar item. Reports live in `Tools/VisualReview/Reports/` (gitignored) or the app's Documents container on a phone, and only the newest is kept.
+
 - `Tools/VisualReview` renders per-scenario canvases. A scenario carries an `output` (pixel size plus scale), so the catalogue can hold phone scenarios: two new ones render Manhattan streets and San Francisco settlements at 1206x2622 with a scale of 3, the densest display and smallest canvas the engine targets, which is where undersized type shows up first.
+
+### Fixed
+
+- The built-in camera control panel no longer sends the camera the wrong way around a bearing cap. Pressing rotate at the cap edge normalized the overshot angle across the forbidden arc and clamped it to the opposite edge, and the bearing follow then eased along the shortest path, which runs behind the compass: every step was clamped back to the cap, the follow stalled, and the panel's readout showed one edge while the camera sat at the other. The panel now saturates at the cap in the direction of travel, and the follow eases along the in-window path (through north) whenever the cap in force is narrower than the half turn, so the far edge is reached instead of stalled at. Before `bearingLimit(_:)` this was reachable only transiently on a globe mid-transition; the cap made it a stable configuration.
 
 ## [0.6.1] - 2026-08-13
 

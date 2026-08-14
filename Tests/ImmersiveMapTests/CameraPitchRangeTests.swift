@@ -115,4 +115,46 @@ final class CameraPitchRangeTests: XCTestCase {
 
         XCTAssertEqual(state.pitch, 0.4, accuracy: 0.0001)
     }
+
+    // MARK: - Floor versus the globe ceiling
+
+    /// The settings-level floor is surface-blind; on the globe the constraint's
+    /// zoom-eased ceiling can sit below it. The anchored-zoom compensation runs
+    /// after the constraint clamp and must move only the center: pushing the
+    /// whole state back through `setCameraState` would re-apply the floor and
+    /// leave the camera resting above the ceiling.
+    func testCenterShiftAfterGlobeConstraintDoesNotRefloorPitch() {
+        let settings = cameraSettings(minimumPitch: 0.6)
+        let controller = CameraStateController(settings: settings)
+        controller.setCameraPosition(position(pitch: 0.9, zoom: 1))
+
+        let constraints = CameraConstraintResolver.resolve(cameraState: controller.currentCameraState(),
+                                                           cameraSettings: settings,
+                                                           renderSurfaceMode: .spherical)
+        controller.clampPitch(to: constraints.pitch)
+        let ceiling = constraints.pitch.clampedMaximumPitch
+        XCTAssertLessThan(ceiling, 0.6, "The scenario needs the globe ceiling below the floor.")
+        XCTAssertEqual(controller.pitch, ceiling, accuracy: 0.0001)
+
+        controller.setCenterWorldMercator(SIMD2<Double>(0.52, 0.48))
+
+        XCTAssertEqual(controller.pitch, ceiling, accuracy: 0.0001)
+    }
+
+    /// The still recorder's default (no camera position) is the controller's
+    /// initial state, which the floor lifts to a tilt; at zoom 0 the globe's
+    /// ceiling is 0, so applying the surface constraints must level it off,
+    /// which is why the recorder applies them even with no position given.
+    func testZoomedOutGlobeConstraintLevelsTheFlooredDefaultState() {
+        let settings = cameraSettings(minimumPitch: 0.35)
+        let controller = CameraStateController(settings: settings)
+        XCTAssertEqual(controller.pitch, 0.35, accuracy: 0.0001)
+
+        let constraints = CameraConstraintResolver.resolve(cameraState: controller.currentCameraState(),
+                                                           cameraSettings: settings,
+                                                           renderSurfaceMode: .spherical)
+        controller.clampPitch(to: constraints.pitch)
+
+        XCTAssertEqual(controller.pitch, 0, accuracy: 0.0001)
+    }
 }

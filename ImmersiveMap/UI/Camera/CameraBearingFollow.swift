@@ -4,7 +4,8 @@
 import Foundation
 
 /// Time-based follower for camera bearing: the control sets the target angle instantly, while the
-/// actual bearing converges to it exponentially every frame along the shortest angular path (half-life).
+/// actual bearing converges to it exponentially every frame (half-life), along the shortest angular
+/// path when rotation is unbounded and along the in-window path under a bearing cap.
 /// Removes rotation jerkiness caused by the uneven event rate of the slider/gesture.
 final class CameraBearingFollow {
     struct Configuration {
@@ -65,7 +66,9 @@ final class CameraBearingFollow {
         return true
     }
 
-    func advance(currentBearing: Float, currentTime: CFTimeInterval) -> Step {
+    func advance(currentBearing: Float,
+                 currentTime: CFTimeInterval,
+                 maximumAbsoluteBearing: Float = .pi) -> Step {
         guard isActive else {
             return Step(bearing: currentBearing, isActive: false)
         }
@@ -96,7 +99,8 @@ final class CameraBearingFollow {
         let nextBearing = CameraBearingFollowMath.steppedBearing(current: currentBearing,
                                                                 target: target,
                                                                 deltaTime: deltaTime,
-                                                                halfLife: configuration.halfLife)
+                                                                halfLife: configuration.halfLife,
+                                                                maximumAbsoluteBearing: maximumAbsoluteBearing)
         self.previousBearing = currentBearing
         return Step(bearing: nextBearing, isActive: true)
     }

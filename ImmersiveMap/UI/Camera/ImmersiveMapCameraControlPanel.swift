@@ -262,8 +262,17 @@ public struct ImmersiveMapCameraControlPanel: View {
     }
 
     private func clampedBearingDegrees(_ degrees: Double) -> Double {
-        CameraControlMath.clampedDegrees(CameraControlMath.normalizedDegrees(degrees),
-                                         range: bearingRangeDegrees)
+        let range = bearingRangeDegrees
+        let normalized = CameraControlMath.normalizedDegrees(degrees)
+        guard range.contains(normalized) else {
+            // The value crossed a bearing cap: saturate at the cap in the
+            // direction of travel. Normalizing first would carry the value
+            // across the forbidden arc and clamp it to the opposite cap edge,
+            // turning one +15 press at the cap into a command to the other
+            // side of the compass.
+            return CameraControlMath.clampedDegrees(degrees, range: range)
+        }
+        return normalized
     }
 
     private func applyCameraUpdate(bearingDegrees: Double, pitchDegrees: Double) {

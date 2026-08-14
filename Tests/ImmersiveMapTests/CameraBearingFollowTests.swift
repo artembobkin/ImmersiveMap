@@ -118,4 +118,54 @@ final class CameraBearingFollowTests: XCTestCase {
         XCTAssertFalse(follow.retarget(radians(90), currentTime: 0))
         XCTAssertFalse(follow.active)
     }
+
+    // MARK: - Bearing cap
+
+    func testFollowDeltaTakesTheInWindowPathUnderAWideCap() {
+        // With a 170° cap, 168° -> -168° the short way runs behind the compass
+        // through the forbidden arc; the legal path goes down through north.
+        let delta = CameraBearingFollowMath.followDelta(current: radians(168),
+                                                        target: radians(-168),
+                                                        maximumAbsoluteBearing: radians(170))
+        XCTAssertEqual(delta, radians(-336), accuracy: 0.001)
+    }
+
+    func testFollowDeltaKeepsTheShortestPathWhenUnbounded() {
+        let delta = CameraBearingFollowMath.followDelta(current: radians(168),
+                                                        target: radians(-168),
+                                                        maximumAbsoluteBearing: .pi)
+        XCTAssertEqual(delta, radians(24), accuracy: 0.001)
+    }
+
+    /// The stall scenario the shortest path produces under a wide cap: each
+    /// eased step toward the forbidden arc is clamped back to the cap edge and
+    /// the follow gives up at the wrong side of the compass. Along the
+    /// in-window path every step is legal, so the follow must arrive.
+    func testFollowReachesTheOppositeCapEdgeWithoutCrossingTheForbiddenArc() {
+        let cap = radians(170)
+        let follow = CameraBearingFollow(configuration: enabledConfiguration())
+        let start = radians(168)
+        let target = radians(-168)
+        follow.retarget(target, currentTime: 0)
+
+        var bearing = start
+        var time: CFTimeInterval = 0
+        var didFinish = false
+        for _ in 0..<600 {
+            time += 1.0 / 60.0
+            let step = follow.advance(currentBearing: bearing,
+                                      currentTime: time,
+                                      maximumAbsoluteBearing: cap)
+            // The constraint clamp that runs after every eased step.
+            bearing = min(max(step.bearing, -cap), cap)
+            XCTAssertLessThanOrEqual(abs(bearing), cap + 0.001)
+            if step.isActive == false {
+                didFinish = true
+                break
+            }
+        }
+
+        XCTAssertTrue(didFinish, "the follow must arrive instead of stalling at a cap edge")
+        XCTAssertEqual(bearing, target, accuracy: 0.001)
+    }
 }

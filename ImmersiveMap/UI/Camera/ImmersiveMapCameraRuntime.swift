@@ -306,9 +306,7 @@ final class ImmersiveMapCameraRuntime {
             return
         }
 
-        var compensatedState = stateAfter
-        compensatedState.centerWorldMercator = center
-        renderCamera.setCameraState(compensatedState)
+        renderCamera.setCameraCenterWorldMercator(center)
     }
 
     private func anchorCompensatedCenter(stateBefore: ImmersiveMapCameraState,

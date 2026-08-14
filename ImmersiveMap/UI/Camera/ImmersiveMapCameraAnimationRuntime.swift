@@ -262,7 +262,9 @@ final class ImmersiveMapCameraAnimationRuntime {
             return
         }
 
-        let step = cameraBearingFollow.advance(currentBearing: currentBearing, currentTime: currentTime)
+        let step = cameraBearingFollow.advance(currentBearing: currentBearing,
+                                               currentTime: currentTime,
+                                               maximumAbsoluteBearing: cameraRuntime.currentMaximumAbsoluteBearing())
         if step.bearing != currentBearing {
             cameraRuntime.setCameraBearing(step.bearing)
         }

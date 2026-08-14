@@ -195,21 +195,24 @@ final class ImmersiveMapStillRuntime {
         let presentationStateResolver = MapPresentationStateController(settings: settings)
         self.presentationStateResolver = presentationStateResolver
 
-        // Position, then the presentation-derived clamp, in that order and
-        // never one without the other. `setCameraPosition` limits zoom and the
-        // global pitch ceiling but takes bearing verbatim; the globe's own
-        // bearing and pitch limits are reachable only through
-        // `applyConstraints`, and nothing later re-applies them. Without this,
-        // a capture at zoom 2 with bearing 120 would render 120 degrees where
-        // the live map and a video export both render 70, so the same
-        // `ImmersiveMapCameraPosition` would give a different picture
-        // depending on which of the three drew it.
+        // Position first (when given), then the presentation-derived clamp,
+        // always. `setCameraPosition` limits zoom and the global pitch
+        // ceiling but takes bearing verbatim; the globe's own bearing and
+        // pitch limits are reachable only through `applyConstraints`, and
+        // nothing later re-applies them. Without this, a capture at zoom 2
+        // with bearing 120 would render 120 degrees where the live map and a
+        // video export both render 70, so the same `ImmersiveMapCameraPosition`
+        // would give a different picture depending on which of the three drew
+        // it. The default position needs the clamp just as much: a configured
+        // pitch floor is surface-blind and lifts the zoom-0 state onto a tilt
+        // the globe's own zoomed-out ceiling forbids, so skipping it would
+        // tilt a whole-globe still that the live map renders level.
         if let camera {
             renderCamera.setCameraPosition(camera)
-            let constraints = presentationStateResolver
-                .cameraConstraints(cameraState: renderCamera.currentCameraState())
-            renderCamera.applyConstraints(constraints)
         }
+        let constraints = presentationStateResolver
+            .cameraConstraints(cameraState: renderCamera.currentCameraState())
+        renderCamera.applyConstraints(constraints)
 
         // Controllers built here and owned by this capture alone: their
         // snapshots are one-shot diffs, and sharing one with a live map would
