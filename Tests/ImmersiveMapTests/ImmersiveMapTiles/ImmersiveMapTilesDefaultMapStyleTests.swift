@@ -213,26 +213,27 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testPlanetZoomBoundariesShowSolidCountriesOnly() {
+    func testPlanetZoomBoundariesShowCountriesOnly() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
 
         // Regional (admin 3-4) borders are clutter over a planet or continent
-        // view: hidden below the detail zoom, present from it on.
+        // view: hidden below the regional zoom, present from it on.
         for zoom in [0, 2, 3] {
             XCTAssertEqual(makeStyle(style, layerName: "boundary", zoom: zoom).key, 0,
                            "admin_level 4 must hide at z\(zoom)")
         }
         XCTAssertNotEqual(makeStyle(style, layerName: "boundary", zoom: 4).key, 0)
 
-        // Country borders stay, but solid: at planet zooms a dash is a few
-        // pixels long and degenerates into a chain of dots.
-        let countryPlanet = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 2)
-        XCTAssertNotEqual(countryPlanet.key, 0)
-        XCTAssertEqual(countryPlanet.lineWidthPoints, 1.4)
-        XCTAssertEqual(countryPlanet.dashLengthPoints, 0)
-
-        let countryRegional = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 5)
-        XCTAssertGreaterThan(countryRegional.dashLengthPoints, 0)
+        // Country borders stay, dashed at every zoom: the point-locked dash
+        // pattern keeps its designed size, so it reads as dashes rather than
+        // dots even over a planet view.
+        for zoom in [1, 2, 5, 10] {
+            let country = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: zoom)
+            XCTAssertNotEqual(country.key, 0)
+            XCTAssertEqual(country.lineWidthPoints, 1.4)
+            XCTAssertEqual(country.dashLengthPoints, 7.0, "z\(zoom)")
+            XCTAssertEqual(country.dashGapPoints, 3.5, "z\(zoom)")
+        }
     }
 
     private func makeStyle(_ style: ImmersiveMapTilesDefaultMapStyle,

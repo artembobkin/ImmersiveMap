@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 33
+    private static let implementationRevision: UInt32 = 34
 
     private let fallbackKey: UInt8 = 0
     private let landuseMinimumZoom = 6
@@ -371,29 +371,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     /// Below this tile zoom the map is a planet or continent view: regional
-    /// (admin 3-4) borders are pure clutter there, and country-border dashes
-    /// are a few pixels long, degenerating into chains of dots, so countries
-    /// draw solid instead.
-    private static let boundaryDetailMinimumZoom = 4
+    /// (admin 3-4) borders are pure clutter there and stay hidden.
+    private static let regionalBoundaryMinimumZoom = 4
 
     private func boundaryStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
         let adminLevel = parseIntValue(props["admin_level"]) ?? 4
         guard adminLevel <= 4 else {
             return hiddenStyle
         }
-        let isDetailZoom = tileZoom >= Self.boundaryDetailMinimumZoom
-        if adminLevel > 2, isDetailZoom == false {
+        if adminLevel > 2, tileZoom < Self.regionalBoundaryMinimumZoom {
             return hiddenStyle
         }
         // Borders are fully point-locked: the visible width comes from
         // lineWidthPoints (thinned toward planet zooms by LineWidthZoomTaper)
-        // and the dash pattern from dash/gap points, both resolved in screen
-        // space at render time, so neither pumps with the tile's on-screen
-        // scale. The geometry is a continuous solid ribbon carrying arc
-        // length; the tessellated width below is only the ceiling the shader
-        // can place the edge inside, at full width at every zoom so it never
-        // undercuts the requested points. Below the detail zoom the dashes
-        // are off entirely: countries draw solid over a planet view.
+        // and the dash pattern from dash/gap points, stated in layout points
+        // and anchored to the geometry at the tile's nominal display scale,
+        // so neither is an accident of the tile grid. The geometry is a
+        // continuous solid ribbon carrying arc length; the tessellated width
+        // below is only the ceiling the shader can place the edge inside, at
+        // full width at every zoom so it never undercuts the requested
+        // points.
         let width: Double = adminLevel <= 2 ? 7.8 : 3.4
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
         return FeatureStyle(
@@ -401,8 +398,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             color: configuration.layers.boundary,
             lowZoomFadeMask: 1.0,
             lineWidthPoints: adminLevel <= 2 ? 1.4 : 0.8,
-            dashLengthPoints: isDetailZoom ? 7.0 : 0.0,
-            dashGapPoints: isDetailZoom ? 3.5 : 0.0,
+            dashLengthPoints: 7.0,
+            dashGapPoints: 3.5,
             parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width),
             // Borders are drawn as lines only. Some features (Native American
             // reservations) arrive as polygons; their area must not be filled,

@@ -158,8 +158,8 @@ enum VisualReviewCatalogue {
             The planet is round with no seam down the middle, the coastlines are \
             clean, and the terminator falls where the pinned date puts it. Stars \
             behind it, no banding in the space gradient. Country borders are \
-            thin, solid, unobtrusive lines: no regional borders, no chains of \
-            fat dots.
+            thin, unobtrusive dashed lines that read as dashes, not chains of \
+            fat dots, and no regional borders clutter the planet.
             """,
             settings: .default,
             subject: .still(camera: Place.globe)),
