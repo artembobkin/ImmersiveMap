@@ -51,6 +51,14 @@ struct OverviewFadeUniform {
     float pixelsPerPoint;
 };
 
+/// Per-draw dash scale: tile units per layout point at the tile's nominal
+/// display scale. A constant of the tile and the viewport, never of the live
+/// camera, so the dash pattern stays anchored to the geometry instead of
+/// crawling under camera motion (see LineDashNominalScale).
+struct LineDashUniform {
+    float unitsPerPoint;
+};
+
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant Camera& camera [[buffer(1)]],
                                   constant Style* styles [[buffer(2)]],
@@ -109,15 +117,17 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 ///
 /// The longitudinal parameter is style-interpreted. A point-dashed style
 /// carries arc length in tile units, and the dash pattern is cut here, per
-/// fragment: the parameter's own screen-space derivative converts the
-/// pattern's point lengths into tile units locally, so dashes hold their
-/// on-screen size at every zoom and on both raster paths, and their cuts get
-/// the same one-pixel ramp as the sides. A solid style carries the
-/// end-feather distance whose zero isoline is a free butt end's styled cut.
+/// fragment, on the fixed unit grid `dashUnitsPerPoint` scales (anchored to
+/// the geometry, so the pattern holds still under camera motion), while the
+/// parameter's screen-space derivative supplies only the antialiasing band,
+/// giving the cuts the same one-pixel ramp as the sides. A solid style
+/// carries the end-feather distance whose zero isoline is a free butt end's
+/// styled cut.
 static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
-                                    float pixelsPerPoint) {
+                                    float pixelsPerPoint,
+                                    float dashUnitsPerPoint) {
     // The derivatives are taken before the threshold test: fwidth needs the
     // whole 2x2 quad, so it must not sit behind potentially divergent flow.
     float sideSpan = max(fwidth(lineDistance), 1e-5);
@@ -138,10 +148,10 @@ static inline half tileLineCoverage(float lineDistance,
     if (dashLengthPoints > 0.0h) {
         // A vanishing gradient means the parameter is saturated (polygon
         // decoration sharing the style) rather than a real arc: skip the
-        // pattern instead of dividing by noise.
+        // pattern instead of smearing a constant.
         float unitsPerPixel = parameterSpan;
-        float dashUnits = float(dashLengthPoints) * pixelsPerPoint * unitsPerPixel;
-        float gapUnits = float(lineStyle.w) * pixelsPerPoint * unitsPerPixel;
+        float dashUnits = float(dashLengthPoints) * dashUnitsPerPoint;
+        float gapUnits = float(lineStyle.w) * dashUnitsPerPoint;
         float period = dashUnits + gapUnits;
         if (unitsPerPixel > 1e-5 && dashUnits > 0.0 && gapUnits > 0.0) {
             // Signed distance to the nearest dash boundary, wrapped around
@@ -171,6 +181,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
                                   constant float4& localClipBounds [[buffer(1)]],
                                   constant HorizonFog& horizonFog [[buffer(2)]],
                                   constant Shadow& shadow [[buffer(3)]],
+                                  constant LineDashUniform& lineDash [[buffer(4)]],
                                   depth2d_array<float> shadowMap [[texture(0)]]) {
     // The shadow factor and the line coverage come first: both evaluate
     // screen-space derivatives, which are undefined in any 2x2 quad after a
@@ -179,7 +190,8 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     half lineCoverage = tileLineCoverage(in.lineDistance,
                                          in.lineParameter,
                                          in.lineStyle,
-                                         overviewFade.pixelsPerPoint);
+                                         overviewFade.pixelsPerPoint,
+                                         lineDash.unitsPerPoint);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
         discard_fragment();

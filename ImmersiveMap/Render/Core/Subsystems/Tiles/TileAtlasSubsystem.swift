@@ -139,7 +139,10 @@ final class TileAtlasSubsystem: RenderSubsystem {
                                                roadAlpha: roadFadeAlpha,
                                                landuseAlpha: landuseFadeAlpha,
                                                pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                               lineWidthZoomTaper: lineWidthZoomTaper)
+                                               lineWidthZoomTaper: lineWidthZoomTaper,
+                                               drawableHeightPx: Float(frameContext.drawSize.height),
+                                               nativeTileWorldSize: Float(2.0 * Double.pi
+                                                   * frameContext.services.settings.presentation.globeRadiusScale))
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {

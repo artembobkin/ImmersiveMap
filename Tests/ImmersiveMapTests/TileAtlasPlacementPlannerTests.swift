@@ -65,6 +65,30 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         }
     }
 
+    func testLineDashNominalScaleIsAConstantOfTileAndViewport() {
+        // A native tile spans 2*pi*globeRadiusScale world units; at the
+        // nominal camera distance (1, fov pi/4) the viewport height covers
+        // 2*tan(pi/8) world units, so units-per-pixel follows directly. The
+        // formula must not involve camera state: it is what anchors the dash
+        // pattern to the geometry.
+        let nativeWorldSize = Float(2.0 * Double.pi * 0.14)
+        let unitsPerPixel = LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: nativeWorldSize,
+                                                               drawableHeightPx: 3440)
+        XCTAssertEqual(unitsPerPixel, 4096 * 2 * tan(Float.pi / 8) / (3440 * nativeWorldSize),
+                       accuracy: 1e-5)
+
+        // A one-level substitute spans twice the world, so its coarser units
+        // get exactly half as many per pixel: its dashes keep the on-screen
+        // size of the tiles it stands in for.
+        let substitute = LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: nativeWorldSize * 2,
+                                                            drawableHeightPx: 3440)
+        XCTAssertEqual(substitute, unitsPerPixel * 0.5, accuracy: 1e-6)
+
+        // Degenerate inputs collapse to zero instead of infinity.
+        XCTAssertEqual(LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: 0, drawableHeightPx: 3440), 0)
+        XCTAssertEqual(LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: 1, drawableHeightPx: 0), 0)
+    }
+
     func testLineWidthZoomTaperThinsPlanetZoomsAndReleasesByRegionalZoom() {
         XCTAssertEqual(LineWidthZoomTaper.scale(for: 0.0), 0.5)
         XCTAssertEqual(LineWidthZoomTaper.scale(for: 2.0), 0.5)

@@ -200,11 +200,12 @@ enum VisualReviewCatalogue {
             analytic antialiasing keeps their edges. Border dashes should read \
             as clean, evenly spaced dashes with soft edges and softened cut \
             ends, not dots or a smeared quasi-solid line, and the line should \
-            hold one width along its length instead of rippling. Width and \
-            dash size are both point-locked: zooming within a level must not \
-            visibly fatten or stretch them, nor snap them at the next level. \
-            Roads are hairlines here; they should be faint but smooth, not \
-            broken into dots.
+            hold one width along its length instead of rippling. The width is \
+            point-locked: zooming within a level must not visibly fatten it, \
+            nor snap it at the next level. The dash pattern is anchored to \
+            the map: panning or rotating must not make the dashes crawl along \
+            the border. Roads are hairlines here; they should be faint but \
+            smooth, not broken into dots.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

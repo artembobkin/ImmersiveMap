@@ -18,6 +18,7 @@ enum FlatMapSurfaceDrawer {
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
+                     drawableHeightPx: Float,
                      separateRoadRenderingMinimumZoom: Int,
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
@@ -63,7 +64,9 @@ enum FlatMapSurfaceDrawer {
                                       buffers: metalTile.tileBuffers[keyPath: keyPath],
                                       tile: metalTile.tile,
                                       placeIn: placeTile.placeIn,
-                                      flatRenderState: flatRenderState)
+                                      flatRenderState: flatRenderState,
+                                      pixelsPerPoint: pixelsPerPoint,
+                                      drawableHeightPx: drawableHeightPx)
             }
         }
 
@@ -79,7 +82,9 @@ enum FlatMapSurfaceDrawer {
                                               buffers: structureBucket.layer(for: role),
                                               tile: metalTile.tile,
                                               placeIn: placeTile.placeIn,
-                                              flatRenderState: flatRenderState)
+                                              flatRenderState: flatRenderState,
+                                              pixelsPerPoint: pixelsPerPoint,
+                                              drawableHeightPx: drawableHeightPx)
                     }
                 }
             }
@@ -97,7 +102,9 @@ enum FlatMapSurfaceDrawer {
                                           buffers: structureBucket.layer(for: .overlay),
                                           tile: metalTile.tile,
                                           placeIn: placeTile.placeIn,
-                                          flatRenderState: flatRenderState)
+                                          flatRenderState: flatRenderState,
+                                          pixelsPerPoint: pixelsPerPoint,
+                                          drawableHeightPx: drawableHeightPx)
                 }
             }
         } else {
@@ -108,11 +115,17 @@ enum FlatMapSurfaceDrawer {
         }
     }
 
+    private struct LineDashUniform {
+        var unitsPerPoint: Float
+    }
+
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,
                                               tile: Tile,
                                               placeIn: VisibleTile,
-                                              flatRenderState: FlatRenderState) {
+                                              flatRenderState: FlatRenderState,
+                                              pixelsPerPoint: Float,
+                                              drawableHeightPx: Float) {
         guard buffers.indicesCount > 0,
               let indices = buffers.indices,
               let vertices = buffers.vertices,
@@ -141,6 +154,20 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&localClipBounds,
                                        length: MemoryLayout<SIMD4<Float>>.stride,
                                        index: 1)
+
+        // Anchors point-dashed patterns to the geometry: the scale depends on
+        // the source tile's world size and the viewport, never on the live
+        // camera, so dashes hold still under camera motion (untapered on
+        // purpose: a pattern must not stretch with the zoom taper either).
+        var lineDashUniform = LineDashUniform(
+            unitsPerPoint: pixelsPerPoint * LineDashNominalScale.unitsPerPixel(
+                sourceTileWorldSize: originAndSize.z,
+                drawableHeightPx: drawableHeightPx
+            )
+        )
+        renderEncoder.setFragmentBytes(&lineDashUniform,
+                                       length: MemoryLayout<LineDashUniform>.stride,
+                                       index: 4)
 
         var modelMatrix = Matrix.translationMatrix(
             x: originAndSize.x,

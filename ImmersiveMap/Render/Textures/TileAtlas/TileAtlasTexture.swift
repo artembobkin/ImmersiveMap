@@ -15,6 +15,10 @@ class TileAtlasTexture {
         var pixelsPerPoint: Float
     }
 
+    private struct LineDashUniform {
+        var unitsPerPoint: Float
+    }
+
     struct TileData {
         let position: simd_int1
         let textureSize: simd_int1
@@ -69,6 +73,12 @@ class TileAtlasTexture {
                                                             landuseAlpha: 1,
                                                             pixelsPerPoint: 1)
     private var activeLineWidthZoomTaper: Float = 1.0
+    /// Per-encode context for the dash anchor (see LineDashNominalScale):
+    /// the raw point-to-pixel scale, the drawable height, and the world size
+    /// of a native tile, from which each allocation derives its own scale.
+    private var activeDashPixelsPerPoint: Float = 1.0
+    private var activeDrawableHeightPx: Float = 0.0
+    private var activeNativeTileWorldSize: Float = 0.0
     
     init(metalDevice: MTLDevice,
          tilePipeline: TilePipeline,
@@ -155,6 +165,12 @@ class TileAtlasTexture {
         renderEncoder!.setFragmentBytes(&shadowUniform,
                                         length: MemoryLayout<ShadowUniform>.stride,
                                         index: 3)
+        // Replaced per allocation in draw(); bound here so the pipeline's
+        // binding is complete before the first draw regardless of order.
+        var lineDashUniform = LineDashUniform(unitsPerPoint: 0)
+        renderEncoder!.setFragmentBytes(&lineDashUniform,
+                                        length: MemoryLayout<LineDashUniform>.stride,
+                                        index: 4)
         renderEncoder!.setFragmentTexture(shadowFallbackTexture, index: 0)
     }
     
@@ -168,12 +184,17 @@ class TileAtlasTexture {
                                roadAlpha: Float,
                                landuseAlpha: Float,
                                pixelsPerPoint: Float,
-                               lineWidthZoomTaper: Float = 1.0) {
+                               lineWidthZoomTaper: Float = 1.0,
+                               drawableHeightPx: Float = 0.0,
+                               nativeTileWorldSize: Float = 0.0) {
         guard let renderEncoder else { return }
         // Kept for the per-allocation rebind in draw(): each slot converts
         // point-locked line widths through its own texel-per-pixel ratio,
         // with the low-zoom taper folded into that quantized ratio.
         activeLineWidthZoomTaper = lineWidthZoomTaper
+        activeDashPixelsPerPoint = pixelsPerPoint
+        activeDrawableHeightPx = drawableHeightPx
+        activeNativeTileWorldSize = nativeTileWorldSize
         activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
                                                     roadAlpha: roadAlpha,
                                                     landuseAlpha: landuseAlpha,
@@ -287,6 +308,22 @@ class TileAtlasTexture {
         renderEncoder.setFragmentBytes(&fadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)
+
+        // Dash anchor: a substitute spans more world than the tile it stands
+        // in for, by one factor of two per missing level, so its units get
+        // proportionally fewer per pixel and its dashes keep the same size on
+        // screen. Camera-independent by design (see LineDashNominalScale).
+        let sourceTileWorldSize = activeNativeTileWorldSize
+            * powf(2.0, Float(placeIn.z - metalTile.tile.z))
+        var lineDashUniform = LineDashUniform(
+            unitsPerPoint: activeDashPixelsPerPoint * LineDashNominalScale.unitsPerPixel(
+                sourceTileWorldSize: sourceTileWorldSize,
+                drawableHeightPx: activeDrawableHeightPx
+            )
+        )
+        renderEncoder.setFragmentBytes(&lineDashUniform,
+                                       length: MemoryLayout<LineDashUniform>.stride,
+                                       index: 4)
 
         renderEncoder.drawIndexedPrimitives(type: .triangle,
                                             indexCount: groundIndices.count,
