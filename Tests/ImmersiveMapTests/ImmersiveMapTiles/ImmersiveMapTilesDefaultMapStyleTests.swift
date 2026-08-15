@@ -152,11 +152,12 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             makeStyle(style, layerName: "transportation", className: className, zoom: zoom).key
         }
 
-        // Majors carry the country view from the first tile they ship in;
-        // each further class joins at the zoom it can carry meaning.
-        XCTAssertNotEqual(key("motorway", zoom: 4), 0)
-        XCTAssertNotEqual(key("trunk", zoom: 4), 0)
-        for (className, minimumZoom) in [("primary", 7), ("ferry", 8), ("secondary", 9),
+        // Majors wait for the zoom where the source's network is whole
+        // (below tile z6 only motorway-class geometry exists, so corridors
+        // would show cut off mid-line); each further class joins at the zoom
+        // it can carry meaning.
+        for (className, minimumZoom) in [("motorway", 6), ("trunk", 6),
+                                         ("primary", 7), ("ferry", 8), ("secondary", 9),
                                          ("tertiary", 10), ("rail", 10), ("minor", 12),
                                          ("service", 13), ("path", 14)] {
             XCTAssertEqual(key(className, zoom: minimumZoom - 1), 0,
@@ -168,7 +169,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
 
     func testRoadsFadeInThroughTheRoadBand() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 4)
+        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 6)
         XCTAssertEqual(motorway.lowZoomFadeMask, 2.0)
         for pass in motorway.resolvedLineRenderPasses {
             XCTAssertEqual(pass.lowZoomFadeMask, 2.0)
@@ -231,12 +232,12 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
 
-        // The z4 tiles ship motorway and motorway_construction and nothing
-        // else; hiding the construction half cut corridors mid-line. It gates
-        // like the base class and draws point-dashed, without casing or the
-        // overview accent.
+        // The low-zoom tiles ship the construction variant right alongside
+        // the base class; hiding it cut corridors mid-line. It gates like the
+        // base class and draws point-dashed, without casing or the overview
+        // accent.
         let construction = makeStyle(style, layerName: "transportation",
-                                     className: "motorway_construction", zoom: 4)
+                                     className: "motorway_construction", zoom: 6)
         XCTAssertNotEqual(construction.key, 0)
         let fill = construction.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
         XCTAssertGreaterThan(fill.dashLengthPoints, 0)

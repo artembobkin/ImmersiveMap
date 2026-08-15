@@ -376,7 +376,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static func roadClassMinimumZoom(_ cls: String?) -> Int {
         switch cls {
         case "motorway", "trunk":
-            return 0
+            // The source ships only motorway-class geometry below z6, so an
+            // earlier start would show corridors cut off wherever the OSM
+            // tagging changes to trunk; from z6 the major network is whole.
+            return 6
         case "primary":
             return 7
         case "ferry":
