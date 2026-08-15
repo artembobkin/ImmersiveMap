@@ -383,7 +383,7 @@ final class CameraPathFollowControllerTests: XCTestCase {
                                        zoom: $0)
         } ?? overview
         let view = ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
-                                      settings: FixtureTiles.settings(),
+                                      settings: FixtureTiles.tilelessSettings(),
                                       avatarsController: nil,
                                       cameraPosition: position,
                                       cameraController: camera,

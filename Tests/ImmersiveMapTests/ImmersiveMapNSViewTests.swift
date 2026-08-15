@@ -25,7 +25,7 @@ final class ImmersiveMapNSViewTests: XCTestCase {
                                                         longitudeDegrees: 37.6173,
                                                         zoom: 3)
         let view = ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
-                                      settings: FixtureTiles.settings(),
+                                      settings: FixtureTiles.tilelessSettings(),
                                       avatarsController: nil,
                                       cameraPosition: cameraPosition,
                                       cameraController: camera,
