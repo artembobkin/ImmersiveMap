@@ -43,7 +43,7 @@ platform-specific.
   native macOS (AppKit) only.
 - Host-app-only app delegates, scene setup, launch environment parsing, or demo
   mode code.
-- Bearer tokens, Mapbox tokens, private endpoints, or local secret files.
+- Bearer tokens, provider access tokens, private endpoints, or local secret files.
 
 ## Intended Flow
 

@@ -38,7 +38,7 @@ final class ImmersiveMapOfflineSettingsTests: XCTestCase {
     func testTileProviderFanOutLeavesTheOfflineModeAlone() {
         let settings = ImmersiveMapSettings.default
             .offlineTileMode(.offlineOnly)
-            .tileProvider(MapboxTileProvider(accessToken: "token"))
+            .tileProvider(ImmersiveMapTilesProvider(apiKey: "tiles-key"))
         XCTAssertEqual(settings.tiles.offline.mode, .offlineOnly)
     }
 }

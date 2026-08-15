@@ -3,8 +3,8 @@
 
 import simd
 
-/// Tunable palette for `ImmersiveMapTilesDefaultMapStyle`. Mirrors the shape of the
-/// Mapbox configuration so hosts can recolor the first-party
+/// Tunable palette for `ImmersiveMapTilesDefaultMapStyle`: labels, layer colors
+/// and feature colors as plain values, so hosts can recolor the first-party
 /// OpenMapTiles basemap without touching the layer logic.
 public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable {
     public struct LabelAppearance: Equatable, Sendable {

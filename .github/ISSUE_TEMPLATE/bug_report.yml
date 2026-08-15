@@ -42,7 +42,6 @@ body:
       label: Tile provider
       options:
         - ImmersiveMap (Base)
-        - Mapbox
         - Different
   - type: textarea
     id: logs

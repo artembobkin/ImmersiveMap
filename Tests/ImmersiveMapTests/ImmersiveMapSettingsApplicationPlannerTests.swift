@@ -147,12 +147,10 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
 
     func testMapStyleTokenChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
-            .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
-            .mapStyle(MapboxMapStyle(configuration: .mapboxDefault))
+            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault))
         let newSettings = ImmersiveMapSettings.default
-            .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
-            .mapStyle(MapboxMapStyle(configuration: .mapboxDefault.labels { labels in
-                labels.district.haloEm = 0.11
+            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault.labels { labels in
+                labels.town.haloEm = 0.11
             }))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)

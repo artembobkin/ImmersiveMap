@@ -31,7 +31,7 @@ payloads into structured map content.
 - Provider-specific label decision policy that belongs in
   `VectorTileAdaptation`.
 - Runtime label cache/fade state that belongs in `Labels`.
-- Hard-coded bearer tokens, Mapbox tokens, private endpoints, or local secrets.
+- Hard-coded bearer tokens, provider access tokens, private endpoints, or local secrets.
 
 ## Intended Flow
 

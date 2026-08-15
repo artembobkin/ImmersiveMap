@@ -21,7 +21,7 @@ generated Swift output belongs in `Generated`, not here.
 
 - Generated Swift protobuf output.
 - Tile parser implementation, renderer code, or UI runtime code.
-- Provider credentials, private endpoints, bearer tokens, or Mapbox tokens.
+- Provider credentials, private endpoints, bearer tokens, or provider access tokens.
 - Local generated artifacts, temporary generator output, or build products.
 - Schemas unrelated to the ImmersiveMap package.
 

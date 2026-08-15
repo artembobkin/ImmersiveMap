@@ -52,10 +52,9 @@ The required credit depends on whose tiles you render, not on which parts of the
 | Tile provider | Required credit | Link |
 | --- | --- | --- |
 | `ImmersiveMapTilesProvider` (default) | `© OpenStreetMap © OpenMapTiles` | [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) |
-| `MapboxTileProvider` | `© Mapbox © OpenStreetMap` plus an "Improve this map" link | [mapbox.com/about/maps](https://www.mapbox.com/about/maps/) |
 | Custom `VectorTileProvider` | whatever your data source requires, because the engine cannot know | your source's license page |
 
-The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. Mapbox's own terms apply in addition to the OSM credit when you render Mapbox tiles.
+The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. A commercial tile service you plug in through `VectorTileProvider` usually has terms of its own that apply in addition to the OSM credit.
 
 ### Where it has to appear
 
@@ -87,7 +86,7 @@ The badge takes its text from the **active tile provider**. With the built-in ti
 
 > © OpenStreetMap © OpenMapTiles
 
-A tap (or click on macOS) opens [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) with the full license story. `MapboxTileProvider` credits Mapbox and OpenStreetMap instead; a custom `VectorTileProvider` shows whatever attribution it declares, and nothing when it declares none (see [the custom tile provider guide](Documentation/docs/custom-tile-provider.md)).
+A tap (or click on macOS) opens [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) with the full license story. A custom `VectorTileProvider` shows whatever attribution it declares, and nothing when it declares none (see [the custom tile provider guide](Documentation/docs/custom-tile-provider.md)).
 
 The engine never puts its own name into the badge: a map drawn on OpenStreetMap data credits OpenStreetMap, not the renderer.
 
@@ -176,4 +175,3 @@ Nothing in the license requires crediting ImmersiveMap, and the badge deliberate
 - [OSMF attribution guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines): where "visible on or next to the map" comes from.
 - [OpenMapTiles license](https://openmaptiles.org/#license): the schema and planet build terms.
 - [OpenFreeMap](https://openfreemap.org): the data source behind the hosted tiles.
-- [Mapbox attribution requirements](https://docs.mapbox.com/help/getting-started/attribution/): when rendering Mapbox tiles.

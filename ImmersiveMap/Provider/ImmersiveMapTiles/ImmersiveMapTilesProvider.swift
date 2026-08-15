@@ -3,10 +3,10 @@
 
 import Foundation
 
-/// Third first-party provider: self-hosted OpenMapTiles-schema vector tiles
-/// (the ImmersiveMap Tiles service backed by an OpenFreeMap planet). Rendered by
-/// `ImmersiveMapTilesDefaultMapStyle`, styled in the spirit of the Mapbox default but
-/// reading the OpenMapTiles layer/field contract.
+/// The first-party provider: OpenMapTiles-schema vector tiles from the
+/// ImmersiveMap Tiles service (backed by an OpenFreeMap planet) or a self-hosted
+/// endpoint with the same contract. Rendered by `ImmersiveMapTilesDefaultMapStyle`,
+/// which reads the OpenMapTiles layer/field contract.
 public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     public static let defaultMaximumTileZoomLevel = 14
 

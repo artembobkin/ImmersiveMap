@@ -55,15 +55,6 @@ struct ContentView: View {
 
 ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required (see [Where the map data comes from](Documentation/docs/map-data.md)). The same SwiftUI code runs natively on iOS (UIKit host) and macOS (AppKit host): `ImmersiveMapView` bridges to the platform view internally.
 
-To use Mapbox vector tiles instead, attach a provider and style:
-
-```swift
-ImmersiveMapView()
-    .tileProvider(MapboxTileProvider(accessToken: "your-mapbox-public-token"))
-    .mapStyle(MapboxMapStyle())
-    // camera and other modifiers...
-```
-
 Any other MVT source works through `VectorTileProvider`, see the [custom tile provider guide](Documentation/docs/custom-tile-provider.md).
 
 ## Features
@@ -75,7 +66,6 @@ Any other MVT source works through `VectorTileProvider`, see the [custom tile pr
 | Native macOS (AppKit host, no Catalyst) | Available |
 | Native Metal renderer | Available |
 | [Built-in vector tiles, no token required](Documentation/docs/map-data.md) | Available |
-| [Mapbox vector tiles](Documentation/docs/mapbox.md) | Available |
 | [Your own MVT tile source](Documentation/docs/custom-tile-provider.md) | Available |
 | [Customizable attribution badge](ATTRIBUTION.md) | Available |
 | [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md) | Available |
@@ -114,7 +104,7 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, Mapbox tiles, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally and, except for the Mapbox one, render the built-in tile provider with no token or account.
+The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, offline regions, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally and render the built-in tile provider with no token or account.
 
 ## Where the map data comes from
 
