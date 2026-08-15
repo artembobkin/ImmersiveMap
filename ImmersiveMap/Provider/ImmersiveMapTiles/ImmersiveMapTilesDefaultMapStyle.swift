@@ -3,9 +3,9 @@
 
 import simd
 
-/// Default style for the OpenMapTiles-schema first-party provider. Visually in
-/// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
-/// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
+/// Default style for the OpenMapTiles-schema first-party provider, reading the
+/// OpenMapTiles layer and field contract
+/// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static let implementationRevision: UInt32 = 41
 

@@ -5,45 +5,46 @@
 import XCTest
 
 final class ImmersiveMapProviderSettingsTests: XCTestCase {
-    func testMapboxTileProviderAndMapStyleConfigureSourceAndStyleSeparately() {
-        let style = MapboxDefaultMapStyleConfiguration.mapboxDefault.labels { labels in
-            labels.district.haloEm = 0.125
+    func testBuiltInTileProviderAndMapStyleConfigureSourceAndStyleSeparately() {
+        let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
+            labels.town.haloEm = 0.125
         }
 
+        // A non-default base URL, so the assertion proves the provider was copied
+        // into `tiles.network` rather than matching what `.default` already held.
+        let tileBaseURL = URL(string: "https://tiles.example.com/tiles")!
         let settings = ImmersiveMapSettings.default
-            .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
-            .mapStyle(MapboxMapStyle(configuration: style))
+            .tileProvider(ImmersiveMapTilesProvider(tileBaseURL: tileBaseURL, apiKey: "tiles-key"))
+            .mapStyle(ImmersiveMapTilesMapStyle(configuration: style))
 
-        XCTAssertEqual(settings.tileProvider.id, "mapbox")
-        XCTAssertEqual(settings.tileProvider.cacheNamespace, "mapbox")
-        XCTAssertEqual(settings.tiles.network.tileBaseURL.absoluteString,
-                       "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2")
-        XCTAssertEqual(settings.tiles.network.authorizationToken, "mapbox-token")
-        XCTAssertEqual(settings.tiles.network.authorizationMode, .accessTokenQuery(parameterName: "access_token"))
+        XCTAssertNotEqual(tileBaseURL, ImmersiveMapTilesProvider.defaultTileBaseURL)
+        XCTAssertEqual(settings.tileProvider.id, "immersivemaptiles")
+        XCTAssertEqual(settings.tileProvider.cacheNamespace, "immersivemaptiles")
+        XCTAssertEqual(settings.tiles.network.tileBaseURL, tileBaseURL)
+        XCTAssertEqual(settings.tiles.network.authorizationToken, "tiles-key")
+        XCTAssertEqual(settings.tiles.network.authorizationMode, .bearerHeader)
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
-                       AnyImmersiveMapMapStyle(MapboxMapStyle(configuration: style)).configurationFingerprint)
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 20)
+                       AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(configuration: style)).configurationFingerprint)
+        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel)
     }
 
-    func testMapboxTileProviderRestoresDefaultMaximumZoomAfterCustomTileProvider() {
+    func testBuiltInTileProviderRestoresDefaultMaximumZoomAfterCustomTileProvider() {
         let settings = ImmersiveMapSettings.default
             .tileProvider(VectorTileProvider(
                 id: "example",
                 tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
                 maximumTileZoomLevel: 12
             ))
-            .tileProvider(MapboxTileProvider(accessToken: nil))
+            .tileProvider(ImmersiveMapTilesProvider())
 
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 20)
+        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel)
     }
 
     func testMapStyleChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
-            .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
-            .mapStyle(MapboxMapStyle(configuration: .mapboxDefault))
+            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault))
         let newSettings = ImmersiveMapSettings.default
-            .tileProvider(MapboxTileProvider(accessToken: "mapbox-token"))
-            .mapStyle(MapboxMapStyle(configuration: .mapboxDefault.layers { layers in
+            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault.layers { layers in
                 layers.water = SIMD4<Float>(0.12, 0.34, 0.56, 1.0)
             }))
 

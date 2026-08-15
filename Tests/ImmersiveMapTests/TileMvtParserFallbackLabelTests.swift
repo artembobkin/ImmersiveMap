@@ -44,8 +44,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     func testExistingProviderWaterAliasSuppressesLocalizedFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .russian,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: try makeProviderAtlanticOceanTile().serializedData(),
-                                                  tileProvider: AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)))
+                                                  mvtData: try makeProviderAtlanticOceanTile().serializedData())
 
         XCTAssertEqual(labels.filter { $0 == "Atlantic Ocean" }.count, 1)
         XCTAssertFalse(labels.contains("Атлантический океан"))
@@ -96,8 +95,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                                   mvtData: try makeProviderAtlanticOceanTile(name: "Oceano Atlântico",
                                                                                             englishName: "Atlantic Ocean").serializedData(),
                                                   glyphCoverage: Self.bundledGlyphCoverage(),
-                                                  fallbackPolicy: .localFirst,
-                                                  tileProvider: AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: nil)))
+                                                  fallbackPolicy: .localFirst)
 
         XCTAssertEqual(labels.filter { $0 == "Oceano Atlântico" }.count, 1)
         XCTAssertFalse(labels.contains("Atlantic Ocean"))
@@ -114,14 +112,14 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: try makeProviderAtlanticOceanTile().serializedData())
         let expectedKey = VectorTileLabelIdentity.providerFeature(providerID: "parser-provider",
-                                                                  layerName: "natural_label",
+                                                                  layerName: "water_name",
                                                                   featureID: 1).runtimeKey
-        let mapboxKey = VectorTileLabelIdentity.providerFeature(providerID: "mapbox",
-                                                                layerName: "natural_label",
-                                                                featureID: 1).runtimeKey
+        let defaultProviderKey = VectorTileLabelIdentity.providerFeature(providerID: ImmersiveMapTilesProvider().id,
+                                                                         layerName: "water_name",
+                                                                         featureID: 1).runtimeKey
 
         XCTAssertTrue(parsedTile.textLabels.map(\.key).contains(expectedKey))
-        XCTAssertFalse(parsedTile.textLabels.map(\.key).contains(mapboxKey))
+        XCTAssertFalse(parsedTile.textLabels.map(\.key).contains(defaultProviderKey))
     }
 
     func testParserNormalizesLayerExtentToInternalTileExtent() throws {
@@ -257,13 +255,9 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         tile: Tile = Tile(x: 0, y: 0, z: 0),
         mvtData: Data? = nil,
         glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests,
-        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international,
-        tileProvider: AnyImmersiveMapTileProvider? = nil
+        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     ) throws -> [String] {
         var config = ImmersiveMapSettings.default
-        if let tileProvider {
-            config = config.tileProvider(tileProvider)
-        }
         config.labels.language = language
         config.labels.fallbackPolicy = fallbackPolicy
 
@@ -308,7 +302,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
         var layer = VectorTile_Tile.Layer()
         layer.version = 2
-        layer.name = "natural_label"
+        layer.name = "water_name"
         layer.extent = 4096
         layer.keys = ["class", "type", "name", "name_en"]
         layer.values = [

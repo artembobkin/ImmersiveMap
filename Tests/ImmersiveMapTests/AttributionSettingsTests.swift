@@ -18,14 +18,19 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertFalse(attribution.title.contains("ImmersiveMap"))
     }
 
-    func testMapboxProviderCreditsMapboxAndOpenStreetMap() {
+    /// A custom provider that declares its own attribution gets exactly that
+    /// on the badge, nothing added by the engine.
+    func testCustomProviderAttributionIsShownVerbatim() {
+        let declared = ImmersiveMapAttribution(title: "© Example Data",
+                                               copyright: "Improve this map",
+                                               linkURL: URL(string: "https://example.com/about"))
+        let provider = VectorTileProvider(id: "custom",
+                                          tileSource: .url(URL(string: "https://example.com/tiles")!),
+                                          attribution: declared)
         let settings = ImmersiveMapSettings.default
-            .tileProvider(AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: "token")))
+            .tileProvider(AnyImmersiveMapTileProvider(provider))
 
-        let attribution = settings.resolvedAttribution
-
-        XCTAssertTrue(attribution.title.contains("Mapbox"))
-        XCTAssertTrue(attribution.title.contains("OpenStreetMap"))
+        XCTAssertEqual(settings.resolvedAttribution, declared)
     }
 
     /// A custom provider that declares no source gets no third-party attribution
@@ -55,7 +60,13 @@ final class AttributionSettingsTests: XCTestCase {
     func testProviderChangeMarksAttributionForLiveApply() {
         let oldSettings = ImmersiveMapSettings.default
         let newSettings = oldSettings
-            .tileProvider(AnyImmersiveMapTileProvider(MapboxTileProvider(accessToken: "token")))
+            .tileProvider(AnyImmersiveMapTileProvider(VectorTileProvider(
+                id: "custom",
+                tileSource: .url(URL(string: "https://example.com/tiles")!),
+                attribution: ImmersiveMapAttribution(title: "© Example Data",
+                                                     copyright: "",
+                                                     linkURL: nil)
+            )))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 

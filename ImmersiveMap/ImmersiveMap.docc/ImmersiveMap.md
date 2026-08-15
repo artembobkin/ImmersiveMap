@@ -54,7 +54,7 @@ Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-
 
 ### Map data
 
-The built-in ``ImmersiveMapTilesProvider`` renders out of the box and takes an optional API key; ``MapboxTileProvider`` renders Mapbox vector tiles; any other MVT source plugs in through ``VectorTileProvider`` or a custom ``ImmersiveMapTileProvider``. Tiles are cached in memory and on disk (raw and prepared), and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
+The built-in ``ImmersiveMapTilesProvider`` renders out of the box and takes an optional API key; any other MVT source plugs in through ``VectorTileProvider`` or a custom ``ImmersiveMapTileProvider``. Tiles are cached in memory and on disk (raw and prepared), and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
 
 ### Export
 
@@ -138,7 +138,6 @@ Feature guides, one example app per feature and the changelog live in the [repos
 
 - ``ImmersiveMapTileProvider``
 - ``ImmersiveMapTilesProvider``
-- ``MapboxTileProvider``
 - ``VectorTileProvider``
 - ``AnyImmersiveMapTileProvider``
 - ``ImmersiveMapTileSource``
@@ -149,8 +148,6 @@ Feature guides, one example app per feature and the changelog live in the [repos
 - ``ImmersiveMapMapStyle``
 - ``ImmersiveMapTilesMapStyle``
 - ``ImmersiveMapTilesDefaultMapStyleConfiguration``
-- ``MapboxMapStyle``
-- ``MapboxDefaultMapStyleConfiguration``
 - ``VectorTileMapStyle``
 - ``AnyImmersiveMapMapStyle``
 

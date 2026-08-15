@@ -37,15 +37,13 @@ ImmersiveMapView()
 | `features(_:)` | Feature-level colors that are not a layer palette, notably `buildingFillColor`. |
 | `globalLandcover(_:)` | The low-zoom biome palette used before detailed land cover arrives. |
 
-`MapboxDefaultMapStyleConfiguration` is the same shape for `MapboxMapStyle`, with `labels`, `layers` and `features` (no `labelVisibility` or `globalLandcover`), see [Mapbox vector tiles](mapbox.md).
-
 Colors are straight (non-premultiplied) RGBA. `SIMD4<Float>` components run `0...1`.
 
 ## Style fingerprints and the cache
 
-Every style exposes a `configurationFingerprint`, and both built-in configurations compute theirs as an FNV-1a hash over every palette component. This is not cosmetic bookkeeping: prepared tiles are cached on disk with the style baked in, so a palette that changes without changing the fingerprint would keep drawing from stale prepared tiles.
+Every style exposes a `configurationFingerprint`, and the built-in configuration computes its own as an FNV-1a hash over every palette component. This is not cosmetic bookkeeping: prepared tiles are cached on disk with the style baked in, so a palette that changes without changing the fingerprint would keep drawing from stale prepared tiles.
 
-The built-in configurations handle this for you. A **hand-written** `ImmersiveMapVectorTileStyle` must do it itself:
+The built-in configuration handles this for you. A **hand-written** `ImmersiveMapVectorTileStyle` must do it itself:
 
 ```swift
 struct MyStyle: ImmersiveMapVectorTileStyle {
@@ -106,4 +104,4 @@ Anti-aliasing is not a style setting: FXAA lives in [post-processing](performanc
 - A style is written against one provider's schema. Swapping the provider without swapping the style leaves features unclassified and painted `fallbackFeatureColor`.
 - Changing a palette re-prepares tiles, so it is not a per-frame knob.
 
-Running examples: [`Examples/macOS/ImmersiveMapCustomTilesMac`](../../Examples/macOS/ImmersiveMapCustomTilesMac) implements a full `ImmersiveMapVectorTileStyle` by hand; [`Examples/macOS/ImmersiveMapMapboxMac`](../../Examples/macOS/ImmersiveMapMapboxMac) restyles a built-in configuration with the builder methods; the **Style** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) swaps day, night and blueprint palettes for the built-in provider and restyles the attribution badge next to them.
+Running examples: [`Examples/macOS/ImmersiveMapCustomTilesMac`](../../Examples/macOS/ImmersiveMapCustomTilesMac) implements a full `ImmersiveMapVectorTileStyle` by hand; the **Style** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) swaps day, night and blueprint palettes for the built-in provider and restyles the attribution badge next to them.

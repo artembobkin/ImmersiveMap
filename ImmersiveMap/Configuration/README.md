@@ -23,8 +23,8 @@ perform runtime side effects directly.
 ## Must Not Contain
 
 - Runtime controllers that directly mutate render, tile, camera, or UI state.
-- Network clients, URL session code, bearer tokens, Mapbox tokens, or local
-  development secrets.
+- Network clients, URL session code, bearer tokens, tile-provider API keys,
+  or local development secrets.
 - Metal resources, render graph code, shaders, or frame timing.
 - Tile parsing, label decisions, avatar state, or host-app launch logic.
 - Generated files or generated secret/config artifacts.

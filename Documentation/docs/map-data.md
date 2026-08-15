@@ -8,8 +8,6 @@ A map engine draws tiles, it does not produce them. Here is exactly what you are
 
 **Your own tiles.** Any MVT source works through `VectorTileProvider`: your own tile server, your own planet build, or any service that speaks MVT. See the [custom tile provider guide](custom-tile-provider.md).
 
-**Mapbox.** `MapboxTileProvider` renders Mapbox vector tiles with your own access token, paired with `MapboxMapStyle`. See the [Mapbox guide](mapbox.md).
-
 ## Attribution is not optional
 
 Map data carries licence obligations, and the most common one, ODbL for OpenStreetMap data, requires visible credit in your app.

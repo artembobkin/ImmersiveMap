@@ -45,9 +45,6 @@
             location = "group:Examples/macOS/ImmersiveMapSettingsMac/ImmersiveMapSettingsMac.xcodeproj">
          </FileRef>
          <FileRef
-            location = "group:Examples/macOS/ImmersiveMapMapboxMac/ImmersiveMapMapboxMac.xcodeproj">
-         </FileRef>
-         <FileRef
             location = "group:Examples/macOS/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
          </FileRef>
          <FileRef
