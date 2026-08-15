@@ -24,6 +24,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
     private var roadFadeAlpha: Float = 0.0
     private var landuseFadeAlpha: Float = 0.0
     private var lineWidthZoomTaper: Float = 1.0
+    private var streetPaletteBlend: Float = 0.0
     private var tileAtlasDebugSummary: TileAtlasDebugSummary?
     private var pageRetention = TileAtlasPageRetention()
 
@@ -42,6 +43,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
         landuseFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .landuse)
         lineWidthZoomTaper = LineWidthZoomTaper.scale(for: frameContext.zoom)
+        streetPaletteBlend = LowZoomOverviewFade.streetPaletteBlend(for: frameContext.zoom)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
         refreshDebugSummaryIfNeeded(frameContext: frameContext)
@@ -52,6 +54,9 @@ final class TileAtlasSubsystem: RenderSubsystem {
         hasher.combine(overviewFadeAlpha.bitPattern)
         hasher.combine(roadFadeAlpha.bitPattern)
         hasher.combine(landuseFadeAlpha.bitPattern)
+        // Continuous during the palette handover band, like the fade alphas
+        // during theirs: the atlas re-bakes per frame while it moves.
+        hasher.combine(streetPaletteBlend.bitPattern)
         combineAtlasPlanHash(atlasPlan, into: &hasher)
         let textureChanged = globeTextureVersionTracker.stage(hasher.finalize())
         tileTraceRecorder.record(.atlasTextureStage(frameIndex: frameContext.frameIndex,
@@ -142,7 +147,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
                                                lineWidthZoomTaper: lineWidthZoomTaper,
                                                drawableHeightPx: Float(frameContext.drawSize.height),
                                                nativeTileWorldSize: Float(2.0 * Double.pi
-                                                   * frameContext.services.settings.presentation.globeRadiusScale))
+                                                   * frameContext.services.settings.presentation.globeRadiusScale),
+                                               streetPaletteBlend: streetPaletteBlend)
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {

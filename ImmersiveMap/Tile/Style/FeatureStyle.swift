@@ -87,6 +87,10 @@ struct LineRenderPass {
 struct FeatureStyle {
     let key: UInt8
     let color: SIMD4<Float>
+    /// Street-palette counterpart of `color` for ground styles that change
+    /// with the overview-to-street handover; nil bakes `color` twice. See
+    /// `TilePolygonStyle.streetColor`.
+    let streetColor: SIMD4<Float>?
     let lowZoomFadeMask: Float
     /// See `LineRenderPass.lineWidthPoints`; zero for world-locked lines and
     /// for all polygon geometry.
@@ -118,6 +122,7 @@ struct FeatureStyle {
     init(
         key: UInt8,
         color: SIMD4<Float>,
+        streetColor: SIMD4<Float>? = nil,
         lowZoomFadeMask: Float = 0.0,
         lineWidthPoints: Float = 0.0,
         dashLengthPoints: Float = 0.0,
@@ -139,6 +144,7 @@ struct FeatureStyle {
     ) {
         self.key = key
         self.color = color
+        self.streetColor = streetColor
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints

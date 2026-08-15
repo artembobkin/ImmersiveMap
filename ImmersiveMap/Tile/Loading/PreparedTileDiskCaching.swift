@@ -430,7 +430,10 @@ final class PreparedTileDiskCaching {
     // the freed byte rejoined the longitudinal parameter as a 16-bit value
     // that point-dashed styles fill with arc length. A version-35 record's
     // strides and vertex bytes both mean something else.
-    static let preparedFormatVersion: UInt32 = 36
+    // 37: TilePolygonStyle carries the street-palette counterpart color, so
+    // the style spans doubled in stride; a version-36 record's style bytes
+    // would bind half a struct per entry.
+    static let preparedFormatVersion: UInt32 = 37
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

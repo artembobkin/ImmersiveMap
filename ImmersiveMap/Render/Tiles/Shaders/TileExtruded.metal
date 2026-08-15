@@ -25,6 +25,9 @@ struct VertexOut {
 
 struct Style {
     float4 color;
+    /// Mirror of TilePolygonStyle: buildings are street-only, so this stays
+    /// unused here, but the stride must match the shared style buffer.
+    float4 streetColor;
 };
 
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],

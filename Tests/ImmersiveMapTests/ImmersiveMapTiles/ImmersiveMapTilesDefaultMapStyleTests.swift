@@ -5,40 +5,57 @@
 import XCTest
 
 final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
-    func testGroundPaletteHandsOverGraduallyAcrossZoomNineToTwelve() {
+    func testGroundStylesBakeBothPalettesForTheContinuousHandover() {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
 
-        func mixed(_ overview: SIMD4<Float>, _ street: SIMD4<Float>, _ amount: Float) -> SIMD4<Float> {
-            overview + (street - overview) * amount
+        // Every ground style bakes its overview color and its street
+        // counterpart, at EVERY tile zoom: the shader lerps between them per
+        // frame from camera zoom, so the rendered color is identical on both
+        // sides of any tile swap and no zoom boundary can flip the map.
+        for zoom in [2, 8, 9, 10, 12] {
+            let water = makeStyle(style, layerName: "water", zoom: zoom)
+            XCTAssertEqual(water.color, configuration.globalLandcover.water, "z\(zoom)")
+            XCTAssertEqual(water.streetColor, configuration.layers.water, "z\(zoom)")
+        }
+        for zoom in [8, 9, 10, 12] {
+            let background = makeStyle(style, layerName: "background", zoom: zoom)
+            XCTAssertEqual(background.color, configuration.globalLandcover.land, "z\(zoom)")
+            XCTAssertEqual(background.streetColor, configuration.layers.land, "z\(zoom)")
         }
 
-        // Untouched ends of the bridge: pure overview palette through z8,
-        // pure street palette from z12.
-        XCTAssertEqual(makeStyle(style, layerName: "background", zoom: 2).color,
-                       configuration.globalLandcover.grass)
-        XCTAssertEqual(makeStyle(style, layerName: "background", zoom: 8).color,
-                       configuration.globalLandcover.land)
-        XCTAssertEqual(makeStyle(style, layerName: "water", zoom: 8).color,
-                       configuration.globalLandcover.water)
-        XCTAssertEqual(makeStyle(style, layerName: "background", zoom: 12).color,
-                       configuration.layers.land)
-        XCTAssertEqual(makeStyle(style, layerName: "water", zoom: 12).color,
-                       configuration.layers.water)
+        // A WorldCover biome's street color is the OSM class that replaces
+        // it, and the replacing OSM class enters wearing the biome's color:
+        // through the handover both lerp along the same segment, so the swap
+        // changes geometry, never the color language.
+        let biomeForest = makeStyle(style, layerName: "globallandcover", className: "forest", zoom: 9)
+        XCTAssertEqual(biomeForest.streetColor, configuration.layers.wood)
+        let osmWood = makeStyle(style, layerName: "landcover", className: "wood", zoom: 10)
+        XCTAssertEqual(osmWood.color, configuration.globalLandcover.forest)
+        XCTAssertEqual(osmWood.streetColor, configuration.layers.wood)
 
-        // The handover itself steps through intermediate mixes instead of
-        // flipping the whole ground in one zoom: this is what removes the
-        // green-world-to-white-world snap at z9/z10.
-        XCTAssertEqual(makeStyle(style, layerName: "background", zoom: 9).color,
-                       mixed(configuration.globalLandcover.land, configuration.layers.land, 0.3))
-        XCTAssertEqual(makeStyle(style, layerName: "water", zoom: 9).color,
-                       mixed(configuration.globalLandcover.water, configuration.layers.water, 0.3))
-        XCTAssertEqual(makeStyle(style, layerName: "background", zoom: 10).color,
-                       mixed(configuration.globalLandcover.land, configuration.layers.land, 0.65))
-        XCTAssertEqual(makeStyle(style, layerName: "water", zoom: 10).color,
-                       mixed(configuration.globalLandcover.water, configuration.layers.water, 0.65))
-        XCTAssertEqual(makeStyle(style, layerName: "water", zoom: 11).color,
-                       mixed(configuration.globalLandcover.water, configuration.layers.water, 0.85))
+        // Styles outside the handover bake the same color twice.
+        let boundary = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 9)
+        XCTAssertNil(boundary.streetColor)
+    }
+
+    func testStreetPaletteBlendIsContinuousAcrossTheHandoverBand() {
+        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 7.0), 0.0)
+        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 8.0), 0.0)
+        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 11.5), 1.0)
+        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 14.0), 1.0)
+        // Strictly monotone through the band, with no step bigger than a
+        // smooth ramp allows: this is the property the per-tile-zoom bridge
+        // could not have.
+        var previous = LowZoomOverviewFade.streetPaletteBlend(for: 8.0)
+        var zoom = 8.05
+        while zoom < 11.5 {
+            let value = LowZoomOverviewFade.streetPaletteBlend(for: zoom)
+            XCTAssertGreaterThan(value, previous, "zoom \(zoom)")
+            XCTAssertLessThan(value - previous, 0.03, "zoom \(zoom)")
+            previous = value
+            zoom += 0.05
+        }
     }
 
     func testMassiveOverviewMergesVegetationClassesThroughZoomTwo() {
@@ -84,14 +101,14 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  className: "forest",
                                  zoom: 3).color,
                        blended(colors.forest, amount: 0.65 * 0.75))
-        // At z9 the vegetation blend has released, but the street handover
-        // has begun: the forest is washed toward the street land base.
-        let configurationLayers = configuration.layers
+        // At z9 the vegetation blend has fully released: the overview color
+        // is the raw palette (the street handover happens per frame in the
+        // shader, not in the baked color).
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 9).color,
-                       colors.forest + (configurationLayers.land - colors.forest) * 0.3)
+                       colors.forest)
     }
 
     func testGlobalLandcoverClassesUseDedicatedSoftBiomesColors() {

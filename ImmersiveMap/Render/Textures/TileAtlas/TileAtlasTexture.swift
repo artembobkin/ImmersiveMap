@@ -19,6 +19,10 @@ class TileAtlasTexture {
         var unitsPerPoint: Float
     }
 
+    private struct StreetPaletteUniform {
+        var blend: Float
+    }
+
     struct TileData {
         let position: simd_int1
         let textureSize: simd_int1
@@ -186,8 +190,14 @@ class TileAtlasTexture {
                                pixelsPerPoint: Float,
                                lineWidthZoomTaper: Float = 1.0,
                                drawableHeightPx: Float = 0.0,
-                               nativeTileWorldSize: Float = 0.0) {
+                               nativeTileWorldSize: Float = 0.0,
+                               streetPaletteBlend: Float = 0.0) {
         guard let renderEncoder else { return }
+        // Bound once per page encoding; vertex bytes persist across draws.
+        var streetPaletteUniform = StreetPaletteUniform(blend: streetPaletteBlend)
+        renderEncoder.setVertexBytes(&streetPaletteUniform,
+                                     length: MemoryLayout<StreetPaletteUniform>.stride,
+                                     index: 6)
         // Kept for the per-allocation rebind in draw(): each slot converts
         // point-locked line widths through its own texel-per-pixel ratio,
         // with the low-zoom taper folded into that quantized ratio.

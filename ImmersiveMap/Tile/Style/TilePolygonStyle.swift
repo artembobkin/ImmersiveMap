@@ -3,6 +3,21 @@
 
 struct TilePolygonStyle {
     let color: SIMD4<Float>
+    /// The street-palette counterpart of `color`. The ground palette hands
+    /// over from the overview set (soft-biome greens, saturated globe water)
+    /// to the street set continuously in camera zoom: the shader lerps
+    /// between the two baked colors with a per-frame blend, so the rendered
+    /// color is identical on both sides of every tile swap and no zoom
+    /// boundary can flip the map's look. Styles with no street counterpart
+    /// bake the same color twice. The memory layout is a binding contract
+    /// with the `Style` structs in Tile.metal and TileExtruded.metal and an
+    /// arena span stride; changing it is a prepared-cache format change.
+    let streetColor: SIMD4<Float>
+
+    init(color: SIMD4<Float>, streetColor: SIMD4<Float>? = nil) {
+        self.color = color
+        self.streetColor = streetColor ?? color
+    }
 }
 
 /// Per-style line rendering parameters, uploaded alongside `TilePolygonStyle`

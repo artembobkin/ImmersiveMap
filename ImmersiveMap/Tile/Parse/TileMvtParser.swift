@@ -1231,7 +1231,7 @@ class TileMvtParser {
 
         for styleKey in styleKeys {
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color))
+                styles.append(TilePolygonStyle(color: style.color, streetColor: style.streetColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style))
             }
@@ -1290,7 +1290,7 @@ class TileMvtParser {
             }
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color))
+                styles.append(TilePolygonStyle(color: style.color, streetColor: style.streetColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style))
             }
@@ -1449,7 +1449,7 @@ class TileMvtParser {
             }
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = readingStageResult.styles[styleKey] {
-                extrudedStyles.append(TilePolygonStyle(color: style.color))
+                extrudedStyles.append(TilePolygonStyle(color: style.color, streetColor: style.streetColor))
             }
         }
 

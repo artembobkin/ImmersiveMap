@@ -34,6 +34,15 @@ struct VertexOut {
 
 struct Style {
     float4 color;
+    /// Street-palette counterpart of color; the vertex stage lerps between
+    /// the two with the per-frame street blend, so the ground palette hands
+    /// over continuously in camera zoom instead of stepping per tile zoom.
+    float4 streetColor;
+};
+
+/// Per-frame overview-to-street palette blend, from camera zoom.
+struct StreetPaletteUniform {
+    float blend;
 };
 
 /// Mirror of the Swift `TileLineStyle`; indexed per style alongside `Style`.
@@ -64,7 +73,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant Style* styles [[buffer(2)]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
-                                  constant LineStyle* lineStyles [[buffer(5)]]) {
+                                  constant LineStyle* lineStyles [[buffer(5)]],
+                                  constant StreetPaletteUniform& streetPalette [[buffer(6)]]) {
     
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
@@ -76,7 +86,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.position = clipPosition;
     out.localPosition = float2(vertexIn.position.xy);
     out.worldPos = worldPosition.xyz;
-    out.color = half4(style.color);
+    out.color = half4(mix(style.color, style.streetColor, streetPalette.blend));
     out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
     LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
     out.lineDistance = float(vertexIn.lineDistance) / 127.0;
