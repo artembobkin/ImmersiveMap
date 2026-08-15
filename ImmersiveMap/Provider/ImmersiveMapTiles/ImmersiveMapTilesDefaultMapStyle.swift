@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 40
+    private static let implementationRevision: UInt32 = 41
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -228,8 +228,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            streetColor: layers.wetland)
         case "snow":
             return polygon(key: 8, color: colors.snow, streetColor: layers.ice)
+        case "urban":
+            // Cities are the one thing a region view exists to show: a soft
+            // warm gray, clearly apart from the greens, handing over to the
+            // OSM residential beige that replaces it from z10.
+            return polygon(key: 10,
+                           color: SIMD4<Float>(0.886, 0.871, 0.847, 1.0),
+                           streetColor: layers.residential)
         default:
-            // urban / water: leave to the background and water layers.
+            // water: left to the background and water layers.
             return hiddenStyle
         }
     }
@@ -239,12 +246,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static func vegetationBlendAmount(tileZoom: Int) -> Float {
         switch tileZoom {
         case ...2: return 1.0
-        case 3: return 0.65
-        case 4: return 0.5
-        case 5: return 0.4
-        case 6: return 0.3
-        case 7: return 0.2
-        case 8: return 0.1
+        case 3: return 0.7
+        case 4: return 0.6
+        case 5: return 0.5
+        case 6: return 0.4
+        case 7: return 0.3
+        case 8: return 0.2
         default: return 0.0
         }
     }
@@ -348,17 +355,17 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.4,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.615, 0.325, 1.0),
+                             minimumWidthPoints: 1.6,
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.929, 0.529, 0.208, 1.0),
                              construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.3,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.680, 0.390, 1.0),
+                             minimumWidthPoints: 1.4,
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.937, 0.604, 0.290, 1.0),
                              construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.1, construction: isConstruction)
+                             minimumWidthPoints: 1.2, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 0.9, construction: isConstruction)
