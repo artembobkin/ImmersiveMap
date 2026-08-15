@@ -227,6 +227,33 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(primaryFill.color, configuration.layers.roads.primary)
     }
 
+    func testConstructionClassesFollowTheirBaseClass() {
+        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+
+        // The z4 tiles ship motorway and motorway_construction and nothing
+        // else; hiding the construction half cut corridors mid-line. It gates
+        // like the base class and draws point-dashed, without casing or the
+        // overview accent.
+        let construction = makeStyle(style, layerName: "transportation",
+                                     className: "motorway_construction", zoom: 4)
+        XCTAssertNotEqual(construction.key, 0)
+        let fill = construction.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertGreaterThan(fill.dashLengthPoints, 0)
+        XCTAssertEqual(fill.color, configuration.layers.roads.motorway)
+        XCTAssertNil(fill.streetColor)
+        XCTAssertFalse(construction.resolvedLineRenderPasses.contains { $0.roadPassRole == .casing })
+        XCTAssertEqual(makeStyle(style, layerName: "transportation",
+                                 className: "motorway_construction", zoom: 12)
+            .resolvedLineRenderPasses.contains { $0.roadPassRole == .casing }, false)
+
+        // A construction variant of a gated class stays gated with the base.
+        XCTAssertEqual(makeStyle(style, layerName: "transportation",
+                                 className: "primary_construction", zoom: 6).key, 0)
+        XCTAssertNotEqual(makeStyle(style, layerName: "transportation",
+                                    className: "primary_construction", zoom: 7).key, 0)
+    }
+
     func testRoadCasingJoinsOnlyFromTileZoomTen() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func hasCasing(_ className: String, zoom: Int) -> Bool {

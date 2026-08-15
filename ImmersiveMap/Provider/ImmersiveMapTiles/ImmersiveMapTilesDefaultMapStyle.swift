@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 37
+    private static let implementationRevision: UInt32 = 38
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -303,11 +303,22 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let isTunnel = brunnel == "tunnel"
         let subclass = props["subclass"]?.stringValue.lowercased()
         let roads = configuration.layers.roads
+        // A `<class>_construction` segment belongs to its base class: the
+        // source ships it from the same zoom (a z4 tile carries motorway and
+        // motorway_construction and nothing else), and hiding it cuts the
+        // corridor mid-line. It gates and colors like the base class and
+        // draws point-dashed, without casing or accent: a road that exists
+        // as a corridor but is not finished.
+        let constructionSuffix = "_construction"
+        let isConstruction = cls?.hasSuffix(constructionSuffix) == true
+        let effectiveClass = isConstruction
+            ? cls.map { String($0.dropLast(constructionSuffix.count)) }
+            : cls
         // A class draws only from the zoom where it can carry meaning: over a
         // country or regional view every road the tile ships is a sub-pixel
         // hairline, and drawing all of them just greys the map. Majors appear
         // first, the minor network fills in toward street level.
-        guard tileZoom >= Self.roadClassMinimumZoom(cls) else {
+        guard tileZoom >= Self.roadClassMinimumZoom(effectiveClass) else {
             return hiddenStyle
         }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
@@ -321,23 +332,27 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // region zooms, and the overview accent gives motorways and trunks a
         // deeper orange over a country view, released to the light street
         // palette by the same continuous camera-zoom blend the ground uses.
-        let casingZoom = tileZoom >= 10
-        switch cls {
+        let casingZoom = tileZoom >= 10 && isConstruction == false
+        switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.4, overviewAccent: SIMD4<Float>(0.965, 0.615, 0.325, 1.0))
+                             minimumWidthPoints: 1.4,
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.615, 0.325, 1.0),
+                             construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.3, overviewAccent: SIMD4<Float>(0.965, 0.680, 0.390, 1.0))
+                             minimumWidthPoints: 1.3,
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.680, 0.390, 1.0),
+                             construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.1)
+                             minimumWidthPoints: 1.1, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9)
+                             minimumWidthPoints: 0.9, construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, width: 8 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 0.8)
+                             minimumWidthPoints: 0.8, construction: isConstruction)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, width: 7.6 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
         case "service":
@@ -404,10 +419,16 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            casing: Bool,
                            tunnel: Bool,
                            minimumWidthPoints: Float = 0,
-                           overviewAccent: SIMD4<Float>? = nil) -> FeatureStyle {
+                           overviewAccent: SIMD4<Float>? = nil,
+                           construction: Bool = false) -> FeatureStyle {
         let fillGeometry = tunnel
             ? makeDashedRoadGeometry(width: width, dashLength: width * 2.0, dashGap: width * 1.2)
             : makeRoadGeometry(width: width)
+        // A tunnel already dashes its geometry in tile units; the
+        // construction point-dash only applies to surface segments.
+        let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
+            ? (length: 5.0, gap: 2.5)
+            : nil
         // With an overview accent, the accent is the baked color and the
         // regular palette is its street counterpart: the continuous street
         // blend releases the accent exactly as it lightens the ground.
@@ -435,6 +456,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            color: fillColor,
                            streetColor: fillStreetColor,
                            lowZoomFadeMask: roadLowZoomFadeMask,
+                           dashLengthPoints: constructionDash?.length ?? 0,
+                           dashGapPoints: constructionDash?.gap ?? 0,
                            minimumWidthPoints: minimumWidthPoints,
                            parseGeometryStyleData: fillGeometry,
                            includeRoadLabelPath: false,
