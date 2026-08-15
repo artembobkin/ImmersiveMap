@@ -56,6 +56,12 @@ struct LineRenderPass {
     /// `parseGeometryStyleData` must stay zero for it.
     let dashLengthPoints: Float
     let dashGapPoints: Float
+    /// Floor for a world-locked width; see `TileLineStyle.minimumWidthPoints`.
+    let minimumWidthPoints: Float
+    /// Street-palette counterpart of `color` for passes whose color changes
+    /// with the overview-to-street handover (the motorway accent); nil bakes
+    /// `color` twice.
+    let streetColor: SIMD4<Float>?
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let placement: LinePlacement
@@ -63,20 +69,24 @@ struct LineRenderPass {
 
     init(key: UInt8,
          color: SIMD4<Float>,
+         streetColor: SIMD4<Float>? = nil,
          lowZoomFadeMask: Float = 0.0,
          lineWidthPoints: Float = 0.0,
          dashLengthPoints: Float = 0.0,
          dashGapPoints: Float = 0.0,
+         minimumWidthPoints: Float = 0.0,
          parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
          placement: LinePlacement = .ground,
          roadPassRole: RoadPassRole = .fill) {
         self.key = key
         self.color = color
+        self.streetColor = streetColor
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
+        self.minimumWidthPoints = minimumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.placement = placement
@@ -98,6 +108,8 @@ struct FeatureStyle {
     /// See `LineRenderPass.dashLengthPoints`.
     let dashLengthPoints: Float
     let dashGapPoints: Float
+    /// See `TileLineStyle.minimumWidthPoints`.
+    let minimumWidthPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let linePlacement: LinePlacement
@@ -127,6 +139,7 @@ struct FeatureStyle {
         lineWidthPoints: Float = 0.0,
         dashLengthPoints: Float = 0.0,
         dashGapPoints: Float = 0.0,
+        minimumWidthPoints: Float = 0.0,
         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
         linePlacement: LinePlacement = .ground,
@@ -149,6 +162,7 @@ struct FeatureStyle {
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
+        self.minimumWidthPoints = minimumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.linePlacement = linePlacement
@@ -172,10 +186,12 @@ struct FeatureStyle {
         return [
             LineRenderPass(key: key,
                            color: color,
+                           streetColor: streetColor,
                            lowZoomFadeMask: lowZoomFadeMask,
                            lineWidthPoints: lineWidthPoints,
                            dashLengthPoints: dashLengthPoints,
                            dashGapPoints: dashGapPoints,
+                           minimumWidthPoints: minimumWidthPoints,
                            parseGeometryStyleData: parseGeometryStyleData,
                            includeRoadLabelPath: includeRoadLabelPath,
                            placement: linePlacement,

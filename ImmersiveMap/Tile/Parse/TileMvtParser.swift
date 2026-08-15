@@ -875,10 +875,12 @@ class TileMvtParser {
                             let passStyle = FeatureStyle(
                                 key: lineRenderPass.key,
                                 color: lineRenderPass.color,
+                                streetColor: lineRenderPass.streetColor,
                                 lowZoomFadeMask: lineRenderPass.lowZoomFadeMask,
                                 lineWidthPoints: lineRenderPass.lineWidthPoints,
                                 dashLengthPoints: lineRenderPass.dashLengthPoints,
                                 dashGapPoints: lineRenderPass.dashGapPoints,
+                                minimumWidthPoints: lineRenderPass.minimumWidthPoints,
                                 parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
                                 includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
                                 linePlacement: lineRenderPass.placement,
@@ -1256,7 +1258,8 @@ class TileMvtParser {
         return TileLineStyle(widthPoints: style.lineWidthPoints,
                              dashLengthPoints: style.dashLengthPoints,
                              dashGapPoints: style.dashGapPoints,
-                             edgeThreshold: edgeThreshold)
+                             edgeThreshold: edgeThreshold,
+                             minimumWidthPoints: style.minimumWidthPoints)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the

@@ -202,6 +202,45 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertGreaterThan(casingKeys.min()!, 30)
     }
 
+    func testMajorRoadsHoldAWidthFloorAndAnOverviewAccent() {
+        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+
+        // The floor keeps the majors readable strokes at region zooms; it is
+        // a floor, not a lock, so street-zoom world growth is untouched.
+        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 7)
+        let fill = motorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertEqual(fill.minimumWidthPoints, 1.4)
+        XCTAssertEqual(fill.lineWidthPoints, 0)
+
+        // The overview accent is the baked color; the light street palette is
+        // its continuous street counterpart, released by the same camera-zoom
+        // blend as the ground.
+        XCTAssertEqual(fill.streetColor, configuration.layers.roads.motorway)
+        XCTAssertNotEqual(fill.color, configuration.layers.roads.motorway)
+
+        // Primary has a floor but no accent.
+        let primary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 8)
+        let primaryFill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertEqual(primaryFill.minimumWidthPoints, 1.1)
+        XCTAssertNil(primaryFill.streetColor)
+        XCTAssertEqual(primaryFill.color, configuration.layers.roads.primary)
+    }
+
+    func testRoadCasingJoinsOnlyFromTileZoomTen() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        func hasCasing(_ className: String, zoom: Int) -> Bool {
+            makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
+                .resolvedLineRenderPasses.contains { $0.roadPassRole == .casing }
+        }
+        // Below tile z10 the fill is under about two points and a casing
+        // cannot render as an edge: majors draw as clean single strokes.
+        XCTAssertFalse(hasCasing("motorway", zoom: 7))
+        XCTAssertFalse(hasCasing("primary", zoom: 9))
+        XCTAssertTrue(hasCasing("motorway", zoom: 10))
+        XCTAssertTrue(hasCasing("tertiary", zoom: 12))
+    }
+
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {
         let originalConfiguration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let updatedConfiguration = originalConfiguration.globalLandcover { colors in

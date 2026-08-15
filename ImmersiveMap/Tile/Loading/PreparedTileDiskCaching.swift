@@ -433,7 +433,9 @@ final class PreparedTileDiskCaching {
     // 37: TilePolygonStyle carries the street-palette counterpart color, so
     // the style spans doubled in stride; a version-36 record's style bytes
     // would bind half a struct per entry.
-    static let preparedFormatVersion: UInt32 = 37
+    // 38: TileLineStyle widened to eight floats, adding the world-width
+    // floor and reserved space, so the line-style spans changed stride.
+    static let preparedFormatVersion: UInt32 = 38
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -30,6 +30,7 @@ struct VertexOut {
     float lineDistance;
     float lineParameter;
     half4 lineStyle;
+    half lineMinimumWidthPoints;
 };
 
 struct Style {
@@ -51,6 +52,10 @@ struct LineStyle {
     float dashLengthPoints;
     float dashGapPoints;
     float edgeThreshold;
+    float minimumWidthPoints;
+    float reserved0;
+    float reserved1;
+    float reserved2;
 };
 
 struct OverviewFadeUniform {
@@ -100,6 +105,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                           lineStyle.widthPoints,
                           lineStyle.dashLengthPoints,
                           lineStyle.dashGapPoints);
+    out.lineMinimumWidthPoints = half(lineStyle.minimumWidthPoints);
     return out;
 }
 
@@ -136,6 +142,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
+                                    half minimumWidthPoints,
                                     float pixelsPerPoint,
                                     float dashUnitsPerPoint) {
     // The derivatives are taken before the threshold test: fwidth needs the
@@ -148,9 +155,19 @@ static inline half tileLineCoverage(float lineDistance,
     }
     float rimPx = 1.0 / sideSpan;
     half widthPoints = lineStyle.y;
-    float edgePx = widthPoints > 0.0h
-        ? min(float(widthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5)
-        : float(edgeThreshold) * rimPx;
+    float edgePx;
+    if (widthPoints > 0.0h) {
+        edgePx = min(float(widthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5);
+    } else {
+        // World-locked width, optionally floored: a road class never thins
+        // into an unreadable hairline at region zooms, yet keeps its natural
+        // world growth once wider than the floor.
+        edgePx = float(edgeThreshold) * rimPx;
+        if (minimumWidthPoints > 0.0h) {
+            float floorPx = min(float(minimumWidthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5);
+            edgePx = max(edgePx, floorPx);
+        }
+    }
     float sideDistancePx = edgePx - abs(lineDistance) * rimPx;
     float coverage = smoothstep(-0.5, 0.5, sideDistancePx);
 
@@ -200,6 +217,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     half lineCoverage = tileLineCoverage(in.lineDistance,
                                          in.lineParameter,
                                          in.lineStyle,
+                                         in.lineMinimumWidthPoints,
                                          overviewFade.pixelsPerPoint,
                                          lineDash.unitsPerPoint);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||

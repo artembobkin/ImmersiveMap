@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 37)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 38)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -608,8 +608,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         // Ground line styles: one all-zero TileLineStyle (the fixture style
         // is a plain polygon).
-        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 16, elementCount: 1, indexWidth: nil))
-        XCTAssertEqual(blob[1024..<1040], Data(count: 16))
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 32, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[1024..<1056], Data(count: 32))
 
         // Everything after the ground layer is empty: zero-length spans do
         // not advance the cursor, so the arena ends at the width span's
@@ -623,7 +623,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(blob[24..<256], Data(count: 232), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[772..<1024], Data(count: 252), "Span padding must be deterministic zeros")
-        XCTAssertEqual(blob[1040..<1280], Data(count: 240), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[1056..<1280], Data(count: 224), "Span padding must be deterministic zeros")
     }
 
     func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {

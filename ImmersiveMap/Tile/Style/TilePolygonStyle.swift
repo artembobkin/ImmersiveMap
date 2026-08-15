@@ -37,6 +37,28 @@ struct TileLineStyle {
     /// half-width over extruded half-width, 0...1). Zero marks a non-line
     /// style: the shader skips line coverage entirely for it.
     var edgeThreshold: Float
+    /// Floor for a world-locked width, in layout points: the visible width is
+    /// the world width or this, whichever is wider, so a road class never
+    /// thins into an unreadable hairline at region zooms yet still grows with
+    /// the world at street level. Zero disables the floor; ignored when
+    /// `widthPoints` locks the width outright.
+    var minimumWidthPoints: Float
+    /// Reserved; keeps the stride stable for future line parameters.
+    var reserved0: Float = 0
+    var reserved1: Float = 0
+    var reserved2: Float = 0
+
+    init(widthPoints: Float,
+         dashLengthPoints: Float,
+         dashGapPoints: Float,
+         edgeThreshold: Float,
+         minimumWidthPoints: Float = 0) {
+        self.widthPoints = widthPoints
+        self.dashLengthPoints = dashLengthPoints
+        self.dashGapPoints = dashGapPoints
+        self.edgeThreshold = edgeThreshold
+        self.minimumWidthPoints = minimumWidthPoints
+    }
 
     static let polygon = TileLineStyle(widthPoints: 0,
                                        dashLengthPoints: 0,

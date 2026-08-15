@@ -314,17 +314,30 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // width at street level. Base widths below are the z14+ (full) values.
         let s = roadWidthScale(tileZoom: tileZoom)
 
+        // Casing joins a class only from the zoom where the fill is wide
+        // enough (about two points) for an edge to render; below that a
+        // sub-pixel casing just muddies the fill's antialiasing. The width
+        // floors keep the majors readable strokes instead of hairlines at
+        // region zooms, and the overview accent gives motorways and trunks a
+        // deeper orange over a country view, released to the light street
+        // palette by the same continuous camera-zoom blend the ground uses.
+        let casingZoom = tileZoom >= 10
         switch cls {
         case "motorway":
-            return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: true, tunnel: isTunnel)
+            return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.4, overviewAccent: SIMD4<Float>(0.965, 0.615, 0.325, 1.0))
         case "trunk":
-            return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: true, tunnel: isTunnel)
+            return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.3, overviewAccent: SIMD4<Float>(0.965, 0.680, 0.390, 1.0))
         case "primary":
-            return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: true, tunnel: isTunnel)
+            return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.1)
         case "secondary":
-            return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: true, tunnel: isTunnel)
+            return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 0.9)
         case "tertiary":
-            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8 * s, priority: 74, casing: true, tunnel: isTunnel)
+            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 0.8)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, width: 7.6 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
         case "service":
@@ -389,17 +402,29 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            width: Double,
                            priority: Int,
                            casing: Bool,
-                           tunnel: Bool) -> FeatureStyle {
+                           tunnel: Bool,
+                           minimumWidthPoints: Float = 0,
+                           overviewAccent: SIMD4<Float>? = nil) -> FeatureStyle {
         let fillGeometry = tunnel
             ? makeDashedRoadGeometry(width: width, dashLength: width * 2.0, dashGap: width * 1.2)
             : makeRoadGeometry(width: width)
+        // With an overview accent, the accent is the baked color and the
+        // regular palette is its street counterpart: the continuous street
+        // blend releases the accent exactly as it lightens the ground.
+        let fillColor = overviewAccent ?? color
+        let fillStreetColor = overviewAccent != nil ? color : nil
+        // The floor stops mattering once the world width exceeds it, so the
+        // casing keeps its proportion by flooring half a point above the fill.
+        let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0
 
         var passes: [LineRenderPass] = []
         if casing, tunnel == false {
             passes.append(
                 LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
-                               color: roadCasingColor(from: color),
+                               color: roadCasingColor(from: fillColor),
+                               streetColor: fillStreetColor.map(roadCasingColor(from:)),
                                lowZoomFadeMask: roadLowZoomFadeMask,
+                               minimumWidthPoints: casingFloor,
                                parseGeometryStyleData: makeRoadGeometry(width: width * 1.5),
                                includeRoadLabelPath: false,
                                roadPassRole: .casing)
@@ -407,8 +432,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
         passes.append(
             LineRenderPass(key: fillKey,
-                           color: color,
+                           color: fillColor,
+                           streetColor: fillStreetColor,
                            lowZoomFadeMask: roadLowZoomFadeMask,
+                           minimumWidthPoints: minimumWidthPoints,
                            parseGeometryStyleData: fillGeometry,
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
@@ -416,7 +443,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
         return FeatureStyle(
             key: fillKey,
-            color: color,
+            color: fillColor,
+            streetColor: fillStreetColor,
             lowZoomFadeMask: roadLowZoomFadeMask,
             parseGeometryStyleData: fillGeometry,
             lineRenderPasses: passes,
@@ -451,6 +479,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: 46,
             color: configuration.layers.roads.rail,
             lowZoomFadeMask: roadLowZoomFadeMask,
+            minimumWidthPoints: 0.7,
             parseGeometryStyleData: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
             roadClassPriority: 30
         )

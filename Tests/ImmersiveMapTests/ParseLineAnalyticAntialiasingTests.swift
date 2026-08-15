@@ -44,7 +44,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineDistance), 5)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineParameter), 6)
         // The per-style line parameters are an arena span and a shader struct.
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 16)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 32)
     }
 
     func testStraightSegmentIsExtrudedByTheFeatherAndCarriesTheRimDistances() throws {
