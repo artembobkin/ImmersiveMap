@@ -105,7 +105,7 @@ struct TileAtlasAllocation: Hashable {
     /// with the tile set and never follows the live camera.
     static func coarseTileLineScale(sourceTileZoom: Int) -> Float {
         switch sourceTileZoom {
-        case ...0: return 0.35
+        case ...0: return 0.25
         case 1: return 0.7
         case 2: return 0.9
         default: return 1.0

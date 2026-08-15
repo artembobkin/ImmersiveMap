@@ -70,7 +70,7 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         // magnify lines at the globe-face center; the compensation is deepest
         // at z0 and releases by z3. A function of the source tile zoom only:
         // camera-dependence here would make dashes crawl again.
-        XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 0), 0.35)
+        XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 0), 0.25)
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 1), 0.7)
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 2), 0.9)
         XCTAssertEqual(TileAtlasAllocation.coarseTileLineScale(sourceTileZoom: 3), 1.0)
