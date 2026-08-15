@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 35
+    private static let implementationRevision: UInt32 = 36
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -53,21 +53,23 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "background":
             // Synthetic full-tile base quad the engine emits per tile. OpenMapTiles
             // has no land polygon, so this is what paints the land; without it the
-            // base falls through to the red debug fallback.
-            let color: SIMD4<Float>
-            if z <= massiveOverviewMaximumZoom {
-                color = configuration.globalLandcover.grass
-            } else if z <= globalLandcoverMaximumZoom {
-                color = configuration.globalLandcover.land
-            } else {
-                color = configuration.layers.land
-            }
-            return polygon(key: 1, color: color)
+            // base falls through to the red debug fallback. The overview tone
+            // hands over to the street land gradually (streetPaletteBlend), so
+            // no single zoom flips the whole ground color.
+            let overviewColor = z <= massiveOverviewMaximumZoom
+                ? configuration.globalLandcover.grass
+                : configuration.globalLandcover.land
+            return polygon(key: 1,
+                           color: blend(overviewColor,
+                                        toward: configuration.layers.land,
+                                        amount: Self.streetPaletteBlend(tileZoom: z)))
         case "water":
-            let color = z <= globalLandcoverMaximumZoom
-                ? configuration.globalLandcover.water
-                : configuration.layers.water
-            return polygon(key: 20, color: color)
+            // Same bridge for water: the saturated globe blue eases into the
+            // pale street blue across the handover zooms instead of snapping.
+            return polygon(key: 20,
+                           color: blend(configuration.globalLandcover.water,
+                                        toward: configuration.layers.water,
+                                        amount: Self.streetPaletteBlend(tileZoom: z)))
         case "waterway":
             return waterwayStyle(cls: cls, props: props)
         case "landcover":
@@ -185,24 +187,49 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // same proportion the full merge always used. Barren and snow are
         // real geographic edges (deserts, ice caps) and stay unblended.
         let amount = Self.vegetationBlendAmount(tileZoom: tileZoom)
+        // In the biomes' final zoom the street palette is already arriving:
+        // washing them toward the street land makes their disappearance at
+        // the next zoom a small step instead of the green world vanishing.
+        let street = Self.streetPaletteBlend(tileZoom: tileZoom)
+        func washed(_ color: SIMD4<Float>) -> SIMD4<Float> {
+            blend(color, toward: configuration.layers.land, amount: street)
+        }
         switch cls {
         case "land":
-            return polygon(key: 2, color: blend(colors.land, toward: vegetationBase, amount: amount))
+            return polygon(key: 2, color: washed(blend(colors.land, toward: vegetationBase, amount: amount)))
         case "barren":
-            return polygon(key: 3, color: colors.barren)
+            return polygon(key: 3, color: washed(colors.barren))
         case "grass", "shrub", "moss":
-            return polygon(key: 4, color: colors.grass)
+            return polygon(key: 4, color: washed(colors.grass))
         case "crop":
-            return polygon(key: 5, color: blend(colors.crop, toward: vegetationBase, amount: amount))
+            return polygon(key: 5, color: washed(blend(colors.crop, toward: vegetationBase, amount: amount)))
         case "forest":
-            return polygon(key: 6, color: blend(colors.forest, toward: vegetationBase, amount: amount * 0.75))
+            return polygon(key: 6, color: washed(blend(colors.forest, toward: vegetationBase, amount: amount * 0.75)))
         case "wetland", "mangroves":
-            return polygon(key: 7, color: blend(colors.wetland, toward: vegetationBase, amount: amount))
+            return polygon(key: 7, color: washed(blend(colors.wetland, toward: vegetationBase, amount: amount)))
         case "snow":
             return polygon(key: 8, color: colors.snow)
         default:
             // urban / water: leave to the background and water layers.
             return hiddenStyle
+        }
+    }
+
+    /// How far the ground palette has handed over from the overview set (the
+    /// soft-biome greens, the saturated globe water) to the street set (the
+    /// near-white land base, the pale water) at a tile zoom. The two sets
+    /// used to switch in one step at z9/z10, together with the biome
+    /// polygons vanishing there (the tile service merges WorldCover only
+    /// through z9), which flipped the whole map from a green world to a
+    /// white one at a single zoom. Spreading the handover across z9-z12
+    /// turns the cliff into steps small enough to read as a gradual change.
+    private static func streetPaletteBlend(tileZoom: Int) -> Float {
+        switch tileZoom {
+        case ...8: return 0.0
+        case 9: return 0.3
+        case 10: return 0.65
+        case 11: return 0.85
+        default: return 1.0
         }
     }
 
