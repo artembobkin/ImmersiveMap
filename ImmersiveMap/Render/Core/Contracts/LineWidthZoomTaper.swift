@@ -26,3 +26,21 @@ enum LineWidthZoomTaper {
         return floorScale + (1.0 - floorScale) * eased
     }
 }
+
+/// The one camera quantity point-locked widths on the globe must track: the
+/// fractional-zoom dolly, which magnifies the whole baked atlas on screen by
+/// 1/(1 - 0.5 frac(zoom)). It is global, identical for every tile, so
+/// compensating with it cannot make widths differ between tiles or shift
+/// under panning and tilting, unlike anything derived from a tile's own
+/// projected footprint. Log-quantized to eighth-of-an-octave steps so it can
+/// sit in the atlas redraw hash without re-baking every frame; across an
+/// integer zoom the factor snaps from a half back to one exactly as the next
+/// level's tiles halve on screen, so the products cancel and the width is
+/// continuous.
+enum LineWidthDollyScale {
+    static func quantized(for zoom: Double) -> Float {
+        let dolly = Float(1.0 - 0.5 * zoom.truncatingRemainder(dividingBy: 1.0))
+        let stepped = (log2(max(dolly, 0.5)) * 8.0).rounded() / 8.0
+        return exp2(stepped)
+    }
+}

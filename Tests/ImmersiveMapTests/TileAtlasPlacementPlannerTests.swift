@@ -36,32 +36,44 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
         XCTAssertEqual(TileAtlasSlotDepth.desired(forScreenDemandPx: 256, pageSizePx: 4096), .depth4)
     }
 
-    func testLineWidthRasterScaleIsContinuousAcrossAnIntegerZoom() {
-        // At an integer zoom crossing the next level's tiles take over with
-        // exactly half the screen demand, in the slot the halved demand
-        // derives. Widths bake as points x scale and appear on screen at
-        // demand/cell of that, so the two sides must produce identical
-        // on-screen widths: cell tracking demand keeps the raw ratio equal,
-        // and where the depth is capped the exact halving lands on the same
-        // log2 quantization grid.
-        func onScreenPerTargetWidth(demand: Float, zoomTaper: Float) -> Float {
-            let cell = TileAtlasSlotDepth.desired(forScreenDemandPx: demand, pageSizePx: 4096)
-                .cellSize(pageSizePx: 4096)
-            return TileAtlasAllocation.lineWidthRasterScale(cellSizePx: cell,
-                                                            screenDemandPx: demand,
-                                                            zoomTaper: zoomTaper)
-                * (demand / Float(cell))
-        }
+    func testLineWidthNominalScaleIsInvariantToTheSlotAndTheCamera() {
+        // The width bake scale is a constant of the slot size and the
+        // viewport, and it is linear in the slot size: a slot magnified on
+        // screen by 1/cell exactly cancels it, so a budget downgrade or a
+        // demand-driven depth change cannot alter a border's visible width,
+        // and nothing about the camera or a tile's projected footprint enters
+        // at all. That is the property whose absence made borders thicken
+        // per tile under panning and tilting.
+        let nativeWorldSize = Float(2.0 * Double.pi * 0.14)
+        let atDepth0 = TileAtlasAllocation.lineWidthNominalTexelsPerPixel(
+            cellSizePx: 4096, drawableHeightPx: 3440, nativeTileWorldSize: nativeWorldSize)
+        let atDepth2 = TileAtlasAllocation.lineWidthNominalTexelsPerPixel(
+            cellSizePx: 1024, drawableHeightPx: 3440, nativeTileWorldSize: nativeWorldSize)
+        XCTAssertEqual(atDepth0, atDepth2 * 4.0, accuracy: 1e-5)
+        XCTAssertEqual(atDepth0,
+                       4096 * 2 * tan(Float.pi / 8) / (3440 * nativeWorldSize),
+                       accuracy: 1e-4)
+        // Degenerate inputs collapse to zero instead of infinity.
+        XCTAssertEqual(TileAtlasAllocation.lineWidthNominalTexelsPerPixel(
+            cellSizePx: 4096, drawableHeightPx: 0, nativeTileWorldSize: nativeWorldSize), 0)
+    }
 
-        // The taper is identical on both sides of the crossing instant, so it
-        // must not break the alignment either.
-        for zoomTaper: Float in [1.0, 0.63] {
-            for demand: Float in [5600, 4100, 3000, 2333, 1700, 1200] {
-                XCTAssertEqual(onScreenPerTargetWidth(demand: demand, zoomTaper: zoomTaper),
-                               onScreenPerTargetWidth(demand: demand / 2, zoomTaper: zoomTaper),
-                               accuracy: 1e-4,
-                               "demand \(demand), taper \(zoomTaper)")
-            }
+    func testLineWidthDollyScaleTracksTheDollyWithinAQuantizationStep() {
+        // The dolly magnifies the baked atlas by 1/(1 - 0.5 frac(zoom)); the
+        // quantized compensation must stay within half a step of the exact
+        // inverse everywhere, and land exactly on 1 at integer zooms, where
+        // the next level's tiles halve on screen as the factor doubles, so
+        // the visible width is continuous across the crossing.
+        XCTAssertEqual(LineWidthDollyScale.quantized(for: 7.0), 1.0)
+        XCTAssertEqual(LineWidthDollyScale.quantized(for: 12.0), 1.0)
+        let maximumRatio = exp2(Float(1.0 / 16.0)) + 1e-4
+        var zoom = 4.0
+        while zoom < 5.0 {
+            let exact = Float(1.0 - 0.5 * zoom.truncatingRemainder(dividingBy: 1.0))
+            let quantized = LineWidthDollyScale.quantized(for: zoom)
+            let ratio = quantized / exact
+            XCTAssertLessThanOrEqual(max(ratio, 1 / ratio), maximumRatio, "zoom \(zoom)")
+            zoom += 0.02
         }
     }
 
@@ -122,28 +134,6 @@ final class TileAtlasPlacementPlannerTests: XCTestCase {
             XCTAssertGreaterThan(value, previous, "zoom \(zoom)")
             previous = value
         }
-    }
-
-    func testLineWidthRasterScaleStaysWithinHalfAQuantizationStep() {
-        // The on-screen width error is the distance to the nearest eighth-of-
-        // an-octave step: at most 2^(1/16), about 4.4 percent, invisible on a
-        // one-to-two-point line.
-        let maximumRatio = exp2(Float(1.0 / 16.0)) + 1e-4
-        var demand: Float = 1100
-        while demand <= 8000 {
-            let scale = TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 4096, screenDemandPx: demand)
-            let onScreenPerTarget = scale * (demand / 4096)
-            XCTAssertLessThanOrEqual(max(onScreenPerTarget, 1 / onScreenPerTarget), maximumRatio,
-                                     "demand \(demand)")
-            demand *= 1.037
-        }
-    }
-
-    func testLineWidthRasterScaleClampsDegenerateFootprints() {
-        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 4096, screenDemandPx: 1), 4.0)
-        // The floor sits below the taper's half-scale so the taper still has
-        // headroom at the smallest realistic ratios.
-        XCTAssertEqual(TileAtlasAllocation.lineWidthRasterScale(cellSizePx: 256, screenDemandPx: 8000), 0.125)
     }
 
     func testSingleCandidateUpscalesToFullPageWithinExistingPageBudget() throws {

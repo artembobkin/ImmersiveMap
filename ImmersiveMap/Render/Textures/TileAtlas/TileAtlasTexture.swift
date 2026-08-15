@@ -83,6 +83,7 @@ class TileAtlasTexture {
     private var activeDashPixelsPerPoint: Float = 1.0
     private var activeDrawableHeightPx: Float = 0.0
     private var activeNativeTileWorldSize: Float = 0.0
+    private var activeLineWidthDollyScale: Float = 1.0
     
     init(metalDevice: MTLDevice,
          tilePipeline: TilePipeline,
@@ -191,7 +192,8 @@ class TileAtlasTexture {
                                lineWidthZoomTaper: Float = 1.0,
                                drawableHeightPx: Float = 0.0,
                                nativeTileWorldSize: Float = 0.0,
-                               streetPaletteBlend: Float = 0.0) {
+                               streetPaletteBlend: Float = 0.0,
+                               lineWidthDollyScale: Float = 1.0) {
         guard let renderEncoder else { return }
         // Bound once per page encoding; vertex bytes persist across draws.
         var streetPaletteUniform = StreetPaletteUniform(blend: streetPaletteBlend)
@@ -202,6 +204,7 @@ class TileAtlasTexture {
         // point-locked line widths through its own texel-per-pixel ratio,
         // with the low-zoom taper folded into that quantized ratio.
         activeLineWidthZoomTaper = lineWidthZoomTaper
+        activeLineWidthDollyScale = lineWidthDollyScale
         activeDashPixelsPerPoint = pixelsPerPoint
         activeDrawableHeightPx = drawableHeightPx
         activeNativeTileWorldSize = nativeTileWorldSize
@@ -312,12 +315,21 @@ class TileAtlasTexture {
         let coarseTileLineScale = TileAtlasAllocation.coarseTileLineScale(
             sourceTileZoom: metalTile.tile.z
         )
+        // Width bake scale = nominal texels-per-pixel of the slot times the
+        // global taper, coarse and dolly factors. Every input is either a
+        // constant of the slot and viewport or a global camera-zoom quantity:
+        // nothing about the tile's own projected footprint enters, so a
+        // border's width is identical on every tile and cannot change when
+        // the camera pans or tilts.
         var fadeUniform = activeFadeUniform
-        fadeUniform.pixelsPerPoint *= TileAtlasAllocation.lineWidthRasterScale(
-            cellSizePx: allocation.cellSizePx,
-            screenDemandPx: allocation.candidate.screenDemandPx,
-            zoomTaper: activeLineWidthZoomTaper * coarseTileLineScale
-        )
+        fadeUniform.pixelsPerPoint *= activeLineWidthZoomTaper
+            * coarseTileLineScale
+            * activeLineWidthDollyScale
+            * TileAtlasAllocation.lineWidthNominalTexelsPerPixel(
+                cellSizePx: allocation.cellSizePx,
+                drawableHeightPx: activeDrawableHeightPx,
+                nativeTileWorldSize: activeNativeTileWorldSize
+            )
         renderEncoder.setFragmentBytes(&fadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)

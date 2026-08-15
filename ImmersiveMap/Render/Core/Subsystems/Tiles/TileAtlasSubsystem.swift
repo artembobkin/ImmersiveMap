@@ -24,6 +24,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
     private var roadFadeAlpha: Float = 0.0
     private var landuseFadeAlpha: Float = 0.0
     private var lineWidthZoomTaper: Float = 1.0
+    private var lineWidthDollyScale: Float = 1.0
     private var streetPaletteBlend: Float = 0.0
     private var tileAtlasDebugSummary: TileAtlasDebugSummary?
     private var pageRetention = TileAtlasPageRetention()
@@ -43,6 +44,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
         roadFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .roads)
         landuseFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom, kind: .landuse)
         lineWidthZoomTaper = LineWidthZoomTaper.scale(for: frameContext.zoom)
+        lineWidthDollyScale = LineWidthDollyScale.quantized(for: frameContext.zoom)
         streetPaletteBlend = LowZoomOverviewFade.streetPaletteBlend(for: frameContext.zoom)
         updateAtlasPlanIfNeeded(frameContext: frameContext,
                                 placementVersion: tilePlacementState.placementVersion)
@@ -57,6 +59,11 @@ final class TileAtlasSubsystem: RenderSubsystem {
         // Continuous during the palette handover band, like the fade alphas
         // during theirs: the atlas re-bakes per frame while it moves.
         hasher.combine(streetPaletteBlend.bitPattern)
+        // Point-locked widths bake through the taper and the quantized dolly;
+        // both are global, so a step re-bakes every page once and panning or
+        // tilting the camera can never re-bake a width at all.
+        hasher.combine(lineWidthZoomTaper.bitPattern)
+        hasher.combine(lineWidthDollyScale.bitPattern)
         combineAtlasPlanHash(atlasPlan, into: &hasher)
         let textureChanged = globeTextureVersionTracker.stage(hasher.finalize())
         tileTraceRecorder.record(.atlasTextureStage(frameIndex: frameContext.frameIndex,
@@ -148,7 +155,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
                                                drawableHeightPx: Float(frameContext.drawSize.height),
                                                nativeTileWorldSize: Float(2.0 * Double.pi
                                                    * frameContext.services.settings.presentation.globeRadiusScale),
-                                               streetPaletteBlend: streetPaletteBlend)
+                                               streetPaletteBlend: streetPaletteBlend,
+                                               lineWidthDollyScale: lineWidthDollyScale)
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {
@@ -233,18 +241,6 @@ final class TileAtlasSubsystem: RenderSubsystem {
             hasher.combine(allocation.placeTile.metalTile.tile)
             hasher.combine(allocation.placeTile.placeIn.tile)
             hasher.combine(allocation.placeTile.lodKind)
-            // Quantized, so the fractional-zoom dolly re-bakes the pages in
-            // coarse steps: point-locked line widths bake in texels through
-            // this ratio (with the low-zoom taper folded in), and a stale
-            // ratio is exactly the on-screen width pump the point lock exists
-            // to remove.
-            hasher.combine(TileAtlasAllocation.lineWidthRasterScale(
-                cellSizePx: allocation.cellSizePx,
-                screenDemandPx: allocation.candidate.screenDemandPx,
-                zoomTaper: lineWidthZoomTaper * TileAtlasAllocation.coarseTileLineScale(
-                    sourceTileZoom: allocation.placeTile.metalTile.tile.z
-                )
-            ).bitPattern)
         }
     }
 }

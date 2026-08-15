@@ -67,30 +67,21 @@ struct TileAtlasAllocation: Hashable {
         candidate.placeTile
     }
 
-    /// Atlas texels per on-screen pixel for this slot, log-quantized to
-    /// eighth-of-an-octave steps (about 9 percent).
-    ///
-    /// Point-locked line widths bake into the atlas in texels, but the baked
-    /// page is then magnified on screen by the fractional-zoom dolly, which
-    /// the bake cannot see: converting points to texels through this ratio is
-    /// what keeps the on-screen width steady while the camera closes in, and
-    /// continuous across an integer zoom (the demand halves exactly as the
-    /// next level's tiles take over, so the products cancel). Quantized so
-    /// the value can sit in the atlas redraw hash without re-baking every
-    /// frame: a step costs one redraw, and a sub-step drift of a few percent
-    /// of a line's width is invisible. Clamped, so a degenerate footprint
-    /// cannot demand an absurd bake width.
-    /// `zoomTaper` is `LineWidthZoomTaper` for the frame's camera zoom, folded
-    /// in before quantization so the taper and the texel ratio step together;
-    /// quantizing them separately would leave a continuous product that would
-    /// re-bake the atlas every frame.
-    static func lineWidthRasterScale(cellSizePx: Int,
-                                     screenDemandPx: Float,
-                                     zoomTaper: Float = 1.0) -> Float {
-        let raw = Float(cellSizePx) / max(screenDemandPx, 1.0) * zoomTaper
-        let clamped = min(max(raw, 0.125), 4.0)
-        let stepped = (log2(clamped) * 8.0).rounded() / 8.0
-        return exp2(stepped)
+    /// Atlas texels per on-screen pixel for a slot at the nominal display
+    /// scale (a native tile shown with the fractional-zoom dolly at its far
+    /// point). A constant of the slot size and the viewport: nothing about
+    /// the camera or the tile's own projected footprint enters, which is what
+    /// keeps point-locked widths identical across tiles and immovable under
+    /// panning and tilting. The dolly is compensated separately, with the
+    /// global `LineWidthDollyScale`. The slot size cancels against the slot's
+    /// on-screen magnification, so a budget downgrade or a demand-driven
+    /// depth change cannot alter a line's visible width either.
+    static func lineWidthNominalTexelsPerPixel(cellSizePx: Int,
+                                               drawableHeightPx: Float,
+                                               nativeTileWorldSize: Float) -> Float {
+        guard drawableHeightPx > 0, nativeTileWorldSize > 0 else { return 0 }
+        return Float(cellSizePx) * 2.0 * tan(Float.pi / 8.0)
+            / (drawableHeightPx * nativeTileWorldSize)
     }
 
     /// Compensation for the sphere magnification of very coarse tiles.
