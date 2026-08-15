@@ -204,9 +204,9 @@ enum VisualReviewCatalogue {
             point-locked: zooming within a level must not visibly fatten it, \
             nor snap it at the next level. The dash pattern is anchored to \
             the map: panning or rotating must not make the dashes crawl along \
-            the border. No roads this far out: the major network fades in \
-            only from z6, where the source data carries it whole, so nothing \
-            can show a corridor cut off mid-line.
+            the border. No roads this far out (the motorway skeleton fades \
+            in from z5), and the major rivers read as thin pale-blue threads \
+            rather than vanishing.
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),

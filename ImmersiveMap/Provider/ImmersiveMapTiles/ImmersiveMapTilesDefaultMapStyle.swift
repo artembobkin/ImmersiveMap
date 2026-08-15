@@ -7,7 +7,7 @@ import simd
 /// the spirit of `MapboxDefaultMapStyle`, but reading the OpenMapTiles layer and
 /// field contract (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 39
+    private static let implementationRevision: UInt32 = 40
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -284,16 +284,28 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         if props["brunnel"]?.stringValue.lowercased() == "tunnel" {
             return hiddenStyle
         }
+        // The source ships major rivers from z3; without a floor their
+        // 2.5-unit width is sub-pixel over a country view and the
+        // antialiasing correctly dims them to near-invisibility, so a point
+        // floor keeps them readable threads from the first tile they appear
+        // in. World growth takes over at street zoom as with roads.
         let width: Double
+        let minimumWidthPoints: Float
         switch cls {
         case "river", "canal":
             width = 2.5
+            minimumWidthPoints = 0.7
         case "stream":
             width = 1.4
+            minimumWidthPoints = 0.5
         default:
             width = 1.0
+            minimumWidthPoints = 0.5
         }
-        return line(key: 22, color: configuration.layers.water, width: width)
+        return line(key: 22,
+                    color: configuration.layers.water,
+                    width: width,
+                    minimumWidthPoints: minimumWidthPoints)
     }
 
     private func transportationStyle(cls: String?,
@@ -376,10 +388,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static func roadClassMinimumZoom(_ cls: String?) -> Int {
         switch cls {
         case "motorway", "trunk":
-            // The source ships only motorway-class geometry below z6, so an
-            // earlier start would show corridors cut off wherever the OSM
-            // tagging changes to trunk; from z6 the major network is whole.
-            return 6
+            // The motorway skeleton starts at z5 by design choice, knowing
+            // the source adds trunk-class geometry only from z6: a corridor
+            // whose tagging changes to trunk shows cut until then.
+            return 5
         case "primary":
             return 7
         case "ferry":
@@ -785,10 +797,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                       color: SIMD4<Float>,
                       width: Double,
                       dashLength: Double = 0,
-                      dashGap: Double = 0) -> FeatureStyle {
+                      dashGap: Double = 0,
+                      minimumWidthPoints: Float = 0) -> FeatureStyle {
         FeatureStyle(
             key: key,
             color: color,
+            minimumWidthPoints: minimumWidthPoints,
             parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width,
                                                                          lineCapRound: true,
                                                                          lineJoinRound: true,

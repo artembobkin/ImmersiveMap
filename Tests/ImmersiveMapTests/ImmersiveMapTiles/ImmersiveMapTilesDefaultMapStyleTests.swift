@@ -156,7 +156,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // (below tile z6 only motorway-class geometry exists, so corridors
         // would show cut off mid-line); each further class joins at the zoom
         // it can carry meaning.
-        for (className, minimumZoom) in [("motorway", 6), ("trunk", 6),
+        for (className, minimumZoom) in [("motorway", 5), ("trunk", 5),
                                          ("primary", 7), ("ferry", 8), ("secondary", 9),
                                          ("tertiary", 10), ("rail", 10), ("minor", 12),
                                          ("service", 13), ("path", 14)] {
@@ -247,6 +247,12 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(makeStyle(style, layerName: "transportation",
                                  className: "motorway_construction", zoom: 12)
             .resolvedLineRenderPasses.contains { $0.roadPassRole == .casing }, false)
+
+        // Rivers carry a width floor so they read from the z3 tiles the
+        // source first ships them in.
+        let river = makeStyle(style, layerName: "waterway", className: "river", zoom: 3)
+        XCTAssertNotEqual(river.key, 0)
+        XCTAssertEqual(river.minimumWidthPoints, 0.7)
 
         // A construction variant of a gated class stays gated with the base.
         XCTAssertEqual(makeStyle(style, layerName: "transportation",

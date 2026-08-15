@@ -17,12 +17,10 @@ enum LowZoomOverviewFade {
 
     static let overviewStartZoom: Double = 0.0
     static let overviewEndZoom: Double = 1.0
-    /// Roads fade in together with the zoom where the source's major-road
-    /// network is complete: below tile z6 the tiles carry only motorway-class
-    /// geometry, and a network shown before trunk joins reads as corridors
-    /// cut off mid-line.
-    static let roadStartZoom: Double = 6.0
-    static let roadEndZoom: Double = 7.0
+    /// Roads fade in from the first zoom the style shows them (tile z5, the
+    /// motorway skeleton; trunks join at z6 when the source ships them).
+    static let roadStartZoom: Double = 5.0
+    static let roadEndZoom: Double = 6.0
     static let landuseStartZoom: Double = 13.0
     static let landuseEndZoom: Double = 14.0
     /// The overview-to-street ground palette handover. Continuous in camera
