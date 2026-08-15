@@ -10,8 +10,8 @@ import XCTest
 /// Full-pipeline export smoke test: recorder → headless engine → tile gate →
 /// pixel-buffer render → AVAssetWriter. Requires the compiled Metal library,
 /// so it skips under `swift test` and runs in the xcodebuild workspace suite.
-/// Tile loading may touch the network; the short readiness timeout keeps the
-/// test bounded offline (frames are then captured with whatever has loaded).
+/// Tiles come from the in-process fixture service, so the tile gate is
+/// exercised against bytes that are always there and never against a CDN.
 final class TourVideoExportEndToEndTests: XCTestCase {
     private final class Owner {}
 
@@ -28,7 +28,7 @@ final class TourVideoExportEndToEndTests: XCTestCase {
         let owner = Owner()
         recorder.attachRuntime(owner: owner,
                                context: ImmersiveMapVideoExportAttachContext(
-                                   currentSettings: { .default },
+                                   currentSettings: { FixtureTiles.settings() },
                                    currentCameraPosition: { nil },
                                    currentAvatarsController: { nil },
                                    currentMarkerContent: { nil }))
@@ -118,7 +118,12 @@ final class TourVideoExportEndToEndTests: XCTestCase {
             let recorder = ImmersiveMapTourVideoRecorder()
             recorder.attachRuntime(owner: self,
                                    context: ImmersiveMapVideoExportAttachContext(
-                                       currentSettings: { .default },
+                                       // Tile-free, not merely offline: this
+                                       // case compares two exports of the
+                                       // same scene, and a tile that made it
+                                       // into one of them but not the other
+                                       // would read as an overlay.
+                                       currentSettings: { FixtureTiles.tilelessSettings() },
                                        currentCameraPosition: { nil },
                                        currentAvatarsController: { avatarsController },
                                        currentMarkerContent: { markerContent }))
