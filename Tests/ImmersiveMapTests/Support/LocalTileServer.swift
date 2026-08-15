@@ -49,9 +49,14 @@ final class LocalTileServer: @unchecked Sendable {
 
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
-        // Port 0 asks the system for a free one, so parallel test runs and a
-        // developer's own servers never collide.
-        listener = try NWListener(using: parameters, on: .any)
+        // Bound to loopback, and to a port the system picks. Loopback because
+        // a fixture tile has no business being reachable from whatever network
+        // the machine is on, and because binding every interface is what makes
+        // macOS ask the developer whether to allow incoming connections. Port
+        // zero because parallel test runs and a developer's own servers must
+        // never collide.
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        listener = try NWListener(using: parameters)
 
         let started = DispatchSemaphore(value: 0)
         listener.stateUpdateHandler = { state in
