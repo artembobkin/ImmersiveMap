@@ -274,40 +274,4 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         tileValue.stringValue = value
         return tileValue
     }
-
-    private func uintValue(_ value: UInt64) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.uintValue = value
-        return tileValue
-    }
-
-    private func intValue(_ value: Int64) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.intValue = value
-        return tileValue
-    }
-
-    private func sintValue(_ value: Int64) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.sintValue = value
-        return tileValue
-    }
-
-    private func floatValue(_ value: Float) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.floatValue = value
-        return tileValue
-    }
-
-    private func doubleValue(_ value: Double) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.doubleValue = value
-        return tileValue
-    }
-
-    private func boolValue(_ value: Bool) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.boolValue = value
-        return tileValue
-    }
 }

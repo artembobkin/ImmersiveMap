@@ -41,9 +41,9 @@ Colors are straight (non-premultiplied) RGBA. `SIMD4<Float>` components run `0..
 
 ## Style fingerprints and the cache
 
-Every style exposes a `configurationFingerprint`, and both built-in configurations compute theirs as an FNV-1a hash over every palette component. This is not cosmetic bookkeeping: prepared tiles are cached on disk with the style baked in, so a palette that changes without changing the fingerprint would keep drawing from stale prepared tiles.
+Every style exposes a `configurationFingerprint`, and the built-in configuration computes its own as an FNV-1a hash over every palette component. This is not cosmetic bookkeeping: prepared tiles are cached on disk with the style baked in, so a palette that changes without changing the fingerprint would keep drawing from stale prepared tiles.
 
-The built-in configurations handle this for you. A **hand-written** `ImmersiveMapVectorTileStyle` must do it itself:
+The built-in configuration handles this for you. A **hand-written** `ImmersiveMapVectorTileStyle` must do it itself:
 
 ```swift
 struct MyStyle: ImmersiveMapVectorTileStyle {

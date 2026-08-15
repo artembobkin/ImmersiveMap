@@ -22,7 +22,8 @@ runtime assets.
 
 ## Must Not Contain
 
-- Bearer tokens, provider access tokens, private URLs, or local environment notes.
+- Bearer tokens, tile-provider API keys, private URLs, or local environment
+  notes.
 - Internal stand documentation, database credentials, or generated secret files.
 - Build artifacts, screenshots from private sessions, or DerivedData.
 - Hand-written Swift, Metal, Proto, or renderer implementation files.

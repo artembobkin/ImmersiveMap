@@ -255,13 +255,9 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         tile: Tile = Tile(x: 0, y: 0, z: 0),
         mvtData: Data? = nil,
         glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests,
-        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international,
-        tileProvider: AnyImmersiveMapTileProvider? = nil
+        fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     ) throws -> [String] {
         var config = ImmersiveMapSettings.default
-        if let tileProvider {
-            config = config.tileProvider(tileProvider)
-        }
         config.labels.language = language
         config.labels.fallbackPolicy = fallbackPolicy
 

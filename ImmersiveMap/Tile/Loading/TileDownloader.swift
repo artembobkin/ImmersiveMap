@@ -84,7 +84,7 @@ class TileDownloader: @unchecked Sendable {
     private let authorizationMode: ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
     private let session: URLSession
     // Retains the TileJSON discovery task so it can be cancelled on deinit; nil
-    // when no TileJSON endpoint is configured (Mapbox/OSM, or a bare base URL).
+    // when no TileJSON endpoint is configured (a bare tile base URL).
     private var tileJSONTemplateTask: Task<Void, Never>?
 
     init(config: ImmersiveMapSettings) {

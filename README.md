@@ -104,7 +104,7 @@ The App Store download size is lower than the archive size, since the store comp
 
 ## Example Apps
 
-The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, offline regions, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally and render the built-in tile provider with no token or account.
+The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, offline regions, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally, and every one but the custom tile source renders the built-in tile provider with no token or account.
 
 ## Where the map data comes from
 

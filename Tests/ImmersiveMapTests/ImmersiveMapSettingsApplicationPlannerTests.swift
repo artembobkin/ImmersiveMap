@@ -145,7 +145,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
-    func testMapStyleTokenChangeRebuildsPreparedData() {
+    func testMapStyleLabelPaletteChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault))
         let newSettings = ImmersiveMapSettings.default

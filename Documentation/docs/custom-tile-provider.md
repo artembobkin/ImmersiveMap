@@ -109,7 +109,7 @@ Providers pair with an `ImmersiveMapMapStyle` (see `Provider/Core/ImmersiveMapMa
 
 ## Provider-specific schema logic
 
-MVT layers differ between providers (OpenMapTiles is one schema; other tile services name their layers and fields differently). Provider-specific schema normalization is confined to `VectorTileAdaptation/` and the concrete provider folders under `Provider/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data - keep provider quirks inside the adaptation layer.
+MVT layers differ between providers (OpenMapTiles is one schema; other tile services name their layers and fields differently). Provider-specific schema normalization is confined to `VectorTileAdaptation/` and the concrete provider folder `Provider/ImmersiveMapTiles/`. The rest of the engine (`Render`, `Labels`, `Tile`) consumes only provider-neutral, normalized data - keep provider quirks inside the adaptation layer.
 
 ## Attribution
 

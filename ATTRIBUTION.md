@@ -54,7 +54,7 @@ The required credit depends on whose tiles you render, not on which parts of the
 | `ImmersiveMapTilesProvider` (default) | `© OpenStreetMap © OpenMapTiles` | [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) |
 | Custom `VectorTileProvider` | whatever your data source requires, because the engine cannot know | your source's license page |
 
-The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. A commercial tile service you plug in through `VectorTileProvider` usually has terms of its own that apply in addition to the OSM credit.
+The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. A tile source you plug in through `VectorTileProvider` carries whatever its own licence requires, which may or may not include an OpenStreetMap credit: that depends on the data behind it, and the engine cannot know. Read the source's terms and declare the credit they ask for on the provider.
 
 ### Where it has to appear
 
