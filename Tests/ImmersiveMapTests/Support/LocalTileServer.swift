@@ -61,7 +61,13 @@ final class LocalTileServer: @unchecked Sendable {
         let started = DispatchSemaphore(value: 0)
         listener.stateUpdateHandler = { state in
             switch state {
-            case .ready, .failed, .cancelled:
+            // `.waiting` is where a bind failure actually lands (measured:
+            // `waiting(POSIXErrorCode(49): Can't assign requested address)`),
+            // and it does not resolve itself for a listener that cannot have
+            // the endpoint it asked for. Waiting the full timeout on it stalls
+            // the caller, which is a main-thread test, for five seconds and
+            // then reports the same thing.
+            case .ready, .waiting, .failed, .cancelled:
                 started.signal()
             default:
                 break
@@ -75,10 +81,16 @@ final class LocalTileServer: @unchecked Sendable {
         _ = started.wait(timeout: .now() + 5)
     }
 
-    /// Root of the served namespace; nil while the listener has no port, which
-    /// means it never came up.
+    /// Root of the served namespace; nil when the listener never came up.
+    ///
+    /// A listener that failed to bind reports port 0 rather than nil
+    /// (measured), so the obvious `listener.port != nil` test is not the one
+    /// to make: it would hand out `http://127.0.0.1:0`, which refuses every
+    /// connection exactly like the dead port. Nothing would reach the network,
+    /// but every rendering case would go quietly tile-less and say so in
+    /// whatever terms its own assertion is phrased in, rather than here.
     var baseURL: URL? {
-        guard let port = listener.port?.rawValue else {
+        guard let port = listener.port?.rawValue, port != 0 else {
             return nil
         }
         return URL(string: "http://127.0.0.1:\(port)")
