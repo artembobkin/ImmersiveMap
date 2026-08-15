@@ -34,6 +34,12 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(osmWood.color, configuration.globalLandcover.forest)
         XCTAssertEqual(osmWood.streetColor, configuration.layers.wood)
 
+        // Cities render: the WorldCover urban class is a soft gray with the
+        // OSM residential beige as its street counterpart.
+        let urban = makeStyle(style, layerName: "globallandcover", className: "urban", zoom: 6)
+        XCTAssertEqual(urban.key, 10)
+        XCTAssertEqual(urban.streetColor, configuration.layers.residential)
+
         // Styles outside the handover bake the same color twice.
         let boundary = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 9)
         XCTAssertNil(boundary.streetColor)
@@ -80,7 +86,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  zoom: 2).color,
                        overviewForest)
         // Past the full merge the blend releases gradually instead of
-        // snapping to the raw palette: at z3 vegetation still sits 65 percent
+        // snapping to the raw palette: at z3 vegetation still sits 70 percent
         // of the way toward the shared tone (forests three quarters of that),
         // and only from z9 is the palette unmixed.
         func blended(_ base: SIMD4<Float>, amount: Float) -> SIMD4<Float> {
@@ -90,17 +96,17 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  layerName: "globallandcover",
                                  className: "land",
                                  zoom: 3).color,
-                       blended(colors.land, amount: 0.65))
+                       blended(colors.land, amount: 0.7))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "crop",
                                  zoom: 3).color,
-                       blended(colors.crop, amount: 0.65))
+                       blended(colors.crop, amount: 0.7))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 3).color,
-                       blended(colors.forest, amount: 0.65 * 0.75))
+                       blended(colors.forest, amount: 0.7 * 0.75))
         // At z9 the vegetation blend has fully released: the overview color
         // is the raw palette (the street handover happens per frame in the
         // shader, not in the baked color).
@@ -116,9 +122,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let colors = configuration.globalLandcover
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
         // z8 is the last zoom before the street handover begins; the
-        // vegetation blend is a residual 10 percent there, so the palette is
+        // vegetation blend is a residual 20 percent there, so the palette is
         // as close to raw as it ever gets. One key per class.
-        let vegetationResidual: Float = 0.1
+        let vegetationResidual: Float = 0.2
         func residual(_ base: SIMD4<Float>, forest: Bool = false) -> SIMD4<Float> {
             base + (colors.grass - base) * (forest ? vegetationResidual * 0.75 : vegetationResidual)
         }
