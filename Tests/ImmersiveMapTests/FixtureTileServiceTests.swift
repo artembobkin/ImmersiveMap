@@ -50,6 +50,93 @@ final class FixtureTileServiceTests: XCTestCase {
                        "The advertised template must serve tiles, not just resolve")
     }
 
+    /// A request split across two writes is still answered with the tile.
+    ///
+    /// TCP may break even a short GET in two, and the server used to answer
+    /// whatever had arrived by the first read: the truncated path matched no
+    /// route and became a 404, which the loader reads as "this tile is empty"
+    /// and blacklists for ten minutes (`TileRetryController.notFoundCooldown`).
+    /// One split request would have emptied the map for the rest of the run.
+    func testASplitRequestIsStillAnsweredWithTheTile() throws {
+        let (data, status) = try Self.rawRequest(["GET /tiles/3/4/", "5.mvt HTTP/1.1\r\nHost: fixture\r\n\r\n"])
+
+        XCTAssertEqual(status, 200, "A request that arrived in two pieces must not be a 404")
+        XCTAssertEqual(try MvtTileDecoder.decode(data: data).layers.map(\.name), ["water"])
+    }
+
+    /// A request that stops mid-line is a 400, deliberately not a 404: the
+    /// loader retries a client error within a second, and gives a not-found
+    /// ten minutes.
+    func testATruncatedRequestIsRefusedCheaply() throws {
+        let (_, status) = try Self.rawRequest(["GET /tiles/3/4"], closeAfterWriting: true)
+
+        XCTAssertEqual(status, 400)
+    }
+
+    /// `"?".split(separator: "?")` is empty, and the old code subscripted it,
+    /// which traps and takes the whole test process down.
+    func testARequestTargetOfOnlyAQuestionMarkDoesNotTrap() throws {
+        let (_, status) = try Self.rawRequest(["GET ? HTTP/1.1\r\nHost: fixture\r\n\r\n"])
+
+        XCTAssertEqual(status, 404, "An empty path carries no tile, but it must be answered, not crashed on")
+    }
+
+    /// Writes the pieces to the fixture service over a raw socket, with a
+    /// pause between them so they land in separate reads, and returns the
+    /// status line's code and the body.
+    private static func rawRequest(_ pieces: [String],
+                                   closeAfterWriting: Bool = false) throws -> (body: Data, status: Int) {
+        let tileBaseURL = try XCTUnwrap(FixtureTileService.shared.tileBaseURL)
+        let port = try XCTUnwrap(tileBaseURL.port)
+
+        let socketHandle = socket(AF_INET, SOCK_STREAM, 0)
+        guard socketHandle >= 0 else {
+            throw XCTSkip("A socket could not be opened in this environment")
+        }
+        defer { close(socketHandle) }
+
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let connected = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(socketHandle, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard connected == 0 else {
+            throw XCTSkip("The fixture service refused a raw connection in this environment")
+        }
+
+        for (index, piece) in pieces.enumerated() {
+            _ = piece.withCString { write(socketHandle, $0, strlen($0)) }
+            if index < pieces.count - 1 {
+                // Long enough that the pieces cannot coalesce into one read.
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+        }
+        if closeAfterWriting {
+            shutdown(socketHandle, SHUT_WR)
+        }
+
+        var response = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let readCount = read(socketHandle, &buffer, buffer.count)
+            guard readCount > 0 else {
+                break
+            }
+            response.append(contentsOf: buffer[0..<readCount])
+        }
+
+        let separator = Data("\r\n\r\n".utf8)
+        let headerEnd = try XCTUnwrap(response.range(of: separator), "The answer carried no header block")
+        let statusLine = String(decoding: response[response.startIndex..<headerEnd.lowerBound], as: UTF8.self)
+            .split(separator: "\r\n").first ?? ""
+        let status = Int(statusLine.split(separator: " ").dropFirst().first ?? "") ?? 0
+        return (Data(response[headerEnd.upperBound...]), status)
+    }
+
     /// The settings a case renders under carry no address that leaves the
     /// machine, whichever helper it took them from.
     func testFixtureSettingsStayOnLoopback() {
@@ -72,23 +159,34 @@ final class FixtureTileServiceTests: XCTestCase {
     /// Read off the checkout, in the spirit of the cases that assert on shader
     /// source: there is no way to ask a built test bundle which settings its
     /// sources pass. On a device there is no checkout, so this skips.
+    ///
+    /// What it cannot see: settings that never appear at the call site.
+    /// `capture(settings:)`, `RenderFrameEngine.init(settings:)` and
+    /// `ImmersiveMapView.init(settings:)` all default to the shipped settings
+    /// in their own signatures, so a call that omits the argument reaches the
+    /// hosted service with nothing to grep for. One such call existed and is
+    /// fixed; if another turns up, spell the argument out rather than trying
+    /// to teach this check to read Swift.
     func testNoTestBuildsARuntimeFromTheShippedDefaults() throws {
-        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        guard let enumerator = FileManager.default.enumerator(at: testsDirectory,
-                                                              includingPropertiesForKeys: nil) else {
-            throw XCTSkip("The test sources are not on disk in this environment")
-        }
+        let thisFile = URL(fileURLWithPath: #filePath).standardizedFileURL
+        let testsDirectory = thisFile.deletingLastPathComponent()
+        // `Support/` at the top of the tests tree, and only there: a nested
+        // `Support` folder somewhere else is not the fixture layer and must
+        // still be checked.
+        let supportDirectory = testsDirectory.appendingPathComponent("Support").standardizedFileURL
+        let enumerator = FileManager.default.enumerator(at: testsDirectory, includingPropertiesForKeys: nil)
 
         var offenders: [String] = []
         var scannedFiles = 0
         var runtimeFiles = 0
-        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+        for case let fileURL as URL in enumerator ?? .init() where fileURL.pathExtension == "swift" {
             scannedFiles += 1
             // Support owns the fixture layer itself and the harness that
             // rewrites settings before the engine sees them; this file spells
             // the patterns out and would otherwise report itself.
-            guard fileURL.deletingLastPathComponent().lastPathComponent != "Support",
-                  fileURL.lastPathComponent != URL(fileURLWithPath: #filePath).lastPathComponent else {
+            let standardized = fileURL.standardizedFileURL
+            guard standardized.deletingLastPathComponent() != supportDirectory,
+                  standardized != thisFile else {
                 continue
             }
             let source = try String(contentsOf: fileURL, encoding: .utf8)
@@ -117,18 +215,46 @@ final class FixtureTileServiceTests: XCTestCase {
                        """)
     }
 
-    /// Entry points that take settings verbatim and build a renderer, a tile
-    /// loader and a transport out of them.
+    /// Everything that turns settings into a transport, not just the public
+    /// names.
+    ///
+    /// The first version of this list held the five entry points an app calls,
+    /// and it was wrong: `RenderFrameEngine` builds a `RenderPersistentContext`,
+    /// which builds a `TileRenderStore`, which builds an
+    /// `ImmersiveMapNeedsTile`, which builds a `DefaultTileLoadPipeline`,
+    /// which builds a `TileDownloader`, whose `init` fires the TileJSON
+    /// request before a frame is ever asked for. Three test files reached the
+    /// hosted service through that chain while this check watched the layer
+    /// above and reported nothing. The list now names the chain itself.
     private static let runtimeEntryPoints = ["ImmersiveMapNSView(",
                                              "ImmersiveMapUIView(",
                                              "ImmersiveMapStillRecorder(",
                                              "ImmersiveMapTourVideoRecorder(",
-                                             "ImmersiveMapVideoExportAttachContext("]
+                                             "ImmersiveMapVideoExportAttachContext(",
+                                             "ImmersiveMapHostRuntime(",
+                                             "ImmersiveMapRuntimeGraph(",
+                                             "RenderFrameEngine(",
+                                             "RenderPersistentContext(",
+                                             "TileRenderStore(",
+                                             // These two have an initializer that takes the
+                                             // pipeline (or the downloader) already built, which
+                                             // is how their own tests drive them and which touches
+                                             // nothing. Only the convenience that assembles the
+                                             // transport out of settings is a way to the network,
+                                             // and it is the one that takes a tile render store.
+                                             "ImmersiveMapNeedsTile(tileRenderStore:",
+                                             "DefaultTileLoadPipeline(tileRenderStore:",
+                                             "TileDownloader(config:"]
 
     /// How the shipped defaults are spelled where they are handed to one.
+    /// `config:` is the name every internal seam uses, `settings:` the public
+    /// one, and a bare `ImmersiveMapTilesProvider()` is the hosted service
+    /// itself: its `tileBaseURL` defaults to `tiles.immersivemap.dev`.
     private static let defaultSettings = ["ImmersiveMapSettings.default",
                                           "settings: .default",
-                                          "currentSettings: { .default }"]
+                                          "config: .default",
+                                          "currentSettings: { .default }",
+                                          "ImmersiveMapTilesProvider()"]
 
     /// Whether the line turns the shipped defaults into settings a runtime
     /// could be built from, and does so without going through `FixtureTiles`.
@@ -139,15 +265,31 @@ final class FixtureTileServiceTests: XCTestCase {
     /// the hosted tile service still in them. Textually the two differ by the
     /// call parentheses, which is what this looks for.
     private static func buildsSettingsFromTheShippedDefaults(_ line: Substring) -> Bool {
-        guard line.contains("FixtureTiles.") == false else {
+        // Comments and assertions cannot build anything. Stripping them keeps
+        // the check off prose that merely names the pattern, including prose
+        // explaining this rule.
+        let code = line.ranges(of: "//").first.map { line[line.startIndex..<$0.lowerBound] } ?? line
+        guard code.trimmingCharacters(in: .whitespaces).hasPrefix("XCTAssert") == false else {
             return false
         }
         for marker in defaultSettings {
-            for range in line.ranges(of: marker) where isSettingsValue(line[range.upperBound...]) {
+            for range in code.ranges(of: marker) where isSettingsValue(code[range.upperBound...])
+            && isInsideAFixtureCall(code[code.startIndex..<range.lowerBound]) == false {
                 return true
             }
         }
         return false
+    }
+
+    /// Whether the defaults are being handed to `FixtureTiles` as a base to
+    /// rewrite, which is the one legitimate way to name them next to a
+    /// runtime.
+    ///
+    /// Deliberately narrower than "the line mentions FixtureTiles somewhere":
+    /// `FixtureTiles.settings().tileProvider(ImmersiveMapTilesProvider())`
+    /// undoes the fixture on the same line that would have excused it.
+    private static func isInsideAFixtureCall(_ before: Substring) -> Bool {
+        before.hasSuffix("FixtureTiles.settings(") || before.hasSuffix("FixtureTiles.tilelessSettings(")
     }
 
     /// True unless what follows the defaults is a plain property access.

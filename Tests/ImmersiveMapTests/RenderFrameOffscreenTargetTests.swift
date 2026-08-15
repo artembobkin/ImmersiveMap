@@ -34,7 +34,7 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
             throw XCTSkip("Unified-memory GPU is required for direct texture readback")
         }
 
-        let settings = ImmersiveMapSettings.default
+        let settings = FixtureTiles.tilelessSettings()
         let clock = RenderFrameScriptedClock()
         let eventSink = VideoExportRenderEventSink()
         let renderCamera = FrameCameraStateResolver(settings: settings)

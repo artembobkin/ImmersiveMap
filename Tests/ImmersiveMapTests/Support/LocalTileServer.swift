@@ -41,9 +41,9 @@ final class LocalTileServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "ImmersiveMapTests.LocalTileServer")
     private let route: @Sendable (String) -> Response?
 
-    /// - Parameter route: called with the request path (`/tiles/3/4/5.mvt`),
-    ///   on the server's own queue and possibly concurrently, so it must not
-    ///   capture mutable state.
+    /// - Parameter route: called with the request path (`/tiles/3/4/5.mvt`) on
+    ///   the server's own serial queue, so it sees one request at a time, but
+    ///   never on the caller's thread.
     init(route: @escaping @Sendable (String) -> Response?) throws {
         self.route = route
 
@@ -69,17 +69,7 @@ final class LocalTileServer: @unchecked Sendable {
         }
         listener.newConnectionHandler = { [route, queue] connection in
             connection.start(queue: queue)
-            // Reading the request keeps the client from seeing a reset before
-            // its write completes, and is how the path is known at all. A tile
-            // request is a bare GET, so it arrives in one segment.
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { content, _, _, _ in
-                let path = content.flatMap(Self.requestPath(in:)) ?? "/"
-                let response = Self.httpResponse(for: route(path))
-                connection.send(content: response,
-                                completion: .contentProcessed { _ in
-                                    connection.cancel()
-                                })
-            }
+            Self.readRequest(on: connection, received: Data(), route: route)
         }
         listener.start(queue: queue)
         _ = started.wait(timeout: .now() + 5)
@@ -105,30 +95,82 @@ final class LocalTileServer: @unchecked Sendable {
         listener.cancel()
     }
 
-    /// The path out of a request line such as `GET /tiles/3/4/5.mvt HTTP/1.1`,
-    /// query string dropped.
+    /// Reads until the header block is complete, then answers exactly once.
+    ///
+    /// One `receive` is not enough. TCP may split even a short GET, and an
+    /// earlier version answered whatever had arrived by then: a truncated
+    /// path matched no route and became a 404. A 404 is the most expensive
+    /// wrong answer this server can give, because the loader reads it as
+    /// "this tile has nothing to render" and puts the tile in a ten-minute
+    /// cooldown (`TileRetryController.notFoundCooldown`), which inside a test
+    /// process means forever. One split request would have emptied the map
+    /// for the rest of the run, silently, which is the flake this whole
+    /// fixture service exists to remove.
+    private static func readRequest(on connection: NWConnection,
+                                    received: Data,
+                                    route: @escaping @Sendable (String) -> Response?) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: maximumRequestBytes) { content, _, isComplete, error in
+            var request = received
+            if let content {
+                request.append(content)
+            }
+            let headersComplete = request.range(of: Data("\r\n\r\n".utf8)) != nil
+            if headersComplete == false, isComplete == false, error == nil,
+               request.count < maximumRequestBytes {
+                readRequest(on: connection, received: request, route: route)
+                return
+            }
+            // A request that never arrived in full gets a 400 rather than a
+            // 404: the loader retries a client error within a second and
+            // blacklists a not-found for ten minutes.
+            let response = requestPath(in: request).map { httpResponse(for: route($0)) }
+                ?? httpResponse(status: "400 Bad Request")
+            connection.send(content: response,
+                            completion: .contentProcessed { _ in
+                                connection.cancel()
+                            })
+        }
+    }
+
+    /// The path out of a complete request line such as
+    /// `GET /tiles/3/4/5.mvt HTTP/1.1`, query string dropped. Nil when the
+    /// line is not all there, so a partial read cannot be mistaken for a
+    /// request for `/`.
     private static func requestPath(in data: Data) -> String? {
-        guard let requestLine = String(decoding: data.prefix(8 * 1024), as: UTF8.self)
-            .split(separator: "\r\n", maxSplits: 1, omittingEmptySubsequences: false).first else {
+        let head = String(decoding: data.prefix(maximumRequestBytes), as: UTF8.self)
+        guard let lineEnd = head.range(of: "\r\n") else {
             return nil
         }
-        let fields = requestLine.split(separator: " ")
-        guard fields.count >= 2 else {
+        // Method, target and version: a request line that is all there has
+        // three fields, and anything shorter is a read that stopped early.
+        let fields = head[head.startIndex..<lineEnd.lowerBound].split(separator: " ")
+        guard fields.count == 3 else {
             return nil
         }
-        return String(fields[1].split(separator: "?", maxSplits: 1)[0])
+        // `prefix`, not `split`: splitting "?" on "?" drops both empty halves
+        // and leaves an empty array, and subscripting that traps and takes the
+        // whole test process with it.
+        return String(fields[1].prefix { $0 != "?" })
+    }
+
+    private static let maximumRequestBytes = 64 * 1024
+
+    /// A bodiless answer, for the paths that carry no tile and for a request
+    /// that never arrived in full.
+    private static func httpResponse(status: String) -> Data {
+        let header = """
+            HTTP/1.1 \(status)\r
+            Content-Length: 0\r
+            Cache-Control: no-store\r
+            Connection: close\r
+            \r\n
+            """
+        return Data(header.utf8)
     }
 
     private static func httpResponse(for response: Response?) -> Data {
         guard let response else {
-            let notFound = """
-                HTTP/1.1 404 Not Found\r
-                Content-Length: 0\r
-                Cache-Control: no-store\r
-                Connection: close\r
-                \r\n
-                """
-            return Data(notFound.utf8)
+            return httpResponse(status: "404 Not Found")
         }
         let header = """
             HTTP/1.1 200 OK\r

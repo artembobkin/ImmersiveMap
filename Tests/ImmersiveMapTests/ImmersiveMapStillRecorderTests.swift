@@ -49,7 +49,8 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
     func testCaptureRejectsAnInvalidConfigurationBeforeTouchingTheGPU() async {
         let recorder = ImmersiveMapStillRecorder()
         do {
-            _ = try await recorder.capture(configuration: ImmersiveMapStillConfiguration(width: 0))
+            _ = try await recorder.capture(settings: FixtureTiles.tilelessSettings(),
+                                           configuration: ImmersiveMapStillConfiguration(width: 0))
             XCTFail("A zero width must not be captured")
         } catch let error as ImmersiveMapStillCaptureError {
             guard case .invalidConfiguration = error else {
@@ -74,11 +75,17 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
+        // Settings spelled out rather than left to the default argument: the
+        // capture that gets through builds a whole runtime, and `capture`
+        // defaults to `ImmersiveMapSettings.default`, which streams from the
+        // hosted tile service.
+        let settings = FixtureTiles.tilelessSettings()
+
         // Both run on the main actor, so the second call gets its turn while
         // the first is suspended awaiting the GPU, which is exactly the window
         // the guard exists for.
-        async let first: CGImage = recorder.capture(configuration: configuration)
-        async let second: CGImage = recorder.capture(configuration: configuration)
+        async let first: CGImage = recorder.capture(settings: settings, configuration: configuration)
+        async let second: CGImage = recorder.capture(settings: settings, configuration: configuration)
 
         var failures: [ImmersiveMapStillCaptureError] = []
         do {
@@ -99,8 +106,13 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
 
     // MARK: - Rendering
 
-    /// The frame comes back at the requested size, with the map drawn on it
+    /// The frame comes back at the requested size, with the globe drawn on it
     /// and the space around it left unpainted.
+    ///
+    /// The globe, not the map: this renders tile-free, so what covers the
+    /// middle is the globe surface itself. What a tile adds to a capture is
+    /// asserted by `testSceneModelsReachTheCapturedImage`, which serves them
+    /// from the fixture service.
     ///
     /// Transparent space is what makes this decidable without a reference
     /// image: the corners must carry no coverage at all and the middle of the

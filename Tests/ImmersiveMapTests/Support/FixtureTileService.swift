@@ -103,15 +103,25 @@ enum FixtureTiles {
     /// Port 1 is reserved and unused; nothing on the machine listens there.
     static let deadEndTileBaseURL = URL(string: "http://127.0.0.1:1/tiles")!
 
-    /// Both disk caches off, for two reasons. A test run must leave nothing
-    /// behind in the user's Caches directory, and a run must not be able to
-    /// read what an earlier one wrote: a warm prepared-tile cache is a way for
-    /// yesterday's tiles to appear in today's frame, which is the same
-    /// non-determinism the network was removed to avoid.
+    /// Both disk caches off, and downloaded regions ignored.
+    ///
+    /// The caches for two reasons: a test run must leave nothing behind in the
+    /// user's Caches directory, and a run must not be able to read what an
+    /// earlier one wrote. A warm prepared-tile cache is a way for yesterday's
+    /// tiles to appear in today's frame, which is the same non-determinism the
+    /// network was removed to avoid.
+    ///
+    /// The regions because `DefaultTileLoadPipeline` otherwise builds an
+    /// `OfflineTileStore` rooted in the user's real Application Support
+    /// directory, and in `.automatic` mode consults it on every failed
+    /// download. Nothing in the suite writes there, so today it only ever
+    /// reads, but a store the tests never populate has no business being
+    /// consulted by them at all.
     private static func cacheless(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
         var cacheless = settings
         cacheless.tiles.cache.urlCacheEnabled = false
         cacheless.tiles.cache.preparedTileCacheEnabled = false
+        cacheless.tiles.offline.mode = .disabled
         return cacheless
     }
 }

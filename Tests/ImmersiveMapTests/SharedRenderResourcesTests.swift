@@ -63,13 +63,17 @@ final class SharedRenderResourcesTests: XCTestCase {
 
     @MainActor
     private func makePersistentContext() -> RenderPersistentContext {
-        RenderPersistentContext(layer: CAMetalLayer(),
+        // A persistent context owns the tile store, and the tile store builds
+        // the transport: with the shipped settings this reaches the hosted
+        // tile service before a frame is asked for.
+        let settings = FixtureTiles.tilelessSettings()
+        return RenderPersistentContext(layer: CAMetalLayer(),
                                 avatarSource: StubAvatarSource(),
                                 markerSource: StubMarkerSource(),
                                 sceneModelSource: StubSceneModelSource(),
                                 routeSource: StubRouteSource(),
-                                providerRuntime: ImmersiveMapProviderRuntimeContext(settings: .default),
-                                config: .default,
+                                providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                config: settings,
                                 eventSink: VideoExportRenderEventSink(),
                                 tileTraceRecorder: TileTraceRecorder(),
                                 baseLabelTraceRecorder: BaseLabelTraceRecorder())

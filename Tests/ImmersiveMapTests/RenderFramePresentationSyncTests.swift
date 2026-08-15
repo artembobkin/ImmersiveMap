@@ -41,7 +41,7 @@ final class RenderFramePresentationSyncTests: XCTestCase {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 
-        let settings = ImmersiveMapSettings.default
+        let settings = FixtureTiles.tilelessSettings()
         let clock = RenderFrameScriptedClock()
         let eventSink = VideoExportRenderEventSink()
         let markerSource = MutableMarkerSource()

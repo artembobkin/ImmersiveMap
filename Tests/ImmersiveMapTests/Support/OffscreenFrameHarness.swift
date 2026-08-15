@@ -111,6 +111,15 @@ final class OffscreenFrameHarness {
         // directly: every offscreen test states that it renders an empty map,
         // and `FixtureTiles.tilelessSettings` makes that true. A test that
         // wants tiles hands them to `tileRenderStore` itself.
+        //
+        // Note what this costs: the settings go through the `tileProvider`
+        // builder, so anything a caller set in `tiles.network` or
+        // `tiles.coverage` is overwritten here. Nothing does today. The
+        // previous version assigned `settings.tileProvider` alone and left
+        // `tiles.network` untouched, which read as more conservative and was
+        // in fact the bug: the transport takes its URL from `tiles.network`,
+        // so the dead port never applied and this harness streamed tiles from
+        // the hosted service while claiming to be offline.
         return try OffscreenFrameHarness(settings: FixtureTiles.tilelessSettings(settings),
                                          size: size,
                                          date: date,
