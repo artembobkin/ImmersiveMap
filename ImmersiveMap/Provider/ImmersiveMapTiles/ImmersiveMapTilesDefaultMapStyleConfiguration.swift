@@ -299,18 +299,21 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles {
-    /// Low-contrast overview palette: a continuous sage land base hides sparse
-    /// source-data gaps, while broad biome classes remain distinguishable without
-    /// turning the globe into a high-contrast categorical mosaic.
+    /// The street palette, class by class: the overview and street sets are
+    /// deliberately one set of colors, so the map wears the same water blue
+    /// and the same greens at every zoom and nothing shifts hue while zooming
+    /// (the per-frame street blend then lerps between equal endpoints and is
+    /// inert). A custom configuration may differentiate the two sets and get
+    /// a smooth camera-zoom handover between them.
     static let softBiomes = ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles(
-        land: SIMD4<Float>(0.722, 0.784, 0.596, 1.0),
-        water: SIMD4<Float>(0.302, 0.600, 0.902, 1.0),
-        forest: SIMD4<Float>(0.502, 0.627, 0.408, 1.0),
-        grass: SIMD4<Float>(0.627, 0.722, 0.502, 1.0),
-        crop: SIMD4<Float>(0.722, 0.753, 0.565, 1.0),
-        barren: SIMD4<Float>(0.941, 0.878, 0.753, 1.0),
-        wetland: SIMD4<Float>(0.533, 0.659, 0.439, 1.0),
-        snow: SIMD4<Float>(0.949, 0.953, 0.937, 1.0)
+        land: SIMD4<Float>(0.941, 0.937, 0.910, 1.0),
+        water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
+        forest: SIMD4<Float>(0.560, 0.760, 0.480, 1.0),
+        grass: SIMD4<Float>(0.700, 0.840, 0.540, 1.0),
+        crop: SIMD4<Float>(0.800, 0.860, 0.580, 1.0),
+        barren: SIMD4<Float>(0.945, 0.914, 0.784, 1.0),
+        wetland: SIMD4<Float>(0.690, 0.808, 0.639, 1.0),
+        snow: SIMD4<Float>(0.925, 0.949, 0.973, 1.0)
     )
 }
 

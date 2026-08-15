@@ -1073,7 +1073,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                              fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
                              baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
                                                                   globeBackground: SIMD4<Double>(0.0039, 0.0431, 0.0980, 1.0),
-                                                                  water: SIMD4<Float>(0.3, 0.6, 0.9, 1.0),
+                                                                  water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
                                                                   landCover: SIMD4<Float>(0.4, 0.7, 0.4, 0.7))),
         avatars: AvatarSettings(size: .px64,
                                 sizeScale: 1.7,
