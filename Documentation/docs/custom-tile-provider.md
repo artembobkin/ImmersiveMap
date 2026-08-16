@@ -101,6 +101,6 @@ attributionOverride: ImmersiveMapAttribution(
 
 `title` is the badge's first line; an empty `copyright` renders a one-line badge, a non-empty one adds a second, smaller line. An explicit `ImmersiveMapAttribution.none` empties the badge.
 
-The badge can also be restyled with `attributionSettings(size:position:textColor:)` or hidden with `attributionSettings(isVisible: false)`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence. A map that starts with a hidden or empty badge logs a one-time console warning; an app that shows the credit itself declares that with `.attributionProvidedExternally()`.
+The badge can also be restyled with `attributionSettings(size:position:margin:textColor:)` (the margin is the distance from the corner; 0, the default, pins the badge tightly into it) or hidden with `attributionSettings(isVisible: false)`, but hiding required attribution without crediting the source elsewhere in the app breaks the data licence. A map that starts with a hidden or empty badge logs a one-time console warning; an app that shows the credit itself declares that with `.attributionProvidedExternally()`.
 
 Running example: [`Examples/macOS/ImmersiveMapCustomTilesMac`](../../Examples/macOS/ImmersiveMapCustomTilesMac) wires a template, request headers, a hand-written style with a label profile, and an attribution end to end, entirely through the public API.

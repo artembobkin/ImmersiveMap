@@ -868,6 +868,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var isVisible: Bool
         public var size: Size
         public var position: Position
+        /// Distance in points between the badge and the view edges (applied
+        /// after the safe area). 0, the default, pins the badge tightly into
+        /// its corner; raise it to float the badge over the map.
+        public var margin: Double
         /// Badge text color as RGBA in `0...1` (same convention as
         /// `AvatarSettings.borderColor`); `nil` keeps the default white.
         /// The copyright line renders at 76% of the given alpha.
@@ -881,12 +885,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isVisible: Bool = true,
                     size: Size = .regular,
                     position: Position = .bottomTrailing,
+                    margin: Double = 0,
                     textColor: SIMD4<Float>? = nil,
                     isProvidedExternally: Bool = false,
                     attributionOverride: ImmersiveMapAttribution? = nil) {
             self.isVisible = isVisible
             self.size = size
             self.position = position
+            self.margin = margin
             self.textColor = textColor
             self.isProvidedExternally = isProvidedExternally
             self.attributionOverride = attributionOverride
@@ -1347,6 +1353,7 @@ public extension ImmersiveMapSettings {
     func attributionSettings(isVisible: Bool? = nil,
                              size: AttributionSettings.Size? = nil,
                              position: AttributionSettings.Position? = nil,
+                             margin: Double? = nil,
                              textColor: SIMD4<Float>? = nil,
                              isProvidedExternally: Bool? = nil) -> ImmersiveMapSettings {
         var attribution = self.attribution
@@ -1358,6 +1365,9 @@ public extension ImmersiveMapSettings {
         }
         if let position {
             attribution.position = position
+        }
+        if let margin {
+            attribution.margin = margin
         }
         if let textColor {
             attribution.textColor = textColor

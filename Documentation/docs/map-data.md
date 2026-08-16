@@ -37,6 +37,7 @@ The badge is adjustable without touching the credit itself:
 ```swift
 ImmersiveMapView()
     .attributionSettings(size: .large,             // .small / .regular / .large
+                         margin: 12,               // distance from the corner; 0 (default) pins it tight
                          position: .topLeading,    // four corners plus .bottomCenter / .topCenter
                          textColor: SIMD4<Float>(1, 1, 1, 1))
 ```

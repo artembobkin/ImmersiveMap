@@ -24,7 +24,6 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         XCTAssertEqual(metrics.verticalInset, 7)
         XCTAssertEqual(metrics.interLabelSpacing, 2)
         XCTAssertEqual(metrics.cornerRadius, 8)
-        XCTAssertEqual(metrics.containerInset, 12)
         XCTAssertEqual(metrics.maximumWidth, 240)
     }
 
@@ -39,23 +38,25 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
             XCTAssertLessThan(smaller.horizontalInset, larger.horizontalInset)
             XCTAssertLessThan(smaller.verticalInset, larger.verticalInset)
             XCTAssertLessThan(smaller.cornerRadius, larger.cornerRadius)
-            XCTAssertLessThan(smaller.containerInset, larger.containerInset)
             XCTAssertLessThan(smaller.maximumWidth, larger.maximumWidth)
         }
     }
 
+    // A non-zero margin, so the frame math is exercised with all three
+    // offsets (safe area, margin, badge size) in play; the zero default is
+    // covered by `AttributionBadgeMarginTests`.
     private func frame(_ position: ImmersiveMapSettings.AttributionSettings.Position,
                        isRightToLeft: Bool = false) -> CGRect {
         AttributionBadgeLayoutMath.badgeFrame(badgeSize: badgeSize,
                                               position: position,
                                               bounds: bounds,
                                               safeAreaInsets: safeArea,
-                                              metrics: metrics,
+                                              margin: 12,
                                               isRightToLeft: isRightToLeft)
     }
 
     func testBadgeFrameForEveryPosition() {
-        // contentRect: x 22...783, y 32...554 (safe area + containerInset 12).
+        // contentRect: x 22...783, y 32...554 (safe area + margin 12).
         XCTAssertEqual(frame(.bottomTrailing),
                        CGRect(x: 783 - 200, y: 554 - 30, width: 200, height: 30))
         XCTAssertEqual(frame(.bottomLeading),
@@ -82,10 +83,10 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
                        frame(.topCenter))
     }
 
-    func testAvailableWidthSubtractsSafeAreaAndContainerInsets() {
+    func testAvailableWidthSubtractsSafeAreaAndMargins() {
         let width = AttributionBadgeLayoutMath.availableWidth(bounds: bounds,
                                                               safeAreaInsets: safeArea,
-                                                              metrics: metrics)
+                                                              margin: 12)
 
         XCTAssertEqual(width, 800 - 10 - 5 - 12 * 2)
     }

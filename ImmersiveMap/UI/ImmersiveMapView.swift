@@ -657,12 +657,14 @@ public extension ImmersiveMapView {
     public func attributionSettings(isVisible: Bool? = nil,
                                     size: ImmersiveMapSettings.AttributionSettings.Size? = nil,
                                     position: ImmersiveMapSettings.AttributionSettings.Position? = nil,
+                                    margin: Double? = nil,
                                     textColor: SIMD4<Float>? = nil,
                                     isProvidedExternally: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionSettings(isVisible: isVisible,
                                                           size: size,
                                                           position: position,
+                                                          margin: margin,
                                                           textColor: textColor,
                                                           isProvidedExternally: isProvidedExternally)
         return view

@@ -17,7 +17,6 @@ enum AttributionBadgeLayoutMath {
         let verticalInset: CGFloat
         let interLabelSpacing: CGFloat
         let cornerRadius: CGFloat
-        let containerInset: CGFloat
         let maximumWidth: CGFloat
     }
 
@@ -30,7 +29,6 @@ enum AttributionBadgeLayoutMath {
                            verticalInset: 5,
                            interLabelSpacing: 2,
                            cornerRadius: 6,
-                           containerInset: 10,
                            maximumWidth: 200)
         case .regular:
             return Metrics(titleFontSize: 12,
@@ -39,7 +37,6 @@ enum AttributionBadgeLayoutMath {
                            verticalInset: 7,
                            interLabelSpacing: 2,
                            cornerRadius: 8,
-                           containerInset: 12,
                            maximumWidth: 240)
         case .large:
             return Metrics(titleFontSize: 14,
@@ -48,17 +45,18 @@ enum AttributionBadgeLayoutMath {
                            verticalInset: 9,
                            interLabelSpacing: 3,
                            cornerRadius: 10,
-                           containerInset: 14,
                            maximumWidth: 300)
         }
     }
 
-    /// Width the badge may occupy: bounds minus safe area minus the
-    /// container inset on both sides.
+    /// Width the badge may occupy: bounds minus safe area minus the margin
+    /// on both sides. The margin is the app-configured distance between the
+    /// badge and the view edges; 0, the default, pins the badge into its
+    /// corner.
     static func availableWidth(bounds: CGRect,
                                safeAreaInsets: PlatformEdgeInsets,
-                               metrics: Metrics) -> CGFloat {
-        max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - metrics.containerInset * 2)
+                               margin: CGFloat) -> CGFloat {
+        max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - margin * 2)
     }
 
     /// Plate size from measured label sizes. A zero copyright size means a
@@ -86,14 +84,14 @@ enum AttributionBadgeLayoutMath {
                            position: ImmersiveMapSettings.AttributionSettings.Position,
                            bounds: CGRect,
                            safeAreaInsets: PlatformEdgeInsets,
-                           metrics: Metrics,
+                           margin: CGFloat,
                            isRightToLeft: Bool) -> CGRect {
-        let contentRect = CGRect(x: safeAreaInsets.left + metrics.containerInset,
-                                 y: safeAreaInsets.top + metrics.containerInset,
+        let contentRect = CGRect(x: safeAreaInsets.left + margin,
+                                 y: safeAreaInsets.top + margin,
                                  width: max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right
-                                            - metrics.containerInset * 2),
+                                            - margin * 2),
                                  height: max(0, bounds.height - safeAreaInsets.top - safeAreaInsets.bottom
-                                             - metrics.containerInset * 2))
+                                             - margin * 2))
 
         enum HorizontalAnchor {
             case leading

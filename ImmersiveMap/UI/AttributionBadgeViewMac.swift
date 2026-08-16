@@ -15,6 +15,7 @@ final class AttributionBadgeView: NSView {
     private var linkURL: URL?
     private var metrics = AttributionBadgeLayoutMath.metrics(for: .regular)
     private var position = ImmersiveMapSettings.AttributionSettings.Position.bottomTrailing
+    private var margin: CGFloat = 0
 
     override var isFlipped: Bool { true }
 
@@ -64,6 +65,7 @@ final class AttributionBadgeView: NSView {
                settings: ImmersiveMapSettings.AttributionSettings) {
         metrics = AttributionBadgeLayoutMath.metrics(for: settings.size)
         position = settings.position
+        margin = CGFloat(settings.margin)
         isHidden = settings.isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL
         titleLabel.stringValue = attribution.title
@@ -99,7 +101,7 @@ final class AttributionBadgeView: NSView {
     func layout(in bounds: CGRect, safeAreaInsets: NSEdgeInsets) {
         let availableWidth = AttributionBadgeLayoutMath.availableWidth(bounds: bounds,
                                                                        safeAreaInsets: safeAreaInsets,
-                                                                       metrics: metrics)
+                                                                       margin: margin)
         let badgeSize = badgeSizeThatFits(CGSize(width: availableWidth,
                                                  height: bounds.height))
         frame = AttributionBadgeLayoutMath.badgeFrame(
@@ -107,7 +109,7 @@ final class AttributionBadgeView: NSView {
             position: position,
             bounds: bounds,
             safeAreaInsets: safeAreaInsets,
-            metrics: metrics,
+            margin: margin,
             isRightToLeft: userInterfaceLayoutDirection == .rightToLeft
         )
     }
