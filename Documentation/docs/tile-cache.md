@@ -66,8 +66,8 @@ public struct NetworkSettings: Equatable, Sendable {
     public var pendingRequestQueueCapacity: Int
     public var tileBaseURL: URL
     public var tileJSONURL: URL?
-    public var authorizationToken: String?
-    public var authorizationMode: AuthorizationMode   // .bearerHeader | .accessTokenQuery(parameterName:)
+    public var tileURLTemplate: String?               // "https://tiles.com/{x}/{y}/{z}?apiKey=xxx"
+    public var tileRequestHeaders: [String: String]   // added to every tile request
     public var cacheIdentity: UInt64
 }
 
@@ -78,7 +78,7 @@ public struct CoverageSettings: Equatable, Sendable {
 
 Loading runs off the main thread with bounded concurrency: `maxConcurrentFetches` in flight, the rest in a dedup FIFO capped at `pendingRequestQueueCapacity`, with retry and backoff. Requests for a tile already in flight join the existing one rather than starting a second.
 
-Most apps never touch `NetworkSettings` directly: a [tile provider](custom-tile-provider.md) supplies the URL and the credentials, and `.apiKey(_:)` supplies a key for the built-in source. Setting the fields by hand is for cases a provider cannot express.
+Most apps never touch `NetworkSettings` directly: `.tileURLTemplate(_:headers:)` or a [tile provider](custom-tile-provider.md) supplies the URL and the credentials. Setting the fields by hand is for cases a provider cannot express.
 
 `CoverageSettings.maximumZoomLevel` caps the zoom level actually requested from the source. Past it the engine keeps rendering the deepest tiles it has, scaled up, which is why a source that stops at z14 still draws at z18.
 

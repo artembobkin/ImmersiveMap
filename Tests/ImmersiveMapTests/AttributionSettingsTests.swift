@@ -37,8 +37,7 @@ final class AttributionSettingsTests: XCTestCase {
     /// from the engine: an empty badge is more honest than a made-up copyright.
     func testCustomProviderWithoutAttributionResolvesToEmpty() {
         let provider = VectorTileProvider(id: "custom",
-                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!,
-                                                                         apiKey: nil))
+                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!))
         let settings = ImmersiveMapSettings.default
             .tileProvider(AnyImmersiveMapTileProvider(provider))
 

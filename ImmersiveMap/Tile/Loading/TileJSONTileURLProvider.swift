@@ -61,44 +61,29 @@ final class TileJSONTemplateStore: @unchecked Sendable {
 final class TileJSONTileURLProvider: GetMapTileDownloadUrl {
     private let fallback: GetMapTileDownloadUrl
     private let store: TileJSONTemplateStore
-    private let queryItemsProvider: (() -> [URLQueryItem])?
 
     init(fallback: GetMapTileDownloadUrl,
-         store: TileJSONTemplateStore,
-         queryItemsProvider: (() -> [URLQueryItem])? = nil) {
+         store: TileJSONTemplateStore) {
         self.fallback = fallback
         self.store = store
-        self.queryItemsProvider = queryItemsProvider
     }
 
     func get(tileX: Int, tileY: Int, tileZ: Int) -> URL {
         if let template = store.template,
-           let url = Self.url(fromTemplate: template,
-                              x: tileX, y: tileY, z: tileZ,
-                              queryItems: queryItemsProvider?() ?? []) {
+           let url = Self.url(fromTemplate: template, x: tileX, y: tileY, z: tileZ) {
             return url
         }
         return fallback.get(tileX: tileX, tileY: tileY, tileZ: tileZ)
     }
 
-    /// Substitutes `{z}`/`{x}`/`{y}` into a TileJSON template and appends any query
-    /// items (e.g. an API key). Returns `nil` for a malformed template so callers
+    /// Substitutes `{z}`/`{x}`/`{y}` into a URL template, keeping any query
+    /// string as written. Returns `nil` for a malformed template so callers
     /// can fall back to the static path.
-    static func url(fromTemplate template: String,
-                    x: Int, y: Int, z: Int,
-                    queryItems: [URLQueryItem]) -> URL? {
+    static func url(fromTemplate template: String, x: Int, y: Int, z: Int) -> URL? {
         let substituted = template
             .replacingOccurrences(of: "{z}", with: String(z))
             .replacingOccurrences(of: "{x}", with: String(x))
             .replacingOccurrences(of: "{y}", with: String(y))
-        guard let url = URL(string: substituted) else {
-            return nil
-        }
-        guard queryItems.isEmpty == false,
-              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            return url
-        }
-        components.queryItems = (components.queryItems ?? []) + queryItems
-        return components.url ?? url
+        return URL(string: substituted)
     }
 }

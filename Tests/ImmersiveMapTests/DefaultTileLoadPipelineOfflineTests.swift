@@ -32,8 +32,7 @@ final class DefaultTileLoadPipelineOfflineTests: XCTestCase {
         init(result: DownloadResult) {
             self.result = result
             super.init(mapTileDownloader: FixedTileURLProvider(),
-                       session: URLSession(configuration: .ephemeral),
-                       authorizationToken: nil)
+                       session: URLSession(configuration: .ephemeral))
         }
 
         override func downloadResult(tile: Tile) async -> DownloadResult {

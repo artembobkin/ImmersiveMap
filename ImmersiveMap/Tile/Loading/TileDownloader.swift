@@ -80,8 +80,6 @@ class TileDownloader: @unchecked Sendable {
     }
 
     private let mapTileDownloader: GetMapTileDownloadUrl
-    private let authorizationToken: String?
-    private let authorizationMode: ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
     private let customHeaders: [String: String]
     private let session: URLSession
     // Retains the TileJSON discovery task so it can be cancelled on deinit; nil
@@ -95,19 +93,13 @@ class TileDownloader: @unchecked Sendable {
             configuration.urlCache?.removeAllCachedResponses()
         }
         let network = config.tiles.network
-        authorizationToken = network.authorizationToken
-        authorizationMode = network.authorizationMode
         customHeaders = network.tileRequestHeaders
-        let queryItemsProvider = Self.queryItemsProvider(token: network.authorizationToken,
-                                                         mode: network.authorizationMode)
-        let baseProvider = BackendTileURLProvider(baseURL: network.tileBaseURL,
-                                                  queryItemsProvider: queryItemsProvider)
+        let baseProvider = BackendTileURLProvider(baseURL: network.tileBaseURL)
         if let template = network.tileURLTemplate {
             // An explicit template is complete configuration: no discovery
             // request, no appended path, the query string as written.
             self.mapTileDownloader = TemplateTileURLProvider(template: template,
-                                                             fallback: baseProvider,
-                                                             queryItemsProvider: queryItemsProvider)
+                                                             fallback: baseProvider)
         } else if let tileJSONURL = network.tileJSONURL {
             // Prefer the versioned, immutable TileJSON template (…/v/<version>/…),
             // which the CDN caches for a year. Until the document resolves - and
@@ -115,8 +107,7 @@ class TileDownloader: @unchecked Sendable {
             // so rendering is never blocked on the discovery request.
             let store = TileJSONTemplateStore()
             self.mapTileDownloader = TileJSONTileURLProvider(fallback: baseProvider,
-                                                             store: store,
-                                                             queryItemsProvider: queryItemsProvider)
+                                                             store: store)
             let loader = TileJSONTemplateLoader()
             tileJSONTemplateTask = Task(priority: .utility) {
                 guard let template = try? await loader.loadTemplate(from: tileJSONURL),
@@ -133,12 +124,9 @@ class TileDownloader: @unchecked Sendable {
 
     init(mapTileDownloader: GetMapTileDownloadUrl,
          session: URLSession,
-         authorizationToken: String?,
          customHeaders: [String: String] = [:]) {
         self.mapTileDownloader = mapTileDownloader
         self.session = session
-        self.authorizationToken = authorizationToken
-        self.authorizationMode = .bearerHeader
         self.customHeaders = customHeaders
     }
 
@@ -178,22 +166,6 @@ class TileDownloader: @unchecked Sendable {
         return configuration
     }
 
-    private static func queryItemsProvider(token: String?,
-                                           mode: ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode) -> (() -> [URLQueryItem])? {
-        guard let token else {
-            return nil
-        }
-
-        switch mode {
-        case .bearerHeader:
-            return nil
-        case let .accessTokenQuery(parameterName):
-            return {
-                [URLQueryItem(name: parameterName, value: token)]
-            }
-        }
-    }
-    
     func download(tile: Tile) async -> Data? {
         let result = await downloadResult(tile: tile)
         if case let .success(data, _) = result {
@@ -213,11 +185,8 @@ class TileDownloader: @unchecked Sendable {
         // try QUIC instead of waiting for an Alt-Svc upgrade, and URLSession
         // falls back to HTTP/2 or 1.1 transparently where it is unsupported.
         request.assumesHTTP3Capable = true
-        if let authorizationToken, authorizationMode == .bearerHeader {
-            request.setValue("Bearer \(authorizationToken)", forHTTPHeaderField: "Authorization")
-        }
-        // Custom headers apply last on purpose: a source that carries its own
-        // `Authorization` header replaces the access-token convenience above.
+        // Header-based credentials travel here: the tile source's custom
+        // headers are set on every request, `Authorization` included.
         for (field, value) in customHeaders {
             request.setValue(value, forHTTPHeaderField: field)
         }

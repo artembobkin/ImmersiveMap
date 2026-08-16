@@ -21,7 +21,6 @@ public struct ImmersiveMapView: View {
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     private var markerContent: MarkerViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
-    private var apiKey: String?
 
     public init(settings: ImmersiveMapSettings = .default,
                 avatarsController: ImmersiveMapAvatarsController? = nil,
@@ -40,7 +39,7 @@ public struct ImmersiveMapView: View {
     /// otherwise SwiftUI destroys and recreates the entire platform map view
     /// (renderer, caches, controller bindings).
     public var body: some View {
-        ImmersiveMapUIViewRepresentable(settings: resolvedSettings,
+        ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
                                         routesController: routesController,
@@ -59,14 +58,6 @@ public struct ImmersiveMapView: View {
             )
     }
 
-    /// The key is applied here rather than in the modifier so that `apiKey` and
-    /// `tileProvider` can be written in either order: attaching a provider
-    /// replaces the whole authorization block, which would otherwise silently
-    /// drop a key set before it.
-    var resolvedSettings: ImmersiveMapSettings {
-        guard let apiKey, apiKey.isEmpty == false else { return settings }
-        return settings.apiKey(apiKey)
-    }
 }
 
 #if canImport(UIKit)
@@ -451,25 +442,6 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Authorises tile requests with an API key.
-    ///
-    /// Get one at https://immersivemap.dev/account. Without a key the map still
-    /// renders on the hosted service's shared, rate-limited public pool,
-    /// so a key buys your own budget rather than access.
-    ///
-    ///     ImmersiveMapView()
-    ///         .apiKey("im_…")
-    ///
-    /// The key is sent as an `Authorization: Bearer` header, not a query
-    /// parameter, so tiles stay on one shared CDN cache entry instead of one
-    /// copy per key. It applies to whichever provider is configured, and may be
-    /// written before or after `tileProvider`.
-    public func apiKey(_ apiKey: String?) -> ImmersiveMapView {
-        var view = self
-        view.apiKey = apiKey
-        return view
-    }
-
     /// Points the map at any tile endpoint with one URL template:
     ///
     ///     ImmersiveMapView()
@@ -477,8 +449,7 @@ public extension ImmersiveMapView {
     ///
     /// `{x}`, `{y}` and `{z}` may appear in any order and the query string is
     /// preserved as written, so a key can live in the template. Credentials
-    /// that travel as headers go in `headers`, added to every tile request
-    /// (a custom `Authorization` value replaces the one `.apiKey(_:)` sets):
+    /// that travel as headers go in `headers`, added to every tile request:
     ///
     ///     .tileURLTemplate("https://tiles.com/{x}/{y}/{z}",
     ///                      headers: ["X-API-Key": "xxx"])

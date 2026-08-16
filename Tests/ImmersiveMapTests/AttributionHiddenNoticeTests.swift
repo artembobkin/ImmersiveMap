@@ -34,8 +34,7 @@ final class AttributionHiddenNoticeTests: XCTestCase {
     /// is as invisible as hiding it.
     func testEmptyProviderAttributionWarrantsWarning() {
         let provider = VectorTileProvider(id: "custom",
-                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!,
-                                                                         apiKey: nil))
+                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!))
         let settings = ImmersiveMapSettings.default
             .tileProvider(AnyImmersiveMapTileProvider(provider))
 

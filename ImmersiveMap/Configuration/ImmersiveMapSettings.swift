@@ -316,11 +316,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         public struct NetworkSettings: Equatable, Sendable {
-            public enum AuthorizationMode: Equatable, Sendable {
-                case bearerHeader
-                case accessTokenQuery(parameterName: String)
-            }
-
             public var maxConcurrentFetches: Int
             public var pendingRequestQueueCapacity: Int
             public var tileBaseURL: URL
@@ -328,14 +323,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// versioned, immutable URL template (…/v/<version>/tiles/{z}/{x}/{y}.pbf)
             /// and falls back to `tileBaseURL/{z}/{x}/{y}.mvt` until/if it resolves.
             public var tileJSONURL: URL?
-            public var authorizationToken: String?
-            public var authorizationMode: AuthorizationMode
             /// Optional tile URL template with `{x}`, `{y}` and `{z}` placeholders.
             /// When set, it wins over `tileBaseURL` and TileJSON discovery; the
             /// query string is preserved as written.
             public var tileURLTemplate: String?
-            /// HTTP header fields added to every tile request, applied after the
-            /// authorization header so a custom `Authorization` value wins.
+            /// HTTP header fields added to every tile request. This is how
+            /// header-based credentials travel, e.g. `["Authorization": "Bearer xxx"]`.
             public var tileRequestHeaders: [String: String]
             /// Provider `configurationFingerprint`, folded into the raw and prepared
             /// disk-cache namespaces so a provider/content change invalidates the
@@ -347,8 +340,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         pendingRequestQueueCapacity: Int,
                         tileBaseURL: URL = URL(string: "https://example.com/api/v1/map/tiles")!,
                         tileJSONURL: URL? = nil,
-                        authorizationToken: String? = nil,
-                        authorizationMode: AuthorizationMode = .bearerHeader,
                         tileURLTemplate: String? = nil,
                         tileRequestHeaders: [String: String] = [:],
                         cacheIdentity: UInt64 = 0) {
@@ -356,8 +347,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
                 self.tileBaseURL = tileBaseURL
                 self.tileJSONURL = tileJSONURL
-                self.authorizationToken = authorizationToken
-                self.authorizationMode = authorizationMode
                 self.tileURLTemplate = tileURLTemplate
                 self.tileRequestHeaders = tileRequestHeaders
                 self.cacheIdentity = cacheIdentity
@@ -1047,7 +1036,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                                   pendingRequestQueueCapacity: 50,
                                                                   tileBaseURL: ImmersiveMapTilesProvider.defaultTileBaseURL,
                                                                   tileJSONURL: ImmersiveMapTilesProvider.defaultTileJSONURL,
-                                                                  authorizationMode: .bearerHeader,
                                                                   cacheIdentity: ImmersiveMapTilesProvider().configurationFingerprint),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
@@ -1146,27 +1134,12 @@ public extension ImmersiveMapSettings {
         settings.tileProvider = tileProvider
         settings.tiles.network.tileBaseURL = tileProvider.tileSource.tileBaseURL
         settings.tiles.network.tileJSONURL = tileProvider.tileSource.tileJSONURL
-        settings.tiles.network.authorizationToken = tileProvider.tileSource.accessToken
-        settings.tiles.network.authorizationMode = tileProvider.tileSource.authorization
         settings.tiles.network.tileURLTemplate = tileProvider.tileSource.urlTemplate
         settings.tiles.network.tileRequestHeaders = tileProvider.tileSource.headers
         settings.tiles.network.cacheIdentity = tileProvider.configurationFingerprint
         if let maximumTileZoomLevel = tileProvider.maximumTileZoomLevel {
             settings.tiles.coverage.maximumZoomLevel = maximumTileZoomLevel
         }
-        return settings
-    }
-
-    /// Overrides the tile authorization with an API key, leaving the rest of the
-    /// provider (endpoints, zoom coverage, cache identity) untouched.
-    ///
-    /// The header form is deliberate: a query parameter is part of a URL, so a
-    /// CDN would keep a separate copy of every tile for every key, while the
-    /// tiles themselves are identical for everyone.
-    func apiKey(_ apiKey: String) -> ImmersiveMapSettings {
-        var settings = self
-        settings.tiles.network.authorizationToken = apiKey
-        settings.tiles.network.authorizationMode = .bearerHeader
         return settings
     }
 

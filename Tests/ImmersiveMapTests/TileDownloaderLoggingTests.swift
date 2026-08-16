@@ -24,8 +24,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         let downloader = TileDownloader(
             mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://example.com/tile.mvt")!),
-            session: session,
-            authorizationToken: nil
+            session: session
         )
 
         let output = await captureStandardOutput {
@@ -90,8 +89,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         let downloader = TileDownloader(
             mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://example.com/tile.mvt")!),
-            session: session,
-            authorizationToken: nil
+            session: session
         )
 
         let output = await captureStandardOutput {

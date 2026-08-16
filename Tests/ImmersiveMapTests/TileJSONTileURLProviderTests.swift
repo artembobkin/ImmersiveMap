@@ -25,15 +25,8 @@ final class TileJSONTileURLProviderTests: XCTestCase {
     func testURLFromTemplateSubstitutesCoordinates() {
         let url = TileJSONTileURLProvider.url(
             fromTemplate: "https://host/v/abc-def/tiles/{z}/{x}/{y}.pbf",
-            x: 3, y: 5, z: 4, queryItems: [])
+            x: 3, y: 5, z: 4)
         XCTAssertEqual(url?.absoluteString, "https://host/v/abc-def/tiles/4/3/5.pbf")
-    }
-
-    func testURLFromTemplateAppendsQueryItems() {
-        let url = TileJSONTileURLProvider.url(
-            fromTemplate: "https://host/v/abc/tiles/{z}/{x}/{y}.pbf",
-            x: 1, y: 2, z: 3, queryItems: [URLQueryItem(name: "key", value: "secret")])
-        XCTAssertEqual(url?.absoluteString, "https://host/v/abc/tiles/3/1/2.pbf?key=secret")
     }
 
     // MARK: - Provider fallback then upgrade
@@ -51,16 +44,6 @@ final class TileJSONTileURLProviderTests: XCTestCase {
         store.update("https://host/v/ver/tiles/{z}/{x}/{y}.pbf")
         XCTAssertEqual(provider.get(tileX: 1, tileY: 2, tileZ: 3).absoluteString,
                        "https://host/v/ver/tiles/3/1/2.pbf")
-    }
-
-    func testProviderCarriesQueryItemsOnTemplatePath() {
-        let store = TileJSONTemplateStore()
-        store.update("https://host/v/ver/tiles/{z}/{x}/{y}.pbf")
-        let fallback = BackendTileURLProvider(baseURL: URL(string: "https://host/tiles")!)
-        let provider = TileJSONTileURLProvider(fallback: fallback, store: store,
-                                               queryItemsProvider: { [URLQueryItem(name: "key", value: "k")] })
-        XCTAssertEqual(provider.get(tileX: 0, tileY: 0, tileZ: 0).absoluteString,
-                       "https://host/v/ver/tiles/0/0/0.pbf?key=k")
     }
 
     // MARK: - Source wiring

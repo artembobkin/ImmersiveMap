@@ -42,8 +42,7 @@ final class FixtureTileServiceTests: XCTestCase {
         let template = try await TileJSONTemplateLoader().loadTemplate(from: tileJSONURL)
 
         let resolved = try XCTUnwrap(TileJSONTileURLProvider.url(fromTemplate: try XCTUnwrap(template),
-                                                                 x: 4, y: 5, z: 3,
-                                                                 queryItems: []))
+                                                                 x: 4, y: 5, z: 3))
         XCTAssertEqual(resolved.host, "127.0.0.1")
         let (data, _) = try await URLSession.shared.data(from: resolved)
         XCTAssertEqual(try MvtTileDecoder.decode(data: data).layers.map(\.name), ["water"],

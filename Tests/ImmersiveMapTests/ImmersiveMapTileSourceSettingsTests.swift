@@ -75,7 +75,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
             labels.town.haloEm = 0.125
         }
 
-        let tileProvider = ImmersiveMapTilesProvider(apiKey: "tiles-key")
+        let tileProvider = ImmersiveMapTilesProvider()
         let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
         let settings = ImmersiveMapSettings.default
             .tileProvider(tileProvider)
@@ -90,7 +90,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
             labels.poi.haloEm = 0.35
         }
-        let tileProvider = ImmersiveMapTilesProvider(apiKey: "tiles-key")
+        let tileProvider = ImmersiveMapTilesProvider()
         let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
 
         let view = ImmersiveMapView()
@@ -338,37 +338,21 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.debug, debug)
     }
 
-    func testVectorTileProviderConfiguresGenericURLAndBearerToken() {
+    func testVectorTileProviderConfiguresGenericURLAndRequestHeaders() {
         let url = URL(string: "https://tiles.example.com/vector")!
         let provider = VectorTileProvider(
             id: "custom",
-            tileSource: .url(url).token("public-token"),
+            tileSource: .url(url).headers(["Authorization": "Bearer public-token"]),
             maximumTileZoomLevel: 12
         )
 
         let settings = ImmersiveMapSettings.default.tileProvider(provider)
 
         XCTAssertEqual(settings.tiles.network.tileBaseURL, url)
-        XCTAssertEqual(settings.tiles.network.authorizationToken, "public-token")
-        XCTAssertEqual(settings.tiles.network.authorizationMode, .bearerHeader)
+        XCTAssertEqual(settings.tiles.network.tileRequestHeaders,
+                       ["Authorization": "Bearer public-token"])
         XCTAssertEqual(settings.tileProvider, AnyImmersiveMapTileProvider(provider))
         XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 12)
-    }
-
-    func testVectorTileProviderUpdatesNetworkURLTokenAndAuthorizationMode() {
-        let url = URL(string: "https://tiles.example.com/vector")!
-        let provider = VectorTileProvider(
-            id: "custom-query",
-            tileSource: ImmersiveMapTileSource(tileBaseURL: url,
-                                               accessToken: "public-token",
-                                               authorization: .accessTokenQuery(parameterName: "access_token"))
-        )
-
-        let settings = ImmersiveMapSettings.default.tileProvider(provider)
-
-        XCTAssertEqual(settings.tiles.network.tileBaseURL, url)
-        XCTAssertEqual(settings.tiles.network.authorizationToken, "public-token")
-        XCTAssertEqual(settings.tiles.network.authorizationMode, .accessTokenQuery(parameterName: "access_token"))
     }
 
     private func reflectedValue<T>(_ label: String, in value: Any) -> T? {

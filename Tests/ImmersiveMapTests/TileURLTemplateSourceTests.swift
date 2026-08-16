@@ -52,7 +52,7 @@ final class TileURLTemplateSourceTests: XCTestCase {
 
     // MARK: - Request headers
 
-    func testDownloaderSendsCustomHeadersAndLetsAuthorizationBeOverridden() async {
+    func testDownloaderSendsCustomHeadersOnEveryTileRequest() async {
         HeaderCapturingURLProtocol.reset()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [HeaderCapturingURLProtocol.self]
@@ -62,8 +62,7 @@ final class TileURLTemplateSourceTests: XCTestCase {
                 template: template,
                 fallback: BackendTileURLProvider(baseURL: URL(string: "https://fallback.host/tiles")!)),
             session: session,
-            authorizationToken: "engine-key",
-            customHeaders: ["X-Client": "demo", "Authorization": "Custom abc"])
+            customHeaders: ["X-Client": "demo", "Authorization": "Bearer abc"])
 
         let result = await downloader.downloadResult(tile: Tile(x: 3, y: 5, z: 4))
 
@@ -71,8 +70,8 @@ final class TileURLTemplateSourceTests: XCTestCase {
         XCTAssertEqual(HeaderCapturingURLProtocol.capturedURL?.absoluteString,
                        "https://tiles.com/3/5/4?apiKey=xxx")
         XCTAssertEqual(HeaderCapturingURLProtocol.capturedHeaders["X-Client"], "demo")
-        // Custom headers apply after the token, so an explicit Authorization wins.
-        XCTAssertEqual(HeaderCapturingURLProtocol.capturedHeaders["Authorization"], "Custom abc")
+        // Header-based credentials travel this way now, Authorization included.
+        XCTAssertEqual(HeaderCapturingURLProtocol.capturedHeaders["Authorization"], "Bearer abc")
     }
 
     // MARK: - Settings plumbing

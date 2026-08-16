@@ -4,15 +4,11 @@
 import Foundation
 
 public struct ImmersiveMapTileSource: Equatable, Sendable {
-    public typealias AuthorizationMode = ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
-
     public var tileBaseURL: URL
     /// Optional TileJSON endpoint. When set, the loader discovers a versioned,
     /// immutable tile URL template from it (…/v/<version>/tiles/{z}/{x}/{y}.pbf)
     /// and falls back to `tileBaseURL/{z}/{x}/{y}.mvt` until/if it resolves.
     public var tileJSONURL: URL?
-    public var accessToken: String?
-    public var authorization: AuthorizationMode
     /// Optional tile URL template with `{x}`, `{y}` and `{z}` placeholders, e.g.
     /// `https://tiles.com/{x}/{y}/{z}?apiKey=xxx`. When set, it wins over both
     /// `tileBaseURL` (which the loader would otherwise extend with
@@ -20,23 +16,19 @@ public struct ImmersiveMapTileSource: Equatable, Sendable {
     /// the template, so a key embedded there travels with every request.
     public var urlTemplate: String?
     /// HTTP header fields added to every tile request, e.g.
-    /// `["X-API-Key": "xxx"]`. Applied last, so a custom `Authorization` value
-    /// here replaces the one an access token would set. Assumed not to change
-    /// the tile bytes: header names are part of the cache identity, header
-    /// values are not, so rotating a credential keeps the caches warm. A header
-    /// whose value selects different content needs a provider fingerprint bump.
+    /// `["X-API-Key": "xxx"]` or `["Authorization": "Bearer xxx"]`. This is how
+    /// header-based credentials travel. Assumed not to change the tile bytes:
+    /// header names are part of the cache identity, header values are not, so
+    /// rotating a credential keeps the caches warm. A header whose value
+    /// selects different content needs a provider fingerprint bump.
     public var headers: [String: String]
 
     public init(tileBaseURL: URL,
                 tileJSONURL: URL? = nil,
-                accessToken: String? = nil,
-                authorization: AuthorizationMode = .bearerHeader,
                 urlTemplate: String? = nil,
                 headers: [String: String] = [:]) {
         self.tileBaseURL = tileBaseURL
         self.tileJSONURL = tileJSONURL
-        self.accessToken = accessToken
-        self.authorization = authorization
         self.urlTemplate = urlTemplate
         self.headers = headers
     }
@@ -70,21 +62,6 @@ public struct ImmersiveMapTileSource: Equatable, Sendable {
     public func headers(_ headers: [String: String]) -> ImmersiveMapTileSource {
         var source = self
         source.headers = source.headers.merging(headers) { _, new in new }
-        return source
-    }
-
-    public func token(_ accessToken: String?) -> ImmersiveMapTileSource {
-        var source = self
-        source.accessToken = accessToken
-        source.authorization = .bearerHeader
-        return source
-    }
-
-    public func accessToken(_ accessToken: String?,
-                            parameterName: String = "access_token") -> ImmersiveMapTileSource {
-        var source = self
-        source.accessToken = accessToken
-        source.authorization = .accessTokenQuery(parameterName: parameterName)
         return source
     }
 }

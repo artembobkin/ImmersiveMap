@@ -14,15 +14,13 @@ final class ImmersiveMapProviderSettingsTests: XCTestCase {
         // into `tiles.network` rather than matching what `.default` already held.
         let tileBaseURL = URL(string: "https://tiles.example.com/tiles")!
         let settings = ImmersiveMapSettings.default
-            .tileProvider(ImmersiveMapTilesProvider(tileBaseURL: tileBaseURL, apiKey: "tiles-key"))
+            .tileProvider(ImmersiveMapTilesProvider(tileBaseURL: tileBaseURL))
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: style))
 
         XCTAssertNotEqual(tileBaseURL, ImmersiveMapTilesProvider.defaultTileBaseURL)
         XCTAssertEqual(settings.tileProvider.id, "immersivemaptiles")
         XCTAssertEqual(settings.tileProvider.cacheNamespace, "immersivemaptiles")
         XCTAssertEqual(settings.tiles.network.tileBaseURL, tileBaseURL)
-        XCTAssertEqual(settings.tiles.network.authorizationToken, "tiles-key")
-        XCTAssertEqual(settings.tiles.network.authorizationMode, .bearerHeader)
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
                        AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(configuration: style)).configurationFingerprint)
         XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel)

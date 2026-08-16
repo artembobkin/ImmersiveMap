@@ -4,7 +4,7 @@ A map engine draws tiles, it does not produce them. Here is exactly what you are
 
 **Out of the box.** The default provider fetches vector tiles from `tiles.immersivemap.dev`, the tile service run for this project. It serves a planet build in the [OpenMapTiles](https://openmaptiles.org) schema, assembled from [OpenFreeMap](https://openfreemap.org) data, which is [OpenStreetMap](https://www.openstreetmap.org/copyright) data under ODbL. No token, no account, no sign-up, and the demo apps in this repository render against it directly.
 
-**A key of your own.** The default provider works anonymously on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you onto your own throughput; attach it with `.apiKey(_:)` and it travels as an `Authorization: Bearer` header.
+**A key of your own.** The default provider works anonymously on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you onto your own throughput; attach it as a request header, `.tileURLTemplate("https://tiles.immersivemap.dev/tiles/{z}/{x}/{y}.mvt", headers: ["Authorization": "Bearer im_…"])`. The header form is deliberate: a key in the URL becomes part of the CDN cache key, so every customer would get a private copy of tiles that are byte-identical for everyone.
 
 **Your own endpoint, one line.** An OpenMapTiles-schema endpoint of your own (a self-hosted planet build, a different tile service) plugs in with a single URL template, drawn by the built-in style:
 

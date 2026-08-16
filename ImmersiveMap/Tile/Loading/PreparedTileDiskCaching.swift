@@ -35,12 +35,6 @@ struct PreparedTileCacheIdentity {
             hasher.combine("header:\(field)")
         }
         hasher.combine(String(network.cacheIdentity))
-        switch network.authorizationMode {
-        case .bearerHeader:
-            hasher.combine("bearerHeader")
-        case .accessTokenQuery(let parameterName):
-            hasher.combine("accessTokenQuery:\(parameterName)")
-        }
         return hasher.finalize()
     }
 }
