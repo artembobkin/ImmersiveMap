@@ -49,7 +49,8 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
     func testCaptureRejectsAnInvalidConfigurationBeforeTouchingTheGPU() async {
         let recorder = ImmersiveMapStillRecorder()
         do {
-            _ = try await recorder.capture(configuration: ImmersiveMapStillConfiguration(width: 0))
+            _ = try await recorder.capture(settings: FixtureTiles.tilelessSettings(),
+                                           configuration: ImmersiveMapStillConfiguration(width: 0))
             XCTFail("A zero width must not be captured")
         } catch let error as ImmersiveMapStillCaptureError {
             guard case .invalidConfiguration = error else {
@@ -74,11 +75,17 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
+        // Settings spelled out rather than left to the default argument: the
+        // capture that gets through builds a whole runtime, and `capture`
+        // defaults to `ImmersiveMapSettings.default`, which streams from the
+        // hosted tile service.
+        let settings = FixtureTiles.tilelessSettings()
+
         // Both run on the main actor, so the second call gets its turn while
         // the first is suspended awaiting the GPU, which is exactly the window
         // the guard exists for.
-        async let first: CGImage = recorder.capture(configuration: configuration)
-        async let second: CGImage = recorder.capture(configuration: configuration)
+        async let first: CGImage = recorder.capture(settings: settings, configuration: configuration)
+        async let second: CGImage = recorder.capture(settings: settings, configuration: configuration)
 
         var failures: [ImmersiveMapStillCaptureError] = []
         do {
@@ -99,8 +106,13 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
 
     // MARK: - Rendering
 
-    /// The frame comes back at the requested size, with the map drawn on it
+    /// The frame comes back at the requested size, with the globe drawn on it
     /// and the space around it left unpainted.
+    ///
+    /// The globe, not the map: this renders tile-free, so what covers the
+    /// middle is the globe surface itself. What a tile adds to a capture is
+    /// asserted by `testSceneModelsReachTheCapturedImage`, which serves them
+    /// from the fixture service.
     ///
     /// Transparent space is what makes this decidable without a reference
     /// image: the corners must carry no coverage at all and the middle of the
@@ -116,7 +128,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
                                                            settleTimeout: 0,
                                                            sceneDate: Date(timeIntervalSinceReferenceDate: 0))
 
-        let image = try await recorder.capture(settings: offlineSettings(.default.transparentSpace()),
+        let image = try await recorder.capture(settings: FixtureTiles.tilelessSettings(.default.transparentSpace()),
                                                camera: ImmersiveMapCameraPosition(latitudeDegrees: 0,
                                                                                   longitudeDegrees: 0,
                                                                                   zoom: 1),
@@ -148,7 +160,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // requires two captures of the same scene to be identical, and a tile
         // arriving in one of them but not the other breaks that by thousands
         // of pixels.
-        let settings = tileFreeSettings(.default.earthScene(isEnabled: false))
+        let settings = FixtureTiles.tilelessSettings(.default.earthScene(isEnabled: false))
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -207,7 +219,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // Space left opaque on purpose: the starfield is the part of the map
         // most sensitive to where the clock stopped, so if captures are
         // reproducible with stars on screen they are reproducible.
-        let settings = offlineSettings(.default.earthScene(isEnabled: false))
+        let settings = FixtureTiles.tilelessSettings(.default.earthScene(isEnabled: false))
         let routes = [ImmersiveMapRoute(id: 1,
                                         path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
                                                                   to: GeoCoordinate(latitude: 0, longitude: 20),
@@ -255,15 +267,10 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // A model needs a map under it: with no tiles at all the flat frame
         // has no tile origin and nothing in the world pass is drawn, model
         // included (measured: the two captures came back identical). The
-        // tiles come from a local fixture server rather than the live tile
-        // service, so the case does not depend on the network, on rate
+        // tiles come from the in-process fixture service rather than the live
+        // tile service, so the case does not depend on the network, on rate
         // limiting, or on tiles arriving inside the settle window.
-        let server = try LocalTileServer(tileBody: VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                                                      properties: ["class": "water"]))
-        defer { server.stop() }
-        let settings = ImmersiveMapSettings.default.tileProvider(
-            ImmersiveMapTilesProvider(tileBaseURL: try XCTUnwrap(server.tileBaseURL))
-        )
+        let settings = FixtureTiles.settings()
 
         let withoutModel = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -314,39 +321,6 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
             .appendingPathExtension("obj")
         try obj.write(to: url, atomically: true, encoding: .utf8)
         return url
-    }
-
-    /// Settings whose tile provider points at a port nothing listens on.
-    ///
-    /// A test that renders the real provider depends on a tile service, a CDN
-    /// and how warm the local disk cache happens to be, which is three ways
-    /// for the same assertion to mean something different on a laptop and on
-    /// a runner. Nothing here is about tiles.
-    /// Points the provider at a dead port. Note that this assigns the field
-    /// rather than going through the `tileProvider` builder, so the tile
-    /// *settings* still carry the default source: downloads and the
-    /// prepared-tile cache namespace are the real ones, and a capture here
-    /// can still be served real tiles. Cases that must not depend on which
-    /// tiles happen to arrive use `tileFreeSettings` instead.
-    private func offlineSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
-        var offline = settings
-        offline.tileProvider = AnyImmersiveMapTileProvider(
-            ImmersiveMapTilesProvider(tileBaseURL: URL(string: "http://127.0.0.1:1/tiles")!))
-        return offline
-    }
-
-    /// Settings under which no tile can ever reach the frame: the builder
-    /// points the tile settings at the dead port too, so the downloader has
-    /// nowhere to go and the prepared-tile cache gets a namespace of its own
-    /// that nothing else populates.
-    ///
-    /// A capture is then a pure function of the scene, which is what any case
-    /// comparing two captures needs. Sharing the default namespace made those
-    /// comparisons depend on what ran before them and on how far a tile load
-    /// had progressed between the two captures.
-    private func tileFreeSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
-        settings.tileProvider(
-            ImmersiveMapTilesProvider(tileBaseURL: URL(string: "http://127.0.0.1:1/tiles")!))
     }
 
     /// Redraws the image into a known layout, so the assertions do not depend

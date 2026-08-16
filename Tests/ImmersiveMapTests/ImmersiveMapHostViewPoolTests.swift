@@ -40,7 +40,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
         view.dismantle()
         pool.park(view, timeToLive: 30)
 
-        var settings = ImmersiveMapSettings.default
+        var settings = FixtureTiles.tilelessSettings()
         settings.camera.minimumZoom = 3
         let adopted = try XCTUnwrap(pool.adopt())
         adopted.prepareForAdoption(settings: settings,
@@ -107,7 +107,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
     func testDismantleForReuseHonorsDisabledSetting() throws {
         try skipUnlessMetalAvailable()
 
-        var settings = ImmersiveMapSettings.default
+        var settings = FixtureTiles.tilelessSettings()
         settings.viewReuse.isEnabled = false
         let view = ImmersiveMapNSView(frame: .zero, settings: settings)
 
@@ -159,7 +159,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
                                                    longitudeDegrees: -0.1276,
                                                    zoom: 9)
         let view = makeHostView()
-        view.update(settings: .default,
+        view.update(settings: FixtureTiles.tilelessSettings(),
                     avatarsController: nil,
                     cameraController: nil,
                     selectionController: nil,
@@ -176,7 +176,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
         ImmersiveMapHostViewPool.shared.drain()
         view.dismantleForReuse()
         let adopted = try XCTUnwrap(ImmersiveMapHostViewPool.shared.adopt())
-        adopted.prepareForAdoption(settings: .default,
+        adopted.prepareForAdoption(settings: FixtureTiles.tilelessSettings(),
                                    avatarsController: nil,
                                    sceneModelsController: nil,
                                    routesController: nil,
@@ -194,7 +194,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
     @MainActor
     private func makeHostView() -> ImmersiveMapNSView {
         ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
-                           settings: .default)
+                           settings: FixtureTiles.tilelessSettings())
     }
 
     private func skipUnlessMetalAvailable() throws {

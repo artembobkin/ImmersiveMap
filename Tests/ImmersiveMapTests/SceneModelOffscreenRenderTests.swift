@@ -54,9 +54,9 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
             fitDiameterMeters: 2_000_000))
 
         // The mesh loads asynchronously off-main: keep rendering until the
-        // model rasterizes or the deadline passes. Changed pixels alone do not
-        // prove it arrived (tiles stream in and change them too), so the drawn
-        // model is awaited through the hit volume the frame publishes for it.
+        // model rasterizes or the deadline passes. Changed pixels alone would
+        // be weak evidence that it arrived, so the drawn model is awaited
+        // through the hit volume the frame publishes for it.
         var pixelsChanged = false
         var snapshot = SceneModelSelectionSnapshot.empty
         for frameIndex in 1...200 {

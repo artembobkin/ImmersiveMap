@@ -12,7 +12,7 @@ final class ImmersiveMapTourVideoRecorderAttachTests: XCTestCase {
     private final class Owner {}
 
     private func makeContext() -> ImmersiveMapVideoExportAttachContext {
-        ImmersiveMapVideoExportAttachContext(currentSettings: { .default },
+        ImmersiveMapVideoExportAttachContext(currentSettings: { FixtureTiles.tilelessSettings() },
                                              currentCameraPosition: { nil },
                                              currentAvatarsController: { nil },
                                              currentMarkerContent: { nil })

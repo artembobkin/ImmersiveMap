@@ -107,32 +107,23 @@ final class OffscreenFrameHarness {
                            date: Date = Date(timeIntervalSinceReferenceDate: 0),
                            eventSink: RenderFrameEventSink = VideoExportRenderEventSink()) throws -> OffscreenFrameHarness {
         _ = try requireMetalDeviceOrSkip()
-        return try OffscreenFrameHarness(settings: offline(settings),
+        // No frame this harness renders can contain a tile it was not handed
+        // directly: every offscreen test states that it renders an empty map,
+        // and `FixtureTiles.tilelessSettings` makes that true. A test that
+        // wants tiles hands them to `tileRenderStore` itself.
+        //
+        // Note what this costs: the settings go through the `tileProvider`
+        // builder, so anything a caller set in `tiles.network` or
+        // `tiles.coverage` is overwritten here. Nothing does today. The
+        // previous version assigned `settings.tileProvider` alone and left
+        // `tiles.network` untouched, which read as more conservative and was
+        // in fact the bug: the transport takes its URL from `tiles.network`,
+        // so the dead port never applied and this harness streamed tiles from
+        // the hosted service while claiming to be offline.
+        return try OffscreenFrameHarness(settings: FixtureTiles.tilelessSettings(settings),
                                          size: size,
                                          date: date,
                                          eventSink: eventSink)
-    }
-
-    /// Points the tile provider at a port nothing listens on, so no frame this
-    /// harness renders can contain a tile it was not handed directly.
-    ///
-    /// Out of the box the engine streams from the hosted tile service, and a
-    /// test that renders two frames a sixtieth of a second apart would have
-    /// tiles landing between them: the picture changes for reasons the test
-    /// never asked for, and the whole GPU suite becomes a network client whose
-    /// results depend on a CDN. Every offscreen test states that it renders an
-    /// empty map; this makes that true.
-    ///
-    /// The provider type stays the same, so the map style, label profile and
-    /// cache namespace are unchanged and only the transport dies, immediately
-    /// and locally (connection refused on 127.0.0.1, no DNS, no traffic).
-    /// A test that wants tiles hands them to `tileRenderStore` itself.
-    private static func offline(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
-        var offlineSettings = settings
-        let unreachable = URL(string: "http://127.0.0.1:1/tiles")!
-        offlineSettings.tileProvider = AnyImmersiveMapTileProvider(
-            ImmersiveMapTilesProvider(tileBaseURL: unreachable))
-        return offlineSettings
     }
 
     /// The device a headless frame needs, or the way out: a skip normally, a
