@@ -47,9 +47,9 @@ private func hostedTileHeaders() -> [String: String] {
 
 /// The environment wins (the scheme carries an empty placeholder for it);
 /// otherwise the key comes from the gitignored `LocalSecrets.plist` at the
-/// repository root, found from this source file's path, which exists wherever
-/// the app can also read it: on the Mac and in the simulator. A physical
-/// device sees neither and uses the scheme variable.
+/// repository root, read live off the checkout where possible (the Mac, the
+/// simulator) and from the copy the "Bundle LocalSecrets" build phase put
+/// into the app on a physical device, which cannot see the Mac's files.
 private func localAPIKey() -> String? {
     if let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
        key.isEmpty == false {
@@ -59,9 +59,16 @@ private func localAPIKey() -> String? {
     while directory.path != "/" {
         if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
             let secrets = directory.appendingPathComponent("LocalSecrets.plist")
-            return NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String
+            if let key = NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String,
+               key.isEmpty == false {
+                return key
+            }
+            break
         }
         directory = directory.deletingLastPathComponent()
     }
-    return nil
+    guard let bundled = Bundle.main.url(forResource: "LocalSecrets", withExtension: "plist") else {
+        return nil
+    }
+    return NSDictionary(contentsOf: bundled)?["IMMERSIVEMAP_API_KEY"] as? String
 }

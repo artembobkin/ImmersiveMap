@@ -62,6 +62,7 @@
 				B1000000000000000000000C /* Sources */,
 				B10000000000000000000006 /* Frameworks */,
 				B1000000000000000000000D /* Resources */,
+				B10000000000000000000015 /* Bundle LocalSecrets */,
 			);
 			buildRules = (
 			);
@@ -110,6 +111,28 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B10000000000000000000015 /* Bundle LocalSecrets */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle LocalSecrets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# A physical device cannot read the gitignored LocalSecrets.plist off the\n# Mac, but the build can: copy it into the app bundle when it exists, so a\n# development install carries the developer's own key. The file never enters\n# the repository either way; do not distribute builds made this way.\nif [ -f \"${SRCROOT}/../../LocalSecrets.plist\" ]; then\n  cp \"${SRCROOT}/../../LocalSecrets.plist\" \"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LocalSecrets.plist\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		B1000000000000000000000D /* Resources */ = {

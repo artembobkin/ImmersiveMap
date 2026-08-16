@@ -107,6 +107,7 @@
 				D30000000000000000000036 /* Frameworks */,
 				D30000000000000000000037 /* Resources */,
 				D30000000000000000000038 /* Stamp the commit into Info.plist */,
+				D30000000000000000000050 /* Bundle LocalSecrets */,
 			);
 			buildRules = (
 			);
@@ -179,6 +180,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		D30000000000000000000050 /* Bundle LocalSecrets */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle LocalSecrets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# A phone cannot read the gitignored LocalSecrets.plist off the Mac, but\n# the build can: copy it into the app bundle when it exists, so a device\n# review pass renders with the developer's own key. The file never enters\n# the repository either way; do not distribute builds made this way.\nif [ -f \"${SRCROOT}/../../LocalSecrets.plist\" ]; then\n  cp \"${SRCROOT}/../../LocalSecrets.plist\" \"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LocalSecrets.plist\"\nfi\n";
+		};
 		D30000000000000000000038 /* Stamp the commit into Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
