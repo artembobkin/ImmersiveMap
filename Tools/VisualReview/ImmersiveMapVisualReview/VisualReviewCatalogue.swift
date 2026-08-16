@@ -356,7 +356,6 @@ extension ImmersiveMapView {
             .renderLoopSettings(settings.renderLoop)
             .cameraSettings(settings.camera)
             .presentationSettings(settings.presentation)
-            .tileProvider(settings.tileProvider)
             .mapStyle(settings.mapStyle)
             .tileSettings(settings.tiles)
             .labelSettings(settings.labels)

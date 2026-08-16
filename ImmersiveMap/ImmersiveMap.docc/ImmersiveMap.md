@@ -30,7 +30,7 @@ struct MapScreen: View {
 }
 ```
 
-Everything else is a builder-style modifier on the view (`.tileProvider(_:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.sceneSettings(_:)`, `.shadows()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
+Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:headers:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.sceneSettings(_:)`, `.shadows()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
 
 ### Presentation
 
@@ -54,7 +54,7 @@ Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-
 
 ### Map data
 
-The built-in ``ImmersiveMapTilesProvider`` renders out of the box and takes an optional API key; any other MVT source plugs in through ``VectorTileProvider`` or a custom ``ImmersiveMapTileProvider``. Tiles are cached in memory and on disk (raw and prepared), and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
+The built-in tile source renders out of the box; any other MVT endpoint plugs in with one URL template, `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx", headers: [:])`, with parsing and styling configured separately through ``VectorTileMapStyle``. Tiles are cached in memory and on disk (raw and prepared), and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
 
 ### Export
 
@@ -134,13 +134,9 @@ Feature guides, one example app per feature and the changelog live in the [repos
 - ``ImmersiveMapAvatarTapEvent``
 - ``ImmersiveMapSceneModelTapEvent``
 
-### Tile Providers
+### Tile Sources
 
-- ``ImmersiveMapTileProvider``
-- ``ImmersiveMapTilesProvider``
-- ``VectorTileProvider``
-- ``AnyImmersiveMapTileProvider``
-- ``ImmersiveMapTileSource``
+- ``ImmersiveMapTilesService``
 - ``ImmersiveMapAttribution``
 
 ### Map Styles

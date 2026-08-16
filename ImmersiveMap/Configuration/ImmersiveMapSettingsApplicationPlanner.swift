@@ -57,16 +57,6 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.presentation != newValue.presentation {
             mark(.presentation, actions: [.liveApply])
         }
-        if oldValue.tileProvider != newValue.tileProvider {
-            if oldValue.tileProvider.tileSource != newValue.tileProvider.tileSource {
-                mark(.tiles, actions: [.invalidateCaches, .recreateRenderer])
-            } else if oldValue.tileProvider.configurationFingerprint != newValue.tileProvider.configurationFingerprint
-                || oldValue.tileProvider.id != newValue.tileProvider.id
-                || oldValue.tileProvider.cacheNamespace != newValue.tileProvider.cacheNamespace
-                || oldValue.tileProvider.maximumTileZoomLevel != newValue.tileProvider.maximumTileZoomLevel {
-                mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
-            }
-        }
         if oldValue.mapStyle != newValue.mapStyle {
             mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         }
@@ -123,10 +113,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
         }
-        // The badge also changes when the tile provider changed without the settings
-        // themselves changing: the default attribution text belongs to the provider.
-        if oldValue.attribution != newValue.attribution
-            || oldValue.resolvedAttribution != newValue.resolvedAttribution {
+        if oldValue.attribution != newValue.attribution {
             mark(.attribution, actions: [.liveApply])
         }
         if oldValue.postProcessing != newValue.postProcessing {

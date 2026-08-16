@@ -4,6 +4,9 @@
 @testable import ImmersiveMap
 import XCTest
 
+/// The tile source and the map style are independent settings: the source is
+/// only a URL bytes come from, and everything about interpreting them (style,
+/// label profile) is configured on the style side.
 final class ImmersiveMapTileProviderStyleSeparationTests: XCTestCase {
     func testSettingsDoNotKeepLegacyCombinedProviderState() {
         let settings = ImmersiveMapSettings.default
@@ -11,45 +14,34 @@ final class ImmersiveMapTileProviderStyleSeparationTests: XCTestCase {
         let settingLabels = Mirror(reflecting: settings).children.compactMap(\.label)
 
         XCTAssertFalse(settingLabels.contains("provider"))
+        XCTAssertFalse(settingLabels.contains("tileProvider"))
     }
 
-    func testTileProviderConfiguresSourceAndTechnicalLabelProfileSeparatelyFromStyle() {
-        let tileProvider = VectorTileProvider(
-            id: "custom-tiles",
-            tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
-            labelProfile: ImmersiveMapVectorTileLabelProfile(textKeys: ["title"]),
-            maximumTileZoomLevel: 16
-        )
-        let mapStyle = VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 77))
+    func testTemplateConfiguresSourceAndStyleConfiguresParsingSeparately() {
+        let mapStyle = VectorTileMapStyle(
+            style: BasicVectorTileStyle(cacheFingerprint: 77),
+            labelProfile: ImmersiveMapVectorTileLabelProfile(textKeys: ["title"]))
 
         let settings = ImmersiveMapSettings.default
-            .tileProvider(tileProvider)
+            .tileURLTemplate("https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(mapStyle)
 
-        XCTAssertEqual(settings.tileProvider.id, "custom-tiles")
-        XCTAssertEqual(settings.tileProvider.tileSource.tileBaseURL.absoluteString,
-                       "https://example.com/api/v1/map/tiles")
-        XCTAssertEqual(settings.tiles.network.tileBaseURL.absoluteString,
-                       "https://example.com/api/v1/map/tiles")
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 16)
+        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
+                       "https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.mapStyle.configurationFingerprint, mapStyle.configurationFingerprint)
 
         let runtime = ImmersiveMapProviderRuntimeContext(settings: settings)
         XCTAssertEqual(runtime.mapStyle.preparedTileStyleRevision, 77)
-        XCTAssertEqual(runtime.labelProviderProfile.providerID, "custom-tiles")
+        XCTAssertEqual(runtime.labelProviderProfile.providerID, AnyImmersiveMapMapStyle.genericStyleID)
         XCTAssertEqual(runtime.labelProviderProfile.labelTextKeys, ["title"])
     }
 
     func testChangingOnlyMapStyleIsAStyleChangeNotATileSourceChange() {
-        let tileProvider = VectorTileProvider(
-            id: "custom-tiles",
-            tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!)
-        )
         let oldSettings = ImmersiveMapSettings.default
-            .tileProvider(tileProvider)
+            .tileURLTemplate("https://example.com/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
         let newSettings = ImmersiveMapSettings.default
-            .tileProvider(tileProvider)
+            .tileURLTemplate("https://example.com/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 2)))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
@@ -58,18 +50,12 @@ final class ImmersiveMapTileProviderStyleSeparationTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
     }
 
-    func testChangingOnlyTileProviderIsATileChange() {
+    func testChangingOnlyTheTemplateIsATileChange() {
         let oldSettings = ImmersiveMapSettings.default
-            .tileProvider(VectorTileProvider(
-                id: "custom-tiles",
-                tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!)
-            ))
+            .tileURLTemplate("https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
         let newSettings = ImmersiveMapSettings.default
-            .tileProvider(VectorTileProvider(
-                id: "custom-tiles",
-                tileSource: .url(URL(string: "https://example.com/api/v2/map/tiles")!)
-            ))
+            .tileURLTemplate("https://example.com/api/v2/map/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)

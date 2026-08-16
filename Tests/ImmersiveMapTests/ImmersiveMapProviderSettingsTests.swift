@@ -5,37 +5,31 @@
 import XCTest
 
 final class ImmersiveMapProviderSettingsTests: XCTestCase {
-    func testBuiltInTileProviderAndMapStyleConfigureSourceAndStyleSeparately() {
+    func testTemplateAndMapStyleConfigureSourceAndStyleSeparately() {
         let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
             labels.town.haloEm = 0.125
         }
 
-        // A non-default base URL, so the assertion proves the provider was copied
-        // into `tiles.network` rather than matching what `.default` already held.
-        let tileBaseURL = URL(string: "https://tiles.example.com/tiles")!
         let settings = ImmersiveMapSettings.default
-            .tileProvider(ImmersiveMapTilesProvider(tileBaseURL: tileBaseURL))
+            .tileURLTemplate("https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: style))
 
-        XCTAssertNotEqual(tileBaseURL, ImmersiveMapTilesProvider.defaultTileBaseURL)
-        XCTAssertEqual(settings.tileProvider.id, "immersivemaptiles")
-        XCTAssertEqual(settings.tileProvider.cacheNamespace, "immersivemaptiles")
-        XCTAssertEqual(settings.tiles.network.tileBaseURL, tileBaseURL)
+        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
+                       "https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
                        AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(configuration: style)).configurationFingerprint)
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel)
+        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel,
+                       ImmersiveMapTilesService.maximumTileZoomLevel)
     }
 
-    func testBuiltInTileProviderRestoresDefaultMaximumZoomAfterCustomTileProvider() {
-        let settings = ImmersiveMapSettings.default
-            .tileProvider(VectorTileProvider(
-                id: "example",
-                tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
-                maximumTileZoomLevel: 12
-            ))
-            .tileProvider(ImmersiveMapTilesProvider())
+    func testDefaultSettingsPointAtTheHostedService() {
+        let network = ImmersiveMapSettings.default.tiles.network
 
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel)
+        XCTAssertEqual(network.tileBaseURL, ImmersiveMapTilesService.tileBaseURL)
+        XCTAssertEqual(network.tileJSONURL, ImmersiveMapTilesService.tileJSONURL)
+        XCTAssertNil(network.tileURLTemplate)
+        XCTAssertTrue(network.tileRequestHeaders.isEmpty)
+        XCTAssertNotEqual(network.cacheIdentity, 0)
     }
 
     func testMapStyleChangeRebuildsPreparedData() {
@@ -52,17 +46,4 @@ final class ImmersiveMapProviderSettingsTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
-
-    func testVectorTileProviderCanConfigureMaximumTileZoomLevel() {
-        let settings = ImmersiveMapSettings.default.tileProvider(
-            VectorTileProvider(
-                id: "example",
-                tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
-                maximumTileZoomLevel: 12
-            )
-        )
-
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 12)
-    }
-
 }

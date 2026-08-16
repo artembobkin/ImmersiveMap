@@ -6,15 +6,15 @@ import Foundation
 /// Downloads map regions to disk and manages them, so maps render without a
 /// network connection.
 ///
-/// The controller is standalone: it is created with a tile provider and never
+/// The controller is standalone: it is created with a settings value and never
 /// attaches to a map view. Downloaded tiles land in a store keyed by the tile
-/// source identity, the same identity every `ImmersiveMapView` using that
-/// provider derives on its own, so serving needs no wiring: with the default
+/// source identity, the same identity every `ImmersiveMapView` with the same
+/// source derives on its own, so serving needs no wiring: with the default
 /// `.automatic` offline mode the map falls back to downloaded regions whenever
 /// a tile request fails, and `.offlineTileMode(.offlineOnly)` renders from
 /// them without touching the network at all.
 ///
-///     let offline = ImmersiveMapOfflineController(tileProvider: ImmersiveMapTilesProvider())
+///     let offline = ImmersiveMapOfflineController()
 ///     try offline.download(ImmersiveMapOfflineRegion(
 ///         id: "london",
 ///         southWest: GeoCoordinate(latitude: 51.35, longitude: -0.35),
@@ -65,21 +65,19 @@ public final class ImmersiveMapOfflineController {
     private var pruneSweepTask: Task<Void, Never>?
     private var statuses: [String: ImmersiveMapOfflineRegionStatus] = [:]
 
-    public convenience init<P: ImmersiveMapTileProvider>(tileProvider: P) {
-        self.init(tileProvider: AnyImmersiveMapTileProvider(tileProvider))
-    }
-
-    public convenience init(tileProvider: AnyImmersiveMapTileProvider) {
-        // Deriving the network settings through the same builder a map view
-        // uses guarantees the store namespace matches what that map resolves.
-        let config = ImmersiveMapSettings.default.tileProvider(tileProvider)
-        self.init(network: config.tiles.network,
-                  maximumTileZoomLevel: tileProvider.maximumTileZoomLevel,
+    /// - Parameter settings: the same settings value the map renders with
+    ///   (built with `.tileURLTemplate` and friends, or `.default` for the
+    ///   hosted service). Sharing the value guarantees the store namespace
+    ///   matches what that map resolves, so downloaded regions are found
+    ///   without any wiring.
+    public convenience init(settings: ImmersiveMapSettings = .default) {
+        self.init(network: settings.tiles.network,
+                  maximumTileZoomLevel: settings.tiles.coverage.maximumZoomLevel,
                   makeFetchTile: {
-                      let downloader = TileDownloader(config: config)
+                      let downloader = TileDownloader(config: settings)
                       return { tile in await downloader.downloadResult(tile: tile) }
                   },
-                  maxConcurrentFetches: config.tiles.network.maxConcurrentFetches)
+                  maxConcurrentFetches: settings.tiles.network.maxConcurrentFetches)
     }
 
     init(network: ImmersiveMapSettings.TileSettings.NetworkSettings,

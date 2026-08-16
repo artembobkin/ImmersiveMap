@@ -2,11 +2,11 @@
 
 Download a geographic region once and the map renders it with no network connection. Two pieces, deliberately decoupled:
 
-- `ImmersiveMapOfflineController` downloads and manages regions. It is standalone: create it with a tile provider anywhere in the app (a settings screen, a background task), no map view involved.
-- The map serves downloaded tiles automatically. Both sides derive the same on-disk store location from the tile provider's source identity, so a map configured with the same provider finds the regions without any wiring.
+- `ImmersiveMapOfflineController` downloads and manages regions. It is standalone: create it with a settings value anywhere in the app (a settings screen, a background task), no map view involved. `ImmersiveMapOfflineController()` uses the default hosted source; a map on its own endpoint passes the same settings it renders with, e.g. `ImmersiveMapOfflineController(settings: ImmersiveMapSettings.default.tileURLTemplate("https://…/{z}/{x}/{y}.mvt"))`.
+- The map serves downloaded tiles automatically. Both sides derive the same on-disk store location from the tile source identity in the settings, so a map configured with the same source finds the regions without any wiring.
 
 ```swift
-let offline = ImmersiveMapOfflineController(tileProvider: ImmersiveMapTilesProvider())
+let offline = ImmersiveMapOfflineController()
 
 try offline.download(ImmersiveMapOfflineRegion(
     id: "london",
@@ -15,7 +15,7 @@ try offline.download(ImmersiveMapOfflineRegion(
     zoomLevels: 0...14))
 ```
 
-A region is a rectangle plus a zoom span: every tile overlapping the rectangle at every zoom in the range, edges included. Start the range at 0: the low levels cost a handful of tiles per zoom and keep the map usable while zooming out over the downloaded area. The cost of a region is dominated by its top zoom level. Zoom levels above the provider's `maximumTileZoomLevel` are clamped away; the renderer never requests them (it overzooms by stretching the deepest tiles it has). `ImmersiveMapOfflineRegion.tileCount` estimates the size before downloading, and `download(_:)` throws `ImmersiveMapOfflineError.regionTooLarge` past the controller's `maximumTileCountPerDownload` (50 000 by default) rather than quietly mirroring half the planet.
+A region is a rectangle plus a zoom span: every tile overlapping the rectangle at every zoom in the range, edges included. Start the range at 0: the low levels cost a handful of tiles per zoom and keep the map usable while zooming out over the downloaded area. The cost of a region is dominated by its top zoom level. Zoom levels above the settings' `tiles.coverage.maximumZoomLevel` are clamped away; the renderer never requests them (it overzooms by stretching the deepest tiles it has). `ImmersiveMapOfflineRegion.tileCount` estimates the size before downloading, and `download(_:)` throws `ImmersiveMapOfflineError.regionTooLarge` past the controller's `maximumTileCountPerDownload` (50 000 by default) rather than quietly mirroring half the planet.
 
 ## Watching progress
 
@@ -46,6 +46,6 @@ Serving goes through the regular pipeline, so offline tiles get the same parsing
 
 ## Storage and lifecycle
 
-Regions live under Application Support (unlike the [tile caches](tile-cache.md), which live in Caches and are the system's to evict): an explicit download stays until the app removes it. `removeRegion(regionID:)` deletes a region but keeps tiles shared with an overlapping region; `removeAllRegions()` clears everything for that tile source. The store is namespaced by the provider's source identity, the same identity that keys the prepared-tile cache, so changing the provider configuration (a different URL, a different `configurationFingerprint`) makes existing downloads invisible to it: download and serve with the same provider configuration.
+Regions live under Application Support (unlike the [tile caches](tile-cache.md), which live in Caches and are the system's to evict): an explicit download stays until the app removes it. `removeRegion(regionID:)` deletes a region but keeps tiles shared with an overlapping region; `removeAllRegions()` clears everything for that tile source. The store is namespaced by the tile source identity, the same identity that keys the prepared-tile cache, so changing the source (a different URL or template, different header names) makes existing downloads invisible to it: download and serve with the same source configuration.
 
 Running example: [`Examples/macOS/ImmersiveMapOfflineMac`](../../Examples/macOS/ImmersiveMapOfflineMac) downloads preset city regions or a box around the current map center, shows live progress with cancel/resume/delete, and has the mode switch: download a city, flip to "Offline only", and pan around it.

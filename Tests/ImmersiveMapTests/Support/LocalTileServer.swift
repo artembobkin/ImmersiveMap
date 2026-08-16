@@ -96,9 +96,9 @@ final class LocalTileServer: @unchecked Sendable {
         return URL(string: "http://127.0.0.1:\(port)")
     }
 
-    /// The base URL to hand to `ImmersiveMapTilesProvider`. The provider
-    /// appends `/{z}/{x}/{y}.mvt` and derives its TileJSON endpoint by
-    /// swapping the last component for `tiles.json`.
+    /// The base URL to point the tile network settings at. The loader
+    /// appends `/{z}/{x}/{y}.mvt`, and the TileJSON endpoint sits next to
+    /// the tile path as `tiles.json`.
     var tileBaseURL: URL? {
         baseURL?.appendingPathComponent("tiles")
     }

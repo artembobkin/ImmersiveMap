@@ -26,7 +26,7 @@ import Foundation
 final class FixtureTileService: @unchecked Sendable {
     static let shared = FixtureTileService()
 
-    /// The base URL to hand to `ImmersiveMapTilesProvider`, or nil when the
+    /// The base URL to point the tile network settings at, or nil when the
     /// listener never came up. `FixtureTileServiceTests` is where that
     /// failure is reported; the settings helpers below stay offline either
     /// way, they just have no tiles to serve.
@@ -86,7 +86,7 @@ enum FixtureTiles {
             // missing tiles are reported by `FixtureTileServiceTests`.
             return tilelessSettings(settings)
         }
-        return cacheless(settings.tileProvider(ImmersiveMapTilesProvider(tileBaseURL: tileBaseURL)))
+        return cacheless(sourced(settings, tileBaseURL: tileBaseURL))
     }
 
     /// Settings under which no tile can ever reach a frame: the provider
@@ -97,11 +97,22 @@ enum FixtureTiles {
     /// the scene: two frames rendered a sixtieth of a second apart must not
     /// differ because a tile landed between them.
     static func tilelessSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
-        cacheless(settings.tileProvider(ImmersiveMapTilesProvider(tileBaseURL: deadEndTileBaseURL)))
+        cacheless(sourced(settings, tileBaseURL: deadEndTileBaseURL))
     }
 
     /// Port 1 is reserved and unused; nothing on the machine listens there.
     static let deadEndTileBaseURL = URL(string: "http://127.0.0.1:1/tiles")!
+
+    /// Points the network settings at the given base URL the same way the
+    /// shipped defaults point at the hosted service: the loader appends
+    /// `/{z}/{x}/{y}.mvt`, and TileJSON sits next to the tile path.
+    private static func sourced(_ settings: ImmersiveMapSettings, tileBaseURL: URL) -> ImmersiveMapSettings {
+        var sourced = settings
+        sourced.tiles.network.tileBaseURL = tileBaseURL
+        sourced.tiles.network.tileJSONURL = tileBaseURL.deletingLastPathComponent()
+            .appendingPathComponent("tiles.json")
+        return sourced
+    }
 
     /// Both disk caches off, and downloaded regions ignored.
     ///

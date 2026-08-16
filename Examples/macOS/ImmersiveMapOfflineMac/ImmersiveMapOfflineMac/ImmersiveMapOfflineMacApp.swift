@@ -21,12 +21,11 @@ struct ImmersiveMapOfflineMacApp: App {
 /// which is the honest picture of what offline mode has.
 ///
 /// The controller and the map never meet: both derive the same on-disk store
-/// location from the tile provider, so serving needs no wiring. In this app
-/// both use the default `ImmersiveMapTilesProvider()`.
+/// location from the tile source in the settings, so serving needs no wiring.
+/// In this app both use the default hosted source.
 private struct OfflineScreen: View {
     @State private var camera = ImmersiveMapCameraController()
-    @State private var offlineController = ImmersiveMapOfflineController(
-        tileProvider: ImmersiveMapTilesProvider())
+    @State private var offlineController = ImmersiveMapOfflineController()
     @State private var regionStatuses: [ImmersiveMapOfflineRegionStatus] = []
     @State private var offlineMode = ImmersiveMapSettings.TileSettings.OfflineSettings.Mode.automatic
     @State private var lastErrorText: String?

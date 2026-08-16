@@ -36,8 +36,7 @@ final class FixtureTileServiceTests: XCTestCase {
     /// hosted service actually uses.
     func testFixtureServiceAdvertisesATileJSONTemplate() async throws {
         let tileBaseURL = try XCTUnwrap(FixtureTileService.shared.tileBaseURL)
-        let source = ImmersiveMapTileSource.immersiveMapTiles(tileBaseURL: tileBaseURL)
-        let tileJSONURL = try XCTUnwrap(source.tileJSONURL)
+        let tileJSONURL = tileBaseURL.deletingLastPathComponent().appendingPathComponent("tiles.json")
 
         let template = try await TileJSONTemplateLoader().loadTemplate(from: tileJSONURL)
 
@@ -246,14 +245,12 @@ final class FixtureTileServiceTests: XCTestCase {
                                              "TileDownloader(config:"]
 
     /// How the shipped defaults are spelled where they are handed to one.
-    /// `config:` is the name every internal seam uses, `settings:` the public
-    /// one, and a bare `ImmersiveMapTilesProvider()` is the hosted service
-    /// itself: its `tileBaseURL` defaults to `tiles.immersivemap.dev`.
+    /// `config:` is the name every internal seam uses, `settings:` the
+    /// public one; the shipped defaults point at `tiles.immersivemap.dev`.
     private static let defaultSettings = ["ImmersiveMapSettings.default",
                                           "settings: .default",
                                           "config: .default",
-                                          "currentSettings: { .default }",
-                                          "ImmersiveMapTilesProvider()"]
+                                          "currentSettings: { .default }"]
 
     /// Whether the line turns the shipped defaults into settings a runtime
     /// could be built from, and does so without going through `FixtureTiles`.
@@ -285,7 +282,7 @@ final class FixtureTileServiceTests: XCTestCase {
     /// runtime.
     ///
     /// Deliberately narrower than "the line mentions FixtureTiles somewhere":
-    /// `FixtureTiles.settings().tileProvider(ImmersiveMapTilesProvider())`
+    /// `FixtureTiles.settings().tileSettings(ImmersiveMapSettings.default.tiles)`
     /// undoes the fixture on the same line that would have excused it.
     private static func isInsideAFixtureCall(_ before: Substring) -> Bool {
         before.hasSuffix("FixtureTiles.settings(") || before.hasSuffix("FixtureTiles.tilelessSettings(")

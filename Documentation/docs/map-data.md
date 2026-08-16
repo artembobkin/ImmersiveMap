@@ -15,22 +15,21 @@ ImmersiveMapView()
 
 `{x}`, `{y}` and `{z}` may appear in any order and the query string is preserved, so a key can live in the template. Credentials that travel as headers go in the second parameter: `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}", headers: ["X-API-Key": "xxx"])`.
 
-**Your own tiles.** Any MVT source works through `VectorTileProvider`: your own tile server, your own planet build, or any service that speaks MVT, in any schema, drawn by your own style. See the [custom tile provider guide](custom-tile-provider.md).
+**Your own tiles.** Any MVT source works the same way: your own tile server, your own planet build, or any service that speaks MVT. A source in another schema pairs the template with your own style, `.mapStyle(VectorTileMapStyle(style:labelProfile:))`. See the [custom tile source guide](custom-tile-provider.md).
 
 ## Attribution is not optional
 
 Map data carries licence obligations, and the most common one, ODbL for OpenStreetMap data, requires visible credit in your app.
 
-The engine handles this for you: **the attribution badge takes its text from the active tile provider**, so the built-in tiles show the one-line credit "© OpenStreetMap © OpenMapTiles" linking to the full license story. Each provider carries the credit its own data requires, and only while that provider is active. You do not have to write anything.
+For the default source the engine handles this for you: the badge shows the one-line credit "© OpenStreetMap © OpenMapTiles" linking to the full license story, which is what the built-in tiles require. You do not have to write anything.
 
-If you build a custom `VectorTileProvider`, declare its attribution, because the engine will not invent one for you:
+If you point the map at your own data with `.tileURLTemplate`, the credit is yours to get right, because the engine cannot know what your endpoint serves. Declare it:
 
 ```swift
-VectorTileProvider(
-    id: "my-tiles",
-    tileSource: ImmersiveMapTileSource(tileBaseURL: myTileURL),
-    attribution: .openStreetMap    // or your own ImmersiveMapAttribution
-)
+ImmersiveMapView()
+    .tileURLTemplate("https://tiles.com/{z}/{x}/{y}.mvt")
+    .attributionSettings(ImmersiveMapSettings.AttributionSettings(
+        attributionOverride: .openStreetMap))   // or your own ImmersiveMapAttribution
 ```
 
 The badge is adjustable without touching the credit itself:

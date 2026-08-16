@@ -70,50 +70,40 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertTrue(settings.debug.enableDebugPanel)
     }
 
-    func testTileProviderAndMapStyleSettingsModifiersStoreBuiltInConfiguration() {
+    func testMapStyleSettingsModifierStoresBuiltInConfiguration() {
         let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
             labels.town.haloEm = 0.125
         }
 
-        let tileProvider = ImmersiveMapTilesProvider()
         let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
         let settings = ImmersiveMapSettings.default
-            .tileProvider(tileProvider)
             .mapStyle(mapStyle)
 
-        XCTAssertEqual(settings.tileProvider, AnyImmersiveMapTileProvider(tileProvider))
         XCTAssertEqual(settings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
         XCTAssertNotEqual(settings, ImmersiveMapSettings.default)
     }
 
-    func testTileProviderAndMapStyleViewModifiersStoreBuiltInConfiguration() throws {
+    func testMapStyleViewModifierStoresBuiltInConfiguration() throws {
         let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
             labels.poi.haloEm = 0.35
         }
-        let tileProvider = ImmersiveMapTilesProvider()
         let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
 
         let view = ImmersiveMapView()
-            .tileProvider(tileProvider)
             .mapStyle(mapStyle)
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
         let unwrappedSettings = try XCTUnwrap(settings)
-        XCTAssertEqual(unwrappedSettings.tileProvider, AnyImmersiveMapTileProvider(tileProvider))
         XCTAssertEqual(unwrappedSettings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
     }
 
-    func testTileURLTemplateModifierConfiguresTheBuiltInProviderWithTheTemplateSource() throws {
+    func testTileURLTemplateModifierStoresTemplateAndHeadersInNetworkSettings() throws {
         let view = ImmersiveMapView()
             .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx",
                              headers: ["X-Client": "demo"])
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
         let unwrappedSettings = try XCTUnwrap(settings)
-        let provider = unwrappedSettings.tileProvider
-        XCTAssertEqual(provider.id, "immersivemaptiles")
-        XCTAssertEqual(provider.tileSource.urlTemplate, "https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
-        XCTAssertEqual(provider.tileSource.headers, ["X-Client": "demo"])
         XCTAssertEqual(unwrappedSettings.tiles.network.tileURLTemplate,
                        "https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
         XCTAssertEqual(unwrappedSettings.tiles.network.tileRequestHeaders, ["X-Client": "demo"])
@@ -338,21 +328,15 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.debug, debug)
     }
 
-    func testVectorTileProviderConfiguresGenericURLAndRequestHeaders() {
-        let url = URL(string: "https://tiles.example.com/vector")!
-        let provider = VectorTileProvider(
-            id: "custom",
-            tileSource: .url(url).headers(["Authorization": "Bearer public-token"]),
-            maximumTileZoomLevel: 12
-        )
+    func testTemplateWithHeadersConfiguresSourceAndCredentialsTogether() {
+        let settings = ImmersiveMapSettings.default
+            .tileURLTemplate("https://tiles.example.com/vector/{z}/{x}/{y}.mvt",
+                             headers: ["Authorization": "Bearer public-token"])
 
-        let settings = ImmersiveMapSettings.default.tileProvider(provider)
-
-        XCTAssertEqual(settings.tiles.network.tileBaseURL, url)
+        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
+                       "https://tiles.example.com/vector/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.tiles.network.tileRequestHeaders,
                        ["Authorization": "Bearer public-token"])
-        XCTAssertEqual(settings.tileProvider, AnyImmersiveMapTileProvider(provider))
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel, 12)
     }
 
     private func reflectedValue<T>(_ label: String, in value: Any) -> T? {

@@ -5,10 +5,9 @@
 import XCTest
 
 final class CustomVectorTileLabelProfileTests: XCTestCase {
-    func testCustomProviderUsesConfiguredLabelProfile() {
-        let provider = VectorTileProvider(
-            id: "custom",
-            tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
+    func testCustomStyleUsesConfiguredLabelProfile() {
+        let mapStyle = VectorTileMapStyle(
+            style: BasicVectorTileStyle(cacheFingerprint: 1),
             labelProfile: ImmersiveMapVectorTileLabelProfile(
                 textKeys: ["title"],
                 rankKeys: ["priority"],
@@ -19,7 +18,7 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
             )
         )
 
-        let profile = AnyImmersiveMapTileProvider(provider).makeLabelProviderProfile(settings: .default)
+        let profile = AnyImmersiveMapMapStyle(mapStyle).makeLabelProviderProfile(settings: .default)
 
         XCTAssertEqual(profile.sortKey(properties: ["priority": intValue(7)]), 7)
         XCTAssertTrue(profile.includesBasePointLabel(layerName: "custom_label",
@@ -36,18 +35,14 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
         XCTAssertTrue(profile.isHouseNumberLayer("address_label"))
     }
 
-    func testCustomProviderLabelProfileParticipatesInConfigurationFingerprint() {
-        let defaultProvider = VectorTileProvider(
-            id: "custom",
-            tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!)
-        )
-        let customProvider = VectorTileProvider(
-            id: "custom",
-            tileSource: .url(URL(string: "https://example.com/api/v1/map/tiles")!),
+    func testCustomLabelProfileParticipatesInStyleConfigurationFingerprint() {
+        let defaultStyle = VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1))
+        let customStyle = VectorTileMapStyle(
+            style: BasicVectorTileStyle(cacheFingerprint: 1),
             labelProfile: ImmersiveMapVectorTileLabelProfile(textKeys: ["title"])
         )
 
-        XCTAssertNotEqual(defaultProvider.configurationFingerprint, customProvider.configurationFingerprint)
+        XCTAssertNotEqual(defaultStyle.configurationFingerprint, customStyle.configurationFingerprint)
     }
 
     func testCustomLabelProfileResolvesTextFromCustomKey() {

@@ -55,7 +55,7 @@ struct ContentView: View {
 
 ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required (see [Where the map data comes from](Documentation/docs/map-data.md)). The same SwiftUI code runs natively on iOS (UIKit host) and macOS (AppKit host): `ImmersiveMapView` bridges to the platform view internally.
 
-Any other MVT source works through `VectorTileProvider`, see the [custom tile provider guide](Documentation/docs/custom-tile-provider.md).
+Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")`, see the [custom tile source guide](Documentation/docs/custom-tile-provider.md).
 
 ## Features
 

@@ -952,7 +952,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var renderLoop: RenderLoopSettings
     public var camera: CameraSettings
     public var presentation: PresentationSettings
-    public var tileProvider: AnyImmersiveMapTileProvider
     public var mapStyle: AnyImmersiveMapMapStyle
     public var tiles: TileSettings
     public var labels: LabelSettings
@@ -967,7 +966,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
                 presentation: PresentationSettings,
-                tileProvider: AnyImmersiveMapTileProvider = AnyImmersiveMapTileProvider(ImmersiveMapTilesProvider()),
                 mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
                 tiles: TileSettings,
                 labels: LabelSettings,
@@ -981,7 +979,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.renderLoop = renderLoop
         self.camera = camera
         self.presentation = presentation
-        self.tileProvider = tileProvider
         self.mapStyle = mapStyle
         self.tiles = tiles
         self.labels = labels
@@ -1029,14 +1026,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         presentation: PresentationSettings(automaticTransitionStartZoom: 6.0,
                                            automaticTransitionSpan: 1.0,
                                            globeRadiusScale: 0.14),
-        tileProvider: AnyImmersiveMapTileProvider(ImmersiveMapTilesProvider()),
         mapStyle: AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
-        tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: ImmersiveMapTilesProvider.defaultMaximumTileZoomLevel),
+        tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: ImmersiveMapTilesService.maximumTileZoomLevel),
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
-                                                                  tileBaseURL: ImmersiveMapTilesProvider.defaultTileBaseURL,
-                                                                  tileJSONURL: ImmersiveMapTilesProvider.defaultTileJSONURL,
-                                                                  cacheIdentity: ImmersiveMapTilesProvider().configurationFingerprint),
+                                                                  tileBaseURL: ImmersiveMapTilesService.tileBaseURL,
+                                                                  tileJSONURL: ImmersiveMapTilesService.tileJSONURL,
+                                                                  cacheIdentity: ImmersiveMapTilesService.cacheIdentity),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
                                                               memoryCacheSizeInBytes: 256 * 1024 * 1024),
@@ -1125,21 +1121,16 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func tileProvider<P: ImmersiveMapTileProvider>(_ tileProvider: P) -> ImmersiveMapSettings {
-        self.tileProvider(AnyImmersiveMapTileProvider(tileProvider))
-    }
-
-    func tileProvider(_ tileProvider: AnyImmersiveMapTileProvider) -> ImmersiveMapSettings {
+    /// Points the tile loader at any endpoint with one URL template such as
+    /// `https://tiles.com/{x}/{y}/{z}?apiKey=xxx`; `headers` are added to every
+    /// tile request. The source is just bytes: how they are parsed and drawn is
+    /// configured separately through `mapStyle(_:)`, and the zoom coverage
+    /// through `tileSettings(_:)` when the endpoint does not ship z0-14.
+    func tileURLTemplate(_ urlTemplate: String,
+                         headers: [String: String] = [:]) -> ImmersiveMapSettings {
         var settings = self
-        settings.tileProvider = tileProvider
-        settings.tiles.network.tileBaseURL = tileProvider.tileSource.tileBaseURL
-        settings.tiles.network.tileJSONURL = tileProvider.tileSource.tileJSONURL
-        settings.tiles.network.tileURLTemplate = tileProvider.tileSource.urlTemplate
-        settings.tiles.network.tileRequestHeaders = tileProvider.tileSource.headers
-        settings.tiles.network.cacheIdentity = tileProvider.configurationFingerprint
-        if let maximumTileZoomLevel = tileProvider.maximumTileZoomLevel {
-            settings.tiles.coverage.maximumZoomLevel = maximumTileZoomLevel
-        }
+        settings.tiles.network.tileURLTemplate = urlTemplate
+        settings.tiles.network.tileRequestHeaders = headers
         return settings
     }
 
@@ -1386,10 +1377,12 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// What the badge actually shows: the app override, or, when absent,
-    /// the current tile provider's attribution.
+    /// What the badge actually shows: the app override, or, when absent, the
+    /// hosted service's credit, which is what the default source requires. An
+    /// app that points the map at its own data owns the credit and states it
+    /// with `attributionSettings`.
     var resolvedAttribution: ImmersiveMapAttribution {
-        attribution.attributionOverride ?? tileProvider.attribution
+        attribution.attributionOverride ?? ImmersiveMapTilesService.attribution
     }
 
     func postProcessingSettings(_ postProcessing: PostProcessingSettings) -> ImmersiveMapSettings {

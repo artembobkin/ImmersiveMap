@@ -18,33 +18,9 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertFalse(attribution.title.contains("ImmersiveMap"))
     }
 
-    /// A custom provider that declares its own attribution gets exactly that
-    /// on the badge, nothing added by the engine.
-    func testCustomProviderAttributionIsShownVerbatim() {
-        let declared = ImmersiveMapAttribution(title: "© Example Data",
-                                               copyright: "Improve this map",
-                                               linkURL: URL(string: "https://example.com/about"))
-        let provider = VectorTileProvider(id: "custom",
-                                          tileSource: .url(URL(string: "https://example.com/tiles")!),
-                                          attribution: declared)
-        let settings = ImmersiveMapSettings.default
-            .tileProvider(AnyImmersiveMapTileProvider(provider))
-
-        XCTAssertEqual(settings.resolvedAttribution, declared)
-    }
-
-    /// A custom provider that declares no source gets no third-party attribution
-    /// from the engine: an empty badge is more honest than a made-up copyright.
-    func testCustomProviderWithoutAttributionResolvesToEmpty() {
-        let provider = VectorTileProvider(id: "custom",
-                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!))
-        let settings = ImmersiveMapSettings.default
-            .tileProvider(AnyImmersiveMapTileProvider(provider))
-
-        XCTAssertTrue(settings.resolvedAttribution.isEmpty)
-    }
-
-    func testApplicationOverrideWinsOverProviderAttribution() {
+    /// An app pointing the map at its own data owns the credit: the override
+    /// is shown verbatim, nothing added by the engine.
+    func testApplicationOverrideWinsOverTheDefaultAttribution() {
         let override = ImmersiveMapAttribution(title: "Custom source",
                                                copyright: "© Custom data",
                                                linkURL: URL(string: "https://example.com/licence"))
@@ -54,18 +30,24 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertEqual(settings.resolvedAttribution, override)
     }
 
-    /// Changing the provider changes the badge text even if the `AttributionSettings`
-    /// themselves stayed the same, so the planner must mark the attribution domain.
-    func testProviderChangeMarksAttributionForLiveApply() {
+    /// An explicit empty override empties the badge: more honest than a
+    /// made-up copyright for data the engine knows nothing about.
+    func testEmptyOverrideResolvesToEmpty() {
+        let settings = ImmersiveMapSettings.default
+            .attributionSettings(ImmersiveMapSettings.AttributionSettings(attributionOverride: ImmersiveMapAttribution.none))
+
+        XCTAssertTrue(settings.resolvedAttribution.isEmpty)
+    }
+
+    /// The badge text changes with the override, so the planner must mark the
+    /// attribution domain.
+    func testOverrideChangeMarksAttributionForLiveApply() {
         let oldSettings = ImmersiveMapSettings.default
         let newSettings = oldSettings
-            .tileProvider(AnyImmersiveMapTileProvider(VectorTileProvider(
-                id: "custom",
-                tileSource: .url(URL(string: "https://example.com/tiles")!),
-                attribution: ImmersiveMapAttribution(title: "© Example Data",
-                                                     copyright: "",
-                                                     linkURL: nil)
-            )))
+            .attributionSettings(ImmersiveMapSettings.AttributionSettings(
+                attributionOverride: ImmersiveMapAttribution(title: "© Example Data",
+                                                             copyright: "",
+                                                             linkURL: nil)))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 

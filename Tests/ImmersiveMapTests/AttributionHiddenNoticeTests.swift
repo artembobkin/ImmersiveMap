@@ -30,13 +30,11 @@ final class AttributionHiddenNoticeTests: XCTestCase {
         XCTAssertTrue(AttributionHiddenNotice.isWarningWarranted(for: settings))
     }
 
-    /// A provider that declares no attribution leaves the badge empty, and that
-    /// is as invisible as hiding it.
-    func testEmptyProviderAttributionWarrantsWarning() {
-        let provider = VectorTileProvider(id: "custom",
-                                          tileSource: .immersiveMapTiles(tileBaseURL: URL(string: "https://example.com/tiles")!))
+    /// An empty override leaves the badge empty, and that is as invisible as
+    /// hiding it.
+    func testEmptyAttributionOverrideWarrantsWarning() {
         let settings = ImmersiveMapSettings.default
-            .tileProvider(AnyImmersiveMapTileProvider(provider))
+            .attributionSettings(ImmersiveMapSettings.AttributionSettings(attributionOverride: ImmersiveMapAttribution.none))
 
         XCTAssertTrue(AttributionHiddenNotice.isWarningWarranted(for: settings))
     }

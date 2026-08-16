@@ -50,9 +50,9 @@ public struct CacheSettings: Equatable, Sendable {
 
 ## Cache identity
 
-This is the part that bites. Prepared tiles carry the provider's schema interpretation, the style's palette and the label language baked in, so a cache entry is only valid for the exact configuration that produced it. Identity comes from three places:
+This is the part that bites. Prepared tiles carry the schema interpretation, the style's palette and the label language baked in, so a cache entry is only valid for the exact configuration that produced it. Identity comes from three places:
 
-- `ImmersiveMapTileProvider.configurationFingerprint`, folded into both disk namespaces as `NetworkSettings.cacheIdentity`. It is what keeps two providers, or one provider pointed at two different endpoints, from reading each other's tiles. A provider whose configuration changes the produced tiles **must** change its fingerprint, see [custom tile providers](custom-tile-provider.md).
+- The tile source identity: the base URL, the URL template and the request header names, plus `NetworkSettings.cacheIdentity`. It is what keeps two endpoints from reading each other's tiles; pointing the map elsewhere with `.tileURLTemplate` re-keys the caches on its own.
 - `ImmersiveMapMapStyle.configurationFingerprint`, so a recolor does not draw from tiles prepared under the old palette, see [map styling](styling.md).
 - `LabelLanguage.preparedTileCacheNamespaceKey`, so switching the [label language](labels.md) re-prepares rather than redraws.
 
@@ -78,7 +78,7 @@ public struct CoverageSettings: Equatable, Sendable {
 
 Loading runs off the main thread with bounded concurrency: `maxConcurrentFetches` in flight, the rest in a dedup FIFO capped at `pendingRequestQueueCapacity`, with retry and backoff. Requests for a tile already in flight join the existing one rather than starting a second.
 
-Most apps never touch `NetworkSettings` directly: `.tileURLTemplate(_:headers:)` or a [tile provider](custom-tile-provider.md) supplies the URL and the credentials. Setting the fields by hand is for cases a provider cannot express.
+Most apps never touch `NetworkSettings` directly: `.tileURLTemplate(_:headers:)` supplies the URL and the credentials. Setting the fields by hand is for cases the template cannot express.
 
 `CoverageSettings.maximumZoomLevel` caps the zoom level actually requested from the source. Past it the engine keeps rendering the deepest tiles it has, scaled up, which is why a source that stops at z14 still draws at z18.
 
@@ -89,7 +89,7 @@ Both disk caches sit in the app's caches directory, so the system may evict them
 ## Limitations
 
 - `preparedDiskCacheSizeInBytes` is root-wide, not per map instance: the last map to initialize sets the policy for all of them.
-- Cache identity is the app's responsibility for custom providers and styles. A fingerprint that does not change when the output does produces stale tiles that look like rendering bugs.
+- Cache identity is the app's responsibility for custom styles. A `configurationFingerprint` that does not change when the output does produces stale tiles that look like rendering bugs.
 - The caches fill from what the camera has actually looked at, and the system may evict them. To pre-download an area and keep it, use [offline regions](offline-tiles.md), which are a separate pinned store, not a cache policy.
 
 Running examples: [`Examples/macOS/ImmersiveMapCameraTourMac`](../../Examples/macOS/ImmersiveMapCameraTourMac) raises the memory cache to 1 GiB so a looped tour does not re-upload tiles between laps; the **Diagnostics** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) turns the raw and prepared caches off one at a time, so the cost of the stage below each one is visible on screen.

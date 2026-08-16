@@ -35,10 +35,10 @@ final class ImmersiveMapOfflineSettingsTests: XCTestCase {
         XCTAssertEqual(replaced.settings.tiles.offline.mode, .disabled)
     }
 
-    func testTileProviderFanOutLeavesTheOfflineModeAlone() {
+    func testTileURLTemplateLeavesTheOfflineModeAlone() {
         let settings = ImmersiveMapSettings.default
             .offlineTileMode(.offlineOnly)
-            .tileProvider(ImmersiveMapTilesProvider())
+            .tileURLTemplate("https://tiles.example.com/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.tiles.offline.mode, .offlineOnly)
     }
 }

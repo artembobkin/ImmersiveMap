@@ -33,7 +33,7 @@ RenderFrameEngine
 
 The package targets iOS 18 (UIKit) and native macOS 15 (AppKit); Mac Catalyst is not supported. Platform-specific UI (gestures, attribution badge, debug HUD, touch control zones) lives in per-platform files; shared runtime logic is platform-neutral and references the host view through the `ImmersiveMapHostView` typealias.
 
-Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsController`, `ImmersiveMapSelectionController`. Provider protocols live in `Provider/Core/`, together with the generic `VectorTileProvider`/`VectorTileMapStyle`; the first-party implementation is `ImmersiveMapTilesProvider`/`ImmersiveMapTilesMapStyle` in `Provider/ImmersiveMapTiles/`.
+Public controllers: `ImmersiveMapCameraController`, `ImmersiveMapAvatarsController`, `ImmersiveMapSelectionController`. Style protocols live in `Provider/Core/` (`ImmersiveMapMapStyle`, `ImmersiveMapVectorTileStyle`), together with the generic `VectorTileMapStyle`; the built-in style is `ImmersiveMapTilesMapStyle` in `Provider/ImmersiveMapTiles/`, next to the `ImmersiveMapTilesService` constants for the hosted source.
 
 ## Frame loop and render pipeline
 

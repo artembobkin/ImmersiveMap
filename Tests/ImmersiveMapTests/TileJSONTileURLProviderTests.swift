@@ -48,10 +48,10 @@ final class TileJSONTileURLProviderTests: XCTestCase {
 
     // MARK: - Source wiring
 
-    func testImmersiveMapTilesSourceDerivesTileJSONURL() {
-        let source = ImmersiveMapTileSource.immersiveMapTiles(
-            tileBaseURL: URL(string: "https://tiles.immersivemap.dev/tiles")!)
-        XCTAssertEqual(source.tileJSONURL?.absoluteString,
+    func testDefaultSettingsPointAtTheHostedTileJSONNextToTheTilePath() {
+        let network = ImmersiveMapSettings.default.tiles.network
+        XCTAssertEqual(network.tileBaseURL, ImmersiveMapTilesService.tileBaseURL)
+        XCTAssertEqual(network.tileJSONURL?.absoluteString,
                        "https://tiles.immersivemap.dev/tiles.json")
     }
 }

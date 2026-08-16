@@ -454,22 +454,16 @@ public extension ImmersiveMapView {
     ///     .tileURLTemplate("https://tiles.com/{x}/{y}/{z}",
     ///                      headers: ["X-API-Key": "xxx"])
     ///
-    /// The template configures the built-in provider and its default style, so
-    /// the endpoint must serve OpenMapTiles-schema MVT. For another schema,
-    /// wrap the same source in a `VectorTileProvider` with your own style:
-    /// `.tileProvider(VectorTileProvider(id:tileSource: .template(...)))`.
+    /// The source is only where bytes come from. How they are parsed and drawn
+    /// is configured separately: the default `ImmersiveMapTilesMapStyle` draws
+    /// OpenMapTiles-schema MVT, and any other schema pairs the template with
+    /// `.mapStyle(VectorTileMapStyle(style:labelProfile:))`. A source that does
+    /// not ship z0-14 states its depth via `tileSettings`, and its data credit
+    /// via `attributionSettings`.
     public func tileURLTemplate(_ urlTemplate: String,
                                 headers: [String: String] = [:]) -> ImmersiveMapView {
-        tileProvider(ImmersiveMapTilesProvider(tileSource: .template(urlTemplate, headers: headers)))
-    }
-
-    public func tileProvider<P: ImmersiveMapTileProvider>(_ tileProvider: P) -> ImmersiveMapView {
-        self.tileProvider(AnyImmersiveMapTileProvider(tileProvider))
-    }
-
-    public func tileProvider(_ tileProvider: AnyImmersiveMapTileProvider) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.tileProvider(tileProvider)
+        view.settings = view.settings.tileURLTemplate(urlTemplate, headers: headers)
         return view
     }
 

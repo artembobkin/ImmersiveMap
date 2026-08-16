@@ -103,7 +103,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
     func testPointLabelsUseConfiguredProviderIDInRuntimeProfile() throws {
         var config = ImmersiveMapSettings.default
-        config = config.tileProvider(ParserProviderIDTestTileProvider(id: "parser-provider"))
+        config = config.mapStyle(ParserProviderIDTestMapStyle(id: "parser-provider"))
 
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: FallbackWaterLabelStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
@@ -114,7 +114,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         let expectedKey = VectorTileLabelIdentity.providerFeature(providerID: "parser-provider",
                                                                   layerName: "water_name",
                                                                   featureID: 1).runtimeKey
-        let defaultProviderKey = VectorTileLabelIdentity.providerFeature(providerID: ImmersiveMapTilesProvider().id,
+        let defaultProviderKey = VectorTileLabelIdentity.providerFeature(providerID: "immersivemaptiles",
                                                                          layerName: "water_name",
                                                                          featureID: 1).runtimeKey
 
@@ -386,27 +386,23 @@ private final class ParserSolidPolygonStyle: ImmersiveMapStyle {
     }
 }
 
-private struct ParserProviderIDTestTileProvider: ImmersiveMapTileProvider {
+private struct ParserProviderIDTestMapStyle: ImmersiveMapMapStyle {
     let id: String
-
-    var cacheNamespace: String {
-        id
-    }
 
     var configurationFingerprint: UInt64 {
         1
     }
 
-    var tileSource: ImmersiveMapTileSource {
-        .url(URL(string: "https://example.com/api/v1/map/tiles")!)
-    }
-
-    var maximumTileZoomLevel: Int? {
-        nil
+    var vectorTileStyle: any ImmersiveMapVectorTileStyle {
+        BasicVectorTileStyle(cacheFingerprint: 1)
     }
 }
 
-extension ParserProviderIDTestTileProvider: ImmersiveMapTileProviderRuntime {
+extension ParserProviderIDTestMapStyle: ImmersiveMapMapStyleRuntime {
+    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
+        FallbackWaterLabelStyle()
+    }
+
     func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
         ParserProviderIDTestLabelProviderProfile(providerID: id)
     }
