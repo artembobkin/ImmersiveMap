@@ -283,15 +283,36 @@ private struct CrowdScreen: View {
 }
 
 /// The hosted tile endpoint, written as the one-line URL template. The API key
-/// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
-/// this machine and never lands in the repository; without it the map renders
-/// on the shared anonymous pool.
+/// comes from `IMMERSIVEMAP_API_KEY` in the environment or from the gitignored
+/// `LocalSecrets.plist` at the repository root, so a real key never has to be
+/// typed into a committed scheme; without a key the map renders on the shared
+/// anonymous pool.
 private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
 
 private func hostedTileHeaders() -> [String: String] {
-    guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
-          key.isEmpty == false else {
+    guard let key = localAPIKey(), key.isEmpty == false else {
         return [:]
     }
     return ["Authorization": "Bearer \(key)"]
+}
+
+/// The environment wins (the scheme carries an empty placeholder for it);
+/// otherwise the key comes from the gitignored `LocalSecrets.plist` at the
+/// repository root, found from this source file's path, which exists wherever
+/// the app can also read it: on the Mac and in the simulator. A physical
+/// device sees neither and uses the scheme variable.
+private func localAPIKey() -> String? {
+    if let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+       key.isEmpty == false {
+        return key
+    }
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    while directory.path != "/" {
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+            let secrets = directory.appendingPathComponent("LocalSecrets.plist")
+            return NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String
+        }
+        directory = directory.deletingLastPathComponent()
+    }
+    return nil
 }

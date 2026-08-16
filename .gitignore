@@ -30,3 +30,6 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# A developer's own tile API key, read by the demo apps. Never committed.
+/LocalSecrets.plist

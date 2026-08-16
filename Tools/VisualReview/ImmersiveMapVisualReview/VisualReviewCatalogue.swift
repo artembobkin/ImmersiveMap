@@ -78,9 +78,10 @@ struct VisualReviewScenario: Identifiable {
         self.title = title
         self.lookFor = lookFor
         // Every scenario renders the hosted endpoint through the one-line
-        // template; the API key comes from the local environment
-        // (`IMMERSIVEMAP_API_KEY`) so it never lands in the repository, and
-        // without it the render runs on the shared anonymous pool.
+        // template; the API key comes from `IMMERSIVEMAP_API_KEY` in the
+        // environment or from the gitignored `LocalSecrets.plist` at the
+        // repository root, so it never lands in the repository, and without
+        // it the render runs on the shared anonymous pool.
         self.settings = settings.tileURLTemplate(
             "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt",
             headers: Self.hostedTileHeaders())
@@ -89,11 +90,31 @@ struct VisualReviewScenario: Identifiable {
     }
 
     private static func hostedTileHeaders() -> [String: String] {
-        guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
-              key.isEmpty == false else {
+        guard let key = localAPIKey(), key.isEmpty == false else {
             return [:]
         }
         return ["Authorization": "Bearer \(key)"]
+    }
+
+    /// The environment wins (the scheme carries an empty placeholder for it);
+    /// otherwise the key comes from the gitignored `LocalSecrets.plist` at
+    /// the repository root, found from this source file's path, which exists
+    /// wherever the app can also read it: on the Mac and in the simulator. A
+    /// physical device sees neither and uses the scheme variable.
+    private static func localAPIKey() -> String? {
+        if let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+           key.isEmpty == false {
+            return key
+        }
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while directory.path != "/" {
+            if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+                let secrets = directory.appendingPathComponent("LocalSecrets.plist")
+                return NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String
+            }
+            directory = directory.deletingLastPathComponent()
+        }
+        return nil
     }
 }
 
