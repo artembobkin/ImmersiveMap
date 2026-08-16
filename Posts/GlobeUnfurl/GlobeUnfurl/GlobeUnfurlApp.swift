@@ -241,7 +241,7 @@ private struct UnfurlScreen: View {
 /// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
 /// this machine and never lands in the repository; without it the map renders
 /// on the shared anonymous pool.
-private let hostedTileTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
 
 private func hostedTileHeaders() -> [String: String] {
     guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],

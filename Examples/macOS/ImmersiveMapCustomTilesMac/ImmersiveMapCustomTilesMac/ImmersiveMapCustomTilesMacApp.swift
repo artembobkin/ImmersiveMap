@@ -33,7 +33,7 @@ private struct CustomTilesScreen: View {
 
     /// A public OpenMapTiles-schema endpoint, used so the example starts with
     /// something on screen. Replace it with your own.
-    private static let defaultTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+    private static let defaultTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
 
     /// Prefills the key field from the local environment so the key stays on
     /// this machine and never lands in the repository. Empty means anonymous.

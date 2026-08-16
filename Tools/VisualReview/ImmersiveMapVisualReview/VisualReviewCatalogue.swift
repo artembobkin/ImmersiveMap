@@ -82,7 +82,7 @@ struct VisualReviewScenario: Identifiable {
         // (`IMMERSIVEMAP_API_KEY`) so it never lands in the repository, and
         // without it the render runs on the shared anonymous pool.
         self.settings = settings.tileURLTemplate(
-            "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt",
+            "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt",
             headers: Self.hostedTileHeaders())
         self.subject = subject
         self.output = output

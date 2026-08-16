@@ -11,7 +11,7 @@ import XCTest
 /// really there and really serves a tile the loader can read, so a case that
 /// asks for a map with ground on it gets one. The second says no case reaches
 /// past it: a test that builds a live runtime out of `ImmersiveMapSettings`
-/// as shipped is pointed at `tiles.immersivemap.dev`, and the failure that
+/// as shipped is pointed at `immersivemap.dev`, and the failure that
 /// causes turns up later, somewhere else, as a flake nobody can reproduce.
 final class FixtureTileServiceTests: XCTestCase {
     // MARK: - The service is there
@@ -246,7 +246,7 @@ final class FixtureTileServiceTests: XCTestCase {
 
     /// How the shipped defaults are spelled where they are handed to one.
     /// `config:` is the name every internal seam uses, `settings:` the
-    /// public one; the shipped defaults point at `tiles.immersivemap.dev`.
+    /// public one; the shipped defaults point at `immersivemap.dev`.
     private static let defaultSettings = ["ImmersiveMapSettings.default",
                                           "settings: .default",
                                           "config: .default",

@@ -10,12 +10,7 @@ import Foundation
 public enum ImmersiveMapTilesService {
     /// Base URL of the hosted tile endpoint. The loader appends
     /// `/{z}/{x}/{y}.mvt`.
-    public static let tileBaseURL = URL(string: "https://tiles.immersivemap.dev/tiles")!
-
-    /// TileJSON endpoint of the hosted service. The loader reads the versioned,
-    /// immutable tile URL template from here so tiles are fetched over the CDN-
-    /// cacheable `/v/<version>/…` path instead of the always-revalidated base path.
-    public static let tileJSONURL = URL(string: "https://tiles.immersivemap.dev/tiles.json")!
+    public static let tileBaseURL = URL(string: "https://immersivemap.dev/tiles")!
 
     /// The deepest zoom the hosted planet build ships.
     public static let maximumTileZoomLevel = 14

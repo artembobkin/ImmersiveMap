@@ -26,7 +26,9 @@ final class ImmersiveMapProviderSettingsTests: XCTestCase {
         let network = ImmersiveMapSettings.default.tiles.network
 
         XCTAssertEqual(network.tileBaseURL, ImmersiveMapTilesService.tileBaseURL)
-        XCTAssertEqual(network.tileJSONURL, ImmersiveMapTilesService.tileJSONURL)
+        // The hosted service serves no TileJSON document, so the defaults do
+        // not fire a discovery request that can only 404.
+        XCTAssertNil(network.tileJSONURL)
         XCTAssertNil(network.tileURLTemplate)
         XCTAssertTrue(network.tileRequestHeaders.isEmpty)
         XCTAssertNotEqual(network.cacheIdentity, 0)

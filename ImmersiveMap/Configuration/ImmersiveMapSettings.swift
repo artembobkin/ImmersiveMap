@@ -1037,7 +1037,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
                                                                   tileBaseURL: ImmersiveMapTilesService.tileBaseURL,
-                                                                  tileJSONURL: ImmersiveMapTilesService.tileJSONURL,
                                                                   cacheIdentity: ImmersiveMapTilesService.cacheIdentity),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,

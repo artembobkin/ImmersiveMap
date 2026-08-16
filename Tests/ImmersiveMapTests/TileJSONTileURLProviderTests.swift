@@ -8,10 +8,10 @@ final class TileJSONTileURLProviderTests: XCTestCase {
     // MARK: - Template loader
 
     func testLoaderExtractsFirstTileTemplate() async throws {
-        let json = #"{"tiles":["https://tiles.immersivemap.dev/v/abc-def/tiles/{z}/{x}/{y}.pbf"],"minzoom":0}"#
+        let json = #"{"tiles":["https://immersivemap.dev/v/abc-def/tiles/{z}/{x}/{y}.pbf"],"minzoom":0}"#
         let loader = TileJSONTemplateLoader(loadData: { _ in Data(json.utf8) })
-        let template = try await loader.loadTemplate(from: URL(string: "https://tiles.immersivemap.dev/tiles.json")!)
-        XCTAssertEqual(template, "https://tiles.immersivemap.dev/v/abc-def/tiles/{z}/{x}/{y}.pbf")
+        let template = try await loader.loadTemplate(from: URL(string: "https://immersivemap.dev/tiles.json")!)
+        XCTAssertEqual(template, "https://immersivemap.dev/v/abc-def/tiles/{z}/{x}/{y}.pbf")
     }
 
     func testLoaderReturnsNilWhenNoTiles() async throws {
@@ -48,10 +48,12 @@ final class TileJSONTileURLProviderTests: XCTestCase {
 
     // MARK: - Source wiring
 
-    func testDefaultSettingsPointAtTheHostedTileJSONNextToTheTilePath() {
+    func testDefaultSettingsPointAtTheHostedServiceWithoutTileJSONDiscovery() {
         let network = ImmersiveMapSettings.default.tiles.network
-        XCTAssertEqual(network.tileBaseURL, ImmersiveMapTilesService.tileBaseURL)
-        XCTAssertEqual(network.tileJSONURL?.absoluteString,
-                       "https://tiles.immersivemap.dev/tiles.json")
+        XCTAssertEqual(network.tileBaseURL.absoluteString, "https://immersivemap.dev/tiles")
+        // The hosted service serves no TileJSON document; the loader goes
+        // straight to the base path instead of firing a discovery request
+        // that can only 404.
+        XCTAssertNil(network.tileJSONURL)
     }
 }

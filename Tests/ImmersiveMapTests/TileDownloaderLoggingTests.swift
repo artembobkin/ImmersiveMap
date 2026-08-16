@@ -105,12 +105,12 @@ final class TileDownloaderLoggingTests: XCTestCase {
     func testAuthorizationMessagePointsAtTheAccountForTheHostedService() {
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 401,
-            url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt"),
+            url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt"),
             responseBody: Data())
 
         XCTAssertTrue(message.contains("401"), message)
         XCTAssertTrue(message.contains("unauthorized"), message)
-        XCTAssertTrue(message.contains("tiles.immersivemap.dev"), message)
+        XCTAssertTrue(message.contains("immersivemap.dev"), message)
         XCTAssertTrue(message.contains("https://immersivemap.dev/account"), message)
     }
 
@@ -136,7 +136,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 401,
-            url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt"),
+            url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt"),
             responseBody: body)
 
         XCTAssertTrue(message.contains("Token expired on 2026-08-01"), message)
@@ -169,7 +169,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
         let session = URLSession(configuration: configuration)
 
         let downloader = TileDownloader(
-            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt")!),
+            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt")!),
             session: session
         )
 
