@@ -104,6 +104,17 @@ final class AttributionBadgeView: UIView {
             margin: margin,
             isRightToLeft: effectiveUserInterfaceLayoutDirection == .rightToLeft
         )
+        layer.maskedCorners = Self.cornerMask(
+            for: AttributionBadgeLayoutMath.roundedCorners(badgeFrame: frame, bounds: bounds))
+    }
+
+    private static func cornerMask(for rounded: AttributionBadgeLayoutMath.RoundedCorners) -> CACornerMask {
+        var mask: CACornerMask = []
+        if rounded.topLeft { mask.insert(.layerMinXMinYCorner) }
+        if rounded.topRight { mask.insert(.layerMaxXMinYCorner) }
+        if rounded.bottomLeft { mask.insert(.layerMinXMaxYCorner) }
+        if rounded.bottomRight { mask.insert(.layerMaxXMaxYCorner) }
+        return mask
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {

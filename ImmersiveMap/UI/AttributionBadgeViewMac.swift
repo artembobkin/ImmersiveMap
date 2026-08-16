@@ -112,6 +112,19 @@ final class AttributionBadgeView: NSView {
             margin: margin,
             isRightToLeft: userInterfaceLayoutDirection == .rightToLeft
         )
+        // Same min/max mapping as UIKit: the view is flipped, so AppKit keeps
+        // the layer geometry flipped with it and minY renders at the top.
+        layer?.maskedCorners = Self.cornerMask(
+            for: AttributionBadgeLayoutMath.roundedCorners(badgeFrame: frame, bounds: bounds))
+    }
+
+    private static func cornerMask(for rounded: AttributionBadgeLayoutMath.RoundedCorners) -> CACornerMask {
+        var mask: CACornerMask = []
+        if rounded.topLeft { mask.insert(.layerMinXMinYCorner) }
+        if rounded.topRight { mask.insert(.layerMaxXMinYCorner) }
+        if rounded.bottomLeft { mask.insert(.layerMinXMaxYCorner) }
+        if rounded.bottomRight { mask.insert(.layerMaxXMaxYCorner) }
+        return mask
     }
 
     private func badgeSizeThatFits(_ size: CGSize) -> CGSize {

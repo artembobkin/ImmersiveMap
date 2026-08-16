@@ -65,6 +65,42 @@ final class AttributionBadgeMarginTests: XCTestCase {
                        bounds.width - 30)
     }
 
+    func testCornersTouchingTheEdgesRenderSquare() {
+        // Flush bottom-trailing: only the corner facing the map interior
+        // keeps its radius.
+        let flush = AttributionBadgeLayoutMath.roundedCorners(
+            badgeFrame: CGRect(x: bounds.maxX - 120, y: bounds.maxY - 24, width: 120, height: 24),
+            bounds: bounds)
+        XCTAssertEqual(flush,
+                       AttributionBadgeLayoutMath.RoundedCorners(topLeft: true,
+                                                                 topRight: false,
+                                                                 bottomLeft: false,
+                                                                 bottomRight: false))
+
+        // Flush bottom-center: both top corners face the interior.
+        let center = AttributionBadgeLayoutMath.roundedCorners(
+            badgeFrame: CGRect(x: 140, y: bounds.maxY - 24, width: 120, height: 24),
+            bounds: bounds)
+        XCTAssertEqual(center,
+                       AttributionBadgeLayoutMath.RoundedCorners(topLeft: true,
+                                                                 topRight: true,
+                                                                 bottomLeft: false,
+                                                                 bottomRight: false))
+    }
+
+    func testAFloatingBadgeKeepsAllFourRoundedCorners() {
+        // Off every edge, whether by margin or by a safe-area inset: a badge
+        // that visibly floats keeps the full pill shape.
+        let floating = AttributionBadgeLayoutMath.roundedCorners(
+            badgeFrame: CGRect(x: bounds.maxX - 132, y: bounds.maxY - 58, width: 120, height: 24),
+            bounds: bounds)
+        XCTAssertEqual(floating,
+                       AttributionBadgeLayoutMath.RoundedCorners(topLeft: true,
+                                                                 topRight: true,
+                                                                 bottomLeft: true,
+                                                                 bottomRight: true))
+    }
+
     func testMarginBuilderTouchesOnlyTheMargin() {
         let settings = ImmersiveMapSettings.default
             .attributionSettings(margin: 12)
