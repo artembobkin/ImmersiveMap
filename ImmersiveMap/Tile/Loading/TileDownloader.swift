@@ -4,17 +4,20 @@
 import Foundation
 import os
 
-/// Throttles the rate-limit warning to one line per interval, process wide.
+/// Throttles a per-tile warning to one line per interval, process wide.
 ///
 /// A blocked viewport is about thirty tiles refused at once, and every one of
 /// them carries the same news. Logged per tile it is noise the developer
 /// scrolls past; logged once it is the answer to "why is my map full of holes".
-/// Process wide rather than per downloader because the quota belongs to the
-/// app's key, not to whichever downloader happened to notice first.
+/// Process wide rather than per downloader because the quota (or the broken
+/// key) belongs to the app, not to whichever downloader happened to notice
+/// first. One instance per kind of news, so a rate limit and a rejected
+/// credential each get their own line.
 /// `@unchecked Sendable` because the lock is the synchronisation the compiler
 /// cannot see: the state is private and every path to it goes through `lock`.
-final class TileRateLimitNotice: @unchecked Sendable {
-    static let shared = TileRateLimitNotice()
+final class TileNoticeThrottle: @unchecked Sendable {
+    static let rateLimit = TileNoticeThrottle()
+    static let authorization = TileNoticeThrottle()
     static let interval: TimeInterval = 60
 
     private let lock = NSLock()
@@ -58,6 +61,29 @@ class TileDownloader: @unchecked Sendable {
             return "ImmersiveMap: tile requests are being rate limited. \(message)"
         }
         return "ImmersiveMap: tile requests are being rate limited (HTTP 429), so tiles will be missing until the limit clears."
+    }
+
+    /// What to do about a rejected credential, spelled out. The advice names
+    /// the account page only when the request actually went to the hosted
+    /// service; any other endpoint gets the generic pointer at the two places
+    /// a credential can travel. A server-provided `message` is appended, same
+    /// convention as the rate-limit body.
+    static func authorizationFailureMessage(statusCode: Int, url: URL?, responseBody: Data) -> String {
+        let reason = statusCode == 401 ? "unauthorized" : "forbidden"
+        let host = url?.host
+        var message = "ImmersiveMap: the tile server\(host.map { " at \($0)" } ?? "") returned HTTP \(statusCode) (\(reason))."
+        if host?.hasSuffix("immersivemap.dev") == true {
+            message += " If you are using https://immersivemap.dev, check your token in your account: https://immersivemap.dev/account."
+        } else {
+            message += " Check the credential the tile source sends: a key in the URL template's query, or an Authorization header in tileURLTemplate(_:headers:)."
+        }
+        message += " Tiles will be missing until the credential is fixed."
+        if let object = try? JSONSerialization.jsonObject(with: responseBody) as? [String: Any],
+           let serverMessage = object["message"] as? String,
+           serverMessage.isEmpty == false {
+            message += " The server says: \(serverMessage)"
+        }
+        return message
     }
 
     enum DownloadFailure: Equatable, Sendable {
@@ -204,10 +230,17 @@ class TileDownloader: @unchecked Sendable {
                 print("Tile download failed with status \(statusCode) \(tile)")
                 #endif
                 switch statusCode {
-                case 401:
-                    return .failure(.unauthorized)
-                case 403:
-                    return .failure(.forbidden)
+                case 401, 403:
+                    // Warned about outside DEBUG on purpose, like the rate
+                    // limit below: a revoked or mistyped key is found in the
+                    // field, and a silent map full of holes gives no clue.
+                    if TileNoticeThrottle.authorization.shouldLog() {
+                        let message = Self.authorizationFailureMessage(statusCode: statusCode,
+                                                                       url: tileURL,
+                                                                       responseBody: data)
+                        Self.logger.warning("\(message, privacy: .public)")
+                    }
+                    return .failure(statusCode == 401 ? .unauthorized : .forbidden)
                 case 404:
                     return .failure(.notFound)
                 case 410:
@@ -219,7 +252,7 @@ class TileDownloader: @unchecked Sendable {
                     // quota is not a bug to catch at the desk, it is a thing that
                     // starts happening once real users arrive. os.Logger keeps it
                     // out of stdout, so it costs a release build nothing.
-                    if TileRateLimitNotice.shared.shouldLog() {
+                    if TileNoticeThrottle.rateLimit.shouldLog() {
                         let message = Self.rateLimitMessage(responseBody: data)
                         Self.logger.warning("\(message, privacy: .public)")
                     }

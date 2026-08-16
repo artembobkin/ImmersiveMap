@@ -60,7 +60,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
     // A blocked viewport is ~30 tiles refused at once. Thirty identical lines
     // are noise the developer scrolls past; one line is the answer.
     func testRateLimitNoticeLogsOncePerInterval() {
-        let notice = TileRateLimitNotice.shared
+        let notice = TileNoticeThrottle.rateLimit
         notice.reset()
         defer { notice.reset() }
 
@@ -72,15 +72,15 @@ final class TileDownloaderLoggingTests: XCTestCase {
         }
 
         // Still stuck a minute later: that is worth saying again.
-        let later = start.addingTimeInterval(TileRateLimitNotice.interval + 1)
+        let later = start.addingTimeInterval(TileNoticeThrottle.interval + 1)
         XCTAssertTrue(notice.shouldLog(now: later))
     }
 
     // os.Logger writes to the unified log, not to stdout, so warning in a
     // release build costs a customer's console nothing.
     func testRateLimitWarningStaysOutOfStandardOutput() async {
-        TileRateLimitNotice.shared.reset()
-        defer { TileRateLimitNotice.shared.reset() }
+        TileNoticeThrottle.rateLimit.reset()
+        defer { TileNoticeThrottle.rateLimit.reset() }
 
         RateLimitedTileURLProtocol.body = Data(#"{"message":"Get a key"}"#.utf8)
         let configuration = URLSessionConfiguration.ephemeral
@@ -99,6 +99,107 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         XCTAssertFalse(output.contains("Get a key"), "the advice belongs in the unified log, not stdout: \(output)")
     }
+
+    // A bare "401" is a number, not an instruction. The warning has to tell
+    // the developer where the credential lives and where to fix it.
+    func testAuthorizationMessagePointsAtTheAccountForTheHostedService() {
+        let message = TileDownloader.authorizationFailureMessage(
+            statusCode: 401,
+            url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt"),
+            responseBody: Data())
+
+        XCTAssertTrue(message.contains("401"), message)
+        XCTAssertTrue(message.contains("unauthorized"), message)
+        XCTAssertTrue(message.contains("tiles.immersivemap.dev"), message)
+        XCTAssertTrue(message.contains("https://immersivemap.dev/account"), message)
+    }
+
+    // Someone else's endpoint gets the generic advice: the engine cannot know
+    // where that service manages its keys, only where a credential can travel.
+    func testAuthorizationMessageGivesGenericAdviceForOtherHosts() {
+        let message = TileDownloader.authorizationFailureMessage(
+            statusCode: 403,
+            url: URL(string: "https://tiles.example.com/0/0/0.mvt?apiKey=x"),
+            responseBody: Data())
+
+        XCTAssertTrue(message.contains("403"), message)
+        XCTAssertTrue(message.contains("forbidden"), message)
+        XCTAssertTrue(message.contains("tiles.example.com"), message)
+        XCTAssertTrue(message.contains("tileURLTemplate"), message)
+        XCTAssertFalse(message.contains("immersivemap.dev/account"), message)
+    }
+
+    // The service knows more than the engine (expired vs revoked vs wrong
+    // plan); its wording rides along when it sends one.
+    func testAuthorizationMessageAppendsTheServersWording() {
+        let body = Data(#"{"error":"unauthorized","message":"Token expired on 2026-08-01"}"#.utf8)
+
+        let message = TileDownloader.authorizationFailureMessage(
+            statusCode: 401,
+            url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt"),
+            responseBody: body)
+
+        XCTAssertTrue(message.contains("Token expired on 2026-08-01"), message)
+    }
+
+    // A rejected key and a rate limit are different news; one being reported
+    // must not silence the other.
+    func testAuthorizationNoticeThrottlesIndependentlyOfTheRateLimit() {
+        TileNoticeThrottle.rateLimit.reset()
+        TileNoticeThrottle.authorization.reset()
+        defer {
+            TileNoticeThrottle.rateLimit.reset()
+            TileNoticeThrottle.authorization.reset()
+        }
+
+        let now = Date()
+        XCTAssertTrue(TileNoticeThrottle.rateLimit.shouldLog(now: now))
+        XCTAssertTrue(TileNoticeThrottle.authorization.shouldLog(now: now))
+        XCTAssertFalse(TileNoticeThrottle.authorization.shouldLog(now: now.addingTimeInterval(1)))
+    }
+
+    // Same rule as the rate limit: the advice goes to the unified log, and a
+    // release build's stdout stays clean.
+    func testAuthorizationWarningStaysOutOfStandardOutput() async {
+        TileNoticeThrottle.authorization.reset()
+        defer { TileNoticeThrottle.authorization.reset() }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UnauthorizedTileURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        let downloader = TileDownloader(
+            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://tiles.immersivemap.dev/0/0/0.mvt")!),
+            session: session
+        )
+
+        let output = await captureStandardOutput {
+            let result = await downloader.downloadResult(tile: Tile(x: 0, y: 0, z: 0))
+            XCTAssertEqual(result, .failure(.unauthorized))
+        }
+
+        XCTAssertFalse(output.contains("immersivemap.dev/account"),
+                       "the advice belongs in the unified log, not stdout: \(output)")
+    }
+}
+
+private final class UnauthorizedTileURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 401,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private final class RateLimitedTileURLProtocol: URLProtocol {

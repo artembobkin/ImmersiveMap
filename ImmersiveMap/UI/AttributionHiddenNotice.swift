@@ -6,7 +6,7 @@ import Foundation
 /// One hidden-attribution warning per process: every map view constructed
 /// with a hidden badge carries the same news, and the license obligation
 /// belongs to the app, not to whichever view happened to appear first.
-/// `@unchecked Sendable` for the same reason as `TileRateLimitNotice`:
+/// `@unchecked Sendable` for the same reason as `TileNoticeThrottle`:
 /// the lock is the synchronization the compiler cannot see.
 final class AttributionHiddenNotice: @unchecked Sendable {
     static let shared = AttributionHiddenNotice()

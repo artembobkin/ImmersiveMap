@@ -170,7 +170,7 @@ struct OfflineRegionsPanel: View {
                 if status.isBlockedByAuthorization {
                     // Resuming with the same credentials would stop the same
                     // way, so the row explains instead of offering a retry.
-                    Text("authorization failed")
+                    Text("authorization failed, check your API key")
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else if status.failedTileCount > 0 {
