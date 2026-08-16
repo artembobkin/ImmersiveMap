@@ -11,6 +11,9 @@
          location = "group:README.md">
       </FileRef>
       <FileRef
+         location = "group:LocalSecrets.plist">
+      </FileRef>
+      <FileRef
          location = "group:ImmersiveMap">
       </FileRef>
    </Group>
