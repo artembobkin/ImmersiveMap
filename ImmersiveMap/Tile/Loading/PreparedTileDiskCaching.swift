@@ -26,6 +26,14 @@ struct PreparedTileCacheIdentity {
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
         var hasher = StableFNV1aHasher()
         hasher.combine(network.tileBaseURL.absoluteString)
+        // The template is URL identity, hashed whole (a key embedded in its
+        // query included). Header names are identity too, but header values are
+        // credentials by convention, left out for the same reason the bearer
+        // token is: rotating a key must not cold-start the prepared cache.
+        hasher.combine(network.tileURLTemplate ?? "")
+        for field in network.tileRequestHeaders.keys.sorted() {
+            hasher.combine("header:\(field)")
+        }
         hasher.combine(String(network.cacheIdentity))
         switch network.authorizationMode {
         case .bearerHeader:

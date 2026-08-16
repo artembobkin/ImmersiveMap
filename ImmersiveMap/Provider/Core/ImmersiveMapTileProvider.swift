@@ -112,6 +112,10 @@ public struct VectorTileProvider: ImmersiveMapTileProvider {
         hasher.combine(id)
         hasher.combine(cacheNamespace)
         hasher.combine(tileSource.tileBaseURL.absoluteString)
+        hasher.combine(tileSource.urlTemplate ?? "")
+        for field in tileSource.headers.keys.sorted() {
+            hasher.combine("header:\(field)")
+        }
         hasher.combine(String(labelProfileFingerprint))
         if let maximumTileZoomLevel {
             hasher.combine(String(maximumTileZoomLevel))

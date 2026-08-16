@@ -27,6 +27,9 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
 
     public let tileBaseURL: URL
     public let apiKey: String?
+    // Set by `init(tileSource:)`; when present, `tileSource` returns it verbatim
+    // instead of deriving the hosted-service source from `tileBaseURL`/`apiKey`.
+    private let overrideTileSource: ImmersiveMapTileSource?
 
     public var id: String { "immersivemaptiles" }
 
@@ -38,13 +41,19 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
         hasher.combine(cacheNamespace)
         hasher.combine(tileBaseURL.absoluteString)
         hasher.combine(apiKey ?? "")
+        if let overrideTileSource {
+            hasher.combine(overrideTileSource.urlTemplate ?? "")
+            for field in overrideTileSource.headers.keys.sorted() {
+                hasher.combine("header:\(field)")
+            }
+        }
         hasher.combine(String(Self.defaultMaximumTileZoomLevel))
         hasher.combine(String(Self.contentRevision))
         return hasher.finalize()
     }
 
     public var tileSource: ImmersiveMapTileSource {
-        .immersiveMapTiles(tileBaseURL: tileBaseURL, apiKey: apiKey)
+        overrideTileSource ?? .immersiveMapTiles(tileBaseURL: tileBaseURL, apiKey: apiKey)
     }
 
     public var maximumTileZoomLevel: Int? {
@@ -73,6 +82,19 @@ public struct ImmersiveMapTilesProvider: ImmersiveMapTileProvider {
     public init(tileBaseURL: URL = ImmersiveMapTilesProvider.defaultTileBaseURL, apiKey: String? = nil) {
         self.tileBaseURL = tileBaseURL
         self.apiKey = apiKey
+        self.overrideTileSource = nil
+    }
+
+    /// Runs the built-in OpenMapTiles-schema style over any endpoint described
+    /// by a full tile source: a URL template (`.template("https://…/{x}/{y}/{z}")`),
+    /// custom request headers, a TileJSON endpoint, or a token. The endpoint
+    /// must serve OpenMapTiles-schema MVT for the default style to have
+    /// something to draw; for another schema pair a `VectorTileProvider` with
+    /// your own style instead.
+    public init(tileSource: ImmersiveMapTileSource) {
+        self.tileBaseURL = tileSource.tileBaseURL
+        self.apiKey = tileSource.accessToken
+        self.overrideTileSource = tileSource
     }
 }
 

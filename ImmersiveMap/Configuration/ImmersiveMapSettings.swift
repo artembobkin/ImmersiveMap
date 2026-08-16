@@ -330,6 +330,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var tileJSONURL: URL?
             public var authorizationToken: String?
             public var authorizationMode: AuthorizationMode
+            /// Optional tile URL template with `{x}`, `{y}` and `{z}` placeholders.
+            /// When set, it wins over `tileBaseURL` and TileJSON discovery; the
+            /// query string is preserved as written.
+            public var tileURLTemplate: String?
+            /// HTTP header fields added to every tile request, applied after the
+            /// authorization header so a custom `Authorization` value wins.
+            public var tileRequestHeaders: [String: String]
             /// Provider `configurationFingerprint`, folded into the raw and prepared
             /// disk-cache namespaces so a provider/content change invalidates the
             /// caches even when the base URL is unchanged (e.g. a server-side layer
@@ -342,6 +349,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         tileJSONURL: URL? = nil,
                         authorizationToken: String? = nil,
                         authorizationMode: AuthorizationMode = .bearerHeader,
+                        tileURLTemplate: String? = nil,
+                        tileRequestHeaders: [String: String] = [:],
                         cacheIdentity: UInt64 = 0) {
                 self.maxConcurrentFetches = maxConcurrentFetches
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
@@ -349,6 +358,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.tileJSONURL = tileJSONURL
                 self.authorizationToken = authorizationToken
                 self.authorizationMode = authorizationMode
+                self.tileURLTemplate = tileURLTemplate
+                self.tileRequestHeaders = tileRequestHeaders
                 self.cacheIdentity = cacheIdentity
             }
         }
@@ -1137,6 +1148,8 @@ public extension ImmersiveMapSettings {
         settings.tiles.network.tileJSONURL = tileProvider.tileSource.tileJSONURL
         settings.tiles.network.authorizationToken = tileProvider.tileSource.accessToken
         settings.tiles.network.authorizationMode = tileProvider.tileSource.authorization
+        settings.tiles.network.tileURLTemplate = tileProvider.tileSource.urlTemplate
+        settings.tiles.network.tileRequestHeaders = tileProvider.tileSource.headers
         settings.tiles.network.cacheIdentity = tileProvider.configurationFingerprint
         if let maximumTileZoomLevel = tileProvider.maximumTileZoomLevel {
             settings.tiles.coverage.maximumZoomLevel = maximumTileZoomLevel

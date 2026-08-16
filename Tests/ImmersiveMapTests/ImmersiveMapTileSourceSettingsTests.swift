@@ -103,6 +103,22 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(unwrappedSettings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
     }
 
+    func testTileURLTemplateModifierConfiguresTheBuiltInProviderWithTheTemplateSource() throws {
+        let view = ImmersiveMapView()
+            .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx",
+                             headers: ["X-Client": "demo"])
+
+        let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
+        let unwrappedSettings = try XCTUnwrap(settings)
+        let provider = unwrappedSettings.tileProvider
+        XCTAssertEqual(provider.id, "immersivemaptiles")
+        XCTAssertEqual(provider.tileSource.urlTemplate, "https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+        XCTAssertEqual(provider.tileSource.headers, ["X-Client": "demo"])
+        XCTAssertEqual(unwrappedSettings.tiles.network.tileURLTemplate,
+                       "https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+        XCTAssertEqual(unwrappedSettings.tiles.network.tileRequestHeaders, ["X-Client": "demo"])
+    }
+
     func testEarthSceneModifierControlsFullSunAndTerminatorPackage() {
         let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
 

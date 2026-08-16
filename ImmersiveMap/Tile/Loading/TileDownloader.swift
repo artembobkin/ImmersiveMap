@@ -82,6 +82,7 @@ class TileDownloader: @unchecked Sendable {
     private let mapTileDownloader: GetMapTileDownloadUrl
     private let authorizationToken: String?
     private let authorizationMode: ImmersiveMapSettings.TileSettings.NetworkSettings.AuthorizationMode
+    private let customHeaders: [String: String]
     private let session: URLSession
     // Retains the TileJSON discovery task so it can be cancelled on deinit; nil
     // when no TileJSON endpoint is configured (a bare tile base URL).
@@ -96,11 +97,18 @@ class TileDownloader: @unchecked Sendable {
         let network = config.tiles.network
         authorizationToken = network.authorizationToken
         authorizationMode = network.authorizationMode
+        customHeaders = network.tileRequestHeaders
         let queryItemsProvider = Self.queryItemsProvider(token: network.authorizationToken,
                                                          mode: network.authorizationMode)
         let baseProvider = BackendTileURLProvider(baseURL: network.tileBaseURL,
                                                   queryItemsProvider: queryItemsProvider)
-        if let tileJSONURL = network.tileJSONURL {
+        if let template = network.tileURLTemplate {
+            // An explicit template is complete configuration: no discovery
+            // request, no appended path, the query string as written.
+            self.mapTileDownloader = TemplateTileURLProvider(template: template,
+                                                             fallback: baseProvider,
+                                                             queryItemsProvider: queryItemsProvider)
+        } else if let tileJSONURL = network.tileJSONURL {
             // Prefer the versioned, immutable TileJSON template (…/v/<version>/…),
             // which the CDN caches for a year. Until the document resolves - and
             // permanently if it never does - tiles come from the legacy base path,
@@ -123,11 +131,15 @@ class TileDownloader: @unchecked Sendable {
         self.session = URLSession(configuration: configuration)
     }
 
-    init(mapTileDownloader: GetMapTileDownloadUrl, session: URLSession, authorizationToken: String?) {
+    init(mapTileDownloader: GetMapTileDownloadUrl,
+         session: URLSession,
+         authorizationToken: String?,
+         customHeaders: [String: String] = [:]) {
         self.mapTileDownloader = mapTileDownloader
         self.session = session
         self.authorizationToken = authorizationToken
         self.authorizationMode = .bearerHeader
+        self.customHeaders = customHeaders
     }
 
     deinit {
@@ -203,6 +215,11 @@ class TileDownloader: @unchecked Sendable {
         request.assumesHTTP3Capable = true
         if let authorizationToken, authorizationMode == .bearerHeader {
             request.setValue("Bearer \(authorizationToken)", forHTTPHeaderField: "Authorization")
+        }
+        // Custom headers apply last on purpose: a source that carries its own
+        // `Authorization` header replaces the access-token convenience above.
+        for (field, value) in customHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
         }
         do {
             let (data, response) = try await session.data(for: request)

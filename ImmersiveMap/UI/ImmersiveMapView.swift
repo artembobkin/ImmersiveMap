@@ -470,6 +470,28 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Points the map at any tile endpoint with one URL template:
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+    ///
+    /// `{x}`, `{y}` and `{z}` may appear in any order and the query string is
+    /// preserved as written, so a key can live in the template. Credentials
+    /// that travel as headers go in `headers`, added to every tile request
+    /// (a custom `Authorization` value replaces the one `.apiKey(_:)` sets):
+    ///
+    ///     .tileURLTemplate("https://tiles.com/{x}/{y}/{z}",
+    ///                      headers: ["X-API-Key": "xxx"])
+    ///
+    /// The template configures the built-in provider and its default style, so
+    /// the endpoint must serve OpenMapTiles-schema MVT. For another schema,
+    /// wrap the same source in a `VectorTileProvider` with your own style:
+    /// `.tileProvider(VectorTileProvider(id:tileSource: .template(...)))`.
+    public func tileURLTemplate(_ urlTemplate: String,
+                                headers: [String: String] = [:]) -> ImmersiveMapView {
+        tileProvider(ImmersiveMapTilesProvider(tileSource: .template(urlTemplate, headers: headers)))
+    }
+
     public func tileProvider<P: ImmersiveMapTileProvider>(_ tileProvider: P) -> ImmersiveMapView {
         self.tileProvider(AnyImmersiveMapTileProvider(tileProvider))
     }

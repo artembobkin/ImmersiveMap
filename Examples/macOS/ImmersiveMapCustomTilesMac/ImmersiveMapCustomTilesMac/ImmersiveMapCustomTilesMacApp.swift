@@ -26,7 +26,7 @@ private struct CustomTilesScreen: View {
     @State private var tileBaseURLText = Self.defaultTileBaseURL.absoluteString
     @State private var apiKey = ""
     @State private var usesCustomStyle = true
-    @State private var provider = Self.makeProvider(tileBaseURL: Self.defaultTileBaseURL)
+    @State private var provider = Self.makeProvider(urlText: Self.defaultTileBaseURL.absoluteString)
 
     /// A public OpenMapTiles-schema endpoint, used so the example starts with
     /// something on screen. Replace it with your own.
@@ -62,16 +62,28 @@ private struct CustomTilesScreen: View {
         return base.mapStyle(VectorTileMapStyle(style: DemoTileStyle()))
     }
 
-    /// A tile source is a URL template plus how credentials travel. The
-    /// TileJSON endpoint is optional: when present the loader discovers a
-    /// versioned, immutable tile URL from it and falls back to
-    /// `tileBaseURL/{z}/{x}/{y}.mvt` until it resolves.
-    private static func makeProvider(tileBaseURL: URL) -> VectorTileProvider {
-        let tileSource = ImmersiveMapTileSource(
-            tileBaseURL: tileBaseURL,
-            tileJSONURL: tileBaseURL.deletingLastPathComponent()
-                .appendingPathComponent("tiles.json"),
-            authorization: .bearerHeader)
+    /// A tile source is a URL plus how credentials travel. The URL field takes
+    /// either form: a base URL, whose TileJSON endpoint the loader discovers
+    /// (falling back to `tileBaseURL/{z}/{x}/{y}.mvt` until it resolves), or a
+    /// full template with `{x}`/`{y}`/`{z}` placeholders such as
+    /// `https://tiles.com/{x}/{y}/{z}?apiKey=xxx`, which is used verbatim.
+    /// (For an OpenMapTiles-schema endpoint drawn by the built-in style, the
+    /// one-line `.tileURLTemplate(_:headers:)` view modifier does all of this
+    /// without a provider; this example builds one to also swap the style.)
+    private static func makeProvider(urlText: String) -> VectorTileProvider {
+        let tileSource: ImmersiveMapTileSource
+        if urlText.contains("{x}") {
+            // Custom request headers ride along with a template source, e.g.
+            // .template(urlText, headers: ["X-API-Key": "xxx"]).
+            tileSource = .template(urlText)
+        } else {
+            let tileBaseURL = URL(string: urlText) ?? Self.defaultTileBaseURL
+            tileSource = ImmersiveMapTileSource(
+                tileBaseURL: tileBaseURL,
+                tileJSONURL: tileBaseURL.deletingLastPathComponent()
+                    .appendingPathComponent("tiles.json"),
+                authorization: .bearerHeader)
+        }
 
         return VectorTileProvider(
             id: "demo-openmaptiles",
@@ -98,7 +110,7 @@ private struct CustomTilesScreen: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            TextField("https://host/tiles", text: $tileBaseURLText)
+            TextField("https://host/tiles or https://host/{x}/{y}/{z}", text: $tileBaseURLText)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 300)
             SecureField("api key (optional)", text: $apiKey)
@@ -107,7 +119,7 @@ private struct CustomTilesScreen: View {
             Button("Apply") {
                 applyTileSource()
             }
-            .disabled(URL(string: tileBaseURLText) == nil)
+            .disabled(tileBaseURLText.isEmpty)
 
             Divider().frame(height: 20)
 
@@ -124,10 +136,7 @@ private struct CustomTilesScreen: View {
     /// what keeps caches of different sources apart: without a fingerprint
     /// change the new source would be served stale tiles from disk.
     private func applyTileSource() {
-        guard let url = URL(string: tileBaseURLText) else {
-            return
-        }
-        provider = Self.makeProvider(tileBaseURL: url)
+        provider = Self.makeProvider(urlText: tileBaseURLText)
     }
 
     private static let overview = ImmersiveMapCameraPosition(

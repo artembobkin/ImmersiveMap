@@ -22,6 +22,25 @@ ImmersiveMapView()
     .mapStyle(VectorTileMapStyle(style: MyVectorTileStyle()))
 ```
 
+## The one-liner: a URL template
+
+For an endpoint that serves OpenMapTiles-schema MVT (the schema the built-in style draws), no provider is needed at all:
+
+```swift
+ImmersiveMapView()
+    .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+```
+
+The `{x}`, `{y}` and `{z}` placeholders may appear in any order and the query string is preserved as written, so a key can live in the template. Credentials that travel as HTTP headers go in the second parameter, added to every tile request:
+
+```swift
+ImmersiveMapView()
+    .tileURLTemplate("https://tiles.com/{x}/{y}/{z}",
+                     headers: ["X-API-Key": "xxx"])
+```
+
+A custom `Authorization` header there replaces the one `.apiKey(_:)` would set. The same template form works anywhere a tile source is taken, so a different schema pairs it with your own style through a provider: `VectorTileProvider(id: "my-tiles", tileSource: .template("https://…/{x}/{y}/{z}"), …)`.
+
 ## Tile source
 
 ```swift
@@ -30,17 +49,23 @@ public struct ImmersiveMapTileSource: Equatable, Sendable {
     public var tileJSONURL: URL?
     public var accessToken: String?
     public var authorization: AuthorizationMode   // .bearerHeader | .accessTokenQuery(parameterName:)
+    public var urlTemplate: String?               // "https://tiles.com/{x}/{y}/{z}?apiKey=xxx"
+    public var headers: [String: String]          // added to every tile request
 
-    public init(tileBaseURL:tileJSONURL:accessToken:authorization:)
+    public init(tileBaseURL:tileJSONURL:accessToken:authorization:urlTemplate:headers:)
     public static func url(_ tileBaseURL: URL) -> ImmersiveMapTileSource
+    public static func template(_ urlTemplate: String, headers: [String: String] = [:]) -> ImmersiveMapTileSource
     public func token(_ accessToken: String?) -> ImmersiveMapTileSource
     public func accessToken(_ accessToken: String?, parameterName: String = "access_token") -> ImmersiveMapTileSource
+    public func headers(_ headers: [String: String]) -> ImmersiveMapTileSource
 }
 ```
 
-The loader appends `/{z}/{x}/{y}.mvt` to `tileBaseURL`. When `tileJSONURL` is set it first discovers a versioned, immutable tile URL template from that endpoint and falls back to the base path until (or unless) it resolves, which is what makes tiles CDN-cacheable rather than always revalidated.
+The loader appends `/{z}/{x}/{y}.mvt` to `tileBaseURL`. When `tileJSONURL` is set it first discovers a versioned, immutable tile URL template from that endpoint and falls back to the base path until (or unless) it resolves, which is what makes tiles CDN-cacheable rather than always revalidated. When `urlTemplate` is set it wins over both: tiles are fetched from the template verbatim, placeholders substituted, no path appended and no discovery request made.
 
 `token(_:)` sends the credential in an `Authorization: Bearer` header, `accessToken(_:parameterName:)` puts it in a query parameter. Prefer the header where the service allows it: a key in the URL becomes part of the CDN cache key, so every customer gets a private copy of tiles that are byte-identical for everyone.
+
+`headers` are applied after the authorization header, so a custom `Authorization` value replaces the token's. Header *names* are part of the tile cache identity, header *values* are not: rotating a credential keeps the caches warm, and a header whose value selects different tile content (rare) needs a `configurationFingerprint` bump to invalidate them.
 
 ## Vector tile styles
 

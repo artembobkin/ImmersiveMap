@@ -6,7 +6,16 @@ A map engine draws tiles, it does not produce them. Here is exactly what you are
 
 **A key of your own.** The default provider works anonymously on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you onto your own throughput; attach it with `.apiKey(_:)` and it travels as an `Authorization: Bearer` header.
 
-**Your own tiles.** Any MVT source works through `VectorTileProvider`: your own tile server, your own planet build, or any service that speaks MVT. See the [custom tile provider guide](custom-tile-provider.md).
+**Your own endpoint, one line.** An OpenMapTiles-schema endpoint of your own (a self-hosted planet build, a different tile service) plugs in with a single URL template, drawn by the built-in style:
+
+```swift
+ImmersiveMapView()
+    .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+```
+
+`{x}`, `{y}` and `{z}` may appear in any order and the query string is preserved, so a key can live in the template. Credentials that travel as headers go in the second parameter: `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}", headers: ["X-API-Key": "xxx"])`.
+
+**Your own tiles.** Any MVT source works through `VectorTileProvider`: your own tile server, your own planet build, or any service that speaks MVT, in any schema, drawn by your own style. See the [custom tile provider guide](custom-tile-provider.md).
 
 ## Attribution is not optional
 
