@@ -54,7 +54,7 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "IMMERSIVEMAP_API_KEY"
-            value = "im_78511644062567525f3ce6edf4bad5a907cfef806269b901"
+            value = ""
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
