@@ -25,6 +25,7 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
+            .tileURLTemplate(hostedTileTemplate, headers: hostedTileHeaders())
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
@@ -44,4 +45,18 @@ private struct MapScreen: View {
         bearing: 0,
         pitch: 0.9
     )
+}
+
+/// The hosted tile endpoint, written as the one-line URL template. The API key
+/// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
+/// this machine and never lands in the repository; without it the map renders
+/// on the shared anonymous pool.
+private let hostedTileTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+
+private func hostedTileHeaders() -> [String: String] {
+    guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+          key.isEmpty == false else {
+        return [:]
+    }
+    return ["Authorization": "Bearer \(key)"]
 }

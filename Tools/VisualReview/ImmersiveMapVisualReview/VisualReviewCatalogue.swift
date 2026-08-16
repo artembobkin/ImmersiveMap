@@ -77,9 +77,23 @@ struct VisualReviewScenario: Identifiable {
         self.id = id
         self.title = title
         self.lookFor = lookFor
-        self.settings = settings
+        // Every scenario renders the hosted endpoint through the one-line
+        // template; the API key comes from the local environment
+        // (`IMMERSIVEMAP_API_KEY`) so it never lands in the repository, and
+        // without it the render runs on the shared anonymous pool.
+        self.settings = settings.tileURLTemplate(
+            "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt",
+            headers: Self.hostedTileHeaders())
         self.subject = subject
         self.output = output
+    }
+
+    private static func hostedTileHeaders() -> [String: String] {
+        guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+              key.isEmpty == false else {
+            return [:]
+        }
+        return ["Authorization": "Bearer \(key)"]
     }
 }
 

@@ -42,6 +42,7 @@ private struct SceneModelsScreen: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ImmersiveMapView()
+                .tileURLTemplate(hostedTileTemplate, headers: hostedTileHeaders())
                 .camera(camera, position: DemoCity.paris.cameraPosition)
                 .sceneModels(sceneModels)
                 // Hit-testing follows the model through the morph and through
@@ -261,4 +262,18 @@ private enum DemoCity: String, CaseIterable, Identifiable {
         }
         return allCases.min { squaredDistance(to: $0) < squaredDistance(to: $1) } ?? .paris
     }
+}
+
+/// The hosted tile endpoint, written as the one-line URL template. The API key
+/// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
+/// this machine and never lands in the repository; without it the map renders
+/// on the shared anonymous pool.
+private let hostedTileTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+
+private func hostedTileHeaders() -> [String: String] {
+    guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+          key.isEmpty == false else {
+        return [:]
+    }
+    return ["Authorization": "Bearer \(key)"]
 }

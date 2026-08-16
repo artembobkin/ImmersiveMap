@@ -40,6 +40,7 @@ private struct OfflineScreen: View {
                 .frame(minWidth: 340, maxWidth: 400)
 
             ImmersiveMapView()
+                .tileURLTemplate(hostedTileTemplate, headers: hostedTileHeaders())
                 .camera(camera, position: OfflineRegionsPanel.presets.first!.cameraPosition)
                 .offlineTileMode(offlineMode)
                 .enableCameraUIControls()
@@ -53,4 +54,18 @@ private struct OfflineScreen: View {
             regionStatuses = offlineController.regions
         }
     }
+}
+
+/// The hosted tile endpoint, written as the one-line URL template. The API key
+/// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
+/// this machine and never lands in the repository; without it the map renders
+/// on the shared anonymous pool.
+private let hostedTileTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+
+private func hostedTileHeaders() -> [String: String] {
+    guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+          key.isEmpty == false else {
+        return [:]
+    }
+    return ["Authorization": "Bearer \(key)"]
 }

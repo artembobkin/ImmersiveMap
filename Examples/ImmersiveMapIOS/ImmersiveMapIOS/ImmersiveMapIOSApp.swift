@@ -22,11 +22,25 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
+            .tileURLTemplate(hostedTileTemplate, headers: hostedTileHeaders())
             .camera(camera)
-            .tileURLTemplate("https://tucik.moscow/tiles/{z}/{x}/{y}.mvt")
             // One-thumb pitch and zoom drag zones in the bottom corners. Touch
             // platforms only, so this is the one example that can show them.
             .cameraControlZones()
             .ignoresSafeArea()
     }
+}
+
+/// The hosted tile endpoint, written as the one-line URL template. The API key
+/// is read from the local environment (`IMMERSIVEMAP_API_KEY`) so it stays on
+/// this machine and never lands in the repository; without it the map renders
+/// on the shared anonymous pool.
+private let hostedTileTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+
+private func hostedTileHeaders() -> [String: String] {
+    guard let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
+          key.isEmpty == false else {
+        return [:]
+    }
+    return ["Authorization": "Bearer \(key)"]
 }

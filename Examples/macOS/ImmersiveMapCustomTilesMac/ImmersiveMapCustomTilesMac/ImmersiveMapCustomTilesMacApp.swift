@@ -26,14 +26,19 @@ struct ImmersiveMapCustomTilesMacApp: App {
 private struct CustomTilesScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var templateText = Self.defaultTemplate
-    @State private var apiKey = ""
+    @State private var apiKey = Self.environmentAPIKey
     @State private var appliedTemplate = Self.defaultTemplate
-    @State private var appliedAPIKey = ""
+    @State private var appliedAPIKey = Self.environmentAPIKey
     @State private var usesCustomStyle = true
 
     /// A public OpenMapTiles-schema endpoint, used so the example starts with
     /// something on screen. Replace it with your own.
-    private static let defaultTemplate = "https://tiles.immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+    private static let defaultTemplate = "https://tiles.immersivemap.dev/{z}/{x}/{y}.mvt"
+
+    /// Prefills the key field from the local environment so the key stays on
+    /// this machine and never lands in the repository. Empty means anonymous.
+    private static let environmentAPIKey =
+        ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"] ?? ""
 
     var body: some View {
         ZStack(alignment: .bottom) {
