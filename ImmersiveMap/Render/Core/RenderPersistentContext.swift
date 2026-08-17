@@ -31,6 +31,7 @@ final class RenderPersistentContext {
 
     let globeCapRenderer: GlobeCapRenderer
     let starfieldRenderer: StarfieldRenderer
+    let atmosphereRenderer: AtmosphereRenderer
     let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
@@ -125,6 +126,9 @@ final class RenderPersistentContext {
                                                    spaceColor: config.scene.space.clearColor,
                                                    transitionTargetColor: config.scene.mapClearColor,
                                                    config: config.scene.starfield)
+        // The atmosphere reads its settings per frame, so only the shared
+        // pipeline is behind it.
+        self.atmosphereRenderer = AtmosphereRenderer(pipeline: shared.atmospherePipeline)
 
         self.mapSurfaceGridBuffers = shared.mapSurfaceGridBuffers
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)

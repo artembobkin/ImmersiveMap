@@ -70,6 +70,7 @@ final class SharedRenderResources {
     let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
+    let atmospherePipeline: AtmospherePipeline
     let sceneModelPipeline: SceneModelPipeline
     let routePipeline: RoutePipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -129,6 +130,7 @@ final class SharedRenderResources {
         self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
+        self.atmospherePipeline = compiled.atmospherePipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.routePipeline = compiled.routePipeline
         self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
@@ -156,6 +158,7 @@ final class SharedRenderResources {
         let globeSurfacePlaceholderPipeline: GlobePipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
+        let atmospherePipeline: AtmospherePipeline
         let sceneModelPipeline: SceneModelPipeline
         let routePipeline: RoutePipeline
         let tilePointScreenPipelines: TilePointScreenPipelines
@@ -188,6 +191,7 @@ final class SharedRenderResources {
         var globeSurfacePlaceholderPipeline: GlobePipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
+        var atmospherePipeline: AtmospherePipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var routePipeline: RoutePipeline?
         var tilePointScreenPipelines: TilePointScreenPipelines?
@@ -245,6 +249,10 @@ final class SharedRenderResources {
                                                     pixelFormat: pixelFormat,
                                                     library: library,
                                                     sampleCount: sampleCount) },
+            { atmospherePipeline = AtmospherePipeline(metalDevice: device,
+                                                      pixelFormat: pixelFormat,
+                                                      library: library,
+                                                      sampleCount: sampleCount) },
             { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
@@ -268,6 +276,7 @@ final class SharedRenderResources {
             globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
+            atmospherePipeline: atmospherePipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             routePipeline: routePipeline!,
             tilePointScreenPipelines: tilePointScreenPipelines!,

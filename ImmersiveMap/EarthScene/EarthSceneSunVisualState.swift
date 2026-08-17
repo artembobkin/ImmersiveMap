@@ -131,7 +131,10 @@ struct EarthSceneSunVisualState {
         )
     }
 
-    private static func globeRotationMatrix(globe: GlobeUniform) -> matrix_float4x4 {
+    /// The rotation the globe shader applies to sphere positions, so anything
+    /// stated in the earth-fixed frame (the sun) can be carried into world space
+    /// with `transpose(rotation) * v`, matching the shader's `v * rotation`.
+    static func globeRotationMatrix(globe: GlobeUniform) -> matrix_float4x4 {
         let maxLatitude = Float(ImmersiveMapProjection.maxMercatorLatitude)
         let latitude = globe.panY * maxLatitude
         let longitude = globe.panX * .pi

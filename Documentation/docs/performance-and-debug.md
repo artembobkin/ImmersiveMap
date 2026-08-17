@@ -62,6 +62,10 @@ ImmersiveMapView()
 
 The world pass is already MSAA. FXAA is an additional full-screen post-processing pass, off by default: it smooths the edges MSAA does not catch (notably inside shaded fragments) at the cost of some sharpness in labels. Judge it on a device rather than on a screenshot.
 
+## Judge speed in Release
+
+Xcode builds a package dependency with the configuration of the app that depends on it, so a Debug build of your app runs an unoptimized engine. That is a different program: the tile parser (MVT decode, clipping, triangulation, building extrusion) runs several times slower without optimization, and in a dense city, where a single tile at the source's maximum zoom carries thousands of buildings, the difference is the one between buildings that arrive with the tiles and buildings that appear tens of seconds after them. Every example and post scheme in this repository runs in Release for that reason. Before concluding that tiles or buildings load slowly, run the app in Release, or profile it there: every frame stage and tile stage is an `os_signpost` interval (subsystem `ImmersiveMap`, categories `Render` and `Tiles`), so Instruments shows where the time actually goes.
+
 ## Debug HUD
 
 ```swift

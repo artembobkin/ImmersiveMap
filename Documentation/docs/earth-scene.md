@@ -1,6 +1,6 @@
-# Sun, day/night terminator and starfield
+# Sun, day/night terminator, atmosphere and starfield
 
-The Earth scene is what makes the globe read as a planet rather than a textured ball: a visible sun, a terminator sweeping the sphere so half of it is in night, and a starfield behind it. It is on by default and follows the real clock, so a map opened at midnight in Tokyo opens with Japan in the dark.
+The Earth scene is what makes the globe read as a planet rather than a textured ball: a visible sun, a terminator sweeping the sphere so half of it is in night, an atmosphere around the limb, and a starfield behind it. It is on by default and follows the real clock, so a map opened at midnight in Tokyo opens with Japan in the dark.
 
 `.earthScene(isEnabled:)` is the shorthand for turning the whole package on and off. Everything else lives on `ImmersiveMapSettings.SceneSettings` and is attached with `.sceneSettings(_:)`.
 
@@ -60,7 +60,40 @@ public struct SunSettings: Equatable, Sendable {
 | `diskAngularSize` / `diskIntensity` | The sun's own disk in space, and how bright it is. |
 | `glowIntensity` | The halo immediately around the disk. |
 | `edgeGlareIntensity` | Glare at the viewport edge when the sun is offscreen. Zero by default: an offscreen light source that keeps announcing itself reads as a lens artifact rather than a planet. |
-| `limbHaloIntensity` / `limbHaloWidth` | The lit rim of the globe seen against space, the atmosphere read. |
+| `limbHaloIntensity` / `limbHaloWidth` | The warm rim of the globe on the sun's side, where the atmosphere below catches the low sun. |
+
+## Atmosphere
+
+```swift
+public struct AtmosphereSettings: Equatable, Sendable {
+    public var isEnabled: Bool           // true
+    public var color: SIMD3<Float>       // (0.40, 0.66, 1.0), sky blue
+    public var intensity: Float          // 1.0
+    public var thickness: Float          // 1.0
+    public var sunInfluence: Float       // 0.6
+}
+```
+
+The atmosphere is what puts air on the planet: a soft halo of scattered light around the sphere's edge, painted in space just outside the limb, and the matching glow on the surface toward the limb, where the air over the ground thickens with the viewing angle. It is on by default and independent of the earth scene, so a globe with `.earthScene(isEnabled: false)` still has it; `.atmosphere(isEnabled:)` is the shorthand for the whole thing, `.atmosphereSettings(_:)` takes the value.
+
+| Field | Meaning |
+|---|---|
+| `color` | The tint of the scattered light. The very edge of the halo whitens toward the limb on its own, the way saturated scattering does. |
+| `intensity` | Brightness of the halo and of the surface glow together. 0 leaves the sphere bare while keeping the layer on. |
+| `thickness` | Width of the halo relative to the globe radius. The halo scales with the planet on screen, so it looks the same at every zoom of the globe presentation; 2 is twice as wide, 0.5 a thin bright ring. |
+| `sunInfluence` | How much the earth scene's sun shapes the halo. At 1 the halo is full on the day side of the limb and dims to a residual glow on the night side; at 0 it is even all the way around. Ignored while the earth scene is off, since there is no sun to take the direction from. |
+
+The halo is resolved per pixel from the view ray and the sphere, not from a circle projected on screen: under perspective the silhouette of the globe is a conic, and at a tilted or off-center camera a screen-space circle would leave the halo detached from the limb on one side. It fades out over the first part of the [globe-to-flat morph](globe.md), before the sphere silhouette it is fitted to starts moving, and the horizon haze of the flat map takes over from there.
+
+```swift
+ImmersiveMapView()
+    .atmosphereSettings(ImmersiveMapSettings.AtmosphereSettings(
+        color: SIMD3<Float>(0.55, 0.75, 1.0),
+        intensity: 1.2,
+        thickness: 1.4))
+```
+
+Turning the atmosphere off also removes the surface glow, and the limb becomes a hard edge against space.
 
 ## Starfield and space
 
@@ -89,7 +122,7 @@ ImmersiveMapView()
     .transparentSpace()
 ```
 
-`isTransparent` leaves everything outside the globe unpainted: the frame is cleared to a fully transparent pixel and the entire starfield layer (space background, stars and the visible sun) is skipped, so whatever the app puts behind the map, a color, a gradient, an image, continues around the planet. `clearColor` is ignored in that mode, and the globe surface itself stays opaque.
+`isTransparent` leaves everything outside the globe unpainted: the frame is cleared to a fully transparent pixel and the entire starfield layer (space background, stars and the visible sun) is skipped, and so is the atmosphere halo, which is painted in space too, so whatever the app puts behind the map, a color, a gradient, an image, continues around the planet. `clearColor` is ignored in that mode, the globe surface itself stays opaque, and it keeps the atmosphere's glow toward the limb.
 
 This is the mode for a globe that is one element on a screen with its own background rather than a scene in orbit. Painting space a flat color could only ever match a flat background exactly; anything else showed as a square around the globe. On the way to the flat presentation the clear color still ramps to the opaque map color through the morph, so the plane arrives fully painted. On macOS the enclosing window must itself be transparent for the desktop to show through.
 
@@ -104,9 +137,9 @@ ImmersiveMapView()
 
 ## Limitations
 
-- The sun, the terminator and the starfield are globe-side: they fade out through the [globe-to-flat morph](globe.md) and draw nothing on the fully flat map.
-- `transparentSpace()` and the sun are mutually exclusive by construction: the visible sun draws in the starfield layer, which transparent space skips entirely.
+- The sun, the terminator, the atmosphere and the starfield are globe-side: they fade out through the [globe-to-flat morph](globe.md) and draw nothing on the fully flat map.
+- `transparentSpace()` and the sun are mutually exclusive by construction: the visible sun draws in the starfield layer, which transparent space skips entirely. The atmosphere halo goes with it, since it too is painted in space; only the surface glow toward the limb stays.
 - The terminator is a lighting model, not a data layer: it shades the rendered sphere and has no bearing on labels, markers or tile content.
 - `.realtime` re-resolves the date per frame, so a long-running screen drifts with the clock by design. Pin it with `.fixed` when that matters.
 
-Running example: the **Earth scene** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) drives the terminator with an hour slider, exposes the sun fields live, and puts a gradient behind the map so transparent space has something to show through to.
+Running example: the **Earth scene** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) drives the terminator with an hour slider, exposes the sun and atmosphere fields live, and puts a gradient behind the map so transparent space has something to show through to.

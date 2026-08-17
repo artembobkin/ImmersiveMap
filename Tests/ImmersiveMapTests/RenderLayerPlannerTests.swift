@@ -12,7 +12,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -42,7 +43,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -68,11 +70,13 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
             .starfield,
+            .atmosphere,
             .globeSurface,
             .globeCap,
             .sceneModels,
@@ -93,11 +97,13 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
             .starfield,
+            .atmosphere,
             .globeSurface,
             .globeCap,
             .sceneModels,
@@ -107,7 +113,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .atmosphere, .globeSurface, .globeCap, .sceneModels, .routes])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -124,7 +130,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
@@ -141,7 +148,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true)
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
         )
 
         let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
@@ -166,7 +174,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: false)
+                                                 starfieldEnabled: false,
+                                                 atmosphereEnabled: false)
         )
 
         XCTAssertEqual(enabledLayers(in: plan), [
@@ -180,6 +189,47 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertEqual(skipReason(for: .starfield, in: plan), .transparentSpace)
+        // The halo is painted in space, so it goes with the starfield and
+        // reports the same reason: nothing outside the globe is painted.
+        XCTAssertEqual(skipReason(for: .atmosphere, in: plan), .transparentSpace)
+    }
+
+    /// The atmosphere halo sits between the starfield and the globe surface:
+    /// it paints over space and the sphere paints over it. Off by setting, it
+    /// stays in the plan disabled with its own reason, and the starfield is
+    /// untouched.
+    func testAtmosphereOffBySettingKeepsTheStarfield() {
+        let plan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .spherical,
+                                                 labelsEnabled: false,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 sceneModelOcclusionEnabled: false,
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: false)
+        )
+
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeSurface, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(skipReason(for: .atmosphere, in: plan), .atmosphereDisabled)
+        XCTAssertNil(skipReason(for: .starfield, in: plan))
+    }
+
+    /// The halo is a world layer of the globe presentation only: the flat map
+    /// has no sphere to wrap it around, and it never runs in the overlay pass.
+    func testAtmosphereIsAGlobeWorldLayer() {
+        XCTAssertTrue(RenderPassGraph.isWorldLayer(.atmosphere))
+        XCTAssertFalse(RenderPassGraph.isOverlayLayer(.atmosphere))
+
+        let flatPlan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .flat,
+                                                 labelsEnabled: false,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 sceneModelOcclusionEnabled: false,
+                                                 starfieldEnabled: true,
+                                                 atmosphereEnabled: true)
+        )
+        XCTAssertFalse(flatPlan.map(\.layer).contains(.atmosphere))
     }
 
     private func enabledLayers(in plan: [RenderLayerPlanItem]) -> [RenderLayer] {

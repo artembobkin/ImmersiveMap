@@ -42,6 +42,7 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: mapClearColor)
+        let atmosphere = GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere)
         // Blank map in every slot the placements leave unpainted, drawn first
         // and with the same depth state. Each fill is the slot its tile will
         // draw, on the same grid: the tile replaces it at identical depth, so
@@ -54,6 +55,7 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                                 placeholderPipeline: placeholderPipeline,
                                                 mapSurfaceGridBuffers: mapSurfaceGridBuffers,
                                                 horizonFog: horizonFog,
+                                                atmosphere: atmosphere,
                                                 fillColor: SIMD4<Float>(Float(mapClearColor.x),
                                                                         Float(mapClearColor.y),
                                                                         Float(mapClearColor.z),
@@ -67,6 +69,7 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                 mapSurfaceGridBuffers: mapSurfaceGridBuffers,
                                 tilesTexture: tilesTexture,
                                 horizonFog: horizonFog,
+                                atmosphere: atmosphere,
                                 isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled)
     }
 

@@ -5,12 +5,17 @@ import SwiftUI
 import ImmersiveMap
 
 /// The Earth scene: a visible sun, the day/night terminator across the globe,
-/// and the starfield behind it. All of it lives on `settings.scene`;
-/// `.earthScene(isEnabled:)` is the one-line shorthand for the whole package.
+/// the atmosphere around its edge, and the starfield behind it. All of it lives
+/// on `settings.scene`; `.earthScene(isEnabled:)` is the one-line shorthand for
+/// the sun-and-terminator package, `.atmosphere(isEnabled:)` for the air.
 ///
 /// The sun position follows a wall date. `EarthSceneTimeMode.realtime` tracks
 /// the clock; `.fixed(Date)` pins it, which is what the hour slider does, so
 /// the terminator sweeps the planet as you drag.
+///
+/// The atmosphere is independent of the earth scene: it stays on with the
+/// sun off (the halo is then even all the way around), and every one of its
+/// fields is a per-frame uniform, so the sliders apply live.
 struct EarthScenePanel: View {
     @Binding var settings: ImmersiveMapSettings
     @State private var hourOfDay: Double = 12
@@ -58,6 +63,26 @@ struct EarthScenePanel: View {
                 }
             }
             .disabled(settings.scene.earth.isEnabled == false)
+
+            PanelRow {
+                Toggle("Atmosphere", isOn: $settings.scene.atmosphere.isEnabled)
+                    .toggleStyle(.switch)
+                ValueSlider("Intensity",
+                            value: $settings.scene.atmosphere.intensity.asDouble,
+                            range: 0...2)
+                ValueSlider("Thickness",
+                            value: $settings.scene.atmosphere.thickness.asDouble,
+                            range: 0.25...3)
+                // With the earth scene off there is no sun to follow, and the
+                // slider does nothing; it stays enabled so the value can still
+                // be set for when the sun comes back.
+                ValueSlider("Sun influence",
+                            value: $settings.scene.atmosphere.sunInfluence.asDouble,
+                            range: 0...1)
+                ColorPicker("Color", selection: atmosphereColor, supportsOpacity: false)
+                    .frame(width: 110)
+            }
+            .disabled(settings.scene.atmosphere.isEnabled == false)
         }
         // The panel is rebuilt every time the section comes back, so the hour
         // is recovered from the settings instead of snapping back to noon.
@@ -71,6 +96,22 @@ struct EarthScenePanel: View {
 
     private var isRealtime: Bool {
         settings.scene.earth.timeMode == .realtime
+    }
+
+    /// The atmosphere tint as a SwiftUI color and back: `Color` carries the
+    /// picker's RGB in the sRGB space the setting is stated in.
+    private var atmosphereColor: Binding<Color> {
+        Binding(get: {
+            let tint = settings.scene.atmosphere.color
+            return Color(.sRGB, red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z))
+        }, set: { newColor in
+            guard let components = NSColor(newColor).usingColorSpace(.sRGB) else {
+                return
+            }
+            settings.scene.atmosphere.color = SIMD3<Float>(Float(components.redComponent),
+                                                           Float(components.greenComponent),
+                                                           Float(components.blueComponent))
+        })
     }
 
     private var followsRealtime: Binding<Bool> {

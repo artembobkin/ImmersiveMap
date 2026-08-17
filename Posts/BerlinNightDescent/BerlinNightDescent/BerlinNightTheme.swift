@@ -82,8 +82,9 @@ enum BerlinNightTheme {
         // The same snow the global landcover paints Antarctica with, so the cap
         // continues the continent instead of punching a hole in it.
         style.baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-        // Depth-correct buildings rather than the default translucent
-        // composite: the last third of the descent is spent among them.
+        // Depth-correct buildings, stated even though solid is the default:
+        // the last third of the descent is spent among them, and the theme
+        // must not depend on the engine default staying put.
         style.buildingExtrusionMode = .solid
         return style
     }

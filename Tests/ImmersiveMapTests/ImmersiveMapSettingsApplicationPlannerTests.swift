@@ -101,7 +101,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
 
     func testBuildingExtrusionModeChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default
-        let newSettings = oldSettings.buildingExtrusionMode(.solid)
+        let newSettings = oldSettings.buildingExtrusionMode(.translucent)
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 
@@ -135,7 +135,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
 
     func testBuildingExtrusionModeChangeCombinedWithBaseColorsChangeRecreatesRenderer() {
         let oldSettings = ImmersiveMapSettings.default
-        var newSettings = oldSettings.buildingExtrusionMode(.solid)
+        var newSettings = oldSettings.buildingExtrusionMode(.translucent)
         newSettings.style.baseColors.water = SIMD4<Float>(0.1, 0.2, 0.8, 1.0)
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)

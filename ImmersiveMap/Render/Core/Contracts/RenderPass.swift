@@ -12,6 +12,9 @@ enum RenderLayer: String, CaseIterable {
     case shadowCasters
     case buildingImage
     case starfield
+    /// The atmosphere halo in space around the globe, between the starfield it
+    /// paints over and the surface that paints over it.
+    case atmosphere
     case globeSurface
     case globeCap
     case flatMapSurface
@@ -41,8 +44,11 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noSceneModelContent
     case debugOverlayDisabled
     /// The starfield layer, which paints the space background, the stars and the
-    /// Sun, is off because space is configured transparent.
+    /// Sun, is off because space is configured transparent. The atmosphere halo
+    /// reports the same reason: it too is painted in space.
     case transparentSpace
+    /// The atmosphere halo is off by setting.
+    case atmosphereDisabled
 }
 
 struct RenderPassAvailability {
@@ -56,6 +62,9 @@ struct RenderPassAvailability {
     /// False when space is configured transparent: nothing outside the globe is
     /// painted, so the space background, the stars and the Sun are skipped.
     let starfieldEnabled: Bool
+    /// False when the atmosphere is off by setting, or when space is
+    /// transparent (the halo is painted in space).
+    let atmosphereEnabled: Bool
 }
 
 struct RenderLayerPlanItem {
@@ -70,14 +79,21 @@ struct RenderLayerPlanner {
         case .flat:
             [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            [.starfield, .globeSurface, .globeCap, .sceneModels, .routes]
+            [.starfield, .atmosphere, .globeSurface, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in
-            guard layer == .starfield, availability.starfieldEnabled == false else {
+            switch layer {
+            case .starfield where availability.starfieldEnabled == false:
+                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
+            case .atmosphere where availability.atmosphereEnabled == false:
+                // The halo is painted in space, so transparent space takes it
+                // with the starfield; otherwise it is off by its own setting.
+                let reason: RenderSkipReason = availability.starfieldEnabled ? .atmosphereDisabled : .transparentSpace
+                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: reason)
+            default:
                 return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
             }
-            return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
         } + [
             // First in the overlay pass: the depth it writes is what the label
             // draws test against. It only serves labels, so it is off without

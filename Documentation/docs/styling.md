@@ -5,6 +5,14 @@ Two different things decide what the map looks like, and it is worth knowing whi
 - **The map style** owns the palette of the data: water, forest, roads by class, buildings, label colors. It belongs to the tile provider, because a palette is written against a particular MVT schema. Attached with `.mapStyle(_:)`.
 - **`StyleSettings`** owns the handful of engine-level colors and switches that are not per-feature: the backdrop behind tiles, the globe background, the building extrusion mode. Attached with `.styleSettings(_:)`.
 
+## The built-in palette
+
+The default map is a light, warm, low-contrast palette in the manner of the system maps people already know: a warm off-white ground, soft pastel greens for parks and forests, a clear light blue for water, white streets with a whisper of a warm-grey casing, and a road hierarchy that reads as warmth rather than as darkness (a warm gold on the motorways, pale yellow primaries, plain white minor streets). Buildings are a warm light grey a step under the ground, so a roof separates from the street around it and the renderer's wall shading separates the walls from the roof. The overview biomes of the globe are the same colors, class by class, so nothing shifts hue while zooming.
+
+Three engine defaults are matched to it so a still-loading map, the horizon haze and the placeholder globe wear the ground the tiles will paint over them: `SceneSettings.mapClearColor` and `StyleSettings.baseColors.tileBackground` are the palette's land, and `baseColors.water` is its water (which is what the polar cap continues the ocean with). A custom palette that moves the land or the water color should move those three with it, otherwise loading flashes a lighter patch and the pole changes color at the cap.
+
+Shadows are not in the palette but complete the picture: they are soft and cool by default (see [buildings and shadows](buildings-and-shadows.md) for `ShadowSettings.strength` and `tint`), so a shadowed street still reads as daylight.
+
 ## Restyling the built-in map
 
 The default provider's style is `ImmersiveMapTilesMapStyle`, configured by `ImmersiveMapTilesDefaultMapStyleConfiguration`. It is a value with builder methods, so a recolor is a chain:
@@ -67,7 +75,7 @@ public struct StyleSettings: Equatable, Sendable {
 }
 
 public struct BaseColors: Equatable, Sendable {
-    public var tileBackground: SIMD4<Float>   // white
+    public var tileBackground: SIMD4<Float>   // the built-in palette's land
     public var globeBackground: SIMD4<Double> // deep blue
     public var water: SIMD4<Float>
     public var landCover: SIMD4<Float>
@@ -76,13 +84,13 @@ public struct BaseColors: Equatable, Sendable {
 
 | Field | Default | Meaning |
 |---|---|---|
-| `baseColors.tileBackground` | white | What is under a tile before any feature draws. This is the color of a still-loading map. |
+| `baseColors.tileBackground` | warm off-white, the palette's land | What is under a tile before any feature draws. This is the color of a still-loading map. |
 | `baseColors.globeBackground` | deep blue | The globe sphere itself where no tile has arrived. |
-| `baseColors.water` / `landCover` | blue / green | The low-zoom fallbacks used before detailed geometry exists. |
+| `baseColors.water` / `landCover` | the palette's water / green | The low-zoom fallbacks used before detailed geometry exists; the water is also what the polar cap continues the ocean with. |
 | `fallbackFeatureColor` | opaque red | Drawn for a feature the style did not classify. Deliberately loud: a red road is a bug you want to see. |
-| `preparedTileStyleRevision` | 85 | Manual cache-invalidation lever for the prepared tile cache. Bump it to force a re-prepare. |
+| `preparedTileStyleRevision` | 86 | Manual cache-invalidation lever for the prepared tile cache. Bump it to force a re-prepare. |
 | `flatSeparateRoadRenderingMinimumZoom` | 8 | The zoom from which roads get their own passes (casing, fill, detail) instead of being drawn with other lines. |
-| `buildingExtrusionAlpha` / `buildingExtrusionMode` | 0.6 / `.translucent` | See [buildings and shadows](buildings-and-shadows.md). |
+| `buildingExtrusionAlpha` / `buildingExtrusionMode` | 0.6 / `.solid` | See [buildings and shadows](buildings-and-shadows.md). |
 
 ```swift
 ImmersiveMapView()

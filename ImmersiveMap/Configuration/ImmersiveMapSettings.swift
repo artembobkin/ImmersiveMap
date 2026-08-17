@@ -704,15 +704,69 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// over it, so its texel density scales inversely; the near (crisp)
         /// cascade always covers 2 camera distances.
         public var coverageCameraDistances: Float
+        /// The cast of the shadowed light, as an RGB multiplier applied on top
+        /// of `strength` where a surface is fully in shadow: white keeps the
+        /// neutral darkening, and the default cool tint gives shadows the
+        /// bluish cast of light arriving only from the sky, which is what
+        /// keeps a shadowed street reading as daylight rather than as a grey
+        /// stain. Components run `0...1`; a partially shadowed fragment takes
+        /// on the tint in proportion.
+        public var tint: SIMD3<Float>
 
         public init(isEnabled: Bool = true,
-                    strength: Float = 0.5,
+                    strength: Float = 0.22,
                     mapResolution: Int = 2048,
-                    coverageCameraDistances: Float = 16.0) {
+                    coverageCameraDistances: Float = 16.0,
+                    tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled
             self.strength = strength
             self.mapResolution = mapResolution
             self.coverageCameraDistances = coverageCameraDistances
+            self.tint = tint
+        }
+    }
+
+    /// The atmosphere of the globe: a soft halo of scattered light around the
+    /// planet's edge, painted in space just outside the sphere, and the matching
+    /// glow on the surface toward the limb, so the sphere reads as a planet
+    /// with air on it rather than as a textured ball. Globe presentation only:
+    /// it fades out as the sphere unrolls into the plane. Off, the surface
+    /// glow disappears too and the limb becomes a hard edge against space.
+    ///
+    /// The halo is painted in space, so it follows the same rule as the stars:
+    /// with `SpaceSettings.isTransparent` nothing outside the globe is drawn
+    /// and the halo is skipped, and only the surface glow remains.
+    public struct AtmosphereSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// The color of the scattered light, RGB in `0...1`. Sky blue by default;
+        /// the very edge of the halo whitens toward the limb on its own.
+        public var color: SIMD3<Float>
+        /// Brightness multiplier of the halo and of the surface glow. Expected
+        /// range: `0...2`; 1 is the designed look, 0 leaves the sphere bare
+        /// while keeping the layer on.
+        public var intensity: Float
+        /// Width multiplier of the halo, relative to the globe radius: 1 is
+        /// the designed look, 2 twice as wide, 0.5 a thin bright ring. The
+        /// halo scales with the globe on screen, so it looks the same at every
+        /// zoom of the globe presentation.
+        public var thickness: Float
+        /// How much the earth scene's sun shapes the halo, `0...1`: at 1 the
+        /// halo is full on the day side of the limb and dims to a residual
+        /// glow on the night side; at 0 it is the same brightness all the way
+        /// around. Ignored while the earth scene is off, since there is no sun
+        /// to take the direction from.
+        public var sunInfluence: Float
+
+        public init(isEnabled: Bool = true,
+                    color: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
+                    intensity: Float = 1.0,
+                    thickness: Float = 1.0,
+                    sunInfluence: Float = 0.6) {
+            self.isEnabled = isEnabled
+            self.color = color
+            self.intensity = intensity
+            self.thickness = thickness
+            self.sunInfluence = sunInfluence
         }
     }
 
@@ -723,29 +777,35 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var earth: EarthSceneSettings
         public var light: SceneLightSettings
         public var shadows: ShadowSettings
+        public var atmosphere: AtmosphereSettings
 
         public init(mapClearColor: SIMD4<Double>,
                     space: SpaceSettings,
                     starfield: StarfieldSettings,
                     earth: EarthSceneSettings = EarthSceneSettings(),
                     light: SceneLightSettings = SceneLightSettings(),
-                    shadows: ShadowSettings = ShadowSettings()) {
+                    shadows: ShadowSettings = ShadowSettings(),
+                    atmosphere: AtmosphereSettings = AtmosphereSettings()) {
             self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
             self.earth = earth
             self.light = light
             self.shadows = shadows
+            self.atmosphere = atmosphere
         }
     }
 
     public struct StyleSettings: Equatable, Sendable {
         /// How flat-mode extruded buildings are composited over the map.
         public enum BuildingExtrusionMode: Equatable, Sendable {
-            /// Buildings are blended over the map using `buildingExtrusionAlpha`.
+            /// Buildings are blended over the map using `buildingExtrusionAlpha`,
+            /// so streets stay visible through the massing. A roof then also
+            /// shows the ground under it, which its own building shadows, so
+            /// with shadows on every roof reads darker than its color.
             case translucent
-            /// Buildings are fully opaque; `buildingExtrusionAlpha` and the
-            /// style color alpha are ignored.
+            /// The default. Buildings are fully opaque; `buildingExtrusionAlpha`
+            /// and the style color alpha are ignored.
             case solid
             /// Translucent below `startZoom`, fully opaque above `endZoom`;
             /// in between the blend alpha is interpolated from
@@ -794,7 +854,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(preparedTileStyleRevision: UInt32,
                     flatSeparateRoadRenderingMinimumZoom: Int,
                     buildingExtrusionAlpha: Float,
-                    buildingExtrusionMode: BuildingExtrusionMode = .translucent,
+                    buildingExtrusionMode: BuildingExtrusionMode = .solid,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {
             self.preparedTileStyleRevision = preparedTileStyleRevision
@@ -1055,7 +1115,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                                fadeOutSeconds: 0.25),
                               road: LabelSettings.RoadSettings(gridCellSizePoints: 16.0,
                                                                maxGlyphTurnRadians: .pi / 6.0)),
-        scene: SceneSettings(mapClearColor: SIMD4<Double>(1.0, 1.0, 1.0, 1.0),
+        // The map color is the built-in style's land, so a tile that has not
+        // arrived, the horizon haze and the placeholder globe all wear the
+        // ground the tiles will paint over them, and loading never flashes a
+        // lighter patch.
+        scene: SceneSettings(mapClearColor: SIMD4<Double>(0.973, 0.965, 0.941, 1.0),
                              space: SpaceSettings(clearColor: SIMD4<Double>(0.008, 0.012, 0.032, 1.0)),
                              starfield: StarfieldSettings(starCount: 3400,
                                                           sizeMin: 0.9,
@@ -1069,11 +1133,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         style: StyleSettings(preparedTileStyleRevision: 86,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
-                             buildingExtrusionMode: .translucent,
+                             // Solid: a translucent roof composites over the
+                             // ground under it, which its own building shadows,
+                             // so every roof came out a muddy grey; opaque
+                             // massing keeps roofs light and walls shaded, the
+                             // way a lit city reads.
+                             buildingExtrusionMode: .solid,
                              fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
-                             baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+                             // Tile background and water mirror the built-in
+                             // style's land and water: the background is what a
+                             // tile is before its features draw, and the water
+                             // is what the polar cap continues the ocean with.
+                             baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
                                                                   globeBackground: SIMD4<Double>(0.0039, 0.0431, 0.0980, 1.0),
-                                                                  water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
+                                                                  water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
                                                                   landCover: SIMD4<Float>(0.4, 0.7, 0.4, 0.7))),
         avatars: AvatarSettings(size: .px64,
                                 sizeScale: 1.7,
@@ -1258,6 +1331,20 @@ public extension ImmersiveMapSettings {
     func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
+        return settings
+    }
+
+    func atmosphereSettings(_ atmosphere: AtmosphereSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.atmosphere = atmosphere
+        return settings
+    }
+
+    /// The globe's atmosphere: the halo around the planet and the glow on the
+    /// surface toward the limb.
+    func atmosphere(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.atmosphere.isEnabled = isEnabled
         return settings
     }
 

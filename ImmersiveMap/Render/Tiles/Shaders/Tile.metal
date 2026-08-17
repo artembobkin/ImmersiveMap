@@ -238,7 +238,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     // dissolves into the haze instead of cutting a visible line. Zero normal
     // (passed above): the ground always faces the sun and keeps its tight
     // contact (no normal-offset shift).
-    color.rgb *= half(shadowFactor);
+    color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }

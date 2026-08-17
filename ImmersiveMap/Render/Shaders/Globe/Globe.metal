@@ -248,6 +248,22 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
     };
 }
 
+/// The atmosphere's glow on the sphere toward the limb. `facing` is how far the
+/// surface turns away from the view (0 face-on, 1 at the limb): the air over
+/// it thickens with the angle, so the surface lifts toward the atmosphere tint,
+/// and in the last sliver before the edge toward white, where the scattering
+/// saturates. Additive, so a dark night side still shows a thin lit rim, and
+/// weighted by the atmosphere intensity, which is zero when it is off. The
+/// halo painted in space (Atmosphere.metal) continues this from the limb
+/// outward, from the same tint, so the edge reads as one thing.
+static inline half3 globeAtmosphereSurfaceGlow(half facing,
+                                               constant GlobeAtmosphere& atmosphere) {
+    half rim = pow(facing, 2.6h);
+    half edge = pow(facing, 9.0h);
+    half3 glow = half3(atmosphere.color) * rim * 0.40h + half3(1.0h) * edge * 0.24h;
+    return glow * half(atmosphere.intensity);
+}
+
 /// Everything the globe surface does to a sampled color: day/night shading, the
 /// limb glow, and the haze that hides the seam at the surface swap. Shared so
 /// the placeholder fill below is lit exactly like the tiles that replace it,
@@ -258,7 +274,8 @@ static inline half4 globeSurfaceShade(half4 color,
                                       VertexOut in,
                                       constant Camera& camera,
                                       constant EarthScene& earthScene,
-                                      constant HorizonFog& horizonFog) {
+                                      constant HorizonFog& horizonFog,
+                                      constant GlobeAtmosphere& atmosphere) {
     half transition = half(in.transition);
     if (earthScene.isEnabled != 0) {
         half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
@@ -275,12 +292,9 @@ static inline half4 globeSurfaceShade(half4 color,
 
     float3 viewDir = normalize(camera.eye - in.worldPos);
     half facing = half(max(0.0, 1.0 - dot(in.normal, viewDir)));
-    half rim = pow(facing, 2.35h);
-    half outerGlow = pow(facing, 5.2h);
-    half glowStrength = rim * 0.38h * (1.0h - transition);
-    half3 innerGlowColor = half3(0.28h, 0.54h, 1.0h) * glowStrength;
-    half3 outerGlowColor = half3(0.08h, 0.22h, 0.72h) * outerGlow * 0.22h * (1.0h - transition);
-    color.rgb += innerGlowColor + outerGlowColor;
+    // The glow belongs to the sphere: it fades with the unfurl, since a plane
+    // has no limb for the air to thicken toward.
+    color.rgb += globeAtmosphereSurfaceGlow(facing, atmosphere) * (1.0h - transition);
     // The haze is gated by the transition phase (strength = transition): a pure
     // globe in space stays fog-free, and by the moment the surfaces swap, the
     // morph and the plane are fogged identically - the horizon-line seam is hidden.
@@ -293,7 +307,8 @@ fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
                                    constant Camera& camera [[buffer(1)]],
                                    constant EarthScene& earthScene [[buffer(2)]],
                                    constant Tile& tileData [[buffer(3)]],
-                                   constant HorizonFog& horizonFog [[buffer(4)]]) {
+                                   constant HorizonFog& horizonFog [[buffer(4)]],
+                                   constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
     AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
@@ -303,7 +318,7 @@ fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
     }
 
     return globeSurfaceShade(texture.sample(textureSampler, coords.uv, level(coords.lod)),
-                             in, camera, earthScene, horizonFog);
+                             in, camera, earthScene, horizonFog, atmosphere);
 }
 
 /// A blank tile in the map's own background color, drawn into every visible
@@ -321,8 +336,9 @@ fragment half4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
                                                      constant Camera& camera [[buffer(1)]],
                                                      constant EarthScene& earthScene [[buffer(2)]],
                                                      constant HorizonFog& horizonFog [[buffer(4)]],
-                                                     constant float4& fillColor [[buffer(5)]]) {
-    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog);
+                                                     constant float4& fillColor [[buffer(5)]],
+                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
+    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog, atmosphere);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
@@ -386,7 +402,8 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
                                       constant CapParams& params [[buffer(0)]],
                                       constant Camera& camera [[buffer(1)]],
                                       constant EarthScene& earthScene [[buffer(2)]],
-                                      constant Tile& tileData [[buffer(3)]]) {
+                                      constant Tile& tileData [[buffer(3)]],
+                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
     half seamBlend = half(smoothstep(params.blendStartAbsLatitude,
@@ -433,13 +450,9 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
 
     float3 viewDir = normalize(camera.eye - in.worldPos);
     half facing = half(max(0.0, 1.0 - dot(in.normal, viewDir)));
-    half rim = pow(facing, 2.35h);
-    half outerGlow = pow(facing, 5.2h);
-    half glowStrength = rim * 0.38h * capAlpha;
-    half3 glowColor = half3(0.28h, 0.54h, 1.0h) * glowStrength
-        + half3(0.08h, 0.22h, 0.72h) * outerGlow * 0.22h * capAlpha;
-
-    color.rgb += glowColor;
+    // The same glow as the tiled surface, so the cap continues it seamlessly
+    // over the pole; it goes with the cap's own fade through the unfurl.
+    color.rgb += globeAtmosphereSurfaceGlow(facing, atmosphere) * capAlpha;
     color.a *= capAlpha;
     return color;
 }

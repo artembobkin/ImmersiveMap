@@ -97,6 +97,18 @@ struct Shadow {
     // Normalized direction towards the static sun, for the geometric
     // self-shadow test of receivers that have normals.
     float3 lightDirection;
+    // RGB cast of a fully shadowed surface on top of the strength darkening:
+    // white keeps the neutral darkening, a bluish tint gives shadows the cool
+    // cast of light coming only from the sky.
+    float3 tint;
+};
+
+// The glow of the globe's atmosphere on the sphere surface toward the limb;
+// the layout mirrors GlobeAtmosphereUniform.swift. Zero intensity leaves the
+// surface bare (the atmosphere is off).
+struct GlobeAtmosphere {
+    float3 color;
+    float intensity;
 };
 
 // Receiver-plane depth gradient dz/duv from screen-space derivatives
@@ -297,6 +309,25 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
     float distanceToEye = length(worldPos - shadow.eye);
     float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
     return 1.0 - shadowAmount * shadow.strength * fade;
+}
+
+// The color multiplier a shadow factor stands for. `sampleShadowFactor` returns
+// the neutral darkening 1 - amount * strength; the multiplier recovers the
+// amount and mixes the surface toward the tinted fully shadowed multiplier
+// (1 - strength) * tint instead of toward plain grey, so a shadowed fragment
+// takes on the cast of the sky-lit shadow in proportion to how shadowed it
+// is. A white tint reproduces the scalar factor exactly, and disabled shadows
+// (zero strength) always yield 1.
+static inline float3 shadowColorMultiplier(constant Shadow& shadow, float factor) {
+    if (shadow.strength <= 0.0) {
+        return float3(1.0);
+    }
+    float amount = saturate((1.0 - factor) / shadow.strength);
+    return mix(float3(1.0), (1.0 - shadow.strength) * shadow.tint, amount);
+}
+
+static inline half3 shadowColorMultiplier(constant Shadow& shadow, half factor) {
+    return half3(shadowColorMultiplier(shadow, float(factor)));
 }
 
 // Haze at the horizon of the flat presentation; the layout mirrors

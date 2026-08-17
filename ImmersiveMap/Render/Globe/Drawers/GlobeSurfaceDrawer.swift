@@ -26,6 +26,7 @@ enum GlobeSurfaceDrawer {
                                      placeholderPipeline: GlobePipeline,
                                      mapSurfaceGridBuffers: MapSurfaceGridBuffers,
                                      horizonFog: HorizonFogUniform,
+                                     atmosphere: GlobeAtmosphereUniform,
                                      fillColor: SIMD4<Float>,
                                      slots: [Tile]) {
         guard slots.isEmpty == false else {
@@ -35,6 +36,7 @@ enum GlobeSurfaceDrawer {
         var earthSceneValue = earthScene
         var globeValue = globe
         var horizonFogValue = horizonFog
+        var atmosphereValue = atmosphere
         var fillColorValue = fillColor
 
         placeholderPipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -49,6 +51,9 @@ enum GlobeSurfaceDrawer {
         renderEncoder.setFragmentBytes(&fillColorValue,
                                        length: MemoryLayout<SIMD4<Float>>.stride,
                                        index: 5)
+        renderEncoder.setFragmentBytes(&atmosphereValue,
+                                       length: MemoryLayout<GlobeAtmosphereUniform>.stride,
+                                       index: 6)
         renderEncoder.setVertexBuffer(mapSurfaceGridBuffers.verticesBuffer, offset: 0, index: 0)
         for slot in slots {
             let slotVector = simd_int3(Int32(slot.x), Int32(slot.y), Int32(slot.z))
@@ -76,10 +81,12 @@ enum GlobeSurfaceDrawer {
                      mapSurfaceGridBuffers: MapSurfaceGridBuffers,
                      tilesTexture: TileAtlasTexture,
                      horizonFog: HorizonFogUniform,
+                     atmosphere: GlobeAtmosphereUniform,
                      isWireframeEnabled: Bool) {
         var cameraUniformValue = cameraUniform
         var earthSceneValue = earthScene
         var globeValue = globe
+        var atmosphereValue = atmosphere
 
         globePipeline.selectPipeline(renderEncoder: renderEncoder)
         renderEncoder.setCullMode(.front)
@@ -94,6 +101,9 @@ enum GlobeSurfaceDrawer {
         renderEncoder.setFragmentBytes(&horizonFogValue,
                                        length: MemoryLayout<HorizonFogUniform>.stride,
                                        index: 4)
+        renderEncoder.setFragmentBytes(&atmosphereValue,
+                                       length: MemoryLayout<GlobeAtmosphereUniform>.stride,
+                                       index: 6)
         renderEncoder.setVertexBuffer(mapSurfaceGridBuffers.verticesBuffer, offset: 0, index: 0)
 
         let pageMappings = TileAtlasPageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)

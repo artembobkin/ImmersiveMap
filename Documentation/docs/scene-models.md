@@ -139,7 +139,7 @@ Materials: the base color of each submesh is used (either its texture or its con
 
 ## Limitations
 
-- **Translucent buildings** (the default `buildingExtrusionMode`): the composited building tint carries no depth, so models are never occluded by translucent buildings (and never tinted by them). With `.solid` / `.solidAtHighZoom` at high zoom, occlusion between models and buildings is depth-correct, see [buildings and shadows](buildings-and-shadows.md).
+- **Translucent buildings** (`buildingExtrusionMode: .translucent`, or `.solidAtHighZoom` below its end zoom): the composited building tint carries no depth, so models are never occluded by translucent buildings (and never tinted by them). With the default `.solid` (and `.solidAtHighZoom` at high zoom), occlusion between models and buildings is depth-correct, see [buildings and shadows](buildings-and-shadows.md).
 - **Video export**: scene models are not included in [tour video exports](tour-video-export.md) in this version.
 - **Antimeridian**: a model is drawn once (its anchor wraps to the camera-near copy of the world), not duplicated on both screen edges.
 - **Tap precision**: hit-testing uses the asset's bounding box, not its triangles, so a tap in the empty corner of the box of a concave model still counts as a hit. Depth is not consulted either: a model hidden behind a solid building is still tappable (the globe horizon is handled, such a model is not). See [tap selection](selection.md).

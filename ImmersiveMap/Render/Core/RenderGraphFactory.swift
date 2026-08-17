@@ -64,6 +64,8 @@ enum RenderGraphFactory {
                                                                           shadowFallbackTexture: context.shadowFallbackTexture,
                                                                           supportsFramebufferFetch: context.supportsFramebufferFetch)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer)
+        let atmosphereSubsystem = AtmosphereRenderSubsystem(atmosphereRenderer: context.atmosphereRenderer,
+                                                            depthDisabledState: context.depthDisabledState)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
         let globeSurfaceSubsystem = GlobeSurfaceRenderSubsystem(globeDepthState: context.extrudedDepthState,
@@ -95,6 +97,7 @@ enum RenderGraphFactory {
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,
+            atmosphereSubsystem,
             globeSurfaceSubsystem,
             globeCapSubsystem,
             postProcessingSubsystem,
@@ -106,6 +109,7 @@ enum RenderGraphFactory {
             avatarSubsystem,
             sceneModelSubsystem,
             starfieldSubsystem,
+            atmosphereSubsystem,
             debugSubsystem
         ]
         return RenderGraph(registry: RenderSubsystemRegistry(subsystems: subsystems),

@@ -587,6 +587,20 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The globe's atmosphere: the soft halo of scattered light around the
+    /// planet's edge and the matching glow on the surface toward the limb.
+    public func atmosphereSettings(_ atmosphere: ImmersiveMapSettings.AtmosphereSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.atmosphereSettings(atmosphere)
+        return view
+    }
+
+    public func atmosphere(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.atmosphere(isEnabled: isEnabled)
+        return view
+    }
+
     public func styleSettings(_ style: ImmersiveMapSettings.StyleSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.styleSettings(style)
