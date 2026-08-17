@@ -183,6 +183,29 @@ final class AtmosphereSettingsTests: XCTestCase {
         XCTAssertEqual(uniform.sunInfluence, 1)
     }
 
+    /// The halo's day/night asymmetry fades out with the terminator: past
+    /// zoom 2 the surface shows no night, and a halo still dimmed on one side
+    /// would read as a lopsided ring.
+    func testHaloSunInfluenceFadesWithTheTerminator() {
+        let settings = ImmersiveMapSettings.AtmosphereSettings(sunInfluence: 0.8)
+        let earth = ImmersiveMapSettings.EarthSceneSettings(timeMode: .fixed(Date(timeIntervalSince1970: 1_749_000_000)))
+        let globe = GlobeUniform(panX: 0, panY: 0, radius: 1, transition: 0)
+        func influence(atZoom zoom: Double) -> Float {
+            AtmosphereUniform.make(settings: settings,
+                                   earthScene: EarthSceneUniform(settings: earth, zoom: zoom),
+                                   globe: globe,
+                                   projectionView: matrix_identity_float4x4,
+                                   cameraEye: .zero).sunInfluence
+        }
+
+        XCTAssertEqual(influence(atZoom: 1.0), 0.8, accuracy: 1e-6)
+        let midway = influence(atZoom: 1.5)
+        XCTAssertGreaterThan(midway, 0)
+        XCTAssertLessThan(midway, 0.8)
+        XCTAssertEqual(influence(atZoom: 2.0), 0, accuracy: 1e-6)
+        XCTAssertEqual(influence(atZoom: 4.0), 0, accuracy: 1e-6)
+    }
+
     // MARK: - Shaders
 
     /// The surface glow and the halo are one thing seen from two sides of the

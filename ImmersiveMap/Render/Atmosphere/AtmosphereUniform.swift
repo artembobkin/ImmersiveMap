@@ -52,6 +52,12 @@ struct AtmosphereUniform {
         } else {
             sunDirection = .zero
         }
+        // The terminator fades off the surface between zoom 1 and 2
+        // (`sunShadowFade`), and the halo's day/night asymmetry goes with it:
+        // a halo still dimmed on one side of a planet that shows no night
+        // would read as a lopsided ring.
+        let sunInfluence = min(Self.clampedNonNegative(settings.sunInfluence), 1)
+            * (1 - Self.clampedUnit(earthScene.sunShadowFade))
         return AtmosphereUniform(inverseViewProjection: simd_inverse(projectionView),
                                  eye: cameraEye,
                                  center: SIMD3<Float>(0, 0, -globe.radius),
@@ -61,7 +67,7 @@ struct AtmosphereUniform {
                                  transition: globe.transition,
                                  intensity: Self.clampedNonNegative(settings.intensity),
                                  thickness: Self.clampedNonNegative(settings.thickness),
-                                 sunInfluence: min(Self.clampedNonNegative(settings.sunInfluence), 1))
+                                 sunInfluence: sunInfluence)
     }
 
     private static func clampedUnit(_ color: SIMD3<Float>) -> SIMD3<Float> {

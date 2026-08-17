@@ -754,7 +754,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// halo is full on the day side of the limb and dims to a residual
         /// glow on the night side; at 0 it is the same brightness all the way
         /// around. Ignored while the earth scene is off, since there is no sun
-        /// to take the direction from.
+        /// to take the direction from, and faded out with the terminator
+        /// between zoom 1 and 2, so a planet that shows no night is not ringed
+        /// by a lopsided halo.
         public var sunInfluence: Float
 
         public init(isEnabled: Bool = true,

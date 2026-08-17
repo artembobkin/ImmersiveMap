@@ -81,7 +81,7 @@ The atmosphere is what puts air on the planet: a soft halo of scattered light ar
 | `color` | The tint of the scattered light. The very edge of the halo whitens toward the limb on its own, the way saturated scattering does. |
 | `intensity` | Brightness of the halo and of the surface glow together. 0 leaves the sphere bare while keeping the layer on. |
 | `thickness` | Width of the halo relative to the globe radius. The halo scales with the planet on screen, so it looks the same at every zoom of the globe presentation; 2 is twice as wide, 0.5 a thin bright ring. |
-| `sunInfluence` | How much the earth scene's sun shapes the halo. At 1 the halo is full on the day side of the limb and dims to a residual glow on the night side; at 0 it is even all the way around. Ignored while the earth scene is off, since there is no sun to take the direction from. |
+| `sunInfluence` | How much the earth scene's sun shapes the halo. At 1 the halo is full on the day side of the limb and dims to a residual glow on the night side; at 0 it is even all the way around. Ignored while the earth scene is off, since there is no sun to take the direction from, and it fades out with the terminator between zoom 1 and 2, so a planet that shows no night is not ringed by a lopsided halo. |
 
 The halo is resolved per pixel from the view ray and the sphere, not from a circle projected on screen: under perspective the silhouette of the globe is a conic, and at a tilted or off-center camera a screen-space circle would leave the halo detached from the limb on one side. It fades out over the first part of the [globe-to-flat morph](globe.md), before the sphere silhouette it is fitted to starts moving, and the horizon haze of the flat map takes over from there.
 
