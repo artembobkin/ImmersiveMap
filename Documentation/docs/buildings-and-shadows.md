@@ -23,8 +23,8 @@ public enum BuildingExtrusionMode: Equatable, Sendable {
 
 | Mode | What happens |
 |---|---|
-| `.translucent` | The default. Buildings render into an offscreen image which is then composited over the map with `StyleSettings.buildingExtrusionAlpha` (0.6 by default). Streets and labels stay readable through the massing. |
-| `.solid` | Buildings draw straight into the world pass, fully opaque. `buildingExtrusionAlpha` and the style's color alpha are ignored. |
+| `.translucent` | Buildings render into an offscreen image which is then composited over the map with `StyleSettings.buildingExtrusionAlpha` (0.6 by default). Streets stay visible through the massing. The price is that a roof also shows the ground under it, which its own building shadows, so with shadows on every roof reads darker than its color. |
+| `.solid` | The default. Buildings draw straight into the world pass, fully opaque: roofs keep their color, walls take the shading, and the shadows fall on the ground around them. `buildingExtrusionAlpha` and the style's color alpha are ignored. |
 | `.solidAtHighZoom(startZoom:endZoom:)` | Translucent below `startZoom`, opaque above `endZoom`, with the blend alpha interpolated in between. The compromise most apps want: massing at district zoom, real buildings at street zoom. |
 
 The mode is not just an appearance choice. **The composited translucent image carries no depth**, which is why translucent buildings never occlude a scene model and never tint one. Under `.solid` (or `.solidAtHighZoom` past its end zoom), occlusion between buildings and models is depth-correct. If a model is meant to stand behind a building rather than in front of it, that is the setting to change.
@@ -41,6 +41,8 @@ public struct SceneLightSettings: Equatable, Sendable {
 
 `direction` points **towards** the light in the flat basis: +X east, +Y north, +Z up. It is normalized before use, so only the direction matters. There is no analytic surface shading in flat mode: faces darken only through the shadow map, so this vector is the single thing that decides where shadows fall and how long they are. A low elevation (a small +Z relative to the horizontal components) throws long shadows.
 
+What the walls do get is a tonal cue, not lighting: a roof keeps the style's building color, a wall square to the light sits a step under it, a wall turned away steps down further (and the shadow map then shades it as self-shadowed), and every wall darkens toward the ground over its first thirty meters, the ambient occlusion of a street canyon. Roof, lit wall, side wall and shaded wall are therefore four distinct tones of one color, which is what makes a block read as a lit solid.
+
 This is not the [Earth scene sun](earth-scene.md), which lights the globe. The two are independent, and an app that wants them to agree has to set both.
 
 ## Shadows
@@ -48,17 +50,21 @@ This is not the [Earth scene sun](earth-scene.md), which lights the globe. The t
 ```swift
 public struct ShadowSettings: Equatable, Sendable {
     public var isEnabled: Bool                 // true
-    public var strength: Float                 // 0.5
+    public var strength: Float                 // 0.22
     public var mapResolution: Int              // 2048
     public var coverageCameraDistances: Float  // 16.0
+    public var tint: SIMD3<Float>              // (0.88, 0.92, 1.0)
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `strength` | How much a shadowed fragment darkens, `0...1`. |
+| `tint` | The cast of the shadowed light: an RGB multiplier applied on top of `strength` where a surface is fully in shadow, and in proportion where it is partly shadowed. White keeps the neutral darkening; the default cool tint gives shadows the bluish cast of light arriving only from the sky, so a shadowed street reads as daylight rather than as a grey stain. The ground, the buildings and the scene models all take the same tint. |
 | `mapResolution` | Side of the square shadow map in pixels, clamped to `256...4096` at render time. The main sharpness-versus-cost lever. |
 | `coverageCameraDistances` | Far-cascade coverage radius, measured in multiples of the camera distance. Beyond it shadows fade out. |
+
+The defaults are deliberately soft: at a strength of 0.22 with the cool tint a fully shadowed white surface comes out around `(0.69, 0.72, 0.78)`, a light blue-grey. Heavier shadows are one line away (`strength: 0.5, tint: SIMD3<Float>(repeating: 1)` is the neutral darkening earlier versions shipped).
 
 Shadows use two cascades packed into one 2:1 atlas, fitted per frame from the camera. The near cascade always covers two camera distances and stays crisp; the far cascade is stretched over `coverageCameraDistances`, so its texel density scales inversely with the radius you ask for. Raising coverage buys reach and pays in softness at the far end.
 

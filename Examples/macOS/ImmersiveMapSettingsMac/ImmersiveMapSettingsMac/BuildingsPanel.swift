@@ -10,10 +10,15 @@ import ImmersiveMap
 /// map is already a plane.
 ///
 /// `buildingExtrusionMode` decides how buildings are composited over the map.
-/// The default `.translucent` renders them into an offscreen image and blends
-/// it, which is why translucent buildings carry no depth and never occlude
-/// scene models; `.solid` is depth-correct and `.solidAtHighZoom` interpolates
-/// between the two as the camera comes down.
+/// The default `.solid` draws them opaque and depth-correct; `.translucent`
+/// renders them into an offscreen image and blends it, which is why translucent
+/// buildings carry no depth and never occlude scene models; `.solidAtHighZoom`
+/// interpolates between the two as the camera comes down.
+///
+/// Shadows have a strength and a tint: the tint is the cast of the light a
+/// shadowed surface still gets (the sky), applied on top of the strength, and
+/// every receiver takes it, so one picker recolors the shadows on the ground,
+/// the buildings and the models alike.
 struct BuildingsPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
@@ -84,6 +89,8 @@ struct BuildingsPanel: View {
                             value: $settings.scene.shadows.coverageCameraDistances.asDouble,
                             range: 2...48,
                             format: "%.0f")
+                ColorPicker("Tint", selection: shadowTint, supportsOpacity: false)
+                    .frame(width: 100)
             }
             .disabled(settings.scene.shadows.isEnabled == false)
         }
@@ -92,6 +99,22 @@ struct BuildingsPanel: View {
     private var extrusionChoice: Binding<ExtrusionChoice> {
         Binding(get: { ExtrusionChoice(mode: settings.style.buildingExtrusionMode) },
                 set: { settings.style.buildingExtrusionMode = $0.mode })
+    }
+
+    /// The shadow tint as a SwiftUI color and back, in the sRGB space the
+    /// setting is stated in.
+    private var shadowTint: Binding<Color> {
+        Binding(get: {
+            let tint = settings.scene.shadows.tint
+            return Color(.sRGB, red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z))
+        }, set: { newColor in
+            guard let components = NSColor(newColor).usingColorSpace(.sRGB) else {
+                return
+            }
+            settings.scene.shadows.tint = SIMD3<Float>(Float(components.redComponent),
+                                                       Float(components.greenComponent),
+                                                       Float(components.blueComponent))
+        })
     }
 
     /// The light direction points **towards** the sun in the flat basis

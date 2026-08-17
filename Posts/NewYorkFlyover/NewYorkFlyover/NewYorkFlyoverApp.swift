@@ -73,8 +73,9 @@ private struct FlyoverScreen: View {
                 .camera(camera, position: NewYorkStoryboard.overview)
                 .enableCameraUIControls(showChrome)
                 .tourVideoRecorder(videoRecorder)
-                // Depth-correct buildings instead of the default translucent
-                // composite: the skyline is the hero of this post.
+                // Depth-correct buildings, stated even though solid is the
+                // default: the skyline is the hero of this post, and the
+                // scene must not depend on the engine default staying put.
                 .buildingExtrusionMode(.solid)
                 // A cleaner cinematic frame: no house numbers and no POI
                 // badges at the storyboard's street zooms.

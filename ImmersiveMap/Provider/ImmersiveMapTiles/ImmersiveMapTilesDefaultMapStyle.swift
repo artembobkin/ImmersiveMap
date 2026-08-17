@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 41
+    private static let implementationRevision: UInt32 = 42
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -832,10 +832,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     /// Road border = the fill colour darkened and made fully opaque - a border of
     /// the same hue but darker, never see-through, drawn under the lighter fill.
+    /// The step is small and leans warm (blue drops the most), so a white
+    /// street gets a light warm-grey edge that defines it without drawing a
+    /// dark net over the city, and a golden major a deeper gold.
     private func roadCasingColor(from fill: SIMD4<Float>) -> SIMD4<Float> {
-        SIMD4<Float>(max(fill.x - 0.20, 0.0),
-                     max(fill.y - 0.20, 0.0),
-                     max(fill.z - 0.20, 0.0),
+        SIMD4<Float>(max(fill.x - 0.125, 0.0),
+                     max(fill.y - 0.135, 0.0),
+                     max(fill.z - 0.16, 0.0),
                      1.0)
     }
 

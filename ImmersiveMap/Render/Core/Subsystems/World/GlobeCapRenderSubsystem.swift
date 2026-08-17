@@ -36,6 +36,7 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
                               cameraUniform: frameContext.cameraUniform,
                               globe: frameContext.globeRenderUniform,
                               earthScene: frameContext.earthSceneUniform,
+                              atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere),
                               tilesTexture: tilesTexture)
 
         encoder.setDepthStencilState(depthDisabledState)

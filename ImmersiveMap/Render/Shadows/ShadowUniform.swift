@@ -75,6 +75,9 @@ struct ShadowUniform {
     /// it for the geometric self-shadow test (a face turned away from the sun
     /// is in shadow by definition: no map lookup can get that wrong).
     var lightDirection: SIMD3<Float>
+    /// RGB cast of a fully shadowed surface, on top of the strength darkening
+    /// (`ShadowSettings.tint`); white is the neutral darkening.
+    var tint: SIMD3<Float>
 
     /// Bound when the shadow pass is skipped: the strength guard in
     /// `sampleShadowFactor` returns 1.0 before touching the texture.
@@ -85,5 +88,6 @@ struct ShadowUniform {
                                         strength: 0,
                                         fadeStartDistance: 0,
                                         fadeEndDistance: 1,
-                                        lightDirection: SIMD3<Float>(0, 0, 1))
+                                        lightDirection: SIMD3<Float>(0, 0, 1),
+                                        tint: SIMD3<Float>(repeating: 1))
 }

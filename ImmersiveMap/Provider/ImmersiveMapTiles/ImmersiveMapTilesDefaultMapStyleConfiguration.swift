@@ -306,36 +306,44 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverSt
     /// inert). A custom configuration may differentiate the two sets and get
     /// a smooth camera-zoom handover between them.
     static let softBiomes = ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles(
-        land: SIMD4<Float>(0.941, 0.937, 0.910, 1.0),
-        water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
-        forest: SIMD4<Float>(0.560, 0.760, 0.480, 1.0),
-        grass: SIMD4<Float>(0.700, 0.840, 0.540, 1.0),
-        crop: SIMD4<Float>(0.800, 0.860, 0.580, 1.0),
-        barren: SIMD4<Float>(0.945, 0.914, 0.784, 1.0),
-        wetland: SIMD4<Float>(0.690, 0.808, 0.639, 1.0),
-        snow: SIMD4<Float>(0.925, 0.949, 0.973, 1.0)
+        land: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
+        water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
+        forest: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
+        grass: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
+        crop: SIMD4<Float>(0.851, 0.902, 0.698, 1.0),
+        barren: SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
+        wetland: SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
+        snow: SIMD4<Float>(0.937, 0.957, 0.973, 1.0)
     )
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
+    /// A light, warm, low-contrast palette in the manner of the system maps
+    /// people already know: a warm off-white ground, soft pastel greens, a
+    /// clear light blue for water, white streets with a whisper of a casing,
+    /// and warm golden majors. Contrast is spent on what carries meaning
+    /// (water, parks, the road hierarchy) and taken out of everything that
+    /// used to compete with the labels and the buildings for attention.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles(
-        land: SIMD4<Float>(0.941, 0.937, 0.910, 1.0),
-        water: SIMD4<Float>(0.667, 0.808, 0.902, 1.0),
+        land: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
+        water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
         // Landcover greens are opaque: they cover whole tiles (a tile can be entirely
         // forest/grass), and a translucent green over the near-white `land` base reads
         // as a washed, pale fill - and does so per-whole-tile, so adjacent tiles jump
         // in tone. Opaque keeps the green saturated and consistent.
-        wood: SIMD4<Float>(0.560, 0.760, 0.480, 1.0),
-        grass: SIMD4<Float>(0.700, 0.840, 0.540, 1.0),
-        farmland: SIMD4<Float>(0.800, 0.860, 0.580, 1.0),
-        ice: SIMD4<Float>(0.925, 0.949, 0.973, 1.0),
-        sand: SIMD4<Float>(0.945, 0.914, 0.784, 1.0),
+        wood: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
+        grass: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
+        farmland: SIMD4<Float>(0.851, 0.902, 0.698, 1.0),
+        ice: SIMD4<Float>(0.937, 0.957, 0.973, 1.0),
+        sand: SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
         // Wetland/bog covers huge areas in Russia's lowlands; a near-grey tint made
         // whole regions read as desaturated. A muted green reads as the vegetation it is.
-        wetland: SIMD4<Float>(0.690, 0.808, 0.639, 1.0),
-        park: SIMD4<Float>(0.804, 0.890, 0.761, 1.0),
-        residential: SIMD4<Float>(0.929, 0.922, 0.906, 1.0),
-        industrial: SIMD4<Float>(0.906, 0.894, 0.878, 1.0),
+        wetland: SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
+        park: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
+        // The built-up tints sit a hair under the ground: enough that a city
+        // reads as a city over a region view, not enough to grey the streets.
+        residential: SIMD4<Float>(0.961, 0.945, 0.914, 1.0),
+        industrial: SIMD4<Float>(0.949, 0.941, 0.925, 1.0),
         boundary: SIMD4<Float>(0.52, 0.15, 0.72, 0.9),
         aeroway: SIMD4<Float>(0.886, 0.882, 0.902, 1.0),
         roads: .immersiveMapTilesDefault
@@ -343,23 +351,32 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
+    /// White streets, golden majors. The hierarchy runs from a warm gold on
+    /// the motorways through pale yellow primaries down to plain white minor
+    /// streets, so importance reads as warmth rather than as darkness; the
+    /// grey minor roads of the earlier palette put a net of dark lines over
+    /// every city. The casing the style derives from these fills is a light
+    /// warm grey on white streets and a deeper gold on the majors.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
-        motorway: SIMD4<Float>(0.984, 0.792, 0.549, 1.0),
-        trunk: SIMD4<Float>(0.984, 0.843, 0.604, 1.0),
-        primary: SIMD4<Float>(0.992, 0.898, 0.663, 1.0),
-        secondary: SIMD4<Float>(1.0, 0.961, 0.749, 1.0),
-        tertiary: SIMD4<Float>(1.0, 0.988, 0.851, 1.0),
-        minor: SIMD4<Float>(0.855, 0.855, 0.870, 1.0),
-        service: SIMD4<Float>(0.886, 0.886, 0.898, 1.0),
-        path: SIMD4<Float>(0.847, 0.816, 0.757, 1.0),
-        rail: SIMD4<Float>(0.702, 0.702, 0.722, 1.0),
-        casing: SIMD4<Float>(0.596, 0.596, 0.627, 0.95)
+        motorway: SIMD4<Float>(0.992, 0.831, 0.475, 1.0),
+        trunk: SIMD4<Float>(0.996, 0.871, 0.569, 1.0),
+        primary: SIMD4<Float>(1.0, 0.933, 0.722, 1.0),
+        secondary: SIMD4<Float>(1.0, 0.969, 0.851, 1.0),
+        tertiary: SIMD4<Float>(1.0, 0.996, 0.973, 1.0),
+        minor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+        service: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+        path: SIMD4<Float>(0.867, 0.843, 0.796, 1.0),
+        rail: SIMD4<Float>(0.741, 0.741, 0.765, 1.0),
+        casing: SIMD4<Float>(0.875, 0.865, 0.840, 1.0)
     )
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles {
+    /// A warm light grey a step under the ground: the roof of a building
+    /// separates from the street around it, and its walls, which the renderer
+    /// shades down from this, separate from the roof.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles(
-        buildingFillColor: SIMD4<Float>(0.859, 0.835, 0.796, 1.0)
+        buildingFillColor: SIMD4<Float>(0.906, 0.890, 0.863, 1.0)
     )
 }
 

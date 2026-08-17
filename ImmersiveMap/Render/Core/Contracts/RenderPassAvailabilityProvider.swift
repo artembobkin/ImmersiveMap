@@ -16,6 +16,9 @@ struct RenderPassAvailabilityBuilder {
     /// Unlike the content-driven flags above, the starfield is on by default and
     /// is turned off by settings, so it starts enabled instead of accumulating.
     var starfieldEnabled: Bool = true
+    /// On by default like the starfield: the atmosphere halo is part of the
+    /// globe look and is turned off by settings (or by transparent space).
+    var atmosphereEnabled: Bool = true
 
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
@@ -23,6 +26,7 @@ struct RenderPassAvailabilityBuilder {
                                avatarsEnabled: avatarsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
                                sceneModelOcclusionEnabled: sceneModelOcclusionEnabled,
-                               starfieldEnabled: starfieldEnabled)
+                               starfieldEnabled: starfieldEnabled,
+                               atmosphereEnabled: atmosphereEnabled)
     }
 }

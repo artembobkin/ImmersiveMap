@@ -199,12 +199,45 @@ enum VisualReviewCatalogue {
             lookFor: """
             The planet is round with no seam down the middle, the coastlines are \
             clean, and the terminator falls where the pinned date puts it. Stars \
-            behind it, no banding in the space gradient. Country borders are \
-            thin, unobtrusive dashed lines that read as dashes, not chains of \
-            fat dots, and no regional borders clutter the planet.
+            behind it, no banding in the space gradient. A soft sky-blue \
+            atmosphere hugs the whole limb, brighter on the day side and a \
+            thin residual glow on the night side, whitening right at the \
+            edge, with no gap between the halo and the sphere and no hard \
+            ring; the surface itself lifts toward the same blue at the limb. \
+            Country borders are thin, unobtrusive dashed lines that read as \
+            dashes, not chains of fat dots, and no regional borders clutter \
+            the planet.
             """,
             settings: .default,
             subject: .still(camera: Place.globe)),
+
+        VisualReviewScenario(
+            id: "globe.atmosphere.off",
+            title: "Globe with the atmosphere off",
+            lookFor: """
+            The control for the frame above: the same planet with a hard limb \
+            against space, no halo and no glow toward the edge. The sun's warm \
+            rim on the day side is still there (that is the earth scene, not \
+            the atmosphere).
+            """,
+            settings: .default.atmosphere(isEnabled: false),
+            subject: .still(camera: Place.globe)),
+
+        VisualReviewScenario(
+            id: "globe.atmosphere.tilted",
+            title: "Atmosphere on a tilted, off-center globe",
+            lookFor: """
+            The camera is pitched and the planet fills the lower frame, so its \
+            silhouette is no longer a circle. The halo must still hug the limb \
+            all the way along, at the same width, without detaching on one \
+            side or crossing onto the surface on the other.
+            """,
+            settings: .default,
+            subject: .still(camera: ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
+                                                               longitudeDegrees: 10.0,
+                                                               zoom: 3.4,
+                                                               bearing: 0.4,
+                                                               pitch: 0.7))),
 
         VisualReviewScenario(
             id: "globe.transparent.space",
@@ -277,9 +310,13 @@ enum VisualReviewCatalogue {
             id: "buildings.shadows",
             title: "Manhattan, buildings and shadows",
             lookFor: """
-            Towers are extruded with flat roofs and no z-fighting on the walls. \
-            Shadows fall away from the sun, land on the ground and on lower \
-            roofs, and have no visible cascade seam across the frame.
+            Towers are extruded solid, with light roofs a step under the \
+            ground and no z-fighting on the walls. Roof, sun-facing wall, side \
+            wall and shaded wall read as four tones of one warm grey, and the \
+            walls darken toward the street. Shadows are soft and cool (a light \
+            blue-grey, never a black or neutral grey stain), fall away from \
+            the sun, land on the ground and on lower roofs, and have no \
+            visible cascade seam across the frame.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattan)),
@@ -295,11 +332,27 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.manhattan)),
 
         VisualReviewScenario(
+            id: "buildings.translucent",
+            title: "Manhattan with translucent buildings",
+            lookFor: """
+            The composited path, no longer the default: streets and labels \
+            show through the massing at the blend alpha, the roofs carry the \
+            ground shadow under them, and nothing z-fights or double-tints \
+            where buildings overlap.
+            """,
+            settings: .default.buildingExtrusionMode(.translucent),
+            subject: .still(camera: Place.manhattan)),
+
+        VisualReviewScenario(
             id: "roads.labels.flat",
             title: "Manhattan flat, roads and road labels",
             lookFor: """
-            Road casings are even, junctions do not blob, and road labels follow \
-            the street, stay upright, and do not repeat on top of each other.
+            The palette at street level: a warm off-white ground, white minor \
+            streets with a whisper of a warm-grey casing, pale yellow to gold \
+            majors, light blue water and soft green parks; nothing dark \
+            competes with the labels. Road casings are even, junctions do not \
+            blob, and road labels follow the street, stay upright, and do not \
+            repeat on top of each other.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattanFlat)),

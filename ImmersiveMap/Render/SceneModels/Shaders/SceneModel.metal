@@ -82,5 +82,5 @@ fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
                                         sampler baseColorSampler [[sampler(0)]]) {
     half4 base = baseColorTexture.sample(baseColorSampler, in.uv) * half4(material.baseColor);
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal));
-    return half4(base.rgb * shadowFactor, 1.0h);
+    return half4(base.rgb * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
 }

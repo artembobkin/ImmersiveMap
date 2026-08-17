@@ -64,16 +64,20 @@ static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBoun
 // "flat base color + shadow map"): two subtle tonal terms multiply the base
 // color so that faces separate where flat shading would merge them.
 // - Hemisphere term: roofs keep the base color, walls darken slightly, and
-//   the sun-facing side of a wall is a touch lighter than the far side, so
-//   the edge between two differently oriented walls is always visible.
+//   the sun-facing side of a wall is lighter than the far side, so the edge
+//   between two differently oriented walls is always visible and a block
+//   reads as a lit solid: even a wall square to the sun stays a step under
+//   the roof, so the roof edge never dissolves into a lit facade, and one
+//   turned away drops toward the self-shadow the shadow map gives it, so
+//   roof, lit wall, side wall and shaded wall are four distinct tones.
 // - Vertical gradient: walls darken toward the ground, faking the ambient
 //   occlusion of street canyons and visually grounding the buildings
 //   (short buildings also read slightly darker than tall ones).
 // Both are tonal cues, not lighting: they never exceed 1 and compose with
 // the shadow factor and the geometric self-shadow untouched.
-constant half kWallShadeBase = 0.94h;
-constant half kWallShadeSunSwing = 0.03h;
-constant half kBaseDarkening = 0.90h;
+constant half kWallShadeBase = 0.90h;
+constant half kWallShadeSunSwing = 0.07h;
+constant half kBaseDarkening = 0.88h;
 constant half kGradientRampMeters = 30.0h;
 
 // Unit-range tonal math runs in half; heights saturate the 30 m ramp far
@@ -132,9 +136,11 @@ static inline half4 shadeExtrudedFragment(VertexOut in,
     // The cues fade out with the shadow factor: a self-shadowed or cast-shadowed
     // face keeps the pure shadow color instead of stacking darkening on
     // darkening (dark x dark reads unnatural). With shadows disabled the
-    // factor is 1 and the cues apply fully.
+    // factor is 1 and the cues apply fully. The factor is applied through
+    // the tinted multiplier, so shadowed faces take on the sky cast the
+    // ground under them takes on: one shadow color across the scene.
     half appliedCue = mix(1.0h, depthCueShade, shadowFactor);
-    return half4(in.color.rgb * appliedCue * shadowFactor, 1.0h);
+    return half4(in.color.rgb * appliedCue * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
 }
 
 fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],

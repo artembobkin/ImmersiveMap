@@ -66,7 +66,11 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
         harness.setCameraPosition(Self.camera)
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
-        try await loadFixtureTiles(into: harness, layerName: "landcover")
+        // A landcover class the style paints (wood is green at this zoom): the
+        // engine's map color is the style's land, so a tile whose only paint
+        // is the synthetic land quad leaves the frame exactly as it was, by
+        // design, and could not prove it arrived.
+        try await loadFixtureTiles(into: harness, layerName: "landcover", className: "wood")
         let painted = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(1))
 
         // Both halves are needed. Without the first, a frame where the ground
@@ -122,9 +126,11 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     /// zoom, viewport reach, fallback ancestors), and a test that predicted it
     /// would be asserting on the policy instead of on the pipeline.
     @MainActor
-    private func loadFixtureTiles(into harness: OffscreenFrameHarness, layerName: String) async throws {
+    private func loadFixtureTiles(into harness: OffscreenFrameHarness,
+                                  layerName: String,
+                                  className: String? = nil) async throws {
         let data = try VectorTileFixture.fullCoverageTile(layerName: layerName,
-                                                          properties: ["class": layerName])
+                                                          properties: ["class": className ?? layerName])
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
                                                                longitude: Self.camera.longitudeDegrees,
                                                                maximumZoom: Int(Self.renderZoom))

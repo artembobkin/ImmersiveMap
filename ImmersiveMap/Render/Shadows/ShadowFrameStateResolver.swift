@@ -162,7 +162,10 @@ enum ShadowFrameStateResolver {
                                     strength: strength,
                                     fadeStartDistance: farRadius * 0.75,
                                     fadeEndDistance: farRadius,
-                                    lightDirection: lightDirection)
+                                    lightDirection: lightDirection,
+                                    tint: simd_clamp(scene.shadows.tint,
+                                                     SIMD3<Float>(repeating: 0),
+                                                     SIMD3<Float>(repeating: 1)))
         return ShadowFrameState(lightProjectionViews: lightProjectionViews,
                                 shadowUniform: uniform,
                                 mapResolution: mapResolution)

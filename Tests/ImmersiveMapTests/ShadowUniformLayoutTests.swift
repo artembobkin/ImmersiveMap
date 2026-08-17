@@ -22,7 +22,7 @@ final class ShadowUniformLayoutTests: XCTestCase {
     }
 
     func testShadowUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 384)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 400)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeNear), 0)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeMiddle), 112)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascadeFar), 224)
@@ -31,6 +31,7 @@ final class ShadowUniformLayoutTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeStartDistance), 356)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeEndDistance), 360)
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 368)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.tint), 384)
     }
 
     func testCasterUniformMatchesMetalLayout() {
