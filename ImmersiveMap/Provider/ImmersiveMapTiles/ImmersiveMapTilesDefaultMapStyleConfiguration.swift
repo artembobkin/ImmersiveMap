@@ -321,7 +321,7 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
     /// A light, warm, low-contrast palette in the manner of the system maps
     /// people already know: a warm off-white ground, soft pastel greens, a
     /// clear light blue for water, and asphalt-grey streets whose majors run
-    /// a step deeper. Contrast is spent on what carries meaning
+    /// wider, not darker. Contrast is spent on what carries meaning
     /// (water, parks, the road hierarchy) and taken out of everything that
     /// used to compete with the labels and the buildings for attention.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles(
@@ -351,20 +351,20 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
 }
 
 public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
-    /// Asphalt streets in the driving-map manner: every drive tier is a cool
-    /// neutral grey, and importance reads as depth of grey, motorways darkest
-    /// down to pale minor streets that stay a quiet step under the warm
-    /// ground. Paths keep their warm gravel tone (they are not asphalt) and
-    /// the casing the style derives from these fills is a uniformly darker
-    /// grey, so every road sits in a slightly deeper edge.
+    /// Asphalt streets in the driving-map manner: every drive tier is the
+    /// same cool neutral grey, one road surface across the network, and
+    /// importance reads as width alone, motorways widest down to narrow
+    /// service alleys. Paths keep their warm gravel tone (they are not
+    /// asphalt) and the casing the style derives from these fills is a
+    /// uniformly darker grey, so every road sits in a slightly deeper edge.
     static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
-        motorway: SIMD4<Float>(0.596, 0.612, 0.635, 1.0),
-        trunk: SIMD4<Float>(0.635, 0.651, 0.671, 1.0),
-        primary: SIMD4<Float>(0.702, 0.714, 0.733, 1.0),
+        motorway: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
+        trunk: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
+        primary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         secondary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
-        tertiary: SIMD4<Float>(0.808, 0.816, 0.827, 1.0),
-        minor: SIMD4<Float>(0.847, 0.855, 0.863, 1.0),
-        service: SIMD4<Float>(0.871, 0.875, 0.882, 1.0),
+        tertiary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
+        minor: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
+        service: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         path: SIMD4<Float>(0.867, 0.843, 0.796, 1.0),
         rail: SIMD4<Float>(0.741, 0.741, 0.765, 1.0),
         casing: SIMD4<Float>(0.718, 0.725, 0.735, 1.0)

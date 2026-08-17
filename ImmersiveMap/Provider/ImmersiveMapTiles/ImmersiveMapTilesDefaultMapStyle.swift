@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 43
+    private static let implementationRevision: UInt32 = 44
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -342,6 +342,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
+        // With every drive tier sharing one asphalt grey, width is the whole
+        // hierarchy, so the ramp is spread wide: majors gain width over what
+        // color used to say for them, minors give a little back.
         let s = roadWidthScale(tileZoom: tileZoom)
 
         // Casing joins a class only from the zoom where the fill is wide
@@ -355,28 +358,28 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let casingZoom = tileZoom >= 10 && isConstruction == false
         switch effectiveClass {
         case "motorway":
-            return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
+            return roadStyle(fillKey: 56, color: roads.motorway, width: 20 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.4,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
                              construction: isConstruction)
         case "trunk":
-            return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
+            return roadStyle(fillKey: 54, color: roads.trunk, width: 17.5 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.3,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
                              construction: isConstruction)
         case "primary":
-            return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
+            return roadStyle(fillKey: 52, color: roads.primary, width: 14 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.1, construction: isConstruction)
         case "secondary":
-            return roadStyle(fillKey: 50, color: roads.secondary, width: 10 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
+            return roadStyle(fillKey: 50, color: roads.secondary, width: 11 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 0.9, construction: isConstruction)
         case "tertiary":
-            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
+            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8.5 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 0.8, construction: isConstruction)
         case "minor":
-            return roadStyle(fillKey: 44, color: roads.minor, width: 7.6 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
+            return roadStyle(fillKey: 44, color: roads.minor, width: 7 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
         case "service":
-            return roadStyle(fillKey: 42, color: roads.service, width: 5.6 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
+            return roadStyle(fillKey: 42, color: roads.service, width: 5 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a thin solid
             // line, no dashes, which used to read as noise over water/parks.
