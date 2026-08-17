@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 42
+    private static let implementationRevision: UInt32 = 43
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -349,19 +349,20 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // sub-pixel casing just muddies the fill's antialiasing. The width
         // floors keep the majors readable strokes instead of hairlines at
         // region zooms, and the overview accent gives motorways and trunks a
-        // deeper orange over a country view, released to the light street
-        // palette by the same continuous camera-zoom blend the ground uses.
+        // deeper asphalt grey over a country view, released to the light
+        // street palette by the same continuous camera-zoom blend the ground
+        // uses.
         let casingZoom = tileZoom >= 10 && isConstruction == false
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: 16 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.4,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.615, 0.325, 1.0),
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
                              construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: 14 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.3,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.965, 0.680, 0.390, 1.0),
+                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
                              construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: 12 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
@@ -832,13 +833,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     /// Road border = the fill colour darkened and made fully opaque - a border of
     /// the same hue but darker, never see-through, drawn under the lighter fill.
-    /// The step is small and leans warm (blue drops the most), so a white
-    /// street gets a light warm-grey edge that defines it without drawing a
-    /// dark net over the city, and a golden major a deeper gold.
+    /// The step is small and uniform across the channels, so an asphalt-grey
+    /// fill keeps its neutral hue in the edge (a channel-biased step would
+    /// tint the casing against the fill) and the edge defines the street
+    /// without drawing a dark net over the city.
     private func roadCasingColor(from fill: SIMD4<Float>) -> SIMD4<Float> {
-        SIMD4<Float>(max(fill.x - 0.125, 0.0),
-                     max(fill.y - 0.135, 0.0),
-                     max(fill.z - 0.16, 0.0),
+        SIMD4<Float>(max(fill.x - 0.13, 0.0),
+                     max(fill.y - 0.13, 0.0),
+                     max(fill.z - 0.13, 0.0),
                      1.0)
     }
 
