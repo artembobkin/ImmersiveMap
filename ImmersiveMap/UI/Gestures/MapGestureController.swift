@@ -14,6 +14,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         case pan
         case pinch
         case rotation
+        case tilt
 
         var interactionSource: ImmersiveMapInteractionRuntime.Source {
             switch self {
@@ -23,8 +24,20 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
                 return .mapPinch
             case .rotation:
                 return .mapRotation
+            case .tilt:
+                return .pitchControl
             }
         }
+    }
+
+    /// Where the two-finger drag stands between competing readings: it starts
+    /// undecided, commits to tilting once the movement is clearly vertical,
+    /// and once rejected stays inert until the fingers lift, leaving the drag
+    /// to the pinch and rotation recognizers running alongside it.
+    private enum TiltPhase {
+        case undecided
+        case tilting
+        case rejected
     }
 
     private weak var mapView: ImmersiveMapUIView?
@@ -33,6 +46,8 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
     private let doubleTapGesture: UITapGestureRecognizer
     private let rotationGesture: UIRotationGestureRecognizer
     private let pinchGesture: UIPinchGestureRecognizer
+    private let tiltGesture: UIPanGestureRecognizer
+    private var tiltPhase: TiltPhase = .rejected
 
     init(mapView: ImmersiveMapUIView) {
         self.mapView = mapView
@@ -41,6 +56,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         self.doubleTapGesture = UITapGestureRecognizer()
         self.rotationGesture = UIRotationGestureRecognizer()
         self.pinchGesture = UIPinchGestureRecognizer()
+        self.tiltGesture = UIPanGestureRecognizer()
         super.init()
 
         configureGestures(in: mapView)
@@ -56,6 +72,15 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         if (gestureRecognizer is UIRotationGestureRecognizer && otherGestureRecognizer is UIPinchGestureRecognizer) ||
             (gestureRecognizer is UIPinchGestureRecognizer && otherGestureRecognizer is UIRotationGestureRecognizer) {
             return true
+        }
+        // The two-finger tilt must run alongside pinch and rotation: all three
+        // recognize the same pair of touches, and without this the first one
+        // to begin would lock the other two out for the whole touch sequence.
+        if gestureRecognizer === tiltGesture || otherGestureRecognizer === tiltGesture {
+            return otherGestureRecognizer is UIPinchGestureRecognizer ||
+                otherGestureRecognizer is UIRotationGestureRecognizer ||
+                gestureRecognizer is UIPinchGestureRecognizer ||
+                gestureRecognizer is UIRotationGestureRecognizer
         }
         return false
     }
@@ -98,6 +123,12 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         pinchGesture.addTarget(self, action: #selector(handlePinch(_:)))
         pinchGesture.delegate = self
         mapView.addGestureRecognizer(pinchGesture)
+
+        tiltGesture.addTarget(self, action: #selector(handleTilt(_:)))
+        tiltGesture.delegate = self
+        tiltGesture.minimumNumberOfTouches = 2
+        tiltGesture.maximumNumberOfTouches = 2
+        mapView.addGestureRecognizer(tiltGesture)
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -180,6 +211,80 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
                                          velocity: gesture.velocity,
                                          anchorPoint: gesture.location(in: mapView))
         gesture.scale = 1.0
+    }
+
+    /// Two-finger vertical drag tilts the camera (up for more tilt), the touch
+    /// counterpart of the macOS right-button drag. The drag commits to tilting
+    /// only when the fingers sit roughly side by side and move together mostly
+    /// vertically; anything else is left untouched for the pinch and rotation
+    /// recognizers running simultaneously on the same touches.
+    @objc private func handleTilt(_ gesture: UIPanGestureRecognizer) {
+        guard let mapView,
+              mapView.cameraRuntime.currentCameraState() != nil else {
+            return
+        }
+
+        switch gesture.state {
+        case .began:
+            gesture.setTranslation(.zero, in: mapView)
+            if gesture.numberOfTouches >= 2,
+               TwoFingerTiltGestureMath.touchLayoutAllowsTilt(gesture.location(ofTouch: 0, in: mapView),
+                                                              gesture.location(ofTouch: 1, in: mapView)) {
+                tiltPhase = .undecided
+            } else {
+                tiltPhase = .rejected
+            }
+        case .changed:
+            switch tiltPhase {
+            case .undecided:
+                // Translation keeps accumulating until the drag reveals its
+                // direction; only then does the tilt engage, applying the
+                // whole accumulated movement so nothing is lost to the wait.
+                switch TwoFingerTiltGestureMath.intent(ofTranslation: gesture.translation(in: mapView)) {
+                case .undecided:
+                    break
+                case .tilt:
+                    tiltPhase = .tilting
+                    setInteractionActive(true,
+                                         gestureKind: .tilt)
+                    applyTiltTranslation(gesture, in: mapView)
+                case .other:
+                    tiltPhase = .rejected
+                }
+            case .tilting:
+                applyTiltTranslation(gesture, in: mapView)
+            case .rejected:
+                break
+            }
+        case .ended, .cancelled, .failed:
+            if tiltPhase == .tilting {
+                setInteractionActive(false,
+                                     gestureKind: .tilt)
+            }
+            tiltPhase = .rejected
+        case .possible:
+            break
+        @unknown default:
+            if tiltPhase == .tilting {
+                setInteractionActive(false,
+                                     gestureKind: .tilt)
+            }
+            tiltPhase = .rejected
+        }
+    }
+
+    private func applyTiltTranslation(_ gesture: UIPanGestureRecognizer,
+                                      in mapView: ImmersiveMapUIView) {
+        let translation = gesture.translation(in: mapView)
+        gesture.setTranslation(.zero, in: mapView)
+        guard let currentPitch = mapView.cameraRuntime.currentPitch else {
+            return
+        }
+
+        let pitchDelta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: translation.y,
+                                                             viewHeight: mapView.bounds.height,
+                                                             maximumPitch: mapView.cameraRuntime.currentMaximumPitch())
+        mapView.cameraAnimationRuntime.setPitchTarget(currentPitch + pitchDelta)
     }
 
     private func updateInteractionState(for state: UIGestureRecognizer.State,

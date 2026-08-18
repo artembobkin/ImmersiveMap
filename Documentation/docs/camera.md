@@ -106,6 +106,8 @@ func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapVi
 - `bearingLimit` caps how far the camera may rotate away from north, symmetric around it; `nil` (the default) leaves rotation unbounded. On the globe the cap becomes the widest the zoom-eased bearing window opens instead of the full half turn.
 - `cameraControlZones` turns on the invisible one-thumb drag zones in the bottom corners (leading tilts, trailing zooms). Both are off by default because a zone captures drags that would otherwise pan the map and nothing on screen announces it. Touch platforms only; accepted and ignored on macOS.
 
+The map canvas itself answers the usual gestures with nothing to enable. On touch platforms: one-finger drag pans, pinch zooms, two-finger twist rotates, double tap zooms in one level toward the tap, and a two-finger vertical drag tilts the camera (fingers side by side, up for more tilt, a full-height drag sweeping the whole pitch range). The tilt drag commits only once the movement is clearly vertical, so a pinch or a twist that drifts is never mistaken for it. On macOS: left-button drag pans, right-button drag (or left with Option) tilts and rotates, scroll zooms, and the trackpad answers magnification and rotation.
+
 Everything else about gesture feel lives on `ImmersiveMapSettings.CameraSettings` and is attached with `.cameraSettings(_:)`. The fields worth knowing:
 
 | Field | Meaning |
