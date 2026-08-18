@@ -37,19 +37,13 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         )
     }
 
-    // Lower value == more important. OpenMapTiles `rank` is 1-based (1 = biggest).
+    // Lower value == more important. `rank` is 1-based (1 = biggest) and is
+    // the whole contract (see Documentation/docs/label-priority-in-tiles.md):
+    // the tiles bake population and capital status into it at build time, so
+    // there is no second signal to reconcile, and a feature without a rank is
+    // the least important thing in its layer.
     func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int {
-        if let rank = parseIntValue(properties["rank"]) {
-            return rank
-        }
-        // Capitals and populous places float up when rank is absent.
-        if isCapital(properties) {
-            return 2
-        }
-        if let population = population(properties), population > 0 {
-            return max(1, 1_000 - min(800, Int(log10(Double(population)) * 100.0)))
-        }
-        return 1_000
+        parseIntValue(properties["rank"]) ?? 1_000
     }
 
     func collisionRank(layerName: String, sortKey: Int) -> Int {
@@ -178,10 +172,6 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         properties["name"]?.stringValue.isEmpty == false
             || properties["name:en"]?.stringValue.isEmpty == false
             || properties["name_en"]?.stringValue.isEmpty == false
-    }
-
-    private func population(_ properties: [String: VectorTile_Tile.Value]) -> Int? {
-        parseIntValue(properties["population"])
     }
 
     private func parseIntValue(_ value: VectorTile_Tile.Value?) -> Int? {

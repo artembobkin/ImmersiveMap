@@ -609,7 +609,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             a.weight = .thin
             appearance = a
         }
-        if isCapital(props) {
+        // Capitals in the label-priority contract: `capital` no longer
+        // travels in the tiles, a national capital is a rank-1 city.
+        if cls == "city", parseIntValue(props["rank"]) == 1 {
             appearance.sizePoints += 1.5
             appearance.weight = .bold
         }
@@ -647,7 +649,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // thresholds automatically via tile.z.
         let cls = props["class"]?.stringValue.lowercased()
         let subclass = props["subclass"]?.stringValue.lowercased()
-        let rank = Double(parseIntValue(props["rank"]) ?? Self.poiDefaultRank)
+        let rank = Double(parseIntValue(props["rank"]) ?? Self.poiUnrankedRank)
         let effectiveRank = max(Self.poiNativeCellBudget,
                                 rank + Self.poiClassRankBias(cls: cls, subclass: subclass))
         var minCameraZoom = Float(tileZoom)
@@ -671,8 +673,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// visible as soon as the tile appears; each zoom of overzoom quadruples the budget.
     private static let poiNativeCellBudget = 1.0
 
-    /// Rank for features without a rank attribute: middle of the tail.
-    private static let poiDefaultRank = 15
+    /// Rank for features without a rank attribute. The label-priority contract
+    /// says an absent rank means the least important thing in its layer, so it
+    /// lands at the reveal cap's tail (the profile's rank cap), not mid-tail.
+    private static let poiUnrankedRank = 64
 
     /// Reveal ceiling: the neutral tail of the cap (rank 64) is exhausted
     /// exactly by tile.z + 3; positively offset infrastructure is clamped to
@@ -884,13 +888,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     // MARK: - Property helpers
-
-    private func isCapital(_ props: [String: VectorTile_Tile.Value]) -> Bool {
-        if let capital = parseIntValue(props["capital"]), capital > 0 {
-            return true
-        }
-        return false
-    }
 
     private func parseIntValue(_ value: VectorTile_Tile.Value?) -> Int? {
         guard let value else {

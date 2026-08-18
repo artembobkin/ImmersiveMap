@@ -440,7 +440,10 @@ final class PreparedTileDiskCaching {
     // 39: label language resolution learned the `name:xx` field spelling, so
     // a version-38 record prepared from a colon-convention source carries
     // native-name label text the parser would no longer produce.
-    static let preparedFormatVersion: UInt32 = 39
+    // 40: label priority follows the one-number `rank` contract (no more
+    // capital/population fallbacks, unranked POIs at the reveal tail), and
+    // priorities are baked into prepared label runs.
+    static let preparedFormatVersion: UInt32 = 40
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
