@@ -213,7 +213,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         gesture.scale = 1.0
     }
 
-    /// Two-finger vertical drag tilts the camera (up for more tilt), the touch
+    /// Two-finger vertical drag tilts the camera (down for more tilt), the touch
     /// counterpart of the macOS right-button drag. The drag commits to tilting
     /// only when the fingers sit roughly side by side and move together mostly
     /// vertically; anything else is left untouched for the pinch and rotation

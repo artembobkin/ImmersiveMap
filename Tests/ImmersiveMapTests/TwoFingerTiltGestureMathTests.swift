@@ -51,8 +51,8 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
 
     // MARK: - Pitch delta
 
-    func testDraggingUpTiltsFurther() {
-        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
+    func testDraggingDownTiltsFurther() {
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: 100,
                                                         viewHeight: 800,
                                                         maximumPitch: 1.2,
                                                         sensitivity: 1.0)
@@ -60,8 +60,8 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
         XCTAssertEqual(delta, 0.15, accuracy: 0.0001)
     }
 
-    func testDraggingDownLevelsOff() {
-        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: 200,
+    func testDraggingUpLevelsOff() {
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -200,
                                                         viewHeight: 800,
                                                         maximumPitch: 1.2,
                                                         sensitivity: 1.0)
@@ -70,7 +70,7 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
     }
 
     func testFullHeightDragSweepsTheFullCeilingAtUnitSensitivity() {
-        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -800,
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: 800,
                                                         viewHeight: 800,
                                                         maximumPitch: 1.2,
                                                         sensitivity: 1.0)
@@ -79,10 +79,19 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
     }
 
     func testSensitivityMultipliesTheDelta() {
-        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: 100,
                                                         viewHeight: 800,
                                                         maximumPitch: 1.2,
                                                         sensitivity: 2.0)
+
+        XCTAssertEqual(delta, 0.3, accuracy: 0.0001)
+    }
+
+    func testNegativeSensitivityInvertsTheDirection() {
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
+                                                        viewHeight: 800,
+                                                        maximumPitch: 1.2,
+                                                        sensitivity: -2.0)
 
         XCTAssertEqual(delta, 0.3, accuracy: 0.0001)
     }

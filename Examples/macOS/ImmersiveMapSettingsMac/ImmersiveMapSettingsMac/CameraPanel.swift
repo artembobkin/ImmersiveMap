@@ -77,12 +77,13 @@ struct CameraPanel: View {
 
                 Divider().frame(height: 20)
 
-                // How fast a tilt drag tilts: multiples of the pitch range a
-                // full-height drag sweeps (two fingers on touch, right-button
-                // or Option-drag here).
+                // How fast a tilt drag tilts and which way: multiples of the
+                // pitch range a full-height drag sweeps (two fingers on touch,
+                // right-button or Option-drag here). Positive tilts on the way
+                // down, negative inverts, zero turns the drag off.
                 ValueSlider("Tilt speed",
                             value: tiltSensitivity,
-                            range: 0.5...5,
+                            range: -5...5,
                             step: 0.25,
                             format: "%.2f",
                             width: 120)

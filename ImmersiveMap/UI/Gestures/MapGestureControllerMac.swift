@@ -204,8 +204,9 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         }
     }
 
-    /// Vertical dragging changes pitch (up - more tilt),
-    /// horizontal dragging rotates the camera.
+    /// Vertical dragging changes pitch (down - more tilt, inverted by a
+    /// negative `tiltGestureSensitivity`), horizontal dragging rotates the
+    /// camera.
     private func applyTilt(_ gesture: NSPanGestureRecognizer,
                            in mapView: ImmersiveMapNSView) {
         updateInteractionState(for: gesture.state,

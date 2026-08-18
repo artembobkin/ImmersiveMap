@@ -135,6 +135,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// two-finger vertical drag on touch platforms and to the tilt drag
         /// (right button, or Option-drag) on macOS; 1 makes a full-height
         /// drag exactly span the range, the default 2 reaches it in half.
+        /// Dragging down tilts further and up levels off; a negative value
+        /// inverts the direction, so -2 tilts on the way up at the same speed.
         public var tiltGestureSensitivity: Float
         public var globePanInertiaEnabled: Bool
         public var globePanInertiaHalfLife: Double
