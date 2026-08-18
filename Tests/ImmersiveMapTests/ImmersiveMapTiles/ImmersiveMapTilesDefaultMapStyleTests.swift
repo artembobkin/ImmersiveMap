@@ -210,12 +210,23 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
 
-        // The floor keeps the majors readable strokes at region zooms; it is
-        // a floor, not a lock, so street-zoom world growth is untouched.
+        // Through z9 the majors are point-locked symbols: the class states
+        // its on-screen width in points and the ribbon is tessellated wide
+        // enough to host it (a floor alone cannot help there, because the
+        // shader clamps it to the sub-pixel world-width ribbon).
         let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 7)
         let fill = motorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
         XCTAssertEqual(fill.minimumWidthPoints, 2.2)
-        XCTAssertEqual(fill.lineWidthPoints, 0)
+        XCTAssertEqual(fill.lineWidthPoints, 2.2)
+        XCTAssertGreaterThanOrEqual(fill.parseGeometryStyleData.lineWidth, Double(2.2 * 32),
+                                    "The ribbon must host the point width")
+
+        // From z10 the world width takes over: no point lock, floor as a
+        // safety net, so street-zoom world growth is untouched.
+        let streetMotorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 10)
+        let streetFill = streetMotorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertEqual(streetFill.lineWidthPoints, 0)
+        XCTAssertEqual(streetFill.minimumWidthPoints, 2.2)
 
         // The overview accent is the baked color; the light street palette is
         // its continuous street counterpart, released by the same camera-zoom
