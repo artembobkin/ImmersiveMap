@@ -74,8 +74,25 @@ struct CameraPanel: View {
                             step: 0.5,
                             format: "%.1f",
                             width: 120)
+
+                Divider().frame(height: 20)
+
+                // How fast a tilt drag tilts: multiples of the pitch range a
+                // full-height drag sweeps (two fingers on touch, right-button
+                // or Option-drag here).
+                ValueSlider("Tilt speed",
+                            value: tiltSensitivity,
+                            range: 0.5...5,
+                            step: 0.25,
+                            format: "%.2f",
+                            width: 120)
             }
         }
+    }
+
+    private var tiltSensitivity: Binding<Double> {
+        Binding(get: { Double(settings.camera.tiltGestureSensitivity) },
+                set: { settings.camera.tiltGestureSensitivity = Float($0) })
     }
 
     private var minimumPitchDegrees: Binding<Double> {

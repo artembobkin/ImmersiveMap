@@ -130,6 +130,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var dragZoomVelocityFactor: Double
         public var dragZoomVelocityLimit: Double
         public var rotationGestureSensitivity: Float
+        /// How fast a tilt drag tilts: the multiple of the full pitch range
+        /// that a drag across the whole view height sweeps. Applies to the
+        /// two-finger vertical drag on touch platforms and to the tilt drag
+        /// (right button, or Option-drag) on macOS; 1 makes a full-height
+        /// drag exactly span the range, the default 2 reaches it in half.
+        public var tiltGestureSensitivity: Float
         public var globePanInertiaEnabled: Bool
         public var globePanInertiaHalfLife: Double
         public var globePanInertiaActivationVelocity: Double
@@ -167,6 +173,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     dragZoomVelocityFactor: Double,
                     dragZoomVelocityLimit: Double,
                     rotationGestureSensitivity: Float,
+                    tiltGestureSensitivity: Float = 2.0,
                     globePanInertiaEnabled: Bool = true,
                     globePanInertiaHalfLife: Double = 0.28,
                     globePanInertiaActivationVelocity: Double = 450.0,
@@ -203,6 +210,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.dragZoomVelocityFactor = dragZoomVelocityFactor
             self.dragZoomVelocityLimit = dragZoomVelocityLimit
             self.rotationGestureSensitivity = rotationGestureSensitivity
+            self.tiltGestureSensitivity = tiltGestureSensitivity
             self.globePanInertiaEnabled = globePanInertiaEnabled
             self.globePanInertiaHalfLife = globePanInertiaHalfLife
             self.globePanInertiaActivationVelocity = globePanInertiaActivationVelocity
@@ -1086,6 +1094,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                dragZoomVelocityFactor: 0.35,
                                dragZoomVelocityLimit: 5.0,
                                rotationGestureSensitivity: -0.6,
+                               tiltGestureSensitivity: 2.0,
                                globePanInertiaEnabled: true,
                                globePanInertiaHalfLife: 0.28,
                                globePanInertiaActivationVelocity: 450.0,

@@ -281,9 +281,11 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
             return
         }
 
+        let settings = mapView.cameraRuntime.currentSettings.camera
         let pitchDelta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: translation.y,
                                                              viewHeight: mapView.bounds.height,
-                                                             maximumPitch: mapView.cameraRuntime.currentMaximumPitch())
+                                                             maximumPitch: mapView.cameraRuntime.currentMaximumPitch(),
+                                                             sensitivity: settings.tiltGestureSensitivity)
         mapView.cameraAnimationRuntime.setPitchTarget(currentPitch + pitchDelta)
     }
 

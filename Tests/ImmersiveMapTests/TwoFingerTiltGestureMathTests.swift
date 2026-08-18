@@ -54,7 +54,8 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
     func testDraggingUpTiltsFurther() {
         let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
                                                         viewHeight: 800,
-                                                        maximumPitch: 1.2)
+                                                        maximumPitch: 1.2,
+                                                        sensitivity: 1.0)
 
         XCTAssertEqual(delta, 0.15, accuracy: 0.0001)
     }
@@ -62,23 +63,41 @@ final class TwoFingerTiltGestureMathTests: XCTestCase {
     func testDraggingDownLevelsOff() {
         let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: 200,
                                                         viewHeight: 800,
-                                                        maximumPitch: 1.2)
+                                                        maximumPitch: 1.2,
+                                                        sensitivity: 1.0)
 
         XCTAssertEqual(delta, -0.3, accuracy: 0.0001)
     }
 
-    func testFullHeightDragSweepsTheFullCeiling() {
+    func testFullHeightDragSweepsTheFullCeilingAtUnitSensitivity() {
         let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -800,
                                                         viewHeight: 800,
-                                                        maximumPitch: 1.2)
+                                                        maximumPitch: 1.2,
+                                                        sensitivity: 1.0)
 
         XCTAssertEqual(delta, 1.2, accuracy: 0.0001)
+    }
+
+    func testSensitivityMultipliesTheDelta() {
+        let delta = TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
+                                                        viewHeight: 800,
+                                                        maximumPitch: 1.2,
+                                                        sensitivity: 2.0)
+
+        XCTAssertEqual(delta, 0.3, accuracy: 0.0001)
+    }
+
+    func testDefaultSettingsTiltAtDoubleSpeed() {
+        XCTAssertEqual(ImmersiveMapSettings.default.camera.tiltGestureSensitivity,
+                       2.0,
+                       accuracy: 0.0001)
     }
 
     func testZeroHeightViewProducesNoDelta() {
         XCTAssertEqual(TwoFingerTiltGestureMath.pitchDelta(forVerticalTranslation: -100,
                                                            viewHeight: 0,
-                                                           maximumPitch: 1.2),
+                                                           maximumPitch: 1.2,
+                                                           sensitivity: 2.0),
                        0)
     }
 }

@@ -45,14 +45,17 @@ enum TwoFingerTiltGestureMath {
         return translation.y.magnitude > translation.x.magnitude ? .tilt : .other
     }
 
-    /// Dragging across the full view height sweeps the full pitch ceiling,
-    /// matching the macOS tilt drag: up tilts further, down levels off.
+    /// Dragging across the full view height sweeps the full pitch ceiling
+    /// `sensitivity` times over, matching the macOS tilt drag: up tilts
+    /// further, down levels off, and `CameraSettings.tiltGestureSensitivity`
+    /// is what feeds the multiplier.
     static func pitchDelta(forVerticalTranslation translationY: CGFloat,
                            viewHeight: CGFloat,
-                           maximumPitch: Float) -> Float {
+                           maximumPitch: Float,
+                           sensitivity: Float) -> Float {
         guard viewHeight > 0 else {
             return 0
         }
-        return -Float(translationY / viewHeight) * max(maximumPitch, 0)
+        return -Float(translationY / viewHeight) * max(maximumPitch, 0) * sensitivity
     }
 }
