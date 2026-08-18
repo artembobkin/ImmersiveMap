@@ -320,6 +320,26 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Sets how fast a tilt drag tilts, and which way: the multiple of the
+    /// pitch range that a drag across the full view height sweeps. Applies to
+    /// the two-finger vertical drag on touch platforms and to the tilt drag
+    /// (right button, or Option-drag) on macOS. Positive tilts as the fingers
+    /// pull down, negative inverts the drag so pulling up tilts instead, and
+    /// zero leaves the drag without effect. The default is 2: half the view
+    /// height covers the whole pitch range.
+    ///
+    ///     ImmersiveMapView()
+    ///         .tiltGestureSensitivity(3)    // faster
+    ///         .tiltGestureSensitivity(-2)   // inverted, default speed
+    ///         .tiltGestureSensitivity(0)    // tilt drags do nothing
+    func tiltGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.tiltGestureSensitivity = sensitivity
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
     /// Controls reuse of dismantled map views (on by default). When the screen
     /// with this map goes away, the platform view (renderer, GPU tile cache,
     /// atlas pages) is parked briefly and the next `ImmersiveMapView` adopts

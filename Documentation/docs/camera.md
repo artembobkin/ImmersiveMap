@@ -98,6 +98,7 @@ func zoomRange(minimum: Double? = nil, maximum: Double? = nil) -> ImmersiveMapVi
 func pitchRange(minimum: Float? = nil, maximum: Float? = nil) -> ImmersiveMapView
 func bearingLimit(_ maximumAbsoluteBearing: Float?) -> ImmersiveMapView
 func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapView
+func tiltGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapView
 ```
 
 - `enableCameraUIControls` adds the built-in control panel (`ImmersiveMapCameraControlPanel`, itself public if you want to place it yourself).
@@ -105,8 +106,9 @@ func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapVi
 - `pitchRange` clamps tilt the same way, in radians from straight down. A minimum keeps the map perpetually tilted; on the globe the tilt ceiling still eases in with zoom, and a minimum above that easing ceiling yields to it, so a zoomed-out globe still levels off.
 - `bearingLimit` caps how far the camera may rotate away from north, symmetric around it; `nil` (the default) leaves rotation unbounded. On the globe the cap becomes the widest the zoom-eased bearing window opens instead of the full half turn.
 - `cameraControlZones` turns on the invisible one-thumb drag zones in the bottom corners (leading tilts, trailing zooms). Both are off by default because a zone captures drags that would otherwise pan the map and nothing on screen announces it. Touch platforms only; accepted and ignored on macOS.
+- `tiltGestureSensitivity` writes `CameraSettings.tiltGestureSensitivity` without constructing the whole settings value: how fast a tilt drag tilts and which way. Positive tilts on the way down (2, the default, sweeps the pitch range in half the view height), negative inverts the drag, zero disables its effect.
 
-The map canvas itself answers the usual gestures with nothing to enable. On touch platforms: one-finger drag pans, pinch zooms, two-finger twist rotates, double tap zooms in one level toward the tap, and a two-finger vertical drag tilts the camera (fingers side by side, down for more tilt), with `CameraSettings.tiltGestureSensitivity` setting how fast and which way: the default 2 sweeps the whole pitch range in half the view height, and a negative value inverts the drag so pulling up tilts instead. The tilt drag commits only once the movement is clearly vertical, so a pinch or a twist that drifts is never mistaken for it. On macOS: left-button drag pans, right-button drag (or left with Option) tilts and rotates, scroll zooms, and the trackpad answers magnification and rotation.
+The map canvas itself answers the usual gestures with nothing to enable. On touch platforms: one-finger drag pans, pinch zooms, two-finger twist rotates, double tap zooms in one level toward the tap, and a two-finger vertical drag tilts the camera (fingers side by side, down for more tilt), with `CameraSettings.tiltGestureSensitivity` (or the `.tiltGestureSensitivity(_:)` modifier) setting how fast and which way: the default 2 sweeps the whole pitch range in half the view height, and a negative value inverts the drag so pulling up tilts instead. The tilt drag commits only once the movement is clearly vertical, so a pinch or a twist that drifts is never mistaken for it. On macOS: left-button drag pans, right-button drag (or left with Option) tilts and rotates, scroll zooms, and the trackpad answers magnification and rotation.
 
 Everything else about gesture feel lives on `ImmersiveMapSettings.CameraSettings` and is attached with `.cameraSettings(_:)`. The fields worth knowing:
 

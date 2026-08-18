@@ -58,6 +58,15 @@ final class CameraControlZoneSettingsTests: XCTestCase {
         XCTAssertNil(cleared.maximumAbsoluteBearing)
     }
 
+    func testTiltGestureSensitivityModifierWritesTheSetting() {
+        let camera = ImmersiveMapView()
+            .tiltGestureSensitivity(-3)
+            .settings
+            .camera
+
+        XCTAssertEqual(camera.tiltGestureSensitivity, -3)
+    }
+
     func testCameraModifiersDoNotOverwriteEachOther() {
         // All of these rewrite CameraSettings, so a later one must not silently
         // undo an earlier one.
@@ -66,6 +75,7 @@ final class CameraControlZoneSettingsTests: XCTestCase {
             .zoomRange(minimum: 4, maximum: 17)
             .pitchRange(minimum: 0.1, maximum: 1.2)
             .bearingLimit(.pi / 3)
+            .tiltGestureSensitivity(2.5)
             .settings
             .camera
 
@@ -74,6 +84,7 @@ final class CameraControlZoneSettingsTests: XCTestCase {
         XCTAssertEqual(camera.minimumPitch, 0.1)
         XCTAssertEqual(camera.maximumPitch, 1.2)
         XCTAssertEqual(camera.maximumAbsoluteBearing, .pi / 3)
+        XCTAssertEqual(camera.tiltGestureSensitivity, 2.5)
         XCTAssertTrue(camera.controlZones.isZoomZoneEnabled)
         XCTAssertFalse(camera.controlZones.isPitchZoneEnabled)
     }
