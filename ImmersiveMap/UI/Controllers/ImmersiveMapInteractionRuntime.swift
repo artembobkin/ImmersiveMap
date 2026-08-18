@@ -11,6 +11,12 @@ final class ImmersiveMapInteractionRuntime {
         case mapPan
         case mapPinch
         case mapRotation
+        /// Tilt gestures on the map canvas: the two-finger vertical drag on
+        /// touch platforms, the right-button or Option drag on macOS. Kept
+        /// apart from `pitchControl` because the sources are a plain set: the
+        /// zone and a canvas tilt can run at once on disjoint touches, and a
+        /// shared value would let whichever ends first deactivate both.
+        case mapTilt
         case pitchControl
         case zoomControl
         case scrollZoom

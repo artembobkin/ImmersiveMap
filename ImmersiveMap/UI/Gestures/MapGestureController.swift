@@ -25,7 +25,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
             case .rotation:
                 return .mapRotation
             case .tilt:
-                return .pitchControl
+                return .mapTilt
             }
         }
     }
@@ -235,6 +235,18 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
                 tiltPhase = .rejected
             }
         case .changed:
+            // The recognizer only requires two touches to begin: after one
+            // finger lifts it keeps delivering .changed from the remaining
+            // touch, so without this check a lone finger would keep tilting,
+            // or a lone vertical drag would newly commit an undecided tilt.
+            if gesture.numberOfTouches < 2 {
+                if tiltPhase == .tilting {
+                    setInteractionActive(false,
+                                         gestureKind: .tilt)
+                }
+                tiltPhase = .rejected
+                return
+            }
             switch tiltPhase {
             case .undecided:
                 // Translation keeps accumulating until the drag reveals its

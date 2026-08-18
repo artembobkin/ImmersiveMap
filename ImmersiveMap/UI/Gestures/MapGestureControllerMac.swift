@@ -210,7 +210,7 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
     private func applyTilt(_ gesture: NSPanGestureRecognizer,
                            in mapView: ImmersiveMapNSView) {
         updateInteractionState(for: gesture.state,
-                               source: .pitchControl)
+                               source: .mapTilt)
 
         let translation = gesture.translation(in: mapView)
         gesture.setTranslation(.zero, in: mapView)
