@@ -478,8 +478,8 @@ public extension ImmersiveMapView {
     /// is configured separately: the default `ImmersiveMapTilesMapStyle` draws
     /// OpenMapTiles-schema MVT, and any other schema pairs the template with
     /// `.mapStyle(VectorTileMapStyle(style:labelProfile:))`. A source that does
-    /// not ship z0-14 states its depth via `tileSettings`, and its data credit
-    /// via `attributionSettings`.
+    /// not ship z0-14 states its depth via `tileMaximumZoomLevel(_:)`, and its
+    /// data credit via `attributionSettings`.
     public func tileURLTemplate(_ urlTemplate: String,
                                 headers: [String: String] = [:]) -> ImmersiveMapView {
         var view = self
@@ -500,6 +500,22 @@ public extension ImmersiveMapView {
     public func tileSettings(_ tiles: ImmersiveMapSettings.TileSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileSettings(tiles)
+        return view
+    }
+
+    /// The deepest tile zoom level the renderer requests from the source.
+    ///
+    /// The default is the hosted service's depth
+    /// (`ImmersiveMapTilesService.maximumTileZoomLevel`, currently 14). A
+    /// source built to a different depth states it here, next to its
+    /// `tileURLTemplate(_:headers:)`: a source serving z16 needs
+    /// `.tileMaximumZoomLevel(16)` or the renderer never asks past z14 and
+    /// scales z14 tiles up instead. Past the deepest level the camera keeps
+    /// zooming and the deepest tiles are scaled up, exactly as before; offline
+    /// region downloads clamp to the same level.
+    public func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileMaximumZoomLevel(maximumZoomLevel)
         return view
     }
 

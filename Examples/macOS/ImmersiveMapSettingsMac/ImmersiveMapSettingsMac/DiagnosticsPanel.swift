@@ -38,7 +38,7 @@ struct DiagnosticsPanel: View {
                             format: "%.0f")
                 ValueSlider("Tile zoom cap",
                             value: $settings.tiles.coverage.maximumZoomLevel.asDouble,
-                            range: 6...14,
+                            range: 6...16,
                             step: 1,
                             format: "%.0f")
             }

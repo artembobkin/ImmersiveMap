@@ -1241,6 +1241,14 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The deepest tile zoom level requested from the source. Past it the
+    /// camera keeps zooming and the renderer scales the deepest tiles up.
+    func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.coverage.maximumZoomLevel = maximumZoomLevel
+        return settings
+    }
+
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                       urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
