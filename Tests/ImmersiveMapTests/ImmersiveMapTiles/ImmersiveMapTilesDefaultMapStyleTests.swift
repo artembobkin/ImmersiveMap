@@ -214,7 +214,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // a floor, not a lock, so street-zoom world growth is untouched.
         let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 7)
         let fill = motorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(fill.minimumWidthPoints, 1.4)
+        XCTAssertEqual(fill.minimumWidthPoints, 2.2)
         XCTAssertEqual(fill.lineWidthPoints, 0)
 
         // The overview accent is the baked color; the light street palette is
@@ -226,7 +226,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // Primary has a floor but no accent.
         let primary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 8)
         let primaryFill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(primaryFill.minimumWidthPoints, 1.1)
+        XCTAssertEqual(primaryFill.minimumWidthPoints, 1.6)
         XCTAssertNil(primaryFill.streetColor)
         XCTAssertEqual(primaryFill.color, configuration.layers.roads.primary)
     }
@@ -384,7 +384,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // every tile zoom where they draw the request is the same.
         for zoom in [4, 8, 12] {
             let boundary = makeStyle(style, layerName: "boundary", zoom: zoom)
-            XCTAssertEqual(boundary.lineWidthPoints, 0.8, "admin_level defaults to 4 at z\(zoom)")
+            XCTAssertEqual(boundary.lineWidthPoints, 1.1, "admin_level defaults to 4 at z\(zoom)")
         }
 
         // The dash pattern is point-locked and shader-cut: the tessellation
@@ -422,7 +422,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         for zoom in [1, 2, 5, 10] {
             let country = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: zoom)
             XCTAssertNotEqual(country.key, 0)
-            XCTAssertEqual(country.lineWidthPoints, 1.4)
+            XCTAssertEqual(country.lineWidthPoints, 1.6)
             XCTAssertEqual(country.dashLengthPoints, 7.0, "z\(zoom)")
             XCTAssertEqual(country.dashGapPoints, 3.5, "z\(zoom)")
         }

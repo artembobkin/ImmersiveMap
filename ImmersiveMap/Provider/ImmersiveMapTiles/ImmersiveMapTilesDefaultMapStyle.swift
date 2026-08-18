@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 45
+    private static let implementationRevision: UInt32 = 46
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -363,25 +363,31 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // uses.
         let casingZoom = tileZoom >= 10 && isConstruction == false
         switch effectiveClass {
+        // The point floors below ARE the road width over a country or region
+        // view: the world width (base * s) is sub-pixel there, so every class
+        // draws at its floor until world growth takes over near street level.
+        // They are sized as readable ribbons, not hairlines: a z5 motorway
+        // skeleton drawn at a point-something reads as thread cracks over the
+        // pale overview ground.
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: 20 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.4,
+                             minimumWidthPoints: 2.2,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
                              construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: 17.5 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.3,
+                             minimumWidthPoints: 2.0,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
                              construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: 14 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.1, construction: isConstruction)
+                             minimumWidthPoints: 1.6, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: 11 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, construction: isConstruction)
+                             minimumWidthPoints: 1.2, construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, width: 8.5 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 0.8, construction: isConstruction)
+                             minimumWidthPoints: 1.0, construction: isConstruction)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, width: 7 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
         case "service":
@@ -592,7 +598,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: key,
             color: color,
             lowZoomFadeMask: 1.0,
-            lineWidthPoints: adminLevel <= 2 ? 1.4 : 0.8,
+            lineWidthPoints: adminLevel <= 2 ? 1.6 : 1.1,
             dashLengthPoints: 7.0,
             dashGapPoints: 3.5,
             parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width),

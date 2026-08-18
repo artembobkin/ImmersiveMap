@@ -303,8 +303,9 @@ enum VisualReviewCatalogue {
             creams, forests as soft green shapes on them, nothing camouflage: \
             no field of green-on-green blotches with visible raster edges. \
             Regional borders are a quiet pale dash, distinctly softer than \
-            the national ones; roads are thin dark threads that do not \
-            dominate; lakes stay legible.
+            the national ones; the motorway skeleton reads as slim dark \
+            ribbons, clearly drawn strokes rather than hairline cracks, and \
+            still does not dominate; lakes stay legible.
             """,
             settings: .default,
             subject: .still(camera: Place.centralRussia)),
