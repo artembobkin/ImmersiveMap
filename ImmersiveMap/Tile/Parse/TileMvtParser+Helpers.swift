@@ -11,6 +11,12 @@ extension TileMvtParser {
         let footprintSignature: BuildingFootprintSignature
         let clippedExterior: [SIMD2<Float>]
         let clippedInteriors: [[SIMD2<Float>]]
+        /// The exterior ring as the tile carries it, before the clip to the
+        /// tile square, in the same converted coordinates as `clippedExterior`.
+        /// The roof frame must come from this whole footprint, never from the
+        /// clipped one, or ridges break at tile edges.
+        let rawExterior: [SIMD2<Float>]
+        let hasRawInteriorRings: Bool
         let roof: ParsedPolygon
         let roofInfo: RoofInfo?
         let baseHeight: Float
@@ -523,6 +529,8 @@ extension TileMvtParser {
     func buildExtrudedMesh(
         clippedExterior: [SIMD2<Float>],
         clippedInteriors: [[SIMD2<Float>]],
+        rawExterior: [SIMD2<Float>] = [],
+        hasRawInteriorRings: Bool = false,
         roof: ParsedPolygon,
         roofInfo: RoofInfo?,
         baseHeight: Float,
@@ -594,17 +602,21 @@ extension TileMvtParser {
         }
 
         let sanitizedExterior = sanitizeRing(clippedExterior)
-        let hasInteriorRings = clippedInteriors.contains { sanitizeRing($0).count >= 3 }
+        let footprintRing = rawExterior.isEmpty ? sanitizedExterior : sanitizeRing(rawExterior)
+        let hasInteriorRings = hasRawInteriorRings
+            || clippedInteriors.contains { sanitizeRing($0).count >= 3 }
         let roofGeometry = roofInfo.flatMap {
             RoofGeometryBuilder.build(roof: $0,
-                                      exteriorRing: sanitizedExterior,
+                                      footprintRing: footprintRing,
+                                      wallRing: sanitizedExterior,
                                       hasInteriorRings: hasInteriorRings,
                                       flatTriangulationVertices: roof.vertices.map {
                                           SIMD2<Float>(Float($0.x), Float($0.y))
                                       },
                                       flatTriangulationIndices: roof.indices,
                                       baseHeight: baseHeight,
-                                      topHeight: topHeight)
+                                      topHeight: topHeight,
+                                      tileExtent: tileExtent)
         }
         let roofOffset = UInt32(vertices.count)
         if let roofGeometry {
@@ -810,6 +822,8 @@ extension TileMvtParser {
                 footprintSignature: candidate.footprintSignature,
                 clippedExterior: candidate.clippedExterior,
                 clippedInteriors: candidate.clippedInteriors,
+                rawExterior: candidate.rawExterior,
+                hasRawInteriorRings: candidate.hasRawInteriorRings,
                 roof: candidate.roof,
                 roofInfo: nil,
                 baseHeight: candidate.baseHeight,

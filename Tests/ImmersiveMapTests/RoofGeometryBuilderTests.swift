@@ -29,15 +29,21 @@ final class RoofGeometryBuilderTests: XCTestCase {
 
     private func build(_ shape: RoofShape,
                        ring: [SIMD2<Float>]? = nil,
+                       wallRing: [SIMD2<Float>]? = nil,
                        orientation: RoofOrientation? = nil,
-                       direction: Float? = nil) -> RoofGeometry? {
-        RoofGeometryBuilder.build(roof: makeRoof(shape, orientation: orientation, direction: direction),
-                                  exteriorRing: ring ?? rectangle,
-                                  hasInteriorRings: false,
-                                  flatTriangulationVertices: ring ?? rectangle,
-                                  flatTriangulationIndices: [0, 1, 2, 0, 2, 3],
-                                  baseHeight: baseHeight,
-                                  topHeight: topHeight)
+                       direction: Float? = nil,
+                       hasInteriorRings: Bool = false,
+                       tileExtent: Float = 4096) -> RoofGeometry? {
+        let footprint = ring ?? rectangle
+        return RoofGeometryBuilder.build(roof: makeRoof(shape, orientation: orientation, direction: direction),
+                                         footprintRing: footprint,
+                                         wallRing: wallRing ?? footprint,
+                                         hasInteriorRings: hasInteriorRings,
+                                         flatTriangulationVertices: wallRing ?? footprint,
+                                         flatTriangulationIndices: [0, 1, 2, 0, 2, 3],
+                                         baseHeight: baseHeight,
+                                         topHeight: topHeight,
+                                         tileExtent: tileExtent)
     }
 
     private func rotate(_ ring: [SIMD2<Float>], byDegrees degrees: Float, around pivot: SIMD2<Float>) -> [SIMD2<Float>] {
@@ -238,24 +244,72 @@ final class RoofGeometryBuilderTests: XCTestCase {
         XCTAssertGreaterThan(first.z, 0)
     }
 
+    func testSkillionCompassIsNorthUpInTheParsedTileSpace() throws {
+        // Rings reach the builder with the MVT y already flipped, so north is
+        // +y here. A roof facing north (direction 0) descends northward.
+        let geometry = try XCTUnwrap(build(.skillion, direction: 0))
+        XCTAssertEqual(geometry.wallTop(SIMD2(1050, 1000)), topHeight, accuracy: 0.01,
+                       "The south side is the high side when the roof faces north")
+        XCTAssertEqual(geometry.wallTop(SIMD2(1050, 1040)), roofBase, accuracy: 0.01)
+    }
+
     // MARK: - Fallbacks
 
     func testUnsupportedFootprintsFallBackToNil() {
-        XCTAssertNil(RoofGeometryBuilder.build(roof: makeRoof(.gabled),
-                                               exteriorRing: rectangle,
-                                               hasInteriorRings: true,
-                                               flatTriangulationVertices: rectangle,
-                                               flatTriangulationIndices: [0, 1, 2, 0, 2, 3],
-                                               baseHeight: baseHeight,
-                                               topHeight: topHeight),
+        XCTAssertNil(build(.gabled, hasInteriorRings: true),
                      "A footprint with holes under a gabled roof falls back to the flat lid")
         XCTAssertNil(build(.flat))
         XCTAssertNil(RoofGeometryBuilder.build(roof: RoofInfo(height: 0, shape: .gabled, orientation: nil, directionDegrees: nil),
-                                               exteriorRing: rectangle,
+                                               footprintRing: rectangle,
+                                               wallRing: rectangle,
                                                hasInteriorRings: false,
                                                flatTriangulationVertices: rectangle,
                                                flatTriangulationIndices: [0, 1, 2, 0, 2, 3],
                                                baseHeight: baseHeight,
-                                               topHeight: topHeight))
+                                               topHeight: topHeight,
+                                               tileExtent: 4096))
+    }
+
+    // MARK: - Whole footprint across tile edges
+
+    func testRoofFrameComesFromTheWholeFootprintAcrossATileEdge() throws {
+        // The building crosses the west tile edge: only x in [0, 20] is inside
+        // this tile, so a frame from the clipped piece (20 x 40, long in Y)
+        // would turn the ridge the wrong way. The whole footprint (100 x 40,
+        // long in X) must win.
+        let footprint: [SIMD2<Float>] = [
+            SIMD2(-80, 1000), SIMD2(20, 1000), SIMD2(20, 1040), SIMD2(-80, 1040)
+        ]
+        let clippedWalls: [SIMD2<Float>] = [
+            SIMD2(0, 1000), SIMD2(20, 1000), SIMD2(20, 1040), SIMD2(0, 1040)
+        ]
+        let geometry = try XCTUnwrap(build(.gabled, ring: footprint, wallRing: clippedWalls))
+
+        let ridge = ridgeVertices(of: geometry)
+        XCTAssertGreaterThanOrEqual(ridge.count, 2)
+        for vertex in ridge {
+            XCTAssertEqual(vertex.y, 1020, accuracy: 0.01,
+                           "The ridge must run along the whole building's long axis")
+        }
+        for vertex in geometry.surfaceVertices {
+            XCTAssertGreaterThanOrEqual(vertex.position.x, -0.01,
+                                        "The roof surface must be clipped to the tile square")
+        }
+        let ridgeXs = ridge.map(\.x)
+        XCTAssertEqual(try XCTUnwrap(ridgeXs.min()), 0, accuracy: 0.01,
+                       "The ridge must reach the tile edge, where the neighbouring tile continues it")
+        XCTAssertEqual(try XCTUnwrap(ridgeXs.max()), 20, accuracy: 0.01)
+    }
+
+    func testFootprintCutByTheTileSourceFallsBackToNil() {
+        // An axis-aligned edge lying outside the tile square is the signature
+        // of the tile source's own clip at its buffer rectangle: the footprint
+        // is not whole, so no honest ridge exists for it.
+        let cut: [SIMD2<Float>] = [
+            SIMD2(-256, 1000), SIMD2(100, 1000), SIMD2(100, 1040), SIMD2(-256, 1040)
+        ]
+        XCTAssertNil(build(.gabled, ring: cut, wallRing: [
+            SIMD2(0, 1000), SIMD2(100, 1000), SIMD2(100, 1040), SIMD2(0, 1040)
+        ]))
     }
 }

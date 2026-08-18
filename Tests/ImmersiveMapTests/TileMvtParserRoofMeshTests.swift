@@ -91,6 +91,45 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
                        "The gable end must close as a vertical triangle up to the ridge")
     }
 
+    func testRoofAcrossATileEdgeIsFramedByTheRawFootprint() throws {
+        // The whole building runs from x = -40 to 60 (long axis X); this tile
+        // only holds x in [0, 60]. Framed by the clipped piece alone the 60x40
+        // piece would still be long in X here, so make it decisive: a raw
+        // footprint whose ridge line must continue past the tile edge, and a
+        // surface that stops exactly at x = 0 for the neighbouring tile to
+        // pick up.
+        let raw: [SIMD2<Float>] = [
+            SIMD2(-40, 1000), SIMD2(60, 1000), SIMD2(60, 1040), SIMD2(-40, 1040)
+        ]
+        let clipped: [SIMD2<Float>] = [
+            SIMD2(0, 1000), SIMD2(60, 1000), SIMD2(60, 1040), SIMD2(0, 1040)
+        ]
+        let parser = makeParser()
+        let mesh = try XCTUnwrap(parser.buildExtrudedMesh(
+            clippedExterior: clipped,
+            clippedInteriors: [],
+            rawExterior: raw,
+            roof: TileMvtParser.ParsedPolygon(vertices: clipped.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) },
+                                              indices: [0, 1, 2, 0, 2, 3]),
+            roofInfo: RoofInfo(height: roofHeight, shape: .gabled, orientation: nil, directionDegrees: nil),
+            baseHeight: 0,
+            topHeight: topHeight,
+            tileExtent: 4096))
+
+        let roofVertices = mesh.vertices.filter { $0.surfaceID == 1 }
+        XCTAssertFalse(roofVertices.isEmpty)
+        for vertex in roofVertices {
+            XCTAssertGreaterThanOrEqual(vertex.position.x, -0.01,
+                                        "The roof surface must not spill past the tile edge")
+        }
+        let ridgeAtTheEdge = roofVertices.contains {
+            abs($0.position.x) < 0.01 && abs($0.position.y - 1020) < 0.01
+                && abs($0.position.z - topHeight) < 0.01
+        }
+        XCTAssertTrue(ridgeAtTheEdge,
+                      "The ridge must reach the tile edge at full height, continuing into the neighbour tile")
+    }
+
     func testGabledWithHolesFallsBackToAFlatLidAtFullHeight() throws {
         let hole: [SIMD2<Float>] = [
             SIMD2(1040, 1010), SIMD2(1060, 1010), SIMD2(1060, 1030), SIMD2(1040, 1030)

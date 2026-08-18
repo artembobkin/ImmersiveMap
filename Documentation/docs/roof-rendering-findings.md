@@ -181,3 +181,100 @@ frames tile 14/9904/5121 so the shapes get looked at before a release.
   `render_min_height`, `building:part`, `hide_3d`.
 - The tile schema and every field it carries: `SCHEMA.md` in the
   ImmersiveMapTilePipeline repository.
+
+## Second round (after the resolution)
+
+The rebuilt roofs were checked against the same tiles. What was still wrong
+splits into a tile-format limit (handled on the tile side as far as it can
+be), and one engine item.
+
+### Tile side: MVT grid resolution at z14
+
+At z14 in Moscow one tile unit is 0.34 m (4096 units per tile). Building parts
+in this area go down to 0.2-0.8 m (window ledges, pilasters, the slabs the
+Armoury roof is assembled from). Snapping such a part to the integer grid
+turns a quad into a triangle or a sliver: in tile 14/9903/5122, 624 of the
+2183 building parts were triangles, against roughly 5% triangles in the source
+data for the same area. Extruded with a roof, a sliver is a fin and a
+degenerate quad is a wedge; that is most of what was still visible on the
+Kremlin wall and on the Armoury.
+
+The tiles now drop parts under 2 units (0.125 px, ~0.7 m) because they cannot
+be represented at this zoom, keep everything above that with a 0.02 px
+simplification tolerance, and carry a 16 px buffer for parts (see below).
+Sub-metre detail is out of reach for z14/4096 tiles by construction; the
+engine will not see it and should not be blamed for it.
+
+For the record, an earlier line in this note claimed that 40 of 64 parts of
+the Armoury were being dropped. That count was wrong (it counted a truncated
+listing); the parts were arriving, degraded by quantisation, not missing.
+
+### Engine item: roofs are built on the clipped footprint
+
+The parser clips a polygon to the tile before the roof is built
+(`clippedExterior` in `TileMvtParser+Helpers.swift`), so a building that
+crosses a tile edge gets its roof computed on each half separately. A ridge
+placed from the half's oriented box is not the ridge of the whole building,
+and the two halves do not meet. The Kremlin's south wall runs along the
+9903/9904 tile boundary (x = 37.6172), which is why the merlons there looked
+worse than elsewhere.
+
+The tiles help as much as a tile can: parts now come with a 16 px buffer, so a
+part within 16 px of an edge arrives whole in both tiles. What the engine has
+to do with that is its call; the invariant is that a roof must be built from
+the whole footprint the tile carries and only then clipped, never built from
+a clipped footprint. Where the footprint is genuinely cut (larger than the
+buffer), a flat lid on the cut piece reads better than a wrong ridge.
+
+### Checked and found right
+
+- Skillion: `roof:direction` is treated as the downslope azimuth with
+  north = (0, -1) in tile coordinates. The Armoury slabs point their
+  directions outward from the roof centre in the data, as they should.
+- `roof:orientation` `along`/`across` is read with the OSM meaning
+  (`along` = ridge parallel to the long side).
+
+### Still open on the engine side
+
+`gabled`/`hipped` with a real `roof:height` on a **non-convex** footprint.
+They exist in this tile (an outline at 55.75177, 37.61450: `gabled`,
+`roof:height=3`, 7 vertices, non-convex; a part at 55.75271, 37.61013:
+`gabled`, 14 vertices, non-convex). A ridge inset from the ends of an oriented
+box is only meaningful for convex, roughly rectangular footprints. Not
+separately verified in this round; the first-round invariant stands.
+
+## Second round: engine follow-up
+
+The engine item above is done. `BuildingExtrusionCandidate` now carries the
+exterior ring as the tile delivered it (`rawExterior`, before the engine's
+clip to the tile square), and `RoofGeometryBuilder` builds the frame and the
+whole roof surface from that footprint, then clips the finished surface to the
+tile in plan view, interpolating positions and normals along the cut. Both
+halves of a building on a tile edge therefore compute the same frame from the
+same buffered footprint and meet exactly at the boundary
+(`TileMvtParserRoofMeshTests.testRoofAcrossATileEdgeIsFramedByTheRawFootprint`).
+Walls stay on the clipped ring, which is what actually gets extruded.
+
+Where the footprint is genuinely cut by the tiler, the flat lid applies, as
+prescribed. Detection is a heuristic, since the engine does not know the
+tiler's buffer: a cut leaves an axis-aligned edge along the buffer rectangle,
+so an axis-aligned edge lying deeper than `extent / 32` (128 units, half the
+16 px buffer) outside the tile square reads as a cut. A grid-aligned building
+wall protruding less than that stays a whole footprint; a giant that
+protrudes further with a wall exactly parallel to the tile edge is flattened
+even if it was never cut, which is the honest side to err on.
+
+One correction to "Checked and found right" above: `roof:direction` with
+north = (0, -1) is the right convention **in raw MVT tile coordinates**, but
+the rings never reach the roof builder in that space. `ParsePolygon` flips y
+(`tileExtent - y`) during conversion and the flat world mapping keeps that
+direction, so where the builder works, north is (0, 1). The first
+implementation used (0, -1) there, which mirrored every tagged direction
+north-to-south; it now maps compass azimuths into the flipped space
+(`RoofGeometryBuilderTests.testSkillionCompassIsNorthUpInTheParsedTileSpace`).
+
+Still open, unchanged: `gabled`/`hipped` on non-convex footprints. The gabled
+split handles a non-convex ring (each ridge-line piece is triangulated on its
+own), but the hipped fan and a single straight ridge are approximations there;
+a straight-skeleton roof is the real answer if those footprints turn out to
+matter on screen.

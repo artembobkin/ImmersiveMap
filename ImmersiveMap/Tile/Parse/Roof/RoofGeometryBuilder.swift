@@ -28,62 +28,194 @@ struct RoofGeometry {
 /// footprint's own geometry: the ridge follows the long axis of the footprint's
 /// minimum-area oriented bounding box, overridden by `roof:orientation` /
 /// `roof:direction` where the data says so. It is invariant under rotation of
-/// the tile grid. The mesh contains the vertices the shape needs (ridge
-/// endpoints, apex, dome bands); footprints the builder cannot shape (holes
-/// under anything but a skillion plane, degenerate rings) return nil and the
-/// caller falls back to a flat lid at the full height.
+/// the tile grid.
+///
+/// The roof is built from the whole footprint the tile carries
+/// (`footprintRing`, which may extend past the tile square into the tile
+/// source's buffer) and only then clipped to the tile, never from the clipped
+/// footprint: a ridge placed from a clipped half is not the ridge of the
+/// building, and the halves in neighbouring tiles would not meet. Walls stay
+/// on the clipped ring (`wallRing`), which is what actually gets extruded.
+///
+/// The mesh contains the vertices the shape needs (ridge endpoints, apex, dome
+/// bands); footprints the builder cannot shape honestly return nil and the
+/// caller falls back to a flat lid at the full height. That covers holes under
+/// anything but the skillion plane, degenerate rings, and footprints the tile
+/// source itself already cut (larger than its buffer), where a flat lid on the
+/// cut piece reads better than a wrong ridge.
 enum RoofGeometryBuilder {
     private static let epsilon: Float = 0.001
 
     static func build(roof: RoofInfo,
-                      exteriorRing: [SIMD2<Float>],
+                      footprintRing: [SIMD2<Float>],
+                      wallRing: [SIMD2<Float>],
                       hasInteriorRings: Bool,
                       flatTriangulationVertices: [SIMD2<Float>],
                       flatTriangulationIndices: [UInt32],
                       baseHeight: Float,
-                      topHeight: Float) -> RoofGeometry? {
+                      topHeight: Float,
+                      tileExtent: Float) -> RoofGeometry? {
         guard roof.shape != .flat, roof.shape != .unknown else { return nil }
-        guard exteriorRing.count >= 3 else { return nil }
+        guard footprintRing.count >= 3, wallRing.count >= 3 else { return nil }
+        guard looksCutByTileSource(footprintRing, tileExtent: tileExtent) == false else { return nil }
 
         let availableHeight = max(0, topHeight - baseHeight)
         let roofHeight = min(roof.height, availableHeight)
         guard roofHeight > 0 else { return nil }
         let roofBase = topHeight - roofHeight
 
+        let geometry: RoofGeometry?
         switch roof.shape {
         case .skillion:
+            // A skillion is one plane, so the clipped triangulation lifted by
+            // the plane needs no clipping of its own; only the plane comes
+            // from the whole footprint.
             return skillion(roof: roof,
-                            exteriorRing: exteriorRing,
+                            footprintRing: footprintRing,
+                            wallRing: wallRing,
                             flatTriangulationVertices: flatTriangulationVertices,
                             flatTriangulationIndices: flatTriangulationIndices,
                             roofBase: roofBase,
                             roofHeight: roofHeight)
         case .gabled:
             guard hasInteriorRings == false else { return nil }
-            return gabled(roof: roof,
-                          exteriorRing: exteriorRing,
-                          roofBase: roofBase,
-                          roofHeight: roofHeight)
+            geometry = gabled(roof: roof,
+                              footprintRing: footprintRing,
+                              wallRing: wallRing,
+                              roofBase: roofBase,
+                              roofHeight: roofHeight)
         case .hipped:
             guard hasInteriorRings == false else { return nil }
-            return hipped(roof: roof,
-                          exteriorRing: exteriorRing,
-                          roofBase: roofBase,
-                          topHeight: topHeight)
+            geometry = hipped(roof: roof,
+                              footprintRing: footprintRing,
+                              wallRing: wallRing,
+                              roofBase: roofBase,
+                              topHeight: topHeight)
         case .pyramid, .cone:
             guard hasInteriorRings == false else { return nil }
-            return pointed(exteriorRing: exteriorRing,
-                           smooth: roof.shape == .cone,
-                           roofBase: roofBase,
-                           topHeight: topHeight)
+            geometry = pointed(footprintRing: footprintRing,
+                               wallRing: wallRing,
+                               smooth: roof.shape == .cone,
+                               roofBase: roofBase,
+                               topHeight: topHeight)
         case .dome:
             guard hasInteriorRings == false else { return nil }
-            return dome(exteriorRing: exteriorRing,
-                        roofBase: roofBase,
-                        roofHeight: roofHeight)
+            geometry = dome(footprintRing: footprintRing,
+                            wallRing: wallRing,
+                            roofBase: roofBase,
+                            roofHeight: roofHeight)
         case .flat, .unknown:
             return nil
         }
+        guard let geometry else { return nil }
+        return clipSurfaceToTile(geometry, tileExtent: tileExtent)
+    }
+
+    /// True when the footprint ring was already cut by the tile source: the
+    /// clip a tiler applies runs along its buffer rectangle, so a cut leaves
+    /// an axis-aligned edge lying outside the tile square at the buffer
+    /// distance. A genuine building wall can also be axis-aligned and outside
+    /// the square (a grid-aligned building crossing a tile edge), so an edge
+    /// only counts as a cut when it sits deep in the buffer: real cuts run at
+    /// the buffer line itself (256 units for a 16 px buffer at extent 4096),
+    /// while a whole building rarely protrudes that far with a wall parallel
+    /// to the edge. Missing a cut gives that rare giant a ridge fitted to its
+    /// visible piece; flagging a whole building would flatten it needlessly.
+    private static func looksCutByTileSource(_ ring: [SIMD2<Float>], tileExtent: Float) -> Bool {
+        let minimumCutLength: Float = 0.5
+        let minimumExcursion = tileExtent / 32
+        for index in 0..<ring.count {
+            let a = ring[index]
+            let b = ring[(index + 1) % ring.count]
+            if abs(a.x - b.x) <= epsilon,
+               a.x < -minimumExcursion || a.x > tileExtent + minimumExcursion,
+               abs(a.y - b.y) > minimumCutLength {
+                return true
+            }
+            if abs(a.y - b.y) <= epsilon,
+               a.y < -minimumExcursion || a.y > tileExtent + minimumExcursion,
+               abs(a.x - b.x) > minimumCutLength {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Clips the finished roof surface to the tile square in plan view,
+    /// interpolating positions and normals along the cut, so a roof built from
+    /// a buffered footprint stops exactly at the tile edge where the
+    /// neighbouring tile's copy of the same footprint continues it.
+    private static func clipSurfaceToTile(_ geometry: RoofGeometry, tileExtent: Float) -> RoofGeometry? {
+        var needsClip = false
+        for vertex in geometry.surfaceVertices {
+            let p = vertex.position
+            if p.x < -epsilon || p.x > tileExtent + epsilon || p.y < -epsilon || p.y > tileExtent + epsilon {
+                needsClip = true
+                break
+            }
+        }
+        guard needsClip else { return geometry }
+
+        // (axis, keepBelow): keep x/y >= 0 and x/y <= extent.
+        let planes: [(axis: Int, limit: Float, keepBelow: Bool)] = [
+            (0, 0, false), (0, tileExtent, true), (1, 0, false), (1, tileExtent, true)
+        ]
+
+        func coordinate(_ position: SIMD3<Float>, _ axis: Int) -> Float {
+            axis == 0 ? position.x : position.y
+        }
+
+        var outVertices: [RoofGeometry.SurfaceVertex] = []
+        var outIndices: [UInt32] = []
+        var index = 0
+        while index + 2 < geometry.surfaceIndices.count {
+            var polygon: [(position: SIMD3<Float>, normal: SIMD3<Float>)] = [0, 1, 2].map {
+                let vertex = geometry.surfaceVertices[Int(geometry.surfaceIndices[index + $0])]
+                return (vertex.position, vertex.normal)
+            }
+            index += 3
+
+            for plane in planes {
+                guard polygon.count >= 3 else { break }
+                var clipped: [(position: SIMD3<Float>, normal: SIMD3<Float>)] = []
+                clipped.reserveCapacity(polygon.count + 2)
+                for i in 0..<polygon.count {
+                    let a = polygon[i]
+                    let b = polygon[(i + 1) % polygon.count]
+                    let sideA = plane.keepBelow ? plane.limit - coordinate(a.position, plane.axis)
+                                                : coordinate(a.position, plane.axis) - plane.limit
+                    let sideB = plane.keepBelow ? plane.limit - coordinate(b.position, plane.axis)
+                                                : coordinate(b.position, plane.axis) - plane.limit
+                    if sideA >= 0 {
+                        clipped.append(a)
+                    }
+                    if (sideA >= 0) != (sideB >= 0) {
+                        let t = sideA / (sideA - sideB)
+                        var normal = a.normal + (b.normal - a.normal) * t
+                        let length = simd_length(normal)
+                        normal = length > 1e-6 ? normal / length : a.normal
+                        clipped.append((a.position + (b.position - a.position) * t, normal))
+                    }
+                }
+                polygon = clipped
+            }
+            guard polygon.count >= 3 else { continue }
+
+            let base = UInt32(outVertices.count)
+            for corner in polygon {
+                outVertices.append(RoofGeometry.SurfaceVertex(position: corner.position, normal: corner.normal))
+            }
+            for fan in 1..<(polygon.count - 1) {
+                outIndices.append(base)
+                outIndices.append(base + UInt32(fan))
+                outIndices.append(base + UInt32(fan) + 1)
+            }
+        }
+        guard outIndices.isEmpty == false else { return nil }
+        return RoofGeometry(surfaceVertices: outVertices,
+                            surfaceIndices: outIndices,
+                            wallExteriorRing: geometry.wallExteriorRing,
+                            wallTop: geometry.wallTop)
     }
 
     // MARK: - Roof frame
@@ -100,12 +232,15 @@ enum RoofGeometryBuilder {
         var slopeSpan: Float { (slopeMax - slopeMin) * 0.5 }
     }
 
-    /// Compass azimuth in degrees to a unit vector in tile coordinates, where
-    /// x grows east and y grows south: north is (0, -1), east is (1, 0).
-    /// Web Mercator is conformal, so compass directions survive projection.
+    /// Compass azimuth in degrees to a unit vector in the parsed tile space
+    /// the rings arrive in. Raw MVT y grows south, but `ParsePolygon` flips it
+    /// (`tileExtent - y`) before anything reaches this builder, and the flat
+    /// world mapping keeps that direction, so here x grows east and y grows
+    /// north: north is (0, 1), east is (1, 0). Web Mercator is conformal, so
+    /// compass directions survive projection.
     private static func azimuthVector(degrees: Float) -> SIMD2<Float> {
         let radians = degrees * .pi / 180
-        return SIMD2<Float>(sin(radians), -cos(radians))
+        return SIMD2<Float>(sin(radians), cos(radians))
     }
 
     private static func frame(for ring: [SIMD2<Float>], roof: RoofInfo) -> RoofFrame? {
@@ -318,7 +453,8 @@ enum RoofGeometryBuilder {
     // MARK: - Skillion
 
     private static func skillion(roof: RoofInfo,
-                                 exteriorRing: [SIMD2<Float>],
+                                 footprintRing: [SIMD2<Float>],
+                                 wallRing: [SIMD2<Float>],
                                  flatTriangulationVertices: [SIMD2<Float>],
                                  flatTriangulationIndices: [UInt32],
                                  roofBase: Float,
@@ -326,15 +462,15 @@ enum RoofGeometryBuilder {
         let downslope: SIMD2<Float>
         if let degrees = roof.directionDegrees {
             downslope = azimuthVector(degrees: degrees)
-        } else if let axes = orientedBoxAxes(of: exteriorRing) {
+        } else if let axes = orientedBoxAxes(of: footprintRing) {
             downslope = roof.orientation == .across ? axes.long : axes.short
         } else {
             return nil
         }
 
-        var minProjection = simd_dot(exteriorRing[0], downslope)
+        var minProjection = simd_dot(footprintRing[0], downslope)
         var maxProjection = minProjection
-        for point in exteriorRing {
+        for point in footprintRing {
             let projection = simd_dot(point, downslope)
             minProjection = min(minProjection, projection)
             maxProjection = max(maxProjection, projection)
@@ -367,17 +503,18 @@ enum RoofGeometryBuilder {
         guard let surface = mesh.finish() else { return nil }
         return RoofGeometry(surfaceVertices: surface.vertices,
                             surfaceIndices: surface.indices,
-                            wallExteriorRing: exteriorRing,
+                            wallExteriorRing: wallRing,
                             wallTop: heightAt)
     }
 
     // MARK: - Gabled
 
     private static func gabled(roof: RoofInfo,
-                               exteriorRing: [SIMD2<Float>],
+                               footprintRing: [SIMD2<Float>],
+                               wallRing: [SIMD2<Float>],
                                roofBase: Float,
                                roofHeight: Float) -> RoofGeometry? {
-        guard let frame = frame(for: exteriorRing, roof: roof) else { return nil }
+        guard let frame = frame(for: footprintRing, roof: roof) else { return nil }
         let span = frame.slopeSpan
         guard span > epsilon else { return nil }
         let slopeDirection = frame.slopeDirection
@@ -391,7 +528,7 @@ enum RoofGeometryBuilder {
 
         var mesh = SurfaceMesh(smooth: false)
         for keepNegative in [true, false] {
-            let side = clipRing(exteriorRing,
+            let side = clipRing(footprintRing,
                                 direction: slopeDirection,
                                 offset: slopeCenter,
                                 keepNegative: keepNegative)
@@ -422,7 +559,7 @@ enum RoofGeometryBuilder {
         }
         guard let surface = mesh.finish() else { return nil }
 
-        let enrichedRing = insertLineCrossings(into: exteriorRing,
+        let enrichedRing = insertLineCrossings(into: wallRing,
                                                direction: slopeDirection,
                                                offset: slopeCenter)
         return RoofGeometry(surfaceVertices: surface.vertices,
@@ -500,10 +637,11 @@ enum RoofGeometryBuilder {
     // MARK: - Hipped
 
     private static func hipped(roof: RoofInfo,
-                               exteriorRing: [SIMD2<Float>],
+                               footprintRing: [SIMD2<Float>],
+                               wallRing: [SIMD2<Float>],
                                roofBase: Float,
                                topHeight: Float) -> RoofGeometry? {
-        guard let frame = frame(for: exteriorRing, roof: roof) else { return nil }
+        guard let frame = frame(for: footprintRing, roof: roof) else { return nil }
         let span = frame.slopeSpan
         guard span > epsilon else { return nil }
 
@@ -526,9 +664,9 @@ enum RoofGeometryBuilder {
         }
 
         var mesh = SurfaceMesh(smooth: false)
-        for index in 0..<exteriorRing.count {
-            let p = exteriorRing[index]
-            let q = exteriorRing[(index + 1) % exteriorRing.count]
+        for index in 0..<footprintRing.count {
+            let p = footprintRing[index]
+            let q = footprintRing[(index + 1) % footprintRing.count]
             guard simd_length(q - p) > epsilon else { continue }
             let a = closestOnRidge(p)
             let b = closestOnRidge(q)
@@ -545,34 +683,35 @@ enum RoofGeometryBuilder {
         guard let surface = mesh.finish() else { return nil }
         return RoofGeometry(surfaceVertices: surface.vertices,
                             surfaceIndices: surface.indices,
-                            wallExteriorRing: exteriorRing,
+                            wallExteriorRing: wallRing,
                             wallTop: { _ in roofBase })
     }
 
     // MARK: - Pyramid and cone
 
-    private static func pointed(exteriorRing: [SIMD2<Float>],
+    private static func pointed(footprintRing: [SIMD2<Float>],
+                                wallRing: [SIMD2<Float>],
                                 smooth: Bool,
                                 roofBase: Float,
                                 topHeight: Float) -> RoofGeometry? {
-        let center = areaCentroid(of: exteriorRing)
+        let center = areaCentroid(of: footprintRing)
         var mesh = SurfaceMesh(smooth: smooth)
         if smooth {
             var ringIndices: [UInt32] = []
-            ringIndices.reserveCapacity(exteriorRing.count)
-            for point in exteriorRing {
+            ringIndices.reserveCapacity(footprintRing.count)
+            for point in footprintRing {
                 ringIndices.append(mesh.addVertex(SIMD3<Float>(point.x, point.y, roofBase)))
             }
             let apex = mesh.addVertex(SIMD3<Float>(center.x, center.y, topHeight))
-            for index in 0..<exteriorRing.count {
+            for index in 0..<footprintRing.count {
                 mesh.addTriangle(ringIndices[index],
-                                 ringIndices[(index + 1) % exteriorRing.count],
+                                 ringIndices[(index + 1) % footprintRing.count],
                                  apex)
             }
         } else {
-            for index in 0..<exteriorRing.count {
-                let p = exteriorRing[index]
-                let q = exteriorRing[(index + 1) % exteriorRing.count]
+            for index in 0..<footprintRing.count {
+                let p = footprintRing[index]
+                let q = footprintRing[(index + 1) % footprintRing.count]
                 let i0 = mesh.addVertex(SIMD3<Float>(p.x, p.y, roofBase))
                 let i1 = mesh.addVertex(SIMD3<Float>(q.x, q.y, roofBase))
                 let i2 = mesh.addVertex(SIMD3<Float>(center.x, center.y, topHeight))
@@ -582,7 +721,7 @@ enum RoofGeometryBuilder {
         guard let surface = mesh.finish() else { return nil }
         return RoofGeometry(surfaceVertices: surface.vertices,
                             surfaceIndices: surface.indices,
-                            wallExteriorRing: exteriorRing,
+                            wallExteriorRing: wallRing,
                             wallTop: { _ in roofBase })
     }
 
@@ -590,11 +729,12 @@ enum RoofGeometryBuilder {
 
     private static let domeBandCount = 5
 
-    private static func dome(exteriorRing: [SIMD2<Float>],
+    private static func dome(footprintRing: [SIMD2<Float>],
+                             wallRing: [SIMD2<Float>],
                              roofBase: Float,
                              roofHeight: Float) -> RoofGeometry? {
-        let center = areaCentroid(of: exteriorRing)
-        let ringCount = exteriorRing.count
+        let center = areaCentroid(of: footprintRing)
+        let ringCount = footprintRing.count
         var mesh = SurfaceMesh(smooth: true)
 
         var bands: [[UInt32]] = []
@@ -605,7 +745,7 @@ enum RoofGeometryBuilder {
             let height = roofBase + roofHeight * sin(latitude)
             var indices: [UInt32] = []
             indices.reserveCapacity(ringCount)
-            for point in exteriorRing {
+            for point in footprintRing {
                 let position = center + (point - center) * shrink
                 indices.append(mesh.addVertex(SIMD3<Float>(position.x, position.y, height)))
             }
@@ -630,7 +770,7 @@ enum RoofGeometryBuilder {
         guard let surface = mesh.finish() else { return nil }
         return RoofGeometry(surfaceVertices: surface.vertices,
                             surfaceIndices: surface.indices,
-                            wallExteriorRing: exteriorRing,
+                            wallExteriorRing: wallRing,
                             wallTop: { _ in roofBase })
     }
 }

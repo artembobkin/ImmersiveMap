@@ -806,12 +806,20 @@ class TileMvtParser {
                         if let extrusion,
                            extrusion.top > extrusion.base,
                            let footprintSignature = buildingFootprintSignature(for: polygon) {
+                            // Same conversion as ParsePolygon.convertRing, so
+                            // the raw ring shares exact coordinates with the
+                            // clipped one on uncut edges.
+                            let rawExterior = polygon.exteriorRing.map {
+                                SIMD2<Float>(Float($0.x), Float(tileExtent) - Float($0.y))
+                            }
                             buildingExtrusionCandidates.append(
                                 BuildingExtrusionCandidate(styleKey: styleKey,
                                                            buildingId: buildingId,
                                                            footprintSignature: footprintSignature,
                                                            clippedExterior: parsedGeometry.clipped.exterior,
                                                            clippedInteriors: parsedGeometry.clipped.interiors,
+                                                           rawExterior: rawExterior,
+                                                           hasRawInteriorRings: polygon.interiorRings.contains { $0.count >= 3 },
                                                            roof: parsedGeometry.parsedPolygon,
                                                            roofInfo: extrusion.roof,
                                                            baseHeight: extrusion.base,
@@ -1116,6 +1124,8 @@ class TileMvtParser {
         for candidate in resolvedBuildingExtrusions {
             if let extrudedMesh = buildExtrudedMesh(clippedExterior: candidate.clippedExterior,
                                                     clippedInteriors: candidate.clippedInteriors,
+                                                    rawExterior: candidate.rawExterior,
+                                                    hasRawInteriorRings: candidate.hasRawInteriorRings,
                                                     roof: candidate.roof,
                                                     roofInfo: candidate.roofInfo,
                                                     baseHeight: candidate.baseHeight,
