@@ -455,7 +455,12 @@ class TileMvtParser {
                 if candidate.fieldName == "name" {
                     code = "native"
                 } else {
-                    code = candidate.fieldName.replacingOccurrences(of: "name_", with: "")
+                    // The chain carries both source spellings of a language
+                    // field (`name_en` and `name:en`); either strips to the
+                    // same language code here.
+                    code = candidate.fieldName
+                        .replacingOccurrences(of: "name_", with: "")
+                        .replacingOccurrences(of: "name:", with: "")
                 }
 
                 guard let value = names[code],

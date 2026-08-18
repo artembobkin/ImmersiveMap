@@ -16,7 +16,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
 
         XCTAssertEqual(preferences.selectedLanguage, .russian)
         XCTAssertEqual(preferences.fallbackPolicy, .international)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_ru", "name_en", "name"])
+        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_ru", "name:ru", "name_en", "name:en", "name"])
         XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
     }
 
@@ -41,7 +41,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                                                                   fallbackPolicy: .localFirst)
 
         XCTAssertEqual(preferences.fallbackPolicy, .localFirst)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name", "name_en"])
+        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name:fr", "name", "name_en", "name:en"])
         XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
     }
 
@@ -65,7 +65,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
 
         XCTAssertEqual(preferences.selectedLanguage, .english)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_en", "name"])
+        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_en", "name:en", "name"])
         XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Moscow EN")
     }
 
@@ -78,7 +78,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
 
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name_en", "name"])
+        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name:fr", "name_en", "name:en", "name"])
         XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Paris FR")
     }
 

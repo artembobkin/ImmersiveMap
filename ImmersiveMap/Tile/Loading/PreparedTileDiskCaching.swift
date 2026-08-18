@@ -437,7 +437,10 @@ final class PreparedTileDiskCaching {
     // would bind half a struct per entry.
     // 38: TileLineStyle widened to eight floats, adding the world-width
     // floor and reserved space, so the line-style spans changed stride.
-    static let preparedFormatVersion: UInt32 = 38
+    // 39: label language resolution learned the `name:xx` field spelling, so
+    // a version-38 record prepared from a colon-convention source carries
+    // native-name label text the parser would no longer produce.
+    static let preparedFormatVersion: UInt32 = 39
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

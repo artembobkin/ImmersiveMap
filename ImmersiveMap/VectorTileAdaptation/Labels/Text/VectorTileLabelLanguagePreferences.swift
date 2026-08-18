@@ -21,21 +21,30 @@ struct VectorTileLabelLanguagePreferences: Equatable {
         settingsLanguage: ImmersiveMapSettings.LabelLanguage,
         fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     ) -> VectorTileLabelLanguagePreferences {
-        let preferredFieldName = "name_\(settingsLanguage.providerFieldSuffix)"
         var fallbackChain: [Candidate] = []
 
+        // A language is looked up under both spellings a source can carry:
+        // OpenMapTiles flattens OSM's `name:xx` tags to `name_xx`, while a
+        // schema passing OSM tags through unchanged keeps the colon. A tile
+        // never carries both with different values, so the order between the
+        // two does not matter; missing keys just fall through.
+        func appendLanguage(_ suffix: String, kind: Candidate.Kind) {
+            fallbackChain.append(Candidate(fieldName: "name_\(suffix)", kind: kind))
+            fallbackChain.append(Candidate(fieldName: "name:\(suffix)", kind: kind))
+        }
+
         if settingsLanguage == .english {
-            fallbackChain.append(Candidate(fieldName: "name_en", kind: .english))
+            appendLanguage("en", kind: .english)
             fallbackChain.append(Candidate(fieldName: "name", kind: .native))
         } else {
-            fallbackChain.append(Candidate(fieldName: preferredFieldName, kind: .preferred))
+            appendLanguage(settingsLanguage.providerFieldSuffix, kind: .preferred)
             switch fallbackPolicy {
             case .international:
-                fallbackChain.append(Candidate(fieldName: "name_en", kind: .english))
+                appendLanguage("en", kind: .english)
                 fallbackChain.append(Candidate(fieldName: "name", kind: .native))
             case .localFirst:
                 fallbackChain.append(Candidate(fieldName: "name", kind: .native))
-                fallbackChain.append(Candidate(fieldName: "name_en", kind: .english))
+                appendLanguage("en", kind: .english)
             }
         }
 
