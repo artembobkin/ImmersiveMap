@@ -310,7 +310,7 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverSt
         water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
         forest: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
         grass: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
-        crop: SIMD4<Float>(0.851, 0.902, 0.698, 1.0),
+        crop: SIMD4<Float>(0.914, 0.922, 0.792, 1.0),
         barren: SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
         wetland: SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
         snow: SIMD4<Float>(0.937, 0.957, 0.973, 1.0)
@@ -333,7 +333,12 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
         // in tone. Opaque keeps the green saturated and consistent.
         wood: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
         grass: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
-        farmland: SIMD4<Float>(0.851, 0.902, 0.698, 1.0),
+        // Farmland is a pale wheat, not a green: cultivated land covers most of
+        // a continental plain (65% of a Central-Russia overview tile), and as a
+        // green it merged with woods and grass into one camouflage field. As a
+        // near-ground cream it recedes, and forests read as green shapes on a
+        // light land the way region maps draw them.
+        farmland: SIMD4<Float>(0.914, 0.922, 0.792, 1.0),
         ice: SIMD4<Float>(0.937, 0.957, 0.973, 1.0),
         sand: SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
         // Wetland/bog covers huge areas in Russia's lowlands; a near-grey tint made

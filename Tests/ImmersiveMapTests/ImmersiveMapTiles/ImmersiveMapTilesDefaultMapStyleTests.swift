@@ -85,10 +85,11 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  className: "forest",
                                  zoom: 2).color,
                        overviewForest)
-        // Past the full merge the blend releases gradually instead of
-        // snapping to the raw palette: at z3 vegetation still sits 70 percent
-        // of the way toward the shared tone (forests three quarters of that),
-        // and only from z9 is the palette unmixed.
+        // Past the full merge the blend releases quickly: the merge exists
+        // for the globe, and holding it into the country zooms turned a
+        // farmed plain into camouflage. At z3 vegetation sits halfway toward
+        // the shared tone (forests three quarters of that), and from z8 the
+        // palette is unmixed.
         func blended(_ base: SIMD4<Float>, amount: Float) -> SIMD4<Float> {
             base + (colors.grass - base) * amount
         }
@@ -96,17 +97,17 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  layerName: "globallandcover",
                                  className: "land",
                                  zoom: 3).color,
-                       blended(colors.land, amount: 0.7))
+                       blended(colors.land, amount: 0.5))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "crop",
                                  zoom: 3).color,
-                       blended(colors.crop, amount: 0.7))
+                       blended(colors.crop, amount: 0.5))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 3).color,
-                       blended(colors.forest, amount: 0.7 * 0.75))
+                       blended(colors.forest, amount: 0.5 * 0.75))
         // At z9 the vegetation blend has fully released: the overview color
         // is the raw palette (the street handover happens per frame in the
         // shader, not in the baked color).
@@ -122,22 +123,18 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let colors = configuration.globalLandcover
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
         // z8 is the last zoom before the street handover begins; the
-        // vegetation blend is a residual 20 percent there, so the palette is
-        // as close to raw as it ever gets. One key per class.
-        let vegetationResidual: Float = 0.2
-        func residual(_ base: SIMD4<Float>, forest: Bool = false) -> SIMD4<Float> {
-            base + (colors.grass - base) * (forest ? vegetationResidual * 0.75 : vegetationResidual)
-        }
+        // vegetation blend has fully released by then, so the palette is
+        // raw. One key per class.
         let expected: [(String, UInt8, SIMD4<Float>)] = [
-            ("land", 2, residual(colors.land)),
+            ("land", 2, colors.land),
             ("barren", 3, colors.barren),
             ("grass", 4, colors.grass),
             ("shrub", 4, colors.grass),
             ("moss", 4, colors.grass),
-            ("crop", 5, residual(colors.crop)),
-            ("forest", 6, residual(colors.forest, forest: true)),
-            ("wetland", 7, residual(colors.wetland)),
-            ("mangroves", 7, residual(colors.wetland)),
+            ("crop", 5, colors.crop),
+            ("forest", 6, colors.forest),
+            ("wetland", 7, colors.wetland),
+            ("mangroves", 7, colors.wetland),
             ("snow", 8, colors.snow)
         ]
 

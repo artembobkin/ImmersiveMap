@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 44
+    private static let implementationRevision: UInt32 = 45
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -244,14 +244,20 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// How far the vegetation classes blend toward the shared tone at a tile
     /// zoom: 1 is the full massive-overview merge, 0 the unmixed palette.
     private static func vegetationBlendAmount(tileZoom: Int) -> Float {
+        // The full merge exists for the globe (z0-2), where raster blobs must
+        // disappear into one green mass. It releases fast below that: a half
+        // blend held into the country zooms kept every class the same green
+        // family while leaving the blob edges visible, which read as
+        // camouflage blotches over a plain that is two-thirds cropland. By z5
+        // the ground and the fields are back to their own near-cream tones and
+        // forests are the one green left on them.
         switch tileZoom {
         case ...2: return 1.0
-        case 3: return 0.7
-        case 4: return 0.6
-        case 5: return 0.5
-        case 6: return 0.4
-        case 7: return 0.3
-        case 8: return 0.2
+        case 3: return 0.5
+        case 4: return 0.3
+        case 5: return 0.15
+        case 6: return 0.08
+        case 7: return 0.04
         default: return 0.0
         }
     }
@@ -572,9 +578,19 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // points.
         let width: Double = adminLevel <= 2 ? 7.8 : 3.4
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
+        // Regional (admin 3-4) borders at country overview zooms: the
+        // saturated purple that separates districts at street zooms is the
+        // one cold hue in a whole-region frame and reads as scribble there.
+        // Until the region zooms the line lightens and turns half
+        // transparent; national borders keep their full weight throughout.
+        var color = configuration.layers.boundary
+        if adminLevel > 2, tileZoom <= 6 {
+            let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * 0.35
+            color = SIMD4<Float>(softened.x, softened.y, softened.z, color.w * 0.6)
+        }
         return FeatureStyle(
             key: key,
-            color: configuration.layers.boundary,
+            color: color,
             lowZoomFadeMask: 1.0,
             lineWidthPoints: adminLevel <= 2 ? 1.4 : 0.8,
             dashLengthPoints: 7.0,

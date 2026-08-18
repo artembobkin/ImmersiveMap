@@ -155,6 +155,9 @@ enum VisualReviewCatalogue {
                                                         zoom: 15.6,
                                                         bearing: 0.4,
                                                         pitch: 0.9)
+        static let centralRussia = ImmersiveMapCameraPosition(latitudeDegrees: 55.7,
+                                                              longitudeDegrees: 37.6,
+                                                              zoom: 5)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -290,6 +293,21 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),
+
+        VisualReviewScenario(
+            id: "landcover.overview.plain",
+            title: "Central Russia, country-view landcover",
+            lookFor: """
+            A farmed plain at region scale, the hardest case for the biome \
+            palette. The ground and the cropland read as two close warm \
+            creams, forests as soft green shapes on them, nothing camouflage: \
+            no field of green-on-green blotches with visible raster edges. \
+            Regional borders are a quiet pale dash, distinctly softer than \
+            the national ones; roads are thin dark threads that do not \
+            dominate; lakes stay legible.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.centralRussia)),
 
         VisualReviewScenario(
             id: "terrain.alps",
