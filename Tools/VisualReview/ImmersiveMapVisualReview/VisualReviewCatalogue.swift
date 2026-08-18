@@ -150,6 +150,11 @@ enum VisualReviewCatalogue {
         static let sanFrancisco = ImmersiveMapCameraPosition(latitudeDegrees: 37.8100,
                                                              longitudeDegrees: -122.4100,
                                                              zoom: 13)
+        static let kremlin = ImmersiveMapCameraPosition(latitudeDegrees: 55.7517,
+                                                        longitudeDegrees: 37.6178,
+                                                        zoom: 15.6,
+                                                        bearing: 0.4,
+                                                        pitch: 0.9)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -342,6 +347,24 @@ enum VisualReviewCatalogue {
             """,
             settings: .default.buildingExtrusionMode(.translucent),
             subject: .still(camera: Place.manhattan)),
+
+        VisualReviewScenario(
+            id: "buildings.roofs.kremlin",
+            title: "Kremlin, shaped roofs",
+            lookFor: """
+            The one tile with every roof shape in it. Where the tiles carry \
+            roof tags: gable ridges run along their building, not diagonally \
+            to it, and gable ends close as vertical triangles up to the \
+            ridge; the Kremlin wall's merlons read as small aligned gables, \
+            not stray fins; tower tents rise as clean pyramids from their \
+            eaves with nothing creased and no edge cutting through a wall; \
+            domes are smooth caps, skillions a single tilted plane. Nothing \
+            z-fights, and every sloped face is lit from above. A building \
+            the engine cannot shape honestly wears a flat lid, which is \
+            correct, not a regression.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.kremlin)),
 
         VisualReviewScenario(
             id: "roads.labels.flat",

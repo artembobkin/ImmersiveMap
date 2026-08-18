@@ -464,7 +464,10 @@ extension TileMvtParser {
         let roofParser = RoofAttributesParser()
         let roofInfo = roofParser.parse(attributes: attributes, numericParser: parseNumericValue)
         let scaledRoof = roofInfo.map {
-            RoofInfo(height: $0.height * style.extrusionHeightScale * zoomScale, shape: $0.shape)
+            RoofInfo(height: $0.height * style.extrusionHeightScale * zoomScale,
+                     shape: $0.shape,
+                     orientation: $0.orientation,
+                     directionDegrees: $0.directionDegrees)
         }
         return ExtrusionHeights(base: base, top: top, roof: scaledRoof)
     }
@@ -591,68 +594,52 @@ extension TileMvtParser {
         }
 
         let sanitizedExterior = sanitizeRing(clippedExterior)
-        let roofField = roofInfo.flatMap {
-            RoofHeightField(roof: $0, exteriorRing: sanitizedExterior, baseHeight: baseHeight, topHeight: topHeight)
+        let hasInteriorRings = clippedInteriors.contains { sanitizeRing($0).count >= 3 }
+        let roofGeometry = roofInfo.flatMap {
+            RoofGeometryBuilder.build(roof: $0,
+                                      exteriorRing: sanitizedExterior,
+                                      hasInteriorRings: hasInteriorRings,
+                                      flatTriangulationVertices: roof.vertices.map {
+                                          SIMD2<Float>(Float($0.x), Float($0.y))
+                                      },
+                                      flatTriangulationIndices: roof.indices,
+                                      baseHeight: baseHeight,
+                                      topHeight: topHeight)
         }
         let roofOffset = UInt32(vertices.count)
-        if roof.indices.count >= 3 {
+        if let roofGeometry {
             let roofSurfaceID = nextLocalSurfaceID
             nextLocalSurfaceID &+= 1
-            if let roofField {
-                let roofPositions: [SIMD3<Float>] = roof.vertices.map {
-                    let xy = SIMD2<Float>(Float($0.x), Float($0.y))
-                    return SIMD3<Float>(xy.x, xy.y, roofField.height(at: xy))
-                }
-                var roofNormals = Array(repeating: SIMD3<Float>(0, 0, 0), count: roofPositions.count)
-                var roofIndices: [UInt32] = []
-                roofIndices.reserveCapacity(roof.indices.count)
-                for i in stride(from: 0, to: roof.indices.count, by: 3) {
-                    if i + 2 >= roof.indices.count { break }
-                    let i0 = roof.indices[i]
-                    let i1 = roof.indices[i + 1]
-                    let i2 = roof.indices[i + 2]
-                    roofIndices.append(i0)
-                    roofIndices.append(i2)
-                    roofIndices.append(i1)
-                    let p0 = roofPositions[Int(i0)]
-                    let p1 = roofPositions[Int(i2)]
-                    let p2 = roofPositions[Int(i1)]
-                    let normal = simd_normalize(simd_cross(p1 - p0, p2 - p0))
-                    if normal.x.isNaN || normal.y.isNaN || normal.z.isNaN {
-                        continue
-                    }
-                    roofNormals[Int(i0)] += normal
-                    roofNormals[Int(i2)] += normal
-                    roofNormals[Int(i1)] += normal
-                }
-                for i in 0..<roofPositions.count {
-                    let normal = roofNormals[i]
-                    let normalized = simd_length(normal) > 0.0001 ? simd_normalize(normal) : SIMD3<Float>(0, 0, 1)
-                    vertices.append(ParsedExtrudedVertex(position: roofPositions[i],
-                                                         normal: normalized,
-                                                         surfaceID: roofSurfaceID))
-                }
-                indices.append(contentsOf: roofIndices.map { $0 + roofOffset })
-            } else {
-                let roofNormal = SIMD3<Float>(0, 0, 1)
-                vertices.append(contentsOf: roof.vertices.map {
-                    ParsedExtrudedVertex(
-                        position: SIMD3<Float>(Float($0.x), Float($0.y), topHeight),
-                        normal: roofNormal,
-                        surfaceID: roofSurfaceID
-                    )
-                })
-                for i in stride(from: 0, to: roof.indices.count, by: 3) {
-                    if i + 2 >= roof.indices.count { break }
-                    let i0 = roof.indices[i] + roofOffset
-                    let i1 = roof.indices[i + 1] + roofOffset
-                    let i2 = roof.indices[i + 2] + roofOffset
-                    indices.append(i0)
-                    indices.append(i2)
-                    indices.append(i1)
-                }
+            vertices.append(contentsOf: roofGeometry.surfaceVertices.map {
+                ParsedExtrudedVertex(position: $0.position, normal: $0.normal, surfaceID: roofSurfaceID)
+            })
+            indices.append(contentsOf: roofGeometry.surfaceIndices.map { $0 + roofOffset })
+        } else if roof.indices.count >= 3 {
+            // Flat tag, no roof tags, or a footprint the roof builder cannot
+            // shape: a flat lid at the full height. A wrong roof reads worse
+            // than a flat one.
+            let roofSurfaceID = nextLocalSurfaceID
+            nextLocalSurfaceID &+= 1
+            let roofNormal = SIMD3<Float>(0, 0, 1)
+            vertices.append(contentsOf: roof.vertices.map {
+                ParsedExtrudedVertex(
+                    position: SIMD3<Float>(Float($0.x), Float($0.y), topHeight),
+                    normal: roofNormal,
+                    surfaceID: roofSurfaceID
+                )
+            })
+            for i in stride(from: 0, to: roof.indices.count, by: 3) {
+                if i + 2 >= roof.indices.count { break }
+                let i0 = roof.indices[i] + roofOffset
+                let i1 = roof.indices[i + 1] + roofOffset
+                let i2 = roof.indices[i + 2] + roofOffset
+                indices.append(i0)
+                indices.append(i2)
+                indices.append(i1)
             }
         }
+
+        let wallTop: (SIMD2<Float>) -> Float = roofGeometry?.wallTop ?? { _ in topHeight }
 
         func appendWalls(for ring: [SIMD2<Float>], clockwise: Bool, isSanitized: Bool = false) {
             var ringPoints = isSanitized ? ring : sanitizeRing(ring)
@@ -668,8 +655,8 @@ extension TileMvtParser {
 
                 let v0 = SIMD3<Float>(p0.x, p0.y, baseHeight)
                 let v1 = SIMD3<Float>(p1.x, p1.y, baseHeight)
-                let top0 = roofField?.height(at: p0) ?? topHeight
-                let top1 = roofField?.height(at: p1) ?? topHeight
+                let top0 = wallTop(p0)
+                let top1 = wallTop(p1)
                 let v2 = SIMD3<Float>(p1.x, p1.y, top1)
                 let v3 = SIMD3<Float>(p0.x, p0.y, top0)
                 // Argument order makes every wall normal face out of the
@@ -698,8 +685,10 @@ extension TileMvtParser {
             }
         }
 
-        // Exterior: CW so walls are front-facing with back culling in current tile space
-        appendWalls(for: sanitizedExterior, clockwise: true, isSanitized: true)
+        // Exterior: CW so walls are front-facing with back culling in current tile space.
+        // The roof geometry's ring carries extra vertices where the gable ridge
+        // crosses an edge, so wall tops can follow the roof up to the ridge.
+        appendWalls(for: roofGeometry?.wallExteriorRing ?? sanitizedExterior, clockwise: true, isSanitized: true)
         for interior in clippedInteriors {
             // Interior (hole): opposite winding
             appendWalls(for: interior, clockwise: false)
