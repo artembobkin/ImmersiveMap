@@ -70,7 +70,15 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             return .line(color: color, width: width)
 
         case "boundary":
-            return .line(color: SIMD4<Float>(0.42, 0.36, 0.46, 1), width: 1.0)
+            // The point-locked line mode: the width is stated in on-screen
+            // points and held there at every zoom, the stroke is opaque with
+            // butt ends, and the dash pattern is in points too. This is how
+            // the built-in style draws country borders; a plain `.line` width
+            // lives in tile units and thins into the distance instead.
+            return .pointLockedLine(color: SIMD4<Float>(0.42, 0.36, 0.46, 1),
+                                    widthPoints: 1.2,
+                                    dashLengthPoints: 6,
+                                    dashGapPoints: 3)
 
         case "place":
             // A point label: the text itself comes from the provider's label

@@ -50,7 +50,19 @@ struct MyVectorTileStyle: ImmersiveMapVectorTileStyle {
 }
 ```
 
-`ImmersiveMapFeatureStyleContext` carries the layer name, the tile coordinate and the feature's MVT properties (`string`, `double`, `integer`, `bool`), which is everything needed to classify a feature. The cases of `ImmersiveMapFeatureStyle` are `.hidden`, `.polygon`, `.line`, `.extrudedPolygon`, `.pointLabel` and `.roadLabel`. An optional `baseColors` overrides the engine-level backdrop colors, see [map styling](styling.md).
+`ImmersiveMapFeatureStyleContext` carries the layer name, the tile coordinate and the feature's MVT properties (`string`, `double`, `integer`, `bool`), which is everything needed to classify a feature. The cases of `ImmersiveMapFeatureStyle` are `.hidden`, `.polygon`, `.line`, `.pointLockedLine`, `.extrudedPolygon`, `.pointLabel` and `.roadLabel`. An optional `baseColors` overrides the engine-level backdrop colors, see [map styling](styling.md).
+
+## Point-locked lines
+
+Two line modes exist, and the difference is what the width means. `.line(color:width:)` is a surface on the ground: its width lives in tile units, so it grows and shrinks with the world, which is right for roads seen up close. `.pointLockedLine(color:widthPoints:dashLengthPoints:dashGapPoints:)` is a drawn stroke: its width (and optional dash pattern) is stated in on-screen points and held there at every zoom, the stroke is opaque from the first frame it is visible, and it ends in butt caps. This is the mode the built-in style draws country borders and the overview road skeleton with, and it is the right choice for any symbolic line whose weight is a design decision rather than a width on the ground: borders, grid lines, a network over a country view.
+
+```swift
+case "boundary":
+    .pointLockedLine(color: SIMD4<Float>(0.42, 0.36, 0.46, 1),
+                     widthPoints: 1.2, dashLengthPoints: 6, dashGapPoints: 3)
+```
+
+Areal geometry a source ships under a point-locked line style is not filled; only the outlines draw (a boundary layer sometimes carries polygons). `Examples/macOS/ImmersiveMapCustomTilesMac` uses the mode for its boundary layer.
 
 ## Label profile
 

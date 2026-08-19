@@ -62,6 +62,15 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
                 color: color,
                 parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: Double(max(Float(0), width)))
             )
+        case .pointLockedLine(let color, let widthPoints, let dashLengthPoints, let dashGapPoints):
+            return FeatureStyle.pointLockedLine(
+                key: key,
+                color: color,
+                widthPoints: max(0, widthPoints),
+                dashLengthPoints: max(0, dashLengthPoints),
+                dashGapPoints: max(0, dashGapPoints),
+                suppressPolygonFill: true
+            )
         case .extrudedPolygon(let color, let heightScale, let anchorZoom, let fallbackHeight):
             return FeatureStyle(
                 key: key,
@@ -120,6 +129,12 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             hasher.combine(2)
             combine(color, into: &hasher)
             hasher.combine(UInt64(width.bitPattern))
+        case let .pointLockedLine(color, widthPoints, dashLengthPoints, dashGapPoints):
+            hasher.combine(6)
+            combine(color, into: &hasher)
+            hasher.combine(UInt64(widthPoints.bitPattern))
+            hasher.combine(UInt64(dashLengthPoints.bitPattern))
+            hasher.combine(UInt64(dashGapPoints.bitPattern))
         case let .extrudedPolygon(color, heightScale, anchorZoom, fallbackHeight):
             hasher.combine(3)
             combine(color, into: &hasher)

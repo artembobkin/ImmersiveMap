@@ -477,14 +477,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
     }
 
-    /// A road over a country or region view, drawn on the country-border
-    /// principle (see `boundaryStyle`): one point-locked line pass in the
-    /// generic ground path, an opaque color from the first visible frame
-    /// (`lowZoomFadeMask` 1, the overview band, fully opaque past z1, never
-    /// the translucent road band), butt ends and plain joins, and a ribbon
-    /// tessellated wide enough to host the stated points (32 units per point;
-    /// the ribbon is only the ceiling the shader places the edge inside).
-    /// Tunnels and construction segments read as point-dashed corridors.
+    /// A road over a country or region view: a symbolic stroke, drawn through
+    /// the point-locked line factory the borders use (see
+    /// `FeatureStyle.pointLockedLine`). Tunnels and construction segments
+    /// read as point-dashed corridors.
     private func overviewRoadStyle(fillKey: UInt8,
                                    widthPoints: Float,
                                    priority: Int,
@@ -493,15 +489,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                    tunnel: Bool,
                                    construction: Bool) -> FeatureStyle {
         let dashed = tunnel || construction
-        return FeatureStyle(
+        return FeatureStyle.pointLockedLine(
             key: fillKey,
             color: accent ?? streetColor,
             streetColor: accent != nil ? streetColor : nil,
-            lowZoomFadeMask: 1.0,
-            lineWidthPoints: widthPoints,
+            widthPoints: widthPoints,
             dashLengthPoints: dashed ? 4.0 : 0,
             dashGapPoints: dashed ? 2.5 : 0,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: Double(widthPoints) * 32),
             roadClassPriority: priority
         )
     }
@@ -629,20 +623,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         if adminLevel > 2, tileZoom < Self.regionalBoundaryMinimumZoom {
             return hiddenStyle
         }
-        // Borders are fully point-locked: the visible width comes from
-        // lineWidthPoints (thinned toward planet zooms by LineWidthZoomTaper)
-        // and the dash pattern from dash/gap points, stated in layout points
-        // and anchored to the geometry at the tile's nominal display scale,
-        // so neither is an accident of the tile grid. The geometry is a
-        // continuous solid ribbon carrying arc length; the tessellated width
-        // below is only the ceiling the shader can place the edge inside, at
-        // full width at every zoom so it never undercuts the requested
-        // points.
-        // The tessellated width must HOST the point width, not equal it: the
-        // shader clamps the point-locked edge to the ribbon, and the previous
-        // narrow ribbons silently capped borders below their stated points on
-        // any large display. Same 32-units-per-point provisioning as roads.
-        let width: Double = adminLevel <= 2 ? 1.6 * 32 : 1.1 * 32
+        // Borders draw through the point-locked line factory (see
+        // FeatureStyle.pointLockedLine, which documents the principle they
+        // originated): width and dash pattern in layout points, opaque, butt
+        // ends, ribbon provisioned to host the width.
         let key: UInt8 = adminLevel <= 2 ? 102 : 100
         // Regional (admin 3-4) borders at country overview zooms: the
         // saturated purple that separates districts at street zooms is the
@@ -654,17 +638,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * 0.35
             color = SIMD4<Float>(softened.x, softened.y, softened.z, color.w * 0.6)
         }
-        return FeatureStyle(
+        // suppressPolygonFill: borders are drawn as lines only. Some features
+        // (Native American reservations) arrive as polygons; their area must
+        // not be filled, otherwise you get solid purple blobs.
+        return FeatureStyle.pointLockedLine(
             key: key,
             color: color,
-            lowZoomFadeMask: 1.0,
-            lineWidthPoints: adminLevel <= 2 ? 1.6 : 1.1,
+            widthPoints: adminLevel <= 2 ? 1.6 : 1.1,
             dashLengthPoints: 7.0,
             dashGapPoints: 3.5,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width),
-            // Borders are drawn as lines only. Some features (Native American
-            // reservations) arrive as polygons; their area must not be filled,
-            // otherwise you get solid purple blobs.
             suppressPolygonFill: true
         )
     }

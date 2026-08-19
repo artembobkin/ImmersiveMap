@@ -125,6 +125,20 @@ public enum ImmersiveMapFeatureStyle: Equatable {
     case hidden
     case polygon(color: SIMD4<Float>)
     case line(color: SIMD4<Float>, width: Float)
+    /// A line whose width is stated in on-screen points and held there at
+    /// every zoom: the drawing mode the built-in style uses for country
+    /// borders and for the overview road skeleton. The stroke is opaque from
+    /// the first frame it is visible, ends in butt caps with plain joins, and
+    /// an optional dash pattern is stated in points too, so it reads as
+    /// dashes at every zoom. Suited to symbolic lines (borders, networks over
+    /// a country view) whose weight is a design decision rather than a width
+    /// on the ground; `line(color:width:)` stays the world-locked line whose
+    /// width lives in tile units. Areal geometry a source ships under a line
+    /// style is not filled: only the outlines draw.
+    case pointLockedLine(color: SIMD4<Float>,
+                         widthPoints: Float,
+                         dashLengthPoints: Float = 0,
+                         dashGapPoints: Float = 0)
     case extrudedPolygon(color: SIMD4<Float>,
                          heightScale: Float = 1.0,
                          anchorZoom: Int = 16,
