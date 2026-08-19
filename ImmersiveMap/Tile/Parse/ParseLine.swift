@@ -185,6 +185,11 @@ class ParseLine {
     /// a one-pixel ramp down to a quarter of a screen pixel per tile unit; a
     /// tile minified further than that is already mip-filtered.
     static let featherTileUnits: Float = 2.0
+    /// Largest angle one fan triangle of a round join may span. At this step
+    /// the chord of a ribbon of half-width R sits R(1 - cos(step/2)) inside
+    /// the rim: under 1.5 percent of R, below the antialiasing band on any
+    /// road the engine draws.
+    static let joinArcMaximumStepRadians: Float = .pi / 9
     private static let capSegments: Int = 8
     private static let capUnitSemicircle: [SIMD2<Float>] = {
         var template: [SIMD2<Float>] = []
@@ -591,30 +596,43 @@ class ParseLine {
             let left0 = precomputed.segmentNormals[index - 1]
             let left1 = precomputed.segmentNormals[index]
             let innerIsLeft = cross < 0
-            let outer0 = center + (innerIsLeft ? left0 : -left0) * extrudedHalfWidth
-            let outer1 = center + (innerIsLeft ? left1 : -left1) * extrudedHalfWidth
+            let outerDirection0 = innerIsLeft ? left0 : -left0
+            let outerDirection1 = innerIsLeft ? left1 : -left1
 
             let joinParameter = emitsArcLength ? precomputed.pointArcLengths[index] : 1.0
             // The wedge between the two segment rectangles on the outside of
-            // the turn. It is lit as distance 0 at the center and 1 at the
-            // two outer corners: a flat-fan approximation of the round join.
-            // Appending it at the join's own arc length means a dash that
-            // spans the corner paints the wedge too, instead of leaving a
-            // notch the exact shape of the gap between the rectangles.
+            // the turn, filled with a fan from the center (distance 0) to the
+            // rim (distance 1) at the join's own arc length, so a dash that
+            // spans the corner paints the wedge instead of notching.
+            //
+            // The fan follows the rim ARC, not its chord: a single triangle
+            // between the two outer corners leaves a circular segment of
+            // sagitta R(1 - cos(turn/2)) uncovered, invisible on a 20-unit
+            // ribbon and a five-metre bite out of a 48-metre carriageway at a
+            // right angle. Steps are sized to the turn so a gentle bend stays
+            // one triangle.
+            let turnAngle = acos(simd_clamp(simd_dot(outerDirection0, outerDirection1), -1.0, 1.0))
+            let stepCount = max(1, Int((turnAngle / Self.joinArcMaximumStepRadians).rounded(.up)))
             let base = UInt32(polygon.vertices.count)
             polygon.vertices.append(center)
-            polygon.vertices.append(outer0)
-            polygon.vertices.append(outer1)
             polygon.distances.append(0.0)
-            polygon.distances.append(1.0)
-            polygon.distances.append(1.0)
             polygon.parameters.append(joinParameter)
-            polygon.parameters.append(joinParameter)
-            polygon.parameters.append(joinParameter)
-
-            polygon.indices.append(base)
-            polygon.indices.append(base + 1)
-            polygon.indices.append(base + 2)
+            for step in 0...stepCount {
+                let t = Float(step) / Float(stepCount)
+                // Slerp between the two outer rim directions; the fallback
+                // lerp-normalize covers the degenerate opposite-direction case.
+                var direction = outerDirection0 * (1 - t) + outerDirection1 * t
+                let length = simd_length(direction)
+                direction = length > Self.epsilon ? direction / length : outerDirection0
+                polygon.vertices.append(center + direction * extrudedHalfWidth)
+                polygon.distances.append(1.0)
+                polygon.parameters.append(joinParameter)
+            }
+            for step in 0..<stepCount {
+                polygon.indices.append(base)
+                polygon.indices.append(base + 1 + UInt32(step))
+                polygon.indices.append(base + 2 + UInt32(step))
+            }
         }
     }
 

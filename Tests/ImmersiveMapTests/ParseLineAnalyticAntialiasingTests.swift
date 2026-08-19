@@ -113,37 +113,49 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertTrue(polygon.lineDistances.allSatisfy { abs(Int($0)) == Int(Int8.max) })
     }
 
-    func testRoundJoinFanCarriesTheJoinArcLengthOnTheOutsideOfTheTurn() throws {
+    func testRoundJoinFanFollowsTheRimArcAtTheJoinArcLength() throws {
         // A dashed marking that bends: the two segment rectangles leave a
         // wedge on the outside of the corner, and the round-join fan fills it.
         // The fan must carry the corner's own arc length so a dash spanning
-        // the bend paints the wedge; a fan at a constant parameter would
-        // notch the dash at every corner.
+        // the bend paints the wedge, and it must follow the rim ARC: a single
+        // chord between the outer corners leaves a circular segment of
+        // sagitta R(1 - cos(turn/2)) uncovered, a five-metre bite out of a
+        // wide carriageway at a right angle.
+        let width = 6.0
         let polygon = try XCTUnwrap(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 250)],
-                                              width: 6,
+                                              width: width,
                                               lineJoinRound: true,
                                               emitsArcLength: true))
 
-        // 8 segment vertices plus the 3-vertex fan.
-        XCTAssertEqual(polygon.vertices.count, 11)
-        let fan = Array(polygon.vertices.suffix(3))
-        let fanParameters = Array(polygon.lineParameters.suffix(3))
-        let fanDistances = Array(polygon.lineDistances.suffix(3))
+        // 8 segment vertices, then the fan: one center plus the rim vertices.
+        XCTAssertGreaterThan(polygon.vertices.count, 8)
+        let fanVertices = Array(polygon.vertices.dropFirst(8))
+        let fanParameters = Array(polygon.lineParameters.dropFirst(8))
+        let fanDistances = Array(polygon.lineDistances.dropFirst(8))
         // The corner sits 100 units in: arc 100, half-unit fixed point 200.
-        XCTAssertEqual(fanParameters, [200, 200, 200])
-        // Center at distance 0, the two rim corners at full distance.
+        XCTAssertTrue(fanParameters.allSatisfy { $0 == 200 }, "the whole fan sits at the join's arc length")
+        // Center at distance 0, every rim vertex at full distance.
         XCTAssertEqual(Int(fanDistances[0]), 0)
-        XCTAssertEqual(abs(Int(fanDistances[1])), Int(Int8.max))
-        XCTAssertEqual(abs(Int(fanDistances[2])), Int(Int8.max))
-        // Vertices are in render space, y flipped (tileExtent - y): the corner
-        // (200, 100) lands at (200, 3996) and the second segment runs toward
-        // smaller render y. In that frame the path turns right, so the gap
-        // between the rectangles is on the left of travel: render +y for the
-        // first (eastbound) segment, +x for the second. Both rim corners of
-        // the fan sit on that outer side, at the extruded half width (3 + 2).
-        XCTAssertEqual(fan[0], SIMD2<Int16>(200, 3996))
-        XCTAssertEqual(fan[1], SIMD2<Int16>(200, 3996 + 5), "outer corner of the first segment")
-        XCTAssertEqual(fan[2], SIMD2<Int16>(200 + 5, 3996), "outer corner of the second segment")
+        XCTAssertTrue(fanDistances.dropFirst().allSatisfy { abs(Int($0)) == Int(Int8.max) })
+
+        // Render space flips y (tileExtent - y): the corner (200, 100) lands
+        // at (200, 3996). The path turns right there, so the wedge is on the
+        // left of travel: render +y for the eastbound segment, +x for the
+        // northbound one. The rim vertices trace that quarter arc at the
+        // extruded half-width (3 + 2), from the first segment's outer corner
+        // to the second's, with a step small enough that no chord sags more
+        // than half a unit inside the rim.
+        let center = SIMD2<Float>(200, 3996)
+        let radius = Float(width) * 0.5 + ParseLine.featherTileUnits
+        XCTAssertEqual(fanVertices[0], SIMD2<Int16>(200, 3996))
+        let rim = fanVertices.dropFirst().map { SIMD2<Float>(Float($0.x), Float($0.y)) }
+        XCTAssertEqual(rim.first, SIMD2<Float>(200, 3996 + radius), "starts at the first segment's outer corner")
+        XCTAssertEqual(rim.last, SIMD2<Float>(200 + radius, 3996), "ends at the second segment's outer corner")
+        for point in rim {
+            XCTAssertEqual(simd_length(point - center), radius, accuracy: 0.75, "every rim vertex is on the arc")
+        }
+        // A 90 degree turn at the 20 degree step is five triangles, not one.
+        XCTAssertGreaterThanOrEqual(rim.count, 6)
     }
 
     func testArcSurvivesClippingByInterpolation() throws {

@@ -452,7 +452,9 @@ final class PreparedTileDiskCaching {
     // 43: labels that overflow three lines re-wrap at a wider, six-line box;
     // the baked label geometry of a version-42 record carries the old
     // three-line layout with its trailing line.
-    static let preparedFormatVersion: UInt32 = 43
+    // 44: round joins tessellate as an arc fan instead of one chord triangle;
+    // a version-43 record's wide bends carry the uncovered circular segment.
+    static let preparedFormatVersion: UInt32 = 44
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
