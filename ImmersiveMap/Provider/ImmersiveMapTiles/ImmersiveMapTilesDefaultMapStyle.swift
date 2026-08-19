@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 53
+    private static let implementationRevision: UInt32 = 54
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -403,7 +403,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // same fact, so they only appear where the surface can hold them.
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let widthMetres = roadWidthUnits(cls: effectiveClass, props: props, tile: tile)
-        let markings = isConstruction == false && tileZoom >= Self.roadMarkingsMinimumTileZoom
+        // A centre divider separates two directions of travel. A one-way
+        // carriageway (one half of a dual carriageway, a one-way street) has
+        // none; where the tiles carry `oneway` it decides, and a tile that
+        // does not is taken as two-way.
+        let isOneWay = (parseIntValue(props["oneway"]).map { $0 != 0 } ?? false)
+            || props["oneway"]?.stringValue.lowercased() == "yes"
+        let markings = isConstruction == false
+            && isOneWay == false
+            && tileZoom >= Self.roadMarkingsMinimumTileZoom
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,

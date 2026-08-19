@@ -224,10 +224,10 @@ class TileMvtParser {
 
     private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
                                                  featureStyles: [FeatureStyle],
+                                                 featureAttributes: [[String: VectorTile_Tile.Value]],
                                                  lineClipper: LineClipper,
                                                  data: Data) -> HighZoomRoadPrecomputation {
-        var pointCounts: [RoadConnectionPointKey: Int] = [:]
-        var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
+        var rawLinesByFeatureIndex = Array(repeating: [[SIMD2<Float>]](), count: layer.features.count)
 
         // One payload mapping for the whole pre-pass instead of one per
         // feature geometry.
@@ -236,22 +236,37 @@ class TileMvtParser {
                 guard featureStyles[featureIndex].key != 0 else {
                     continue
                 }
-
                 let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes), layer: layer)
-                var preparedLines: [PreparedRoadLine] = []
-                preparedLines.reserveCapacity(lines.count)
-                for line in lines {
-                    let points = floatPoints(line)
-                    let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
-                    for fragment in fragments {
-                        for point in fragment.points {
-                            pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
-                        }
-                    }
-                    preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
-                }
-                linesByFeatureIndex[featureIndex] = preparedLines
+                rawLinesByFeatureIndex[featureIndex] = lines.map(floatPoints)
             }
+        }
+
+        // Pieces of one street that the tiles ship cut (OSM way boundaries a
+        // merge did not close, or cuts the tiler made) are stitched end to
+        // end before tessellation, so the street is one ribbon with no seam
+        // where the pieces met: no pair of caps, no kerb across the join.
+        // Stitching needs a street identity on the geometry (`name`, with the
+        // drawing attributes equal); without it nothing is stitched and the
+        // pieces draw as they arrive.
+        let stitched = RoadStreetStitcher.stitch(linesByFeatureIndex: rawLinesByFeatureIndex,
+                                                 featureAttributes: featureAttributes,
+                                                 featureStyles: featureStyles)
+
+        var pointCounts: [RoadConnectionPointKey: Int] = [:]
+        var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
+        for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
+            var preparedLines: [PreparedRoadLine] = []
+            preparedLines.reserveCapacity(lines.count)
+            for points in lines {
+                let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
+                for fragment in fragments {
+                    for point in fragment.points {
+                        pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
+                    }
+                }
+                preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
+            }
+            linesByFeatureIndex[featureIndex] = preparedLines
         }
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
@@ -755,6 +770,7 @@ class TileMvtParser {
             let highZoomRoads = usesSeparateRoadRendering
                 ? buildHighZoomRoadPrecomputation(layer: layer,
                                                   featureStyles: featureStyles,
+                                                  featureAttributes: featureAttributes,
                                                   lineClipper: lineClipper,
                                                   data: mvtData)
                 : .empty

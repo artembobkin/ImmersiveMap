@@ -131,11 +131,21 @@ both ends instead of merging them.
 - Draws a `junction_area` polygon as the carriageway and suppresses ribbon
   casings inside it.
 
-Engine status: the width, the kerb, the tiering and the divider exist today.
-The identity-based render merge and the junction-area surface are built
-against the fields in rules 3 and 4 and ship when the tiles carry them; until
-then the engine has nothing to merge on, and a junction stays the sum of its
-ribbons.
+Engine status: the width, the kerb, the tiering and the divider exist today,
+and so do the two consumers of rule 3, waiting for the fields:
+
+- **Stitching by street identity** (`RoadStreetStitcher`, in the road
+  pre-pass): pieces whose `name`, `class`, `subclass`, `lanes`, `oneway`,
+  `brunnel` and `layer` all agree, meeting at an endpoint that exactly two
+  drive-tier features share, are joined into one polyline before tessellation
+  (one ribbon, no seam); an endpoint a third road touches is a junction and is
+  never stitched across. Pieces without a `name` are left as they arrive, so
+  today's tiles draw exactly as before. Pinned by `RoadStreetStitcherTests`.
+- **`oneway`**: a carriageway tagged one-way (`1`, `-1`, `yes`) gets no centre
+  divider; absent, the road is taken as two-way.
+
+The junction-area surface (rule 4) is built when the first tile with a
+`junction_area` polygon is available to build it against.
 
 ## Where to look
 
