@@ -1216,7 +1216,7 @@ public extension ImmersiveMapSettings {
     /// `https://tiles.com/{x}/{y}/{z}?apiKey=xxx`; `headers` are added to every
     /// tile request. The source is just bytes: how they are parsed and drawn is
     /// configured separately through `mapStyle(_:)`, and the zoom coverage
-    /// through `tileSettings(_:)` when the endpoint does not ship z0-14.
+    /// through `tileSettings(_:)` when the endpoint does not ship z0-16.
     func tileURLTemplate(_ urlTemplate: String,
                          headers: [String: String] = [:]) -> ImmersiveMapSettings {
         var settings = self

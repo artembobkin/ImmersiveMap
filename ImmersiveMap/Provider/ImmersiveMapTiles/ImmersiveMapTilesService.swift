@@ -13,7 +13,7 @@ public enum ImmersiveMapTilesService {
     public static let tileBaseURL = URL(string: "https://immersivemap.dev/tiles")!
 
     /// The deepest zoom the hosted planet build ships.
-    public static let maximumTileZoomLevel = 14
+    public static let maximumTileZoomLevel = 16
 
     /// Manual "invalidate every cached tile" lever: bump to force all clients to
     /// re-fetch and re-parse. Routine content updates at a stable URL do not need
