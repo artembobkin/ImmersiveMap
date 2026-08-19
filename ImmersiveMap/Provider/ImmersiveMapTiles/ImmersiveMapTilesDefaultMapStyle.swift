@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 52
+    private static let implementationRevision: UInt32 = 53
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -435,11 +435,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel,
                              minimumWidthPoints: 0.7, unitsPerMetre: unitsPerMetre)
         case "path", "track":
-            // Park alleys and walkways (footway/path/track): a strip of the
-            // ground color with its own kerb, so over land it reads as an
-            // edge pair and over a park or a square as a pale route across
-            // it. No dashes, which used to read as noise over water/parks.
-            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: true, tunnel: isTunnel,
+            // Park alleys and walkways (footway/path/track): a plain strip of
+            // the ground color, no kerb and no dashes. Over land it is the
+            // ground itself (the footway network is not a second road
+            // system), and over a park, a square or water it reads as a pale
+            // route across the surface. A kerb on a ground-colored strip
+            // turned every path into a grey band wider than its interior.
+            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
                              minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre)
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
