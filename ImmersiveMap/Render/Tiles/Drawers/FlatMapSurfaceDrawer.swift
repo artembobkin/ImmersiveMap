@@ -12,6 +12,8 @@ enum FlatMapSurfaceDrawer {
         /// Converts the per-style point-locked line widths into the pixels the
         /// shader's coverage math runs in.
         var pixelsPerPoint: Float
+        /// See `LowZoomOverviewFade.roadSurfaceBlend`.
+        var roadSurfaceBlend: Float
     }
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -47,7 +49,8 @@ enum FlatMapSurfaceDrawer {
             overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
             roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
-            pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom)
+            pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
+            roadSurfaceBlend: LowZoomOverviewFade.roadSurfaceBlend(for: cameraZoom)
         )
         var horizonFogValue = horizonFog
         var shadowUniformValue = shadowBinding.uniform

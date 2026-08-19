@@ -25,6 +25,10 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertLessThan(minimum.lowerBound, flag.lowerBound)
         XCTAssertNil(body[..<flag.lowerBound].range(of: "float reserved"),
                      "No reserved slot may precede the flag: it took reserved0's position")
+        // The symbol ceiling took reserved1's slot, right after the flag.
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.maximumWidthPoints), 24)
+        let ceiling = try XCTUnwrap(body.range(of: "float maximumWidthPoints;"))
+        XCTAssertLessThan(flag.lowerBound, ceiling.lowerBound)
     }
 
     func testShaderSkipsThePointConversionForWorldLockedDashes() throws {

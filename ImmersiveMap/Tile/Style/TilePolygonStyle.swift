@@ -50,8 +50,14 @@ struct TileLineStyle {
     /// length in metres, so it must not re-flow when the camera zooms or the
     /// engine swaps the tile level that serves the road.
     var dashInTileUnits: Float
+    /// Ceiling for a world-locked width, in layout points: the visible width
+    /// is the world width or this, whichever is narrower. A road is a readable
+    /// symbol at region zooms and becomes its true surface only once the
+    /// world width has shrunk below the symbol on screen, which happens
+    /// continuously with the camera instead of doubling at every tile level.
+    /// Zero disables the ceiling; ignored when `widthPoints` locks the width.
+    var maximumWidthPoints: Float
     /// Reserved; keeps the stride stable for future line parameters.
-    var reserved1: Float = 0
     var reserved2: Float = 0
 
     init(widthPoints: Float,
@@ -59,13 +65,15 @@ struct TileLineStyle {
          dashGapPoints: Float,
          edgeThreshold: Float,
          minimumWidthPoints: Float = 0,
-         dashInTileUnits: Bool = false) {
+         dashInTileUnits: Bool = false,
+         maximumWidthPoints: Float = 0) {
         self.widthPoints = widthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
         self.edgeThreshold = edgeThreshold
         self.minimumWidthPoints = minimumWidthPoints
         self.dashInTileUnits = dashInTileUnits ? 1 : 0
+        self.maximumWidthPoints = maximumWidthPoints
     }
 
     static let polygon = TileLineStyle(widthPoints: 0,

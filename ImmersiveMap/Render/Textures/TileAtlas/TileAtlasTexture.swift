@@ -13,6 +13,8 @@ class TileAtlasTexture {
         /// tile's device-pixel screen footprint, so a texel approximates a
         /// device pixel and the same conversion holds.
         var pixelsPerPoint: Float
+        /// The atlas serves overview zooms, where every road is a symbol.
+        var roadSurfaceBlend: Float = 0
     }
 
     private struct LineDashUniform {

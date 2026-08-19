@@ -134,6 +134,40 @@ class TileMvtParser {
     /// tier its number implies.
     static let automobileRoadClassPriorityFloor = 45
 
+    /// Shifts a polyline sideways by `offset` tile units (positive to the left
+    /// of travel), with mitred corners so the shifted line stays parallel to
+    /// the original; the miter is capped so a hairpin does not shoot the
+    /// corner off to infinity. Zero offset returns the input.
+    static func offsetPolyline(_ points: [SIMD2<Float>], by offset: Float) -> [SIMD2<Float>] {
+        guard abs(offset) > 1e-6, points.count >= 2 else { return points }
+        var normals: [SIMD2<Float>] = []
+        normals.reserveCapacity(points.count - 1)
+        for index in 0..<(points.count - 1) {
+            let direction = points[index + 1] - points[index]
+            let length = simd_length(direction)
+            normals.append(length > 1e-6 ? SIMD2<Float>(-direction.y, direction.x) / length : SIMD2<Float>(0, 0))
+        }
+        var shifted: [SIMD2<Float>] = []
+        shifted.reserveCapacity(points.count)
+        for index in 0..<points.count {
+            let before = index > 0 ? normals[index - 1] : normals[0]
+            let after = index < normals.count ? normals[index] : normals[normals.count - 1]
+            var miter = before + after
+            let miterLength = simd_length(miter)
+            if miterLength > 1e-6 {
+                miter /= miterLength
+                // Projection of the unit miter onto one normal gives the
+                // cosine of the half angle; the miter length is its inverse,
+                // capped at 2 (a 60 degree turn) so sharp corners stay sane.
+                let cosine = max(simd_dot(miter, after), 0.5)
+                shifted.append(points[index] + miter * (offset / cosine))
+            } else {
+                shifted.append(points[index] + after * offset)
+            }
+        }
+        return shifted
+    }
+
     /// Pulls a polyline back from its ends by `inset` tile units along its own
     /// path, consuming whole leading or trailing segments when the inset
     /// exceeds them. Returns nil when the line is shorter than the insets it
@@ -218,8 +252,19 @@ class TileMvtParser {
     private struct HighZoomRoadPrecomputation {
         let sharedPointCounts: [RoadConnectionPointKey: Int]
         let linesByFeatureIndex: [[PreparedRoadLine]]
+        /// Carriageway-surface polygons (junction areas) of the layer, as
+        /// converted rings, with the road class priority each one draws at.
+        /// A ribbon of the same or a lower class that runs inside one of them
+        /// is clipped away there: the surface owns that ground.
+        let surfaceAreas: [RoadSurfaceArea]
 
-        static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:], linesByFeatureIndex: [])
+        static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:], linesByFeatureIndex: [], surfaceAreas: [])
+    }
+
+    struct RoadSurfaceArea {
+        let exterior: [SIMD2<Float>]
+        let classPriority: Int
+        let bounds: (min: SIMD2<Float>, max: SIMD2<Float>)
     }
 
     private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
@@ -228,16 +273,57 @@ class TileMvtParser {
                                                  lineClipper: LineClipper,
                                                  data: Data) -> HighZoomRoadPrecomputation {
         var rawLinesByFeatureIndex = Array(repeating: [[SIMD2<Float>]](), count: layer.features.count)
+        var surfaceAreas: [RoadSurfaceArea] = []
 
         // One payload mapping for the whole pre-pass instead of one per
         // feature geometry.
         data.withUnsafeBytes { bytes in
-            for (featureIndex, feature) in layer.features.enumerated() where feature.type == .linestring {
-                guard featureStyles[featureIndex].key != 0 else {
+            for (featureIndex, feature) in layer.features.enumerated() {
+                let style = featureStyles[featureIndex]
+                guard style.key != 0 else {
                     continue
                 }
-                let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes), layer: layer)
-                rawLinesByFeatureIndex[featureIndex] = lines.map(floatPoints)
+                switch feature.type {
+                case .linestring:
+                    let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes), layer: layer)
+                    rawLinesByFeatureIndex[featureIndex] = lines.map(floatPoints)
+                case .polygon where style.isRoadSurfaceArea:
+                    let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: bytes), layer: layer)
+                    for polygon in polygons where polygon.exteriorRing.count >= 3 {
+                        let ring = polygon.exteriorRing.map {
+                            SIMD2<Float>(Float($0.x), Float(tileExtent) - Float($0.y))
+                        }
+                        var lower = ring[0]
+                        var upper = ring[0]
+                        for point in ring {
+                            lower = simd_min(lower, point)
+                            upper = simd_max(upper, point)
+                        }
+                        surfaceAreas.append(RoadSurfaceArea(exterior: ring,
+                                                            classPriority: style.roadClassPriority,
+                                                            bounds: (lower, upper)))
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
+        // A ribbon that runs inside a carriageway surface of its own or a
+        // higher class is redundant there: the surface is that ground, drawn
+        // as one polygon with one kerb. Left in place, the ribbon's fill paints
+        // over the surface's kerb along the side it follows (a kerb on one
+        // side of the street and none on the other), and its own kerbs draw
+        // inside the surface. The parts inside are clipped away; the parts
+        // outside keep drawing and end flush at the surface's edge.
+        if surfaceAreas.isEmpty == false {
+            for featureIndex in 0..<rawLinesByFeatureIndex.count where rawLinesByFeatureIndex[featureIndex].isEmpty == false {
+                let priority = featureStyles[featureIndex].roadClassPriority
+                let owners = surfaceAreas.filter { $0.classPriority >= priority }
+                guard owners.isEmpty == false else { continue }
+                rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
+                    RoadSurfaceClipper.clip(polyline: $0, outside: owners)
+                }
             }
         }
 
@@ -270,7 +356,8 @@ class TileMvtParser {
         }
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
-                                          linesByFeatureIndex: linesByFeatureIndex)
+                                          linesByFeatureIndex: linesByFeatureIndex,
+                                          surfaceAreas: surfaceAreas)
     }
 
     private func lineLength(points: [SIMD2<Float>]) -> Float {
@@ -983,6 +1070,7 @@ class TileMvtParser {
                                 dashGapPoints: lineRenderPass.dashGapPoints,
                                 dashInTileUnits: lineRenderPass.dashInTileUnits,
                                 minimumWidthPoints: lineRenderPass.minimumWidthPoints,
+                                maximumWidthPoints: lineRenderPass.maximumWidthPoints,
                                 parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
                                 includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
                                 linePlacement: lineRenderPass.placement,
@@ -1124,8 +1212,12 @@ class TileMvtParser {
                                     guard let insetPoints else {
                                         continue
                                     }
+                                    let passPoints = Self.offsetPolyline(
+                                        insetPoints,
+                                        by: Float(lineRenderPass.parseGeometryStyleData.lateralOffset)
+                                    )
 
-                                    if let linePolygon = parseLine.parse(points: insetPoints,
+                                    if let linePolygon = parseLine.parse(points: passPoints,
                                                                          width: lineRenderPass.parseGeometryStyleData.lineWidth,
                                                                          tileExtent: Float(tileExtent),
                                                                          startCapRound: startCapRound,
@@ -1377,7 +1469,8 @@ class TileMvtParser {
                              dashGapPoints: style.dashGapPoints,
                              edgeThreshold: edgeThreshold,
                              minimumWidthPoints: style.minimumWidthPoints,
-                             dashInTileUnits: style.dashInTileUnits)
+                             dashInTileUnits: style.dashInTileUnits,
+                             maximumWidthPoints: style.maximumWidthPoints)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the

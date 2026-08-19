@@ -125,16 +125,28 @@ final class RoadStreetStitcherTests: XCTestCase {
 
     // MARK: - oneway
 
-    func testOneWayCarriagewaysCarryNoCentreDivider() {
-        func marking(oneway: VectorTile_Tile.Value?) -> LineRenderPass? {
-            var a = attributes(name: "X", lanes: 3)
+    func testOneWayCarriagewaysCarryLaneLinesNotACentreDivider() {
+        func markings(oneway: VectorTile_Tile.Value?, lanes: Int) -> [LineRenderPass] {
+            var a = attributes(name: "X", lanes: lanes)
             if let oneway { a["oneway"] = oneway }
-            return styles(for: [a])[0].resolvedLineRenderPasses.first { $0.roadPassRole == .detail }
+            return styles(for: [a])[0].resolvedLineRenderPasses.filter { $0.roadPassRole == .detail }
         }
-        XCTAssertNotNil(marking(oneway: nil), "No tag: two-way, divided")
-        XCTAssertNotNil(marking(oneway: value(0)))
-        XCTAssertNil(marking(oneway: value(1)), "oneway=1: one direction, nothing to divide")
-        XCTAssertNil(marking(oneway: value(-1)), "oneway=-1 is still one direction")
-        XCTAssertNil(marking(oneway: value("yes")))
+        // Two-way: one divider, on the centreline.
+        let twoWay = markings(oneway: nil, lanes: 3)
+        XCTAssertEqual(twoWay.count, 1, "No tag: two-way, one centre divider")
+        XCTAssertEqual(twoWay[0].parseGeometryStyleData.lateralOffset, 0, "on the centreline")
+        XCTAssertEqual(markings(oneway: value(0), lanes: 3).count, 1)
+
+        // One-way with lanes: a line on each boundary between lanes, none on
+        // the centreline (there is no centre to divide), symmetric about it.
+        for oneway in [value(1), value(-1), value("yes")] {
+            let lines = markings(oneway: oneway, lanes: 3)
+            XCTAssertEqual(lines.count, 2, "three lanes, two boundaries")
+            let offsets = lines.map { $0.parseGeometryStyleData.lateralOffset }.sorted()
+            XCTAssertFalse(offsets.contains(0), "no centre divider on a one-way")
+            XCTAssertEqual(offsets[0], -offsets[1], accuracy: 0.001, "the boundaries mirror about the centreline")
+        }
+        // A single-lane one-way is bare asphalt.
+        XCTAssertTrue(markings(oneway: value(1), lanes: 1).isEmpty)
     }
 }

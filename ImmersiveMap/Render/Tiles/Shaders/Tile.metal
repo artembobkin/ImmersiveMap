@@ -31,6 +31,7 @@ struct VertexOut {
     float lineParameter;
     half4 lineStyle;
     half lineMinimumWidthPoints;
+    half lineMaximumWidthPoints;
     // 1 when the dash pattern is already in tile units (world-locked paint),
     // 0 when it is in points and scales by the draw's unitsPerPoint.
     half lineDashInTileUnits;
@@ -60,7 +61,9 @@ struct LineStyle {
     // pattern is cut from arc length without the point-to-unit conversion
     // (world-locked paint such as a lane divider).
     float dashInTileUnits;
-    float reserved1;
+    // Ceiling for a world-locked width in points (zero: none); see the
+    // Swift TileLineStyle.maximumWidthPoints.
+    float maximumWidthPoints;
     float reserved2;
 };
 
@@ -69,6 +72,9 @@ struct OverviewFadeUniform {
     float roadAlpha;
     float landuseAlpha;
     float pixelsPerPoint;
+    // 0: roads are symbols (point ceiling holds); 1: true surfaces. Morphs
+    // continuously with the camera, see LowZoomOverviewFade.roadSurfaceBlend.
+    float roadSurfaceBlend;
 };
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -112,6 +118,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                           lineStyle.dashLengthPoints,
                           lineStyle.dashGapPoints);
     out.lineMinimumWidthPoints = half(lineStyle.minimumWidthPoints);
+    out.lineMaximumWidthPoints = half(lineStyle.maximumWidthPoints);
     out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;
     return out;
 }
@@ -150,8 +157,10 @@ static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
                                     half minimumWidthPoints,
+                                    half maximumWidthPoints,
                                     half dashInTileUnits,
                                     float pixelsPerPoint,
+                                    float roadSurfaceBlend,
                                     float dashUnitsPerPoint) {
     // The derivatives are taken before the threshold test: fwidth needs the
     // whole 2x2 quad, so it must not sit behind potentially divergent flow.
@@ -171,6 +180,19 @@ static inline half tileLineCoverage(float lineDistance,
         // into an unreadable hairline at region zooms, yet keeps its natural
         // world growth once wider than the floor.
         edgePx = float(edgeThreshold) * rimPx;
+        // The ceiling first: at region zooms the world width is far wider on
+        // screen than a readable road symbol, and the road draws at the
+        // symbol until the world catches down to it, continuously with the
+        // camera (the ribbon is tessellated at the world width, so the
+        // ceiling only ever pulls the edge inward; it never clamps to the
+        // rim the way the floor has to).
+        if (maximumWidthPoints > 0.0h) {
+            // Symbol to surface: at region zooms the road draws at its
+            // symbol width (the ceiling), and morphs into its true width as
+            // the camera descends, so the width never steps at a tile level.
+            float symbolPx = min(edgePx, float(maximumWidthPoints) * 0.5 * pixelsPerPoint);
+            edgePx = mix(symbolPx, edgePx, roadSurfaceBlend);
+        }
         if (minimumWidthPoints > 0.0h) {
             float floorPx = min(float(minimumWidthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5);
             edgePx = max(edgePx, floorPx);
@@ -231,8 +253,10 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
                                          in.lineParameter,
                                          in.lineStyle,
                                          in.lineMinimumWidthPoints,
+                                         in.lineMaximumWidthPoints,
                                          in.lineDashInTileUnits,
                                          overviewFade.pixelsPerPoint,
+                                         overviewFade.roadSurfaceBlend,
                                          lineDash.unitsPerPoint);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
         in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {

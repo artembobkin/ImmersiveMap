@@ -63,6 +63,9 @@ struct LineRenderPass {
     let dashInTileUnits: Bool
     /// Floor for a world-locked width; see `TileLineStyle.minimumWidthPoints`.
     let minimumWidthPoints: Float
+    /// Symbol ceiling for a world-locked width; see
+    /// `TileLineStyle.maximumWidthPoints`.
+    let maximumWidthPoints: Float
     /// Street-palette counterpart of `color` for passes whose color changes
     /// with the overview-to-street handover (the motorway accent); nil bakes
     /// `color` twice.
@@ -81,6 +84,7 @@ struct LineRenderPass {
          dashGapPoints: Float = 0.0,
          dashInTileUnits: Bool = false,
          minimumWidthPoints: Float = 0.0,
+         maximumWidthPoints: Float = 0.0,
          parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
          placement: LinePlacement = .ground,
@@ -94,6 +98,7 @@ struct LineRenderPass {
         self.dashGapPoints = dashGapPoints
         self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
+        self.maximumWidthPoints = maximumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.placement = placement
@@ -119,6 +124,8 @@ struct FeatureStyle {
     let dashInTileUnits: Bool
     /// See `TileLineStyle.minimumWidthPoints`.
     let minimumWidthPoints: Float
+    /// See `TileLineStyle.maximumWidthPoints`.
+    let maximumWidthPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let linePlacement: LinePlacement
@@ -156,6 +163,7 @@ struct FeatureStyle {
         dashGapPoints: Float = 0.0,
         dashInTileUnits: Bool = false,
         minimumWidthPoints: Float = 0.0,
+        maximumWidthPoints: Float = 0.0,
         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
         linePlacement: LinePlacement = .ground,
@@ -181,6 +189,7 @@ struct FeatureStyle {
         self.dashGapPoints = dashGapPoints
         self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
+        self.maximumWidthPoints = maximumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
         self.linePlacement = linePlacement
@@ -212,6 +221,7 @@ struct FeatureStyle {
                            dashGapPoints: dashGapPoints,
                            dashInTileUnits: dashInTileUnits,
                            minimumWidthPoints: minimumWidthPoints,
+                           maximumWidthPoints: maximumWidthPoints,
                            parseGeometryStyleData: parseGeometryStyleData,
                            includeRoadLabelPath: includeRoadLabelPath,
                            placement: linePlacement,

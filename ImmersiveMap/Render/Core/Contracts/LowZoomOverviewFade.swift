@@ -31,6 +31,22 @@ enum LowZoomOverviewFade {
     static let streetPaletteStartZoom: Double = 8.0
     static let streetPaletteEndZoom: Double = 11.5
 
+    /// How far a road has become its true surface rather than a symbol, in
+    /// camera zoom. Below the start a road draws at its symbol width (the
+    /// style's point ceiling, constant on screen); above the end at its real
+    /// carriageway width on the ground; between, the edge morphs from one to
+    /// the other. Continuous in camera zoom by construction, so the width never
+    /// steps at a tile level: the tile level swap changes nothing about what
+    /// is drawn, only the geometry it is drawn from.
+    static let roadSurfaceStartZoom: Double = 14.0
+    static let roadSurfaceEndZoom: Double = 16.0
+
+    static func roadSurfaceBlend(for zoom: Double) -> Float {
+        let progress = Float((zoom - roadSurfaceStartZoom) / (roadSurfaceEndZoom - roadSurfaceStartZoom))
+        let clamped = simd_clamp(progress, 0.0, 1.0)
+        return clamped * clamped * (3.0 - 2.0 * clamped)
+    }
+
     static func alpha(for zoom: Double, kind: Kind = .overviewFeatures) -> Float {
         let range: (start: Double, end: Double)
         switch kind {

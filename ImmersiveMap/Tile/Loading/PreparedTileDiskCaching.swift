@@ -457,7 +457,10 @@ final class PreparedTileDiskCaching {
     // 45: junction areas draw in the automobile road phases as surface and
     // kerb; a version-44 record prepared from the new tiles has them as
     // ground polygons under every road.
-    static let preparedFormatVersion: UInt32 = 45
+    // 46: TileLineStyle.reserved1 became maximumWidthPoints (the symbol
+    // ceiling), ribbons inside a carriageway surface are clipped away, and
+    // one-way carriageways carry lane lines at lateral offsets.
+    static let preparedFormatVersion: UInt32 = 46
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
