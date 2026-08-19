@@ -113,6 +113,39 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertTrue(polygon.lineDistances.allSatisfy { abs(Int($0)) == Int(Int8.max) })
     }
 
+    func testRoundJoinFanCarriesTheJoinArcLengthOnTheOutsideOfTheTurn() throws {
+        // A dashed marking that bends: the two segment rectangles leave a
+        // wedge on the outside of the corner, and the round-join fan fills it.
+        // The fan must carry the corner's own arc length so a dash spanning
+        // the bend paints the wedge; a fan at a constant parameter would
+        // notch the dash at every corner.
+        let polygon = try XCTUnwrap(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 250)],
+                                              width: 6,
+                                              lineJoinRound: true,
+                                              emitsArcLength: true))
+
+        // 8 segment vertices plus the 3-vertex fan.
+        XCTAssertEqual(polygon.vertices.count, 11)
+        let fan = Array(polygon.vertices.suffix(3))
+        let fanParameters = Array(polygon.lineParameters.suffix(3))
+        let fanDistances = Array(polygon.lineDistances.suffix(3))
+        // The corner sits 100 units in: arc 100, half-unit fixed point 200.
+        XCTAssertEqual(fanParameters, [200, 200, 200])
+        // Center at distance 0, the two rim corners at full distance.
+        XCTAssertEqual(Int(fanDistances[0]), 0)
+        XCTAssertEqual(abs(Int(fanDistances[1])), Int(Int8.max))
+        XCTAssertEqual(abs(Int(fanDistances[2])), Int(Int8.max))
+        // Vertices are in render space, y flipped (tileExtent - y): the corner
+        // (200, 100) lands at (200, 3996) and the second segment runs toward
+        // smaller render y. In that frame the path turns right, so the gap
+        // between the rectangles is on the left of travel: render +y for the
+        // first (eastbound) segment, +x for the second. Both rim corners of
+        // the fan sit on that outer side, at the extruded half width (3 + 2).
+        XCTAssertEqual(fan[0], SIMD2<Int16>(200, 3996))
+        XCTAssertEqual(fan[1], SIMD2<Int16>(200, 3996 + 5), "outer corner of the first segment")
+        XCTAssertEqual(fan[2], SIMD2<Int16>(200 + 5, 3996), "outer corner of the second segment")
+    }
+
     func testArcSurvivesClippingByInterpolation() throws {
         // The line starts outside the tile; the clipped geometry must carry
         // interpolated arc values so the dash phase is continuous across the

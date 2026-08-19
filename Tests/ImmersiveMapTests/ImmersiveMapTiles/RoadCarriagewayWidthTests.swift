@@ -65,15 +65,15 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         // as from the one after that.
         let widths = [14, 15, 16].map { fillWidthMetres("primary", lanes: 6, z: $0) }
         for width in widths {
-            XCTAssertEqual(width, 6 * 3.5, accuracy: 0.5,
+            XCTAssertEqual(width, 6 * 4.0, accuracy: 0.5,
                            "A six-lane primary is six lanes of ground wide at every tile zoom")
         }
         XCTAssertEqual(widths[0], widths[2], accuracy: 0.5)
     }
 
     func testLaneCountSetsTheWidth() {
-        XCTAssertEqual(fillWidthMetres("primary", lanes: 2, z: 16), 2 * 3.5, accuracy: 0.5)
-        XCTAssertEqual(fillWidthMetres("primary", lanes: 6, z: 16), 6 * 3.5, accuracy: 0.5)
+        XCTAssertEqual(fillWidthMetres("primary", lanes: 2, z: 16), 2 * 4.0, accuracy: 0.5)
+        XCTAssertEqual(fillWidthMetres("primary", lanes: 6, z: 16), 6 * 4.0, accuracy: 0.5)
         XCTAssertGreaterThan(fillWidthMetres("primary", lanes: 6, z: 16),
                              fillWidthMetres("primary", lanes: 2, z: 16))
         // A nonsense lane count cannot swamp the frame.
@@ -88,7 +88,9 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         let service = fillWidthMetres("service", z: 16)
         XCTAssertGreaterThan(motorway, minor)
         XCTAssertGreaterThan(minor, service)
-        XCTAssertEqual(minor, 2 * 3.25, accuracy: 0.5)
+        // A counted lane carries its share of the parking strip and gutter,
+        // so a two-lane street is around 10 m, not the 6.5 m of two painted lanes.
+        XCTAssertEqual(minor, 2 * 5.0, accuracy: 0.5)
     }
 
     func testCasingIsAKerbNotAProportionOfTheCarriageway() {
@@ -122,9 +124,19 @@ final class RoadCarriagewayWidthTests: XCTestCase {
                              "The divider is painted on the road: point-locked, so it never grows with it")
         XCTAssertGreaterThan(marking.dashLengthPoints, 0, "and dashed in points")
         XCTAssertGreaterThan(marking.dashGapPoints, 0)
+        // The ribbon hosts the point width with margin but stays tight: a
+        // wide ribbon is a long corner wedge, the source of the notches seen
+        // at every bend of a dashed marking.
         XCTAssertGreaterThanOrEqual(marking.parseGeometryStyleData.lineWidth,
-                                    Double(marking.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                                    Double(marking.lineWidthPoints) * 4,
                                     "The ribbon must host the point width")
+        XCTAssertLessThan(marking.parseGeometryStyleData.lineWidth,
+                          Double(marking.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                          "and must be far tighter than an overview line's ribbon")
+        XCTAssertTrue(marking.parseGeometryStyleData.lineJoinRound,
+                      "Round joins fill the corner wedge so a dash across a bend does not notch")
+        XCTAssertFalse(marking.parseGeometryStyleData.lineCapRound,
+                       "No round caps: the dashes stop on the road instead of laying a disc past its end")
 
         for className in ["motorway", "trunk", "secondary", "tertiary", "minor"] {
             XCTAssertNotNil(markingPass(className, z: 16), "\(className) is an automobile road")

@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 49
+    private static let implementationRevision: UInt32 = 50
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -579,9 +579,17 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // The lane divider down an automobile road: a point-locked dashed
             // hairline over the carriageway, so it stays a marking painted on
             // asphalt at every zoom instead of a second road that grows with
-            // the first. It draws in the `detail` role, above every fill, and
-            // its ribbon is provisioned to host the point width the same way
-            // the point-locked lines are.
+            // the first. It draws in the `detail` role, above every fill.
+            //
+            // The ribbon is the narrowest that still hosts the point width:
+            // the shader places the edge inside it, and the wider it is, the
+            // longer the wedge the tessellator cuts out on the outside of
+            // every corner where two segment rectangles meet. Round joins
+            // fill that wedge with a fan carrying the join's own arc length,
+            // so a dash spanning the corner paints it instead of notching.
+            // Round caps are deliberately off: at a free end the dash pattern
+            // must stop on the road, not lay a translucent disc past it.
+            let markingRibbonUnits = Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
             passes.append(
                 LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
                                color: Self.roadMarkingColor,
@@ -590,8 +598,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                dashLengthPoints: 5.0,
                                dashGapPoints: 6.0,
                                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
-                                   lineWidth: Double(Self.roadMarkingWidthPoints)
-                                       * FeatureStyle.pointLockedRibbonUnitsPerPoint
+                                   lineWidth: markingRibbonUnits,
+                                   lineCapRound: false,
+                                   lineJoinRound: true
                                ),
                                includeRoadLabelPath: false,
                                roadPassRole: .detail)
@@ -676,27 +685,34 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// each gets its own width. Where the tag is missing the class states a
     /// typical lane count instead, which is what the width used to be based
     /// on implicitly.
+    ///
+    /// The lane width is the whole road's width divided by its lanes, which
+    /// is more than the painted lane: a street is lanes plus the parking
+    /// strip along it, plus the gutter to the kerb. OSM's `lanes` counts the
+    /// marked through lanes and nothing else, so a two-lane city street with
+    /// cars parked on both sides is around 12 m wide, not 6.5, and a width of
+    /// 3.25 m per counted lane drew every such street at half its width.
     private func roadWidthMetres(cls: String?, props: [String: VectorTile_Tile.Value]) -> Double {
         let laneWidthMetres: Double
         let defaultLanes: Double
         switch cls {
         case "motorway":
-            laneWidthMetres = 3.75
+            laneWidthMetres = 4.0
             defaultLanes = 4
         case "trunk":
-            laneWidthMetres = 3.75
+            laneWidthMetres = 4.0
             defaultLanes = 3
         case "primary":
-            laneWidthMetres = 3.5
+            laneWidthMetres = 4.0
             defaultLanes = 3
         case "secondary", "tertiary":
-            laneWidthMetres = 3.5
+            laneWidthMetres = 4.5
             defaultLanes = 2
         case "minor":
-            laneWidthMetres = 3.25
+            laneWidthMetres = 5.0
             defaultLanes = 2
         case "service":
-            laneWidthMetres = 3.0
+            laneWidthMetres = 4.0
             defaultLanes = 1
         default:
             // Footways, tracks and anything unclassified: not a carriageway,
@@ -734,6 +750,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// surface rather than on top of it.
     private static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 0.85)
     private static let roadMarkingWidthPoints: Float = 0.9
+    /// Tile units of marking ribbon per point of stroke. Markings live on
+    /// z15+ tiles, where a unit is a few centimetres, so a much tighter
+    /// provisioning than the overview lines' 32 still hosts the stroke on a
+    /// dense display, and a tighter ribbon is a shorter corner wedge.
+    private static let roadMarkingRibbonUnitsPerPoint: Double = 8
 
     /// Markings sort one above their fill, out of the way of every other
     /// key the style uses. The `detail` pass role is what actually puts them

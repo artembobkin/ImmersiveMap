@@ -591,14 +591,20 @@ class ParseLine {
             let left0 = precomputed.segmentNormals[index - 1]
             let left1 = precomputed.segmentNormals[index]
             let innerIsLeft = cross < 0
-            let inner0 = center + (innerIsLeft ? left0 : -left0) * extrudedHalfWidth
-            let inner1 = center + (innerIsLeft ? left1 : -left1) * extrudedHalfWidth
+            let outer0 = center + (innerIsLeft ? left0 : -left0) * extrudedHalfWidth
+            let outer1 = center + (innerIsLeft ? left1 : -left1) * extrudedHalfWidth
 
             let joinParameter = emitsArcLength ? precomputed.pointArcLengths[index] : 1.0
+            // The wedge between the two segment rectangles on the outside of
+            // the turn. It is lit as distance 0 at the center and 1 at the
+            // two outer corners: a flat-fan approximation of the round join.
+            // Appending it at the join's own arc length means a dash that
+            // spans the corner paints the wedge too, instead of leaving a
+            // notch the exact shape of the gap between the rectangles.
             let base = UInt32(polygon.vertices.count)
             polygon.vertices.append(center)
-            polygon.vertices.append(inner0)
-            polygon.vertices.append(inner1)
+            polygon.vertices.append(outer0)
+            polygon.vertices.append(outer1)
             polygon.distances.append(0.0)
             polygon.distances.append(1.0)
             polygon.distances.append(1.0)
