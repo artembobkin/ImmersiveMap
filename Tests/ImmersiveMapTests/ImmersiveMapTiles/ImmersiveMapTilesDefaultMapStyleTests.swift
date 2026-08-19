@@ -170,13 +170,20 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testRoadsFadeInThroughTheRoadBand() {
+    func testOverviewRoadsAreOpaqueAndOnlyStreetRoadsRideTheRoadFadeBand() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        // The overview skeleton must never be translucent: the road fade band
+        // spans exactly the zooms where the skeleton is the star, and a
+        // translucent stroke composites unevenly where segments overlap.
+        // Overview roads ride the overview band (opaque past z1), borders'
+        // principle.
         let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 6)
-        XCTAssertEqual(motorway.lowZoomFadeMask, 2.0)
+        XCTAssertEqual(motorway.lowZoomFadeMask, 1.0)
         for pass in motorway.resolvedLineRenderPasses {
-            XCTAssertEqual(pass.lowZoomFadeMask, 2.0)
+            XCTAssertEqual(pass.lowZoomFadeMask, 1.0)
         }
+        let streetMotorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 10)
+        XCTAssertEqual(streetMotorway.lowZoomFadeMask, 2.0)
         let rail = makeStyle(style, layerName: "transportation", className: "rail", zoom: 10)
         XCTAssertEqual(rail.lowZoomFadeMask, 2.0)
     }
@@ -210,15 +217,20 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
 
-        // Through z9 the majors are point-locked symbols: the class states
-        // its on-screen width in points and the ribbon is tessellated wide
-        // enough to host it (a floor alone cannot help there, because the
-        // shader clamps it to the sub-pixel world-width ribbon).
+        // Through z9 the majors draw on the country-border principle: one
+        // point-locked pass, opaque from the first visible frame (the
+        // overview fade band, never the translucent road band), butt ends,
+        // and a ribbon tessellated wide enough to host the stated points (a
+        // floor alone cannot help there, because the shader clamps it to the
+        // sub-pixel world-width ribbon).
         let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 7)
         let fill = motorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(fill.minimumWidthPoints, 2.2)
-        XCTAssertEqual(fill.lineWidthPoints, 2.2)
-        XCTAssertGreaterThanOrEqual(fill.parseGeometryStyleData.lineWidth, Double(2.2 * 32),
+        XCTAssertEqual(fill.lineWidthPoints, 1.5)
+        XCTAssertEqual(fill.lowZoomFadeMask, 1.0,
+                       "Overview roads must not ride the translucent road fade band")
+        XCTAssertFalse(fill.parseGeometryStyleData.lineCapRound,
+                       "Butt ends, like borders: translucent wide round caps composited unevenly")
+        XCTAssertGreaterThanOrEqual(fill.parseGeometryStyleData.lineWidth, Double(1.5 * 32),
                                     "The ribbon must host the point width")
 
         // From z10 the world width takes over: no point lock, floor as a
@@ -234,12 +246,17 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(fill.streetColor, configuration.layers.roads.motorway)
         XCTAssertNotEqual(fill.color, configuration.layers.roads.motorway)
 
-        // Primary has a floor but no accent.
+        // Primary at overview: point-locked, its own color, no accent.
         let primary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 8)
         let primaryFill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(primaryFill.minimumWidthPoints, 1.6)
+        XCTAssertEqual(primaryFill.lineWidthPoints, 1.1)
         XCTAssertNil(primaryFill.streetColor)
         XCTAssertEqual(primaryFill.color, configuration.layers.roads.primary)
+
+        // At street zooms primary keeps its width floor.
+        let streetPrimary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 10)
+        let streetPrimaryFill = streetPrimary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertEqual(streetPrimaryFill.minimumWidthPoints, 1.6)
     }
 
     func testConstructionClassesFollowTheirBaseClass() {

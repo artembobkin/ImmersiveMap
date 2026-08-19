@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 47
+    private static let implementationRevision: UInt32 = 48
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -362,38 +362,56 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // street palette by the same continuous camera-zoom blend the ground
         // uses.
         let casingZoom = tileZoom >= 10 && isConstruction == false
-        // Over a country or region view a road is a symbol, not a surface:
-        // the world width (base * s) is sub-pixel there, and a point FLOOR
-        // cannot save it, because the shader clamps the floor to the
-        // tessellated ribbon, which is that same sub-pixel world width. So
-        // through z9 the majors draw POINT-LOCKED, like borders: the class
-        // states its on-screen width in points and the geometry tessellates
-        // wide enough to host it. From z10 (the casing era) the world width
-        // takes over with the floors as a safety net.
-        let overviewEra = tileZoom <= 9
+        // Over a country or region view a road is a symbol, not a surface,
+        // and it draws on the same principle as the country borders: one
+        // point-locked pass in the generic ground path, butt ends, opaque
+        // from the first frame it is visible. The previous overview attempt
+        // kept the road machinery: its fade band held the skeleton
+        // translucent exactly at the zooms it is the star, and translucent
+        // wide round caps composited unevenly at every joint. Borders never
+        // had either problem. From z10 (the casing era) the world width
+        // takes over with the point floors as a safety net.
+        if tileZoom <= 9 {
+            switch effectiveClass {
+            case "motorway":
+                return overviewRoadStyle(fillKey: 56, widthPoints: 1.5, priority: 95,
+                                         accent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
+                                         streetColor: roads.motorway,
+                                         tunnel: isTunnel, construction: isConstruction)
+            case "trunk":
+                return overviewRoadStyle(fillKey: 54, widthPoints: 1.4, priority: 90,
+                                         accent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
+                                         streetColor: roads.trunk,
+                                         tunnel: isTunnel, construction: isConstruction)
+            case "primary":
+                return overviewRoadStyle(fillKey: 52, widthPoints: 1.1, priority: 80,
+                                         accent: nil, streetColor: roads.primary,
+                                         tunnel: isTunnel, construction: isConstruction)
+            case "secondary":
+                return overviewRoadStyle(fillKey: 50, widthPoints: 0.9, priority: 78,
+                                         accent: nil, streetColor: roads.secondary,
+                                         tunnel: isTunnel, construction: isConstruction)
+            default:
+                break
+            }
+        }
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: 20 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 2.2,
-                             overviewWidthPoints: overviewEra ? 2.2 : 0,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
                              construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: 17.5 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 2.0,
-                             overviewWidthPoints: overviewEra ? 2.0 : 0,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
                              construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: 14 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.6,
-                             overviewWidthPoints: overviewEra ? 1.6 : 0,
-                             construction: isConstruction)
+                             minimumWidthPoints: 1.6, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: 11 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.2,
-                             overviewWidthPoints: overviewEra ? 1.2 : 0,
-                             construction: isConstruction)
+                             minimumWidthPoints: 1.2, construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, width: 8.5 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.0, construction: isConstruction)
@@ -459,6 +477,35 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
     }
 
+    /// A road over a country or region view, drawn on the country-border
+    /// principle (see `boundaryStyle`): one point-locked line pass in the
+    /// generic ground path, an opaque color from the first visible frame
+    /// (`lowZoomFadeMask` 1, the overview band, fully opaque past z1, never
+    /// the translucent road band), butt ends and plain joins, and a ribbon
+    /// tessellated wide enough to host the stated points (32 units per point;
+    /// the ribbon is only the ceiling the shader places the edge inside).
+    /// Tunnels and construction segments read as point-dashed corridors.
+    private func overviewRoadStyle(fillKey: UInt8,
+                                   widthPoints: Float,
+                                   priority: Int,
+                                   accent: SIMD4<Float>?,
+                                   streetColor: SIMD4<Float>,
+                                   tunnel: Bool,
+                                   construction: Bool) -> FeatureStyle {
+        let dashed = tunnel || construction
+        return FeatureStyle(
+            key: fillKey,
+            color: accent ?? streetColor,
+            streetColor: accent != nil ? streetColor : nil,
+            lowZoomFadeMask: 1.0,
+            lineWidthPoints: widthPoints,
+            dashLengthPoints: dashed ? 4.0 : 0,
+            dashGapPoints: dashed ? 2.5 : 0,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: Double(widthPoints) * 32),
+            roadClassPriority: priority
+        )
+    }
+
     private func roadStyle(fillKey: UInt8,
                            color: SIMD4<Float>,
                            width: Double,
@@ -466,21 +513,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            casing: Bool,
                            tunnel: Bool,
                            minimumWidthPoints: Float = 0,
-                           overviewWidthPoints: Float = 0,
                            overviewAccent: SIMD4<Float>? = nil,
                            construction: Bool = false) -> FeatureStyle {
-        // A point-locked overview width needs a ribbon that can host it: the
-        // shader can only place the edge inside the tessellated width, and at
-        // overview zooms the world width is a sub-pixel sliver. 32 tile units
-        // per point keeps the ceiling above the requested width on large
-        // displays; the ribbon is a ceiling, not a visible width, so
-        // over-provisioning costs only a slightly wider quad.
-        let hostedWidth = overviewWidthPoints > 0
-            ? max(width, Double(overviewWidthPoints) * 32)
-            : width
         let fillGeometry = tunnel
-            ? makeDashedRoadGeometry(width: hostedWidth, dashLength: hostedWidth * 2.0, dashGap: hostedWidth * 1.2)
-            : makeRoadGeometry(width: hostedWidth)
+            ? makeDashedRoadGeometry(width: width, dashLength: width * 2.0, dashGap: width * 1.2)
+            : makeRoadGeometry(width: width)
         // A tunnel already dashes its geometry in tile units; the
         // construction point-dash only applies to surface segments.
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
@@ -513,7 +550,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            color: fillColor,
                            streetColor: fillStreetColor,
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           lineWidthPoints: overviewWidthPoints,
                            dashLengthPoints: constructionDash?.length ?? 0,
                            dashGapPoints: constructionDash?.gap ?? 0,
                            minimumWidthPoints: minimumWidthPoints,
