@@ -454,7 +454,10 @@ final class PreparedTileDiskCaching {
     // three-line layout with its trailing line.
     // 44: round joins tessellate as an arc fan instead of one chord triangle;
     // a version-43 record's wide bends carry the uncovered circular segment.
-    static let preparedFormatVersion: UInt32 = 44
+    // 45: junction areas draw in the automobile road phases as surface and
+    // kerb; a version-44 record prepared from the new tiles has them as
+    // ground polygons under every road.
+    static let preparedFormatVersion: UInt32 = 45
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

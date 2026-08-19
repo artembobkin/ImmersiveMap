@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 54
+    private static let implementationRevision: UInt32 = 55
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -347,6 +347,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         guard tileZoom >= Self.roadClassMinimumZoom(effectiveClass) else {
             return hiddenStyle
         }
+        // A junction area: the carriageway as the tiles map it, a polygon.
+        // It draws as the surface of the road class that enters it, with the
+        // kerb on its outline, in the automobile tier; the ribbons that enter
+        // it run under it, so their kerbs end at its edge and never cross it.
+        if subclass == "junction_area" {
+            return junctionAreaStyle(cls: effectiveClass, tunnel: isTunnel, tile: tile)
+        }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
         // With every drive tier sharing one asphalt grey, width is the whole
@@ -504,6 +511,61 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case 43: return 33
         default: return 32
         }
+    }
+
+    /// A junction area (`subclass=junction_area`): the carriageway of a junction
+    /// as a polygon. Two passes in the automobile tier, like a road: the kerb
+    /// on the outline (casing role, so every ribbon's fill and the area's own
+    /// fill cover it where they overlap) and the surface (fill role). The
+    /// surface takes the color of the class that enters it, so it merges into
+    /// the ribbons of that class seamlessly; the kerb is the same fixed margin
+    /// a ribbon wears. Below the separate-road zoom the area draws as a plain
+    /// ground polygon in the road color.
+    private func junctionAreaStyle(cls: String?, tunnel: Bool, tile: Tile) -> FeatureStyle {
+        let roads = configuration.layers.roads
+        let color: SIMD4<Float>
+        let fillKey: UInt8
+        let priority: Int
+        switch cls {
+        case "motorway": color = roads.motorway; fillKey = 56; priority = 95
+        case "trunk": color = roads.trunk; fillKey = 54; priority = 90
+        case "primary": color = roads.primary; fillKey = 52; priority = 80
+        case "secondary": color = roads.secondary; fillKey = 50; priority = 78
+        case "tertiary": color = roads.tertiary; fillKey = 48; priority = 74
+        case "service": color = roads.service; fillKey = 42; priority = 45
+        default: color = roads.minor; fillKey = 44; priority = 50
+        }
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
+        let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
+        var passes: [LineRenderPass] = []
+        if tunnel == false {
+            passes.append(
+                LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
+                               color: roadCasingColor(from: color),
+                               lowZoomFadeMask: roadLowZoomFadeMask,
+                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: kerbWidth,
+                                                                                             lineJoinRound: true),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .casing)
+            )
+        }
+        passes.append(
+            LineRenderPass(key: fillKey,
+                           color: color,
+                           lowZoomFadeMask: roadLowZoomFadeMask,
+                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                           includeRoadLabelPath: false,
+                           roadPassRole: .fill)
+        )
+        return FeatureStyle(
+            key: fillKey,
+            color: color,
+            lowZoomFadeMask: roadLowZoomFadeMask,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            lineRenderPasses: passes,
+            roadClassPriority: priority,
+            isRoadSurfaceArea: true
+        )
     }
 
     /// A road over a country or region view: a symbolic stroke, drawn through

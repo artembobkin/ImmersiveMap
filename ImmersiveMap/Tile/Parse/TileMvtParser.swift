@@ -171,7 +171,7 @@ class TileMvtParser {
         return working.count >= 2 ? working : nil
     }
 
-    private func roadStructureKind(attributes: [String: VectorTile_Tile.Value]) -> RoadStructureKind {
+    func roadStructureKind(attributes: [String: VectorTile_Tile.Value]) -> RoadStructureKind {
         let locationValue = attributes["location"]?.stringValue.lowercased() ?? ""
         let structureValue = attributes["structure"]?.stringValue.lowercased() ?? ""
         let brunnelValue = attributes["brunnel"]?.stringValue.lowercased() ?? ""
@@ -203,7 +203,7 @@ class TileMvtParser {
         return .ground
     }
 
-    private func roadLayerValue(attributes: [String: VectorTile_Tile.Value]) -> Int {
+    func roadLayerValue(attributes: [String: VectorTile_Tile.Value]) -> Int {
         attributes["layer"].flatMap(parseIntValue) ?? 0
     }
 
@@ -859,6 +859,25 @@ class TileMvtParser {
 
                         guard let parsedGeometry = parsePolygon.parseGeometry(polygon: polygon,
                                                                               tileExtent: Float(tileExtent)) else {
+                            continue
+                        }
+                        if style.isRoadSurfaceArea, usesSeparateRoadRendering {
+                            // A carriageway surface (junction area) joins the
+                            // road phases instead of the ground: its fill pass
+                            // is the triangulated polygon, its casing pass the
+                            // outline tessellated as a closed kerb. Sorted among
+                            // the roads by class, so the surface covers the
+                            // kerbs of the ribbons that run into it.
+                            appendRoadSurfaceArea(parsedGeometry: parsedGeometry,
+                                                  clippedExterior: parsedGeometry.clipped.exterior,
+                                                  clippedInteriors: parsedGeometry.clipped.interiors,
+                                                  style: style,
+                                                  attributes: attributes,
+                                                  roadStyles: &roadStyles,
+                                                  roadPolygonByStyle: &roadPolygonByStyle,
+                                                  orderedRoadPolygons: &orderedRoadPolygons,
+                                                  roadPolygonSequence: &roadPolygonSequence,
+                                                  parseLine: parseLine)
                             continue
                         }
                         switch style.linePlacement {

@@ -1115,4 +1115,77 @@ extension TileMvtParser {
         polygonByStyle[style.key, default: []].insert(parsedPolygon, at: 0)
         styles[style.key] = style
     }
+
+    /// Puts a carriageway-surface polygon (a junction area) into the road
+    /// phases: the triangulated polygon under the style's fill pass, and each
+    /// ring, closed, tessellated as a kerb under the casing pass. Both carry
+    /// the style's class priority so they sort among the roads of that class:
+    /// the surface is drawn after the ribbons' casings of its class and under
+    /// their fills, exactly where a ribbon's own fill would go, so the ribbons
+    /// entering the junction merge into it and their kerbs stop at its edge.
+    func appendRoadSurfaceArea(parsedGeometry: ParsePolygon.ParsedGeometry,
+                               clippedExterior: [SIMD2<Float>],
+                               clippedInteriors: [[SIMD2<Float>]],
+                               style: FeatureStyle,
+                               attributes: [String: VectorTile_Tile.Value],
+                               roadStyles: inout [UInt8: FeatureStyle],
+                               roadPolygonByStyle: inout [UInt8: [ParsedPolygon]],
+                               orderedRoadPolygons: inout [OrderedRoadPolygon],
+                               roadPolygonSequence: inout Int,
+                               parseLine: ParseLine) {
+        let structure: RoadStructureKind = roadStructureKind(attributes: attributes) == .ground
+            ? .automobileGround
+            : roadStructureKind(attributes: attributes)
+        let layer = roadLayerValue(attributes: attributes)
+        for pass in style.resolvedLineRenderPasses {
+            let passStyle = FeatureStyle(
+                key: pass.key,
+                color: pass.color,
+                streetColor: pass.streetColor,
+                lowZoomFadeMask: pass.lowZoomFadeMask,
+                parseGeometryStyleData: pass.parseGeometryStyleData,
+                roadClassPriority: style.roadClassPriority
+            )
+            if roadStyles[pass.key] == nil {
+                roadStyles[pass.key] = passStyle
+            }
+            var polygons: [ParsedPolygon] = []
+            switch pass.roadPassRole {
+            case .fill:
+                polygons = [parsedGeometry.parsedPolygon]
+            case .casing:
+                // Each ring as a closed line: the first two points repeat at
+                // the end so the closing corner gets a join like every other.
+                for ring in [clippedExterior] + clippedInteriors where ring.count >= 3 {
+                    var closed = ring
+                    closed.append(ring[0])
+                    closed.append(ring[1])
+                    if let kerb = parseLine.parse(points: closed,
+                                                  width: pass.parseGeometryStyleData.lineWidth,
+                                                  tileExtent: Float(tileExtent),
+                                                  startCapRound: false,
+                                                  endCapRound: false,
+                                                  lineJoinRound: true,
+                                                  clipGeometryToTileBounds: true) {
+                        polygons.append(kerb)
+                    }
+                }
+            default:
+                continue
+            }
+            for polygon in polygons {
+                roadPolygonByStyle[pass.key, default: []].append(polygon)
+                orderedRoadPolygons.append(
+                    OrderedRoadPolygon(polygon: polygon,
+                                       styleKey: pass.key,
+                                       structureKind: structure,
+                                       layer: layer,
+                                       classPriority: style.roadClassPriority,
+                                       passRole: pass.roadPassRole,
+                                       sequence: roadPolygonSequence)
+                )
+                roadPolygonSequence += 1
+            }
+        }
+    }
 }

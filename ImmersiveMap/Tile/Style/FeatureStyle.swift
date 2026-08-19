@@ -131,6 +131,12 @@ struct FeatureStyle {
     let labelTextStyle: LabelTextStyle?
     let roadLabelTextStyle: LabelTextStyle?
     let roadDecorationKind: TileMvtParser.RoadDecorationKind
+    /// A polygon that is a carriageway surface (a junction area the tiles
+    /// ship for a junction OSM maps as `area:highway`): it draws in the
+    /// automobile road phases, its fill as the carriageway and its outline as
+    /// the kerb, ordered among the roads so the surface covers the kerbs of
+    /// every ribbon that enters it. False for every ground polygon.
+    let isRoadSurfaceArea: Bool
     /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
     /// Travels with the label to runtime, where it is compared against the current camera zoom.
     let labelMinCameraZoom: Float
@@ -162,6 +168,7 @@ struct FeatureStyle {
         labelTextStyle: LabelTextStyle? = nil,
         roadLabelTextStyle: LabelTextStyle? = nil,
         roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
+        isRoadSurfaceArea: Bool = false,
         labelMinCameraZoom: Float = 0,
         suppressPolygonFill: Bool = false
     ) {
@@ -186,6 +193,7 @@ struct FeatureStyle {
         self.labelTextStyle = labelTextStyle
         self.roadLabelTextStyle = roadLabelTextStyle
         self.roadDecorationKind = roadDecorationKind
+        self.isRoadSurfaceArea = isRoadSurfaceArea
         self.labelMinCameraZoom = labelMinCameraZoom
         self.suppressPolygonFill = suppressPolygonFill
     }

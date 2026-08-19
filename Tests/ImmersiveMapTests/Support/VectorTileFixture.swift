@@ -70,6 +70,86 @@ enum VectorTileFixture {
         return try tile.serializedData()
     }
 
+    /// One feature of a hand-built layer: a polygon ring or a line, with its
+    /// properties. Coordinates are MVT tile units (y down).
+    struct Feature {
+        enum Geometry {
+            case polygon(ring: [(Int32, Int32)])
+            case line(points: [(Int32, Int32)])
+        }
+        let id: UInt64
+        let geometry: Geometry
+        let properties: [String: String]
+    }
+
+    /// A tile holding one layer of arbitrary polygon and line features, for
+    /// cases where the parser's behavior depends on how features relate to
+    /// one another (a junction area among the roads that enter it).
+    static func layerTile(layerName: String,
+                          features: [Feature],
+                          extent: UInt32 = 4096) throws -> Data {
+        var layer = VectorTile_Tile.Layer()
+        layer.version = 2
+        layer.name = layerName
+        layer.extent = extent
+        var keyIndex: [String: UInt32] = [:]
+        var valueIndex: [String: UInt32] = [:]
+        for feature in features {
+            var encoded = VectorTile_Tile.Feature()
+            encoded.id = feature.id
+            switch feature.geometry {
+            case .polygon(let ring):
+                encoded.type = .polygon
+                encoded.geometry = ringGeometry(ring, closed: true)
+            case .line(let points):
+                encoded.type = .linestring
+                encoded.geometry = ringGeometry(points, closed: false)
+            }
+            for key in feature.properties.keys.sorted() {
+                let value = feature.properties[key] ?? ""
+                if keyIndex[key] == nil {
+                    keyIndex[key] = UInt32(layer.keys.count)
+                    layer.keys.append(key)
+                }
+                if valueIndex[value] == nil {
+                    valueIndex[value] = UInt32(layer.values.count)
+                    var encodedValue = VectorTile_Tile.Value()
+                    if let integer = Int64(value) {
+                        encodedValue.intValue = integer
+                    } else {
+                        encodedValue.stringValue = value
+                    }
+                    layer.values.append(encodedValue)
+                }
+                encoded.tags.append(contentsOf: [keyIndex[key]!, valueIndex[value]!])
+            }
+            layer.features.append(encoded)
+        }
+        var tile = VectorTile_Tile()
+        tile.layers = [layer]
+        return try tile.serializedData()
+    }
+
+    /// A polyline or ring as MVT commands: one moveTo, the rest lineTo, and a
+    /// closePath for a ring.
+    private static func ringGeometry(_ points: [(Int32, Int32)], closed: Bool) -> [UInt32] {
+        guard let first = points.first else { return [] }
+        var commands: [UInt32] = [GeometryCommand.moveTo.encoded(count: 1), zigZag(first.0), zigZag(first.1)]
+        if points.count > 1 {
+            commands.append(GeometryCommand.lineTo.encoded(count: UInt32(points.count - 1)))
+            var cursor = first
+            for point in points.dropFirst() {
+                commands.append(zigZag(point.0 - cursor.0))
+                commands.append(zigZag(point.1 - cursor.1))
+                cursor = point
+            }
+        }
+        if closed {
+            commands.append(GeometryCommand.closePath.encoded(count: 1))
+        }
+        return commands
+    }
+
     /// One closed square ring from (0,0) to (side,side), as MVT commands.
     ///
     /// The ring is emitted counter-clockwise in tile coordinates; the parser
