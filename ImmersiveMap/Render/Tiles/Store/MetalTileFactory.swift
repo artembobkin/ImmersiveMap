@@ -244,6 +244,7 @@ final class MetalTileFactory: @unchecked Sendable {
         let roads = RoadStructureBuckets(
             tunnel: takeRoadPhases(.tunnel, cursor: &cursor),
             ground: takeRoadPhases(.ground, cursor: &cursor),
+            automobileGround: takeRoadPhases(.automobileGround, cursor: &cursor),
             bridge: takeRoadPhases(.bridge, cursor: &cursor)
         )
         let bridgeOverlay = takeGeometryLayer(.bridgeOverlay, cursor: &cursor)

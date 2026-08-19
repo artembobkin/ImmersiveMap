@@ -53,6 +53,7 @@ enum PreparedTileCPUTestFixtures {
                                ground: ground,
                                roads: RoadStructureBuckets(tunnel: emptyPhases,
                                                            ground: emptyPhases,
+                                                           automobileGround: emptyPhases,
                                                            bridge: emptyPhases),
                                bridgeOverlay: emptyLayer,
                                extruded: PreparedTileCPU.Extruded(vertices: [], indices: [], styles: []),

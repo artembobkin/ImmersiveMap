@@ -50,6 +50,7 @@ extension RoadGeometryPhases: Sendable where Layer: Sendable {}
 struct RoadStructureBuckets<Bucket> {
     let tunnel: Bucket
     let ground: Bucket
+    let automobileGround: Bucket
     let bridge: Bucket
 
     func bucket(for structureKind: TileMvtParser.RoadStructureKind) -> Bucket {
@@ -58,6 +59,8 @@ struct RoadStructureBuckets<Bucket> {
             return tunnel
         case .ground:
             return ground
+        case .automobileGround:
+            return automobileGround
         case .bridge:
             return bridge
         }
@@ -66,6 +69,7 @@ struct RoadStructureBuckets<Bucket> {
     func map<T>(_ transform: (Bucket) -> T) -> RoadStructureBuckets<T> {
         RoadStructureBuckets<T>(tunnel: transform(tunnel),
                                 ground: transform(ground),
+                                automobileGround: transform(automobileGround),
                                 bridge: transform(bridge))
     }
 
@@ -79,7 +83,7 @@ extension TileMvtParser.RoadStructureKind {
     /// arena-image span order (`TileArenaSchema` iterates it), so changing it
     /// is a prepared-cache format change: bump
     /// `PreparedTileDiskCaching.preparedFormatVersion`.
-    static let drawOrder: [TileMvtParser.RoadStructureKind] = [.tunnel, .ground, .bridge]
+    static let drawOrder: [TileMvtParser.RoadStructureKind] = [.tunnel, .ground, .automobileGround, .bridge]
 }
 
 extension RoadStructureBuckets: Equatable where Bucket: Equatable {}

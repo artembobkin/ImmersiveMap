@@ -178,8 +178,9 @@ final class RoadCarriagewayWidthTests: XCTestCase {
     }
 
     func testNothingElseIsMarked() {
-        XCTAssertNil(markingPass("primary", lanes: 6, z: 14),
-                     "Below street zoom the road is too narrow to hold a divider")
+        XCTAssertNil(markingPass("primary", lanes: 6, z: 12),
+                     "Below z13 the road is too narrow to hold a divider")
+        XCTAssertNotNil(markingPass("primary", lanes: 6, z: 13), "Markings draw from z13")
         XCTAssertNil(markingPass("service", z: 16), "A service road has nothing to divide")
         XCTAssertNil(markingPass("path", z: 16), "A footway is not an automobile road")
         XCTAssertNil(markingPass("primary", lanes: 6, z: 16, brunnel: "tunnel"),

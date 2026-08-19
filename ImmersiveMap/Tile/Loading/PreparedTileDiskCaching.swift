@@ -446,7 +446,10 @@ final class PreparedTileDiskCaching {
     // 41: TileLineStyle.reserved0 became dashInTileUnits, and the lane
     // marking passes it set; a version-40 record's markings would read as
     // point dashes at a tile-unit period.
-    static let preparedFormatVersion: UInt32 = 41
+    // 42: a fourth road structure bucket, automobileGround, joined the
+    // arena span order between ground and bridge; a version-41 record's
+    // road spans bind to the wrong structures.
+    static let preparedFormatVersion: UInt32 = 42
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

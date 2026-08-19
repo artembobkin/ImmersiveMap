@@ -99,10 +99,11 @@ enum FlatMapSurfaceDrawer {
 
             drawRoadGroup(.tunnel)
             drawRoadGroup(.ground)
+            drawRoadGroup(.automobileGround)
             drawLayer(\.bridgeOverlay)
             drawRoadGroup(.bridge)
 
-            for structureKind in [TileMvtParser.RoadStructureKind.tunnel, .ground, .bridge] {
+            for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
                 for placeTile in placeTilesContext.tilePlacements {
                     let metalTile = placeTile.metalTile
                     let structureBucket = metalTile.tileBuffers.roads.bucket(for: structureKind)

@@ -1391,6 +1391,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
                                ground: emptyGeometry,
                                roads: RoadStructureBuckets(tunnel: emptyRoadPhases,
                                                           ground: emptyRoadPhases,
+                                                          automobileGround: emptyRoadPhases,
                                                           bridge: emptyRoadPhases),
                                bridgeOverlay: emptyGeometry,
                                extruded: PreparedTileCPU.Extruded(vertices: [],

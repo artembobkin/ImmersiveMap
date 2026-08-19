@@ -65,7 +65,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         return PreparedTileCPU(
             tile: tile,
             ground: ground,
-            roads: RoadStructureBuckets(tunnel: emptyPhases, ground: groundPhases, bridge: emptyPhases),
+            roads: RoadStructureBuckets(tunnel: emptyPhases, ground: groundPhases, automobileGround: emptyPhases, bridge: emptyPhases),
             bridgeOverlay: emptyLayer,
             extruded: PreparedTileCPU.Extruded(
                 vertices: [],

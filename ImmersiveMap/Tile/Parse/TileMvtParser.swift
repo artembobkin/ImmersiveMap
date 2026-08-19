@@ -127,6 +127,50 @@ class TileMvtParser {
         return point.x > extent || point.y > extent
     }
 
+    /// Styles state a class priority per road; from this value up the road is
+    /// part of the automobile network and draws in the tier above the
+    /// pedestrian one. The built-in style puts service roads at 45 and paths
+    /// at 35 with rail between; a custom style with a priority lands in the
+    /// tier its number implies.
+    static let automobileRoadClassPriorityFloor = 45
+
+    /// Pulls a polyline back from its ends by `inset` tile units along its own
+    /// path, consuming whole leading or trailing segments when the inset
+    /// exceeds them. Returns nil when the line is shorter than the insets it
+    /// is asked for: a stub of paint with no room for a dash is no paint.
+    static func insetLineEnds(_ points: [SIMD2<Float>],
+                              inset: Float,
+                              insetStart: Bool,
+                              insetEnd: Bool) -> [SIMD2<Float>]? {
+        guard inset > 0, insetStart || insetEnd, points.count >= 2 else {
+            return points
+        }
+        var working = points
+        func trim(_ reversed: Bool) -> Bool {
+            var remaining = inset
+            var path = reversed ? Array(working.reversed()) : working
+            while path.count >= 2 {
+                let segment = path[1] - path[0]
+                let length = simd_length(segment)
+                if length > remaining {
+                    path[0] = path[0] + segment / length * remaining
+                    working = reversed ? Array(path.reversed()) : path
+                    return true
+                }
+                remaining -= length
+                path.removeFirst()
+            }
+            return false
+        }
+        if insetStart, trim(false) == false {
+            return nil
+        }
+        if insetEnd, trim(true) == false {
+            return nil
+        }
+        return working.count >= 2 ? working : nil
+    }
+
     private func roadStructureKind(attributes: [String: VectorTile_Tile.Value]) -> RoadStructureKind {
         let locationValue = attributes["location"]?.stringValue.lowercased() ?? ""
         let structureValue = attributes["structure"]?.stringValue.lowercased() ?? ""
@@ -844,9 +888,18 @@ class TileMvtParser {
                                                                   additionalKeys: labelProviderProfile.labelTextKeys)
                     let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
                     let roadLabelStyle = style.roadLabelTextStyle
-                    let roadStructure = roadStructureKind(attributes: attributes)
-                    let roadLayer = roadLayerValue(attributes: attributes)
                     let roadClassPriority = style.roadClassPriority
+                    let physicalStructure = roadStructureKind(attributes: attributes)
+                    // On the ground the automobile network draws as its own
+                    // tier above the pedestrian one, so a path ending against
+                    // an avenue never lies over its kerb. The class priority
+                    // the style states is the tier line: drive tiers sit at
+                    // 45 and above, footways, tracks and rail below.
+                    let roadStructure: RoadStructureKind = physicalStructure == .ground
+                        && roadClassPriority >= Self.automobileRoadClassPriorityFloor
+                        ? .automobileGround
+                        : physicalStructure
+                    let roadLayer = roadLayerValue(attributes: attributes)
                     let sharedRoadPadding = Float(
                         lineRenderPasses.reduce(0.0) { partial, pass in
                             max(partial, pass.parseGeometryStyleData.lineWidth * 0.5)
@@ -1024,7 +1077,20 @@ class TileMvtParser {
                                     let startCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && startFree
                                     let endCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && endFree
 
-                                    if let linePolygon = parseLine.parse(points: renderFragment.points,
+                                    // An inset pulls the line back from a genuine end or a
+                                    // junction; a tile-seam cut keeps its point so the line
+                                    // continues flush in the neighbour.
+                                    let insetPoints = Self.insetLineEnds(
+                                        renderFragment.points,
+                                        inset: Float(lineRenderPass.parseGeometryStyleData.endInset),
+                                        insetStart: startContinuation == false,
+                                        insetEnd: endContinuation == false
+                                    )
+                                    guard let insetPoints else {
+                                        continue
+                                    }
+
+                                    if let linePolygon = parseLine.parse(points: insetPoints,
                                                                          width: lineRenderPass.parseGeometryStyleData.lineWidth,
                                                                          tileExtent: Float(tileExtent),
                                                                          startCapRound: startCapRound,
@@ -1392,6 +1458,11 @@ class TileMvtParser {
                                                                          lineStyles: unifiedRoadLayer.lineStyles),
                                            detail: emptyRoadLayer,
                                            overlay: emptyRoadLayer),
+                automobileGround: RoadGeometryPhases(shadow: emptyRoadLayer,
+                                                     casing: emptyRoadLayer,
+                                                     fill: emptyRoadLayer,
+                                                     detail: emptyRoadLayer,
+                                                     overlay: emptyRoadLayer),
                 bridge: RoadGeometryPhases(shadow: emptyRoadLayer,
                                            casing: emptyRoadLayer,
                                            fill: emptyRoadLayer,
@@ -1432,6 +1503,7 @@ class TileMvtParser {
             roadPhases = RoadStructureBuckets(
                 tunnel: makeStructurePhases(.tunnel),
                 ground: makeStructurePhases(.ground),
+                automobileGround: makeStructurePhases(.automobileGround),
                 bridge: makeStructurePhases(.bridge)
             )
         }

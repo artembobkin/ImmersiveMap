@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 51
+    private static let implementationRevision: UInt32 = 52
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -435,9 +435,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel,
                              minimumWidthPoints: 0.7, unitsPerMetre: unitsPerMetre)
         case "path", "track":
-            // Park alleys and walkways (footway/path/track): a thin solid
-            // line, no dashes, which used to read as noise over water/parks.
-            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
+            // Park alleys and walkways (footway/path/track): a strip of the
+            // ground color with its own kerb, so over land it reads as an
+            // edge pair and over a park or a square as a pale route across
+            // it. No dashes, which used to read as noise over water/parks.
+            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: true, tunnel: isTunnel,
                              minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre)
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
@@ -595,6 +597,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // Round caps are deliberately off: at a free end the dash pattern
             // must stop on the road, not lay a translucent disc past it.
             let markingRibbonUnits = Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
+            // Paint stops half a carriageway short of the road's ends and of
+            // every junction, as it does on the ground: the last dash never
+            // pokes past the fill at a dead end, and the divider never runs
+            // across the street it meets. A tile-seam cut is not an end and
+            // keeps running flush into the neighbour (the parser tells them
+            // apart).
+            let markingEndInset = width * 0.5
             passes.append(
                 LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
                                color: Self.roadMarkingColor,
@@ -606,7 +615,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
                                    lineWidth: markingRibbonUnits,
                                    lineCapRound: false,
-                                   lineJoinRound: true
+                                   lineJoinRound: true,
+                                   endInset: markingEndInset
                                ),
                                includeRoadLabelPath: false,
                                roadPassRole: .detail)
@@ -749,7 +759,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// From this tile zoom a drive-tier road is wide enough on screen to hold
     /// lane markings: below it the dashes would be noise inside a road only a
     /// few points across.
-    private static let roadMarkingsMinimumTileZoom = 15
+    private static let roadMarkingsMinimumTileZoom = 13
 
     /// The paint of a lane divider: an off-white that reads on the asphalt
     /// grey without glaring, slightly translucent so the marking sits in the

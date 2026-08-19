@@ -101,6 +101,7 @@ final class PreparedTileDiskCachingCoordinatorTests: XCTestCase {
                                ground: emptyGeometry,
                                roads: RoadStructureBuckets(tunnel: emptyRoadPhases,
                                                           ground: emptyRoadPhases,
+                                                          automobileGround: emptyRoadPhases,
                                                           bridge: emptyRoadPhases),
                                bridgeOverlay: emptyGeometry,
                                extruded: PreparedTileCPU.Extruded(vertices: [], indices: [], styles: []),

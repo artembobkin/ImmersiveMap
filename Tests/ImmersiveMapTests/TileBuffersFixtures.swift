@@ -55,6 +55,7 @@ enum TileBuffersFixtures {
                            ground: ground,
                            roads: RoadStructureBuckets(tunnel: phases,
                                                        ground: phases,
+                                                       automobileGround: phases,
                                                        bridge: phases),
                            bridgeOverlay: ground,
                            extruded: TileBuffers.Extruded(vertices: nil,

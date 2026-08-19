@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 41)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 42)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -574,9 +574,10 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // strides); pin the ABI before trusting stride-derived expectations.
         XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 8)
 
-        // Slot sequence: 5 ground + 15 road phases x 5 + 5 bridge overlay
+        // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
+        // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
         // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs.
-        XCTAssertEqual(spans.count, 89)
+        XCTAssertEqual(spans.count, 114)
 
         // Ground vertices: 3 elements at offset 0, 24 bytes. The three
         // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0, a zero

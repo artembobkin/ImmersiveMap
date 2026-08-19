@@ -28,7 +28,10 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)
         XCTAssertGreaterThan(parsed.drawingPolygon.indices.count, 0, "ground polygons missing")
         XCTAssertGreaterThan(parsed.drawingExtruded.indices.count, 0, "building extrusions missing")
-        let roadIndexCount = parsed.drawingRoadPhases.ground.casing.drawing.indices.count
+        // The automobile network draws in its own tier above the pedestrian
+        // one; a city tile has both.
+        let roadIndexCount = parsed.drawingRoadPhases.automobileGround.casing.drawing.indices.count
+            + parsed.drawingRoadPhases.automobileGround.fill.drawing.indices.count
             + parsed.drawingRoadPhases.ground.fill.drawing.indices.count
         XCTAssertGreaterThan(roadIndexCount, 0, "separate-road geometry missing")
         XCTAssertGreaterThan(parsed.textLabels.count, 0, "point labels missing")

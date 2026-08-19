@@ -370,7 +370,11 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
         tertiary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         minor: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         service: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
-        path: SIMD4<Float>(0.867, 0.843, 0.796, 1.0),
+        // A plain pedestrian path is the ground with a casing-less edge, not a
+        // surface of its own: the same warm off-white as the land, so the
+        // footway network reads as routes across the ground rather than a
+        // second, beige road system laid over it.
+        path: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
         rail: SIMD4<Float>(0.741, 0.741, 0.765, 1.0),
         casing: SIMD4<Float>(0.718, 0.725, 0.735, 1.0)
     )
