@@ -172,8 +172,8 @@ frames tile 14/9904/5121 so the shapes get looked at before a release.
 
 ## Where to look while working on it
 
-- Dev tiles: `https://5-39-218-215.sslip.io/tiles/{z}/{x}/{y}.mvt` with the
-  bearer key from `LocalSecrets.plist` (`IMMERSIVEMAP_DEV_API_KEY`).
+- Dev tiles: `https://immersivemap.dev/tiles/test/{z}/{x}/{y}.mvt` with the
+  bearer key from `LocalSecrets.plist` (`IMMERSIVEMAP_API_KEY`).
 - Tile 14/9904/5121 (Kremlin, Red Square) has all the shapes above in one
   place; the Bolshoi is one tile north. Tags in the tile: `roof:shape`,
   `roof:height` (metres, decimal), `roof:levels`, `roof:orientation`

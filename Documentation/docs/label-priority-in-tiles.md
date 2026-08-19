@@ -94,7 +94,7 @@ prepared tiles, so the prepared format version was bumped
 
 ## Where to look
 
-- Tiles: `https://5-39-218-215.sslip.io/tiles/{z}/{x}/{y}.mvt`, key in
-  `LocalSecrets.plist` (`IMMERSIVEMAP_DEV_API_KEY`).
+- Tiles: `https://immersivemap.dev/tiles/test/{z}/{x}/{y}.mvt`, key in
+  `LocalSecrets.plist` (`IMMERSIVEMAP_API_KEY`).
 - A z5 tile over Moscow (5/19/10) shows the place ranks; any z14 tile in the
   centre shows POI grid ranks.
