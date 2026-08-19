@@ -4,10 +4,9 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// Pins the one-number label-priority contract
-/// (Documentation/docs/label-priority-in-tiles.md): `rank` is the whole
-/// signal, lower is more important, and a feature without a rank is the least
-/// important thing in its layer. There is no second mechanism to reconcile:
+/// Pins the one-number label-priority contract the tiles follow: `rank` is
+/// the whole signal, lower is more important, and a feature without a rank is
+/// the least important thing in its layer. There is no second mechanism to reconcile:
 /// the tiles bake population and capital status into the rank at build time,
 /// so the profile must not resurrect them as fallbacks.
 final class ImmersiveMapTilesLabelPriorityContractTests: XCTestCase {

@@ -38,7 +38,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     }
 
     // Lower value == more important. `rank` is 1-based (1 = biggest) and is
-    // the whole contract (see Documentation/docs/label-priority-in-tiles.md):
+    // the whole contract the tiles follow (the label-priority contract):
     // the tiles bake population and capital status into it at build time, so
     // there is no second signal to reconcile, and a feature without a rank is
     // the least important thing in its layer.

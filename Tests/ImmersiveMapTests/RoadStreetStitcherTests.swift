@@ -5,7 +5,7 @@
 import simd
 import XCTest
 
-/// Pins the stitching rule from `Documentation/docs/road-network-in-tiles.md`:
+/// Pins the stitching rule of the road-network tile contract:
 /// pieces of one street (same name and drawing attributes) that meet at an
 /// endpoint no third road shares become one polyline before tessellation;
 /// junctions, different streets, different widths and nameless pieces do not.

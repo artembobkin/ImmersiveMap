@@ -33,3 +33,7 @@ DerivedData/
 
 # A developer's own tile API key, read by the demo apps. Never committed.
 /LocalSecrets.plist
+
+# Development working notes (findings, tile-side contracts, investigation logs):
+# not public API documentation, which is what Documentation/docs/ is for.
+Documentation/notes/
