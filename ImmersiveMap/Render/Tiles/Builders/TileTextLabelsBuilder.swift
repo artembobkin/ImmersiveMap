@@ -41,7 +41,51 @@ final class TileTextLabelsBuilder {
         self.poiAtlasLayout = PoiSpriteAtlasLayout()
     }
 
+    /// A label wraps at the base width to at most this many lines.
     private static let baseLabelWrapLineCount = 3
+    /// A label whose text does not fit the base lines re-wraps wider and
+    /// taller instead of dumping its tail onto one long last line: the box
+    /// grows by `extendedLabelWrapWidthFactor` and may run to this many
+    /// lines. A long name then reads as a compact paragraph, not as a
+    /// three-line stack with a sentence trailing off the third.
+    private static let extendedLabelWrapLineCount = 6
+    private static let extendedLabelWrapWidthFactor: Float = 1.5
+    /// Label box width in ems at the base wrap.
+    private static let baseLabelWrapWidthEms: Float = 10.0
+
+    /// Wraps a label at the base box; when the text does not fit the base
+    /// lines (the wrapper then runs the remainder onto its last line, so the
+    /// laid-out width exceeds the box) the label is wrapped again at the
+    /// extended box. Two passes cost a second layout only for the long names,
+    /// which are rare.
+    static func wrappedLabelMetrics(for text: String,
+                                    labelIndex: simd_int1,
+                                    textScale: Float,
+                                    weight: LabelFontWeight,
+                                    textRenderer: TextRenderer) -> TextMetrics {
+        let baseWidth = textScale * baseLabelWrapWidthEms
+        let baseWrap = LabelWrapOptions(maxWidth: baseWidth,
+                                        maxLines: baseLabelWrapLineCount,
+                                        alignment: .left)
+        let baseMetrics = textRenderer.collectLabelVertices(for: text,
+                                                            labelIndex: labelIndex,
+                                                            scale: textScale,
+                                                            wrap: baseWrap,
+                                                            weight: weight)
+        // A small tolerance: a line that measures a hair over the box is the
+        // wrapper's own rounding, not an overflow worth a second pass.
+        guard baseMetrics.size.width > baseWidth * 1.02 else {
+            return baseMetrics
+        }
+        let extendedWrap = LabelWrapOptions(maxWidth: baseWidth * extendedLabelWrapWidthFactor,
+                                            maxLines: extendedLabelWrapLineCount,
+                                            alignment: .left)
+        return textRenderer.collectLabelVertices(for: text,
+                                                 labelIndex: labelIndex,
+                                                 scale: textScale,
+                                                 wrap: extendedWrap,
+                                                 weight: weight)
+    }
     private static let poiCombinedLabelScale: Float = 1.4
 
     func build(textLabels: [TileMvtParser.TextLabel], tile: Tile) -> PreparedTileCPU.TextLabels {
@@ -74,14 +118,11 @@ final class TileTextLabelsBuilder {
             // tile independent of the display it was built on; the shaders scale
             // it by the frame's pixels-per-point.
             let textScale = style.sizePoints * contentScale
-            let wrap = LabelWrapOptions(maxWidth: textScale * 10.0,
-                                        maxLines: Self.baseLabelWrapLineCount,
-                                        alignment: .left)
-            let textMetrics = textRenderer.collectLabelVertices(for: label.text,
-                                                                labelIndex: labelIndex,
-                                                                scale: textScale,
-                                                                wrap: wrap,
-                                                                weight: weight)
+            let textMetrics = Self.wrappedLabelMetrics(for: label.text,
+                                                       labelIndex: labelIndex,
+                                                       textScale: textScale,
+                                                       weight: weight,
+                                                       textRenderer: textRenderer)
             let geometry = makeCombinedLabelGeometry(textMetrics: textMetrics,
                                                      poiIcon: label.poiIcon,
                                                      textStyle: style,

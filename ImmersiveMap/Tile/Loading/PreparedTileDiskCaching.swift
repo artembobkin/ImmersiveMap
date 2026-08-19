@@ -449,7 +449,10 @@ final class PreparedTileDiskCaching {
     // 42: a fourth road structure bucket, automobileGround, joined the
     // arena span order between ground and bridge; a version-41 record's
     // road spans bind to the wrong structures.
-    static let preparedFormatVersion: UInt32 = 42
+    // 43: labels that overflow three lines re-wrap at a wider, six-line box;
+    // the baked label geometry of a version-42 record carries the old
+    // three-line layout with its trailing line.
+    static let preparedFormatVersion: UInt32 = 43
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
