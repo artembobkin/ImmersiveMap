@@ -893,6 +893,7 @@ class TileMvtParser {
                                 lineWidthPoints: lineRenderPass.lineWidthPoints,
                                 dashLengthPoints: lineRenderPass.dashLengthPoints,
                                 dashGapPoints: lineRenderPass.dashGapPoints,
+                                dashInTileUnits: lineRenderPass.dashInTileUnits,
                                 minimumWidthPoints: lineRenderPass.minimumWidthPoints,
                                 parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
                                 includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
@@ -1265,7 +1266,7 @@ class TileMvtParser {
     /// from the tessellated width and the tessellator's feather constant, so
     /// the two stay one definition; a style with no line width keeps a zero
     /// threshold, which is what tells the shader to skip line coverage.
-    private static func makeTileLineStyle(from style: FeatureStyle) -> TileLineStyle {
+    static func makeTileLineStyle(from style: FeatureStyle) -> TileLineStyle {
         let halfWidth = Float(style.parseGeometryStyleData.lineWidth) * 0.5
         let edgeThreshold = halfWidth > 0
             ? halfWidth / (halfWidth + ParseLine.featherTileUnits)
@@ -1274,7 +1275,8 @@ class TileMvtParser {
                              dashLengthPoints: style.dashLengthPoints,
                              dashGapPoints: style.dashGapPoints,
                              edgeThreshold: edgeThreshold,
-                             minimumWidthPoints: style.minimumWidthPoints)
+                             minimumWidthPoints: style.minimumWidthPoints,
+                             dashInTileUnits: style.dashInTileUnits)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the

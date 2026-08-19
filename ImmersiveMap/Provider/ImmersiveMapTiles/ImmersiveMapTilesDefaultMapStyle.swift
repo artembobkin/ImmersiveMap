@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 50
+    private static let implementationRevision: UInt32 = 51
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -576,10 +576,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            roadPassRole: .fill)
         )
         if laneMarkings, tunnel == false {
-            // The lane divider down an automobile road: a point-locked dashed
-            // hairline over the carriageway, so it stays a marking painted on
-            // asphalt at every zoom instead of a second road that grows with
-            // the first. It draws in the `detail` role, above every fill.
+            // The lane divider down an automobile road. It is paint on the
+            // surface, so it is world-locked in both dimensions that matter:
+            // the dash period is a length in metres (a city broken line,
+            // three on and six off), converted to this tile's units, so the
+            // dashes sit still on the asphalt and keep their count while the
+            // camera zooms or the engine swaps the tile level serving the
+            // road. Only the stroke width is point-locked, so a hairline of
+            // paint stays a hairline instead of becoming a second road. It
+            // draws in the `detail` role, above every fill.
             //
             // The ribbon is the narrowest that still hosts the point width:
             // the shader places the edge inside it, and the wider it is, the
@@ -595,8 +600,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                color: Self.roadMarkingColor,
                                lowZoomFadeMask: roadLowZoomFadeMask,
                                lineWidthPoints: Self.roadMarkingWidthPoints,
-                               dashLengthPoints: 5.0,
-                               dashGapPoints: 6.0,
+                               dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
+                               dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
+                               dashInTileUnits: true,
                                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
                                    lineWidth: markingRibbonUnits,
                                    lineCapRound: false,
@@ -750,6 +756,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// surface rather than on top of it.
     private static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 0.85)
     private static let roadMarkingWidthPoints: Float = 0.9
+    /// A city broken lane line: three metres of paint, six of gap.
+    private static let roadMarkingDashMetres: Double = 3.0
+    private static let roadMarkingGapMetres: Double = 6.0
     /// Tile units of marking ribbon per point of stroke. Markings live on
     /// z15+ tiles, where a unit is a few centimetres, so a much tighter
     /// provisioning than the overview lines' 32 still hosts the stroke on a

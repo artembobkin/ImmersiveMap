@@ -56,6 +56,11 @@ struct LineRenderPass {
     /// `parseGeometryStyleData` must stay zero for it.
     let dashLengthPoints: Float
     let dashGapPoints: Float
+    /// True when `dashLengthPoints`/`dashGapPoints` are tile units rather
+    /// than points: a world-locked pattern, paint on the ground whose period
+    /// is a length and must not re-flow with the camera or the serving tile
+    /// level. See `TileLineStyle.dashInTileUnits`.
+    let dashInTileUnits: Bool
     /// Floor for a world-locked width; see `TileLineStyle.minimumWidthPoints`.
     let minimumWidthPoints: Float
     /// Street-palette counterpart of `color` for passes whose color changes
@@ -74,6 +79,7 @@ struct LineRenderPass {
          lineWidthPoints: Float = 0.0,
          dashLengthPoints: Float = 0.0,
          dashGapPoints: Float = 0.0,
+         dashInTileUnits: Bool = false,
          minimumWidthPoints: Float = 0.0,
          parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
@@ -86,6 +92,7 @@ struct LineRenderPass {
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
+        self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
@@ -108,6 +115,8 @@ struct FeatureStyle {
     /// See `LineRenderPass.dashLengthPoints`.
     let dashLengthPoints: Float
     let dashGapPoints: Float
+    /// See `LineRenderPass.dashInTileUnits`.
+    let dashInTileUnits: Bool
     /// See `TileLineStyle.minimumWidthPoints`.
     let minimumWidthPoints: Float
     let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
@@ -139,6 +148,7 @@ struct FeatureStyle {
         lineWidthPoints: Float = 0.0,
         dashLengthPoints: Float = 0.0,
         dashGapPoints: Float = 0.0,
+        dashInTileUnits: Bool = false,
         minimumWidthPoints: Float = 0.0,
         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
@@ -162,6 +172,7 @@ struct FeatureStyle {
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
+        self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
         self.parseGeometryStyleData = parseGeometryStyleData
         self.includeRoadLabelPath = includeRoadLabelPath
@@ -191,6 +202,7 @@ struct FeatureStyle {
                            lineWidthPoints: lineWidthPoints,
                            dashLengthPoints: dashLengthPoints,
                            dashGapPoints: dashGapPoints,
+                           dashInTileUnits: dashInTileUnits,
                            minimumWidthPoints: minimumWidthPoints,
                            parseGeometryStyleData: parseGeometryStyleData,
                            includeRoadLabelPath: includeRoadLabelPath,

@@ -43,8 +43,14 @@ struct TileLineStyle {
     /// the world at street level. Zero disables the floor; ignored when
     /// `widthPoints` locks the width outright.
     var minimumWidthPoints: Float
+    /// Non-zero when the dash pattern is world-locked: `dashLengthPoints` and
+    /// `dashGapPoints` are then tile units, not points, and the shader cuts
+    /// the pattern from arc length with no point-to-unit conversion. Paint on
+    /// the ground (a lane divider) is part of the surface: its period is a
+    /// length in metres, so it must not re-flow when the camera zooms or the
+    /// engine swaps the tile level that serves the road.
+    var dashInTileUnits: Float
     /// Reserved; keeps the stride stable for future line parameters.
-    var reserved0: Float = 0
     var reserved1: Float = 0
     var reserved2: Float = 0
 
@@ -52,12 +58,14 @@ struct TileLineStyle {
          dashLengthPoints: Float,
          dashGapPoints: Float,
          edgeThreshold: Float,
-         minimumWidthPoints: Float = 0) {
+         minimumWidthPoints: Float = 0,
+         dashInTileUnits: Bool = false) {
         self.widthPoints = widthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
         self.edgeThreshold = edgeThreshold
         self.minimumWidthPoints = minimumWidthPoints
+        self.dashInTileUnits = dashInTileUnits ? 1 : 0
     }
 
     static let polygon = TileLineStyle(widthPoints: 0,

@@ -31,6 +31,9 @@ struct VertexOut {
     float lineParameter;
     half4 lineStyle;
     half lineMinimumWidthPoints;
+    // 1 when the dash pattern is already in tile units (world-locked paint),
+    // 0 when it is in points and scales by the draw's unitsPerPoint.
+    half lineDashInTileUnits;
 };
 
 struct Style {
@@ -53,7 +56,10 @@ struct LineStyle {
     float dashGapPoints;
     float edgeThreshold;
     float minimumWidthPoints;
-    float reserved0;
+    // Non-zero: dashLengthPoints/dashGapPoints are tile units and the
+    // pattern is cut from arc length without the point-to-unit conversion
+    // (world-locked paint such as a lane divider).
+    float dashInTileUnits;
     float reserved1;
     float reserved2;
 };
@@ -106,6 +112,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                           lineStyle.dashLengthPoints,
                           lineStyle.dashGapPoints);
     out.lineMinimumWidthPoints = half(lineStyle.minimumWidthPoints);
+    out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;
     return out;
 }
 
@@ -143,6 +150,7 @@ static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
                                     half minimumWidthPoints,
+                                    half dashInTileUnits,
                                     float pixelsPerPoint,
                                     float dashUnitsPerPoint) {
     // The derivatives are taken before the threshold test: fwidth needs the
@@ -177,8 +185,13 @@ static inline half tileLineCoverage(float lineDistance,
         // decoration sharing the style) rather than a real arc: skip the
         // pattern instead of smearing a constant.
         float unitsPerPixel = parameterSpan;
-        float dashUnits = float(dashLengthPoints) * dashUnitsPerPoint;
-        float gapUnits = float(lineStyle.w) * dashUnitsPerPoint;
+        // A world-locked pattern is already in tile units: paint on the
+        // ground keeps its metre period whatever the camera or the serving
+        // tile level does. A point-locked one converts at the draw's nominal
+        // scale.
+        float unitScale = dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint;
+        float dashUnits = float(dashLengthPoints) * unitScale;
+        float gapUnits = float(lineStyle.w) * unitScale;
         float period = dashUnits + gapUnits;
         if (unitsPerPixel > 1e-5 && dashUnits > 0.0 && gapUnits > 0.0) {
             // Signed distance to the nearest dash boundary, wrapped around
@@ -218,6 +231,7 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
                                          in.lineParameter,
                                          in.lineStyle,
                                          in.lineMinimumWidthPoints,
+                                         in.lineDashInTileUnits,
                                          overviewFade.pixelsPerPoint,
                                          lineDash.unitsPerPoint);
     if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||

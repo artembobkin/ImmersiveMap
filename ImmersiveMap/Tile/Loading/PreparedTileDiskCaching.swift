@@ -443,7 +443,10 @@ final class PreparedTileDiskCaching {
     // 40: label priority follows the one-number `rank` contract (no more
     // capital/population fallbacks, unranked POIs at the reveal tail), and
     // priorities are baked into prepared label runs.
-    static let preparedFormatVersion: UInt32 = 40
+    // 41: TileLineStyle.reserved0 became dashInTileUnits, and the lane
+    // marking passes it set; a version-40 record's markings would read as
+    // point dashes at a tile-unit period.
+    static let preparedFormatVersion: UInt32 = 41
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

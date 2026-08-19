@@ -143,6 +143,40 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         }
     }
 
+    func testLaneDividerIsPaintOnTheGroundNotAScreenPattern() throws {
+        // The dash period is a length in metres, so it must come out as the
+        // same metres from a z15 tile and a z16 tile of the same street: the
+        // dashes sit still and keep their count while the camera zooms and
+        // the engine swaps the tile level serving the road. A point-locked
+        // pattern would re-flow at every such swap.
+        let deep = try XCTUnwrap(markingPass("primary", lanes: 6, z: 16))
+        let coarse = try XCTUnwrap(markingPass("primary", lanes: 6, z: 15))
+        XCTAssertTrue(deep.dashInTileUnits, "Paint is world-locked: its period is in tile units")
+        XCTAssertTrue(coarse.dashInTileUnits)
+
+        let deepMetres = metresPerUnit(moscowTile(z: 16))
+        let coarseMetres = metresPerUnit(moscowTile(z: 15))
+        let deepDash = Double(deep.dashLengthPoints) * deepMetres
+        let coarseDash = Double(coarse.dashLengthPoints) * coarseMetres
+        XCTAssertEqual(deepDash, 3.0, accuracy: 0.05, "Three metres of paint")
+        XCTAssertEqual(coarseDash, deepDash, accuracy: 0.05,
+                       "The same metres whichever tile serves the road")
+        XCTAssertEqual(Double(deep.dashGapPoints) * deepMetres, 6.0, accuracy: 0.05, "six of gap")
+        // The stroke itself stays a hairline of paint: point-locked width.
+        XCTAssertEqual(deep.lineWidthPoints, coarse.lineWidthPoints)
+        XCTAssertGreaterThan(deep.lineWidthPoints, 0)
+    }
+
+    func testBordersKeepTheirScreenDashes() {
+        // The other dash mode is untouched: a border's dash is a screen
+        // pattern in points, which is right for a symbolic line.
+        let boundary = style.makeStyle(data: DetFeatureStyleData(layerName: "boundary",
+                                                                 properties: ["admin_level": intValue(2)],
+                                                                 tile: moscowTile(z: 16)))
+        XCTAssertFalse(boundary.dashInTileUnits)
+        XCTAssertEqual(boundary.dashLengthPoints, 7.0)
+    }
+
     func testNothingElseIsMarked() {
         XCTAssertNil(markingPass("primary", lanes: 6, z: 14),
                      "Below street zoom the road is too narrow to hold a divider")
