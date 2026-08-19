@@ -386,6 +386,22 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.kremlin)),
 
         VisualReviewScenario(
+            id: "roads.carriageways.street",
+            title: "Street level, carriageways and lane markings",
+            lookFor: """
+            Roads as surfaces, not strokes: a wide avenue is visibly wider \
+            than the side street it crosses, in the proportion the real \
+            streets are, and each carriageway carries a dashed lane divider \
+            down its middle. The dashes stay a painted marking (constant \
+            weight, evenly spaced) rather than growing into a second road, \
+            junctions do not blob where markings meet, and the kerb is a thin \
+            even edge on both sides instead of a wide dark band. Service \
+            alleys and footways carry no markings.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.manhattan)),
+
+        VisualReviewScenario(
             id: "roads.labels.flat",
             title: "Manhattan flat, roads and road labels",
             lookFor: """

@@ -1,0 +1,150 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+@testable import ImmersiveMap
+import XCTest
+
+/// A road's width is a fact about the ground, so the style states it in metres
+/// and converts per tile. These tests pin that fact end to end: the same street
+/// covers the same metres whichever zoom's tile serves it, the lane count the
+/// tiles carry is what sets the width, and an automobile road wide enough to
+/// hold a lane divider gets one.
+final class RoadCarriagewayWidthTests: XCTestCase {
+    private let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+
+    /// Central Moscow, the tile column/row of the screenshots this behavior
+    /// was reported from, at each zoom.
+    private func moscowTile(z: Int) -> Tile {
+        let scale = 1 << (z - 16)
+        return z >= 16 ? Tile(x: 39616 * scale, y: 20486 * scale, z: z)
+                       : Tile(x: 39616 >> (16 - z), y: 20486 >> (16 - z), z: z)
+    }
+
+    /// Ground metres one tile unit spans, derived independently of the style.
+    private func metresPerUnit(_ tile: Tile) -> Double {
+        let tilesCount = Double(1 << tile.z)
+        let normalizedY = (Double(tile.y) + 0.5) / tilesCount
+        let latitude = atan(sinh(Double.pi * (1.0 - 2.0 * normalizedY)))
+        return 40_075_016.686 * cos(latitude) / tilesCount / 4096.0
+    }
+
+    private func intValue(_ value: Int) -> VectorTile_Tile.Value {
+        var v = VectorTile_Tile.Value()
+        v.intValue = Int64(value)
+        return v
+    }
+
+    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
+        var v = VectorTile_Tile.Value()
+        v.stringValue = value
+        return v
+    }
+
+    private func roadStyle(_ className: String,
+                           lanes: Int? = nil,
+                           z: Int,
+                           brunnel: String? = nil) -> FeatureStyle {
+        var props: [String: VectorTile_Tile.Value] = ["class": stringValue(className)]
+        if let lanes { props["lanes"] = intValue(lanes) }
+        if let brunnel { props["brunnel"] = stringValue(brunnel) }
+        return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                         properties: props,
+                                                         tile: moscowTile(z: z)))
+    }
+
+    private func fillWidthMetres(_ className: String, lanes: Int? = nil, z: Int) -> Double {
+        let featureStyle = roadStyle(className, lanes: lanes, z: z)
+        let fill = featureStyle.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
+        return (fill?.parseGeometryStyleData.lineWidth ?? 0) * metresPerUnit(moscowTile(z: z))
+    }
+
+    func testCarriagewayWidthIsTheSameGroundWidthAtEveryTileZoom() {
+        // The bug this pins: with the width stated in tile units, a street
+        // drawn from a coarse tile in the distance came out twice as wide as
+        // the same street from the next zoom's tile, and four times as wide
+        // as from the one after that.
+        let widths = [14, 15, 16].map { fillWidthMetres("primary", lanes: 6, z: $0) }
+        for width in widths {
+            XCTAssertEqual(width, 6 * 3.5, accuracy: 0.5,
+                           "A six-lane primary is six lanes of ground wide at every tile zoom")
+        }
+        XCTAssertEqual(widths[0], widths[2], accuracy: 0.5)
+    }
+
+    func testLaneCountSetsTheWidth() {
+        XCTAssertEqual(fillWidthMetres("primary", lanes: 2, z: 16), 2 * 3.5, accuracy: 0.5)
+        XCTAssertEqual(fillWidthMetres("primary", lanes: 6, z: 16), 6 * 3.5, accuracy: 0.5)
+        XCTAssertGreaterThan(fillWidthMetres("primary", lanes: 6, z: 16),
+                             fillWidthMetres("primary", lanes: 2, z: 16))
+        // A nonsense lane count cannot swamp the frame.
+        XCTAssertLessThan(fillWidthMetres("primary", lanes: 400, z: 16), 60)
+    }
+
+    func testUntaggedRoadsFallBackToATypicalLaneCountForTheirClass() {
+        // No `lanes` in the tile: the class still states a plausible width,
+        // and the hierarchy survives.
+        let motorway = fillWidthMetres("motorway", z: 16)
+        let minor = fillWidthMetres("minor", z: 16)
+        let service = fillWidthMetres("service", z: 16)
+        XCTAssertGreaterThan(motorway, minor)
+        XCTAssertGreaterThan(minor, service)
+        XCTAssertEqual(minor, 2 * 3.25, accuracy: 0.5)
+    }
+
+    func testCasingIsAKerbNotAProportionOfTheCarriageway() {
+        let featureStyle = roadStyle("primary", lanes: 6, z: 16)
+        let passes = featureStyle.resolvedLineRenderPasses
+        guard let fill = passes.first(where: { $0.roadPassRole == .fill }),
+              let casing = passes.first(where: { $0.roadPassRole == .casing }) else {
+            return XCTFail("Expected a casing and a fill at street zoom")
+        }
+        let metres = metresPerUnit(moscowTile(z: 16))
+        let marginPerSide = (casing.parseGeometryStyleData.lineWidth - fill.parseGeometryStyleData.lineWidth)
+            * metres / 2
+        XCTAssertEqual(marginPerSide, 0.7, accuracy: 0.2,
+                       "The kerb is a fixed margin of ground, not a fraction of a 21 m road")
+    }
+
+    // MARK: - Lane markings
+
+    private func markingPass(_ className: String,
+                             lanes: Int? = nil,
+                             z: Int,
+                             brunnel: String? = nil) -> LineRenderPass? {
+        roadStyle(className, lanes: lanes, z: z, brunnel: brunnel)
+            .resolvedLineRenderPasses.first { $0.roadPassRole == .detail }
+    }
+
+    func testAutomobileRoadsCarryALaneDividerAtStreetZoom() throws {
+        let marking = try XCTUnwrap(markingPass("primary", lanes: 6, z: 16),
+                                    "An automobile road at street zoom is marked")
+        XCTAssertGreaterThan(marking.lineWidthPoints, 0,
+                             "The divider is painted on the road: point-locked, so it never grows with it")
+        XCTAssertGreaterThan(marking.dashLengthPoints, 0, "and dashed in points")
+        XCTAssertGreaterThan(marking.dashGapPoints, 0)
+        XCTAssertGreaterThanOrEqual(marking.parseGeometryStyleData.lineWidth,
+                                    Double(marking.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                                    "The ribbon must host the point width")
+
+        for className in ["motorway", "trunk", "secondary", "tertiary", "minor"] {
+            XCTAssertNotNil(markingPass(className, z: 16), "\(className) is an automobile road")
+        }
+    }
+
+    func testNothingElseIsMarked() {
+        XCTAssertNil(markingPass("primary", lanes: 6, z: 14),
+                     "Below street zoom the road is too narrow to hold a divider")
+        XCTAssertNil(markingPass("service", z: 16), "A service road has nothing to divide")
+        XCTAssertNil(markingPass("path", z: 16), "A footway is not an automobile road")
+        XCTAssertNil(markingPass("primary", lanes: 6, z: 16, brunnel: "tunnel"),
+                     "A tunnel's carriageway is not painted")
+    }
+
+    func testMarkingsDrawOverEveryCarriageway() {
+        // The detail role is what puts the paint on the asphalt: it sorts
+        // above every fill, so a marking is never buried by the road that
+        // crosses it.
+        XCTAssertGreaterThan(RoadPassRole.detail.rawValue, RoadPassRole.fill.rawValue)
+        XCTAssertGreaterThan(RoadPassRole.fill.rawValue, RoadPassRole.casing.rawValue)
+    }
+}

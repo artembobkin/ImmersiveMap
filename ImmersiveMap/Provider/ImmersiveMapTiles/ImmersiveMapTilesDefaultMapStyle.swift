@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 48
+    private static let implementationRevision: UInt32 = 49
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -83,7 +83,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "aeroway":
             return line(key: 28, color: configuration.layers.aeroway, width: 4)
         case "transportation":
-            return transportationStyle(cls: cls, props: props, tileZoom: z)
+            return transportationStyle(cls: cls, props: props, tile: data.tile)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":
@@ -323,7 +323,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func transportationStyle(cls: String?,
                                      props: [String: VectorTile_Tile.Value],
-                                     tileZoom: Int) -> FeatureStyle {
+                                     tile: Tile) -> FeatureStyle {
+        let tileZoom = tile.z
         let brunnel = props["brunnel"]?.stringValue.lowercased()
         let isTunnel = brunnel == "tunnel"
         let subclass = props["subclass"]?.stringValue.lowercased()
@@ -395,40 +396,56 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                 break
             }
         }
+        // From here the width is the road's real carriageway, in metres
+        // converted to this tile's units: at street zoom a six-lane avenue is
+        // drawn six lanes wide, and the point floors below carry the class
+        // through the zooms where that width is sub-pixel. Markings ride the
+        // same fact, so they only appear where the surface can hold them.
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
+        let widthMetres = roadWidthUnits(cls: effectiveClass, props: props, tile: tile)
+        let markings = isConstruction == false && tileZoom >= Self.roadMarkingsMinimumTileZoom
         switch effectiveClass {
         case "motorway":
-            return roadStyle(fillKey: 56, color: roads.motorway, width: 20 * s, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.2,
+            return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 2.2, unitsPerMetre: unitsPerMetre,
+                             laneMarkings: markings,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
                              construction: isConstruction)
         case "trunk":
-            return roadStyle(fillKey: 54, color: roads.trunk, width: 17.5 * s, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.0,
+            return roadStyle(fillKey: 54, color: roads.trunk, width: widthMetres, priority: 90, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 2.0, unitsPerMetre: unitsPerMetre,
+                             laneMarkings: markings,
                              overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
                              construction: isConstruction)
         case "primary":
-            return roadStyle(fillKey: 52, color: roads.primary, width: 14 * s, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.6, construction: isConstruction)
+            return roadStyle(fillKey: 52, color: roads.primary, width: widthMetres, priority: 80, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.6, unitsPerMetre: unitsPerMetre, laneMarkings: markings, construction: isConstruction)
         case "secondary":
-            return roadStyle(fillKey: 50, color: roads.secondary, width: 11 * s, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.2, construction: isConstruction)
+            return roadStyle(fillKey: 50, color: roads.secondary, width: widthMetres, priority: 78, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.2, unitsPerMetre: unitsPerMetre, laneMarkings: markings, construction: isConstruction)
         case "tertiary":
-            return roadStyle(fillKey: 48, color: roads.tertiary, width: 8.5 * s, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.0, construction: isConstruction)
+            return roadStyle(fillKey: 48, color: roads.tertiary, width: widthMetres, priority: 74, casing: casingZoom, tunnel: isTunnel,
+                             minimumWidthPoints: 1.0, unitsPerMetre: unitsPerMetre, laneMarkings: markings, construction: isConstruction)
         case "minor":
-            return roadStyle(fillKey: 44, color: roads.minor, width: 7 * s, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel)
+            return roadStyle(fillKey: 44, color: roads.minor, width: widthMetres, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
+                             minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre, laneMarkings: markings)
         case "service":
-            return roadStyle(fillKey: 42, color: roads.service, width: 5 * s, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel)
+            // A service road is one lane wide and has nothing to divide, so
+            // it carries no markings.
+            return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: 45, casing: tileZoom >= 14, tunnel: isTunnel,
+                             minimumWidthPoints: 0.7, unitsPerMetre: unitsPerMetre)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a thin solid
             // line, no dashes, which used to read as noise over water/parks.
-            return roadStyle(fillKey: 40, color: roads.path, width: 3.2 * s, priority: 35, casing: false, tunnel: isTunnel)
+            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
+                             minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre)
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
         case "ferry":
             return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
-            return roadStyle(fillKey: 43, color: roads.minor, width: 6.0 * s, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel)
+            return roadStyle(fillKey: 43, color: roads.minor, width: widthMetres, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
+                             minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre)
         }
     }
 
@@ -507,6 +524,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            casing: Bool,
                            tunnel: Bool,
                            minimumWidthPoints: Float = 0,
+                           unitsPerMetre: Double = 0,
+                           laneMarkings: Bool = false,
                            overviewAccent: SIMD4<Float>? = nil,
                            construction: Bool = false) -> FeatureStyle {
         let fillGeometry = tunnel
@@ -528,13 +547,18 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
         var passes: [LineRenderPass] = []
         if casing, tunnel == false {
+            // The casing is a kerb: a fixed margin of ground on each side of
+            // the carriageway, not a fraction of it. As a fraction it was a
+            // few units on a symbolic width and metres wide on a true one,
+            // which turns every street into a dark-edged ribbon.
+            let casingWidth = width + 2 * Self.roadCasingMetresPerSide * unitsPerMetre
             passes.append(
                 LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                                color: roadCasingColor(from: fillColor),
                                streetColor: fillStreetColor.map(roadCasingColor(from:)),
                                lowZoomFadeMask: roadLowZoomFadeMask,
                                minimumWidthPoints: casingFloor,
-                               parseGeometryStyleData: makeRoadGeometry(width: width * 1.5),
+                               parseGeometryStyleData: makeRoadGeometry(width: casingWidth),
                                includeRoadLabelPath: false,
                                roadPassRole: .casing)
             )
@@ -551,6 +575,28 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
         )
+        if laneMarkings, tunnel == false {
+            // The lane divider down an automobile road: a point-locked dashed
+            // hairline over the carriageway, so it stays a marking painted on
+            // asphalt at every zoom instead of a second road that grows with
+            // the first. It draws in the `detail` role, above every fill, and
+            // its ribbon is provisioned to host the point width the same way
+            // the point-locked lines are.
+            passes.append(
+                LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
+                               color: Self.roadMarkingColor,
+                               lowZoomFadeMask: roadLowZoomFadeMask,
+                               lineWidthPoints: Self.roadMarkingWidthPoints,
+                               dashLengthPoints: 5.0,
+                               dashGapPoints: 6.0,
+                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+                                   lineWidth: Double(Self.roadMarkingWidthPoints)
+                                       * FeatureStyle.pointLockedRibbonUnitsPerPoint
+                               ),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .detail)
+            )
+        }
 
         return FeatureStyle(
             key: fillKey,
@@ -594,6 +640,106 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             parseGeometryStyleData: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
             roadClassPriority: 30
         )
+    }
+
+    /// The equatorial circumference the Web Mercator tile grid is built on.
+    private static let equatorialCircumferenceMetres: Double = 40_075_016.686
+    /// The canonical tile coordinate space every parsed geometry lives in
+    /// (`TileMvtParser.tileExtent`).
+    private static let tileExtentUnits: Double = 4096
+
+    /// Tile units per ground metre for one tile.
+    ///
+    /// A road's width is a fact about the ground, so the style states it in
+    /// metres and converts here. Web Mercator's scale is a function of
+    /// latitude, taken at the tile's own centre, and the tile's zoom sets how
+    /// much ground its 4096 units span. Doing the conversion per tile is what
+    /// makes a road the same width on screen whichever zoom's tile happens to
+    /// serve it: a street drawn from a coarse tile in the distance and the
+    /// same street drawn from a native tile underfoot agree, where a width
+    /// stated directly in tile units would differ by the zoom ratio between
+    /// them.
+    private static func tileUnitsPerMetre(tile: Tile) -> Double {
+        let tilesCount = Double(1 << max(0, tile.z))
+        let normalizedY = (Double(tile.y) + 0.5) / tilesCount
+        let latitudeRadians = atan(sinh(Double.pi * (1.0 - 2.0 * normalizedY)))
+        let groundSpanMetres = equatorialCircumferenceMetres * cos(latitudeRadians) / tilesCount
+        guard groundSpanMetres > 0.0001 else {
+            return 0
+        }
+        return tileExtentUnits / groundSpanMetres
+    }
+
+    /// Carriageway width in metres, from the lane count the tiles carry.
+    ///
+    /// `lanes` is per way, so a dual carriageway arrives as two features and
+    /// each gets its own width. Where the tag is missing the class states a
+    /// typical lane count instead, which is what the width used to be based
+    /// on implicitly.
+    private func roadWidthMetres(cls: String?, props: [String: VectorTile_Tile.Value]) -> Double {
+        let laneWidthMetres: Double
+        let defaultLanes: Double
+        switch cls {
+        case "motorway":
+            laneWidthMetres = 3.75
+            defaultLanes = 4
+        case "trunk":
+            laneWidthMetres = 3.75
+            defaultLanes = 3
+        case "primary":
+            laneWidthMetres = 3.5
+            defaultLanes = 3
+        case "secondary", "tertiary":
+            laneWidthMetres = 3.5
+            defaultLanes = 2
+        case "minor":
+            laneWidthMetres = 3.25
+            defaultLanes = 2
+        case "service":
+            laneWidthMetres = 3.0
+            defaultLanes = 1
+        default:
+            // Footways, tracks and anything unclassified: not a carriageway,
+            // so a fixed walkable width rather than a lane count.
+            return 2.0
+        }
+        let taggedLanes = parseIntValue(props["lanes"]).map { Double($0) }
+        // A lane count is trusted only within a sane range: the tag carries
+        // occasional nonsense, and a road hundreds of metres wide would swamp
+        // the frame.
+        let lanes = min(max(taggedLanes ?? defaultLanes, 1), 12)
+        return lanes * laneWidthMetres
+    }
+
+    /// The width of a road's carriageway in the tile's own units.
+    private func roadWidthUnits(cls: String?,
+                                props: [String: VectorTile_Tile.Value],
+                                tile: Tile) -> Double {
+        roadWidthMetres(cls: cls, props: props) * Self.tileUnitsPerMetre(tile: tile)
+    }
+
+    /// How much wider than the carriageway the casing draws, in metres per
+    /// side: the kerb line, not a proportion of the road. A proportional
+    /// casing was invisible on a symbolic width and metres wide on a true
+    /// one.
+    private static let roadCasingMetresPerSide: Double = 0.7
+
+    /// From this tile zoom a drive-tier road is wide enough on screen to hold
+    /// lane markings: below it the dashes would be noise inside a road only a
+    /// few points across.
+    private static let roadMarkingsMinimumTileZoom = 15
+
+    /// The paint of a lane divider: an off-white that reads on the asphalt
+    /// grey without glaring, slightly translucent so the marking sits in the
+    /// surface rather than on top of it.
+    private static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 0.85)
+    private static let roadMarkingWidthPoints: Float = 0.9
+
+    /// Markings sort one above their fill, out of the way of every other
+    /// key the style uses. The `detail` pass role is what actually puts them
+    /// over the carriageway; the key only has to stay unique.
+    private static func roadMarkingKey(forFillKey fillKey: UInt8) -> UInt8 {
+        fillKey &+ 1
     }
 
     /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
