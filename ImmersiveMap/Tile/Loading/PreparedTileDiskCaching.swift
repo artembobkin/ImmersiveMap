@@ -468,7 +468,10 @@ final class PreparedTileDiskCaching {
     // 48: two-way carriageways carry their lane boundaries, paint goes solid
     // on the approach to a junction and leaves a gap sized by the road it
     // meets, and marked pedestrian crossings draw as zebra stripes.
-    static let preparedFormatVersion: UInt32 = 48
+    // 49: a two-way street is painted down the middle and nowhere else, and
+    // only where its lanes divide evenly; the split between the directions is
+    // not something the tiles carry.
+    static let preparedFormatVersion: UInt32 = 49
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

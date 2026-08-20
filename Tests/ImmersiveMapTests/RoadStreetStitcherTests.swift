@@ -135,16 +135,14 @@ final class RoadStreetStitcherTests: XCTestCase {
             let passes = styles(for: [a])[0].resolvedLineRenderPasses.filter { $0.roadPassRole == .detail }
             return Set(passes.map { $0.parseGeometryStyleData.lateralOffset }).sorted()
         }
-        // Two-way with an odd lane count: the centre divider sits on the
-        // centreline, with a boundary either side of it.
-        XCTAssertEqual(markingOffsets(oneway: nil, lanes: 3), markingOffsets(oneway: value(0), lanes: 3),
+        // Two-way: one divider, on the centreline, and only where the lanes
+        // divide evenly. An odd count leaves the centre inside a lane.
+        XCTAssertEqual(markingOffsets(oneway: nil, lanes: 4), markingOffsets(oneway: value(0), lanes: 4),
                        "An explicit oneway=0 is the same two-way street as no tag at all")
-        let twoWay = markingOffsets(oneway: nil, lanes: 3)
-        XCTAssertEqual(twoWay.count, 2, "three lanes, two boundaries")
-
-        // A two-way of two lanes is the one case with a single line, and it
-        // is the centre divider.
         XCTAssertEqual(markingOffsets(oneway: nil, lanes: 2), [0], "one divider, on the centreline")
+        XCTAssertEqual(markingOffsets(oneway: nil, lanes: 4), [0], "and one on a four-lane street too")
+        XCTAssertTrue(markingOffsets(oneway: nil, lanes: 3).isEmpty,
+                      "An odd two-way street is bare: the split between directions is unknown")
 
         // One-way with lanes: a line on each boundary between lanes, none on
         // the centreline (there is no centre to divide), symmetric about it.

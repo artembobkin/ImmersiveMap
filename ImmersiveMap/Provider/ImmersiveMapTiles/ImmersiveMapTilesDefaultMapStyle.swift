@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 57
+    private static let implementationRevision: UInt32 = 58
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -455,9 +455,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             && isUnpaved == false
         let markings: RoadMarkings
         if marked, let taggedLaneCount, taggedLaneCount >= 2 {
-            markings = isOneWay
-                ? .laneLines(laneCount: taggedLaneCount)
-                : .centreDivider(laneCount: taggedLaneCount)
+            if isOneWay {
+                // Every lane on a one-way carriageway runs the same way, so
+                // the boundary between two of them is fixed by the count
+                // alone: no knowledge of where each lane leads is needed.
+                markings = .laneLines(laneCount: taggedLaneCount)
+            } else if taggedLaneCount.isMultiple(of: 2) {
+                // A two-way street is painted down the middle, and the middle
+                // is a real boundary only when the lanes divide evenly. The
+                // tiles carry the total; which of them run each way is
+                // `lanes:forward`/`lanes:backward`, mapped on a few per cent
+                // of streets, so an odd total leaves the split unknown.
+                markings = .centreDivider
+            } else {
+                // An odd total: the centre of the carriageway falls inside a
+                // driving lane rather than between two, and a line drawn
+                // there is half a lane from where the paint is. Bare asphalt
+                // is the honest answer, and it costs about seven per cent of
+                // the painted streets in a city centre.
+                markings = .none
+            }
         } else {
             markings = .none
         }
@@ -768,18 +785,17 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            roadPassRole: .fill)
         )
         // Each marking is one dashed hairline pass, offset sideways from the
-        // centreline: a line on every boundary between lanes. On a two-way
-        // street the middle one is the centre divider, and on a carriageway
-        // of two lanes it is the only one; a four-lane avenue also carries
-        // the boundary inside each direction, which is what is painted on
-        // the ground and what the map was leaving out.
+        // centreline. A one-way carriageway gets a line on every boundary
+        // between its lanes; a two-way street gets the divider down the
+        // middle and nothing else, because which of its lanes run each way is
+        // not something the tiles know.
         var markingOffsets: [Double] = []
         if tunnel == false {
             switch markings {
             case .none:
                 break
-            case .centreDivider(let laneCount):
-                markingOffsets = Self.laneBoundaryOffsets(width: width, laneCount: laneCount)
+            case .centreDivider:
+                markingOffsets = [0]
             case .laneLines(let laneCount):
                 markingOffsets = Self.laneBoundaryOffsets(width: width, laneCount: laneCount)
             }
@@ -972,9 +988,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// What paint an automobile road carries.
     enum RoadMarkings {
         case none
-        /// A two-way street: a dashed line down the middle, plus the boundary
-        /// inside each direction once the street is wide enough to have one.
-        case centreDivider(laneCount: Int)
+        /// A two-way street: one dashed line down the middle. The boundaries
+        /// inside each direction are not drawn: placing them needs the split
+        /// between the directions, and the tiles carry only the total.
+        case centreDivider
         /// A one-way carriageway of several lanes: a dashed line on each
         /// boundary between lanes, none in the middle of the road.
         case laneLines(laneCount: Int)

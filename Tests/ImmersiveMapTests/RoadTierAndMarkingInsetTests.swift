@@ -109,6 +109,11 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
 
         XCTAssertEqual(markingLines(["class": "primary", "lanes": 2]), 1,
                        "A two-way avenue with a stated lane count carries its centre divider")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4]), 1,
+                       "and only that: which of its lanes run each way is not in the tiles")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 3]), 0,
+                       "An odd lane count puts the centre inside a driving lane, so nothing is painted")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 5]), 0)
         XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "oneway": 1]), 3,
                        "A one-way carriageway carries a line on each boundary between its lanes")
         XCTAssertEqual(markingLines(["class": "primary"]), 0,
@@ -125,7 +130,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
                        "The through hierarchy down to tertiary is painted")
 
         // Where the lane count came from decides whether it may be painted.
-        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "lanes_src": "tagged"]), 3,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "lanes_src": "tagged"]), 1,
                        "A mapped lane count is evidence of paint")
         XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "lanes_src": "assumed"]), 0,
                        "A lane count assumed from the class is a width, not a marking")
@@ -133,9 +138,9 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         // An unpaved road has no paint on it to draw.
         XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "unpaved"]), 0,
                        "Gravel carries no lane lines")
-        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "paved"]), 3,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "paved"]), 1,
                        "Asphalt does")
-        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "something_new"]), 3,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "something_new"]), 1,
                        "A surface the tiles do not classify says nothing either way")
     }
 
