@@ -29,11 +29,14 @@ final class RoadMarkingJunctionTests: XCTestCase {
     /// How close the paint on the avenue gets to the junction point, in tile
     /// units. Paint that runs through it comes within a dash of it; paint
     /// that stops short leaves half a carriageway.
-    private func closestPaintToJunction(_ second: VectorTileFixture.Feature) throws -> Float {
+    private func closestPaintToJunction(_ second: VectorTileFixture.Feature,
+                                        streetOfAvenue: String? = nil) throws -> Float {
+        var avenue: [String: String] = ["class": "primary", "lanes": "4", "name": "Avenue"]
+        if let streetOfAvenue { avenue["street"] = streetOfAvenue }
         let data = try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .line(points: [(200, 2048), (2048, 2048), (3900, 2048)]),
-                  properties: ["class": "primary", "lanes": "4", "name": "Avenue"]),
+                  properties: avenue),
             second
         ])
         let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: data)
@@ -76,6 +79,50 @@ final class RoadMarkingJunctionTests: XCTestCase {
         )
         XCTAssertLessThan(try closestPaintToJunction(continuation), clearedGap,
                           "A street that continues carries its line through the seam")
+    }
+
+    func testTheSourcesStreetIdentityDecidesWhatIsASeam() throws {
+        // The tiler assembles streets before cutting tiles and states which
+        // street a piece belongs to. Two pieces of one street meeting is a
+        // seam even where their attributes differ, and two pieces of
+        // different streets meeting is a junction even where they agree.
+        let sameStreet = VectorTileFixture.Feature(
+            id: 2,
+            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            properties: ["class": "primary", "lanes": "6", "name": "Avenue", "street": "77"]
+        )
+        XCTAssertLessThan(try closestPaintToJunction(sameStreet, streetOfAvenue: "77"), clearedGap,
+                          "One street on the ground: the paint runs through")
+
+        let otherStreet = VectorTileFixture.Feature(
+            id: 2,
+            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            properties: ["class": "primary", "lanes": "4", "name": "Avenue", "street": "88"]
+        )
+        XCTAssertGreaterThan(try closestPaintToJunction(otherStreet, streetOfAvenue: "77"), clearedGap,
+                             "Two streets that share a name: the paint still stops")
+    }
+
+    /// Paint broken at a junction resumes in step on the far side.
+    ///
+    /// The dash pattern is cut from arc length, and every tessellated piece
+    /// used to start counting at zero, so each block of a street began with a
+    /// fresh full stroke wherever the line had been cut. Pieces now carry how
+    /// far along the line they begin.
+    func testTheDashPatternCarriesOnAcrossAJunction() {
+        let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(250, 0), SIMD2(400, 0)]
+        let fragment = ClippedLineFragment(points: line, startClipped: false, endClipped: false)
+        let counts: [TileMvtParser.RoadConnectionPointKey: Int] = [
+            .init(point: SIMD2(100, 0)): 2,
+            .init(point: SIMD2(250, 0)): 2
+        ]
+        let pieces = TileMvtParser.splitAtJunctionsWithOrigins(fragment: fragment,
+                                                               automobilePointCounts: counts)
+        XCTAssertEqual(pieces.count, 3)
+        XCTAssertEqual(pieces[0].arcLengthOrigin, 0, "The first piece starts the count")
+        XCTAssertEqual(pieces[1].arcLengthOrigin, 100, accuracy: 0.001,
+                       "and the second carries on from where the first ended")
+        XCTAssertEqual(pieces[2].arcLengthOrigin, 250, accuracy: 0.001)
     }
 
     func testADrivewayIsNotAJunction() throws {

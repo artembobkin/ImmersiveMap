@@ -22,8 +22,17 @@ import simd
 /// receives the whole stitched polyline, the others receive nothing, so the
 /// caller's per-feature styling and bookkeeping stay intact.
 enum RoadStreetStitcher {
-    /// Attributes that must agree for two pieces to be one street to draw.
+    /// Attributes that must agree for two pieces to be one street to draw,
+    /// where the source does not say which street a piece belongs to.
     private static let identityKeys = ["name", "class", "subclass", "lanes", "oneway", "brunnel", "layer"]
+
+    /// The source's own answer to "which street is this": an id assembled
+    /// from the whole road network before the tiles were cut. Where it is
+    /// present it replaces the guess above, which compares every drawing
+    /// attribute and so leaves two pieces of one street apart wherever the
+    /// tiler wrote their lane count differently.
+    private static let streetIdentityKey = "street"
+
 
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
                        featureAttributes: [[String: VectorTile_Tile.Value]],
@@ -38,8 +47,15 @@ enum RoadStreetStitcher {
         var participates = false
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
             guard index < featureAttributes.count,
-                  featureStyles[index].roadClassPriority >= TileMvtParser.automobileRoadClassPriorityFloor,
-                  let name = featureAttributes[index]["name"]?.stringValue,
+                  featureStyles[index].roadClassPriority >= TileMvtParser.automobileRoadClassPriorityFloor else {
+                continue
+            }
+            if let street = featureAttributes[index][streetIdentityKey], describe(street).isEmpty == false {
+                identityByFeature[index] = "street=" + describe(street)
+                participates = true
+                continue
+            }
+            guard let name = featureAttributes[index]["name"]?.stringValue,
                   name.isEmpty == false else {
                 continue
             }

@@ -476,7 +476,12 @@ final class PreparedTileDiskCaching {
     // in one street and a service driveway no longer break the line.
     // 51: the solid approach to a junction is gone; every stroke of a broken
     // line is the same length again.
-    static let preparedFormatVersion: UInt32 = 51
+    // 52: pieces of a line carry how far along it they begin, so a dash
+    // pattern broken at a junction resumes in step instead of starting a
+    // fresh stroke; the street a piece belongs to comes from the source
+    // (`street`) where it says, and decides both stitching and what counts
+    // as a junction.
+    static let preparedFormatVersion: UInt32 = 52
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

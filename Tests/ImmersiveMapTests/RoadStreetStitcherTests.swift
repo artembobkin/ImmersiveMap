@@ -123,6 +123,50 @@ final class RoadStreetStitcherTests: XCTestCase {
                                                  featureStyles: styles(for: attrs)), lines)
     }
 
+    // MARK: - the source's own street identity
+
+    func testPiecesOfOneStreetJoinOnTheSourcesIdentityEvenWhereTheirAttributesDiffer() {
+        // A tiler that assembles streets before cutting tiles states which
+        // street a piece belongs to. Where it does, that answer replaces the
+        // guess: these two pieces differ in lane count, which the attribute
+        // comparison treats as two different streets, and they are one.
+        let lines: [[[SIMD2<Float>]]] = [
+            [[SIMD2(0, 100), SIMD2(1000, 100)]],
+            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
+        ]
+        var withStreet = [attributes(name: "Mokhovaya", lanes: 6), attributes(name: "Mokhovaya", lanes: 2)]
+        withStreet[0]["street"] = value(4211)
+        withStreet[1]["street"] = value(4211)
+        let joined = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                               featureAttributes: withStreet,
+                                               featureStyles: styles(for: withStreet))
+        XCTAssertEqual(joined[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
+                       "One street on the ground, one ribbon on the map")
+        XCTAssertEqual(joined[1], [])
+
+        // Two different ids at the same point stay apart, whatever they are
+        // called: this is a junction, not a seam.
+        var different = withStreet
+        different[1]["street"] = value(9002)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                                 featureAttributes: different,
+                                                 featureStyles: styles(for: different)),
+                       lines)
+    }
+
+    func testAPieceWithoutTheSourcesIdentityFallsBackToItsAttributes() {
+        // A source that ships no street id is read as before.
+        let lines: [[[SIMD2<Float>]]] = [
+            [[SIMD2(0, 100), SIMD2(1000, 100)]],
+            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
+        ]
+        let attrs = [attributes(name: "Tverskaya"), attributes(name: "Tverskaya")]
+        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                            featureAttributes: attrs,
+                                            featureStyles: styles(for: attrs))
+        XCTAssertEqual(out[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
+    }
+
     // MARK: - oneway
 
     func testOneWayCarriagewaysCarryLaneLinesNotACentreDivider() {

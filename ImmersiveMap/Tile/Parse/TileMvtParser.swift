@@ -380,15 +380,26 @@ class TileMvtParser {
         // Distinct streets per point, not occurrences and not features: a
         // street arrives cut into pieces the stitcher could not join, and
         // both sides of such a seam carry the same point. Counting it twice
-        // there calls the seam a junction, breaks the paint and lights a
-        // solid approach on a street that simply continues. Streets are told
-        // apart by name; a piece without one answers only for itself.
+        // there calls the seam a junction and breaks the paint on a street
+        // that simply continues.
+        //
+        // Which street a piece belongs to is the source's answer where it
+        // gives one (`street`, an id assembled from the whole network before
+        // the tiles were cut, so it holds across a tile boundary and tells
+        // two same-named streets in different towns apart). A source without
+        // the field falls back to the name, which is right within a tile and
+        // wrong only where two unrelated streets share one; a piece with
+        // neither answers only for itself.
         var streetIdentifiers: [String: Int] = [:]
         var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
         for index in 0..<layer.features.count {
+            if let value = featureAttributes[index]["street"], let street = parseIntValue(value) {
+                streetIdentifierByFeature[index] = Int(street)
+                continue
+            }
             let name = featureAttributes[index]["name"]?.stringValue ?? ""
             if name.isEmpty {
-                streetIdentifierByFeature[index] = -1 - index
+                streetIdentifierByFeature[index] = Int.min + index
             } else {
                 let next = streetIdentifiers.count
                 streetIdentifierByFeature[index] = streetIdentifiers[name] ?? next
@@ -1244,15 +1255,16 @@ class TileMvtParser {
                                 // carriageway and its kerb run through.
                                 let junctionSplit = lineRenderPass.parseGeometryStyleData.endInset > 0
                                     && usesSeparateRoadRendering
-                                    ? Self.splitAtJunctions(fragment: fragment,
-                                                            automobilePointCounts: highZoomAutomobilePointCounts)
-                                    : [fragment]
+                                    ? Self.splitAtJunctionsWithOrigins(fragment: fragment,
+                                                                       automobilePointCounts: highZoomAutomobilePointCounts)
+                                    : [(fragment: fragment, arcLengthOrigin: Float(0))]
                                 let renderFragments = junctionSplit.flatMap { piece in
-                                    self.renderFragments(for: piece,
+                                    self.renderFragments(for: piece.fragment,
                                                          styleData: lineRenderPass.parseGeometryStyleData)
+                                        .map { (fragment: $0, arcLengthOrigin: piece.arcLengthOrigin) }
                                 }
 
-                                for renderFragment in renderFragments {
+                                for (renderFragment, pieceArcLengthOrigin) in renderFragments {
                                     let startConnected = usesSeparateRoadRendering
                                         && renderFragment.points.first.map {
                                             (highZoomRoadSharedPointCounts[RoadConnectionPointKey(point: $0)] ?? 0) > 1
@@ -1302,9 +1314,13 @@ class TileMvtParser {
                                         return max(Float(styleData.endInset),
                                                    highZoomJunctionHalfWidths[RoadConnectionPointKey(point: point)] ?? 0)
                                     }
+                                    // The inset is length the paint gives up at
+                                    // the start of the piece, so the pattern has
+                                    // to count it too.
+                                    let startInset = junctionInset(renderFragment.points.first, isContinuation: startContinuation)
                                     let insetPoints = Self.insetLineEnds(
                                         renderFragment.points,
-                                        startInset: junctionInset(renderFragment.points.first, isContinuation: startContinuation),
+                                        startInset: startInset,
                                         endInset: junctionInset(renderFragment.points.last, isContinuation: endContinuation)
                                     )
                                     guard let insetPoints else {
@@ -1324,6 +1340,7 @@ class TileMvtParser {
                                                                          featherStart: startFree,
                                                                          featherEnd: endFree,
                                                                          emitsArcLength: lineRenderPass.dashLengthPoints > 0,
+                                                                         arcLengthOrigin: pieceArcLengthOrigin + startInset,
                                                                          extendClippedStart: shouldExtendStart,
                                                                          extendClippedEnd: shouldExtendEnd,
                                                                          clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
@@ -1458,12 +1475,29 @@ class TileMvtParser {
     /// decided by the caller, which knows about clipping.
     static func splitAtJunctions(fragment: ClippedLineFragment,
                                  automobilePointCounts: [RoadConnectionPointKey: Int]) -> [ClippedLineFragment] {
-        let points = fragment.points
-        guard points.count > 2 else { return [fragment] }
+        splitAtJunctionsWithOrigins(fragment: fragment,
+                                    automobilePointCounts: automobilePointCounts).map(\.fragment)
+    }
 
-        var pieces: [ClippedLineFragment] = []
+    /// The same, with how far along the line each piece begins.
+    ///
+    /// A dash pattern is cut from arc length, so a piece that continues
+    /// another one has to carry on counting where that one stopped: paint
+    /// broken at a junction resumes in step on the far side instead of
+    /// starting a fresh stroke.
+    static func splitAtJunctionsWithOrigins(
+        fragment: ClippedLineFragment,
+        automobilePointCounts: [RoadConnectionPointKey: Int]
+    ) -> [(fragment: ClippedLineFragment, arcLengthOrigin: Float)] {
+        let points = fragment.points
+        guard points.count > 2 else { return [(fragment, 0)] }
+
+        var pieces: [(fragment: ClippedLineFragment, arcLengthOrigin: Float)] = []
         var current: [SIMD2<Float>] = [points[0]]
+        var travelled: Float = 0
+        var pieceOrigin: Float = 0
         for index in 1..<points.count {
+            travelled += simd_distance(points[index], points[index - 1])
             current.append(points[index])
             let isInterior = index < points.count - 1
             guard isInterior,
@@ -1472,16 +1506,19 @@ class TileMvtParser {
             }
             // The piece ends here, and the next one starts at the same point:
             // both are genuine ends, so both get the inset.
-            pieces.append(ClippedLineFragment(points: current,
-                                              startClipped: pieces.isEmpty ? fragment.startClipped : false,
-                                              endClipped: false))
+            pieces.append((ClippedLineFragment(points: current,
+                                               startClipped: pieces.isEmpty ? fragment.startClipped : false,
+                                               endClipped: false),
+                           pieceOrigin))
             current = [points[index]]
+            pieceOrigin = travelled
         }
-        guard pieces.isEmpty == false else { return [fragment] }
+        guard pieces.isEmpty == false else { return [(fragment, 0)] }
         if current.count >= 2 {
-            pieces.append(ClippedLineFragment(points: current,
-                                              startClipped: false,
-                                              endClipped: fragment.endClipped))
+            pieces.append((ClippedLineFragment(points: current,
+                                               startClipped: false,
+                                               endClipped: fragment.endClipped),
+                           pieceOrigin))
         }
         return pieces
     }

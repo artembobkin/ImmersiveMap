@@ -256,6 +256,7 @@ class ParseLine {
                featherStart: Bool = false,
                featherEnd: Bool = false,
                emitsArcLength: Bool = false,
+               arcLengthOrigin: Float = 0,
                extendClippedStart: Bool = false,
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
@@ -273,7 +274,9 @@ class ParseLine {
                                                 clipPadding: clipPadding,
                                                 extendStart: extendClippedStart,
                                                 extendEnd: extendClippedEnd)
-        let precomputed = precompute(points: effectivePoints, tileExtent: tileExtent)
+        let precomputed = precompute(points: effectivePoints,
+                                     tileExtent: tileExtent,
+                                     arcLengthOrigin: arcLengthOrigin)
         guard precomputed.validSegmentCount > 0 else { return nil }
 
         var polygon = GeneratedPolygon()
@@ -306,7 +309,7 @@ class ParseLine {
                           direction: precomputed.segmentDirections[startSegmentIndex],
                           radius: extrudedHalfWidth,
                           flipDirection: true,
-                          parameter: emitsArcLength ? 0.0 : 1.0,
+                          parameter: emitsArcLength ? precomputed.pointArcLengths[0] : 1.0,
                           polygon: &polygon)
             }
         }
@@ -419,7 +422,9 @@ class ParseLine {
         return nil
     }
 
-    private func precompute(points sourcePoints: [SIMD2<Float>], tileExtent: Float) -> PrecomputedLine {
+    private func precompute(points sourcePoints: [SIMD2<Float>],
+                            tileExtent: Float,
+                            arcLengthOrigin: Float = 0) -> PrecomputedLine {
         var points: [SIMD2<Float>] = []
         points.reserveCapacity(sourcePoints.count)
         for point in sourcePoints {
@@ -452,7 +457,12 @@ class ParseLine {
             lastValidSegmentIndex = index
         }
 
-        var pointArcLengths = [Float](repeating: 0, count: points.count)
+        // Arc length runs from `arcLengthOrigin`, not from zero: a dash
+        // pattern is cut from it, so a piece that continues another one has
+        // to carry on counting where that one stopped. Without it the
+        // pattern restarts at every cut, and a street broken at each junction
+        // comes out as strokes of assorted lengths.
+        var pointArcLengths = [Float](repeating: arcLengthOrigin, count: points.count)
         for index in 0..<segmentCount {
             pointArcLengths[index + 1] = pointArcLengths[index] + segmentLengths[index]
         }
