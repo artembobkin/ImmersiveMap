@@ -471,7 +471,10 @@ final class PreparedTileDiskCaching {
     // 49: a two-way street is painted down the middle and nowhere else, and
     // only where its lanes divide evenly; the split between the directions is
     // not something the tiles carry.
-    static let preparedFormatVersion: UInt32 = 49
+    // 50: a junction for the paint is where two named streets of class
+    // `minor` or above meet, not any point two road features share: a seam
+    // in one street and a service driveway no longer break the line.
+    static let preparedFormatVersion: UInt32 = 50
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

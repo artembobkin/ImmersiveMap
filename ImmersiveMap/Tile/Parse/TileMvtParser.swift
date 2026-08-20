@@ -134,6 +134,12 @@ class TileMvtParser {
     /// tier its number implies.
     static let automobileRoadClassPriorityFloor = 45
 
+    /// The class from which a road makes a junction for the paint on another
+    /// one: `minor`, the lowest class that is a street rather than a way onto
+    /// a plot. A service driveway, a parking aisle and a footway meeting an
+    /// avenue leave its markings running, because on the ground they do.
+    static let markingJunctionClassPriorityFloor = 50
+
     /// Shifts a polyline sideways by `offset` tile units (positive to the left
     /// of travel), with mitred corners so the shifted line stays parallel to
     /// the original; the miter is capped so a hairpin does not shoot the
@@ -300,10 +306,16 @@ class TileMvtParser {
 
     private struct HighZoomRoadPrecomputation {
         let sharedPointCounts: [RoadConnectionPointKey: Int]
-        /// How many drive-tier features touch each point, footways and rails
-        /// excluded. A junction for the paint down a carriageway is where
-        /// another carriageway meets it; a footpath crossing the line is not
-        /// one, and counting it would cut the paint at every kerb ramp.
+        /// How many distinct STREETS touch each point, counted over the
+        /// classes that make a junction for the paint down a carriageway:
+        /// `minor` and above.
+        ///
+        /// A street is its name, so the two sides of a seam the stitcher
+        /// could not close (a piece whose lane count or oneway differs)
+        /// count once between them: the paint runs through, because on the
+        /// ground the street does. A footpath crossing the line is not a
+        /// junction either, and neither is a service driveway or a parking
+        /// aisle meeting a street: paint does not break for a gateway.
         let automobilePointCounts: [RoadConnectionPointKey: Int]
         /// Half the widest carriageway that meets each point, in tile units.
         /// The gap a marking leaves at a junction is the room the crossing
@@ -402,13 +414,31 @@ class TileMvtParser {
                                                  featureStyles: featureStyles)
 
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
-        var automobilePointCounts: [RoadConnectionPointKey: Int] = [:]
+        // Distinct streets per point, not occurrences and not features: a
+        // street arrives cut into pieces the stitcher could not join, and
+        // both sides of such a seam carry the same point. Counting it twice
+        // there calls the seam a junction, breaks the paint and lights a
+        // solid approach on a street that simply continues. Streets are told
+        // apart by name; a piece without one answers only for itself.
+        var streetIdentifiers: [String: Int] = [:]
+        var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
+        for index in 0..<layer.features.count {
+            let name = featureAttributes[index]["name"]?.stringValue ?? ""
+            if name.isEmpty {
+                streetIdentifierByFeature[index] = -1 - index
+            } else {
+                let next = streetIdentifiers.count
+                streetIdentifierByFeature[index] = streetIdentifiers[name] ?? next
+                if streetIdentifiers[name] == nil { streetIdentifiers[name] = next }
+            }
+        }
+        var automobileStreetsAtPoint: [RoadConnectionPointKey: Set<Int>] = [:]
         var junctionHalfWidths: [RoadConnectionPointKey: Float] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
         for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
             var preparedLines: [PreparedRoadLine] = []
             preparedLines.reserveCapacity(lines.count)
-            let isAutomobile = featureStyles[featureIndex].roadClassPriority >= Self.automobileRoadClassPriorityFloor
+            let isJunctionMaking = featureStyles[featureIndex].roadClassPriority >= Self.markingJunctionClassPriorityFloor
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches
             // from its centreline.
@@ -419,8 +449,8 @@ class TileMvtParser {
                     for point in fragment.points {
                         let key = RoadConnectionPointKey(point: point)
                         pointCounts[key, default: 0] += 1
-                        if isAutomobile {
-                            automobilePointCounts[key, default: 0] += 1
+                        if isJunctionMaking {
+                            automobileStreetsAtPoint[key, default: []].insert(streetIdentifierByFeature[featureIndex])
                             junctionHalfWidths[key] = max(junctionHalfWidths[key] ?? 0, halfWidth)
                         }
                     }
@@ -429,6 +459,7 @@ class TileMvtParser {
             }
             linesByFeatureIndex[featureIndex] = preparedLines
         }
+        let automobilePointCounts = automobileStreetsAtPoint.mapValues(\.count)
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
                                           automobilePointCounts: automobilePointCounts,
