@@ -23,16 +23,6 @@ extension TileMvtParser {
         /// carriageway is the road's centreline offset to each lane boundary;
         /// the feature's geometry stays where the tiles put it.
         let lateralOffset: Double
-        /// Tile units of paint next to each junction end that is drawn solid
-        /// rather than dashed: a broken lane line goes solid on the approach
-        /// to a crossing, which is where overtaking and changing lanes stop.
-        /// Zero leaves the paint dashed all the way to the gap.
-        let junctionApproachLength: Double
-        /// Which side of that split this pass draws. The pass that draws the
-        /// approach emits only those two stretches; the pass that draws the
-        /// body pulls back past them, so the solid and the dashed paint meet
-        /// end to end instead of overlapping.
-        let drawsJunctionApproachOnly: Bool
 
         var usesDashPattern: Bool {
             dashLength > 0 && dashGap > 0
@@ -45,9 +35,7 @@ extension TileMvtParser {
              dashGap: Double = 0,
              dashResetsPerSegment: Bool = false,
              endInset: Double = 0,
-             lateralOffset: Double = 0,
-             junctionApproachLength: Double = 0,
-             drawsJunctionApproachOnly: Bool = false) {
+             lateralOffset: Double = 0) {
             self.lineWidth = lineWidth
             self.lineCapRound = lineCapRound
             self.lineJoinRound = lineJoinRound
@@ -56,8 +44,6 @@ extension TileMvtParser {
             self.dashResetsPerSegment = dashResetsPerSegment
             self.endInset = endInset
             self.lateralOffset = lateralOffset
-            self.junctionApproachLength = junctionApproachLength
-            self.drawsJunctionApproachOnly = drawsJunctionApproachOnly
         }
     }
 }

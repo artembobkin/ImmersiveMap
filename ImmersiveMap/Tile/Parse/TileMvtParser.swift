@@ -223,43 +223,6 @@ class TileMvtParser {
         return working.count >= 2 ? working : nil
     }
 
-    /// The leading and trailing stretch of a line, each `length` tile units
-    /// long: the solid approach a marking wears where it runs up to a
-    /// junction. Ends the caller marks as continuations get no stretch, since
-    /// a tile seam is not an approach to anything.
-    static func endSegments(_ points: [SIMD2<Float>],
-                            length: Float,
-                            atStart: Bool,
-                            atEnd: Bool) -> [(points: [SIMD2<Float>], isHead: Bool)] {
-        guard length > 0, points.count >= 2 else { return [] }
-
-        func leading(_ path: [SIMD2<Float>]) -> [SIMD2<Float>]? {
-            var remaining = length
-            var result: [SIMD2<Float>] = [path[0]]
-            for index in 1..<path.count {
-                let segment = path[index] - path[index - 1]
-                let segmentLength = simd_length(segment)
-                if segmentLength >= remaining {
-                    result.append(path[index - 1] + segment / max(segmentLength, .leastNormalMagnitude) * remaining)
-                    return result.count >= 2 ? result : nil
-                }
-                remaining -= segmentLength
-                result.append(path[index])
-            }
-            // Shorter than the stretch asked for: the whole piece is approach.
-            return result.count >= 2 ? result : nil
-        }
-
-        var segments: [(points: [SIMD2<Float>], isHead: Bool)] = []
-        if atStart, let head = leading(points) {
-            segments.append((points: head, isHead: true))
-        }
-        if atEnd, let tail = leading(Array(points.reversed())) {
-            segments.append((points: tail.reversed(), isHead: false))
-        }
-        return segments
-    }
-
     func roadStructureKind(attributes: [String: VectorTile_Tile.Value]) -> RoadStructureKind {
         let locationValue = attributes["location"]?.stringValue.lowercased() ?? ""
         let structureValue = attributes["structure"]?.stringValue.lowercased() ?? ""
@@ -1339,61 +1302,27 @@ class TileMvtParser {
                                         return max(Float(styleData.endInset),
                                                    highZoomJunctionHalfWidths[RoadConnectionPointKey(point: point)] ?? 0)
                                     }
-                                    func isJunction(_ point: SIMD2<Float>?, isContinuation: Bool) -> Bool {
-                                        guard isContinuation == false, let point else { return false }
-                                        return (highZoomAutomobilePointCounts[RoadConnectionPointKey(point: point)] ?? 0) > 1
-                                    }
-                                    let startIsJunction = isJunction(renderFragment.points.first, isContinuation: startContinuation)
-                                    let endIsJunction = isJunction(renderFragment.points.last, isContinuation: endContinuation)
-                                    // Paint runs up to a junction solid, the way it does on
-                                    // the ground: the dashed body stops short of the approach
-                                    // and the solid pass draws exactly that stretch, so the
-                                    // two meet without overlapping.
-                                    let approachLength = Float(styleData.junctionApproachLength)
-                                    var startInset = junctionInset(renderFragment.points.first, isContinuation: startContinuation)
-                                    var endInset = junctionInset(renderFragment.points.last, isContinuation: endContinuation)
-                                    if styleData.drawsJunctionApproachOnly == false {
-                                        if startIsJunction { startInset += approachLength }
-                                        if endIsJunction { endInset += approachLength }
-                                    }
-                                    let insetPoints = Self.insetLineEnds(renderFragment.points,
-                                                                         startInset: startInset,
-                                                                         endInset: endInset)
+                                    let insetPoints = Self.insetLineEnds(
+                                        renderFragment.points,
+                                        startInset: junctionInset(renderFragment.points.first, isContinuation: startContinuation),
+                                        endInset: junctionInset(renderFragment.points.last, isContinuation: endContinuation)
+                                    )
                                     guard let insetPoints else {
                                         continue
                                     }
-                                    let drawnPieces: [(points: [SIMD2<Float>], isHead: Bool)]
-                                    if styleData.drawsJunctionApproachOnly {
-                                        drawnPieces = Self.endSegments(insetPoints,
-                                                                       length: approachLength,
-                                                                       atStart: startIsJunction,
-                                                                       atEnd: endIsJunction)
-                                    } else {
-                                        drawnPieces = [(points: insetPoints, isHead: true)]
-                                    }
-                                    for drawnPiece in drawnPieces {
-                                    // An approach stretch meets the dashed body at its inner
-                                    // end, which must stay a hard cut; only the end that is
-                                    // the line's own keeps the fragment's feathering.
-                                    let pieceFeatherStart = styleData.drawsJunctionApproachOnly
-                                        ? (drawnPiece.isHead && startFree)
-                                        : startFree
-                                    let pieceFeatherEnd = styleData.drawsJunctionApproachOnly
-                                        ? (drawnPiece.isHead == false && endFree)
-                                        : endFree
                                     let passPoints = Self.offsetPolyline(
-                                        drawnPiece.points,
+                                        insetPoints,
                                         by: Float(styleData.lateralOffset)
                                     )
 
                                     if let linePolygon = parseLine.parse(points: passPoints,
                                                                          width: lineRenderPass.parseGeometryStyleData.lineWidth,
                                                                          tileExtent: Float(tileExtent),
-                                                                         startCapRound: startCapRound && pieceFeatherStart,
-                                                                         endCapRound: endCapRound && pieceFeatherEnd,
+                                                                         startCapRound: startCapRound,
+                                                                         endCapRound: endCapRound,
                                                                          lineJoinRound: styleData.lineJoinRound,
-                                                                         featherStart: pieceFeatherStart,
-                                                                         featherEnd: pieceFeatherEnd,
+                                                                         featherStart: startFree,
+                                                                         featherEnd: endFree,
                                                                          emitsArcLength: lineRenderPass.dashLengthPoints > 0,
                                                                          extendClippedStart: shouldExtendStart,
                                                                          extendClippedEnd: shouldExtendEnd,
@@ -1421,7 +1350,6 @@ class TileMvtParser {
                                                 bridgePolygonByStyle[lineRenderPass.key, default: []].append(linePolygon)
                                             }
                                         }
-                                    }
                                     }
                                 }
                             }

@@ -474,7 +474,9 @@ final class PreparedTileDiskCaching {
     // 50: a junction for the paint is where two named streets of class
     // `minor` or above meet, not any point two road features share: a seam
     // in one street and a service driveway no longer break the line.
-    static let preparedFormatVersion: UInt32 = 50
+    // 51: the solid approach to a junction is gone; every stroke of a broken
+    // line is the same length again.
+    static let preparedFormatVersion: UInt32 = 51
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

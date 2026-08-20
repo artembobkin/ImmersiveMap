@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 59
+    private static let implementationRevision: UInt32 = 60
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -827,23 +827,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // keeps running flush into the neighbour (the parser tells them
             // apart).
             let markingEndInset = width * 0.5
-            // On the ground the broken line goes solid before a junction:
-            // that is where overtaking and lane changes stop, and it is what
-            // makes a painted approach read as an approach. The body of the
-            // line stops short of that stretch and the solid pass draws it,
-            // so the two meet end to end.
-            let approachLength = Self.roadMarkingSolidApproachMetres * unitsPerMetre
-            func markingGeometry(approachOnly: Bool) -> TileMvtParser.ParseGeometryStyleData {
-                TileMvtParser.ParseGeometryStyleData(
-                    lineWidth: markingRibbonUnits,
-                    lineCapRound: false,
-                    lineJoinRound: true,
-                    endInset: markingEndInset,
-                    lateralOffset: markingOffset,
-                    junctionApproachLength: approachLength,
-                    drawsJunctionApproachOnly: approachOnly
-                )
-            }
+            // Every stroke of a broken line is the same length. The line does
+            // go solid before a junction on the ground, but drawn here it was
+            // a twelve-metre stroke among three-metre ones, in the same
+            // colour and the same width, separated from the last dash by
+            // whatever the pattern left over: it read as paint of random
+            // length rather than as an approach, and on a junction where
+            // several carriageways fan in, as a thicket of them.
             passes.append(
                 LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
                                color: Self.roadMarkingColor,
@@ -852,16 +842,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
                                dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
                                dashInTileUnits: true,
-                               parseGeometryStyleData: markingGeometry(approachOnly: false),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
-            )
-            passes.append(
-                LineRenderPass(key: Self.roadMarkingSolidKey(forFillKey: fillKey),
-                               color: Self.roadMarkingColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineWidthPoints: Self.roadMarkingWidthPoints,
-                               parseGeometryStyleData: markingGeometry(approachOnly: true),
+                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+                                   lineWidth: markingRibbonUnits,
+                                   lineCapRound: false,
+                                   lineJoinRound: true,
+                                   endInset: markingEndInset,
+                                   lateralOffset: markingOffset
+                               ),
                                includeRoadLabelPath: false,
                                roadPassRole: .detail)
             )
@@ -1061,23 +1048,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static func roadMarkingKey(forFillKey fillKey: UInt8) -> UInt8 {
         fillKey &+ 1
     }
-
-    /// The solid approach to a junction draws through a key of its own, since
-    /// the dash pattern is a property of the style rather than of the
-    /// geometry: same colour, same width, no dash. Only the painted classes
-    /// need one, so a short range above every road key covers them.
-    private static func roadMarkingSolidKey(forFillKey fillKey: UInt8) -> UInt8 {
-        switch fillKey {
-        case 56: return 58
-        case 54: return 59
-        case 52: return 60
-        case 50: return 61
-        default: return 62
-        }
-    }
-
-    /// Metres of solid paint on the run-up to a junction.
-    private static let roadMarkingSolidApproachMetres: Double = 12.0
 
     /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
     /// at country/regional zooms and reach full width at street level.

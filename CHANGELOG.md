@@ -126,8 +126,6 @@ once the public API stabilizes.
 
 - A one-way carriageway carries a line on every boundary between its lanes, which the lane count alone fixes: every lane on it runs the same way, so no knowledge of where each lane leads is needed. A two-way street is painted down the middle and nowhere else, and only where its lanes divide evenly: which of them run each way is `lanes:forward`/`lanes:backward`, mapped on a few per cent of streets, so an odd total leaves the centre inside a driving lane rather than between two, and the street stays bare (about seven per cent of the painted streets in a city centre).
 
-- Lane markings go solid on the run-up to a junction, twelve metres of it, the way they do on the ground where overtaking and lane changes stop. The dashed body of the line stops short of that stretch and a solid pass draws exactly it, so the two meet end to end.
-
 - The gap a marking leaves at a junction is sized by the road it meets. It used to be half of the marking's own carriageway, so a lane line running into a six-lane avenue stopped half a lane short of it and painted over the avenue; the inset is now half of the widest carriageway that meets the point.
 
 - Markings follow what the tiles say about the road, not only its lane count. A source that states where the count came from (`lanes_src`: `tagged` from the data, `assumed` from the class) is painted only where it was mapped, so a road drawn at a default width no longer implies markings nobody surveyed; a source that ships no such field is read as before. A road whose `surface` the tiles call `unpaved` draws no paint at all, since there is none on gravel, and a surface value the tiles do not classify says nothing either way and stays painted.
