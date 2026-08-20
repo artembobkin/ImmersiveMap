@@ -130,6 +130,8 @@ once the public API stabilizes.
 
 - The gap a marking leaves at a junction is sized by the road it meets. It used to be half of the marking's own carriageway, so a lane line running into a six-lane avenue stopped half a lane short of it and painted over the avenue; the inset is now half of the widest carriageway that meets the point.
 
+- Markings follow what the tiles say about the road, not only its lane count. A source that states where the count came from (`lanes_src`: `tagged` from the data, `assumed` from the class) is painted only where it was mapped, so a road drawn at a default width no longer implies markings nobody surveyed; a source that ships no such field is read as before. A road whose `surface` the tiles call `unpaved` draws no paint at all, since there is none on gravel, and a surface value the tiles do not classify says nothing either way and stays painted.
+
 ### Fixed
 
 - A junction area's kerb follows the junction. The carriageway surfaces the tiles ship from z15 (`subclass=junction_area`) reach the kerb pass in render space, where the y axis has already been flipped, and the line tessellator flips it again on the way in: every kerb was drawn mirrored about its tile's mid-line. What that painted was a thin dark outline lying wherever the mirror image happened to land, across a park, a block of buildings or a courtyard, with nothing around the junction it belongs to, and it appeared as the map crossed into z15 because that is where the source starts shipping the areas. The rings are converted back to tile space before tessellation, and a regression test pins every kerb vertex inside the area it belongs to.

@@ -123,6 +123,20 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
                        "nor does a service alley")
         XCTAssertEqual(markingLines(["class": "tertiary", "lanes": 2]), 1,
                        "The through hierarchy down to tertiary is painted")
+
+        // Where the lane count came from decides whether it may be painted.
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "lanes_src": "tagged"]), 3,
+                       "A mapped lane count is evidence of paint")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "lanes_src": "assumed"]), 0,
+                       "A lane count assumed from the class is a width, not a marking")
+
+        // An unpaved road has no paint on it to draw.
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "unpaved"]), 0,
+                       "Gravel carries no lane lines")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "paved"]), 3,
+                       "Asphalt does")
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "surface": "something_new"]), 3,
+                       "A surface the tiles do not classify says nothing either way")
     }
 
     /// A street the tiles ship as one line through its junctions is cut for

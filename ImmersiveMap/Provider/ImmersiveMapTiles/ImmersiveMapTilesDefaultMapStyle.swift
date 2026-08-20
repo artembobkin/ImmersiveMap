@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 56
+    private static let implementationRevision: UInt32 = 57
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -438,9 +438,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // is no centre to divide, but a four-lane one-way avenue is still
         // painted).
         let taggedLaneCount = parseIntValue(props["lanes"]).map { min(max($0, 1), 12) }
+        // The tiles state where the lane count came from: `tagged` is what a
+        // mapper put on the way, `assumed` is the profile's default for the
+        // class, shipped so that every road has a width to draw. Width takes
+        // either; paint takes only the mapped one. A source that ships no
+        // such field only ships `lanes` where it was mapped, so a missing
+        // field reads as mapped.
+        let laneCountIsMapped = props["lanes_src"].map { $0.stringValue == "tagged" } ?? true
+        // An unpaved road has no paint on it to draw. Anything the tiles do
+        // not classify says nothing either way and is left painted.
+        let isUnpaved = props["surface"]?.stringValue == "unpaved"
         let marked = isConstruction == false
             && tileZoom >= Self.roadMarkingsMinimumTileZoom
             && Self.roadClassCarriesMarkings(effectiveClass)
+            && laneCountIsMapped
+            && isUnpaved == false
         let markings: RoadMarkings
         if marked, let taggedLaneCount, taggedLaneCount >= 2 {
             markings = isOneWay
