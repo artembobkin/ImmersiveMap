@@ -75,6 +75,11 @@ struct OverviewFadeUniform {
     // 0: roads are symbols (point ceiling holds); 1: true surfaces. Morphs
     // continuously with the camera, see LowZoomOverviewFade.roadSurfaceBlend.
     float roadSurfaceBlend;
+    // How far road markings have come in, over their own camera-zoom band
+    // above the width morph: paint is a length on the ground and only
+    // resolves as paint once a three-metre dash is more than a point or two
+    // across. See LowZoomOverviewFade.roadMarkingAlpha.
+    float roadMarkingAlpha;
 };
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -264,7 +269,9 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     }
     half4 color = in.color;
     half fade = 1.0h;
-    if (in.lowZoomFadeMask >= 2.5h) {
+    if (in.lowZoomFadeMask >= 3.5h) {
+        fade = half(overviewFade.roadMarkingAlpha);
+    } else if (in.lowZoomFadeMask >= 2.5h) {
         fade = half(overviewFade.landuseAlpha);
     } else if (in.lowZoomFadeMask >= 1.5h) {
         fade = half(overviewFade.roadAlpha);

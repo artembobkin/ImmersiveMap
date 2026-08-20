@@ -118,6 +118,18 @@ once the public API stabilizes.
 
   Because this removes shipped public API it is a breaking change; per the versioning note at the top of this file, the project is still pre-1.0 and does not promise semantic versioning yet.
 
+### Added
+
+- Marked pedestrian crossings draw as zebra stripes. The tiles ship a crossing as the footway line that runs across the carriageway, which states where it is, which way it faces and how long it is, and from z16 they state whether it is painted (`crossing`, `markings`); a crossing the ground actually carries (`marked`, `traffic_signals`, or any stated marking pattern) now draws as a band of white stripes on the asphalt, sized in metres and laid along the crossing so the stripes run with the traffic. An `unmarked` or undescribed crossing draws nothing, which is the honest reading of a tag that says a crossing exists but not that it is painted. The stripes draw in the automobile tier above every carriageway and fade in on the markings' camera-zoom band with the rest of the paint.
+
+- Road markings fade in with the camera rather than appearing with a tile level. Paint is a length on the ground: a three-metre dash is about two points across a z15 frame, which reads as grit, and only past z16 does it resolve into a line. `LowZoomOverviewFade.roadMarkingAlpha` brings every marking in continuously between camera zoom 16 and 17.5, above the band the carriageway widths morph over, so the paint arrives on a road that is already the width it is measured against and nothing pops when the engine swaps the tile level serving the street.
+
+- A two-way street carries the boundaries between its lanes, not only its centre divider. A four-lane avenue is painted down the middle and inside each direction on the ground, and the map used to draw the middle line alone; every boundary between lanes is now painted, the middle one being the divider. A two-lane street is unchanged, since its only boundary is the centre.
+
+- Lane markings go solid on the run-up to a junction, twelve metres of it, the way they do on the ground where overtaking and lane changes stop. The dashed body of the line stops short of that stretch and a solid pass draws exactly it, so the two meet end to end.
+
+- The gap a marking leaves at a junction is sized by the road it meets. It used to be half of the marking's own carriageway, so a lane line running into a six-lane avenue stopped half a lane short of it and painted over the avenue; the inset is now half of the widest carriageway that meets the point.
+
 ### Fixed
 
 - A junction area's kerb follows the junction. The carriageway surfaces the tiles ship from z15 (`subclass=junction_area`) reach the kerb pass in render space, where the y axis has already been flipped, and the line tessellator flips it again on the way in: every kerb was drawn mirrored about its tile's mid-line. What that painted was a thin dark outline lying wherever the mirror image happened to land, across a park, a block of buildings or a courtyard, with nothing around the junction it belongs to, and it appeared as the map crossed into z15 because that is where the source starts shipping the areas. The rings are converted back to tile space before tessellation, and a regression test pins every kerb vertex inside the area it belongs to.

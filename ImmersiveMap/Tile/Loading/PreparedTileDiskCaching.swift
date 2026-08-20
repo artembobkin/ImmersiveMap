@@ -465,7 +465,10 @@ final class PreparedTileDiskCaching {
     // only where the tiles state a lane count and only for the through
     // hierarchy, and they are cut at every junction the carriageway passes
     // through instead of running across it.
-    static let preparedFormatVersion: UInt32 = 47
+    // 48: two-way carriageways carry their lane boundaries, paint goes solid
+    // on the approach to a junction and leaves a gap sized by the road it
+    // meets, and marked pedestrian crossings draw as zebra stripes.
+    static let preparedFormatVersion: UInt32 = 48
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

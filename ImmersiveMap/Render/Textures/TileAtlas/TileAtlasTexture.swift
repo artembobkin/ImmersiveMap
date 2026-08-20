@@ -15,6 +15,8 @@ class TileAtlasTexture {
         var pixelsPerPoint: Float
         /// The atlas serves overview zooms, where every road is a symbol.
         var roadSurfaceBlend: Float = 0
+        /// and where no road is painted yet.
+        var roadMarkingAlpha: Float = 0
     }
 
     private struct LineDashUniform {

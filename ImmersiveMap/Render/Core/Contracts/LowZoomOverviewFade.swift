@@ -41,6 +41,24 @@ enum LowZoomOverviewFade {
     static let roadSurfaceStartZoom: Double = 14.0
     static let roadSurfaceEndZoom: Double = 16.0
 
+    /// Where road markings fade in, in camera zoom.
+    ///
+    /// Paint is a length on the ground: a three-metre dash is about two
+    /// points across a z15 frame, which reads as grit rather than as a line,
+    /// and only past z16 does it resolve into paint. The band starts where
+    /// the carriageway has finished becoming its true surface
+    /// (`roadSurfaceEndZoom`), so the markings arrive on a road that is
+    /// already the width they are measured against, and it is continuous in
+    /// camera zoom, so nothing pops at the tile-level swap.
+    static let roadMarkingStartZoom: Double = 16.0
+    static let roadMarkingEndZoom: Double = 17.5
+
+    static func roadMarkingAlpha(for zoom: Double) -> Float {
+        let progress = Float((zoom - roadMarkingStartZoom) / (roadMarkingEndZoom - roadMarkingStartZoom))
+        let clamped = simd_clamp(progress, 0.0, 1.0)
+        return clamped * clamped * (3.0 - 2.0 * clamped)
+    }
+
     static func roadSurfaceBlend(for zoom: Double) -> Float {
         let progress = Float((zoom - roadSurfaceStartZoom) / (roadSurfaceEndZoom - roadSurfaceStartZoom))
         let clamped = simd_clamp(progress, 0.0, 1.0)

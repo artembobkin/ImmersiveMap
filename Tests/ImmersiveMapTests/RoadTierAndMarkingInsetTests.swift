@@ -101,22 +101,27 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
                 .resolvedLineRenderPasses
                 .filter { $0.roadPassRole == .detail }
         }
+        /// Painted lines, counted once each: every line is drawn by two
+        /// passes, the dashed body and the solid approach to a junction.
+        func markingLines(_ attributes: [String: Any]) -> Int {
+            Set(markingPasses(attributes).map { $0.parseGeometryStyleData.lateralOffset }).count
+        }
 
-        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 2]).count, 1,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 2]), 1,
                        "A two-way avenue with a stated lane count carries its centre divider")
-        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 4, "oneway": 1]).count, 3,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 4, "oneway": 1]), 3,
                        "A one-way carriageway carries a line on each boundary between its lanes")
-        XCTAssertEqual(markingPasses(["class": "primary"]).count, 0,
+        XCTAssertEqual(markingLines(["class": "primary"]), 0,
                        "Without a lane count there is no evidence of paint, so none is drawn")
-        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 1]).count, 0,
+        XCTAssertEqual(markingLines(["class": "primary", "lanes": 1]), 0,
                        "A single-lane carriageway has nothing to divide")
-        XCTAssertEqual(markingPasses(["class": "minor", "lanes": 2]).count, 0,
+        XCTAssertEqual(markingLines(["class": "minor", "lanes": 2]), 0,
                        "A residential street has no painted centre line")
-        XCTAssertEqual(markingPasses(["class": "minor", "lanes": 2, "oneway": 1]).count, 0,
+        XCTAssertEqual(markingLines(["class": "minor", "lanes": 2, "oneway": 1]), 0,
                        "and a one-way one has no lane lines either")
-        XCTAssertEqual(markingPasses(["class": "service", "lanes": 2]).count, 0,
+        XCTAssertEqual(markingLines(["class": "service", "lanes": 2]), 0,
                        "nor does a service alley")
-        XCTAssertEqual(markingPasses(["class": "tertiary", "lanes": 2]).count, 1,
+        XCTAssertEqual(markingLines(["class": "tertiary", "lanes": 2]), 1,
                        "The through hierarchy down to tertiary is painted")
     }
 

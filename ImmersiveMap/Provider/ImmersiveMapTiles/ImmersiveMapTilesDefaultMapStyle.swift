@@ -13,6 +13,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
     /// classes ease in over the globe instead of popping with the z4 tiles.
     private let roadLowZoomFadeMask: Float = 2.0
+    /// Markings fade on their own band (see `LowZoomOverviewFade`), so they
+    /// carry the mask that selects it instead of the roads' one.
+    private static let roadMarkingLowZoomFadeMask: Float = 4.0
     private let landuseMinimumZoom = 6
     private let massiveOverviewMaximumZoom = 2
     private let globalLandcoverMaximumZoom = 9
@@ -347,6 +350,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         guard tileZoom >= Self.roadClassMinimumZoom(effectiveClass) else {
             return hiddenStyle
         }
+        // A marked pedestrian crossing: the line the tiles ship across the
+        // carriageway carries where it is, which way it faces and how long it
+        // is, which is everything a zebra is made of. It draws as stripes on
+        // the asphalt instead of as a footway ribbon.
+        if let crossing = Self.crossingMarking(props: props), tileZoom >= Self.crossingMinimumTileZoom {
+            return crosswalkStyle(marked: crossing, tile: tile)
+        }
         // A junction area: the carriageway as the tiles map it, a polygon.
         // It draws as the surface of the road class that enters it, with the
         // kerb on its outline, in the automobile tier; the ribbons that enter
@@ -433,7 +443,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             && Self.roadClassCarriesMarkings(effectiveClass)
         let markings: RoadMarkings
         if marked, let taggedLaneCount, taggedLaneCount >= 2 {
-            markings = isOneWay ? .laneLines(laneCount: taggedLaneCount) : .centreDivider
+            markings = isOneWay
+                ? .laneLines(laneCount: taggedLaneCount)
+                : .centreDivider(laneCount: taggedLaneCount)
         } else {
             markings = .none
         }
@@ -535,6 +547,74 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         default: return 32
         }
     }
+
+    /// Whether a feature is a pedestrian crossing, and whether it is painted.
+    ///
+    /// The tiles carry `crossing` on the footway that crosses the road, with
+    /// `markings` naming the pattern where OSM says so. `marked` and
+    /// `traffic_signals` are painted on the ground (a signalled crossing
+    /// almost always is); `unmarked` is not, and `unknown` is the honest
+    /// answer for a crossing nobody described, so neither gets a zebra.
+    private static func crossingMarking(props: [String: VectorTile_Tile.Value]) -> Bool? {
+        guard let crossing = props["crossing"]?.stringValue.lowercased(), crossing.isEmpty == false else {
+            return nil
+        }
+        if props["markings"]?.stringValue.isEmpty == false {
+            return true
+        }
+        switch crossing {
+        case "marked", "traffic_signals", "zebra", "uncontrolled":
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// From this tile zoom a crossing is worth drawing: at the latitude of
+    /// Moscow a z16 pixel is about 1.3 m, so a twelve-metre crossing is nine
+    /// pixels of stripes. A level coarser it would be a smudge.
+    private static let crossingMinimumTileZoom = 16
+
+    /// A marked crossing: white stripes laid across the carriageway.
+    ///
+    /// The band is as deep as a crossing is on the ground and the stripes are
+    /// derived from it, so the whole figure is a length rather than a screen
+    /// pattern. It draws in the `detail` role, above every carriageway, and
+    /// fades in on the markings' camera-zoom band with the rest of the paint.
+    private func crosswalkStyle(marked: Bool, tile: Tile) -> FeatureStyle {
+        guard marked else {
+            // An unmarked crossing is a place to cross, not a thing to draw:
+            // the footway underneath it is already on the map.
+            return hiddenStyle
+        }
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
+        let bandUnits = Self.crosswalkBandMetres * unitsPerMetre
+        return FeatureStyle(
+            key: Self.crosswalkKey,
+            color: Self.roadMarkingColor,
+            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: bandUnits),
+            lineRenderPasses: [
+                LineRenderPass(key: Self.crosswalkKey,
+                               color: Self.roadMarkingColor,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: bandUnits),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .detail)
+            ],
+            roadClassPriority: Self.crosswalkClassPriority,
+            roadDecorationKind: .zebraCrossing
+        )
+    }
+
+    /// How deep a crossing is along the road, in metres: the band the stripes
+    /// fill. The stripe period is derived from it inside the builder, so the
+    /// whole figure scales as one thing.
+    private static let crosswalkBandMetres: Double = 4.0
+    private static let crosswalkKey: UInt8 = 63
+    /// A crossing sorts with the carriageway it is painted on, above every
+    /// road fill: it is paint on the road, not a road.
+    private static let crosswalkClassPriority = 96
 
     /// A junction area (`subclass=junction_area`): the carriageway of a junction
     /// as a polygon. Two passes in the automobile tier, like a road: the kerb
@@ -675,20 +755,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
         )
-        // Each marking is one dashed hairline pass; a one-way carriageway
-        // gets one per lane boundary, offset sideways from the centreline.
+        // Each marking is one dashed hairline pass, offset sideways from the
+        // centreline: a line on every boundary between lanes. On a two-way
+        // street the middle one is the centre divider, and on a carriageway
+        // of two lanes it is the only one; a four-lane avenue also carries
+        // the boundary inside each direction, which is what is painted on
+        // the ground and what the map was leaving out.
         var markingOffsets: [Double] = []
         if tunnel == false {
             switch markings {
             case .none:
                 break
-            case .centreDivider:
-                markingOffsets = [0]
+            case .centreDivider(let laneCount):
+                markingOffsets = Self.laneBoundaryOffsets(width: width, laneCount: laneCount)
             case .laneLines(let laneCount):
-                let laneWidth = width / Double(max(laneCount, 1))
-                for boundary in 1..<max(laneCount, 1) {
-                    markingOffsets.append(-width * 0.5 + laneWidth * Double(boundary))
-                }
+                markingOffsets = Self.laneBoundaryOffsets(width: width, laneCount: laneCount)
             }
         }
         for markingOffset in markingOffsets {
@@ -718,21 +799,41 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // keeps running flush into the neighbour (the parser tells them
             // apart).
             let markingEndInset = width * 0.5
+            // On the ground the broken line goes solid before a junction:
+            // that is where overtaking and lane changes stop, and it is what
+            // makes a painted approach read as an approach. The body of the
+            // line stops short of that stretch and the solid pass draws it,
+            // so the two meet end to end.
+            let approachLength = Self.roadMarkingSolidApproachMetres * unitsPerMetre
+            func markingGeometry(approachOnly: Bool) -> TileMvtParser.ParseGeometryStyleData {
+                TileMvtParser.ParseGeometryStyleData(
+                    lineWidth: markingRibbonUnits,
+                    lineCapRound: false,
+                    lineJoinRound: true,
+                    endInset: markingEndInset,
+                    lateralOffset: markingOffset,
+                    junctionApproachLength: approachLength,
+                    drawsJunctionApproachOnly: approachOnly
+                )
+            }
             passes.append(
                 LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
                                color: Self.roadMarkingColor,
-                               lowZoomFadeMask: roadLowZoomFadeMask,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
                                lineWidthPoints: Self.roadMarkingWidthPoints,
                                dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
                                dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
                                dashInTileUnits: true,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
-                                   lineWidth: markingRibbonUnits,
-                                   lineCapRound: false,
-                                   lineJoinRound: true,
-                                   endInset: markingEndInset,
-                                   lateralOffset: markingOffset
-                               ),
+                               parseGeometryStyleData: markingGeometry(approachOnly: false),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .detail)
+            )
+            passes.append(
+                LineRenderPass(key: Self.roadMarkingSolidKey(forFillKey: fillKey),
+                               color: Self.roadMarkingColor,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                               lineWidthPoints: Self.roadMarkingWidthPoints,
+                               parseGeometryStyleData: markingGeometry(approachOnly: true),
                                includeRoadLabelPath: false,
                                roadPassRole: .detail)
             )
@@ -859,11 +960,22 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// What paint an automobile road carries.
     enum RoadMarkings {
         case none
-        /// A two-way street: one dashed line down the middle.
-        case centreDivider
+        /// A two-way street: a dashed line down the middle, plus the boundary
+        /// inside each direction once the street is wide enough to have one.
+        case centreDivider(laneCount: Int)
         /// A one-way carriageway of several lanes: a dashed line on each
         /// boundary between lanes, none in the middle of the road.
         case laneLines(laneCount: Int)
+    }
+
+    /// Lateral offsets of every boundary between lanes, in tile units from
+    /// the centreline. A road of `laneCount` lanes has `laneCount - 1` of
+    /// them, evenly spaced; with an even count one of them is the centre.
+    private static func laneBoundaryOffsets(width: Double, laneCount: Int) -> [Double] {
+        let lanes = max(laneCount, 1)
+        guard lanes >= 2 else { return [] }
+        let laneWidth = width / Double(lanes)
+        return (1..<lanes).map { -width * 0.5 + laneWidth * Double($0) }
     }
 
     /// The width of a road's carriageway in the tile's own units.
@@ -920,6 +1032,23 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static func roadMarkingKey(forFillKey fillKey: UInt8) -> UInt8 {
         fillKey &+ 1
     }
+
+    /// The solid approach to a junction draws through a key of its own, since
+    /// the dash pattern is a property of the style rather than of the
+    /// geometry: same colour, same width, no dash. Only the painted classes
+    /// need one, so a short range above every road key covers them.
+    private static func roadMarkingSolidKey(forFillKey fillKey: UInt8) -> UInt8 {
+        switch fillKey {
+        case 56: return 58
+        case 54: return 59
+        case 52: return 60
+        case 50: return 61
+        default: return 62
+        }
+    }
+
+    /// Metres of solid paint on the run-up to a junction.
+    private static let roadMarkingSolidApproachMetres: Double = 12.0
 
     /// Multiplier applied to the (z14+) base road widths so roads are thin hairlines
     /// at country/regional zooms and reach full width at street level.
