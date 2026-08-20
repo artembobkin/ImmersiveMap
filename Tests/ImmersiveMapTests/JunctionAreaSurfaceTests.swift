@@ -80,6 +80,36 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         XCTAssertFalse(plain.isRoadSurfaceArea)
     }
 
+    /// The kerb traces the area's own outline.
+    ///
+    /// The rings reach the kerb pass in render space (y already flipped) and
+    /// the line tessellator flips again, so a ring handed over unconverted
+    /// drew the kerb mirrored about the tile's mid-line: a dark outline lying
+    /// across whatever was there, and no kerb at the junction. The area in the
+    /// fixture sits in the upper half of the tile, where a mirrored kerb lands
+    /// in the lower half and this assertion catches it.
+    func testJunctionAreaKerbFollowsTheAreaOutline() throws {
+        let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+            .init(id: 1,
+                  geometry: .polygon(ring: [(1800, 600), (2300, 600), (2300, 1100), (1800, 1100)]),
+                  properties: ["class": "primary", "subclass": "junction_area"]),
+        ])
+        let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
+        let kerb = parsed.drawingRoadPhases.automobileGround.casing.drawing
+        XCTAssertGreaterThan(kerb.vertices.count, 0, "the area wears a kerb")
+
+        // The polygon in render space: y flips, so the ring spans y 2996...3496.
+        let margin: Float = 40
+        for vertex in kerb.vertices {
+            let x = Float(vertex.position.x)
+            let y = Float(vertex.position.y)
+            XCTAssertTrue(x >= 1800 - margin && x <= 2300 + margin,
+                          "kerb vertex x=\(x) is outside the area it belongs to")
+            XCTAssertTrue(y >= 2996 - margin && y <= 3496 + margin,
+                          "kerb vertex y=\(y) is outside the area it belongs to: a mirrored kerb lands near y=\(4096 - y)")
+        }
+    }
+
     func testATunnelJunctionAreaHasNoKerb() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }

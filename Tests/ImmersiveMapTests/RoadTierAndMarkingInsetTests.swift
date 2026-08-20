@@ -78,6 +78,71 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         XCTAssertEqual(TileMvtParser.insetLineEnds(line, inset: 0, insetStart: true, insetEnd: true), line)
     }
 
+    /// What the tiles state is what gets painted.
+    ///
+    /// The schema carries `lanes` and `oneway` and nothing about paint, so a
+    /// road without `lanes` has no marking evidence and stays bare: the class
+    /// default the width falls back on is a guess about the ground, and the
+    /// map used to paint a centre line down every unmarked back street from
+    /// it. Classes below tertiary are bare whatever they carry.
+    func testMarkingsComeFromTheTilesAndNotFromClassDefaults() throws {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let tile = Tile(x: 39616, y: 20486, z: 16)
+        func markingPasses(_ attributes: [String: Any]) -> [LineRenderPass] {
+            var properties: [String: VectorTile_Tile.Value] = [:]
+            for (key, value) in attributes {
+                var wrapped = VectorTile_Tile.Value()
+                if let text = value as? String { wrapped.stringValue = text } else if let number = value as? Int { wrapped.intValue = Int64(number) }
+                properties[key] = wrapped
+            }
+            return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                             properties: properties,
+                                                             tile: tile))
+                .resolvedLineRenderPasses
+                .filter { $0.roadPassRole == .detail }
+        }
+
+        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 2]).count, 1,
+                       "A two-way avenue with a stated lane count carries its centre divider")
+        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 4, "oneway": 1]).count, 3,
+                       "A one-way carriageway carries a line on each boundary between its lanes")
+        XCTAssertEqual(markingPasses(["class": "primary"]).count, 0,
+                       "Without a lane count there is no evidence of paint, so none is drawn")
+        XCTAssertEqual(markingPasses(["class": "primary", "lanes": 1]).count, 0,
+                       "A single-lane carriageway has nothing to divide")
+        XCTAssertEqual(markingPasses(["class": "minor", "lanes": 2]).count, 0,
+                       "A residential street has no painted centre line")
+        XCTAssertEqual(markingPasses(["class": "minor", "lanes": 2, "oneway": 1]).count, 0,
+                       "and a one-way one has no lane lines either")
+        XCTAssertEqual(markingPasses(["class": "service", "lanes": 2]).count, 0,
+                       "nor does a service alley")
+        XCTAssertEqual(markingPasses(["class": "tertiary", "lanes": 2]).count, 1,
+                       "The through hierarchy down to tertiary is painted")
+    }
+
+    /// A street the tiles ship as one line through its junctions is cut for
+    /// the marking pass at every interior point another carriageway touches,
+    /// so the paint stops short of the crossing instead of running over it.
+    func testMarkingsAreCutAtJunctions() {
+        let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(200, 0), SIMD2(300, 0)]
+        let fragment = ClippedLineFragment(points: line, startClipped: false, endClipped: false)
+        // A side street ends at (200, 0): two drive-tier features touch it.
+        let counts: [TileMvtParser.RoadConnectionPointKey: Int] = [
+            .init(point: SIMD2(200, 0)): 2
+        ]
+        let pieces = TileMvtParser.splitAtJunctions(fragment: fragment, automobilePointCounts: counts)
+        XCTAssertEqual(pieces.count, 2, "The line is cut at the junction")
+        XCTAssertEqual(pieces[0].points, [SIMD2(0, 0), SIMD2(100, 0), SIMD2(200, 0)])
+        XCTAssertEqual(pieces[1].points, [SIMD2(200, 0), SIMD2(300, 0)])
+        XCTAssertFalse(pieces[0].endClipped, "The cut is a genuine end, so the inset applies to it")
+        XCTAssertFalse(pieces[1].startClipped, "and to the piece that starts there")
+
+        // A point only this street touches is not a junction.
+        let untouched = TileMvtParser.splitAtJunctions(fragment: fragment, automobilePointCounts: [:])
+        XCTAssertEqual(untouched.count, 1, "A plain interior vertex is not a junction")
+        XCTAssertEqual(untouched[0].points, line)
+    }
+
     func testMarkingsStateAHalfCarriagewayInset() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         var props: [String: VectorTile_Tile.Value] = [:]

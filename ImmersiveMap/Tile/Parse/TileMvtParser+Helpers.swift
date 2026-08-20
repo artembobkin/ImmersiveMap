@@ -1156,10 +1156,18 @@ extension TileMvtParser {
             case .casing:
                 // Each ring as a closed line: the first two points repeat at
                 // the end so the closing corner gets a join like every other.
+                //
+                // The rings arrive in render space, where `ParsePolygon` has
+                // already flipped y; the line tessellator takes tile space and
+                // flips it itself. Handing it a flipped ring drew every kerb
+                // mirrored about the tile's mid-line, which is a dark outline
+                // across whatever happened to lie there (a park, a block of
+                // buildings) and nothing around the junction it belongs to.
                 for ring in [clippedExterior] + clippedInteriors where ring.count >= 3 {
-                    var closed = ring
-                    closed.append(ring[0])
-                    closed.append(ring[1])
+                    let tileSpaceRing = ring.map { SIMD2<Float>($0.x, Float(tileExtent) - $0.y) }
+                    var closed = tileSpaceRing
+                    closed.append(tileSpaceRing[0])
+                    closed.append(tileSpaceRing[1])
                     if let kerb = parseLine.parse(points: closed,
                                                   width: pass.parseGeometryStyleData.lineWidth,
                                                   tileExtent: Float(tileExtent),

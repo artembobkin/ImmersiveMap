@@ -251,6 +251,11 @@ class TileMvtParser {
 
     private struct HighZoomRoadPrecomputation {
         let sharedPointCounts: [RoadConnectionPointKey: Int]
+        /// How many drive-tier features touch each point, footways and rails
+        /// excluded. A junction for the paint down a carriageway is where
+        /// another carriageway meets it; a footpath crossing the line is not
+        /// one, and counting it would cut the paint at every kerb ramp.
+        let automobilePointCounts: [RoadConnectionPointKey: Int]
         let linesByFeatureIndex: [[PreparedRoadLine]]
         /// Carriageway-surface polygons (junction areas) of the layer, as
         /// converted rings, with the road class priority each one draws at.
@@ -258,7 +263,10 @@ class TileMvtParser {
         /// is clipped away there: the surface owns that ground.
         let surfaceAreas: [RoadSurfaceArea]
 
-        static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:], linesByFeatureIndex: [], surfaceAreas: [])
+        static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:],
+                                                      automobilePointCounts: [:],
+                                                      linesByFeatureIndex: [],
+                                                      surfaceAreas: [])
     }
 
     struct RoadSurfaceArea {
@@ -339,15 +347,21 @@ class TileMvtParser {
                                                  featureStyles: featureStyles)
 
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
+        var automobilePointCounts: [RoadConnectionPointKey: Int] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
         for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
             var preparedLines: [PreparedRoadLine] = []
             preparedLines.reserveCapacity(lines.count)
+            let isAutomobile = featureStyles[featureIndex].roadClassPriority >= Self.automobileRoadClassPriorityFloor
             for points in lines {
                 let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
                 for fragment in fragments {
                     for point in fragment.points {
-                        pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
+                        let key = RoadConnectionPointKey(point: point)
+                        pointCounts[key, default: 0] += 1
+                        if isAutomobile {
+                            automobilePointCounts[key, default: 0] += 1
+                        }
                     }
                 }
                 preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
@@ -356,6 +370,7 @@ class TileMvtParser {
         }
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
+                                          automobilePointCounts: automobilePointCounts,
                                           linesByFeatureIndex: linesByFeatureIndex,
                                           surfaceAreas: surfaceAreas)
     }
@@ -862,6 +877,7 @@ class TileMvtParser {
                                                   data: mvtData)
                 : .empty
             let highZoomRoadSharedPointCounts = highZoomRoads.sharedPointCounts
+            let highZoomAutomobilePointCounts = highZoomRoads.automobilePointCounts
             for (featureIndex, feature) in layer.features.enumerated() {
                 let attributes = featureAttributes[featureIndex]
                 let style = featureStyles[featureIndex]
@@ -1159,8 +1175,25 @@ class TileMvtParser {
                                                    padding: padding)
 
                             for fragment in paddedFragments {
-                                let renderFragments = renderFragments(for: fragment,
-                                                                      styleData: lineRenderPass.parseGeometryStyleData)
+                                // Paint stops at a junction, as it does on the
+                                // ground: a street's centre line does not run
+                                // across the street it meets. The tiles ship a
+                                // through street as one line with the junctions
+                                // as interior vertices, so the inset at the two
+                                // ends is not enough; the line is cut at every
+                                // interior point another carriageway touches,
+                                // and each piece is inset from its own new
+                                // ends. Only marking passes are cut: the
+                                // carriageway and its kerb run through.
+                                let junctionSplit = lineRenderPass.parseGeometryStyleData.endInset > 0
+                                    && usesSeparateRoadRendering
+                                    ? Self.splitAtJunctions(fragment: fragment,
+                                                            automobilePointCounts: highZoomAutomobilePointCounts)
+                                    : [fragment]
+                                let renderFragments = junctionSplit.flatMap { piece in
+                                    self.renderFragments(for: piece,
+                                                         styleData: lineRenderPass.parseGeometryStyleData)
+                                }
 
                                 for renderFragment in renderFragments {
                                     let startConnected = usesSeparateRoadRendering
@@ -1348,6 +1381,44 @@ class TileMvtParser {
             roadTextLabels: roadTextLabels,
             layerTimings: layerTimings
         )
+    }
+
+    /// Cuts a line at every interior point where another carriageway meets
+    /// it, so a pass that insets its ends (the paint down a road) stops short
+    /// of each junction instead of running through it.
+    ///
+    /// A point is a junction when more than one drive-tier feature touches it.
+    /// The endpoints of the fragment are left alone: they are already ends,
+    /// and whether they are a genuine end, a tile seam or a junction is
+    /// decided by the caller, which knows about clipping.
+    static func splitAtJunctions(fragment: ClippedLineFragment,
+                                 automobilePointCounts: [RoadConnectionPointKey: Int]) -> [ClippedLineFragment] {
+        let points = fragment.points
+        guard points.count > 2 else { return [fragment] }
+
+        var pieces: [ClippedLineFragment] = []
+        var current: [SIMD2<Float>] = [points[0]]
+        for index in 1..<points.count {
+            current.append(points[index])
+            let isInterior = index < points.count - 1
+            guard isInterior,
+                  (automobilePointCounts[RoadConnectionPointKey(point: points[index])] ?? 0) > 1 else {
+                continue
+            }
+            // The piece ends here, and the next one starts at the same point:
+            // both are genuine ends, so both get the inset.
+            pieces.append(ClippedLineFragment(points: current,
+                                              startClipped: pieces.isEmpty ? fragment.startClipped : false,
+                                              endClipped: false))
+            current = [points[index]]
+        }
+        guard pieces.isEmpty == false else { return [fragment] }
+        if current.count >= 2 {
+            pieces.append(ClippedLineFragment(points: current,
+                                              startClipped: false,
+                                              endClipped: fragment.endClipped))
+        }
+        return pieces
     }
 
     /// Bulk-appends one tessellated polygon into the unified vertex/index

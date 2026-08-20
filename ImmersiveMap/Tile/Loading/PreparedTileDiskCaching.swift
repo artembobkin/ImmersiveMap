@@ -460,7 +460,12 @@ final class PreparedTileDiskCaching {
     // 46: TileLineStyle.reserved1 became maximumWidthPoints (the symbol
     // ceiling), ribbons inside a carriageway surface are clipped away, and
     // one-way carriageways carry lane lines at lateral offsets.
-    static let preparedFormatVersion: UInt32 = 46
+    // 47: a junction area's kerb follows its own outline (a version-46
+    // record has it mirrored about the tile's mid-line), markings are drawn
+    // only where the tiles state a lane count and only for the through
+    // hierarchy, and they are cut at every junction the carriageway passes
+    // through instead of running across it.
+    static let preparedFormatVersion: UInt32 = 47
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -138,8 +138,18 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         XCTAssertFalse(marking.parseGeometryStyleData.lineCapRound,
                        "No round caps: the dashes stop on the road instead of laying a disc past its end")
 
-        for className in ["motorway", "trunk", "secondary", "tertiary", "minor"] {
-            XCTAssertNotNil(markingPass(className, z: 16), "\(className) is an automobile road")
+        // The through hierarchy is painted where the tiles state a lane count.
+        for className in ["motorway", "trunk", "secondary", "tertiary"] {
+            XCTAssertNotNil(markingPass(className, lanes: 4, z: 16),
+                            "\(className) is a road of the painted hierarchy")
+            XCTAssertNil(markingPass(className, z: 16),
+                         "\(className) without a stated lane count has no evidence of paint")
+        }
+        // Below it, nothing is painted: a residential street and a service
+        // alley have bare asphalt whatever they carry.
+        for className in ["minor", "service"] {
+            XCTAssertNil(markingPass(className, lanes: 4, z: 16),
+                         "\(className) carries no painted markings")
         }
     }
 

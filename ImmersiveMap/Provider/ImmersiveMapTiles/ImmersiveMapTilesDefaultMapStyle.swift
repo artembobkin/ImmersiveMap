@@ -416,19 +416,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // does not is taken as two-way.
         let isOneWay = (parseIntValue(props["oneway"]).map { $0 != 0 } ?? false)
             || props["oneway"]?.stringValue.lowercased() == "yes"
-        // Markings: a two-way street gets a centre divider; a one-way
-        // carriageway with several lanes gets the lines between its lanes
-        // (there is no centre to divide, but a four-lane one-way avenue is
-        // still painted). A single-lane one-way is bare asphalt.
-        let laneCount = roadLaneCount(cls: effectiveClass, props: props)
-        let marked = isConstruction == false && tileZoom >= Self.roadMarkingsMinimumTileZoom
+        // Markings are painted from what the tiles state, never from what a
+        // class suggests. `lanes` is the only marking evidence the schema
+        // carries, so a road that does not carry it stays bare asphalt: a
+        // default lane count is a guess about the ground, and paint invented
+        // from a guess is wrong in a way an empty carriageway never is. The
+        // classes below tertiary are bare whatever they carry, because a
+        // residential street or a service alley has no painted centre line
+        // to draw. Where the count is known: a two-way street gets a centre
+        // divider, a one-way carriageway the lines between its lanes (there
+        // is no centre to divide, but a four-lane one-way avenue is still
+        // painted).
+        let taggedLaneCount = parseIntValue(props["lanes"]).map { min(max($0, 1), 12) }
+        let marked = isConstruction == false
+            && tileZoom >= Self.roadMarkingsMinimumTileZoom
+            && Self.roadClassCarriesMarkings(effectiveClass)
         let markings: RoadMarkings
-        if marked == false {
-            markings = .none
-        } else if isOneWay {
-            markings = laneCount >= 2 ? .laneLines(laneCount: laneCount) : .none
+        if marked, let taggedLaneCount, taggedLaneCount >= 2 {
+            markings = isOneWay ? .laneLines(laneCount: taggedLaneCount) : .centreDivider
         } else {
-            markings = .centreDivider
+            markings = .none
         }
         // Symbol widths: what the class draws at on screen until the camera
         // is close enough for the true carriageway to take over
@@ -876,6 +883,22 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// lane markings: below it the dashes would be noise inside a road only a
     /// few points across.
     private static let roadMarkingsMinimumTileZoom = 13
+
+    /// Whether a road class is painted at all.
+    ///
+    /// The through hierarchy is: an avenue carries a centre line and lane
+    /// lines, and a map that leaves them out reads as unfinished. Everything
+    /// below it does not: a residential street, a courtyard proezd, a service
+    /// alley, a track and a footway have bare asphalt, and painting them
+    /// covers the map in dashes that are not on the ground.
+    private static func roadClassCarriesMarkings(_ cls: String?) -> Bool {
+        switch cls {
+        case "motorway", "trunk", "primary", "secondary", "tertiary":
+            return true
+        default:
+            return false
+        }
+    }
 
     /// The paint of a lane divider: an off-white that reads on the asphalt
     /// grey without glaring, slightly translucent so the marking sits in the
