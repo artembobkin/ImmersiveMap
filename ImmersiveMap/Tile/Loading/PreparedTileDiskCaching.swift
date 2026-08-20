@@ -481,7 +481,9 @@ final class PreparedTileDiskCaching {
     // fresh stroke; the street a piece belongs to comes from the source
     // (`street`) where it says, and decides both stitching and what counts
     // as a junction.
-    static let preparedFormatVersion: UInt32 = 52
+    // 53: stitching on the source's street id keeps a tunnel or a bridge
+    // out of the weld, which version 52 joined to the surface it belongs to.
+    static let preparedFormatVersion: UInt32 = 53
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

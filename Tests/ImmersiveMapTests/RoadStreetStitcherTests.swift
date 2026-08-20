@@ -154,6 +154,34 @@ final class RoadStreetStitcherTests: XCTestCase {
                        lines)
     }
 
+    func testOneStreetIsStillNotOneRibbonAcrossATunnelOrABridge() {
+        // A street runs into a tunnel and out again: one street, and the
+        // source says so, but the two pieces do not draw alike. Welding them
+        // would draw the surface half as tunnel or the other way round.
+        let lines: [[[SIMD2<Float>]]] = [
+            [[SIMD2(0, 100), SIMD2(1000, 100)]],
+            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
+        ]
+        var attrs = [attributes(name: "Novy Arbat"), attributes(name: "Novy Arbat")]
+        attrs[0]["street"] = value(5150)
+        attrs[1]["street"] = value(5150)
+        attrs[1]["brunnel"] = value("tunnel")
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                                 featureAttributes: attrs,
+                                                 featureStyles: styles(for: attrs)),
+                       lines,
+                       "The tunnel keeps its own ribbon")
+
+        // Same street, same everything that draws: one ribbon.
+        var joined = attrs
+        joined[1]["brunnel"] = value("")
+        joined[1].removeValue(forKey: "brunnel")
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                                 featureAttributes: joined,
+                                                 featureStyles: styles(for: joined))[0],
+                       [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
+    }
+
     func testAPieceWithoutTheSourcesIdentityFallsBackToItsAttributes() {
         // A source that ships no street id is read as before.
         let lines: [[[SIMD2<Float>]]] = [

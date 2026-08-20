@@ -10,13 +10,20 @@ import simd
 /// pipeline did not merge, or cuts the tiler made. Drawn as separate ribbons,
 /// every boundary between two pieces is a seam: two caps, a kerb crossing the
 /// carriageway, a dash pattern restarting. Stitching joins pieces end to end
-/// when, and only when, they are the same street to draw: the same identity
-/// (`name`, or the way id where the source ships none) and the same drawing
-/// attributes (class, lanes, oneway, brunnel), meeting at an endpoint that no
-/// third road shares. A node where a third road meets is a junction, and a
-/// street may pass through it only as its own geometry, never glued across
-/// it: gluing there would weld two streets meeting at a T into one bent
-/// ribbon.
+/// when, and only when, they are the same street to draw, meeting at an
+/// endpoint that no third road shares.
+///
+/// Which street a piece belongs to is the source's answer where it gives one
+/// (`street`, an id assembled from the whole network before the tiles were
+/// cut); otherwise it is guessed from the name and every drawing attribute,
+/// which is right within a tile and refuses to join two pieces whose lane
+/// counts the tiler happened to write differently. Either way the attributes
+/// that change how a piece is drawn must still agree: a street runs into a
+/// tunnel and out again, and those are one street but not one ribbon.
+///
+/// A node where a third road meets is a junction, and a street may pass
+/// through it only as its own geometry, never glued across it: gluing there
+/// would weld two streets meeting at a T into one bent ribbon.
 ///
 /// The result keeps the feature indexing: the first feature of a chain
 /// receives the whole stitched polyline, the others receive nothing, so the
@@ -28,11 +35,19 @@ enum RoadStreetStitcher {
 
     /// The source's own answer to "which street is this": an id assembled
     /// from the whole road network before the tiles were cut. Where it is
-    /// present it replaces the guess above, which compares every drawing
-    /// attribute and so leaves two pieces of one street apart wherever the
-    /// tiler wrote their lane count differently.
+    /// present it replaces the name and the lane count in the identity, both
+    /// of which are guesses about the same question, and the second of which
+    /// left two pieces of one street apart wherever the tiler wrote their
+    /// counts differently.
     private static let streetIdentityKey = "street"
 
+    /// What still has to agree even within one street: everything that
+    /// changes how a piece is drawn. A street runs into a tunnel and out
+    /// again, and the two pieces are one street but not one ribbon: the
+    /// tunnel draws dashed, a bridge draws in the overlay, a one-way half
+    /// carries lane lines where the two-way half carries a divider. Welding
+    /// them would draw the whole street as whichever piece came first.
+    private static let drawingKeys = ["class", "subclass", "brunnel", "layer", "oneway"]
 
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
                        featureAttributes: [[String: VectorTile_Tile.Value]],
@@ -51,7 +66,14 @@ enum RoadStreetStitcher {
                 continue
             }
             if let street = featureAttributes[index][streetIdentityKey], describe(street).isEmpty == false {
-                identityByFeature[index] = "street=" + describe(street)
+                var key = "street=" + describe(street) + ";"
+                for attribute in drawingKeys {
+                    key += attribute
+                    key += "="
+                    key += describe(featureAttributes[index][attribute])
+                    key += ";"
+                }
+                identityByFeature[index] = key
                 participates = true
                 continue
             }
