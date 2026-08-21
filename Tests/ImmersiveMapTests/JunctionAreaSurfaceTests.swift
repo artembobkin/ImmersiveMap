@@ -76,18 +76,20 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         XCTAssertNotNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }, "and it wears a kerb")
         XCTAssertEqual(area.roadClassPriority, 80, "sorted among the primaries")
 
-        // A crossing reconstructed from the graph: its own plane, half a
-        // tone lighter, and no lane paint inside it.
+        // A crossing reconstructed from the graph: the same asphalt, no tone
+        // of its own. The reconstructed polygons overlap each other and the
+        // ribbons, and any distinct tone draws every overlap as a seam; what
+        // sets a crossing apart is only that no lane paint runs inside it.
         let crossing = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                  properties: ["class": value("primary"),
                                                                               "subclass": value("junction_area"),
                                                                               "origin": value("graph")],
                                                                  tile: Tile(x: 39615, y: 20486, z: 16)))
         let crossingFill = crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
-        XCTAssertEqual(crossingFill?.color, ImmersiveMapTilesDefaultMapStyle.junctionSurfaceColor(from: primary),
-                       "The crossing is the class colour lifted half a tone")
-        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.junctionSurfaceColor(from: primary).x, primary.x + 0.028,
-                       accuracy: 0.0001, "and the lift is subtle, not a different material")
+        XCTAssertEqual(crossingFill?.color, primary,
+                       "The crossing is exactly the class colour")
+        XCTAssertEqual(crossingFill?.key, fill?.key,
+                       "and shares the class fill key, so overlaps cannot differ")
         XCTAssertTrue(crossing.surfaceAreaCutsPaint, "and it cuts the paint of the roads inside it")
 
         // A plain road polygon (no junction_area subclass) is untouched.

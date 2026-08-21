@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 63
+    private static let implementationRevision: UInt32 = 64
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -658,8 +658,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// ground polygon in the road color.
     /// `reconstructed` separates two things the tiles ship under one
     /// subclass. A junction rebuilt from the road graph (`origin=graph`) is a
-    /// CROSSING: it wears the junction tone and cuts the paint of the roads
-    /// inside it, because there is no lane paint inside a crossing. A
+    /// CROSSING: it cuts the paint of the roads inside it, because there is
+    /// no lane paint inside a crossing. A
     /// hand-mapped `area:highway` typically covers a whole street's
     /// carriageway: it stays in the class colour and leaves the paint alone,
     /// or a street inside one would lose its markings end to end.
@@ -677,13 +677,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "service": classColor = roads.service; fillKey = 42; priority = 45
         default: classColor = roads.minor; fillKey = 44; priority = 50
         }
-        // A crossing is a half-tone lighter than the carriageways that run
-        // into it, so it reads as its own plane, the way the big map
-        // providers draw it, while still being unmistakably asphalt. Derived
-        // from the class colour rather than configured, so a custom palette
-        // keeps the relationship automatically.
-        let color = reconstructed ? Self.junctionSurfaceColor(from: classColor) : classColor
-        let surfaceKey = reconstructed ? Self.junctionSurfaceKey(forFillKey: fillKey) : fillKey
+        // A crossing wears exactly the class colour, not a tone of its own.
+        // The reconstructed polygons overlap each other, the hand-mapped
+        // areas and the ribbons, and overlaps of one colour are invisible
+        // where a distinct tone showed every one as a diagonal seam.
+        let color = classColor
+        let surfaceKey = fillKey
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
         var passes: [LineRenderPass] = []
@@ -716,32 +715,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             isRoadSurfaceArea: true,
             surfaceAreaCutsPaint: reconstructed
         )
-    }
-
-    /// The junction surface's own tone: the class colour lifted half a tone.
-    static func junctionSurfaceColor(from fill: SIMD4<Float>) -> SIMD4<Float> {
-        SIMD4<Float>(min(fill.x + 0.028, 1.0),
-                     min(fill.y + 0.028, 1.0),
-                     min(fill.z + 0.028, 1.0),
-                     fill.w)
-    }
-
-    /// Junction surfaces draw through keys of their own: their colour is not
-    /// the ribbons' any more, and per-key style tables mean a shared key
-    /// would take whichever colour registered first. The 120s are unused by
-    /// every other style this file hands out (fills live at 30-56, markings
-    /// one above their fill, the crosswalk at 63, labels in the 70s,
-    /// boundaries at 100 and 102).
-    private static func junctionSurfaceKey(forFillKey fillKey: UInt8) -> UInt8 {
-        switch fillKey {
-        case 56: return 120
-        case 54: return 121
-        case 52: return 122
-        case 50: return 123
-        case 48: return 124
-        case 42: return 125
-        default: return 126
-        }
     }
 
     /// A road over a country or region view: a symbolic stroke, drawn through

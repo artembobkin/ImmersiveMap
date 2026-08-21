@@ -136,7 +136,7 @@ once the public API stabilizes.
 
 - A dash pattern broken at a junction resumes in step on the far side. Every tessellated piece used to start counting arc length at zero, so each block of a street began with a fresh full stroke wherever the line had been cut, and one street came out as strokes of assorted lengths. Pieces now carry how far along the line they begin, the inset included.
 
-- A junction reconstructed from the road graph draws as its own plane: the class colour lifted half a tone (`origin=graph` on the tile feature), so a crossing reads the way the big map providers draw it while staying unmistakably asphalt. A hand-mapped `area:highway`, which typically covers a whole street's carriageway, keeps the class colour and merges into the ribbons as before.
+- A junction reconstructed from the road graph (`origin=graph` on the tile feature) wears exactly the class colour, one asphalt with the ribbons and the hand-mapped areas. It briefly drew half a tone lighter within this unreleased line, and the tone turned out to draw every overlap between reconstructed polygons, hand-mapped areas and ribbons as a diagonal seam; what sets a crossing apart is not a colour but that no lane paint runs inside it.
 
 ### Fixed
 
