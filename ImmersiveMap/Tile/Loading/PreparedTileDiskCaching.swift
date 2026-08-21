@@ -503,7 +503,11 @@ final class PreparedTileDiskCaching {
     // asphalt with a kerb, and from street zoom its detail phase carries the
     // synthesized parking-bay comb: short point-locked stripes laid out in
     // rows the way real lots are painted, clipped to the polygon.
-    static let preparedFormatVersion: UInt32 = 57
+    // 58: a dedicated bus lane (`subclass=bus_lane_area`) is a warm-toned
+    // fill over the carriageway; a parking lot eats only its own aisles
+    // (the rest of the service tier moved a step up), and the bay comb ends
+    // at the edge of any surface that overlaps the lot.
+    static let preparedFormatVersion: UInt32 = 58
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

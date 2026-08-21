@@ -1129,6 +1129,7 @@ extension TileMvtParser {
                                style: FeatureStyle,
                                attributes: [String: VectorTile_Tile.Value],
                                tile: Tile,
+                               surfaceAreas: [TileMvtParser.RoadSurfaceArea],
                                roadStyles: inout [UInt8: FeatureStyle],
                                roadPolygonByStyle: inout [UInt8: [ParsedPolygon]],
                                orderedRoadPolygons: inout [OrderedRoadPolygon],
@@ -1185,11 +1186,26 @@ extension TileMvtParser {
                 // flipped back into above), each tessellated as its own
                 // point-locked stroke with hard ends.
                 let tileSpaceRing = clippedExterior.map { SIMD2<Float>($0.x, Float(tileExtent) - $0.y) }
-                let stripes = parkingBayBuilder.buildStripes(
+                let unitsPerMetre = ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                var stripes = parkingBayBuilder.buildStripes(
                     exterior: tileSpaceRing,
-                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                    unitsPerMetre: unitsPerMetre,
                     orientation: attributes["orientation"]?.stringValue
                 )
+                // Where a carriageway, a junction or a bus lane overlaps the
+                // lot, that ground is theirs: the comb ends at their edge
+                // instead of climbing onto the roadway.
+                let owners = surfaceAreas.filter {
+                    $0.classPriority > style.roadClassPriority
+                        && $0.structureKind == roadStructureKind(attributes: attributes)
+                }
+                if owners.isEmpty == false {
+                    stripes = stripes.flatMap { RoadSurfaceClipper.clip(polyline: $0, outside: owners) }
+                        .filter { stripe in
+                            guard let first = stripe.first, let last = stripe.last else { return false }
+                            return simd_distance(first, last) >= ParkingBayGeometryBuilder.minimumStripeMetres * unitsPerMetre
+                        }
+                }
                 for stripe in stripes {
                     if let stroke = parseLine.parse(points: stripe,
                                                     width: pass.parseGeometryStyleData.lineWidth,

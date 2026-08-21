@@ -94,6 +94,51 @@ final class RoadParkingAreaTests: XCTestCase {
                        "and it wears no kerb of its own across the lot")
     }
 
+    func testAParkingLotDoesNotEatTheServiceRoadsPassingAlongIt() throws {
+        // A dedicated bus lane is often mapped as its own service way along
+        // the kerb, inside the parking polygon's reach. The lot owns its
+        // aisles, not the through service tier.
+        let busWay = VectorTileFixture.Feature(id: 3,
+                                               geometry: .line(points: [(1600, 1850), (2600, 1850)]),
+                                               properties: ["class": "service"])
+        let together = try parse([lot(), busWay])
+        let lotOnly = try parse([lot()])
+        XCTAssertGreaterThan(together.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
+                             lotOnly.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
+                             "A through service road keeps its ribbon across the lot")
+    }
+
+    func testTheCombEndsAtAnOverlappingCarriageway() throws {
+        // A carriageway polygon over the right half of the lot: that ground
+        // is the road's, and the comb must not climb onto it.
+        let roadway = VectorTileFixture.Feature(id: 4,
+                                                geometry: .polygon(ring: [(2100, 1700), (2800, 1700), (2800, 2200), (2100, 2200)]),
+                                                properties: ["class": "primary", "subclass": "carriageway_area", "origin": "graph"])
+        let together = try parse([lot(), roadway])
+        let lotOnly = try parse([lot()])
+        XCTAssertLessThan(together.drawingRoadPhases.automobileGround.detail.drawing.indices.count,
+                          lotOnly.drawingRoadPhases.automobileGround.detail.drawing.indices.count,
+                          "The stripes over the roadway are gone")
+        XCTAssertGreaterThan(together.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "and the rest of the comb survives")
+    }
+
+    func testADedicatedBusLaneIsAWarmFillAboveTheCarriageway() {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        var subclassValue = VectorTile_Tile.Value(); subclassValue.stringValue = "bus_lane_area"
+        let lane = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                             properties: ["subclass": subclassValue],
+                                                             tile: Tile(x: 39615, y: 20486, z: 16)))
+        XCTAssertTrue(lane.isRoadSurfaceArea, "The strip owns its ground like every surface")
+        XCTAssertFalse(lane.surfaceAreaCutsPaint, "and cuts nobody's paint")
+        XCTAssertEqual(lane.resolvedLineRenderPasses.count, 1, "One fill, no kerb: paint, not a body")
+        XCTAssertEqual(lane.resolvedLineRenderPasses.first?.roadPassRole, .fill)
+        XCTAssertGreaterThan(lane.roadClassPriority, 80, "sorted above every carriageway fill")
+        let asphalt = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
+        XCTAssertGreaterThan(lane.color.x, lane.color.z, "The tone is warm")
+        XCTAssertGreaterThan(lane.color.x, asphalt.x, "warmer than the cool asphalt it lies on")
+    }
+
     func testTheCombStaysInsideTheLot() throws {
         let parsed = try parse([lot()])
         let detail = parsed.drawingRoadPhases.automobileGround.detail

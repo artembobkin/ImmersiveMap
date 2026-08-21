@@ -440,7 +440,9 @@ enum VisualReviewCatalogue {
             poking past the kerb. A deep lot reads as rows of bays separated \
             by clean aisles; parking aisles inside a lot carry no kerb of \
             their own. The comb appears at street zoom and the lot is clean \
-            asphalt one level out.
+            asphalt one level out. The dedicated bus lane along Okhotny \
+            Ryad reads as a strip one tone warmer than the asphalt, and the \
+            comb never climbs onto it or onto any carriageway.
             """,
             settings: .default,
             subject: .still(camera: Place.okhotnyParking)),

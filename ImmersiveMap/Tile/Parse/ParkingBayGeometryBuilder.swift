@@ -33,7 +33,7 @@ struct ParkingBayGeometryBuilder {
     /// A row cut shorter than half a car by the polygon edge is dropped.
     private static let minimumRowDepthMetres: Float = 2.5
     /// A stripe piece shorter than this is a corner sliver, not a divider.
-    private static let minimumStripeMetres: Float = 1.8
+    static let minimumStripeMetres: Float = 1.8
     /// Runaway guard for degenerate giant polygons.
     private static let maximumStripes = 4000
 

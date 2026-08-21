@@ -1157,6 +1157,7 @@ class TileMvtParser {
                                                   style: style,
                                                   attributes: attributes,
                                                   tile: tile,
+                                                  surfaceAreas: highZoomRoads.surfaceAreas,
                                                   roadStyles: &roadStyles,
                                                   roadPolygonByStyle: &roadPolygonByStyle,
                                                   orderedRoadPolygons: &orderedRoadPolygons,
