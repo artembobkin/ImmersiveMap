@@ -4,6 +4,10 @@
 @testable import ImmersiveMap
 import XCTest
 
+/// `@MainActor` like every other suite that builds an `ImmersiveMapView`: the
+/// view is a SwiftUI `View` and so main-actor isolated, and reaching it from a
+/// nonisolated test is an error under the Swift 6.1 toolchain CI runs.
+@MainActor
 final class TileMaximumZoomLevelSettingsTests: XCTestCase {
     /// The default depth is the hosted service's: a bare map never asks the
     /// hosted source for tiles it does not serve.
