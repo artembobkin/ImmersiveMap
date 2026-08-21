@@ -443,7 +443,9 @@ enum VisualReviewCatalogue {
             asphalt one level out. The dedicated bus lane along Okhotny \
             Ryad carries large white letters A stamped along it, feet toward \
             the oncoming driver, with no recolored surface under them, and \
-            the comb never climbs onto it or onto any carriageway.
+            the comb never climbs onto it or onto any carriageway. At the \
+            bus stops the kerb carries the yellow sawtooth of the stop \
+            marking, anchored to the edge of the roadway.
             """,
             settings: .default,
             subject: .still(camera: Place.okhotnyParking)),

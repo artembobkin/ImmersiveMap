@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 69
+    private static let implementationRevision: UInt32 = 70
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -714,6 +714,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // A letter is a couple of metres: a smudge below z16.
             guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
             return busLaneLetterStyle()
+        case "bus_stop_zigzag":
+            // The stop's stretch of kerb: the yellow sawtooth of the bus
+            // stop marking, folded from the shipped axis by the builder.
+            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            return busStopZigzagStyle()
         case "crossing_unmarked":
             // A place to cross, not a thing to draw: same answer as for the
             // attribute-tagged unmarked crossings.
@@ -957,6 +962,32 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private static let busLaneLetterKey: UInt8 = 71
+
+    /// The yellow sawtooth at a public transport stop, same construction as
+    /// the letter: a polygon decoration in the detail role, in the yellow
+    /// road paint.
+    private func busStopZigzagStyle() -> FeatureStyle {
+        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: 1)
+        return FeatureStyle(
+            key: Self.busStopZigzagKey,
+            color: Self.roadMarkingYellowColor,
+            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+            parseGeometryStyleData: geometry,
+            lineRenderPasses: [
+                LineRenderPass(key: Self.busStopZigzagKey,
+                               color: Self.roadMarkingYellowColor,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                               parseGeometryStyleData: geometry,
+                               includeRoadLabelPath: false,
+                               roadPassRole: .detail)
+            ],
+            roadClassPriority: Self.crosswalkClassPriority,
+            roadDecorationKind: .busStopZigzag,
+            isShippedRoadPaint: true
+        )
+    }
+
+    private static let busStopZigzagKey: UInt8 = 77
 
 
     /// A road over a country or region view: a symbolic stroke, drawn through

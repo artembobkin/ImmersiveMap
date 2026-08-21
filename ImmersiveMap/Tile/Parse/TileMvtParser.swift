@@ -21,6 +21,7 @@ class TileMvtParser {
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
     private let busLaneLetterBuilder        : BusLaneLetterGeometryBuilder = BusLaneLetterGeometryBuilder()
+    private let busStopZigzagBuilder        : BusStopZigzagGeometryBuilder = BusStopZigzagGeometryBuilder()
     let tileExtent = Double(4096)
 
     /// The MVT layer that carries roads: `road` in the Mapbox schema, `transportation`
@@ -1353,6 +1354,36 @@ class TileMvtParser {
                                         orderedRoadPolygons.append(
                                             OrderedRoadPolygon(
                                                 polygon: letterPolygon,
+                                                styleKey: lineRenderPass.key,
+                                                structureKind: roadStructure,
+                                                layer: roadLayer,
+                                                classPriority: roadClassPriority,
+                                                passRole: lineRenderPass.roadPassRole,
+                                                sequence: roadPolygonSequence
+                                            )
+                                        )
+                                        roadPolygonSequence += 1
+                                    }
+                                }
+                                continue
+                            }
+
+                            if usesSeparateRoadRendering,
+                               style.roadDecorationKind == .busStopZigzag,
+                               lineRenderPass.roadPassRole == .detail {
+                                // The stop's kerb: the yellow sawtooth,
+                                // folded from the shipped axis.
+                                for fragment in exactClippedFragments {
+                                    let zigzagPolygons = busStopZigzagBuilder.buildPolygons(
+                                        points: fragment.points,
+                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                                        tileExtent: Float(tileExtent)
+                                    )
+                                    for zigzagPolygon in zigzagPolygons {
+                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(zigzagPolygon)
+                                        orderedRoadPolygons.append(
+                                            OrderedRoadPolygon(
+                                                polygon: zigzagPolygon,
                                                 styleKey: lineRenderPass.key,
                                                 structureKind: roadStructure,
                                                 layer: roadLayer,

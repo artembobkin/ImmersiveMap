@@ -150,6 +150,26 @@ final class RoadParkingAreaTests: XCTestCase {
                              "The letters draw above the carriageway")
     }
 
+    func testABusStopWearsTheYellowSawtooth() throws {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        func value(_ v: String) -> VectorTile_Tile.Value { var x = VectorTile_Tile.Value(); x.stringValue = v; return x }
+        let stop = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                             properties: ["marking": value("bus_stop_zigzag")],
+                                                             tile: Tile(x: 39615, y: 20486, z: 16)))
+        XCTAssertEqual(stop.roadDecorationKind, .busStopZigzag)
+        XCTAssertTrue(stop.isShippedRoadPaint)
+        XCTAssertGreaterThan(stop.color.x, stop.color.z, "The stop marking is yellow, not white")
+        let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                               properties: ["marking": value("bus_stop_zigzag")],
+                                                               tile: Tile(x: 19807, y: 10243, z: 15)))
+        XCTAssertEqual(coarse.key, 0, "A tooth is a metre: a smudge below z16")
+        let parsed = try parse([.init(id: 8,
+                                      geometry: .line(points: [(500, 3200), (700, 3200)]),
+                                      properties: ["marking": "bus_stop_zigzag"])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The sawtooth draws above the carriageway")
+    }
+
     func testTheCombStaysInsideTheLot() throws {
         let parsed = try parse([lot()])
         let detail = parsed.drawingRoadPhases.automobileGround.detail

@@ -14,5 +14,8 @@ extension TileMvtParser {
         /// A bus lane axis whose detail pass is the letter A stamped along
         /// the lane (see `BusLaneLetterGeometryBuilder`).
         case busLaneLetter
+        /// A bus stop axis whose detail pass is the yellow sawtooth along
+        /// the kerb (see `BusStopZigzagGeometryBuilder`).
+        case busStopZigzag
     }
 }

@@ -510,7 +510,10 @@ final class PreparedTileDiskCaching {
     // 59: a dedicated bus lane is no longer a toned polygon but the letter
     // A stamped along the lane's axis (`marking=bus_lane`, oriented with the
     // direction of travel), in the plain marking paint.
-    static let preparedFormatVersion: UInt32 = 59
+    // 60: a public transport stop carries the yellow sawtooth of the bus
+    // stop marking (`marking=bus_stop_zigzag`), folded from the kerb-side
+    // axis the tiles ship.
+    static let preparedFormatVersion: UInt32 = 60
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
