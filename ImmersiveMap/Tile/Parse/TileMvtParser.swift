@@ -265,6 +265,14 @@ class TileMvtParser {
     private struct PreparedRoadLine {
         let points: [SIMD2<Float>]
         let exactFragments: [ClippedLineFragment]
+        /// Set on the PAINT track only: this end of the line was created by
+        /// cutting the street against a crossing's surface. The surface is
+        /// the gap, so the paint runs right up to its edge instead of also
+        /// backing off by its own half-carriageway: with both, a street
+        /// crossed by a chain of small junctions lost its markings entirely,
+        /// each short piece eaten by two ten-metre insets.
+        var paintCutAtStart: Bool = false
+        var paintCutAtEnd: Bool = false
     }
 
     private struct HighZoomRoadPrecomputation {
@@ -280,6 +288,12 @@ class TileMvtParser {
         /// junction either, and neither is a service driveway or a parking
         /// aisle meeting a street: paint does not break for a gateway.
         let automobilePointCounts: [RoadConnectionPointKey: Int]
+        /// The lines a feature's PAINT is built from: the same raw lines,
+        /// but clipped only by the surfaces that cut paint (junctions
+        /// reconstructed from the graph), not by every surface. A hand-mapped
+        /// carriageway area covers a whole street, and a street inside one
+        /// keeps its markings; a crossing does not.
+        let paintLinesByFeatureIndex: [[PreparedRoadLine]]
         /// Half the widest carriageway that meets each point, in tile units.
         /// The gap a marking leaves at a junction is the room the crossing
         /// road takes, not the room its own road takes: a lane line running
@@ -287,13 +301,16 @@ class TileMvtParser {
         let junctionHalfWidths: [RoadConnectionPointKey: Float]
         let linesByFeatureIndex: [[PreparedRoadLine]]
         /// Carriageway-surface polygons (junction areas) of the layer, as
-        /// converted rings, with the road class priority each one draws at.
-        /// A ribbon of the same or a lower class that runs inside one of them
-        /// is clipped away there: the surface owns that ground.
+        /// rings in RAW tile space (y down, the space the road lines are in
+        /// until the tessellators flip them), with the road class priority
+        /// each one draws at. A ribbon of the same or a lower class that runs
+        /// inside one of them is clipped away there: the surface owns that
+        /// ground.
         let surfaceAreas: [RoadSurfaceArea]
 
         static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:],
                                                       automobilePointCounts: [:],
+                                                      paintLinesByFeatureIndex: [],
                                                       junctionHalfWidths: [:],
                                                       linesByFeatureIndex: [],
                                                       surfaceAreas: [])
@@ -303,6 +320,9 @@ class TileMvtParser {
         let exterior: [SIMD2<Float>]
         let classPriority: Int
         let bounds: (min: SIMD2<Float>, max: SIMD2<Float>)
+        /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
+        /// crossing, false for a hand-mapped carriageway area.
+        var cutsPaint: Bool = false
     }
 
     private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
@@ -328,8 +348,18 @@ class TileMvtParser {
                 case .polygon where style.isRoadSurfaceArea:
                     let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: bytes), layer: layer)
                     for polygon in polygons where polygon.exteriorRing.count >= 3 {
+                        // Raw tile space, y down, exactly like the road lines
+                        // the clipper cuts against: the flip to render space
+                        // happens later, inside the tessellators. A flipped
+                        // ring here made the clipper cut every road against a
+                        // MIRROR IMAGE of the area: ribbons and markings
+                        // survived inside real junction areas (a pile of lane
+                        // lines across every crossing), and roads at the
+                        // mirrored spot were phantom-clipped. The symmetric
+                        // fixture of the original test mirrored onto itself,
+                        // which is how this shipped.
                         let ring = polygon.exteriorRing.map {
-                            SIMD2<Float>(Float($0.x), Float(tileExtent) - Float($0.y))
+                            SIMD2<Float>(Float($0.x), Float($0.y))
                         }
                         var lower = ring[0]
                         var upper = ring[0]
@@ -339,7 +369,8 @@ class TileMvtParser {
                         }
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
                                                             classPriority: style.roadClassPriority,
-                                                            bounds: (lower, upper)))
+                                                            bounds: (lower, upper),
+                                                            cutsPaint: style.surfaceAreaCutsPaint))
                     }
                 default:
                     break
@@ -354,6 +385,7 @@ class TileMvtParser {
         // side of the street and none on the other), and its own kerbs draw
         // inside the surface. The parts inside are clipped away; the parts
         // outside keep drawing and end flush at the surface's edge.
+        var paintRawLinesByFeatureIndex = rawLinesByFeatureIndex
         if surfaceAreas.isEmpty == false {
             for featureIndex in 0..<rawLinesByFeatureIndex.count where rawLinesByFeatureIndex[featureIndex].isEmpty == false {
                 let priority = featureStyles[featureIndex].roadClassPriority
@@ -361,6 +393,14 @@ class TileMvtParser {
                 guard owners.isEmpty == false else { continue }
                 rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
                     RoadSurfaceClipper.clip(polyline: $0, outside: owners)
+                }
+                // The paint's track is cut only by the crossings: a street
+                // inside a hand-mapped carriageway area keeps its markings.
+                let paintOwners = owners.filter(\.cutsPaint)
+                if paintOwners.isEmpty == false {
+                    paintRawLinesByFeatureIndex[featureIndex] = paintRawLinesByFeatureIndex[featureIndex].flatMap {
+                        RoadSurfaceClipper.clip(polyline: $0, outside: paintOwners)
+                    }
                 }
             }
         }
@@ -375,6 +415,43 @@ class TileMvtParser {
         let stitched = RoadStreetStitcher.stitch(linesByFeatureIndex: rawLinesByFeatureIndex,
                                                  featureAttributes: featureAttributes,
                                                  featureStyles: featureStyles)
+        let paintStitched = RoadStreetStitcher.stitch(linesByFeatureIndex: paintRawLinesByFeatureIndex,
+                                                      featureAttributes: featureAttributes,
+                                                      featureStyles: featureStyles)
+        // An endpoint that lies on a crossing's outline is a cut the clipper
+        // made, not an end of the street: recognised geometrically after the
+        // stitcher has run, because stitching rearranges which piece carries
+        // which end.
+        let paintCutRings = surfaceAreas.filter(\.cutsPaint).map(\.exterior)
+        func liesOnACrossingOutline(_ point: SIMD2<Float>) -> Bool {
+            for ring in paintCutRings {
+                for index in 0..<ring.count {
+                    let a = ring[index]
+                    let b = ring[(index + 1) % ring.count]
+                    let ab = b - a
+                    let lengthSquared = simd_length_squared(ab)
+                    guard lengthSquared > 0 else { continue }
+                    let t = simd_clamp(simd_dot(point - a, ab) / lengthSquared, 0, 1)
+                    if simd_distance_squared(point, a + ab * t) < 0.25 {
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        var paintLinesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
+        for (featureIndex, lines) in paintStitched.enumerated() where lines.isEmpty == false {
+            var prepared: [PreparedRoadLine] = []
+            prepared.reserveCapacity(lines.count)
+            for points in lines {
+                prepared.append(PreparedRoadLine(points: points,
+                                                 exactFragments: lineClipper.clip(points: points,
+                                                                                  tileExtent: Float(tileExtent)),
+                                                 paintCutAtStart: points.first.map(liesOnACrossingOutline) ?? false,
+                                                 paintCutAtEnd: points.last.map(liesOnACrossingOutline) ?? false))
+            }
+            paintLinesByFeatureIndex[featureIndex] = prepared
+        }
 
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
         // Distinct streets per point, not occurrences and not features: a
@@ -437,6 +514,7 @@ class TileMvtParser {
 
         return HighZoomRoadPrecomputation(sharedPointCounts: pointCounts,
                                           automobilePointCounts: automobilePointCounts,
+                                          paintLinesByFeatureIndex: paintLinesByFeatureIndex,
                                           junctionHalfWidths: junctionHalfWidths,
                                           linesByFeatureIndex: linesByFeatureIndex,
                                           surfaceAreas: surfaceAreas)
@@ -1127,7 +1205,19 @@ class TileMvtParser {
                         }
                         preparedLines = converted
                     }
-                    for preparedLine in preparedLines {
+                    // Two tracks of the same feature: the ribbon and its
+                    // labels draw from lines cut by every carriageway
+                    // surface, the paint from lines cut only by crossings
+                    // (see paintLinesByFeatureIndex).
+                    let paintPreparedLines = usesSeparateRoadRendering
+                        ? highZoomRoads.paintLinesByFeatureIndex[featureIndex]
+                        : preparedLines
+                    let passGroups: [(lines: [PreparedRoadLine], passes: [LineRenderPass], emitsLabels: Bool)] = [
+                        (preparedLines, lineRenderPasses.filter { $0.roadPassRole != .detail }, true),
+                        (paintPreparedLines, lineRenderPasses.filter { $0.roadPassRole == .detail }, false)
+                    ]
+                    for group in passGroups where group.passes.isEmpty == false || group.emitsLabels {
+                    for preparedLine in group.lines {
                         let linePoints = preparedLine.points
                         let exactClippedFragments = preparedLine.exactFragments
                         guard exactClippedFragments.isEmpty == false else {
@@ -1139,7 +1229,7 @@ class TileMvtParser {
                                                padding: sharedRoadPadding)
                             : []
 
-                        for lineRenderPass in lineRenderPasses {
+                        for lineRenderPass in group.passes {
                             if style.roadDecorationKind == .zebraCrossing, roadStructure == .tunnel {
                                 continue
                             }
@@ -1311,6 +1401,16 @@ class TileMvtParser {
                                     let styleData = lineRenderPass.parseGeometryStyleData
                                     func junctionInset(_ point: SIMD2<Float>?, isContinuation: Bool) -> Float {
                                         guard styleData.endInset > 0, isContinuation == false, let point else { return 0 }
+                                        // An end the crossing's surface cut already
+                                        // stands at the edge of the gap: backing off
+                                        // by the inset too ate the whole stroke on a
+                                        // street crossed by a chain of junctions.
+                                        if preparedLine.paintCutAtStart, point == preparedLine.points.first {
+                                            return 0
+                                        }
+                                        if preparedLine.paintCutAtEnd, point == preparedLine.points.last {
+                                            return 0
+                                        }
                                         return max(Float(styleData.endInset),
                                                    highZoomJunctionHalfWidths[RoadConnectionPointKey(point: point)] ?? 0)
                                     }
@@ -1372,7 +1472,8 @@ class TileMvtParser {
                             }
                         }
 
-                        if roadLabelPass != nil,
+                        if group.emitsLabels,
+                           roadLabelPass != nil,
                            let labelText,
                            let roadLabelStyle {
                             for fragment in exactClippedFragments {
@@ -1391,6 +1492,7 @@ class TileMvtParser {
                                 }
                             }
                         }
+                    }
                     }
                 } else if feature.type == .point {
                     guard let labelTextStyle = style.labelTextStyle else { continue }

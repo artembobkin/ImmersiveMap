@@ -134,7 +134,15 @@ once the public API stabilizes.
 
 - A dash pattern broken at a junction resumes in step on the far side. Every tessellated piece used to start counting arc length at zero, so each block of a street began with a fresh full stroke wherever the line had been cut, and one street came out as strokes of assorted lengths. Pieces now carry how far along the line they begin, the inset included.
 
+- A junction reconstructed from the road graph draws as its own plane: the class colour lifted half a tone (`origin=graph` on the tile feature), so a crossing reads the way the big map providers draw it while staying unmistakably asphalt. A hand-mapped `area:highway`, which typically covers a whole street's carriageway, keeps the class colour and merges into the ribbons as before.
+
 ### Fixed
+
+- Roads are clipped against carriageway surfaces in the right coordinate space. The clipper received the surface rings flipped to render space while the road lines were still in raw tile space, so every road was cut against a mirror image of the area: lane paint survived inside real junction areas, piling the dashes of every entering street across the crossing, and roads at the mirrored spot were phantom-clipped. The regression test's fixture now sits off-centre, because the original one mirrored onto itself, which is how this shipped.
+
+- The paint of a street is cut only by reconstructed crossings, not by every carriageway surface. With the clip fixed, a hand-mapped `area:highway` covering a whole street would have erased the street's markings end to end; the ribbons and kerbs are still cut by every surface, but the lane paint runs through a hand-mapped carriageway and stops only at a crossing.
+
+- A street crossed by a chain of small crossings keeps its paint between them. An end created by cutting the street against a crossing's surface already stands at the edge of the gap; backing off by the half-carriageway inset as well ate every short piece twice over, and a street with frequent side-street junctions lost its markings for hundreds of metres.
 
 - A junction area's kerb follows the junction. The carriageway surfaces the tiles ship from z15 (`subclass=junction_area`) reach the kerb pass in render space, where the y axis has already been flipped, and the line tessellator flips it again on the way in: every kerb was drawn mirrored about its tile's mid-line. What that painted was a thin dark outline lying wherever the mirror image happened to land, across a park, a block of buildings or a courtyard, with nothing around the junction it belongs to, and it appeared as the map crossed into z15 because that is where the source starts shipping the areas. The rings are converted back to tile space before tessellation, and a regression test pins every kerb vertex inside the area it belongs to.
 

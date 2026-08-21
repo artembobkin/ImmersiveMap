@@ -144,6 +144,12 @@ struct FeatureStyle {
     /// the kerb, ordered among the roads so the surface covers the kerbs of
     /// every ribbon that enters it. False for every ground polygon.
     let isRoadSurfaceArea: Bool
+    /// Whether this surface also cuts the PAINT of the roads inside it, on
+    /// top of cutting their ribbons. True for a junction reconstructed from
+    /// the road graph: there is no lane paint inside a crossing. False for a
+    /// hand-mapped `area:highway`, which typically covers a whole street's
+    /// carriageway: the street keeps its paint, drawn over the surface.
+    let surfaceAreaCutsPaint: Bool
     /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
     /// Travels with the label to runtime, where it is compared against the current camera zoom.
     let labelMinCameraZoom: Float
@@ -177,6 +183,7 @@ struct FeatureStyle {
         roadLabelTextStyle: LabelTextStyle? = nil,
         roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
         isRoadSurfaceArea: Bool = false,
+        surfaceAreaCutsPaint: Bool = false,
         labelMinCameraZoom: Float = 0,
         suppressPolygonFill: Bool = false
     ) {
@@ -203,6 +210,7 @@ struct FeatureStyle {
         self.roadLabelTextStyle = roadLabelTextStyle
         self.roadDecorationKind = roadDecorationKind
         self.isRoadSurfaceArea = isRoadSurfaceArea
+        self.surfaceAreaCutsPaint = surfaceAreaCutsPaint
         self.labelMinCameraZoom = labelMinCameraZoom
         self.suppressPolygonFill = suppressPolygonFill
     }

@@ -483,7 +483,11 @@ final class PreparedTileDiskCaching {
     // as a junction.
     // 53: stitching on the source's street id keeps a tunnel or a bridge
     // out of the weld, which version 52 joined to the surface it belongs to.
-    static let preparedFormatVersion: UInt32 = 53
+    // 54: the clip of roads against carriageway surfaces runs in the right
+    // coordinate space (version 53 cut against a mirror image of every
+    // area), the paint is cut only by reconstructed crossings while ribbons
+    // are cut by every surface, and a crossing wears its own half-tone.
+    static let preparedFormatVersion: UInt32 = 54
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
