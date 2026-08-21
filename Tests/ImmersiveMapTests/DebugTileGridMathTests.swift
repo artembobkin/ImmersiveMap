@@ -131,6 +131,47 @@ final class DebugTileGridMathTests: XCTestCase {
         XCTAssertEqual(segments.filter { $0.isBorder == false }.count, (density - 1) * 2)
     }
 
+    /// The plate covers the widest line and the full stack, and nothing beyond it
+    /// plus the padding: it is there to stop map labels muddying the stamp, not to
+    /// black out the cell.
+    func testStampPlateCoversEveryLineAndOnlyThePadding() {
+        let plate = DebugTileGridMath.makeStampPlate(
+            lineAnchors: [SIMD2<Float>(0.5, 0.40),
+                          SIMD2<Float>(0.5, 0.50),
+                          SIMD2<Float>(0.5, 0.60)],
+            lineHalfSizes: [SIMD2<Float>(0.08, 0.01),
+                            SIMD2<Float>(0.02, 0.02),
+                            SIMD2<Float>(0.06, 0.01)],
+            paddingUV: 0.01)
+
+        XCTAssertEqual(plate?.minU ?? 0, 0.41, accuracy: 1e-5)
+        XCTAssertEqual(plate?.maxU ?? 0, 0.59, accuracy: 1e-5)
+        XCTAssertEqual(plate?.minV ?? 0, 0.38, accuracy: 1e-5)
+        XCTAssertEqual(plate?.maxV ?? 0, 0.62, accuracy: 1e-5)
+    }
+
+    func testStampPlateIsNilWithoutLines() {
+        XCTAssertNil(DebugTileGridMath.makeStampPlate(lineAnchors: [],
+                                                       lineHalfSizes: [],
+                                                       paddingUV: 0.01))
+    }
+
+    func testStampPlateIsNilWhenLineCountsDisagree() {
+        XCTAssertNil(DebugTileGridMath.makeStampPlate(lineAnchors: [SIMD2<Float>(0.5, 0.5)],
+                                                       lineHalfSizes: [],
+                                                       paddingUV: 0.01))
+    }
+
+    func testStampPlateIgnoresNonFiniteLines() {
+        let plate = DebugTileGridMath.makeStampPlate(
+            lineAnchors: [SIMD2<Float>(0.5, 0.5), SIMD2<Float>(.nan, 0.5)],
+            lineHalfSizes: [SIMD2<Float>(0.1, 0.02), SIMD2<Float>(0.1, 0.02)],
+            paddingUV: 0)
+
+        XCTAssertEqual(plate?.minU ?? 0, 0.4, accuracy: 1e-5)
+        XCTAssertEqual(plate?.maxU ?? 0, 0.6, accuracy: 1e-5)
+    }
+
     func testDensityClampSnapsToTheNearestOfferedValue() {
         XCTAssertEqual(DebugTileGridDensity.clamp(6), 6)
         XCTAssertEqual(DebugTileGridDensity.clamp(0), 2)

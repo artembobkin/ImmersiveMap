@@ -61,7 +61,11 @@ final class DebugOverlayRenderer {
     /// projection cheap when the centre tile is small on screen: on the globe, where
     /// the projection costs transcendentals per point, cells fall under it quickly.
     private let tileGridMinimumCellScreenPixels: Float = 48.0
-    private let tileGridCellMaxWidthFraction: Float = 0.92
+    private let tileGridCellMaxWidthFraction: Float = 0.86
+    /// Dark enough that a road name or a POI label under the stamp stops competing
+    /// with it, translucent enough that what is under the cell can still be seen.
+    private let tileGridCellPlateColor = SIMD4<Float>(0.0, 0.0, 0.0, 0.62)
+    private static let tileGridCellPlatePaddingFraction: Float = 0.03
     private static let tileGridCellLineHeightFractions: [Float] = [0.15, 0.26, 0.15, 0.15]
     private static let tileGridCellExtraLineHeightFraction: Float = 0.12
     private static let tileGridCellLineGapFraction: Float = 0.04
@@ -204,7 +208,21 @@ final class DebugOverlayRenderer {
 
         let clampedDensity = DebugTileGridDensity.clamp(density)
 
+        var placements: [TileProjectedTextPlacement] = []
+        var plates: [TileGridUVRect] = []
+        collectTileGridCellStamps(placements: &placements,
+                                  plates: &plates,
+                                  placeTile: centerPlaceTile,
+                                  density: clampedDensity,
+                                  frameContext: frameContext,
+                                  textRenderer: textRenderer)
+
+        // Plates first, so the grid lines draw over them and the text over both.
         lineVerticesScratch.removeAll(keepingCapacity: true)
+        appendTileGridPlateVertices(into: &lineVerticesScratch,
+                                    plates: plates,
+                                    placeTile: centerPlaceTile,
+                                    frameContext: frameContext)
         appendTileGridLineVertices(into: &lineVerticesScratch,
                                    placeTile: centerPlaceTile,
                                    density: clampedDensity,
@@ -218,11 +236,10 @@ final class DebugOverlayRenderer {
         }
 
         tileProjectedTextVerticesScratch.removeAll(keepingCapacity: true)
-        appendTileGridCellTextVertices(into: &tileProjectedTextVerticesScratch,
-                                       placeTile: centerPlaceTile,
-                                       density: clampedDensity,
-                                       frameContext: frameContext,
-                                       textRenderer: textRenderer)
+        appendProjectedTileTexts(into: &tileProjectedTextVerticesScratch,
+                                 placements: placements,
+                                 placeTile: centerPlaceTile,
+                                 frameContext: frameContext)
         if tileProjectedTextVerticesScratch.isEmpty == false {
             drawTextEntries(renderEncoder: renderEncoder,
                             textRenderer: textRenderer,
@@ -757,11 +774,12 @@ final class DebugOverlayRenderer {
         }
     }
 
-    private func appendTileGridCellTextVertices(into vertices: inout [TextVertex],
-                                                placeTile: PlaceTile,
-                                                density: Int,
-                                                frameContext: FrameContext,
-                                                textRenderer: TextRenderer) {
+    private func collectTileGridCellStamps(placements: inout [TileProjectedTextPlacement],
+                                           plates: inout [TileGridUVRect],
+                                           placeTile: PlaceTile,
+                                           density: Int,
+                                           frameContext: FrameContext,
+                                           textRenderer: TextRenderer) {
         let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
                                       Int32(placeTile.placeIn.y),
                                       Int32(placeTile.placeIn.z))
@@ -788,8 +806,8 @@ final class DebugOverlayRenderer {
 
         let scale = max(settings.diagnosticsScale * 0.5, 28.0)
         let cellSpanUV = 1.0 / Float(density)
-        var placements: [TileProjectedTextPlacement] = []
         placements.reserveCapacity(density * density * Self.tileGridCellLineHeightFractions.count)
+        plates.reserveCapacity(density * density)
         for row in 0..<density {
             for column in 0..<density {
                 let cellIndex = row * density + column
@@ -799,25 +817,68 @@ final class DebugOverlayRenderer {
                     continue
                 }
 
-                appendTileGridCellPlacements(into: &placements,
-                                             lines: DebugTileGridMath.cellLabelLines(tile: placeTile.placeIn.tile,
-                                                                                     column: column,
-                                                                                     row: row,
-                                                                                     density: density,
-                                                                                     sourceTile: placeTile.metalTile.tile),
-                                             rect: DebugTileGridMath.cellUVRect(column: column,
-                                                                                row: row,
-                                                                                density: density),
-                                             cellSpanUV: cellSpanUV,
-                                             scale: scale,
-                                             textRenderer: textRenderer)
+                let plate = appendTileGridCellPlacements(into: &placements,
+                                                         lines: DebugTileGridMath.cellLabelLines(tile: placeTile.placeIn.tile,
+                                                                                                 column: column,
+                                                                                                 row: row,
+                                                                                                 density: density,
+                                                                                                 sourceTile: placeTile.metalTile.tile),
+                                                         rect: DebugTileGridMath.cellUVRect(column: column,
+                                                                                            row: row,
+                                                                                            density: density),
+                                                         cellSpanUV: cellSpanUV,
+                                                         scale: scale,
+                                                         textRenderer: textRenderer)
+                if let plate {
+                    plates.append(plate)
+                }
             }
         }
+    }
 
-        appendProjectedTileTexts(into: &vertices,
-                                 placements: placements,
-                                 placeTile: placeTile,
-                                 frameContext: frameContext)
+    /// Semi-transparent plates under the stamps, laid in the tile plane so they
+    /// tilt with it. Without them a road name or a POI label under a cell reads
+    /// through the stamp and both become hard to read.
+    private func appendTileGridPlateVertices(into vertices: inout [PolygonsPipeline.Vertex],
+                                             plates: [TileGridUVRect],
+                                             placeTile: PlaceTile,
+                                             frameContext: FrameContext) {
+        guard plates.isEmpty == false else { return }
+
+        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                      Int32(placeTile.placeIn.y),
+                                      Int32(placeTile.placeIn.z))
+        var cornerInputs: [TilePointInput] = []
+        cornerInputs.reserveCapacity(plates.count * 4)
+        for plate in plates {
+            cornerInputs.append(TilePointInput(uv: SIMD2<Float>(plate.minU, plate.minV), tile: tileVector, tileSlotIndex: 0))
+            cornerInputs.append(TilePointInput(uv: SIMD2<Float>(plate.maxU, plate.minV), tile: tileVector, tileSlotIndex: 0))
+            cornerInputs.append(TilePointInput(uv: SIMD2<Float>(plate.maxU, plate.maxV), tile: tileVector, tileSlotIndex: 0))
+            cornerInputs.append(TilePointInput(uv: SIMD2<Float>(plate.minU, plate.maxV), tile: tileVector, tileSlotIndex: 0))
+        }
+
+        let snapshot = TilePointToScreenPointSnapshot(pointInputs: cornerInputs,
+                                                      tileSlotVisibleTileIndices: [0])
+        let cornerPoints = tilePointScreenProjector.project(snapshot: snapshot,
+                                                            frameContext: frameContext,
+                                                            tileOriginData: makeTileOriginData(for: placeTile,
+                                                                                               frameContext: frameContext))
+        guard cornerPoints.count == cornerInputs.count else { return }
+
+        vertices.reserveCapacity(vertices.count + plates.count * 6)
+        for plateIndex in plates.indices {
+            let base = plateIndex * 4
+            let corners = (0..<4).map { cornerPoints[base + $0] }
+            guard corners.allSatisfy({ $0.visible != 0 }) else { continue }
+
+            for triangle in [[0, 1, 2], [0, 2, 3]] {
+                for cornerIndex in triangle {
+                    let point = corners[cornerIndex].position
+                    vertices.append(PolygonsPipeline.Vertex(position: SIMD4<Float>(point.x, point.y, 0.0, 1.0),
+                                                            color: tileGridCellPlateColor))
+                }
+            }
+        }
     }
 
     /// The cell's screen bounding box, measured only when all four corners project in
@@ -856,14 +917,15 @@ final class DebugOverlayRenderer {
                     count: lineCount - tileGridCellLineHeightFractions.count)
     }
 
+    /// Lays the cell's lines out and returns the plate that covers them.
     private func appendTileGridCellPlacements(into placements: inout [TileProjectedTextPlacement],
                                               lines: [String],
                                               rect: (minU: Float, minV: Float, maxU: Float, maxV: Float),
                                               cellSpanUV: Float,
                                               scale: Float,
-                                              textRenderer: TextRenderer) {
+                                              textRenderer: TextRenderer) -> TileGridUVRect? {
         let heightFractions = Self.cellLineHeightFractions(lineCount: lines.count)
-        guard lines.isEmpty == false, heightFractions.count == lines.count else { return }
+        guard lines.isEmpty == false, heightFractions.count == lines.count else { return nil }
 
         let gapUV = Self.tileGridCellLineGapFraction * cellSpanUV
         let totalHeightUV = heightFractions.reduce(0.0) { $0 + $1 * cellSpanUV }
@@ -873,19 +935,37 @@ final class DebugOverlayRenderer {
         let maxWidthUV = tileGridCellMaxWidthFraction * cellSpanUV
         // `uv.y` grows southward, so the stack runs from the first line down.
         var lineTopV = centerV - totalHeightUV * 0.5
+        var lineAnchors: [SIMD2<Float>] = []
+        var lineHalfSizes: [SIMD2<Float>] = []
+        lineAnchors.reserveCapacity(lines.count)
+        lineHalfSizes.reserveCapacity(lines.count)
         for index in lines.indices {
             let lineHeightUV = heightFractions[index] * cellSpanUV
             let metrics = textRenderer.collectLabelVertices(for: lines[index],
                                                             labelIndex: 0,
                                                             scale: scale)
-            placements.append(TileProjectedTextPlacement(anchorUV: SIMD2<Float>(centerU,
-                                                                                lineTopV + lineHeightUV * 0.5),
+            let anchorUV = SIMD2<Float>(centerU, lineTopV + lineHeightUV * 0.5)
+            placements.append(TileProjectedTextPlacement(anchorUV: anchorUV,
                                                          metrics: metrics,
                                                          maxWidthUV: maxWidthUV,
                                                          maxHeightUV: lineHeightUV,
                                                          paddingPx: .zero))
+            // The same fit the projection applies, so the plate covers exactly
+            // what will be drawn rather than the box the line was allowed.
+            if let uvScale = Self.tileWatermarkUVScale(metrics: metrics,
+                                                       maxWidthUV: maxWidthUV,
+                                                       maxHeightUV: lineHeightUV,
+                                                       paddingPx: .zero) {
+                lineAnchors.append(anchorUV)
+                lineHalfSizes.append(SIMD2<Float>(Float(metrics.size.width),
+                                                  Float(metrics.size.height)) * 0.5 * uvScale)
+            }
             lineTopV += lineHeightUV + gapUV
         }
+
+        return DebugTileGridMath.makeStampPlate(lineAnchors: lineAnchors,
+                                                lineHalfSizes: lineHalfSizes,
+                                                paddingUV: Self.tileGridCellPlatePaddingFraction * cellSpanUV)
     }
 
     private func appendTileTextEntries(into entries: inout [TextEntry],

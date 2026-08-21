@@ -23,6 +23,14 @@ enum DebugTileGridDensity {
 
 /// One grid line piece in tile UV space, flagged as the tile's own border or an
 /// interior division so the two can be drawn at different thicknesses.
+/// Rectangle in tile UV, used for the plate laid under a cell's stamp.
+struct TileGridUVRect: Equatable {
+    let minU: Float
+    let minV: Float
+    let maxU: Float
+    let maxV: Float
+}
+
 struct TileGridLineSegment {
     let start: SIMD2<Float>
     let end: SIMD2<Float>
@@ -143,6 +151,42 @@ enum DebugTileGridMath {
                 minV: 1.0 - Float(clampedRow + 1) * step,
                 maxU: Float(clampedColumn + 1) * step,
                 maxV: 1.0 - Float(clampedRow) * step)
+    }
+
+    /// The plate laid under a cell's stamp: the union of the laid-out lines,
+    /// grown by `paddingUV`. Every line is centred on its own anchor and spans
+    /// twice its half size, so the union is the smallest rectangle that covers
+    /// the text and nothing else. Kept tight on purpose: the plate exists to keep
+    /// map labels from muddying the stamp, not to hide the tile it is drawn on.
+    static func makeStampPlate(lineAnchors: [SIMD2<Float>],
+                               lineHalfSizes: [SIMD2<Float>],
+                               paddingUV: Float) -> TileGridUVRect? {
+        guard lineAnchors.isEmpty == false,
+              lineAnchors.count == lineHalfSizes.count else {
+            return nil
+        }
+
+        var minCorner = SIMD2<Float>(Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude)
+        var maxCorner = SIMD2<Float>(-Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude)
+        for index in lineAnchors.indices {
+            let anchor = lineAnchors[index]
+            let halfSize = lineHalfSizes[index]
+            guard anchor.x.isFinite, anchor.y.isFinite,
+                  halfSize.x.isFinite, halfSize.y.isFinite else {
+                continue
+            }
+            minCorner = simd_min(minCorner, anchor - halfSize)
+            maxCorner = simd_max(maxCorner, anchor + halfSize)
+        }
+        guard minCorner.x <= maxCorner.x, minCorner.y <= maxCorner.y else {
+            return nil
+        }
+
+        let padding = max(0.0, paddingUV)
+        return TileGridUVRect(minU: minCorner.x - padding,
+                              minV: minCorner.y - padding,
+                              maxU: maxCorner.x + padding,
+                              maxV: maxCorner.y + padding)
     }
 
     private static func columnLetters(_ column: Int) -> String {

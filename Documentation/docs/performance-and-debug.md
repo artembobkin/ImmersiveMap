@@ -106,6 +106,8 @@ The bounds are the tile's own local units, 0 to 4096, with **x growing east and 
 
 While a slot is filled with a substitute (a coarser tile standing in for one that has not arrived), the pixels under the stamp were not built from the tile the first line names, so a fifth `src 19807/10243/15` line appears with the tile they did come from. The bounds stay in the drawn tile's space; the source tile's own rectangle for that slot is what `TileLocalClipMath.clipBounds(source:placeIn:)` computes.
 
+Each stamp sits on a translucent dark plate, laid in the tile plane so it tilts and curves with the map. The plate hugs the text it carries rather than filling the cell: it is there to stop a road name or a POI label underneath from reading through the stamp, not to black out the tile.
+
 Cells too small on screen to hold the stamp keep their lines and drop their text, so a grid can look bare until you zoom in.
 
 ## Where the frame time goes
