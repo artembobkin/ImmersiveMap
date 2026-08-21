@@ -58,6 +58,37 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         return (fill?.parseGeometryStyleData.lineWidth ?? 0) * metresPerUnit(moscowTile(z: z))
     }
 
+    /// A width the tiles state outright wins over any deduction from lanes.
+    ///
+    /// It comes from the same cross-section model that builds the junction
+    /// polygons, and both sides must use one width model: a junction polygon
+    /// inside ribbons of a different width floats like a puddle.
+    func testAStatedWidthBeatsTheLaneModel() throws {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        func widthUnits(_ attributes: [String: Any]) -> Double {
+            var properties: [String: VectorTile_Tile.Value] = [:]
+            for (key, value) in attributes {
+                var wrapped = VectorTile_Tile.Value()
+                if let text = value as? String { wrapped.stringValue = text } else if let number = value as? Int { wrapped.intValue = Int64(number) }
+                properties[key] = wrapped
+            }
+            let feature = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                                    properties: properties,
+                                                                    tile: Tile(x: 39615, y: 20486, z: 16)))
+            return feature.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.parseGeometryStyleData.lineWidth ?? 0
+        }
+        // 75 decimetres = 7.5 m; the lane model would say 4 lanes x 4 m = 16 m.
+        let stated = widthUnits(["class": "primary", "lanes": 4, "width": 75])
+        let deduced = widthUnits(["class": "primary", "lanes": 4])
+        XCTAssertGreaterThan(deduced, stated * 1.8,
+                             "The stated 7.5 m carriageway draws far narrower than the 16 m the lane model guesses")
+        // Nonsense widths fall back to the lane model.
+        XCTAssertEqual(widthUnits(["class": "primary", "lanes": 4, "width": 1]), deduced,
+                       "Ten centimetres is a data accident, not a road")
+        XCTAssertEqual(widthUnits(["class": "primary", "lanes": 4, "width": 900]), deduced,
+                       "and so is ninety metres")
+    }
+
     func testCarriagewayWidthIsTheSameGroundWidthAtEveryTileZoom() {
         // The bug this pins: with the width stated in tile units, a street
         // drawn from a coarse tile in the distance came out twice as wide as

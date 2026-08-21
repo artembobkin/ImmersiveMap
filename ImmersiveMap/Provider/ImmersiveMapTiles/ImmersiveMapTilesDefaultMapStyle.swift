@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 62
+    private static let implementationRevision: UInt32 = 63
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -983,7 +983,28 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// marked through lanes and nothing else, so a two-lane city street with
     /// cars parked on both sides is around 12 m wide, not 6.5, and a width of
     /// 3.25 m per counted lane drew every such street at half its width.
+    /// The carriageway width the tiles state outright, in metres, or nil.
+    ///
+    /// `width` arrives in decimetres and is measured by the same model that
+    /// builds the junction polygons (the street's cross-section, lane by
+    /// lane), which is the whole point: a junction polygon inside ribbons of
+    /// a DIFFERENT width model floats like a puddle, because its straight
+    /// cuts land in the middle of asphalt instead of on the ribbon's edge.
+    /// One width model, one geometry.
+    private func statedWidthMetres(props: [String: VectorTile_Tile.Value]) -> Double? {
+        guard let decimetres = parseIntValue(props["width"]), decimetres > 0 else {
+            return nil
+        }
+        let metres = Double(decimetres) / 10.0
+        // A width outside these bounds is a data accident, not a road.
+        guard metres >= 2.0, metres <= 60.0 else { return nil }
+        return metres
+    }
+
     private func roadWidthMetres(cls: String?, props: [String: VectorTile_Tile.Value]) -> Double {
+        if let stated = statedWidthMetres(props: props) {
+            return stated
+        }
         let laneWidthMetres: Double
         switch cls {
         case "motorway", "trunk", "primary":

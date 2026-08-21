@@ -182,6 +182,32 @@ final class RoadStreetStitcherTests: XCTestCase {
                        [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
     }
 
+    func testAStatedWidthChangeIsARealEdgeEvenWithinOneStreet() {
+        // The street widens into a turn pocket before a junction: the stated
+        // width differs, so the pieces stay separate ribbons. Welding them
+        // would draw the whole street at one piece's width.
+        let lines: [[[SIMD2<Float>]]] = [
+            [[SIMD2(0, 100), SIMD2(1000, 100)]],
+            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
+        ]
+        var attrs = [attributes(name: "Mokhovaya", lanes: 5), attributes(name: "Mokhovaya", lanes: 5)]
+        attrs[0]["street"] = value(4211); attrs[1]["street"] = value(4211)
+        attrs[0]["width"] = value(120); attrs[1]["width"] = value(180)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                                 featureAttributes: attrs,
+                                                 featureStyles: styles(for: attrs)),
+                       lines,
+                       "Twelve metres and eighteen metres are two ribbons")
+
+        var same = attrs
+        same[1]["width"] = value(120)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
+                                                 featureAttributes: same,
+                                                 featureStyles: styles(for: same))[0],
+                       [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
+                       "Equal widths weld as before")
+    }
+
     func testAPieceWithoutTheSourcesIdentityFallsBackToItsAttributes() {
         // A source that ships no street id is read as before.
         let lines: [[[SIMD2<Float>]]] = [

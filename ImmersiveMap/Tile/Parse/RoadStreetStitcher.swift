@@ -31,7 +31,7 @@ import simd
 enum RoadStreetStitcher {
     /// Attributes that must agree for two pieces to be one street to draw,
     /// where the source does not say which street a piece belongs to.
-    private static let identityKeys = ["name", "class", "subclass", "lanes", "oneway", "brunnel", "layer"]
+    private static let identityKeys = ["name", "class", "subclass", "lanes", "width", "oneway", "brunnel", "layer"]
 
     /// The source's own answer to "which street is this": an id assembled
     /// from the whole road network before the tiles were cut. Where it is
@@ -47,7 +47,13 @@ enum RoadStreetStitcher {
     /// tunnel draws dashed, a bridge draws in the overlay, a one-way half
     /// carries lane lines where the two-way half carries a divider. Welding
     /// them would draw the whole street as whichever piece came first.
-    private static let drawingKeys = ["class", "subclass", "brunnel", "layer", "oneway"]
+    ///
+    /// `width` is here and the lane count is not, deliberately. A lane count
+    /// that differs between pieces is tiler noise the street id exists to
+    /// bridge; a stated width that differs is the street actually widening
+    /// (a turn pocket before a junction), and welding across it would draw
+    /// the whole street at one piece's width, discarding the measurement.
+    private static let drawingKeys = ["class", "subclass", "brunnel", "layer", "oneway", "width"]
 
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
                        featureAttributes: [[String: VectorTile_Tile.Value]],

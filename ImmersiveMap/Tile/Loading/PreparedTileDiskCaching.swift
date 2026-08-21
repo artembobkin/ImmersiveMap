@@ -487,7 +487,11 @@ final class PreparedTileDiskCaching {
     // coordinate space (version 53 cut against a mirror image of every
     // area), the paint is cut only by reconstructed crossings while ribbons
     // are cut by every surface, and a crossing wears its own half-tone.
-    static let preparedFormatVersion: UInt32 = 54
+    // 55: a stated carriageway width (`width`, decimetres, from the same
+    // cross-section model that builds the junction polygons) overrides the
+    // lane-count width model, and a width change within one street is a
+    // real edge the stitcher keeps.
+    static let preparedFormatVersion: UInt32 = 55
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
