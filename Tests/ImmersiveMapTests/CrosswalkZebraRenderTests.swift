@@ -99,7 +99,55 @@ final class CrosswalkZebraRenderTests: XCTestCase {
         XCTAssertLessThan(maxX, marked.size * 4 / 5, "and ends near it")
     }
 
+    /// A crossing can also arrive as a measured line (`marking=crossing_marked`
+    /// from the road graph) instead of a tagged footway.
+    func testAShippedCrossingLineIsStriped() throws {
+        let parsed = try parse(features: [
+            .init(id: 1,
+                  geometry: .line(points: [(0, 2048), (4096, 2048)]),
+                  properties: ["class": "primary", "lanes": "4", "name": "Avenue"]),
+            .init(id: 2,
+                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  properties: ["marking": "crossing_marked"]),
+        ])
+        XCTAssertGreaterThan(zebraTriangleCount(parsed), 4,
+                             "A measured crossing line paints its stripes")
+    }
+
+    /// A tile that ships measured crossing lines may still carry the same
+    /// crossings as tagged footways: the measured line wins, the tag is the
+    /// same crossing seen twice.
+    func testAMeasuredCrossingSilencesTheTaggedOne() throws {
+        let shippedOnly = try parse(features: [
+            .init(id: 2,
+                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  properties: ["marking": "crossing_marked"]),
+        ])
+        let both = try parse(features: [
+            .init(id: 2,
+                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  properties: ["marking": "crossing_marked"]),
+            .init(id: 3,
+                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  properties: ["class": "path", "subclass": "footway", "crossing": "marked"]),
+        ])
+        XCTAssertEqual(zebraTriangleCount(both), zebraTriangleCount(shippedOnly),
+                       "One crossing, one set of stripes")
+    }
+
     // MARK: - Helpers
+
+    private func parse(features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
+        let config = ImmersiveMapSettings.default
+        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
+        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
+                                   labelProviderProfile: runtimeContext.labelProviderProfile,
+                                   config: config,
+                                   glyphCoverage: .legacyAtlasForTests)
+        return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
+                                mvtData: VectorTileFixture.layerTile(layerName: "transportation",
+                                                                     features: features))
+    }
 
     private func parse(crossing: String?) throws -> TileMvtParser.ParsedTile {
         let config = ImmersiveMapSettings.default

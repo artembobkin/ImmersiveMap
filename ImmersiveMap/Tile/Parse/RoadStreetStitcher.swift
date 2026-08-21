@@ -68,6 +68,7 @@ enum RoadStreetStitcher {
         var participates = false
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
             guard index < featureAttributes.count,
+                  featureStyles[index].isShippedRoadPaint == false,
                   featureStyles[index].roadClassPriority >= TileMvtParser.automobileRoadClassPriorityFloor else {
                 continue
             }

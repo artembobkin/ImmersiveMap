@@ -155,6 +155,11 @@ enum VisualReviewCatalogue {
                                                         zoom: 15.6,
                                                         bearing: 0.4,
                                                         pitch: 0.9)
+        static let tverskaya = ImmersiveMapCameraPosition(latitudeDegrees: 55.7570,
+                                                          longitudeDegrees: 37.6135,
+                                                          zoom: 16.4,
+                                                          bearing: 0.3,
+                                                          pitch: 0.5)
         static let centralRussia = ImmersiveMapCameraPosition(latitudeDegrees: 55.7,
                                                               longitudeDegrees: 37.6,
                                                               zoom: 5)
@@ -402,15 +407,34 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.manhattan)),
 
         VisualReviewScenario(
+            id: "roads.osm2streets.tverskaya",
+            title: "Tverskaya junction, measured streetscape",
+            lookFor: """
+            Where the tiles carry the measured streetscape (central Moscow \
+            test builds): the junction is ONE surface, flush with every \
+            street entering it, no ribs and no seams inside it; each \
+            carriageway is a single polygon with one thin even kerb; lane \
+            separators are short even dashes that stop at the junction edge \
+            instead of running across it; the centre line is a longer dash, \
+            the carriageway edge a thin solid line; crossings are zebra \
+            stripes inside the junction, drawn once. The palette stays the \
+            light asphalt grey. Where the tiles carry no streetscape the \
+            streets draw exactly as before, and the boundary between the two \
+            is not a visible seam.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.tverskaya)),
+
+        VisualReviewScenario(
             id: "roads.labels.flat",
             title: "Manhattan flat, roads and road labels",
             lookFor: """
-            The palette at street level: a warm off-white ground, white minor \
-            streets with a whisper of a warm-grey casing, pale yellow to gold \
-            majors, light blue water and soft green parks; nothing dark \
-            competes with the labels. Road casings are even, junctions do not \
-            blob, and road labels follow the street, stay upright, and do not \
-            repeat on top of each other.
+            The palette at street level: a warm off-white ground, every \
+            drive tier one light asphalt grey with width carrying the \
+            hierarchy, a thin darker kerb, light blue water and soft green \
+            parks; nothing dark competes with the labels. Road casings are \
+            even, junctions do not blob, and road labels follow the street, \
+            stay upright, and do not repeat on top of each other.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattanFlat)),

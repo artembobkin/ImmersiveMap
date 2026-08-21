@@ -320,6 +320,12 @@ class TileMvtParser {
         let exterior: [SIMD2<Float>]
         let classPriority: Int
         let bounds: (min: SIMD2<Float>, max: SIMD2<Float>)
+        /// The physical structure the surface belongs to. A surface owns only
+        /// the roads of its own structure and layer: a bridge deck polygon
+        /// must not clip the street running under it on the ground, and a
+        /// ground surface must not clip the deck above.
+        var structureKind: RoadStructureKind = .ground
+        var layer: Int = 0
         /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
         /// crossing, false for a hand-mapped carriageway area.
         var cutsPaint: Bool = false
@@ -370,6 +376,8 @@ class TileMvtParser {
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
                                                             classPriority: style.roadClassPriority,
                                                             bounds: (lower, upper),
+                                                            structureKind: roadStructureKind(attributes: featureAttributes[featureIndex]),
+                                                            layer: roadLayerValue(attributes: featureAttributes[featureIndex]),
                                                             cutsPaint: style.surfaceAreaCutsPaint))
                     }
                 default:
@@ -388,8 +396,19 @@ class TileMvtParser {
         var paintRawLinesByFeatureIndex = rawLinesByFeatureIndex
         if surfaceAreas.isEmpty == false {
             for featureIndex in 0..<rawLinesByFeatureIndex.count where rawLinesByFeatureIndex[featureIndex].isEmpty == false {
+                // Shipped paint already ends exactly where it ends on the
+                // ground: a stop line or a crossing lies INSIDE the surface
+                // polygons on purpose, and clipping it against them would
+                // delete it.
+                guard featureStyles[featureIndex].isShippedRoadPaint == false else { continue }
                 let priority = featureStyles[featureIndex].roadClassPriority
-                let owners = surfaceAreas.filter { $0.classPriority >= priority }
+                let structure = roadStructureKind(attributes: featureAttributes[featureIndex])
+                let layerValue = roadLayerValue(attributes: featureAttributes[featureIndex])
+                let owners = surfaceAreas.filter {
+                    $0.classPriority >= priority
+                        && $0.structureKind == structure
+                        && $0.layer == layerValue
+                }
                 guard owners.isEmpty == false else { continue }
                 rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
                     RoadSurfaceClipper.clip(polyline: $0, outside: owners)
@@ -489,7 +508,13 @@ class TileMvtParser {
         for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
             var preparedLines: [PreparedRoadLine] = []
             preparedLines.reserveCapacity(lines.count)
-            let isJunctionMaking = featureStyles[featureIndex].roadClassPriority >= Self.markingJunctionClassPriorityFloor
+            // Shipped paint is not a street: its endpoints lie on the roads
+            // it is painted on, and letting them count would fabricate a
+            // junction (or a connection) at every point a marking happens to
+            // share with a road vertex.
+            let isShippedPaint = featureStyles[featureIndex].isShippedRoadPaint
+            let isJunctionMaking = isShippedPaint == false
+                && featureStyles[featureIndex].roadClassPriority >= Self.markingJunctionClassPriorityFloor
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches
             // from its centreline.
@@ -498,6 +523,7 @@ class TileMvtParser {
                 let fragments = lineClipper.clip(points: points, tileExtent: Float(tileExtent))
                 for fragment in fragments {
                     for point in fragment.points {
+                        guard isShippedPaint == false else { break }
                         let key = RoadConnectionPointKey(point: point)
                         pointCounts[key, default: 0] += 1
                         if isJunctionMaking {
@@ -1021,6 +1047,13 @@ class TileMvtParser {
                                                   lineClipper: lineClipper,
                                                   data: mvtData)
                 : .empty
+            // Where the tiles ship measured crossing lines, the attribute
+            // tagged crossings of the same layer are the same crossings seen
+            // through OSM tags: drawing both stripes the junction twice. The
+            // measured line wins.
+            let layerHasShippedCrossings = featureStyles.contains {
+                $0.isShippedRoadPaint && $0.roadDecorationKind == .zebraCrossing
+            }
             let highZoomRoadSharedPointCounts = highZoomRoads.sharedPointCounts
             let highZoomAutomobilePointCounts = highZoomRoads.automobilePointCounts
             let highZoomJunctionHalfWidths = highZoomRoads.junctionHalfWidths
@@ -1230,7 +1263,9 @@ class TileMvtParser {
                             : []
 
                         for lineRenderPass in group.passes {
-                            if style.roadDecorationKind == .zebraCrossing, roadStructure == .tunnel {
+                            if style.roadDecorationKind == .zebraCrossing,
+                               roadStructure == .tunnel
+                                   || (layerHasShippedCrossings && style.isShippedRoadPaint == false) {
                                 continue
                             }
 

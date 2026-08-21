@@ -491,7 +491,15 @@ final class PreparedTileDiskCaching {
     // cross-section model that builds the junction polygons) overrides the
     // lane-count width model, and a width change within one street is a
     // real edge the stitcher keeps.
-    static let preparedFormatVersion: UInt32 = 55
+    // 56: carriageway surfaces (`subclass=carriageway_area`) join the
+    // junction-area machinery, one polygon per stretch of street that clips
+    // the ribbons and the synthesized paint of the roads it covers, and a
+    // surface owns only the roads of its own structure and layer, so a
+    // bridge deck no longer clips the street under it; the paint the source
+    // measured ships as its own lines (`marking`), drawn as detail passes
+    // that bypass the surface clip, and a marked crossing can arrive as such
+    // a line and stripe itself.
+    static let preparedFormatVersion: UInt32 = 56
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

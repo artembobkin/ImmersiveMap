@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 64
+    private static let implementationRevision: UInt32 = 65
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -332,6 +332,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let isTunnel = brunnel == "tunnel"
         let subclass = props["subclass"]?.stringValue.lowercased()
         let roads = configuration.layers.roads
+        // Paint the source measured on the ground, shipped as its own line:
+        // a lane line, the carriageway edge, a crossing. It carries no class
+        // and no name, only what it is (`marking`) and what colour it is
+        // painted (`paint`), and it bypasses every rule below, which are all
+        // about roads.
+        if let marking = props["marking"]?.stringValue.lowercased(), marking.isEmpty == false {
+            return shippedMarkingStyle(kind: marking, props: props, tile: tile)
+        }
         // A `<class>_construction` segment belongs to its base class: the
         // source ships it from the same zoom (a z4 tile carries motorway and
         // motorway_construction and nothing else), and hiding it cuts the
@@ -361,7 +369,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // It draws as the surface of the road class that enters it, with the
         // kerb on its outline, in the automobile tier; the ribbons that enter
         // it run under it, so their kerbs end at its edge and never cross it.
-        if subclass == "junction_area" {
+        // A carriageway area is the same thing for a road between junctions:
+        // the street's surface computed from the road graph, one polygon per
+        // carriageway, edge-consistent with the junction polygons it meets.
+        if subclass == "junction_area" || subclass == "carriageway_area" {
             return junctionAreaStyle(cls: effectiveClass,
                                      tunnel: isTunnel,
                                      tile: tile,
@@ -613,7 +624,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// derived from it, so the whole figure is a length rather than a screen
     /// pattern. It draws in the `detail` role, above every carriageway, and
     /// fades in on the markings' camera-zoom band with the rest of the paint.
-    private func crosswalkStyle(marked: Bool, tile: Tile) -> FeatureStyle {
+    private func crosswalkStyle(marked: Bool, tile: Tile, shipped: Bool = false) -> FeatureStyle {
         guard marked else {
             // An unmarked crossing is a place to cross, not a thing to draw:
             // the footway underneath it is already on the map.
@@ -635,7 +646,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                roadPassRole: .detail)
             ],
             roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .zebraCrossing
+            roadDecorationKind: .zebraCrossing,
+            isShippedRoadPaint: shipped
         )
     }
 
@@ -647,6 +659,117 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// A crossing sorts with the carriageway it is painted on, above every
     /// road fill: it is paint on the road, not a road.
     private static let crosswalkClassPriority = 96
+
+    /// Yellow road paint (a centre line that may not be crossed): muted like
+    /// the white, so it sits in the asphalt rather than on it.
+    private static let roadMarkingYellowColor = SIMD4<Float>(0.93, 0.83, 0.44, 0.88)
+    /// The stroke of the carriageway edge line, slightly thinner than a lane
+    /// line, as it is on the ground (0.08 m against 0.10 m).
+    private static let roadMarkingEdgeWidthPoints: Float = 0.8
+    /// A lane separator: one metre of paint, one of gap (the source's own
+    /// pattern for the line between two same-direction lanes).
+    private static let shippedSeparatorDashMetres: Double = 1.0
+    private static let shippedSeparatorGapMetres: Double = 1.0
+    /// A dividing (centre) line: two metres of paint, four and a half of gap.
+    private static let shippedDividingDashMetres: Double = 2.0
+    private static let shippedDividingGapMetres: Double = 4.5
+    /// Below this tile zoom the short-period paint (a one-metre separator
+    /// dash) is sub-pixel mush; the edge and the centre line, with their
+    /// longer figures, draw from the zoom the tiles ship them at.
+    private static let shippedFineMarkingMinimumTileZoom = 16
+
+    /// A line of paint the source measured (`marking=...` in the road layer):
+    /// the engine draws exactly the polyline the tiles ship, with the kind
+    /// deciding stroke, colour and dash pattern. One `detail` pass, above
+    /// every carriageway fill; `isShippedRoadPaint` keeps the road machinery
+    /// (surface clipping, junction insets, stitching) off it, because the
+    /// line already ends exactly where the paint ends on the ground.
+    private func shippedMarkingStyle(kind: String,
+                                     props: [String: VectorTile_Tile.Value],
+                                     tile: Tile) -> FeatureStyle {
+        switch kind {
+        case "crossing_marked":
+            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            return crosswalkStyle(marked: true, tile: tile, shipped: true)
+        case "crossing_unmarked":
+            // A place to cross, not a thing to draw: same answer as for the
+            // attribute-tagged unmarked crossings.
+            return hiddenStyle
+        case "dividing", "lane_separator", "edge":
+            break
+        default:
+            // A kind this style does not know yet (a stop line, an arrow): a
+            // newer tile against an older engine. Nothing is better than a
+            // guess drawn wrong.
+            return hiddenStyle
+        }
+        if kind == "lane_separator", tile.z < Self.shippedFineMarkingMinimumTileZoom {
+            return hiddenStyle
+        }
+        // The paint colour: white unless the source says yellow, and yellow
+        // only where it means something (a centre line, an edge line): a key
+        // is a baked style, so every (kind, colour) pair must map to its own.
+        let isYellow = props["paint"]?.stringValue.lowercased() == "yellow" && kind != "lane_separator"
+        let color = isYellow ? Self.roadMarkingYellowColor : Self.roadMarkingColor
+        let key: UInt8
+        switch (kind, isYellow) {
+        case ("lane_separator", _): key = 58
+        case ("edge", false): key = 59
+        case ("dividing", false): key = 60
+        case ("dividing", true): key = 61
+        case ("edge", true): key = 62
+        default: key = 60
+        }
+        // Solid or dashed comes from the source where it says (`style`), with
+        // the kind's own default behind it: a separator is dashed, an edge
+        // line solid, a dividing line dashed unless stated solid.
+        let dashed: Bool
+        switch props["style"]?.stringValue.lowercased() {
+        case "solid": dashed = false
+        case "dashed": dashed = true
+        default: dashed = kind != "edge"
+        }
+        let dashMetres: Double
+        let gapMetres: Double
+        switch kind {
+        case "lane_separator":
+            dashMetres = Self.shippedSeparatorDashMetres
+            gapMetres = Self.shippedSeparatorGapMetres
+        default:
+            dashMetres = Self.shippedDividingDashMetres
+            gapMetres = Self.shippedDividingGapMetres
+        }
+        let widthPoints = kind == "edge" ? Self.roadMarkingEdgeWidthPoints : Self.roadMarkingWidthPoints
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
+        // Same construction as the synthesized lane paint: a point-locked
+        // stroke on a tight ribbon, the dash period a length in metres
+        // converted to this tile's units so the dashes sit still on the
+        // asphalt. No end inset and no lateral offset: the polyline IS the
+        // paint, measured where it lies.
+        let ribbonUnits = Double(widthPoints) * Self.roadMarkingRibbonUnitsPerPoint
+        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: ribbonUnits,
+                                                            lineCapRound: false,
+                                                            lineJoinRound: true)
+        let pass = LineRenderPass(key: key,
+                                  color: color,
+                                  lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                                  lineWidthPoints: widthPoints,
+                                  dashLengthPoints: dashed ? Float(dashMetres * unitsPerMetre) : 0,
+                                  dashGapPoints: dashed ? Float(gapMetres * unitsPerMetre) : 0,
+                                  dashInTileUnits: dashed,
+                                  parseGeometryStyleData: geometry,
+                                  includeRoadLabelPath: false,
+                                  roadPassRole: .detail)
+        return FeatureStyle(
+            key: key,
+            color: color,
+            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+            parseGeometryStyleData: geometry,
+            lineRenderPasses: [pass],
+            roadClassPriority: Self.crosswalkClassPriority,
+            isShippedRoadPaint: true
+        )
+    }
 
     /// A junction area (`subclass=junction_area`): the carriageway of a junction
     /// as a polygon. Two passes in the automobile tier, like a road: the kerb

@@ -150,6 +150,14 @@ struct FeatureStyle {
     /// hand-mapped `area:highway`, which typically covers a whole street's
     /// carriageway: the street keeps its paint, drawn over the surface.
     let surfaceAreaCutsPaint: Bool
+    /// Paint the source measured on the ground and shipped as its own line
+    /// (`marking=...`): a lane line, a stop line, a crossing. It already ends
+    /// exactly where it ends on the ground, so the engine's road machinery
+    /// must not touch it: no clipping against carriageway surfaces, no
+    /// junction making, no stitching, no junction inset (its passes carry
+    /// `endInset` zero). False for every line the engine draws from a road's
+    /// own geometry.
+    let isShippedRoadPaint: Bool
     /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
     /// Travels with the label to runtime, where it is compared against the current camera zoom.
     let labelMinCameraZoom: Float
@@ -184,6 +192,7 @@ struct FeatureStyle {
         roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
         isRoadSurfaceArea: Bool = false,
         surfaceAreaCutsPaint: Bool = false,
+        isShippedRoadPaint: Bool = false,
         labelMinCameraZoom: Float = 0,
         suppressPolygonFill: Bool = false
     ) {
@@ -211,6 +220,7 @@ struct FeatureStyle {
         self.roadDecorationKind = roadDecorationKind
         self.isRoadSurfaceArea = isRoadSurfaceArea
         self.surfaceAreaCutsPaint = surfaceAreaCutsPaint
+        self.isShippedRoadPaint = isShippedRoadPaint
         self.labelMinCameraZoom = labelMinCameraZoom
         self.suppressPolygonFill = suppressPolygonFill
     }
