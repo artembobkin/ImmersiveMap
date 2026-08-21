@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 65
+    private static let implementationRevision: UInt32 = 66
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -663,9 +663,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// Yellow road paint (a centre line that may not be crossed): muted like
     /// the white, so it sits in the asphalt rather than on it.
     private static let roadMarkingYellowColor = SIMD4<Float>(0.93, 0.83, 0.44, 0.88)
-    /// The stroke of the carriageway edge line, slightly thinner than a lane
-    /// line, as it is on the ground (0.08 m against 0.10 m).
-    private static let roadMarkingEdgeWidthPoints: Float = 0.8
+    /// A solid line of paint draws visibly thicker than a broken one: on the
+    /// map a solid line is a statement (an edge, a line not to cross), and at
+    /// the dash's hairline weight it read as just another dash row.
+    private static let solidMarkingWidthPoints: Float = 1.4
     /// A lane separator: one metre of paint, one and a half of gap (the
     /// source's own pattern for the line between two same-direction lanes).
     private static let shippedSeparatorDashMetres: Double = 1.0
@@ -711,15 +712,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // is a baked style, so every (kind, colour) pair must map to its own.
         let isYellow = props["paint"]?.stringValue.lowercased() == "yellow" && kind != "lane_separator"
         let color = isYellow ? Self.roadMarkingYellowColor : Self.roadMarkingColor
-        let key: UInt8
-        switch (kind, isYellow) {
-        case ("lane_separator", _): key = 58
-        case ("edge", false): key = 59
-        case ("dividing", false): key = 60
-        case ("dividing", true): key = 61
-        case ("edge", true): key = 62
-        default: key = 60
-        }
         // Solid or dashed comes from the source where it says (`style`), with
         // the kind's own default behind it: a separator is dashed, an edge
         // line solid, a dividing line dashed unless stated solid.
@@ -728,6 +720,23 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "solid": dashed = false
         case "dashed": dashed = true
         default: dashed = kind != "edge"
+        }
+        // A key is a baked style, so every (kind, colour, solid-or-dashed)
+        // triple carries its own: a solid line is wider than a dashed one,
+        // and two features under one key must bake identically.
+        let key: UInt8
+        switch (kind, isYellow, dashed) {
+        case ("lane_separator", _, true): key = 58
+        case ("lane_separator", _, false): key = 64
+        case ("dividing", false, true): key = 60
+        case ("dividing", true, true): key = 61
+        case ("dividing", false, false): key = 65
+        case ("dividing", true, false): key = 66
+        case ("edge", false, false): key = 59
+        case ("edge", true, false): key = 62
+        case ("edge", false, true): key = 67
+        case ("edge", true, true): key = 68
+        default: key = 60
         }
         let dashMetres: Double
         let gapMetres: Double
@@ -739,7 +748,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             dashMetres = Self.shippedDividingDashMetres
             gapMetres = Self.shippedDividingGapMetres
         }
-        let widthPoints = kind == "edge" ? Self.roadMarkingEdgeWidthPoints : Self.roadMarkingWidthPoints
+        let widthPoints = dashed ? Self.roadMarkingWidthPoints : Self.solidMarkingWidthPoints
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         // Same construction as the synthesized lane paint: a point-locked
         // stroke on a tight ribbon, the dash period a length in metres

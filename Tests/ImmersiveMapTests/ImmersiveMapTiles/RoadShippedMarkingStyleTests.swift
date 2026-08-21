@@ -83,20 +83,28 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
                           "while the longer figures draw from the zoom the tiles ship them at")
     }
 
-    func testAnEdgeLineIsAThinSolidStroke() {
+    func testASolidLineIsAThickerStrokeThanADashedOne() {
         let edge = markingStyle("edge")
         let pass = edge.resolvedLineRenderPasses.first
         XCTAssertEqual(pass?.key, 59)
         XCTAssertEqual(pass?.dashLengthPoints, 0, "An edge line is solid")
-        XCTAssertLessThan(pass?.lineWidthPoints ?? 99,
-                          markingStyle("dividing").resolvedLineRenderPasses.first?.lineWidthPoints ?? 0,
-                          "and slightly thinner than a lane line, as on the ground")
+        XCTAssertGreaterThan(pass?.lineWidthPoints ?? 0,
+                             markingStyle("dividing").resolvedLineRenderPasses.first?.lineWidthPoints ?? 99,
+                             "A solid line is a statement and draws visibly thicker than a dash row")
         let dashedEdge = markingStyle("edge", extra: ["style": "dashed"])
         XCTAssertGreaterThan(dashedEdge.resolvedLineRenderPasses.first?.dashLengthPoints ?? 0, 0,
                              "unless the source says it is dashed")
+        XCTAssertNotEqual(dashedEdge.key, edge.key,
+                          "and then it is its own baked style, at the dash weight")
         let solidDividing = markingStyle("dividing", extra: ["style": "solid"])
-        XCTAssertEqual(solidDividing.resolvedLineRenderPasses.first?.dashLengthPoints, 0,
-                       "and a dividing line the source calls solid draws solid")
+        let solidPass = solidDividing.resolvedLineRenderPasses.first
+        XCTAssertEqual(solidPass?.dashLengthPoints, 0,
+                       "A dividing line the source calls solid draws solid")
+        XCTAssertNotEqual(solidDividing.key, markingStyle("dividing").key,
+                          "under its own key")
+        XCTAssertGreaterThan(solidPass?.lineWidthPoints ?? 0,
+                             markingStyle("dividing").resolvedLineRenderPasses.first?.lineWidthPoints ?? 99,
+                             "and thicker than its broken form")
     }
 
     func testCrossingLinesRouteToTheZebraAndUnknownKindsStayHidden() {
