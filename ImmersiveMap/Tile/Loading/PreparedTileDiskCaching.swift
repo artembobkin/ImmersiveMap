@@ -507,7 +507,10 @@ final class PreparedTileDiskCaching {
     // fill over the carriageway; a parking lot eats only its own aisles
     // (the rest of the service tier moved a step up), and the bay comb ends
     // at the edge of any surface that overlaps the lot.
-    static let preparedFormatVersion: UInt32 = 58
+    // 59: a dedicated bus lane is no longer a toned polygon but the letter
+    // A stamped along the lane's axis (`marking=bus_lane`, oriented with the
+    // direction of travel), in the plain marking paint.
+    static let preparedFormatVersion: UInt32 = 59
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

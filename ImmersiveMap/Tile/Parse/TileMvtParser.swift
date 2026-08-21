@@ -20,6 +20,7 @@ class TileMvtParser {
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
+    private let busLaneLetterBuilder        : BusLaneLetterGeometryBuilder = BusLaneLetterGeometryBuilder()
     let tileExtent = Double(4096)
 
     /// The MVT layer that carries roads: `road` in the Mapbox schema, `transportation`
@@ -1321,6 +1322,37 @@ class TileMvtParser {
                                         orderedRoadPolygons.append(
                                             OrderedRoadPolygon(
                                                 polygon: zebraPolygon,
+                                                styleKey: lineRenderPass.key,
+                                                structureKind: roadStructure,
+                                                layer: roadLayer,
+                                                classPriority: roadClassPriority,
+                                                passRole: lineRenderPass.roadPassRole,
+                                                sequence: roadPolygonSequence
+                                            )
+                                        )
+                                        roadPolygonSequence += 1
+                                    }
+                                }
+                                continue
+                            }
+
+                            if usesSeparateRoadRendering,
+                               style.roadDecorationKind == .busLaneLetter,
+                               lineRenderPass.roadPassRole == .detail {
+                                // The bus lane's axis: the letter A stamped
+                                // along it, from the same polygon path the
+                                // zebra and the arrows take.
+                                for fragment in exactClippedFragments {
+                                    let letterPolygons = busLaneLetterBuilder.buildPolygons(
+                                        points: fragment.points,
+                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                                        tileExtent: Float(tileExtent)
+                                    )
+                                    for letterPolygon in letterPolygons {
+                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(letterPolygon)
+                                        orderedRoadPolygons.append(
+                                            OrderedRoadPolygon(
+                                                polygon: letterPolygon,
                                                 styleKey: lineRenderPass.key,
                                                 structureKind: roadStructure,
                                                 layer: roadLayer,

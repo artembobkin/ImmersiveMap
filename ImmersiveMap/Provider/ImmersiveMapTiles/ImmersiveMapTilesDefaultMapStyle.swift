@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 68
+    private static let implementationRevision: UInt32 = 69
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -384,11 +384,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         if subclass == "parking_area" {
             return parkingAreaStyle(tile: tile)
         }
-        // A dedicated bus lane: the tiles ship the strip of Bus lanes as its
-        // own polygon over the carriageway, and the tone is what makes it
-        // readable: painted the plain asphalt it does not exist on the map.
+        // An older test build shipped bus lanes as toned polygons
+        // (`bus_lane_area`); the lane is now the letter A stamped along its
+        // axis (`marking=bus_lane`), and the polygon draws nothing.
         if subclass == "bus_lane_area" {
-            return busLaneAreaStyle()
+            return hiddenStyle
         }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
@@ -708,6 +708,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "crossing_marked":
             guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
             return crosswalkStyle(marked: true, tile: tile, shipped: true)
+        case "bus_lane":
+            // The lane's axis: the letter A stamped along it, feet toward
+            // the driver, is what marks a dedicated lane on real asphalt.
+            // A letter is a couple of metres: a smudge below z16.
+            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            return busLaneLetterStyle()
         case "crossing_unmarked":
             // A place to cross, not a thing to draw: same answer as for the
             // attribute-tagged unmarked crossings.
@@ -924,38 +930,34 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static let parkingBayKey: UInt8 = 69
     private static let parkingBayMinimumTileZoom = 16
 
-    /// A dedicated bus lane over the carriageway: one fill pass in a tone a
-    /// step warmer than the asphalt, sorted above every road fill so the
-    /// strip reads on top of the surface it belongs to. No kerb: it is paint
-    /// on the carriageway, not a body of its own. It clips the ribbon of a
-    /// bus way mapped as its own line (the polygon IS that ribbon's ground)
-    /// and cuts nobody's paint.
-    private func busLaneAreaStyle() -> FeatureStyle {
-        let color = Self.busLaneColor
+    /// The letter A along a dedicated bus lane: a polygon decoration in the
+    /// detail role, like the zebra, in the plain marking paint. The line the
+    /// tiles ship is the lane's axis with the direction of travel baked in;
+    /// the builder does the stamping, and `isShippedRoadPaint` keeps the
+    /// road machinery off the axis itself.
+    private func busLaneLetterStyle() -> FeatureStyle {
+        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: 1)
         return FeatureStyle(
-            key: Self.busLaneKey,
-            color: color,
-            lowZoomFadeMask: roadLowZoomFadeMask,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            key: Self.busLaneLetterKey,
+            color: Self.roadMarkingColor,
+            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+            parseGeometryStyleData: geometry,
             lineRenderPasses: [
-                LineRenderPass(key: Self.busLaneKey,
-                               color: color,
-                               lowZoomFadeMask: roadLowZoomFadeMask,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                LineRenderPass(key: Self.busLaneLetterKey,
+                               color: Self.roadMarkingColor,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                               parseGeometryStyleData: geometry,
                                includeRoadLabelPath: false,
-                               roadPassRole: .fill)
+                               roadPassRole: .detail)
             ],
-            roadClassPriority: Self.busLaneClassPriority,
-            isRoadSurfaceArea: true
+            roadClassPriority: Self.crosswalkClassPriority,
+            roadDecorationKind: .busLaneLetter,
+            isShippedRoadPaint: true
         )
     }
 
-    /// Warm against the cool asphalt grey: readable as a marked lane, quiet
-    /// enough to stay part of the road surface.
-    private static let busLaneColor = SIMD4<Float>(0.802, 0.745, 0.731, 1.0)
-    private static let busLaneKey: UInt8 = 47
-    /// Above every carriageway fill, below the paint tier (crosswalk 96).
-    private static let busLaneClassPriority = 82
+    private static let busLaneLetterKey: UInt8 = 71
+
 
     /// A road over a country or region view: a symbolic stroke, drawn through
     /// the point-locked line factory the borders use (see

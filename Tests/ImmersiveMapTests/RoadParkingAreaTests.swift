@@ -123,20 +123,31 @@ final class RoadParkingAreaTests: XCTestCase {
                              "and the rest of the comb survives")
     }
 
-    func testADedicatedBusLaneIsAWarmFillAboveTheCarriageway() {
+    func testADedicatedBusLaneIsTheLetterANotATone() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        var subclassValue = VectorTile_Tile.Value(); subclassValue.stringValue = "bus_lane_area"
+        func value(_ v: String) -> VectorTile_Tile.Value { var x = VectorTile_Tile.Value(); x.stringValue = v; return x }
         let lane = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                             properties: ["subclass": subclassValue],
+                                                             properties: ["marking": value("bus_lane")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertTrue(lane.isRoadSurfaceArea, "The strip owns its ground like every surface")
-        XCTAssertFalse(lane.surfaceAreaCutsPaint, "and cuts nobody's paint")
-        XCTAssertEqual(lane.resolvedLineRenderPasses.count, 1, "One fill, no kerb: paint, not a body")
-        XCTAssertEqual(lane.resolvedLineRenderPasses.first?.roadPassRole, .fill)
-        XCTAssertGreaterThan(lane.roadClassPriority, 80, "sorted above every carriageway fill")
-        let asphalt = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
-        XCTAssertGreaterThan(lane.color.x, lane.color.z, "The tone is warm")
-        XCTAssertGreaterThan(lane.color.x, asphalt.x, "warmer than the cool asphalt it lies on")
+        XCTAssertEqual(lane.roadDecorationKind, .busLaneLetter,
+                       "The lane's axis carries the letter A, not a recolored surface")
+        XCTAssertTrue(lane.isShippedRoadPaint, "and the axis is measured paint the machinery leaves alone")
+        let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                               properties: ["marking": value("bus_lane")],
+                                                               tile: Tile(x: 19807, y: 10243, z: 15)))
+        XCTAssertEqual(coarse.key, 0, "A letter is a couple of metres: a smudge below z16")
+        let polygon = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                                properties: ["subclass": value("bus_lane_area")],
+                                                                tile: Tile(x: 39615, y: 20486, z: 16)))
+        XCTAssertEqual(polygon.key, 0, "The older toned polygon draws nothing")
+
+        // A lane axis across the tile stamps its letters into the detail
+        // phase as polygons.
+        let parsed = try parse([.init(id: 7,
+                                      geometry: .line(points: [(500, 2900), (3600, 2900)]),
+                                      properties: ["marking": "bus_lane"])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The letters draw above the carriageway")
     }
 
     func testTheCombStaysInsideTheLot() throws {
