@@ -76,7 +76,7 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
         XCTAssertEqual(pass?.key, 58)
         let metres = metresPerUnit(moscowTile(z: 16))
         XCTAssertEqual(Double(pass?.dashLengthPoints ?? 0) * metres, 1.0, accuracy: 0.05)
-        XCTAssertEqual(Double(pass?.dashGapPoints ?? 0) * metres, 1.0, accuracy: 0.05)
+        XCTAssertEqual(Double(pass?.dashGapPoints ?? 0) * metres, 1.5, accuracy: 0.05)
         XCTAssertEqual(markingStyle("lane_separator", z: 15).key, 0,
                        "A one-metre pattern is sub-pixel mush a level coarser: hidden at z15")
         XCTAssertNotEqual(markingStyle("dividing", z: 15).key, 0,

@@ -666,10 +666,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// The stroke of the carriageway edge line, slightly thinner than a lane
     /// line, as it is on the ground (0.08 m against 0.10 m).
     private static let roadMarkingEdgeWidthPoints: Float = 0.8
-    /// A lane separator: one metre of paint, one of gap (the source's own
-    /// pattern for the line between two same-direction lanes).
+    /// A lane separator: one metre of paint, one and a half of gap (the
+    /// source's own pattern for the line between two same-direction lanes).
     private static let shippedSeparatorDashMetres: Double = 1.0
-    private static let shippedSeparatorGapMetres: Double = 1.0
+    private static let shippedSeparatorGapMetres: Double = 1.5
     /// A dividing (centre) line: two metres of paint, four and a half of gap.
     private static let shippedDividingDashMetres: Double = 2.0
     private static let shippedDividingGapMetres: Double = 4.5
