@@ -1128,6 +1128,7 @@ extension TileMvtParser {
                                clippedInteriors: [[SIMD2<Float>]],
                                style: FeatureStyle,
                                attributes: [String: VectorTile_Tile.Value],
+                               tile: Tile,
                                roadStyles: inout [UInt8: FeatureStyle],
                                roadPolygonByStyle: inout [UInt8: [ParsedPolygon]],
                                orderedRoadPolygons: inout [OrderedRoadPolygon],
@@ -1176,6 +1177,28 @@ extension TileMvtParser {
                                                   lineJoinRound: true,
                                                   clipGeometryToTileBounds: true) {
                         polygons.append(kerb)
+                    }
+                }
+            case .detail where style.roadDecorationKind == .parkingBays:
+                // The parking-bay comb: short stripes laid out by the
+                // builder in tile space (the same space the kerb ring is
+                // flipped back into above), each tessellated as its own
+                // point-locked stroke with hard ends.
+                let tileSpaceRing = clippedExterior.map { SIMD2<Float>($0.x, Float(tileExtent) - $0.y) }
+                let stripes = parkingBayBuilder.buildStripes(
+                    exterior: tileSpaceRing,
+                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                    orientation: attributes["orientation"]?.stringValue
+                )
+                for stripe in stripes {
+                    if let stroke = parseLine.parse(points: stripe,
+                                                    width: pass.parseGeometryStyleData.lineWidth,
+                                                    tileExtent: Float(tileExtent),
+                                                    startCapRound: false,
+                                                    endCapRound: false,
+                                                    lineJoinRound: false,
+                                                    clipGeometryToTileBounds: true) {
+                        polygons.append(stroke)
                     }
                 }
             default:

@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 66
+    private static let implementationRevision: UInt32 = 67
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -377,6 +377,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                      tunnel: isTunnel,
                                      tile: tile,
                                      reconstructed: props["origin"]?.stringValue == "graph")
+        }
+        // A surface parking lot: its own asphalt with a kerb, like a junction
+        // area of the service tier, and from street zoom the synthesized comb
+        // of parking-bay stripes on top.
+        if subclass == "parking_area" {
+            return parkingAreaStyle(tile: tile)
         }
         // Road widths grow with zoom: hairlines at country/regional zooms, full
         // width at street level. Base widths below are the z14+ (full) values.
@@ -848,6 +854,65 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             surfaceAreaCutsPaint: reconstructed
         )
     }
+
+    /// A surface parking lot (`subclass=parking_area`): service-tier asphalt
+    /// with the same kerb a junction area wears, plus, from the zoom where
+    /// paint reads, a `detail` pass that the parser fills with the
+    /// synthesized parking-bay comb (`ParkingBayGeometryBuilder`). The comb
+    /// is a stylization, not a claim about mapped spaces, which OSM almost
+    /// never carries; the polygon and its `orientation` hint are the facts.
+    /// The surface clips the ribbons inside it (a parking aisle needs no kerb
+    /// of its own across the lot) and never cuts anyone's paint.
+    private func parkingAreaStyle(tile: Tile) -> FeatureStyle {
+        let roads = configuration.layers.roads
+        let fillKey: UInt8 = 42
+        let color = roads.service
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
+        let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
+        var passes: [LineRenderPass] = [
+            LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
+                           color: roadCasingColor(from: color),
+                           lowZoomFadeMask: roadLowZoomFadeMask,
+                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: kerbWidth,
+                                                                                         lineJoinRound: true),
+                           includeRoadLabelPath: false,
+                           roadPassRole: .casing),
+            LineRenderPass(key: fillKey,
+                           color: color,
+                           lowZoomFadeMask: roadLowZoomFadeMask,
+                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                           includeRoadLabelPath: false,
+                           roadPassRole: .fill)
+        ]
+        // The comb only from the zoom where a 2.6 m bay is more than a couple
+        // of pixels; at z15 the lot is clean asphalt.
+        if tile.z >= Self.parkingBayMinimumTileZoom {
+            passes.append(
+                LineRenderPass(key: Self.parkingBayKey,
+                               color: Self.roadMarkingColor,
+                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                               lineWidthPoints: Self.roadMarkingWidthPoints,
+                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+                                   lineWidth: Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
+                               ),
+                               includeRoadLabelPath: false,
+                               roadPassRole: .detail)
+            )
+        }
+        return FeatureStyle(
+            key: fillKey,
+            color: color,
+            lowZoomFadeMask: roadLowZoomFadeMask,
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            lineRenderPasses: passes,
+            roadClassPriority: 45,
+            roadDecorationKind: .parkingBays,
+            isRoadSurfaceArea: true
+        )
+    }
+
+    private static let parkingBayKey: UInt8 = 69
+    private static let parkingBayMinimumTileZoom = 16
 
     /// A road over a country or region view: a symbolic stroke, drawn through
     /// the point-locked line factory the borders use (see

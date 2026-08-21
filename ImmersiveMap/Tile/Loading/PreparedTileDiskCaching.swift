@@ -499,7 +499,11 @@ final class PreparedTileDiskCaching {
     // measured ships as its own lines (`marking`), drawn as detail passes
     // that bypass the surface clip, and a marked crossing can arrive as such
     // a line and stripe itself.
-    static let preparedFormatVersion: UInt32 = 56
+    // 57: a surface parking lot (`subclass=parking_area`) is service-tier
+    // asphalt with a kerb, and from street zoom its detail phase carries the
+    // synthesized parking-bay comb: short point-locked stripes laid out in
+    // rows the way real lots are painted, clipped to the polygon.
+    static let preparedFormatVersion: UInt32 = 57
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

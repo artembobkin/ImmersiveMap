@@ -18,6 +18,7 @@ class TileMvtParser {
     private let labelProviderProfile        : any VectorTileLabelProviderProfile
     private let poiSpriteResolver           : PoiSpriteResolver = PoiSpriteResolver()
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
+    let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
     let tileExtent = Double(4096)
 
@@ -1155,6 +1156,7 @@ class TileMvtParser {
                                                   clippedInteriors: parsedGeometry.clipped.interiors,
                                                   style: style,
                                                   attributes: attributes,
+                                                  tile: tile,
                                                   roadStyles: &roadStyles,
                                                   roadPolygonByStyle: &roadPolygonByStyle,
                                                   orderedRoadPolygons: &orderedRoadPolygons,

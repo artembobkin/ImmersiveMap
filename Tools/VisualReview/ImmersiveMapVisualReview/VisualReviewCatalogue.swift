@@ -160,6 +160,11 @@ enum VisualReviewCatalogue {
                                                           zoom: 16.4,
                                                           bearing: 0.3,
                                                           pitch: 0.5)
+        static let okhotnyParking = ImmersiveMapCameraPosition(latitudeDegrees: 55.7577,
+                                                               longitudeDegrees: 37.6156,
+                                                               zoom: 16.5,
+                                                               bearing: 0.3,
+                                                               pitch: 0.4)
         static let centralRussia = ImmersiveMapCameraPosition(latitudeDegrees: 55.7,
                                                               longitudeDegrees: 37.6,
                                                               zoom: 5)
@@ -424,6 +429,21 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.tverskaya)),
+
+        VisualReviewScenario(
+            id: "roads.parking.okhotny",
+            title: "Okhotny Ryad, parking lots",
+            lookFor: """
+            The parking strips along Okhotny Ryad and by the State Duma are \
+            asphalt with a thin kerb, and each carries the comb of parking \
+            bays: short white stripes across the strip, evenly spaced, never \
+            poking past the kerb. A deep lot reads as rows of bays separated \
+            by clean aisles; parking aisles inside a lot carry no kerb of \
+            their own. The comb appears at street zoom and the lot is clean \
+            asphalt one level out.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.okhotnyParking)),
 
         VisualReviewScenario(
             id: "roads.labels.flat",
