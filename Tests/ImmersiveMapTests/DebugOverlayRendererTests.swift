@@ -201,6 +201,71 @@ final class DebugOverlayRendererTests: XCTestCase {
         XCTAssertEqual(DebugOverlayRenderer.makeTileWatermarkTextStyle().strokeWidthPx, 2.0)
     }
 
+    func testTileGridCellIsStampedWhenItsScreenBoxIsLargeEnough() {
+        let corners = makeCellCornerPoints(minCorner: SIMD2<Float>(100, 100),
+                                           maxCorner: SIMD2<Float>(260, 240))
+
+        XCTAssertTrue(DebugOverlayRenderer.isCellLargeEnoughForText(cornerPoints: corners,
+                                                                     cellIndex: 0,
+                                                                     minimumScreenSize: 48))
+    }
+
+    /// The short side decides: a cell seen almost edge-on under a steep pitch is wide
+    /// and a few pixels tall, and its stamp would be a smear.
+    func testTileGridCellIsSkippedWhenItsShortSideIsTooSmall() {
+        let corners = makeCellCornerPoints(minCorner: SIMD2<Float>(100, 100),
+                                           maxCorner: SIMD2<Float>(900, 130))
+
+        XCTAssertFalse(DebugOverlayRenderer.isCellLargeEnoughForText(cornerPoints: corners,
+                                                                      cellIndex: 0,
+                                                                      minimumScreenSize: 48))
+    }
+
+    func testTileGridCellIsSkippedWhenACornerDoesNotProject() {
+        var corners = makeCellCornerPoints(minCorner: SIMD2<Float>(100, 100),
+                                           maxCorner: SIMD2<Float>(400, 400))
+        corners[2] = ScreenPointOutput(position: SIMD2<Float>(400, 400), depth: 0, visible: 0)
+
+        XCTAssertFalse(DebugOverlayRenderer.isCellLargeEnoughForText(cornerPoints: corners,
+                                                                      cellIndex: 0,
+                                                                      minimumScreenSize: 48))
+    }
+
+    func testTileGridCellIsSkippedWhenTheIndexIsOutOfRange() {
+        let corners = makeCellCornerPoints(minCorner: SIMD2<Float>(100, 100),
+                                           maxCorner: SIMD2<Float>(400, 400))
+
+        XCTAssertFalse(DebugOverlayRenderer.isCellLargeEnoughForText(cornerPoints: corners,
+                                                                      cellIndex: 1,
+                                                                      minimumScreenSize: 48))
+    }
+
+    func testTileGridCellLineHeightsGiveTheCodeLineTheMostRoom() {
+        let fractions = DebugOverlayRenderer.cellLineHeightFractions(lineCount: 4)
+
+        XCTAssertEqual(fractions.count, 4)
+        XCTAssertEqual(fractions.max(), fractions[1])
+    }
+
+    func testTileGridCellLineHeightsCoverASubstitutedFifthLine() {
+        let fractions = DebugOverlayRenderer.cellLineHeightFractions(lineCount: 5)
+
+        XCTAssertEqual(fractions.count, 5)
+        XCTAssertEqual(Array(fractions.prefix(4)),
+                       DebugOverlayRenderer.cellLineHeightFractions(lineCount: 4))
+        XCTAssertLessThan(fractions.reduce(0, +), 1.0)
+    }
+
+    private func makeCellCornerPoints(minCorner: SIMD2<Float>,
+                                      maxCorner: SIMD2<Float>) -> [ScreenPointOutput] {
+        [
+            SIMD2<Float>(minCorner.x, minCorner.y),
+            SIMD2<Float>(maxCorner.x, minCorner.y),
+            SIMD2<Float>(maxCorner.x, maxCorner.y),
+            SIMD2<Float>(minCorner.x, maxCorner.y)
+        ].map { ScreenPointOutput(position: $0, depth: 0, visible: 1) }
+    }
+
     func testTileWatermarkScreenPlacementReturnsAxesForOnScreenAnchor() {
         let placement = DebugOverlayRenderer.makeTileWatermarkScreenPlacement(
             center: SIMD2<Float>(500, 400),

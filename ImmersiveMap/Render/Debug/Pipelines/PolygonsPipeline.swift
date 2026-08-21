@@ -25,6 +25,20 @@ class PolygonsPipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        // The debug overlays this pipeline draws have always carried an alpha in
+        // their color (the tile outline at 0.95, label bounds at 0.9) and it was
+        // being discarded, because blending was never turned on. Blending the same
+        // way the text pipeline does makes those alphas mean what they say and lets
+        // an overlay lay a readable plate under its own text. Alpha blends with
+        // .one so coverage accumulates on a transparent destination; over an opaque
+        // one the result is unchanged.
+        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
+        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
+        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         let vertexDescriptor = MTLVertexDescriptor()

@@ -51,4 +51,44 @@ final class DebugOverlayControlStateTests: XCTestCase {
         XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
                                                             controls: roadControls.snapshot()))
     }
+
+    func testTileGridStartsOffAtTheStandardDensity() {
+        let snapshot = DebugOverlayControlState().snapshot()
+
+        XCTAssertFalse(snapshot.tileGridEnabled)
+        XCTAssertEqual(snapshot.tileGridDensity, DebugTileGridDensity.standard)
+    }
+
+    func testSetTileGridEnabledUpdatesSnapshotIndependently() {
+        let controls = DebugOverlayControlState()
+
+        controls.setTileGridEnabled(true)
+
+        XCTAssertTrue(controls.snapshot().tileGridEnabled)
+        XCTAssertFalse(controls.snapshot().tileLayersEnabled)
+    }
+
+    func testTileGridDebugRequiresMetalDebugPass() {
+        var settings = ImmersiveMapSettings.default.debug
+        settings.enableDebugPanel = true
+        let controls = DebugOverlayControlState()
+
+        controls.setTileGridEnabled(true)
+
+        XCTAssertTrue(RenderDebugOverlayPolicy.shouldEncode(settings,
+                                                            controls: controls.snapshot()))
+    }
+
+    func testTileGridDensityIsClampedToAnOfferedValue() {
+        let controls = DebugOverlayControlState()
+
+        controls.setTileGridDensity(8)
+        XCTAssertEqual(controls.snapshot().tileGridDensity, 8)
+
+        controls.setTileGridDensity(1000)
+        XCTAssertEqual(controls.snapshot().tileGridDensity, 8)
+
+        controls.setTileGridDensity(0)
+        XCTAssertEqual(controls.snapshot().tileGridDensity, 2)
+    }
 }

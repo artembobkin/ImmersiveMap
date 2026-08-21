@@ -40,6 +40,20 @@ enum DebugOverlayHUDTextComposer {
         "tiles total: \(count)"
     }
 
+    /// Titles of the tile grid density picker, in `DebugTileGridDensity.options` order.
+    static let tileGridDensityTitles: [String] = DebugTileGridDensity.options.map { "\($0)x\($0)" }
+
+    static func tileGridDensityIndex(for density: Int) -> Int {
+        DebugTileGridDensity.options.firstIndex(of: DebugTileGridDensity.clamp(density)) ?? 0
+    }
+
+    static func tileGridDensity(atIndex index: Int) -> Int {
+        guard index >= 0, index < DebugTileGridDensity.options.count else {
+            return DebugTileGridDensity.standard
+        }
+        return DebugTileGridDensity.options[index]
+    }
+
     static func traceButtonTitle(isRecording: Bool) -> String {
         isRecording ? "Stop recording" : "Start recording"
     }

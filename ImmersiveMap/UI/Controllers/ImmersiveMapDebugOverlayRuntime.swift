@@ -39,6 +39,14 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setTileLayersEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onTileGridEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
+            controls?.setTileGridEnabled(isEnabled)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onTileGridDensityChanged = { [weak controls, weak renderRuntime] density in
+            controls?.setTileGridDensity(density)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onWireframeEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
             controls?.setWireframeEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
