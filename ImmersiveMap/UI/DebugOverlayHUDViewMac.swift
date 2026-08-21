@@ -38,6 +38,12 @@ final class DebugOverlayHUDView: NSView {
     private let axesSwitch = NSSwitch()
     private let tileLayersLabel = NSTextField(labelWithString: "")
     private let tileLayersSwitch = NSSwitch()
+    private let tileGridLabel = NSTextField(labelWithString: "")
+    private let tileGridSwitch = NSSwitch()
+    private let tileGridDensityControl = NSSegmentedControl(labels: DebugOverlayHUDTextComposer.tileGridDensityTitles,
+                                                            trackingMode: .selectOne,
+                                                            target: nil,
+                                                            action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
     private let earthSceneLabel = NSTextField(labelWithString: "")
@@ -83,6 +89,8 @@ final class DebugOverlayHUDView: NSView {
 
     var onAxesEnabledChanged: ((Bool) -> Void)?
     var onTileLayersEnabledChanged: ((Bool) -> Void)?
+    var onTileGridEnabledChanged: ((Bool) -> Void)?
+    var onTileGridDensityChanged: ((Int) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -116,6 +124,7 @@ final class DebugOverlayHUDView: NSView {
 
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
+        configureControlLabel(tileGridLabel, text: "Tile grid")
         configureControlLabel(wireframeLabel, text: "Wireframe")
         configureControlLabel(earthSceneLabel, text: "Earth scene")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
@@ -123,6 +132,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
         configureSwitch(axesSwitch, action: #selector(axesSwitchChanged))
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
+        configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
         configureSwitch(earthSceneSwitch, action: #selector(earthSceneSwitchChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
@@ -132,6 +142,12 @@ final class DebugOverlayHUDView: NSView {
         containerView.addSubview(axesSwitch)
         containerView.addSubview(tileLayersLabel)
         containerView.addSubview(tileLayersSwitch)
+        containerView.addSubview(tileGridLabel)
+        containerView.addSubview(tileGridSwitch)
+        tileGridDensityControl.target = self
+        tileGridDensityControl.action = #selector(tileGridDensityControlChanged)
+        tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: DebugTileGridDensity.standard)
+        containerView.addSubview(tileGridDensityControl)
         containerView.addSubview(wireframeLabel)
         containerView.addSubview(wireframeSwitch)
         containerView.addSubview(earthSceneLabel)
@@ -217,6 +233,8 @@ final class DebugOverlayHUDView: NSView {
         isPanelEnabled = isDebugPanelEnabled
         axesSwitch.state = controls.axesEnabled ? .on : .off
         tileLayersSwitch.state = controls.tileLayersEnabled ? .on : .off
+        tileGridSwitch.state = controls.tileGridEnabled ? .on : .off
+        tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: controls.tileGridDensity)
         wireframeSwitch.state = controls.wireframeEnabled ? .on : .off
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
@@ -289,7 +307,7 @@ final class DebugOverlayHUDView: NSView {
             ? Layout.controlRowHeight + Layout.controlSpacing + Layout.traceStatusHeight + sectionSpacing
             : 0
         let contentWidth = max(Layout.expandedMinimumWidth, maxContentWidth)
-        let controlsBodyHeight = Layout.controlRowHeight * 5 + Layout.controlSpacing * 4
+        let controlsBodyHeight = Layout.controlRowHeight * 7 + Layout.controlSpacing * 6
         let statsBodyHeight = zoomSize.height
             + latLonSize.height
             + sectionSpacing
@@ -379,8 +397,20 @@ final class DebugOverlayHUDView: NSView {
                                         y: tileLayersLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
                                         width: switchSize.width,
                                         height: switchSize.height)
+        tileGridLabel.frame = CGRect(x: Layout.contentInset,
+                                     y: tileLayersLabel.frame.maxY + Layout.controlSpacing,
+                                     width: labelWidth,
+                                     height: Layout.controlRowHeight)
+        tileGridSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
+                                      y: tileGridLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
+                                      width: switchSize.width,
+                                      height: switchSize.height)
+        tileGridDensityControl.frame = CGRect(x: Layout.contentInset,
+                                              y: tileGridLabel.frame.maxY + Layout.controlSpacing,
+                                              width: contentWidth,
+                                              height: Layout.controlRowHeight)
         wireframeLabel.frame = CGRect(x: Layout.contentInset,
-                                      y: tileLayersLabel.frame.maxY + Layout.controlSpacing,
+                                      y: tileGridDensityControl.frame.maxY + Layout.controlSpacing,
                                       width: labelWidth,
                                       height: Layout.controlRowHeight)
         wireframeSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
@@ -672,7 +702,8 @@ final class DebugOverlayHUDView: NSView {
         let isBaseLabelsVisible = selectedTab == .baseLabels && isContentHidden == false
         let isControlsVisible = selectedTab == .controls && isContentHidden == false
         tabControl.isHidden = isContentHidden
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch, wireframeLabel, wireframeSwitch,
+        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
+         tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
          earthSceneLabel, earthSceneSwitch, surfaceModeButton].forEach {
             $0.isHidden = isControlsVisible == false
         }
@@ -704,6 +735,14 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func axesSwitchChanged() {
         onAxesEnabledChanged?(axesSwitch.state == .on)
+    }
+
+    @objc private func tileGridSwitchChanged() {
+        onTileGridEnabledChanged?(tileGridSwitch.state == .on)
+    }
+
+    @objc private func tileGridDensityControlChanged() {
+        onTileGridDensityChanged?(DebugOverlayHUDTextComposer.tileGridDensity(atIndex: tileGridDensityControl.selectedSegment))
     }
 
     @objc private func tileLayersSwitchChanged() {

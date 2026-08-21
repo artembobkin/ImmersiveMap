@@ -194,6 +194,60 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertFalse(view.isAtlasContentVisibleForTesting)
     }
 
+    func testTileGridControlInvokesCallbackAndReflectsState() {
+        let view = DebugOverlayHUDView()
+        var didChange: Bool?
+        view.onTileGridEnabledChanged = { didChange = $0 }
+
+        view.apply(isDebugPanelEnabled: true,
+                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
+                                                         tileLayersEnabled: false,
+                                                         wireframeEnabled: false),
+                   earthSceneEnabled: true)
+        view.simulateControlsTabSelectionForTesting()
+        view.layoutIfNeeded()
+        view.simulateTileGridSwitchChangeForTesting(true)
+
+        XCTAssertEqual(didChange, true)
+        XCTAssertTrue(view.isTileGridSwitchOnForTesting)
+    }
+
+    func testTileGridDensityControlInvokesCallbackAndReflectsState() {
+        let view = DebugOverlayHUDView()
+        var didChange: Int?
+        view.onTileGridDensityChanged = { didChange = $0 }
+
+        view.apply(isDebugPanelEnabled: true,
+                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
+                                                         tileLayersEnabled: false,
+                                                         wireframeEnabled: false),
+                   earthSceneEnabled: true)
+        view.simulateControlsTabSelectionForTesting()
+        view.layoutIfNeeded()
+
+        XCTAssertEqual(view.tileGridDensityForTesting, DebugTileGridDensity.standard)
+
+        view.simulateTileGridDensitySelectionForTesting(8)
+
+        XCTAssertEqual(didChange, 8)
+        XCTAssertEqual(view.tileGridDensityForTesting, 8)
+    }
+
+    func testTileGridControlReflectsAppliedSnapshot() {
+        let view = DebugOverlayHUDView()
+
+        view.apply(isDebugPanelEnabled: true,
+                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
+                                                         tileLayersEnabled: false,
+                                                         wireframeEnabled: false,
+                                                         tileGridEnabled: true,
+                                                         tileGridDensity: 2),
+                   earthSceneEnabled: true)
+
+        XCTAssertTrue(view.isTileGridSwitchOnForTesting)
+        XCTAssertEqual(view.tileGridDensityForTesting, 2)
+    }
+
     func testTilesTabDisplaysTileLoadingStatusWithoutStatsOrAtlasContent() {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug

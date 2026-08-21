@@ -15,6 +15,18 @@ struct TileWatermarkScreenPlacement: Equatable {
     let yAxis: SIMD2<Float>
 }
 
+/// One run of text to be laid into the tile plane at `anchorUV`, scaled down until
+/// it fits a box of `maxWidthUV` by `maxHeightUV` in tile UV. Metrics are passed in
+/// rather than a string so a caller repeating the same text at many anchors lays it
+/// out once.
+struct TileProjectedTextPlacement {
+    let anchorUV: SIMD2<Float>
+    let metrics: TextMetrics
+    let maxWidthUV: Float
+    let maxHeightUV: Float
+    let paddingPx: SIMD2<Float>
+}
+
 final class DebugOverlayRenderer {
     private var settings: ImmersiveMapSettings.DebugSettings
     private let axesVertexBuffer: MTLBuffer
@@ -43,6 +55,16 @@ final class DebugOverlayRenderer {
     private let roadLabelBoundsVisibleColor = SIMD4<Float>(0.0, 0.85, 1.0, 0.9)
     private let roadLabelBoundsHiddenColor = SIMD4<Float>(1.0, 0.65, 0.1, 0.9)
     private let labelBoundsThicknessPx: Float = 1.5
+    private let tileGridLineThicknessPx: Float = 1.5
+    /// Below this, in drawable pixels, a cell has no room for its four-line stamp, so
+    /// the cell keeps its lines and loses its text. Also what keeps the per-glyph
+    /// projection cheap when the centre tile is small on screen: on the globe, where
+    /// the projection costs transcendentals per point, cells fall under it quickly.
+    private let tileGridMinimumCellScreenPixels: Float = 48.0
+    private let tileGridCellMaxWidthFraction: Float = 0.92
+    private static let tileGridCellLineHeightFractions: [Float] = [0.15, 0.26, 0.15, 0.15]
+    private static let tileGridCellExtraLineHeightFraction: Float = 0.12
+    private static let tileGridCellLineGapFraction: Float = 0.04
     private static let tileWatermarkUVs = makeTileWatermarkUVs()
 
     init(metalDevice: MTLDevice,
@@ -153,6 +175,54 @@ final class DebugOverlayRenderer {
                                                     strokeColor: tileLabelStrokeColor,
                                                     strokeWidthPx: tileLabelStrokeWidthPx))
         }
+        if tileProjectedTextVerticesScratch.isEmpty == false {
+            drawTextEntries(renderEncoder: renderEncoder,
+                            textRenderer: textRenderer,
+                            screenMatrix: frameContext.cameraMatrices.screen,
+                            frameSlotIndex: frameContext.frameSlotIndex,
+                            entries: [],
+                            projectedVertices: tileProjectedTextVerticesScratch,
+                            style: Self.makeTileWatermarkTextStyle())
+        }
+    }
+
+    /// Divides the tile under the camera centre into `density x density` cells and
+    /// stamps each cell with the tile it belongs to, its cell code and its tile-local
+    /// bounds. Only that one tile: the grid exists so a screenshot of a region names
+    /// the slice of tile geometry to go read, and repeating it over every visible tile
+    /// would bury the map it is drawn over.
+    func drawTileGridOverlay(renderEncoder: MTLRenderCommandEncoder,
+                             polygonPipeline: PolygonsPipeline,
+                             textRenderer: TextRenderer,
+                             frameContext: FrameContext,
+                             placeTiles: [PlaceTile],
+                             density: Int) {
+        guard let centerPlaceTile = resolveCenterPlaceTile(placeTiles: placeTiles,
+                                                           frameContext: frameContext) else {
+            return
+        }
+
+        let clampedDensity = DebugTileGridDensity.clamp(density)
+
+        lineVerticesScratch.removeAll(keepingCapacity: true)
+        appendTileGridLineVertices(into: &lineVerticesScratch,
+                                   placeTile: centerPlaceTile,
+                                   density: clampedDensity,
+                                   frameContext: frameContext)
+        if lineVerticesScratch.isEmpty == false {
+            drawLineVertices(renderEncoder: renderEncoder,
+                             polygonPipeline: polygonPipeline,
+                             screenMatrix: frameContext.cameraMatrices.screen,
+                             frameSlotIndex: frameContext.frameSlotIndex,
+                             vertices: lineVerticesScratch)
+        }
+
+        tileProjectedTextVerticesScratch.removeAll(keepingCapacity: true)
+        appendTileGridCellTextVertices(into: &tileProjectedTextVerticesScratch,
+                                       placeTile: centerPlaceTile,
+                                       density: clampedDensity,
+                                       frameContext: frameContext,
+                                       textRenderer: textRenderer)
         if tileProjectedTextVerticesScratch.isEmpty == false {
             drawTextEntries(renderEncoder: renderEncoder,
                             textRenderer: textRenderer,
@@ -612,6 +682,212 @@ final class DebugOverlayRenderer {
         }
     }
 
+    private func resolveCenterPlaceTile(placeTiles: [PlaceTile],
+                                        frameContext: FrameContext) -> PlaceTile? {
+        let candidates = DebugTileGridCenterTile.candidates(placeTiles: placeTiles,
+                                                            centerWorldMercator: frameContext.mapCameraState.centerWorldMercator)
+        guard candidates.count > 1 else {
+            return candidates.first
+        }
+
+        // Wrapped copies of one tile all contain the centre; only their placement on
+        // screen tells them apart, and each copy has its own flat origin.
+        var projectedCenters: [ScreenPointOutput] = []
+        projectedCenters.reserveCapacity(candidates.count)
+        for candidate in candidates {
+            let input = TilePointInput(uv: SIMD2<Float>(0.5, 0.5),
+                                       tile: SIMD3<Int32>(Int32(candidate.placeIn.x),
+                                                          Int32(candidate.placeIn.y),
+                                                          Int32(candidate.placeIn.z)),
+                                       tileSlotIndex: 0)
+            let snapshot = TilePointToScreenPointSnapshot(pointInputs: [input],
+                                                          tileSlotVisibleTileIndices: [0])
+            let points = tilePointScreenProjector.project(snapshot: snapshot,
+                                                          frameContext: frameContext,
+                                                          tileOriginData: makeTileOriginData(for: candidate,
+                                                                                             frameContext: frameContext))
+            projectedCenters.append(points.first ?? ScreenPointOutput(position: .zero,
+                                                                      depth: 0.0,
+                                                                      visible: 0))
+        }
+        return DebugTileGridCenterTile.nearestToViewportCenter(candidates: candidates,
+                                                               projectedCenters: projectedCenters,
+                                                               viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
+                                                                                          Float(frameContext.drawSize.height)))
+    }
+
+    private func appendTileGridLineVertices(into vertices: inout [PolygonsPipeline.Vertex],
+                                            placeTile: PlaceTile,
+                                            density: Int,
+                                            frameContext: FrameContext) {
+        let segments = DebugTileGridMath.makeGridSegments(density: density,
+                                                          segmentCountPerEdge: frameContext.screenSpaceProjectionMode == .flat ? 1 : 8)
+        guard segments.isEmpty == false else { return }
+
+        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                      Int32(placeTile.placeIn.y),
+                                      Int32(placeTile.placeIn.z))
+        var pointInputs: [TilePointInput] = []
+        pointInputs.reserveCapacity(segments.count * 2)
+        for segment in segments {
+            pointInputs.append(TilePointInput(uv: segment.start, tile: tileVector, tileSlotIndex: 0))
+            pointInputs.append(TilePointInput(uv: segment.end, tile: tileVector, tileSlotIndex: 0))
+        }
+
+        let snapshot = TilePointToScreenPointSnapshot(pointInputs: pointInputs,
+                                                      tileSlotVisibleTileIndices: [0])
+        let projectedPoints = tilePointScreenProjector.project(snapshot: snapshot,
+                                                               frameContext: frameContext,
+                                                               tileOriginData: makeTileOriginData(for: placeTile,
+                                                                                                  frameContext: frameContext))
+        guard projectedPoints.count == pointInputs.count else { return }
+
+        vertices.reserveCapacity(vertices.count + segments.count * 6)
+        for segmentIndex in segments.indices {
+            let startPoint = projectedPoints[segmentIndex * 2]
+            let endPoint = projectedPoints[(segmentIndex * 2) + 1]
+            guard startPoint.visible != 0, endPoint.visible != 0 else {
+                continue
+            }
+            appendThickLineQuad(into: &vertices,
+                                start: startPoint.position,
+                                end: endPoint.position,
+                                thickness: segments[segmentIndex].isBorder ? tileOutlineThicknessPx : tileGridLineThicknessPx,
+                                color: tileOutlineColor)
+        }
+    }
+
+    private func appendTileGridCellTextVertices(into vertices: inout [TextVertex],
+                                                placeTile: PlaceTile,
+                                                density: Int,
+                                                frameContext: FrameContext,
+                                                textRenderer: TextRenderer) {
+        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                      Int32(placeTile.placeIn.y),
+                                      Int32(placeTile.placeIn.z))
+        let cornerCount = 4
+        var cornerInputs: [TilePointInput] = []
+        cornerInputs.reserveCapacity(density * density * cornerCount)
+        for row in 0..<density {
+            for column in 0..<density {
+                let rect = DebugTileGridMath.cellUVRect(column: column, row: row, density: density)
+                cornerInputs.append(TilePointInput(uv: SIMD2<Float>(rect.minU, rect.minV), tile: tileVector, tileSlotIndex: 0))
+                cornerInputs.append(TilePointInput(uv: SIMD2<Float>(rect.maxU, rect.minV), tile: tileVector, tileSlotIndex: 0))
+                cornerInputs.append(TilePointInput(uv: SIMD2<Float>(rect.maxU, rect.maxV), tile: tileVector, tileSlotIndex: 0))
+                cornerInputs.append(TilePointInput(uv: SIMD2<Float>(rect.minU, rect.maxV), tile: tileVector, tileSlotIndex: 0))
+            }
+        }
+
+        let cornerSnapshot = TilePointToScreenPointSnapshot(pointInputs: cornerInputs,
+                                                            tileSlotVisibleTileIndices: [0])
+        let cornerPoints = tilePointScreenProjector.project(snapshot: cornerSnapshot,
+                                                            frameContext: frameContext,
+                                                            tileOriginData: makeTileOriginData(for: placeTile,
+                                                                                               frameContext: frameContext))
+        guard cornerPoints.count == cornerInputs.count else { return }
+
+        let scale = max(settings.diagnosticsScale * 0.5, 28.0)
+        let cellSpanUV = 1.0 / Float(density)
+        var placements: [TileProjectedTextPlacement] = []
+        placements.reserveCapacity(density * density * Self.tileGridCellLineHeightFractions.count)
+        for row in 0..<density {
+            for column in 0..<density {
+                let cellIndex = row * density + column
+                guard Self.isCellLargeEnoughForText(cornerPoints: cornerPoints,
+                                                    cellIndex: cellIndex,
+                                                    minimumScreenSize: tileGridMinimumCellScreenPixels) else {
+                    continue
+                }
+
+                appendTileGridCellPlacements(into: &placements,
+                                             lines: DebugTileGridMath.cellLabelLines(tile: placeTile.placeIn.tile,
+                                                                                     column: column,
+                                                                                     row: row,
+                                                                                     density: density,
+                                                                                     sourceTile: placeTile.metalTile.tile),
+                                             rect: DebugTileGridMath.cellUVRect(column: column,
+                                                                                row: row,
+                                                                                density: density),
+                                             cellSpanUV: cellSpanUV,
+                                             scale: scale,
+                                             textRenderer: textRenderer)
+            }
+        }
+
+        appendProjectedTileTexts(into: &vertices,
+                                 placements: placements,
+                                 placeTile: placeTile,
+                                 frameContext: frameContext)
+    }
+
+    /// The cell's screen bounding box, measured only when all four corners project in
+    /// front of the camera: a cell straddling the near plane has no meaningful size and
+    /// no useful place to put its stamp.
+    static func isCellLargeEnoughForText(cornerPoints: [ScreenPointOutput],
+                                         cellIndex: Int,
+                                         minimumScreenSize: Float) -> Bool {
+        let base = cellIndex * 4
+        guard base >= 0, base + 3 < cornerPoints.count else { return false }
+
+        var minCorner = SIMD2<Float>(Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude)
+        var maxCorner = SIMD2<Float>(-Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude)
+        for offset in 0..<4 {
+            let point = cornerPoints[base + offset]
+            guard point.visible != 0,
+                  point.position.x.isFinite,
+                  point.position.y.isFinite else {
+                return false
+            }
+            minCorner = simd_min(minCorner, point.position)
+            maxCorner = simd_max(maxCorner, point.position)
+        }
+        let size = maxCorner - minCorner
+        return min(size.x, size.y) >= minimumScreenSize
+    }
+
+    /// Height of every stamped line as a fraction of the cell, the code line taller
+    /// than the rest. A substituted cell stamps one line more than the usual four.
+    static func cellLineHeightFractions(lineCount: Int) -> [Float] {
+        guard lineCount > tileGridCellLineHeightFractions.count else {
+            return Array(tileGridCellLineHeightFractions.prefix(max(0, lineCount)))
+        }
+        return tileGridCellLineHeightFractions
+            + Array(repeating: tileGridCellExtraLineHeightFraction,
+                    count: lineCount - tileGridCellLineHeightFractions.count)
+    }
+
+    private func appendTileGridCellPlacements(into placements: inout [TileProjectedTextPlacement],
+                                              lines: [String],
+                                              rect: (minU: Float, minV: Float, maxU: Float, maxV: Float),
+                                              cellSpanUV: Float,
+                                              scale: Float,
+                                              textRenderer: TextRenderer) {
+        let heightFractions = Self.cellLineHeightFractions(lineCount: lines.count)
+        guard lines.isEmpty == false, heightFractions.count == lines.count else { return }
+
+        let gapUV = Self.tileGridCellLineGapFraction * cellSpanUV
+        let totalHeightUV = heightFractions.reduce(0.0) { $0 + $1 * cellSpanUV }
+            + gapUV * Float(lines.count - 1)
+        let centerU = (rect.minU + rect.maxU) * 0.5
+        let centerV = (rect.minV + rect.maxV) * 0.5
+        let maxWidthUV = tileGridCellMaxWidthFraction * cellSpanUV
+        // `uv.y` grows southward, so the stack runs from the first line down.
+        var lineTopV = centerV - totalHeightUV * 0.5
+        for index in lines.indices {
+            let lineHeightUV = heightFractions[index] * cellSpanUV
+            let metrics = textRenderer.collectLabelVertices(for: lines[index],
+                                                            labelIndex: 0,
+                                                            scale: scale)
+            placements.append(TileProjectedTextPlacement(anchorUV: SIMD2<Float>(centerU,
+                                                                                lineTopV + lineHeightUV * 0.5),
+                                                         metrics: metrics,
+                                                         maxWidthUV: maxWidthUV,
+                                                         maxHeightUV: lineHeightUV,
+                                                         paddingPx: .zero))
+            lineTopV += lineHeightUV + gapUV
+        }
+    }
+
     private func appendTileTextEntries(into entries: inout [TextEntry],
                                        projectedVertices: inout [TextVertex],
                                        placeTile: PlaceTile,
@@ -663,24 +939,58 @@ final class DebugOverlayRenderer {
                                              metrics: TextMetrics,
                                              placeTile: PlaceTile,
                                              frameContext: FrameContext) {
-        guard metrics.vertices.count >= 3,
-              let uvScale = Self.tileWatermarkUVScale(metrics: metrics,
-                                                      maxWidthUV: tileWatermarkMaxWidthUV,
-                                                      maxHeightUV: tileWatermarkMaxHeightUV,
-                                                      paddingPx: tileWatermarkPaddingPx) else { return }
+        let placements = Self.tileWatermarkUVs.map { anchorUV in
+            TileProjectedTextPlacement(anchorUV: anchorUV,
+                                       metrics: metrics,
+                                       maxWidthUV: tileWatermarkMaxWidthUV,
+                                       maxHeightUV: tileWatermarkMaxHeightUV,
+                                       paddingPx: tileWatermarkPaddingPx)
+        }
+        appendProjectedTileTexts(into: &vertices,
+                                 placements: placements,
+                                 placeTile: placeTile,
+                                 frameContext: frameContext)
+    }
+
+    /// Lays a batch of text runs into the tile plane and emits their screen-space
+    /// glyph triangles. Two projector passes for the whole batch: one for the anchor
+    /// bases, which decides which runs survive the projection at all, then one for
+    /// the glyph vertices of the survivors.
+    private func appendProjectedTileTexts(into vertices: inout [TextVertex],
+                                          placements: [TileProjectedTextPlacement],
+                                          placeTile: PlaceTile,
+                                          frameContext: FrameContext) {
+        guard placements.isEmpty == false else { return }
 
         let tileOriginData = makeTileOriginData(for: placeTile, frameContext: frameContext)
+        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                      Int32(placeTile.placeIn.y),
+                                      Int32(placeTile.placeIn.z))
 
+        var scaledPlacements: [(placement: TileProjectedTextPlacement, uvScale: Float)] = []
+        scaledPlacements.reserveCapacity(placements.count)
         tileWatermarkProjectionInputsScratch.removeAll(keepingCapacity: true)
-        for anchorUV in Self.tileWatermarkUVs {
-            Self.appendTileWatermarkProjectionPointInputs(anchorUV: anchorUV,
-                                                          metrics: metrics,
+        tileWatermarkProjectionInputsScratch.reserveCapacity(placements.count * 3)
+        for placement in placements {
+            guard placement.metrics.vertices.count >= 3,
+                  let uvScale = Self.tileWatermarkUVScale(metrics: placement.metrics,
+                                                          maxWidthUV: placement.maxWidthUV,
+                                                          maxHeightUV: placement.maxHeightUV,
+                                                          paddingPx: placement.paddingPx) else {
+                continue
+            }
+
+            scaledPlacements.append((placement: placement, uvScale: uvScale))
+            Self.appendTileWatermarkProjectionPointInputs(anchorUV: placement.anchorUV,
+                                                          metrics: placement.metrics,
                                                           tile: placeTile.placeIn.tile,
-                                                          maxWidthUV: tileWatermarkMaxWidthUV,
-                                                          maxHeightUV: tileWatermarkMaxHeightUV,
-                                                          paddingPx: tileWatermarkPaddingPx,
+                                                          maxWidthUV: placement.maxWidthUV,
+                                                          maxHeightUV: placement.maxHeightUV,
+                                                          paddingPx: placement.paddingPx,
                                                           into: &tileWatermarkProjectionInputsScratch)
         }
+        guard scaledPlacements.isEmpty == false else { return }
+
         let basisSnapshot = TilePointToScreenPointSnapshot(pointInputs: tileWatermarkProjectionInputsScratch,
                                                            tileSlotVisibleTileIndices: [0])
         let basisPoints = tilePointScreenProjector.project(snapshot: basisSnapshot,
@@ -689,17 +999,17 @@ final class DebugOverlayRenderer {
         guard basisPoints.count == tileWatermarkProjectionInputsScratch.count else { return }
 
         let projectedPointCountPerAnchor = 3
-        let textSize = SIMD2<Float>(Float(metrics.size.width), Float(metrics.size.height))
-        let textCenter = textSize * 0.5
         let viewportSize = SIMD2<Float>(Float(frameContext.drawSize.width),
                                         Float(frameContext.drawSize.height))
-        var acceptedAnchorUVs: [SIMD2<Float>] = []
-        acceptedAnchorUVs.reserveCapacity(Self.tileWatermarkUVs.count)
-        for anchorIndex in Self.tileWatermarkUVs.indices {
-            let anchorOffset = anchorIndex * projectedPointCountPerAnchor
+        var accepted: [(placement: TileProjectedTextPlacement, uvScale: Float)] = []
+        accepted.reserveCapacity(scaledPlacements.count)
+        for index in scaledPlacements.indices {
+            let anchorOffset = index * projectedPointCountPerAnchor
             let centerPoint = basisPoints[anchorOffset]
             let xUnitPoint = basisPoints[anchorOffset + 1]
             let yUnitPoint = basisPoints[anchorOffset + 2]
+            let metrics = scaledPlacements[index].placement.metrics
+            let textSize = SIMD2<Float>(Float(metrics.size.width), Float(metrics.size.height))
             guard centerPoint.visible != 0,
                   xUnitPoint.visible != 0,
                   yUnitPoint.visible != 0,
@@ -710,22 +1020,21 @@ final class DebugOverlayRenderer {
                                                         viewportSize: viewportSize) != nil else {
                 continue
             }
-            acceptedAnchorUVs.append(Self.tileWatermarkUVs[anchorIndex])
+            accepted.append(scaledPlacements[index])
         }
-        guard acceptedAnchorUVs.isEmpty == false else { return }
+        guard accepted.isEmpty == false else { return }
 
         // Each glyph vertex is projected exactly: affine extrapolation from the anchor
         // used to "lift" the text out of the map plane toward the camera when tilted.
         tileWatermarkVertexInputsScratch.removeAll(keepingCapacity: true)
-        tileWatermarkVertexInputsScratch.reserveCapacity(acceptedAnchorUVs.count * metrics.vertices.count)
-        let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
-                                      Int32(placeTile.placeIn.y),
-                                      Int32(placeTile.placeIn.z))
-        for anchorUV in acceptedAnchorUVs {
+        tileWatermarkVertexInputsScratch.reserveCapacity(accepted.reduce(0) { $0 + $1.placement.metrics.vertices.count })
+        for entry in accepted {
+            let metrics = entry.placement.metrics
+            let textCenter = SIMD2<Float>(Float(metrics.size.width), Float(metrics.size.height)) * 0.5
             for vertex in metrics.vertices {
                 let centered = vertex.position - textCenter
-                let uv = SIMD2<Float>(anchorUV.x + centered.x * uvScale,
-                                      anchorUV.y - centered.y * uvScale)
+                let uv = SIMD2<Float>(entry.placement.anchorUV.x + centered.x * entry.uvScale,
+                                      entry.placement.anchorUV.y - centered.y * entry.uvScale)
                 tileWatermarkVertexInputsScratch.append(TilePointInput(uv: uv,
                                                                        tile: tileVector,
                                                                        tileSlotIndex: 0))
@@ -738,26 +1047,27 @@ final class DebugOverlayRenderer {
                                                             tileOriginData: tileOriginData)
         guard vertexPoints.count == tileWatermarkVertexInputsScratch.count else { return }
 
-        let verticesPerAnchor = metrics.vertices.count
-        for acceptedIndex in acceptedAnchorUVs.indices {
-            let anchorBase = acceptedIndex * verticesPerAnchor
+        var placementBase = 0
+        for entry in accepted {
+            let metricsVertices = entry.placement.metrics.vertices
             var triangleStart = 0
-            while triangleStart + 2 < verticesPerAnchor {
-                let p0 = vertexPoints[anchorBase + triangleStart]
-                let p1 = vertexPoints[anchorBase + triangleStart + 1]
-                let p2 = vertexPoints[anchorBase + triangleStart + 2]
+            while triangleStart + 2 < metricsVertices.count {
+                let p0 = vertexPoints[placementBase + triangleStart]
+                let p1 = vertexPoints[placementBase + triangleStart + 1]
+                let p2 = vertexPoints[placementBase + triangleStart + 2]
                 if p0.visible != 0, p1.visible != 0, p2.visible != 0 {
                     for offset in 0..<3 {
-                        let point = vertexPoints[anchorBase + triangleStart + offset]
+                        let point = vertexPoints[placementBase + triangleStart + offset]
                         vertices.append(TextVertex(position: SIMD4<Float>(point.position.x,
                                                                           point.position.y,
                                                                           0.0,
                                                                           1.0),
-                                                   uv: metrics.vertices[triangleStart + offset].uv))
+                                                   uv: metricsVertices[triangleStart + offset].uv))
                     }
                 }
                 triangleStart += 3
             }
+            placementBase += metricsVertices.count
         }
     }
 

@@ -89,6 +89,25 @@ The HUD is host-view chrome drawn above the map: camera coordinates and renderer
 
 It is a development aid. It does not appear in a [tour video export](tour-video-export.md), same as the attribution badge, and it should not ship enabled.
 
+### Overlays on the map
+
+The HUD's **Controls** tab carries switches that draw over the map itself rather than in the panel: coordinate axes, tile borders with their `tile = x/y/z` watermark, wireframe, and the tile grid. They are development-build overlays, drawn only when the package is compiled in Debug, and they are not part of the public API: a release build ignores them even with the panel on.
+
+**Tile grid** divides the tile under the camera centre, and only that one tile, into a grid of the chosen density (2, 4, 6 or 8 a side) and stamps each cell with four lines:
+
+```
+39615/20486/16      the tile the cell belongs to, x/y/z
+      C4            the cell code
+  x1365-2047        the cell's tile-local x bounds
+  y2048-2730        the cell's tile-local y bounds
+```
+
+The bounds are the tile's own local units, 0 to 4096, with **x growing east and y growing north from the south edge of the tile**, which is the space the parser leaves geometry in (it flips the incoming MVT y, so the raw `.mvt` value for a stamped `y` is `4096 - y`). The cell code says the same thing: the letter is the column counted from the west, the number is the row counted from the south starting at one. Each cell is self-sufficient on purpose, so a screenshot cropped to one cell still names both the tile and the slice of its geometry to go and read.
+
+While a slot is filled with a substitute (a coarser tile standing in for one that has not arrived), the pixels under the stamp were not built from the tile the first line names, so a fifth `src 19807/10243/15` line appears with the tile they did come from. The bounds stay in the drawn tile's space; the source tile's own rectangle for that slot is what `TileLocalClipMath.clipBounds(source:placeIn:)` computes.
+
+Cells too small on screen to hold the stamp keep their lines and drop their text, so a grid can look bare until you zoom in.
+
 ## Where the frame time goes
 
 For the shape of the pipeline (the five passes, the subsystems, the tile path) see [architecture](architecture.md). The two levers most likely to matter to an app are the [memory tile cache size](tile-cache.md), which decides how often GPU-ready tiles are rebuilt, and the [shadow map resolution and coverage](buildings-and-shadows.md), which is the most expensive optional pass.

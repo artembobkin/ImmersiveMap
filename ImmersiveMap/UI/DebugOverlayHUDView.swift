@@ -36,6 +36,9 @@ final class DebugOverlayHUDView: UIView {
     private let axesSwitch = UISwitch()
     private let tileLayersLabel = UILabel()
     private let tileLayersSwitch = UISwitch()
+    private let tileGridLabel = UILabel()
+    private let tileGridSwitch = UISwitch()
+    private let tileGridDensityControl = UISegmentedControl(items: DebugOverlayHUDTextComposer.tileGridDensityTitles)
     private let wireframeLabel = UILabel()
     private let wireframeSwitch = UISwitch()
     private let earthSceneLabel = UILabel()
@@ -81,6 +84,8 @@ final class DebugOverlayHUDView: UIView {
 
     var onAxesEnabledChanged: ((Bool) -> Void)?
     var onTileLayersEnabledChanged: ((Bool) -> Void)?
+    var onTileGridEnabledChanged: ((Bool) -> Void)?
+    var onTileGridDensityChanged: ((Int) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -114,6 +119,7 @@ final class DebugOverlayHUDView: UIView {
 
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
+        configureControlLabel(tileGridLabel, text: "Tile grid")
         configureControlLabel(wireframeLabel, text: "Wireframe")
         configureControlLabel(earthSceneLabel, text: "Earth scene")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
@@ -121,6 +127,9 @@ final class DebugOverlayHUDView: UIView {
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
         axesSwitch.addTarget(self, action: #selector(axesSwitchChanged), for: .valueChanged)
         tileLayersSwitch.addTarget(self, action: #selector(tileLayersSwitchChanged), for: .valueChanged)
+        tileGridSwitch.addTarget(self, action: #selector(tileGridSwitchChanged), for: .valueChanged)
+        tileGridDensityControl.addTarget(self, action: #selector(tileGridDensityControlChanged), for: .valueChanged)
+        tileGridDensityControl.selectedSegmentIndex = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: DebugTileGridDensity.standard)
         wireframeSwitch.addTarget(self, action: #selector(wireframeSwitchChanged), for: .valueChanged)
         earthSceneSwitch.addTarget(self, action: #selector(earthSceneSwitchChanged), for: .valueChanged)
         roadLabelTilesSwitch.addTarget(self, action: #selector(roadLabelTilesSwitchChanged), for: .valueChanged)
@@ -130,6 +139,9 @@ final class DebugOverlayHUDView: UIView {
         containerView.addSubview(axesSwitch)
         containerView.addSubview(tileLayersLabel)
         containerView.addSubview(tileLayersSwitch)
+        containerView.addSubview(tileGridLabel)
+        containerView.addSubview(tileGridSwitch)
+        containerView.addSubview(tileGridDensityControl)
         containerView.addSubview(wireframeLabel)
         containerView.addSubview(wireframeSwitch)
         containerView.addSubview(earthSceneLabel)
@@ -212,6 +224,8 @@ final class DebugOverlayHUDView: UIView {
         isPanelEnabled = isDebugPanelEnabled
         axesSwitch.setOn(controls.axesEnabled, animated: false)
         tileLayersSwitch.setOn(controls.tileLayersEnabled, animated: false)
+        tileGridSwitch.setOn(controls.tileGridEnabled, animated: false)
+        tileGridDensityControl.selectedSegmentIndex = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: controls.tileGridDensity)
         wireframeSwitch.setOn(controls.wireframeEnabled, animated: false)
         roadLabelTilesSwitch.setOn(controls.roadLabelTilesEnabled, animated: false)
         baseLabelBoundsSwitch.setOn(controls.baseLabelBoundsEnabled, animated: false)
@@ -273,7 +287,7 @@ final class DebugOverlayHUDView: UIView {
             ? Layout.controlRowHeight + Layout.controlSpacing + Layout.traceStatusHeight + sectionSpacing
             : 0
         let contentWidth = max(Layout.expandedMinimumWidth, maxContentWidth)
-        let controlsBodyHeight = Layout.controlRowHeight * 5 + Layout.controlSpacing * 4
+        let controlsBodyHeight = Layout.controlRowHeight * 7 + Layout.controlSpacing * 6
         let statsBodyHeight = zoomSize.height
             + latLonSize.height
             + sectionSpacing
@@ -363,8 +377,20 @@ final class DebugOverlayHUDView: UIView {
                                         y: tileLayersLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
                                         width: switchSize.width,
                                         height: switchSize.height)
+        tileGridLabel.frame = CGRect(x: Layout.contentInset,
+                                     y: tileLayersLabel.frame.maxY + Layout.controlSpacing,
+                                     width: labelWidth,
+                                     height: Layout.controlRowHeight)
+        tileGridSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
+                                      y: tileGridLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
+                                      width: switchSize.width,
+                                      height: switchSize.height)
+        tileGridDensityControl.frame = CGRect(x: Layout.contentInset,
+                                              y: tileGridLabel.frame.maxY + Layout.controlSpacing,
+                                              width: contentWidth,
+                                              height: Layout.controlRowHeight)
         wireframeLabel.frame = CGRect(x: Layout.contentInset,
-                                      y: tileLayersLabel.frame.maxY + Layout.controlSpacing,
+                                      y: tileGridDensityControl.frame.maxY + Layout.controlSpacing,
                                       width: labelWidth,
                                       height: Layout.controlRowHeight)
         wireframeSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
@@ -700,7 +726,8 @@ final class DebugOverlayHUDView: UIView {
         [tabControl].forEach {
             $0.isHidden = isContentHidden
         }
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch, wireframeLabel, wireframeSwitch,
+        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
+         tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
          earthSceneLabel, earthSceneSwitch, surfaceModeButton].forEach {
             $0.isHidden = isControlsVisible == false
         }
@@ -734,6 +761,14 @@ final class DebugOverlayHUDView: UIView {
 
     @objc private func tileLayersSwitchChanged() {
         onTileLayersEnabledChanged?(tileLayersSwitch.isOn)
+    }
+
+    @objc private func tileGridSwitchChanged() {
+        onTileGridEnabledChanged?(tileGridSwitch.isOn)
+    }
+
+    @objc private func tileGridDensityControlChanged() {
+        onTileGridDensityChanged?(DebugOverlayHUDTextComposer.tileGridDensity(atIndex: tileGridDensityControl.selectedSegmentIndex))
     }
 
     @objc private func wireframeSwitchChanged() {
@@ -1295,6 +1330,24 @@ extension DebugOverlayHUDView {
         roadLabelTilesSwitchChanged()
     }
 
+    func simulateTileGridSwitchChangeForTesting(_ isOn: Bool) {
+        tileGridSwitch.setOn(isOn, animated: false)
+        tileGridSwitchChanged()
+    }
+
+    func simulateTileGridDensitySelectionForTesting(_ density: Int) {
+        tileGridDensityControl.selectedSegmentIndex = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: density)
+        tileGridDensityControlChanged()
+    }
+
+    var isTileGridSwitchOnForTesting: Bool {
+        tileGridSwitch.isOn
+    }
+
+    var tileGridDensityForTesting: Int {
+        DebugOverlayHUDTextComposer.tileGridDensity(atIndex: tileGridDensityControl.selectedSegmentIndex)
+    }
+
     var isAtlasTabSelectedForTesting: Bool {
         selectedTab == .atlas
     }
@@ -1312,7 +1365,8 @@ extension DebugOverlayHUDView {
     }
 
     var areDebugControlsVisibleForTesting: Bool {
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch, wireframeLabel, wireframeSwitch,
+        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
+         tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
          earthSceneLabel, earthSceneSwitch, surfaceModeButton]
             .allSatisfy { $0.isHidden == false }
     }

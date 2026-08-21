@@ -25,6 +25,7 @@ enum RenderDebugOverlayPolicy {
         }
         guard controls.axesEnabled
             || controls.tileLayersEnabled
+            || controls.tileGridEnabled
             || controls.roadLabelTilesEnabled
             || controls.baseLabelBoundsEnabled
             || controls.roadLabelBoundsEnabled else {
