@@ -21,6 +21,8 @@ final class BusStopZigzagGeometryBuilderTests: XCTestCase {
         var sawBelow = false
         for polygon in polygons {
             for vertex in polygon.vertices {
+                // The builder is fed tile space (y = 500) and emits render
+                // space vertices, hence the flipped axis to compare against.
                 let acrossAxis = Float(vertex.y) - (4096 - 500)
                 XCTAssertLessThanOrEqual(abs(acrossAxis), 1.2,
                                          "A tooth never reaches past the sawtooth's sweep")

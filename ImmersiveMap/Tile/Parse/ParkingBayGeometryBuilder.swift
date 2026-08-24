@@ -15,9 +15,11 @@ import simd
 /// is the layout the asphalt actually carries. A `parallel` orientation from
 /// the tiles spreads the stripes to car-length spacing.
 ///
-/// Input and output are TILE space (y down), the space `ParseLine.parse`
-/// consumes: the stripes are meant to be tessellated as short point-locked
-/// strokes, exactly like the kerb ring in `appendRoadSurfaceArea`.
+/// Input AND output are TILE space (y down): unlike its four sibling
+/// decoration builders, this one never enters render space, because its
+/// stripes are tessellated by `ParseLine.parse`, which owns its own entry
+/// flip. A deliberate asymmetry; do not "unify" it with the flipping
+/// builders, or the comb mirrors.
 struct ParkingBayGeometryBuilder {
     /// A bay is ~2.6 m wide on the ground; parallel parking spaces are a car
     /// length apart instead.

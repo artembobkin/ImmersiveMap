@@ -561,6 +561,8 @@ final class DebugOverlayRenderer {
         inputs.append(TilePointInput(uv: SIMD2<Float>(anchorUV.x + uvScale, anchorUV.y),
                                      tile: tileVector,
                                      tileSlotIndex: 0))
+        // Up on the map is minus v: uv.y grows southward (the stamp stacking
+        // below explains the same axis).
         inputs.append(TilePointInput(uv: SIMD2<Float>(anchorUV.x, anchorUV.y - uvScale),
                                      tile: tileVector,
                                      tileSlotIndex: 0))

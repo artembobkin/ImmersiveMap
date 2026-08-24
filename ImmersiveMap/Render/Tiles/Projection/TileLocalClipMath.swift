@@ -8,7 +8,7 @@ import simd
 /// the clip, content beyond the `placeIn` slot would overlap neighboring exact tiles
 /// (in the globe atlas the same role is played by cell scissors and shader discard).
 enum TileLocalClipMath {
-    static let tileExtent: Float = 4096.0
+    static let tileExtent: Float = TileCoordinateSpace.tileExtent
 
     /// Disabled clip: exact placements draw in full, including the stitching
     /// geometry margin beyond 0..4096.

@@ -75,6 +75,8 @@ struct TilePointScreenProjector {
             }
 
             let originData = tileOriginData[visibleTileIndex]
+            // v grows from the NORTH edge, the flat render world is y-up:
+            // the same 1 - v as the GPU kernel (TilePointToScreen.metal).
             let local = SIMD2<Float>(input.uv.x * originData.size,
                                      (1.0 - input.uv.y) * originData.size)
             let worldPosition = originData.panRelativeOrigin + local
@@ -108,6 +110,8 @@ struct TilePointScreenProjector {
             }
 
             let originData = tileOriginData[visibleTileIndex]
+            // v grows from the NORTH edge, the flat render world is y-up:
+            // the same 1 - v as the GPU kernel (TilePointToScreen.metal).
             let local = SIMD2<Float>(input.uv.x * originData.size,
                                      (1.0 - input.uv.y) * originData.size)
             let worldPosition = originData.panRelativeOrigin + local

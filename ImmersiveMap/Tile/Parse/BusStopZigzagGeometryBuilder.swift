@@ -22,7 +22,7 @@ struct BusStopZigzagGeometryBuilder {
                        unitsPerMetre: Float,
                        tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
-        let renderPoints = points.map { SIMD2<Float>($0.x, tileExtent - $0.y) }
+        let renderPoints = TileCoordinateSpace.renderPoints(points)
         let total = Self.polylineLength(renderPoints)
         let halfPeriod = Self.toothPeriodMetres * unitsPerMetre * 0.5
         guard total >= halfPeriod * 2 else { return [] }
@@ -64,8 +64,8 @@ struct BusStopZigzagGeometryBuilder {
         // colour, so the overlap is invisible and the joint never gaps.
         let along = direction * (stroke * 0.5)
         return TileMvtParser.ParsedPolygon(
-            vertices: [quantize(a + normal - along), quantize(a - normal - along),
-                       quantize(b - normal + along), quantize(b + normal + along)],
+            vertices: [TileCoordinateSpace.quantized(a + normal - along), TileCoordinateSpace.quantized(a - normal - along),
+                       TileCoordinateSpace.quantized(b - normal + along), TileCoordinateSpace.quantized(b + normal + along)],
             indices: [0, 1, 2, 0, 2, 3]
         )
     }
@@ -97,10 +97,5 @@ struct BusStopZigzagGeometryBuilder {
         let segment = simd_distance(a, b)
         guard segment > 1e-6 else { return nil }
         return (b, (b - a) / segment)
-    }
-
-    private static func quantize(_ point: SIMD2<Float>) -> SIMD2<Int16> {
-        SIMD2<Int16>(Int16(clamping: Int(point.x.rounded())),
-                     Int16(clamping: Int(point.y.rounded())))
     }
 }

@@ -41,15 +41,13 @@ struct TileGridLineSegment {
 /// under the camera centre into `density x density` cells and writes over each
 /// cell which slice of that tile's geometry it covers.
 ///
-/// **Coordinate convention, which is the whole point of the overlay.** The bounds
-/// a cell prints are the RAW `.mvt` units, 0 to 4096, with **x growing east and
-/// y growing south from the NORTH edge of the tile** - exactly what a tile
-/// decoder, a grep over tile bodies or the pipeline's GeoJSON shows, so a stamp
-/// can be pasted into any of them unchanged. The first cut of this overlay
-/// printed y in the parser's own space instead (it flips the incoming MVT y to
-/// `tileExtent - y`), and the very first debugging session went to the mirrored
-/// half of the tile; the stamps exist for cross-referencing the DATA, and the
-/// data speaks MVT. To reach the parser's space, take `4096 - y`.
+/// **Coordinate convention, which is the whole point of the overlay.** The
+/// bounds a cell prints are TILE space (raw `.mvt` units, y south from the
+/// north edge; see the contract in `Tile/README.md` and
+/// `TileCoordinateSpace`) - exactly what a tile decoder, a grep over tile
+/// bodies or the pipeline's GeoJSON shows, so a stamp can be pasted into any
+/// of them unchanged. The first cut printed y in render space instead, and
+/// the very first debugging session went to the mirrored half of the tile.
 ///
 /// A cell code is the same box spelled differently: the letter is the column
 /// index counted from the west (A is x 0 upward), the number is the row index
@@ -61,9 +59,9 @@ struct TileGridLineSegment {
 /// north edge in both the flat and the globe kernel, so `cellUVRect` maps the
 /// row index straight through.
 enum DebugTileGridMath {
-    /// Tile-local extent the stamps are expressed in, matching
-    /// `TileLocalClipMath.tileExtent`.
-    static let tileExtent: Int = 4096
+    /// Tile-local extent the stamps are expressed in; one number for the
+    /// whole engine, see `TileCoordinateSpace`.
+    static let tileExtent: Int = TileCoordinateSpace.tileExtentInt
 
     /// The `density + 1` lines each way, each cut into `segmentCountPerEdge`
     /// pieces so that on the globe a line follows the sphere instead of cutting

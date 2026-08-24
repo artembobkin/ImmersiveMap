@@ -247,6 +247,12 @@ class ParseLine {
     /// length in tile units, for styles whose dash pattern the shader cuts in
     /// screen space; end feathering is off in that mode, the dash coverage
     /// owns the cuts.
+    /// Coordinate contract: `points` are TILE space (y down, raw MVT). The
+    /// single y flip into render space happens inside `precompute`, and the
+    /// emitted vertices are render space. The endpoint-extension helpers run
+    /// before the flip (tile space) and the tile clip after it (render
+    /// space); both are reflection-symmetric about the tile extent, which is
+    /// why each is correct in its own space. See `TileCoordinateSpace`.
     func parse(points: [SIMD2<Float>],
                width: Double,
                tileExtent: Float,

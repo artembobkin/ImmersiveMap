@@ -46,6 +46,9 @@ kernel void tilePointToScreenFlatKernel(const device TilePointInputGpu* inputs [
     uint tileSlotIndex = input.tileSlotIndex;
     uint visibleTileIndex = tileSlotVisibleTileIndices[tileSlotIndex];
     FlatTileOriginDataGpu originData = tileOriginData[visibleTileIndex];
+    // Tile UV's v grows from the NORTH edge while the flat render world is
+    // y-up, hence 1 - v; the globe kernel below consumes v directly, because
+    // its mercator math speaks the same north-down axis.
     float2 local = float2(input.uv.x * originData.size,
                           (1.0 - input.uv.y) * originData.size);
     float2 worldPosition = originData.panRelativeOrigin + local;

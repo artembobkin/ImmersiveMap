@@ -18,7 +18,10 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     private static let camera: ImmersiveMapCameraPosition = {
         let scale = Double(1 << 16)
         let longitude = (39616.5 / scale) * 360.0 - 180.0
-        let latitude = atan(sinh(.pi * (1.0 - 2.0 * (20487.5 / scale)))) * 180.0 / .pi
+        // The crossing sits at v = 1200/4096 of the fixture tile, OFF the
+        // tile's y mirror line on purpose (a camera staring at v = 0.5 would
+        // frame a mirrored figure just as well); the camera aims at it.
+        let latitude = atan(sinh(.pi * (1.0 - 2.0 * ((20487.0 + 1200.0 / 4096.0) / scale)))) * 180.0 / .pi
         return ImmersiveMapCameraPosition(latitudeDegrees: latitude,
                                           longitudeDegrees: longitude,
                                           zoom: 18,
@@ -38,13 +41,13 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     private static func tileData(crossing: String?) throws -> Data {
         var features: [VectorTileFixture.Feature] = [
             .init(id: 1,
-                  geometry: .line(points: [(0, 2048), (4096, 2048)]),
+                  geometry: .line(points: [(0, 1200), (4096, 1200)]),
                   properties: ["class": "primary", "lanes": "4", "name": "Avenue"])
         ]
         if let crossing {
             features.append(
                 .init(id: 2,
-                      geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                      geometry: .line(points: [(2048, 1052), (2048, 1352)]),
                       properties: ["class": "path", "subclass": "footway", "crossing": crossing])
             )
         }
@@ -104,10 +107,10 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     func testAShippedCrossingLineIsStriped() throws {
         let parsed = try parse(features: [
             .init(id: 1,
-                  geometry: .line(points: [(0, 2048), (4096, 2048)]),
+                  geometry: .line(points: [(0, 1200), (4096, 1200)]),
                   properties: ["class": "primary", "lanes": "4", "name": "Avenue"]),
             .init(id: 2,
-                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  geometry: .line(points: [(2048, 1052), (2048, 1352)]),
                   properties: ["marking": "crossing_marked"]),
         ])
         XCTAssertGreaterThan(zebraTriangleCount(parsed), 4,
@@ -120,15 +123,15 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     func testAMeasuredCrossingSilencesTheTaggedOne() throws {
         let shippedOnly = try parse(features: [
             .init(id: 2,
-                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  geometry: .line(points: [(2048, 1052), (2048, 1352)]),
                   properties: ["marking": "crossing_marked"]),
         ])
         let both = try parse(features: [
             .init(id: 2,
-                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  geometry: .line(points: [(2048, 1052), (2048, 1352)]),
                   properties: ["marking": "crossing_marked"]),
             .init(id: 3,
-                  geometry: .line(points: [(2048, 1900), (2048, 2200)]),
+                  geometry: .line(points: [(2048, 1052), (2048, 1352)]),
                   properties: ["class": "path", "subclass": "footway", "crossing": "marked"]),
         ])
         XCTAssertEqual(zebraTriangleCount(both), zebraTriangleCount(shippedOnly),

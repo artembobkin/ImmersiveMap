@@ -6,6 +6,10 @@ resources, and renderer subsystems.
 This folder is the runtime drawing boundary. Data should arrive here already
 parsed, styled, normalized, and prepared for rendering.
 
+
+Tile-local geometry arrives in render space (y up); the y-axis contract
+and its one-flip rule live in `Tile/README.md` and `TileCoordinateSpace`.
+
 ## Responsibilities
 
 - Build and execute the render graph for each frame.

@@ -92,6 +92,8 @@ enum ImmersiveMapProjection {
         let tileSize = renderMapSize / Double(tilesCount)
         let halfRenderMapSize = renderMapSize * 0.5
         let originX = Double(x) * tileSize - halfRenderMapSize + flatRenderPan.x * halfRenderMapSize + Double(loop) * renderMapSize
+        // Tile row index grows SOUTH while the flat render world is y-up:
+        // this is where the two meet (see TileCoordinateSpace, world spaces).
         let originY = Double(tilesCount - y - 1) * tileSize - halfRenderMapSize - flatRenderPan.y * halfRenderMapSize
         return SIMD3<Float>(Float(originX), Float(originY), Float(tileSize))
     }

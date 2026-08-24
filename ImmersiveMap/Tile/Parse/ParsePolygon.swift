@@ -10,11 +10,16 @@ class ParsePolygon {
     private var earcutVertices: [SIMD2<Int16>] = []
     private static let epsilon: Float = 0.0001
 
+    /// Rings in TILE space (y down, raw MVT), clipped to the tile square:
+    /// the space the whole Parse layer works in. See `TileCoordinateSpace`.
     struct ClippedPolygon {
         let exterior: [SIMD2<Float>]
         let interiors: [[SIMD2<Float>]]
     }
 
+    /// `clipped` is tile space; `parsedPolygon` is the tessellated result in
+    /// render space (y up), the vertex storage contract. The flip between
+    /// them happens once, inside `triangulateGeometry`.
     struct ParsedGeometry {
         let clipped: ClippedPolygon
         let parsedPolygon: TileMvtParser.ParsedPolygon
@@ -45,7 +50,7 @@ class ParsePolygon {
         ])
 
         let exterior = polygon.exteriorRing.map {
-            Clipper.Point(x: Double($0.x), y: Double(tileExtent) - Double($0.y))
+            Clipper.Point(x: Double($0.x), y: Double($0.y))
         }
         guard let exteriorClipped = clipper.sutherlandHodgmanClip(subjPoly: Clipper.Polygon(points: exterior),
                                                                   clipPoly: clipPoly) else {
@@ -56,7 +61,7 @@ class ParsePolygon {
         interiorClipped.reserveCapacity(polygon.interiorRings.count)
         for ring in polygon.interiorRings {
             let interior = ring.map {
-                Clipper.Point(x: Double($0.x), y: Double(tileExtent) - Double($0.y))
+                Clipper.Point(x: Double($0.x), y: Double($0.y))
             }
             if let clipped = clipper.sutherlandHodgmanClip(subjPoly: Clipper.Polygon(points: interior),
                                                            clipPoly: clipPoly) {
@@ -85,13 +90,19 @@ class ParsePolygon {
     }
 
     private func triangulateGeometry(clipped: ClippedPolygon) -> ParsedGeometry? {
+        // The one entry into render space for polygon fills. The flip MUST
+        // precede the winding decisions (`signedArea`, earcut): reflecting
+        // afterward would silently invert every triangle's orientation.
+        let renderExterior = TileCoordinateSpace.renderPoints(clipped.exterior)
         if clipped.interiors.isEmpty,
-           let polygon = triangulateConvexExterior(exterior: clipped.exterior) {
+           let polygon = triangulateConvexExterior(exterior: renderExterior) {
             return ParsedGeometry(clipped: clipped,
                                   parsedPolygon: polygon)
         }
 
-        guard let polygon = triangulateEarcut(clipped: clipped) else { return nil }
+        let renderInteriors = clipped.interiors.map(TileCoordinateSpace.renderPoints)
+        guard let polygon = triangulateEarcut(exterior: renderExterior,
+                                              interiors: renderInteriors) else { return nil }
         return ParsedGeometry(clipped: clipped,
                               parsedPolygon: polygon)
     }
@@ -122,20 +133,21 @@ class ParsePolygon {
         return indices.isEmpty ? nil : TileMvtParser.ParsedPolygon(vertices: vertices, indices: indices)
     }
 
-    private func triangulateEarcut(clipped: ClippedPolygon) -> TileMvtParser.ParsedPolygon? {
+    private func triangulateEarcut(exterior: [SIMD2<Float>],
+                                   interiors: [[SIMD2<Float>]]) -> TileMvtParser.ParsedPolygon? {
         earcutCoordinates.removeAll(keepingCapacity: true)
         earcutHoleIndices.removeAll(keepingCapacity: true)
         earcutVertices.removeAll(keepingCapacity: true)
 
-        let totalVertexCount = clipped.exterior.count + clipped.interiors.reduce(0) { partial, ring in
+        let totalVertexCount = exterior.count + interiors.reduce(0) { partial, ring in
             partial + ring.count
         }
         earcutCoordinates.reserveCapacity(totalVertexCount * 2)
-        earcutHoleIndices.reserveCapacity(clipped.interiors.count)
+        earcutHoleIndices.reserveCapacity(interiors.count)
         earcutVertices.reserveCapacity(totalVertexCount)
 
-        appendRing(clipped.exterior)
-        for ring in clipped.interiors {
+        appendRing(exterior)
+        for ring in interiors {
             earcutHoleIndices.append(earcutVertices.count)
             appendRing(ring)
         }
@@ -180,7 +192,7 @@ class ParsePolygon {
         var converted: [SIMD2<Float>] = []
         converted.reserveCapacity(ring.count)
         for point in ring {
-            converted.append(SIMD2<Float>(Float(point.x), tileExtent - Float(point.y)))
+            converted.append(SIMD2<Float>(Float(point.x), Float(point.y)))
         }
         return converted
     }

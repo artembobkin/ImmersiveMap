@@ -513,7 +513,11 @@ final class PreparedTileDiskCaching {
     // 60: a public transport stop carries the yellow sawtooth of the bus
     // stop marking (`marking=bus_stop_zigzag`), folded from the kerb-side
     // axis the tiles ship.
-    static let preparedFormatVersion: UInt32 = 60
+    // 61: the polygon clip runs in raw MVT tile space and the y flip into
+    // render space happens once, at tessellation (see TileCoordinateSpace).
+    // The picture is the same, but the float order changed and a clipped
+    // vertex can round one unit differently, so cached tiles rebuild.
+    static let preparedFormatVersion: UInt32 = 61
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -29,7 +29,7 @@ struct BusLaneLetterGeometryBuilder {
                        unitsPerMetre: Float,
                        tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
-        let renderPoints = points.map { SIMD2<Float>($0.x, tileExtent - $0.y) }
+        let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = Self.polylineLength(renderPoints)
         let height = Self.letterHeightMetres * unitsPerMetre
         let endInset = Self.endInsetMetres * unitsPerMetre
@@ -87,8 +87,8 @@ struct BusLaneLetterGeometryBuilder {
         let direction = (b - a) / length
         let normal = SIMD2<Float>(-direction.y, direction.x) * (stroke * 0.5)
         return TileMvtParser.ParsedPolygon(
-            vertices: [quantize(a + normal), quantize(a - normal),
-                       quantize(b - normal), quantize(b + normal)],
+            vertices: [TileCoordinateSpace.quantized(a + normal), TileCoordinateSpace.quantized(a - normal),
+                       TileCoordinateSpace.quantized(b - normal), TileCoordinateSpace.quantized(b + normal)],
             indices: [0, 1, 2, 0, 2, 3]
         )
     }
@@ -116,10 +116,5 @@ struct BusLaneLetterGeometryBuilder {
             remaining -= segment
         }
         return nil
-    }
-
-    private static func quantize(_ point: SIMD2<Float>) -> SIMD2<Int16> {
-        SIMD2<Int16>(Int16(clamping: Int(point.x.rounded())),
-                     Int16(clamping: Int(point.y.rounded())))
     }
 }

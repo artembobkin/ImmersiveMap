@@ -11,6 +11,9 @@ struct RoadDirectionArrowGeometryBuilder {
     private static let repeatStep: Float = 420.0
     private static let turnThresholdRadians: Float = .pi / 4.0
 
+    /// Input polyline is TILE space (y down); the first line of the body is
+    /// the decoration path's one named entry into render space, and the
+    /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
                        lineWidth: Float,
                        tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
@@ -18,7 +21,7 @@ struct RoadDirectionArrowGeometryBuilder {
             return []
         }
 
-        let renderPoints = points.map { SIMD2<Float>($0.x, tileExtent - $0.y) }
+        let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = polylineLength(points: renderPoints)
         let minimumFragmentLength = max(Self.minimumFragmentLength, lineWidth * Self.minimumFragmentLengthFactor)
         guard totalLength >= minimumFragmentLength else {
@@ -75,19 +78,19 @@ struct RoadDirectionArrowGeometryBuilder {
 
         let tailPolygon = TileMvtParser.ParsedPolygon(
             vertices: [
-                quantize(tailStart + normal * tailHalfWidth),
-                quantize(tailStart - normal * tailHalfWidth),
-                quantize(tailEnd + normal * tailHalfWidth),
-                quantize(tailEnd - normal * tailHalfWidth)
+                TileCoordinateSpace.quantized(tailStart + normal * tailHalfWidth),
+                TileCoordinateSpace.quantized(tailStart - normal * tailHalfWidth),
+                TileCoordinateSpace.quantized(tailEnd + normal * tailHalfWidth),
+                TileCoordinateSpace.quantized(tailEnd - normal * tailHalfWidth)
             ],
             indices: [0, 2, 1, 1, 2, 3]
         )
 
         let headPolygon = TileMvtParser.ParsedPolygon(
             vertices: [
-                quantize(tailEnd + normal * headHalfWidth),
-                quantize(tailEnd - normal * headHalfWidth),
-                quantize(tip)
+                TileCoordinateSpace.quantized(tailEnd + normal * headHalfWidth),
+                TileCoordinateSpace.quantized(tailEnd - normal * headHalfWidth),
+                TileCoordinateSpace.quantized(tip)
             ],
             indices: [0, 2, 1]
         )
@@ -190,11 +193,6 @@ struct RoadDirectionArrowGeometryBuilder {
             total += simd_length(points[index] - points[index - 1])
         }
         return total
-    }
-
-    private func quantize(_ point: SIMD2<Float>) -> SIMD2<Int16> {
-        SIMD2<Int16>(Int16(clamping: Int(point.x.rounded())),
-                     Int16(clamping: Int(point.y.rounded())))
     }
 }
 

@@ -6,6 +6,10 @@ This folder should stay small and mathematical. It translates between map-space
 representations without knowing about providers, rendering passes, or UI
 controls.
 
+
+The tile-geometry y-axis contract (tile space vs render space vs UV vs
+world) is stated once, in `Tile/README.md` and `TileCoordinateSpace`.
+
 ## Responsibilities
 
 - Define projection behavior used across the map engine.

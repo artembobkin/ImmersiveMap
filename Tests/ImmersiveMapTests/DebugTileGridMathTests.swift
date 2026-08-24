@@ -30,7 +30,7 @@ final class DebugTileGridMathTests: XCTestCase {
         }
     }
 
-    func testCellCodeCountsColumnsFromWestAndRowsFromSouth() {
+    func testCellCodeCountsColumnsFromWestAndRowsFromNorth() {
         XCTAssertEqual(DebugTileGridMath.cellCode(column: 0, row: 0), "A1")
         XCTAssertEqual(DebugTileGridMath.cellCode(column: 2, row: 3), "C4")
         XCTAssertEqual(DebugTileGridMath.cellCode(column: 7, row: 7), "H8")

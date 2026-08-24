@@ -108,7 +108,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         let mesh = try XCTUnwrap(parser.buildExtrudedMesh(
             clippedExterior: clipped,
             clippedInteriors: [],
-            rawExterior: raw,
+            unclippedExterior: raw,
             roof: TileMvtParser.ParsedPolygon(vertices: clipped.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) },
                                               indices: [0, 1, 2, 0, 2, 3]),
             roofInfo: RoofInfo(height: roofHeight, shape: .gabled, orientation: nil, directionDegrees: nil),

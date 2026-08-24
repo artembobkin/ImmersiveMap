@@ -20,6 +20,8 @@ static inline GlobeVisibilityProjectionResult globeProjectTileUV(float2 localUv,
     float zPow = pow(2.0, tile.z);
     float size = 1.0 / zPow;
     float vertexUvX = localUv.x / zPow + size * float(tile.x);
+    // Canonical: uv.y = 0 is the tile's NORTH edge, the same axis the raw
+    // MVT bytes and the mercator tile rows use.
     float mercatorV = (float(tile.y) + localUv.y) / zPow;
     float latitudeAtUv = atan(sinh(M_PI_F * (1.0 - 2.0 * mercatorV)));
     float longitudeAtUv = vertexUvX * (2.0 * M_PI_F) - M_PI_F;

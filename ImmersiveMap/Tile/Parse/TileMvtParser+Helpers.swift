@@ -9,14 +9,17 @@ extension TileMvtParser {
         let styleKey: UInt8
         let buildingId: UInt64
         let footprintSignature: BuildingFootprintSignature
+        // All rings are RENDER space (y up): the extrusion path works in
+        // the same space as the roof tessellation it merges with, and enters
+        // it exactly once, at candidate construction in the parser.
         let clippedExterior: [SIMD2<Float>]
         let clippedInteriors: [[SIMD2<Float>]]
         /// The exterior ring as the tile carries it, before the clip to the
         /// tile square, in the same converted coordinates as `clippedExterior`.
         /// The roof frame must come from this whole footprint, never from the
         /// clipped one, or ridges break at tile edges.
-        let rawExterior: [SIMD2<Float>]
-        let hasRawInteriorRings: Bool
+        let unclippedExterior: [SIMD2<Float>]
+        let hasUnclippedInteriorRings: Bool
         let roof: ParsedPolygon
         let roofInfo: RoofInfo?
         let baseHeight: Float
@@ -529,8 +532,8 @@ extension TileMvtParser {
     func buildExtrudedMesh(
         clippedExterior: [SIMD2<Float>],
         clippedInteriors: [[SIMD2<Float>]],
-        rawExterior: [SIMD2<Float>] = [],
-        hasRawInteriorRings: Bool = false,
+        unclippedExterior: [SIMD2<Float>] = [],
+        hasUnclippedInteriorRings: Bool = false,
         roof: ParsedPolygon,
         roofInfo: RoofInfo?,
         baseHeight: Float,
@@ -602,8 +605,8 @@ extension TileMvtParser {
         }
 
         let sanitizedExterior = sanitizeRing(clippedExterior)
-        let footprintRing = rawExterior.isEmpty ? sanitizedExterior : sanitizeRing(rawExterior)
-        let hasInteriorRings = hasRawInteriorRings
+        let footprintRing = unclippedExterior.isEmpty ? sanitizedExterior : sanitizeRing(unclippedExterior)
+        let hasInteriorRings = hasUnclippedInteriorRings
             || clippedInteriors.contains { sanitizeRing($0).count >= 3 }
         let roofGeometry = roofInfo.flatMap {
             RoofGeometryBuilder.build(roof: $0,
@@ -822,8 +825,8 @@ extension TileMvtParser {
                 footprintSignature: candidate.footprintSignature,
                 clippedExterior: candidate.clippedExterior,
                 clippedInteriors: candidate.clippedInteriors,
-                rawExterior: candidate.rawExterior,
-                hasRawInteriorRings: candidate.hasRawInteriorRings,
+                unclippedExterior: candidate.unclippedExterior,
+                hasUnclippedInteriorRings: candidate.hasUnclippedInteriorRings,
                 roof: candidate.roof,
                 roofInfo: nil,
                 baseHeight: candidate.baseHeight,
@@ -1123,6 +1126,9 @@ extension TileMvtParser {
     /// the surface is drawn after the ribbons' casings of its class and under
     /// their fills, exactly where a ribbon's own fill would go, so the ribbons
     /// entering the junction merge into it and their kerbs stop at its edge.
+    /// `clippedExterior`/`clippedInteriors` and `surfaceAreas` are all TILE
+    /// space (y down); only `parsedGeometry.parsedPolygon` (the fill) is
+    /// already tessellated render-space vertices.
     func appendRoadSurfaceArea(parsedGeometry: ParsePolygon.ParsedGeometry,
                                clippedExterior: [SIMD2<Float>],
                                clippedInteriors: [[SIMD2<Float>]],
@@ -1159,17 +1165,15 @@ extension TileMvtParser {
                 // Each ring as a closed line: the first two points repeat at
                 // the end so the closing corner gets a join like every other.
                 //
-                // The rings arrive in render space, where `ParsePolygon` has
-                // already flipped y; the line tessellator takes tile space and
-                // flips it itself. Handing it a flipped ring drew every kerb
-                // mirrored about the tile's mid-line, which is a dark outline
-                // across whatever happened to lie there (a park, a block of
-                // buildings) and nothing around the junction it belongs to.
+                // The rings arrive in tile space (`ParsedGeometry.clipped`
+                // keeps the Parse layer's working space) and go straight to
+                // the line tessellator, which owns the one flip into render
+                // space. This used to be a round trip of three flips, and one
+                // shipped kerb was drawn mirrored about the tile's mid-line.
                 for ring in [clippedExterior] + clippedInteriors where ring.count >= 3 {
-                    let tileSpaceRing = ring.map { SIMD2<Float>($0.x, Float(tileExtent) - $0.y) }
-                    var closed = tileSpaceRing
-                    closed.append(tileSpaceRing[0])
-                    closed.append(tileSpaceRing[1])
+                    var closed = ring
+                    closed.append(ring[0])
+                    closed.append(ring[1])
                     if let kerb = parseLine.parse(points: closed,
                                                   width: pass.parseGeometryStyleData.lineWidth,
                                                   tileExtent: Float(tileExtent),
@@ -1182,13 +1186,11 @@ extension TileMvtParser {
                 }
             case .detail where style.roadDecorationKind == .parkingBays:
                 // The parking-bay comb: short stripes laid out by the
-                // builder in tile space (the same space the kerb ring is
-                // flipped back into above), each tessellated as its own
-                // point-locked stroke with hard ends.
-                let tileSpaceRing = clippedExterior.map { SIMD2<Float>($0.x, Float(tileExtent) - $0.y) }
+                // builder in tile space (the ring already is), each
+                // tessellated as its own point-locked stroke with hard ends.
                 let unitsPerMetre = ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
                 var stripes = parkingBayBuilder.buildStripes(
-                    exterior: tileSpaceRing,
+                    exterior: clippedExterior,
                     unitsPerMetre: unitsPerMetre,
                     orientation: attributes["orientation"]?.stringValue
                 )

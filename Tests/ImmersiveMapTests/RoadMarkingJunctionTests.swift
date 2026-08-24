@@ -13,9 +13,12 @@ import XCTest
 /// treating either as a junction breaks the line on a street that simply
 /// continues.
 final class RoadMarkingJunctionTests: XCTestCase {
-    /// The junction the fixtures put in the middle of the tile, in render
-    /// space (the parser flips y).
-    private static let junction = SIMD2<Float>(2048, 4096 - 2048)
+    /// The junction of the fixtures, in render space (the parser flips y).
+    /// Deliberately OFF the tile centre: the first fixtures sat at
+    /// (2048, 2048), the fixed point of the y mirror, where a mirror bug
+    /// lands back on itself and passes. Here a mirrored junction misses by
+    /// over a thousand units.
+    private static let junction = SIMD2<Float>(1500, 4096 - 2600)
 
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
@@ -35,7 +38,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
         if let streetOfAvenue { avenue["street"] = streetOfAvenue }
         let data = try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
-                  geometry: .line(points: [(200, 2048), (2048, 2048), (3900, 2048)]),
+                  geometry: .line(points: [(200, 2600), (1500, 2600), (3900, 2600)]),
                   properties: avenue),
             second
         ])
@@ -60,7 +63,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
             // OSM splits ways where they meet, so a real crossing shares the
             // node; the engine reads junctions off shared nodes, not off
             // geometric intersections.
-            geometry: .line(points: [(2048, 400), (2048, 2048), (2048, 3700)]),
+            geometry: .line(points: [(1500, 400), (1500, 2600), (1500, 3700)]),
             properties: ["class": "primary", "lanes": "4", "name": "Cross Street"]
         )
         XCTAssertGreaterThan(try closestPaintToJunction(crossing), clearedGap,
@@ -74,7 +77,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
         // is whose street the second piece is.
         let continuation = VectorTileFixture.Feature(
             id: 2,
-            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            geometry: .line(points: [(1500, 2600), (1500, 3600)]),
             properties: ["class": "primary", "lanes": "6", "name": "Avenue"]
         )
         XCTAssertLessThan(try closestPaintToJunction(continuation), clearedGap,
@@ -88,7 +91,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
         // different streets meeting is a junction even where they agree.
         let sameStreet = VectorTileFixture.Feature(
             id: 2,
-            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            geometry: .line(points: [(1500, 2600), (1500, 3600)]),
             properties: ["class": "primary", "lanes": "6", "name": "Avenue", "street": "77"]
         )
         XCTAssertLessThan(try closestPaintToJunction(sameStreet, streetOfAvenue: "77"), clearedGap,
@@ -96,7 +99,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
 
         let otherStreet = VectorTileFixture.Feature(
             id: 2,
-            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            geometry: .line(points: [(1500, 2600), (1500, 3600)]),
             properties: ["class": "primary", "lanes": "4", "name": "Avenue", "street": "88"]
         )
         XCTAssertGreaterThan(try closestPaintToJunction(otherStreet, streetOfAvenue: "77"), clearedGap,
@@ -130,7 +133,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
         // markings on the avenue run past it as they do on the ground.
         let driveway = VectorTileFixture.Feature(
             id: 2,
-            geometry: .line(points: [(2048, 2048), (2048, 3000)]),
+            geometry: .line(points: [(1500, 2600), (1500, 3600)]),
             properties: ["class": "service", "lanes": "1", "name": "Yard"]
         )
         XCTAssertLessThan(try closestPaintToJunction(driveway), clearedGap,

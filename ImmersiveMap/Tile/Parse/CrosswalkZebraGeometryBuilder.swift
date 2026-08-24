@@ -13,6 +13,9 @@ struct CrosswalkZebraGeometryBuilder {
     private static let minimumStripeStep: Float = 3.0
     private static let endInsetFactor: Float = 0.05
 
+    /// Input polyline is TILE space (y down); the first line of the body is
+    /// the decoration path's one named entry into render space, and the
+    /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
                        zoneWidth: Float,
                        tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
@@ -20,7 +23,7 @@ struct CrosswalkZebraGeometryBuilder {
             return []
         }
 
-        let renderPoints = points.map { SIMD2<Float>($0.x, tileExtent - $0.y) }
+        let renderPoints = TileCoordinateSpace.renderPoints(points)
 
         let crossingLength = polylineLength(points: renderPoints)
         guard crossingLength >= Self.minimumCrossingLength else {
@@ -62,10 +65,10 @@ struct CrosswalkZebraGeometryBuilder {
             polygons.append(
                 TileMvtParser.ParsedPolygon(
                     vertices: [
-                        quantize(topLeft),
-                        quantize(bottomLeft),
-                        quantize(bottomRight),
-                        quantize(topRight)
+                        TileCoordinateSpace.quantized(topLeft),
+                        TileCoordinateSpace.quantized(bottomLeft),
+                        TileCoordinateSpace.quantized(bottomRight),
+                        TileCoordinateSpace.quantized(topRight)
                     ],
                     indices: [0, 1, 2, 0, 2, 3]
                 )
@@ -129,10 +132,5 @@ struct CrosswalkZebraGeometryBuilder {
         }
 
         return points.last ?? first
-    }
-
-    private func quantize(_ point: SIMD2<Float>) -> SIMD2<Int16> {
-        SIMD2<Int16>(Int16(clamping: Int(point.x.rounded())),
-                     Int16(clamping: Int(point.y.rounded())))
     }
 }

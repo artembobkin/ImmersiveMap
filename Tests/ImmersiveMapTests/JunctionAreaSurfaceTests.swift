@@ -20,18 +20,20 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                              glyphCoverage: .legacyAtlasForTests)
     }
 
-    /// Two primaries meeting inside a square junction area in the middle of
-    /// the tile, at z16 (separate-road rendering is on).
+    /// Two primaries meeting inside a square junction area, at z16
+    /// (separate-road rendering is on). The square sits OFF the tile centre
+    /// on purpose: a fixture symmetric about the y mirror line lands back on
+    /// itself when a mirror bug ships, which is exactly how one shipped.
     private func makeTile() throws -> Data {
         try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
-                  geometry: .polygon(ring: [(1800, 1800), (2300, 1800), (2300, 2300), (1800, 2300)]),
+                  geometry: .polygon(ring: [(1800, 900), (2300, 900), (2300, 1400), (1800, 1400)]),
                   properties: ["class": "primary", "subclass": "junction_area"]),
             .init(id: 2,
-                  geometry: .line(points: [(200, 2050), (1800, 2050)]),
+                  geometry: .line(points: [(200, 1150), (1800, 1150)]),
                   properties: ["class": "primary", "lanes": "4", "name": "West Street"]),
             .init(id: 3,
-                  geometry: .line(points: [(2050, 200), (2050, 1800)]),
+                  geometry: .line(points: [(2050, 200), (2050, 900)]),
                   properties: ["class": "primary", "lanes": "4", "name": "North Street"]),
         ])
     }
@@ -46,9 +48,9 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         // control parse of the same tile without the area pins the baseline.
         let control = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                              mvtData: VectorTileFixture.layerTile(layerName: "transportation", features: [
-            .init(id: 2, geometry: .line(points: [(200, 2050), (1800, 2050)]),
+            .init(id: 2, geometry: .line(points: [(200, 1150), (1800, 1150)]),
                   properties: ["class": "primary", "lanes": "4", "name": "West Street"]),
-            .init(id: 3, geometry: .line(points: [(2050, 200), (2050, 1800)]),
+            .init(id: 3, geometry: .line(points: [(2050, 200), (2050, 900)]),
                   properties: ["class": "primary", "lanes": "4", "name": "North Street"]),
         ]))
         XCTAssertEqual(parsed.drawingPolygon.indices.count, control.drawingPolygon.indices.count,
