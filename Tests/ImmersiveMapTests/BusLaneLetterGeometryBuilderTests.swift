@@ -12,6 +12,37 @@ import XCTest
 final class BusLaneLetterGeometryBuilderTests: XCTestCase {
     private let builder = BusLaneLetterGeometryBuilder()
 
+    func testEachLegRingIsSimpleNotABowtie() {
+        // The leg ring must run outer base, outer apex, inner apex, inner
+        // base. A perpendicular taken raw points to opposite sides of the
+        // two mirrored legs, and the first build folded one leg into a
+        // bowtie: same four vertices, crossed ring, a wedge of the stroke
+        // missing on the ground. Vertices alone cannot catch it, so this
+        // asserts the ring is simple.
+        let polygons = builder.buildPolygons(points: [SIMD2<Float>(1000, 500), SIMD2<Float>(1300, 500)],
+                                             unitsPerMetre: 10)
+        XCTAssertEqual(polygons.count, 3)
+        func cross(_ a: SIMD2<Float>, _ b: SIMD2<Float>,
+                   _ c: SIMD2<Float>, _ d: SIMD2<Float>) -> Bool {
+            let r = b - a
+            let s = d - c
+            let denominator = r.x * s.y - r.y * s.x
+            guard abs(denominator) > 1e-9 else { return false }
+            let ac = c - a
+            let t = (ac.x * s.y - ac.y * s.x) / denominator
+            let u = (ac.x * r.y - ac.y * r.x) / denominator
+            return t > 0 && t < 1 && u > 0 && u < 1
+        }
+        for legIndex in 0..<2 {
+            let v = polygons[legIndex].vertices.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
+            XCTAssertEqual(v.count, 4)
+            XCTAssertFalse(cross(v[0], v[1], v[2], v[3]),
+                           "Leg \(legIndex): opposite ring edges cross, the quad is a bowtie")
+            XCTAssertFalse(cross(v[1], v[2], v[3], v[0]),
+                           "Leg \(legIndex): opposite ring edges cross, the quad is a bowtie")
+        }
+    }
+
     func testTheLegsShareTheApexEdgeAndNothingOvershoots() {
         // Ten units to the metre so quantization cannot blur the assertions.
         // A 30 m lane gets one letter at its middle, (1150, 3596) in render

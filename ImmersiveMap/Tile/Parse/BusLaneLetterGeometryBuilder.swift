@@ -93,18 +93,25 @@ struct BusLaneLetterGeometryBuilder {
 
         // Feet cut flat along the baseline: each leg edge, offset half a
         // stroke to its side, intersected with the line through the feet.
+        // The ring must run outer base -> outer apex -> inner apex -> inner
+        // base, so the OUTER normal is resolved per leg (a plain perpendicular
+        // points to opposite sides of the two mirrored legs, and using it
+        // raw folded one leg's quad into a bowtie with a wedge missing).
         func legQuad(foot: SIMD2<Float>) -> TileMvtParser.ParsedPolygon? {
             let direction = (apex - foot) / legLength
-            let normal = SIMD2<Float>(-direction.y, direction.x)
-            guard let baseA = Self.intersect(point: foot + normal * halfStroke, direction: direction,
-                                             withPoint: baseCenter, direction: side),
-                  let baseB = Self.intersect(point: foot - normal * halfStroke, direction: direction,
-                                             withPoint: baseCenter, direction: side) else {
+            var outerNormal = SIMD2<Float>(-direction.y, direction.x)
+            if simd_dot(outerNormal, foot - baseCenter) < 0 {
+                outerNormal = -outerNormal
+            }
+            guard let baseOuter = Self.intersect(point: foot + outerNormal * halfStroke, direction: direction,
+                                                 withPoint: baseCenter, direction: side),
+                  let baseInner = Self.intersect(point: foot - outerNormal * halfStroke, direction: direction,
+                                                 withPoint: baseCenter, direction: side) else {
                 return nil
             }
             return TileMvtParser.ParsedPolygon(
-                vertices: [TileCoordinateSpace.quantized(baseA), TileCoordinateSpace.quantized(apexOuter),
-                           TileCoordinateSpace.quantized(apexInner), TileCoordinateSpace.quantized(baseB)],
+                vertices: [TileCoordinateSpace.quantized(baseOuter), TileCoordinateSpace.quantized(apexOuter),
+                           TileCoordinateSpace.quantized(apexInner), TileCoordinateSpace.quantized(baseInner)],
                 indices: [0, 1, 2, 0, 2, 3]
             )
         }
