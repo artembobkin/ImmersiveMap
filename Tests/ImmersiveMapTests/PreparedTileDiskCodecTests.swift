@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 61)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 62)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {

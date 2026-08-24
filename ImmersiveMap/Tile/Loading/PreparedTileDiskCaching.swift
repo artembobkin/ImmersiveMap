@@ -517,7 +517,11 @@ final class PreparedTileDiskCaching {
     // render space happens once, at tessellation (see TileCoordinateSpace).
     // The picture is the same, but the float order changed and a clipped
     // vertex can round one unit differently, so cached tiles rebuild.
-    static let preparedFormatVersion: UInt32 = 61
+    // 62: the slit between two trimmed pieces of one street (a road-graph
+    // connection no polygon ships for) is paved with a bridge quad
+    // (RoadSurfaceGapBridger) that also clips the street's fallback ribbon
+    // out of the slit; prepared tiles gain the quads and lose the stubs.
+    static let preparedFormatVersion: UInt32 = 62
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

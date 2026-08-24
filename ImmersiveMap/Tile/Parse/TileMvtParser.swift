@@ -310,13 +310,20 @@ class TileMvtParser {
         /// inside one of them is clipped away there: the surface owns that
         /// ground.
         let surfaceAreas: [RoadSurfaceArea]
+        /// The slits between trimmed pieces of one street, paved by
+        /// `RoadSurfaceGapBridger`. Their quads are already in
+        /// `surfaceAreas` (so the ribbons are clipped out of the slits);
+        /// this list is what the parser draws, each quad with the style of
+        /// the surface piece it touches.
+        let surfaceBridges: [RoadSurfaceGapBridger.Bridge]
 
         static let empty = HighZoomRoadPrecomputation(sharedPointCounts: [:],
                                                       automobilePointCounts: [:],
                                                       paintLinesByFeatureIndex: [],
                                                       junctionHalfWidths: [:],
                                                       linesByFeatureIndex: [],
-                                                      surfaceAreas: [])
+                                                      surfaceAreas: [],
+                                                      surfaceBridges: [])
     }
 
     struct RoadSurfaceArea {
@@ -332,13 +339,21 @@ class TileMvtParser {
         /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
         /// crossing, false for a hand-mapped carriageway area.
         var cutsPaint: Bool = false
+        /// The street identity (`street` attribute) of the piece, empty when
+        /// the source ships none. Only the gap bridger reads it: a slit is
+        /// paved only between two pieces of the SAME street.
+        var street: String = ""
+        /// The feature the surface was decoded from, -1 for a synthesized
+        /// quad: the bridger's paving inherits this feature's style.
+        var featureIndex: Int = -1
     }
 
     private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
                                                  featureStyles: [FeatureStyle],
                                                  featureAttributes: [[String: VectorTile_Tile.Value]],
                                                  lineClipper: LineClipper,
-                                                 data: Data) -> HighZoomRoadPrecomputation {
+                                                 data: Data,
+                                                 tile: Tile) -> HighZoomRoadPrecomputation {
         var rawLinesByFeatureIndex = Array(repeating: [[SIMD2<Float>]](), count: layer.features.count)
         var surfaceAreas: [RoadSurfaceArea] = []
 
@@ -381,11 +396,54 @@ class TileMvtParser {
                                                             bounds: (lower, upper),
                                                             structureKind: roadStructureKind(attributes: featureAttributes[featureIndex]),
                                                             layer: roadLayerValue(attributes: featureAttributes[featureIndex]),
-                                                            cutsPaint: style.surfaceAreaCutsPaint))
+                                                            cutsPaint: style.surfaceAreaCutsPaint,
+                                                            street: RoadSurfaceGapBridger.streetIdentity(featureAttributes[featureIndex]),
+                                                            featureIndex: featureIndex))
                     }
                 default:
                     break
                 }
+            }
+        }
+
+        // The slits between trimmed pieces of one street are paved BEFORE
+        // anything is clipped: each paving quad joins the surface set, so
+        // the street's fallback ribbon is clipped out of the very slit it
+        // used to poke through.
+        var surfaceBridges: [RoadSurfaceGapBridger.Bridge] = []
+        if surfaceAreas.contains(where: \.cutsPaint) {
+            var featureStreets = [String](repeating: "", count: layer.features.count)
+            var featureStructureKinds = [RoadStructureKind](repeating: .ground, count: layer.features.count)
+            var featureLayers = [Int](repeating: 0, count: layer.features.count)
+            for index in 0..<layer.features.count {
+                featureStreets[index] = RoadSurfaceGapBridger.streetIdentity(featureAttributes[index])
+                featureStructureKinds[index] = roadStructureKind(attributes: featureAttributes[index])
+                featureLayers[index] = roadLayerValue(attributes: featureAttributes[index])
+            }
+            surfaceBridges = RoadSurfaceGapBridger.findBridges(
+                surfaceAreas: surfaceAreas,
+                linesByFeatureIndex: rawLinesByFeatureIndex,
+                featureStyles: featureStyles,
+                featureStreets: featureStreets,
+                featureStructureKinds: featureStructureKinds,
+                featureLayers: featureLayers,
+                maximumGap: RoadSurfaceGapBridger.maximumGapMetres * ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+            )
+            for bridge in surfaceBridges {
+                let owner = surfaceAreas[bridge.ownerAreaIndex]
+                var lower = bridge.ring[0]
+                var upper = bridge.ring[0]
+                for point in bridge.ring {
+                    lower = simd_min(lower, point)
+                    upper = simd_max(upper, point)
+                }
+                surfaceAreas.append(RoadSurfaceArea(exterior: bridge.ring,
+                                                    classPriority: owner.classPriority,
+                                                    bounds: (lower, upper),
+                                                    structureKind: owner.structureKind,
+                                                    layer: owner.layer,
+                                                    cutsPaint: owner.cutsPaint,
+                                                    street: owner.street))
             }
         }
 
@@ -546,7 +604,8 @@ class TileMvtParser {
                                           paintLinesByFeatureIndex: paintLinesByFeatureIndex,
                                           junctionHalfWidths: junctionHalfWidths,
                                           linesByFeatureIndex: linesByFeatureIndex,
-                                          surfaceAreas: surfaceAreas)
+                                          surfaceAreas: surfaceAreas,
+                                          surfaceBridges: surfaceBridges)
     }
 
     private func lineLength(points: [SIMD2<Float>]) -> Float {
@@ -1048,7 +1107,8 @@ class TileMvtParser {
                                                   featureStyles: featureStyles,
                                                   featureAttributes: featureAttributes,
                                                   lineClipper: lineClipper,
-                                                  data: mvtData)
+                                                  data: mvtData,
+                                                  tile: tile)
                 : .empty
             // Where the tiles ship measured crossing lines, the attribute
             // tagged crossings of the same layer are the same crossings seen
@@ -1622,6 +1682,35 @@ class TileMvtParser {
                                                     detailCategory: decision.detailCategory))
                     }
                 }
+            }
+            // The paved slits between trimmed pieces of one street: each
+            // quad draws exactly like a carriageway surface, with the style
+            // and attributes of the piece it touches, so the roadway is
+            // continuous across the joint and the trims' kerbs disappear
+            // under the fills.
+            for bridge in highZoomRoads.surfaceBridges {
+                let owner = highZoomRoads.surfaceAreas[bridge.ownerAreaIndex]
+                guard owner.featureIndex >= 0, owner.featureIndex < featureStyles.count else { continue }
+                let ringPoints = bridge.ring.map {
+                    Point(x: Int32($0.x.rounded()), y: Int32($0.y.rounded()))
+                }
+                guard let parsedGeometry = parsePolygon.parseGeometry(polygon: Polygon(exteriorRing: ringPoints,
+                                                                                      interiorRings: []),
+                                                                      tileExtent: Float(tileExtent)) else {
+                    continue
+                }
+                appendRoadSurfaceArea(parsedGeometry: parsedGeometry,
+                                      clippedExterior: parsedGeometry.clipped.exterior,
+                                      clippedInteriors: parsedGeometry.clipped.interiors,
+                                      style: featureStyles[owner.featureIndex],
+                                      attributes: featureAttributes[owner.featureIndex],
+                                      tile: tile,
+                                      surfaceAreas: highZoomRoads.surfaceAreas,
+                                      roadStyles: &roadStyles,
+                                      roadPolygonByStyle: &roadPolygonByStyle,
+                                      orderedRoadPolygons: &orderedRoadPolygons,
+                                      roadPolygonSequence: &roadPolygonSequence,
+                                      parseLine: parseLine)
             }
             let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - layerStart
             layerTimings.append(TileParseLayerTiming(layerName: layerName,
