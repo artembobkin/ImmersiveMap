@@ -44,20 +44,22 @@ enum LowZoomOverviewFade {
     /// Where road markings fade in, in camera zoom.
     ///
     /// Paint is a length on the ground, so the band decides how small a dash
-    /// is allowed to get before it is drawn: three metres is about one point
-    /// across a z14 frame and two across a z15 one. The band is continuous in
-    /// camera zoom, so nothing pops when the engine swaps the tile level
-    /// serving a street.
+    /// is allowed to get before it is drawn. Below camera zoom 15 there is
+    /// NO paint at all: the streets read as a network, not a surface, and a
+    /// three-metre dash is around a point across the frame there, noise
+    /// rather than marking. From 15 the paint fades in over a short band,
+    /// continuous in camera zoom so nothing pops when the engine swaps the
+    /// tile level serving a street.
     ///
-    /// It overlaps the width morph (`roadSurfaceStartZoom`), which means the
-    /// paint arrives while the widest carriageways are still drawn at their
-    /// symbol width: the lateral offsets of the lane lines are measured
-    /// against the true carriageway, so on a road whose true width is well
-    /// past the symbol ceiling the outer lines sit a little outside the
-    /// drawn edge until the morph catches up. A centre divider is on the
-    /// centreline and is unaffected.
-    static let roadMarkingStartZoom: Double = 14.0
-    static let roadMarkingEndZoom: Double = 15.0
+    /// The band sits inside the width morph (`roadSurfaceStartZoom`), which
+    /// means the paint arrives while the widest carriageways can still be
+    /// drawn under their symbol ceiling: the lateral offsets of the lane
+    /// lines are measured against the true carriageway, so on a road whose
+    /// true width is well past the ceiling the outer lines sit a little
+    /// outside the drawn edge until the morph catches up. A centre divider
+    /// is on the centreline and is unaffected.
+    static let roadMarkingStartZoom: Double = 15.0
+    static let roadMarkingEndZoom: Double = 15.4
 
     static func roadMarkingAlpha(for zoom: Double) -> Float {
         let progress = Float((zoom - roadMarkingStartZoom) / (roadMarkingEndZoom - roadMarkingStartZoom))

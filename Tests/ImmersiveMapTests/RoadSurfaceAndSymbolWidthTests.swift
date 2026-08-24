@@ -91,4 +91,15 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         }
         XCTAssertEqual(LowZoomOverviewFade.roadSurfaceBlend(for: 15.0), 0.5, accuracy: 0.01)
     }
+
+    func testRoadMarkingsDrawNothingBelowCameraZoomFifteen() {
+        // Below camera zoom 15 there is NO paint at all; from 15 it fades in
+        // over a short band, fully in well before z16.
+        XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 13.0), 0)
+        XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 14.9), 0)
+        XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 15.0), 0)
+        XCTAssertGreaterThan(LowZoomOverviewFade.roadMarkingAlpha(for: 15.2), 0)
+        XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 15.4), 1)
+        XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 16.0), 1)
+    }
 }
