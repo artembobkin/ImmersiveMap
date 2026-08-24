@@ -26,8 +26,7 @@ struct BusLaneLetterGeometryBuilder {
     private static let endInsetMetres: Float = 3.0
 
     func buildPolygons(points: [SIMD2<Float>],
-                       unitsPerMetre: Float,
-                       tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
+                       unitsPerMetre: Float) -> [TileMvtParser.ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = Self.polylineLength(renderPoints)

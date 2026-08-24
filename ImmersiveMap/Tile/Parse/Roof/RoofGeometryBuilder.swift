@@ -232,10 +232,11 @@ enum RoofGeometryBuilder {
         var slopeSpan: Float { (slopeMax - slopeMin) * 0.5 }
     }
 
-    /// Compass azimuth in degrees to a unit vector in the parsed tile space
-    /// the rings arrive in. Raw MVT y grows south, but `ParsePolygon` flips it
-    /// (`tileExtent - y`) before anything reaches this builder, and the flat
-    /// world mapping keeps that direction, so here x grows east and y grows
+    /// Compass azimuth in degrees to a unit vector in RENDER space, the
+    /// space the rings arrive in: the extrusion path flips the raw MVT y
+    /// once, at `BuildingExtrusionCandidate` construction (see
+    /// `TileCoordinateSpace`), and the flat world mapping keeps that
+    /// direction, so here x grows east and y grows
     /// north: north is (0, 1), east is (1, 0). Web Mercator is conformal, so
     /// compass directions survive projection.
     private static func azimuthVector(degrees: Float) -> SIMD2<Float> {

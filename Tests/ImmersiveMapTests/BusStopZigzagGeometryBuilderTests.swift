@@ -14,8 +14,7 @@ final class BusStopZigzagGeometryBuilderTests: XCTestCase {
     func testTheSawtoothFoldsAcrossTheAxisAndStaysNearIt() {
         // One unit = one metre, an 18 m axis: one tooth per 2.4 m.
         let polygons = builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(118, 500)],
-                                             unitsPerMetre: 1,
-                                             tileExtent: 4096)
+                                             unitsPerMetre: 1)
         XCTAssertGreaterThanOrEqual(polygons.count, 12, "An 18 m stop folds a dozen tooth strokes")
         var sawAbove = false
         var sawBelow = false
@@ -35,7 +34,6 @@ final class BusStopZigzagGeometryBuilderTests: XCTestCase {
 
     func testAStubShorterThanOneToothGetsNothing() {
         XCTAssertTrue(builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(102, 500)],
-                                            unitsPerMetre: 1,
-                                            tileExtent: 4096).isEmpty)
+                                            unitsPerMetre: 1).isEmpty)
     }
 }

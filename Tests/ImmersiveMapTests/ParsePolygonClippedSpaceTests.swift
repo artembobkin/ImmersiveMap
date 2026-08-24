@@ -62,5 +62,15 @@ final class ParsePolygonClippedSpaceTests: XCTestCase {
         let reversed = try orientation(ring: ring.reversed())
         XCTAssertGreaterThan(forward, 0, "Triangles come out one way up in render space")
         XCTAssertGreaterThan(reversed, 0, "whichever way the source ring winds")
+
+        // The concave (earcut) branch makes the same promise: a flip landing
+        // after the winding decision there would slip past the convex fan.
+        let concave = [Point(x: 600, y: 300), Point(x: 1400, y: 300),
+                       Point(x: 1400, y: 900), Point(x: 1000, y: 500),
+                       Point(x: 600, y: 900)]
+        XCTAssertGreaterThan(try orientation(ring: concave), 0,
+                             "Earcut triangles too")
+        XCTAssertGreaterThan(try orientation(ring: concave.reversed()), 0,
+                             "for both source windings")
     }
 }

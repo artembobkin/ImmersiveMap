@@ -1316,8 +1316,7 @@ class TileMvtParser {
                                 for fragment in exactClippedFragments {
                                     let zebraPolygons = crosswalkZebraBuilder.buildPolygons(
                                         points: fragment.points,
-                                        zoneWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth),
-                                        tileExtent: Float(tileExtent)
+                                        zoneWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth)
                                     )
                                     for zebraPolygon in zebraPolygons {
                                         roadPolygonByStyle[lineRenderPass.key, default: []].append(zebraPolygon)
@@ -1347,8 +1346,7 @@ class TileMvtParser {
                                 for fragment in exactClippedFragments {
                                     let letterPolygons = busLaneLetterBuilder.buildPolygons(
                                         points: fragment.points,
-                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
-                                        tileExtent: Float(tileExtent)
+                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
                                     )
                                     for letterPolygon in letterPolygons {
                                         roadPolygonByStyle[lineRenderPass.key, default: []].append(letterPolygon)
@@ -1377,8 +1375,7 @@ class TileMvtParser {
                                 for fragment in exactClippedFragments {
                                     let zigzagPolygons = busStopZigzagBuilder.buildPolygons(
                                         points: fragment.points,
-                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
-                                        tileExtent: Float(tileExtent)
+                                        unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
                                     )
                                     for zigzagPolygon in zigzagPolygons {
                                         roadPolygonByStyle[lineRenderPass.key, default: []].append(zigzagPolygon)
@@ -1405,8 +1402,7 @@ class TileMvtParser {
                                 for fragment in exactClippedFragments {
                                     let arrowPolygons = roadDirectionArrowBuilder.buildPolygons(
                                         points: fragment.points,
-                                        lineWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth),
-                                        tileExtent: Float(tileExtent)
+                                        lineWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth)
                                     )
                                     for arrowPolygon in arrowPolygons {
                                         roadPolygonByStyle[lineRenderPass.key, default: []].append(arrowPolygon)

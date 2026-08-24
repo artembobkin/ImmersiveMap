@@ -45,7 +45,10 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         return .init(id: id, geometry: .polygon(ring: ring), properties: properties)
     }
 
-    private let coveringRing: [(Int32, Int32)] = [(1800, 1800), (2600, 1800), (2600, 2300), (1800, 2300)]
+    /// Deliberately OFF the tile centre: the old ring (y 1800-2300) mirrored
+    /// onto itself, so a reintroduced mirror-clip would have passed every
+    /// count-only assertion in this file.
+    private let coveringRing: [(Int32, Int32)] = [(1800, 800), (2600, 800), (2600, 1300), (1800, 1300)]
 
     func testACarriagewayAreaStylesLikeAJunctionArea() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
@@ -70,7 +73,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         // The street lies entirely inside the surface, so the clipped ribbon
         // contributes nothing: the tile draws exactly what the surface alone
         // draws.
-        let covered = try parse([surface(coveringRing), street([(1900, 2050), (2500, 2050)])])
+        let covered = try parse([surface(coveringRing), street([(1900, 1050), (2500, 1050)])])
         let surfaceOnly = try parse([surface(coveringRing)])
         let automobile = covered.drawingRoadPhases.automobileGround
         XCTAssertGreaterThan(automobile.fill.drawing.indices.count, 0, "The surface fill draws")
@@ -80,19 +83,26 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         XCTAssertEqual(automobile.casing.drawing.indices.count,
                        surfaceOnly.drawingRoadPhases.automobileGround.casing.drawing.indices.count,
                        "and no kerb of its own inside the surface")
+        // Positional guard: the fill sits where the ring is, in render space
+        // (y 2796...3296), never in its mirror band. Counts alone cannot
+        // tell a mirrored surface from the real one.
+        for vertex in automobile.fill.drawing.vertices {
+            XCTAssertTrue((2788...3304).contains(Int(vertex.position.y)),
+                          "A fill vertex left the ring's render band: y=\(vertex.position.y)")
+        }
     }
 
     func testAGraphSurfaceSuppressesTheSynthesizedPaint() throws {
-        let covered = try parse([surface(coveringRing), street([(1900, 2050), (2500, 2050)])])
+        let covered = try parse([surface(coveringRing), street([(1900, 1050), (2500, 1050)])])
         XCTAssertEqual(covered.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
                        "The street's synthesized centre line ends where the measured surface begins")
-        let bare = try parse([street([(1900, 2050), (2500, 2050)])])
+        let bare = try parse([street([(1900, 1050), (2500, 1050)])])
         XCTAssertGreaterThan(bare.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
                              "The same street alone paints its centre line as before")
     }
 
     func testAPartlyCoveredStreetKeepsDrawingOutsideTheSurface() throws {
-        let long = street([(200, 2050), (3800, 2050)])
+        let long = street([(200, 1050), (3800, 1050)])
         let partly = try parse([surface(coveringRing), long])
         let surfaceOnly = try parse([surface(coveringRing)])
         XCTAssertGreaterThan(partly.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
@@ -110,8 +120,8 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         // that is where the paint is. The surface clips the synthesized paint
         // and leaves the shipped line alone.
         let parsed = try parse([surface(coveringRing),
-                                street([(1900, 2050), (2500, 2050)]),
-                                marking([(1900, 2050), (2500, 2050)])])
+                                street([(1900, 1050), (2500, 1050)]),
+                                marking([(1900, 1050), (2500, 1050)])])
         XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
                              "The shipped line draws where the synthesized paint is gone")
     }
@@ -136,8 +146,8 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         // A deck polygon above a ground street: different structure, so the
         // street is not the deck's ground and keeps its ribbon.
         let deck = surface(coveringRing, extra: ["brunnel": "bridge", "layer": "1"])
-        let withDeck = try parse([deck, street([(1900, 2050), (2500, 2050)])])
-        let bare = try parse([street([(1900, 2050), (2500, 2050)])])
+        let withDeck = try parse([deck, street([(1900, 1050), (2500, 1050)])])
+        let bare = try parse([street([(1900, 1050), (2500, 1050)])])
         XCTAssertEqual(withDeck.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
                        bare.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
                        "The ground street draws exactly as it does without the deck")

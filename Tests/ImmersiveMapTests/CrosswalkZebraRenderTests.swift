@@ -11,10 +11,10 @@ import XCTest
 /// zebra in the automobile tier's detail role, above every carriageway.
 @MainActor
 final class CrosswalkZebraRenderTests: XCTestCase {
-    /// The fixture puts its avenue and the crossing over it at the middle of
-    /// the tile, and the same tile is fed at every level, so the camera is
-    /// placed on the centre of a z16 tile: the crossing is then in the middle
-    /// of the frame instead of somewhere off its edge.
+    /// The same tile is fed at every level, so the camera is aimed at the
+    /// crossing's own point of the fixture tile (off the tile centre, see
+    /// below): the crossing is then in the middle of the frame instead of
+    /// somewhere off its edge.
     private static let camera: ImmersiveMapCameraPosition = {
         let scale = Double(1 << 16)
         let longitude = (39616.5 / scale) * 360.0 - 180.0
@@ -95,9 +95,9 @@ final class CrosswalkZebraRenderTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(painted, 100, "The stripes have to reach the frame, not only the tile")
-        // The crossing sits at the middle of the tile, and the camera is over
-        // it: the paint belongs around the centre of the frame, not spread
-        // across it (a mirrored or misplaced figure would fail here).
+        // The crossing sits under the camera, so the paint belongs around
+        // the centre of the frame, not spread across it (a mirrored or
+        // misplaced figure would fail here).
         XCTAssertGreaterThan(minX, marked.size / 5, "The paint starts near the crossing")
         XCTAssertLessThan(maxX, marked.size * 4 / 5, "and ends near it")
     }

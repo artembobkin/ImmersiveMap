@@ -10,23 +10,21 @@ import XCTest
 /// direction of travel so the feet face the driver approaching it.
 final class BusLaneLetterGeometryBuilderTests: XCTestCase {
     private let builder = BusLaneLetterGeometryBuilder()
-    private let extent: Float = 4096
 
     func testALetterIsThreeStrokesAndRepeatsAlongTheLane() {
         // One unit = one metre: a 95 m lane fits several letters 30 m apart.
         let polygons = builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(195, 500)],
-                                             unitsPerMetre: 1,
-                                             tileExtent: extent)
+                                             unitsPerMetre: 1)
         XCTAssertEqual(polygons.count % 3, 0, "A letter is two legs and the crossbar")
         XCTAssertEqual(polygons.count / 3, 3, "A 95 m lane carries a letter every ~30 m")
     }
 
     func testAShortStubGetsOneLetterAndATinyOneNone() {
         XCTAssertEqual(builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(120, 500)],
-                                             unitsPerMetre: 1, tileExtent: extent).count, 3,
+                                             unitsPerMetre: 1).count, 3,
                        "A short stub gets a single letter in its middle")
         XCTAssertTrue(builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(104, 500)],
-                                            unitsPerMetre: 1, tileExtent: extent).isEmpty,
+                                            unitsPerMetre: 1).isEmpty,
                       "A stub shorter than the letter itself gets none")
     }
 
@@ -36,7 +34,7 @@ final class BusLaneLetterGeometryBuilderTests: XCTestCase {
         // the letter's height of the axis, and the apex (the vertex farthest
         // along x within one letter) lies AHEAD of the feet.
         let polygons = builder.buildPolygons(points: [SIMD2<Float>(100, 500), SIMD2<Float>(130, 500)],
-                                             unitsPerMetre: 1, tileExtent: extent)
+                                             unitsPerMetre: 1)
         XCTAssertEqual(polygons.count, 3)
         let vertices = polygons.flatMap(\.vertices)
         let minX = vertices.map(\.x).min() ?? 0

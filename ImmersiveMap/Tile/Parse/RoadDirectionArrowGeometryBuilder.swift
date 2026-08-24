@@ -15,8 +15,7 @@ struct RoadDirectionArrowGeometryBuilder {
     /// the decoration path's one named entry into render space, and the
     /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
-                       lineWidth: Float,
-                       tileExtent: Float) -> [TileMvtParser.ParsedPolygon] {
+                       lineWidth: Float) -> [TileMvtParser.ParsedPolygon] {
         guard points.count >= 2 else {
             return []
         }

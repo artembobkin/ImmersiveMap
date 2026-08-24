@@ -250,7 +250,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
             let xs = [Float(a.position.x), Float(b.position.x), Float(c.position.x)]
             let ys = [Float(a.position.y), Float(b.position.y), Float(c.position.y)]
             // The piece's vertices sit exactly at the crossings' outlines
-            // (1200 and 1350): test that a triangle spans the middle of the
+            // (1200 and 1320): test that a triangle spans the middle of the
             // gap, not that a vertex falls strictly inside it.
             if xs.min()! < 1260, xs.max()! > 1260, ys.allSatisfy({ $0 > 3396 && $0 < 3696 }),
                xs.max()! - xs.min()! < 400 {
