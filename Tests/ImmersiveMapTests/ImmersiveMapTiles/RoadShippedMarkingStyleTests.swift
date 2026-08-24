@@ -84,18 +84,6 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
     }
 
     func testASolidLineIsAThickerStrokeThanADashedOne() {
-        let edge = markingStyle("edge")
-        let pass = edge.resolvedLineRenderPasses.first
-        XCTAssertEqual(pass?.key, 59)
-        XCTAssertEqual(pass?.dashLengthPoints, 0, "An edge line is solid")
-        XCTAssertGreaterThan(pass?.lineWidthPoints ?? 0,
-                             markingStyle("dividing").resolvedLineRenderPasses.first?.lineWidthPoints ?? 99,
-                             "A solid line is a statement and draws visibly thicker than a dash row")
-        let dashedEdge = markingStyle("edge", extra: ["style": "dashed"])
-        XCTAssertGreaterThan(dashedEdge.resolvedLineRenderPasses.first?.dashLengthPoints ?? 0, 0,
-                             "unless the source says it is dashed")
-        XCTAssertNotEqual(dashedEdge.key, edge.key,
-                          "and then it is its own baked style, at the dash weight")
         let solidDividing = markingStyle("dividing", extra: ["style": "solid"])
         let solidPass = solidDividing.resolvedLineRenderPasses.first
         XCTAssertEqual(solidPass?.dashLengthPoints, 0,
@@ -104,7 +92,17 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
                           "under its own key")
         XCTAssertGreaterThan(solidPass?.lineWidthPoints ?? 0,
                              markingStyle("dividing").resolvedLineRenderPasses.first?.lineWidthPoints ?? 99,
-                             "and thicker than its broken form")
+                             "A solid line is a statement and draws visibly thicker than a dash row")
+    }
+
+    func testAnEdgeLineIsDataOnlyBecauseTheKerbAlreadyDrawsTheEdge() {
+        // Every carriageway wears the grey kerb along its outline; a white
+        // solid a step inside it doubled the road's edge into two parallel
+        // strokes. The shipped edge line therefore draws nothing, in every
+        // colour and pattern the source could state it in.
+        XCTAssertEqual(markingStyle("edge").key, 0)
+        XCTAssertEqual(markingStyle("edge", extra: ["style": "dashed"]).key, 0)
+        XCTAssertEqual(markingStyle("edge", extra: ["paint": "yellow"]).key, 0)
     }
 
     func testCrossingLinesRouteToTheZebraAndUnknownKindsStayHidden() {

@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 71
+    private static let implementationRevision: UInt32 = 72
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -734,7 +734,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // A place to cross, not a thing to draw: same answer as for the
             // attribute-tagged unmarked crossings.
             return hiddenStyle
-        case "dividing", "lane_separator", "edge":
+        case "edge":
+            // The roadway edge is already drawn: every carriageway wears the
+            // grey kerb along its outline. A white solid painted a step
+            // inside it doubled the road's edge into two parallel strokes,
+            // so the shipped edge line stays data-only. The paint in the
+            // middle (dividing lines, separators) keeps drawing.
+            return hiddenStyle
+        case "dividing", "lane_separator":
             break
         default:
             // A kind this style does not know yet (a stop line, an arrow): a
@@ -746,18 +753,18 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             return hiddenStyle
         }
         // The paint colour: white unless the source says yellow, and yellow
-        // only where it means something (a centre line, an edge line): a key
-        // is a baked style, so every (kind, colour) pair must map to its own.
+        // only where it means something (a centre line): a key is a baked
+        // style, so every (kind, colour) pair must map to its own.
         let isYellow = props["paint"]?.stringValue.lowercased() == "yellow" && kind != "lane_separator"
         let color = isYellow ? Self.roadMarkingYellowColor : Self.roadMarkingColor
         // Solid or dashed comes from the source where it says (`style`), with
-        // the kind's own default behind it: a separator is dashed, an edge
-        // line solid, a dividing line dashed unless stated solid.
+        // the kind's own default behind it: a separator is dashed, a
+        // dividing line dashed unless stated solid.
         let dashed: Bool
         switch props["style"]?.stringValue.lowercased() {
         case "solid": dashed = false
         case "dashed": dashed = true
-        default: dashed = kind != "edge"
+        default: dashed = true
         }
         // A key is a baked style, so every (kind, colour, solid-or-dashed)
         // triple carries its own: a solid line is wider than a dashed one,
@@ -770,10 +777,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case ("dividing", true, true): key = 61
         case ("dividing", false, false): key = 65
         case ("dividing", true, false): key = 66
-        case ("edge", false, false): key = 59
-        case ("edge", true, false): key = 62
-        case ("edge", false, true): key = 67
-        case ("edge", true, true): key = 68
+        // 59, 62, 67 and 68 were the edge-line keys; retired with the edge
+        // lines themselves, not to be reused for anything else.
         default: key = 60
         }
         let dashMetres: Double
