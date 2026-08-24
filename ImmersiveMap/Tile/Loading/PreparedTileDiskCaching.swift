@@ -527,7 +527,9 @@ final class PreparedTileDiskCaching {
     // 64: the bus-lane letter and the bus-stop sawtooth are rebuilt with
     // mitered joints (shared apex edge, one seamless band) instead of
     // detached butt-capped quads; their prepared geometry changes.
-    static let preparedFormatVersion: UInt32 = 64
+    // 65: one letter leg shipped as a bowtie ring in v64; the ring order
+    // is fixed and the cached copies of the broken leg must rebuild.
+    static let preparedFormatVersion: UInt32 = 65
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
