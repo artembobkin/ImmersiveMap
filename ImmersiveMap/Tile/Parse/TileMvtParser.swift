@@ -343,13 +343,6 @@ class TileMvtParser {
         /// the source ships none. Only the gap bridger reads it: a slit is
         /// paved only between two pieces of the SAME street.
         var street: String = ""
-        /// Whether the surface is a junction polygon (`subclass=
-        /// junction_area`) rather than a stretch of carriageway. The gap
-        /// bridger's edge phase pairs only across a junction: a junction is
-        /// ground the network flows through, while two street-less
-        /// carriageways lying near each other are two roads with real
-        /// pavement between them.
-        var isJunction: Bool = false
         /// The feature the surface was decoded from, -1 for a synthesized
         /// quad: the bridger's paving inherits this feature's style.
         var featureIndex: Int = -1
@@ -405,7 +398,6 @@ class TileMvtParser {
                                                             layer: roadLayerValue(attributes: featureAttributes[featureIndex]),
                                                             cutsPaint: style.surfaceAreaCutsPaint,
                                                             street: RoadSurfaceGapBridger.streetIdentity(featureAttributes[featureIndex]),
-                                                            isJunction: featureAttributes[featureIndex]["subclass"]?.stringValue == "junction_area",
                                                             featureIndex: featureIndex))
                     }
                 default:

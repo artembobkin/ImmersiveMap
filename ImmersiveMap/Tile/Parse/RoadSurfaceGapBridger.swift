@@ -17,20 +17,24 @@ import simd
 /// drawn exactly like the surfaces it joins and clipping the ribbon with
 /// them.
 ///
-/// A slit is found two ways. The line phase follows the street's own line:
-/// where the line leaves one surface and enters another within a few
-/// metres, the piece between the two cut points is a slit, and the outline
-/// edges the cut points lie on are the trim edges. The line, and both
-/// surfaces, must carry the SAME street identity (the `street` attribute,
-/// an id assembled from the whole road network): that requirement is what
-/// keeps the bridger off the median of a dual carriageway, whose two
-/// opposing one-way roads carry different ids, and off every gap a crossing
-/// footpath threads between two unrelated surfaces. The edge phase covers
-/// the wedges no line crosses, beside junction polygons: two facing,
-/// near-parallel edges of two surfaces (at least one a junction) that come
-/// within touching distance somewhere are paved with the quad of their
-/// overlap. All geometry is tile space (y down), the Parse layer's working
+/// A slit is found by the street's own line: where the line leaves one
+/// surface and enters another within a few metres, the piece between the
+/// two cut points is a slit, and the outline edges the cut points lie on
+/// are the trim edges. The line, and both surfaces, must carry the SAME
+/// street identity (the `street` attribute, an id assembled from the whole
+/// road network): that requirement is what keeps the bridger off the median
+/// of a dual carriageway, whose two opposing one-way roads carry different
+/// ids, and off every gap a crossing footpath threads between two unrelated
+/// surfaces. All geometry is tile space (y down), the Parse layer's working
 /// space.
+///
+/// There briefly was a second, purely geometric phase that paired facing
+/// edges beside junction polygons to cover the wedges no line crosses. It
+/// was retired: at a complex junction it paved hulls sticking OUT of the
+/// roadway, and a wedge big enough to matter is indistinguishable, by
+/// geometry alone, from real ground between two roads. Those wedges are a
+/// data problem (the source can ship the polygons of EVERY joint), not a
+/// heuristic one.
 enum RoadSurfaceGapBridger {
     struct Bridge {
         /// The paving quad, a ring in tile space.
@@ -45,15 +49,6 @@ enum RoadSurfaceGapBridger {
     /// street, in metres on the ground. Connection trims measure a few
     /// metres; a genuine hole in a street is not paved over.
     static let maximumGapMetres: Float = 10
-    /// The edge phase's limits: how wide the wedge beside a junction may
-    /// open, how much the two trim edges must overlap along each other to
-    /// count as facing, and how close the two surfaces must come somewhere
-    /// for the wedge to be a taper between them rather than a strip of real
-    /// pavement (a sidewalk between a junction and a parallel service road
-    /// keeps its width; a reconstruction wedge closes to nothing).
-    private static let edgeGapMetres: Float = 6
-    private static let edgeOverlapMinimumMetres: Float = 2
-    private static let approachMetres: Float = 2
 
     /// How close (tile units) a piece endpoint must lie to a surface outline
     /// to count as a cut the clipper made there. Cut points are exact
@@ -266,160 +261,6 @@ enum RoadSurfaceGapBridger {
             }
         }
 
-        // Edge phase: the wedges beside junctions, found by geometry alone.
-        // A big intersection ships as several junction polygons with short
-        // carriageway pieces squeezed between them, and where their trims
-        // disagree a tapering wedge of bare ground opens that NO street
-        // line crosses, so the line phase cannot see it. Two facing,
-        // near-parallel edges across such a wedge are paved with the quad
-        // of their overlap. Only pairs involving a junction take part, and
-        // only where the two surfaces come within touching distance
-        // somewhere: a junction is ground the network flows through and a
-        // reconstruction wedge closes to nothing, while a sidewalk between
-        // a junction and a parallel service road keeps its width and two
-        // neighbouring carriageways of different streets keep their median.
-        let edgeGap = edgeGapMetres * unitsPerMetre
-        let overlapMinimum = edgeOverlapMinimumMetres * unitsPerMetre
-        let approachLimit = approachMetres * unitsPerMetre
-
-        func ringsApproach(_ a: [SIMD2<Float>], _ b: [SIMD2<Float>], within limit: Float) -> Bool {
-            let limitSquared = limit * limit
-            func anyVertexNear(_ vertices: [SIMD2<Float>], _ ring: [SIMD2<Float>]) -> Bool {
-                for point in vertices {
-                    for index in 0..<ring.count {
-                        let c = ring[index]
-                        let d = ring[(index + 1) % ring.count]
-                        let cd = d - c
-                        let lengthSquared = simd_length_squared(cd)
-                        guard lengthSquared > 0 else { continue }
-                        let t = simd_clamp(simd_dot(point - c, cd) / lengthSquared, 0, 1)
-                        if simd_distance_squared(point, c + cd * t) <= limitSquared {
-                            return true
-                        }
-                    }
-                }
-                return false
-            }
-            return anyVertexNear(a, b) || anyVertexNear(b, a)
-        }
-
-        /// The convex region between the overlapping stretches of two facing
-        /// edges, or nil where they do not face across a wedge-sized gap.
-        /// The overlap is measured in BOTH directions (each edge projected
-        /// onto the other) and the paving is the hull of both windows: on a
-        /// heavily skewed pair each one-way window covers a different part
-        /// of the wedge, and paving only one left the tip open, with which
-        /// half depending on nothing but feature order in the tile.
-        func facingOverlapHull(_ hitA: EdgeHit, _ hitB: EdgeHit) -> [SIMD2<Float>]? {
-            let (a0, a1) = edge(hitA)
-            let (b0, b1) = edge(hitB)
-            let directionA = a1 - a0
-            let directionB = b1 - b0
-            let lengthSquaredA = simd_length_squared(directionA)
-            let lengthSquaredB = simd_length_squared(directionB)
-            guard lengthSquaredA > 1, lengthSquaredB > 1 else { return nil }
-            let lengthA = lengthSquaredA.squareRoot()
-            let lengthB = lengthSquaredB.squareRoot()
-            // Up to about 53 degrees of skew: the tip of a wedge closes at
-            // a real angle, not asymptotically.
-            guard abs(simd_dot(directionA / lengthA, directionB / lengthB)) >= 0.6 else { return nil }
-
-            var points: [SIMD2<Float>] = []
-            var widestGap: Float = 0
-            /// One direction: the stretch of `own` that `other` lies
-            /// alongside, with the feet of its ends on `other`.
-            func collect(own0: SIMD2<Float>, ownDirection: SIMD2<Float>,
-                         ownLengthSquared: Float, ownLength: Float,
-                         other0: SIMD2<Float>, otherDirection: SIMD2<Float>,
-                         otherLengthSquared: Float,
-                         otherStart: SIMD2<Float>, otherEnd: SIMD2<Float>) {
-                let t0 = simd_dot(otherStart - own0, ownDirection) / ownLengthSquared
-                let t1 = simd_dot(otherEnd - own0, ownDirection) / ownLengthSquared
-                let low = max(0, min(t0, t1))
-                let high = min(1, max(t0, t1))
-                guard (high - low) * ownLength >= overlapMinimum else { return }
-                let ownLow = own0 + ownDirection * low
-                let ownHigh = own0 + ownDirection * high
-                func foot(_ point: SIMD2<Float>) -> SIMD2<Float> {
-                    let u = simd_clamp(simd_dot(point - other0, otherDirection) / otherLengthSquared, 0, 1)
-                    return other0 + otherDirection * u
-                }
-                let footLow = foot(ownLow)
-                let footHigh = foot(ownHigh)
-                let gap = max(simd_distance(ownLow, footLow), simd_distance(ownHigh, footHigh))
-                guard gap <= edgeGap else { return }
-                widestGap = max(widestGap, gap)
-                points.append(contentsOf: [ownLow, ownHigh, footLow, footHigh])
-            }
-            collect(own0: a0, ownDirection: directionA, ownLengthSquared: lengthSquaredA, ownLength: lengthA,
-                    other0: b0, otherDirection: directionB, otherLengthSquared: lengthSquaredB,
-                    otherStart: b0, otherEnd: b1)
-            collect(own0: b0, ownDirection: directionB, ownLengthSquared: lengthSquaredB, ownLength: lengthB,
-                    other0: a0, otherDirection: directionA, otherLengthSquared: lengthSquaredA,
-                    otherStart: a0, otherEnd: a1)
-            // Flush stretches (every gap near zero) need no paving; anything
-            // wider than a wedge was rejected above.
-            guard points.count >= 4, widestGap > 0.5 else { return nil }
-            let ring = convexHull(points)
-            guard ring.count >= 3, abs(signedArea(ring)) > 4 else { return nil }
-            return ring
-        }
-
-        /// Monotone-chain hull; every input point lies on one of the two
-        /// edges, so the hull is exactly the ground between them.
-        func convexHull(_ input: [SIMD2<Float>]) -> [SIMD2<Float>] {
-            let sorted = input.sorted { $0.x != $1.x ? $0.x < $1.x : $0.y < $1.y }
-            guard sorted.count >= 3 else { return sorted }
-            func chain(_ sequence: [SIMD2<Float>]) -> [SIMD2<Float>] {
-                var result: [SIMD2<Float>] = []
-                for point in sequence {
-                    while result.count >= 2 {
-                        let o = result[result.count - 2]
-                        let a = result[result.count - 1]
-                        if (a.x - o.x) * (point.y - o.y) - (a.y - o.y) * (point.x - o.x) <= 0 {
-                            result.removeLast()
-                        } else {
-                            break
-                        }
-                    }
-                    result.append(point)
-                }
-                return result
-            }
-            let lower = chain(sorted)
-            let upper = chain(sorted.reversed())
-            return lower.dropLast() + upper.dropLast()
-        }
-
-        for orderA in candidateIndices.indices {
-            for orderB in (orderA + 1)..<candidateIndices.count {
-                let i = candidateIndices[orderA]
-                let j = candidateIndices[orderB]
-                let a = surfaceAreas[i]
-                let b = surfaceAreas[j]
-                guard a.isJunction || b.isJunction else { continue }
-                guard a.structureKind == b.structureKind, a.layer == b.layer else { continue }
-                guard a.bounds.min.x <= b.bounds.max.x + edgeGap,
-                      b.bounds.min.x <= a.bounds.max.x + edgeGap,
-                      a.bounds.min.y <= b.bounds.max.y + edgeGap,
-                      b.bounds.min.y <= a.bounds.max.y + edgeGap else { continue }
-                guard ringsApproach(a.exterior, b.exterior, within: approachLimit) else { continue }
-                // The paving inherits the carriageway side where there is
-                // one: it carries the street's own class and attributes.
-                let owner = a.street.isEmpty == false ? i : (b.street.isEmpty == false ? j : i)
-                for edgeA in 0..<a.exterior.count {
-                    for edgeB in 0..<b.exterior.count {
-                        let hitA = EdgeHit(areaIndex: i, edgeIndex: edgeA)
-                        let hitB = EdgeHit(areaIndex: j, edgeIndex: edgeB)
-                        let key = EdgePairKey(areaA: i, edgeA: edgeA, areaB: j, edgeB: edgeB)
-                        guard pavedEdgePairs.contains(key) == false else { continue }
-                        guard let ring = facingOverlapHull(hitA, hitB) else { continue }
-                        pavedEdgePairs.insert(key)
-                        bridges.append(Bridge(ring: ring, ownerAreaIndex: owner))
-                    }
-                }
-            }
-        }
         return bridges
     }
 

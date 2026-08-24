@@ -529,7 +529,10 @@ final class PreparedTileDiskCaching {
     // detached butt-capped quads; their prepared geometry changes.
     // 65: one letter leg shipped as a bowtie ring in v64; the ring order
     // is fixed and the cached copies of the broken leg must rebuild.
-    static let preparedFormatVersion: UInt32 = 65
+    // 66: the gap bridger's edge phase is retired (its hulls could stick
+    // out of the roadway at complex junctions); tiles prepared with those
+    // hulls baked in must rebuild without them.
+    static let preparedFormatVersion: UInt32 = 66
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
