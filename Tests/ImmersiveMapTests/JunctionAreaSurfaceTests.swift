@@ -6,10 +6,12 @@ import simd
 import XCTest
 
 /// A junction area (`subclass=junction_area`, a polygon in `transportation`)
-/// is the carriageway of a junction as the tiles map it. The parser routes it
-/// into the automobile road phases, its fill as the surface and its outline as
-/// the kerb, so it sorts among the roads of its class and covers the kerbs of
-/// the ribbons that enter it; it never falls to the ground polygons.
+/// is the carriageway of a junction. Only the graph-reconstructed ones
+/// (`origin=graph`) draw: the parser routes them into the automobile road
+/// phases, fill as the surface and outline as the kerb, sorted among the
+/// roads of their class. A hand-mapped `area:highway` is ignored: in central
+/// Moscow it often covers a whole street including the gap between the two
+/// halves of a dual carriageway, welding the reconstructed bodies together.
 final class JunctionAreaSurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
@@ -28,7 +30,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 900), (2300, 900), (2300, 1400), (1800, 1400)]),
-                  properties: ["class": "primary", "subclass": "junction_area"]),
+                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
             .init(id: 2,
                   geometry: .line(points: [(200, 1150), (1800, 1150)]),
                   properties: ["class": "primary", "lanes": "4", "name": "West Street"]),
@@ -61,38 +63,35 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                        "and nothing to the pedestrian tier")
     }
 
-    func testJunctionAreaTakesTheColorOfItsClass() throws {
+    func testAHandMappedAreaIsIgnoredAndAGraphOneWearsTheClassColour() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }
-        let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                             properties: ["class": value("primary"), "subclass": value("junction_area")],
-                                                             tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertTrue(area.isRoadSurfaceArea)
-        let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
-        // Hand-mapped area:highway: the carriageway of a whole street, so it
-        // stays in the class colour and leaves the street's paint alone.
-        let fill = area.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
-        XCTAssertEqual(fill?.color, primary,
-                       "A hand-mapped carriageway area merges into the ribbons of its class")
-        XCTAssertFalse(area.surfaceAreaCutsPaint, "and the street inside it keeps its markings")
-        XCTAssertNotNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }, "and it wears a kerb")
-        XCTAssertEqual(area.roadClassPriority, 80, "sorted among the primaries")
+        // Hand-mapped area:highway: ignored. In central Moscow it often
+        // covers a whole street including the gap between the two halves of
+        // a dual carriageway, welding the reconstructed bodies into one mass
+        // with both inner edge lines stranded inside it.
+        let handMapped = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                                   properties: ["class": value("primary"), "subclass": value("junction_area")],
+                                                                   tile: Tile(x: 39615, y: 20486, z: 16)))
+        XCTAssertEqual(handMapped.key, 0, "A hand-mapped area draws nothing")
 
-        // A crossing reconstructed from the graph: the same asphalt, no tone
-        // of its own. The reconstructed polygons overlap each other and the
-        // ribbons, and any distinct tone draws every overlap as a seam; what
-        // sets a crossing apart is only that no lane paint runs inside it.
+        // A surface reconstructed from the graph: the same asphalt, no tone
+        // of its own, the kerb on its outline, and it cuts the paint of the
+        // roads inside it, because the measured paint ships as its own lines.
+        let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
         let crossing = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                  properties: ["class": value("primary"),
                                                                               "subclass": value("junction_area"),
                                                                               "origin": value("graph")],
                                                                  tile: Tile(x: 39615, y: 20486, z: 16)))
+        XCTAssertTrue(crossing.isRoadSurfaceArea)
         let crossingFill = crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
         XCTAssertEqual(crossingFill?.color, primary,
                        "The crossing is exactly the class colour")
-        XCTAssertEqual(crossingFill?.key, fill?.key,
-                       "and shares the class fill key, so overlaps cannot differ")
+        XCTAssertNotNil(crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
+                        "and it wears a kerb")
         XCTAssertTrue(crossing.surfaceAreaCutsPaint, "and it cuts the paint of the roads inside it")
+        XCTAssertEqual(crossing.roadClassPriority, 80, "sorted among the primaries")
 
         // A plain road polygon (no junction_area subclass) is untouched.
         let plain = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
@@ -113,7 +112,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 600), (2300, 600), (2300, 1100), (1800, 1100)]),
-                  properties: ["class": "primary", "subclass": "junction_area"]),
+                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
         ])
         let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
         let kerb = parsed.drawingRoadPhases.automobileGround.casing.drawing
@@ -187,37 +186,30 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                              "The road at the area's mirror image is untouched")
     }
 
-    /// A hand-mapped carriageway area covers a whole street, and the street
-    /// keeps its markings inside it; only a reconstructed crossing cuts them.
-    func testAHandMappedAreaDoesNotCutTheStreetsPaint() throws {
-        let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+    /// A hand-mapped carriageway area is invisible: the tile still ships it,
+    /// and the frame is exactly what it would be without it, so the street
+    /// keeps its ribbon, its kerbs and its paint.
+    func testAHandMappedAreaChangesNothing() throws {
+        let street = VectorTileFixture.Feature(
+            id: 2,
+            geometry: .line(points: [(200, 550), (3900, 550)]),
+            properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Through Street"])
+        let withArea = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16),
+                                              mvtData: VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1500, 300), (2600, 300), (2600, 800), (1500, 800)]),
                   properties: ["class": "primary", "subclass": "junction_area"]),
-            .init(id: 2,
-                  geometry: .line(points: [(200, 550), (3900, 550)]),
-                  properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Through Street"]),
-        ])
-        let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
-        let detail = parsed.drawingRoadPhases.automobileGround.detail.drawing
-        // The paint is one continuous ribbon through the area, so its
-        // vertices sit at the street's ends: test that a triangle SPANS the
-        // area, not that a centroid lands inside it.
-        var spansArea = 0
-        var index = 0
-        while index + 2 < detail.indices.count {
-            let a = detail.vertices[Int(detail.indices[index])]
-            let b = detail.vertices[Int(detail.indices[index + 1])]
-            let c = detail.vertices[Int(detail.indices[index + 2])]
-            let xs = [Float(a.position.x), Float(b.position.x), Float(c.position.x)]
-            let ys = [Float(a.position.y), Float(b.position.y), Float(c.position.y)]
-            if xs.min()! < 1500, xs.max()! > 2600, ys.allSatisfy({ $0 > 3306 && $0 < 3786 }) {
-                spansArea += 1
-            }
-            index += 3
+            street,
+        ]))
+        let bare = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16),
+                                          mvtData: VectorTileFixture.layerTile(layerName: "transportation",
+                                                                               features: [street]))
+        for role in [\RoadGeometryPhases<TileMvtParser.DrawingGeometryLayer>.fill,
+                     \.casing, \.detail] {
+            XCTAssertEqual(withArea.drawingRoadPhases.automobileGround[keyPath: role].drawing.indices.count,
+                           bare.drawingRoadPhases.automobileGround[keyPath: role].drawing.indices.count,
+                           "The hand-mapped area neither draws nor clips anything")
         }
-        XCTAssertGreaterThan(spansArea, 0,
-                             "The street keeps its lane lines over the hand-mapped carriageway")
     }
 
     /// A street crossed by a chain of small junctions keeps paint between
@@ -266,7 +258,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }
         let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                             properties: ["class": value("service"), "subclass": value("junction_area"), "brunnel": value("tunnel")],
+                                                             properties: ["class": value("service"), "subclass": value("junction_area"), "origin": value("graph"), "brunnel": value("tunnel")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
         XCTAssertNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing })
     }

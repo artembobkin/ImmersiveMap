@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 70
+    private static let implementationRevision: UInt32 = 71
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -373,10 +373,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // the street's surface computed from the road graph, one polygon per
         // carriageway, edge-consistent with the junction polygons it meets.
         if subclass == "junction_area" || subclass == "carriageway_area" {
+            // Only the graph-reconstructed surfaces draw. A hand-mapped
+            // area:highway (a junction_area without origin=graph) often
+            // covers a whole street, including the gap between the two
+            // one-way halves of a dual carriageway: painted, it welded the
+            // two reconstructed bodies into one mass with both inner edge
+            // lines stranded inside it. The roadway is filled by the
+            // reconstruction alone; the tag still ships and can be turned
+            // back on here if a region without reconstruction needs it.
+            guard subclass == "carriageway_area" || props["origin"]?.stringValue == "graph" else {
+                return hiddenStyle
+            }
             return junctionAreaStyle(cls: effectiveClass,
                                      tunnel: isTunnel,
                                      tile: tile,
-                                     reconstructed: props["origin"]?.stringValue == "graph")
+                                     reconstructed: true)
         }
         // A surface parking lot: its own asphalt with a kerb, like a junction
         // area of the service tier, and from street zoom the synthesized comb
@@ -815,13 +826,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// the ribbons of that class seamlessly; the kerb is the same fixed margin
     /// a ribbon wears. Below the separate-road zoom the area draws as a plain
     /// ground polygon in the road color.
-    /// `reconstructed` separates two things the tiles ship under one
-    /// subclass. A junction rebuilt from the road graph (`origin=graph`) is a
-    /// CROSSING: it cuts the paint of the roads inside it, because there is
-    /// no lane paint inside a crossing. A
-    /// hand-mapped `area:highway` typically covers a whole street's
-    /// carriageway: it stays in the class colour and leaves the paint alone,
-    /// or a street inside one would lose its markings end to end.
+    /// Only graph-reconstructed surfaces reach this style (the caller hides
+    /// a hand-mapped `area:highway`, see the routing above), so
+    /// `reconstructed` is always true today: a graph surface cuts the paint
+    /// of the roads inside it, because the measured paint ships as its own
+    /// lines. The parameter stays for the day hand-mapped areas return for
+    /// regions without a reconstruction.
     private func junctionAreaStyle(cls: String?, tunnel: Bool, tile: Tile, reconstructed: Bool) -> FeatureStyle {
         let roads = configuration.layers.roads
         let classColor: SIMD4<Float>
