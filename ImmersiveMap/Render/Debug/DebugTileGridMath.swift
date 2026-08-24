@@ -42,23 +42,24 @@ struct TileGridLineSegment {
 /// cell which slice of that tile's geometry it covers.
 ///
 /// **Coordinate convention, which is the whole point of the overlay.** The bounds
-/// a cell prints are the tile's own local units, 0 to 4096, with **x growing east
-/// and y growing north from the SOUTH edge of the tile**. That is the space
-/// `TileMvtParser` leaves geometry in: it flips the incoming MVT y
-/// (`tileExtent - y`), so a vertex stored in a `PreparedTileCPU` and a rectangle
-/// from `TileLocalClipMath.clipBounds` are both measured this way. The raw `.mvt`
-/// bytes use the opposite y (0 at the north edge); to go back to them, take
-/// `4096 - y`.
+/// a cell prints are the RAW `.mvt` units, 0 to 4096, with **x growing east and
+/// y growing south from the NORTH edge of the tile** - exactly what a tile
+/// decoder, a grep over tile bodies or the pipeline's GeoJSON shows, so a stamp
+/// can be pasted into any of them unchanged. The first cut of this overlay
+/// printed y in the parser's own space instead (it flips the incoming MVT y to
+/// `tileExtent - y`), and the very first debugging session went to the mirrored
+/// half of the tile; the stamps exist for cross-referencing the DATA, and the
+/// data speaks MVT. To reach the parser's space, take `4096 - y`.
 ///
 /// A cell code is the same box spelled differently: the letter is the column
 /// index counted from the west (A is x 0 upward), the number is the row index
-/// counted from the south starting at one (1 is y 0 upward). So `C4` at density
-/// six is exactly `x1365-2047 y2048-2730`, and either half of the stamp is enough
-/// to find the geometry.
+/// counted from the north starting at one (1 is y 0 downward), reading like the
+/// rows of a table. So `C4` at density six is exactly `x1365-2047 y2048-2730`,
+/// and either half of the stamp is enough to find the geometry.
 ///
-/// Tile UV, which the projector takes, runs the other way in y: `uv.y = 0` is the
-/// north edge in both the flat and the globe kernel. `cellUVRect` is where the two
-/// conventions are reconciled.
+/// Tile UV, which the projector takes, runs the same way: `uv.y = 0` is the
+/// north edge in both the flat and the globe kernel, so `cellUVRect` maps the
+/// row index straight through.
 enum DebugTileGridMath {
     /// Tile-local extent the stamps are expressed in, matching
     /// `TileLocalClipMath.tileExtent`.
@@ -105,7 +106,7 @@ enum DebugTileGridMath {
         return (lo: lo, hi: next - 1)
     }
 
-    /// Column letter from the west plus row number from the south, one-based.
+    /// Column letter from the west plus row number from the north, one-based.
     static func cellCode(column: Int, row: Int) -> String {
         "\(columnLetters(column))\(max(0, row) + 1)"
     }
@@ -138,8 +139,8 @@ enum DebugTileGridMath {
         return lines
     }
 
-    /// The cell's rectangle in tile UV. The row index counts from the south while
-    /// `uv.y` counts from the north, so the v range is the mirrored one.
+    /// The cell's rectangle in tile UV. The row index and `uv.y` both count
+    /// from the north, so the mapping is straight: row 0 is the top band.
     static func cellUVRect(column: Int,
                            row: Int,
                            density: Int) -> (minU: Float, minV: Float, maxU: Float, maxV: Float) {
@@ -148,9 +149,9 @@ enum DebugTileGridMath {
         let clampedColumn = min(max(column, 0), clampedDensity - 1)
         let clampedRow = min(max(row, 0), clampedDensity - 1)
         return (minU: Float(clampedColumn) * step,
-                minV: 1.0 - Float(clampedRow + 1) * step,
+                minV: Float(clampedRow) * step,
                 maxU: Float(clampedColumn + 1) * step,
-                maxV: 1.0 - Float(clampedRow) * step)
+                maxV: Float(clampedRow + 1) * step)
     }
 
     /// The plate laid under a cell's stamp: the union of the laid-out lines,

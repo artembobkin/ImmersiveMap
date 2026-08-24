@@ -88,20 +88,21 @@ final class DebugTileGridMathTests: XCTestCase {
         }
     }
 
-    /// The row index counts north from the south edge while `uv.y` counts south from
-    /// the north edge, so the first row has to sit at the bottom of the tile in UV.
-    func testCellUVRectMirrorsRowsAgainstTileUV() {
-        let bottomRow = DebugTileGridMath.cellUVRect(column: 0, row: 0, density: 4)
-        XCTAssertEqual(bottomRow.minU, 0.0, accuracy: 1e-6)
-        XCTAssertEqual(bottomRow.maxU, 0.25, accuracy: 1e-6)
-        XCTAssertEqual(bottomRow.minV, 0.75, accuracy: 1e-6)
-        XCTAssertEqual(bottomRow.maxV, 1.0, accuracy: 1e-6)
+    /// The row index and `uv.y` both count from the north edge (the same axis
+    /// the raw MVT bytes use), so the first row sits at the top of the tile in
+    /// UV and a stamped y range can be pasted into a tile decoder unchanged.
+    func testCellUVRectMapsRowsStraightIntoTileUV() {
+        let topBand = DebugTileGridMath.cellUVRect(column: 0, row: 0, density: 4)
+        XCTAssertEqual(topBand.minU, 0.0, accuracy: 1e-6)
+        XCTAssertEqual(topBand.maxU, 0.25, accuracy: 1e-6)
+        XCTAssertEqual(topBand.minV, 0.0, accuracy: 1e-6)
+        XCTAssertEqual(topBand.maxV, 0.25, accuracy: 1e-6)
 
-        let topRow = DebugTileGridMath.cellUVRect(column: 3, row: 3, density: 4)
-        XCTAssertEqual(topRow.minU, 0.75, accuracy: 1e-6)
-        XCTAssertEqual(topRow.maxU, 1.0, accuracy: 1e-6)
-        XCTAssertEqual(topRow.minV, 0.0, accuracy: 1e-6)
-        XCTAssertEqual(topRow.maxV, 0.25, accuracy: 1e-6)
+        let bottomBand = DebugTileGridMath.cellUVRect(column: 3, row: 3, density: 4)
+        XCTAssertEqual(bottomBand.minU, 0.75, accuracy: 1e-6)
+        XCTAssertEqual(bottomBand.maxU, 1.0, accuracy: 1e-6)
+        XCTAssertEqual(bottomBand.minV, 0.75, accuracy: 1e-6)
+        XCTAssertEqual(bottomBand.maxV, 1.0, accuracy: 1e-6)
     }
 
     func testGridSegmentsCoverEveryLineAndStayInsideTheTile() {

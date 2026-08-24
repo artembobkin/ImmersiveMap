@@ -102,7 +102,7 @@ The HUD's **Controls** tab carries switches that draw over the map itself rather
   y2048-2730        the cell's tile-local y bounds
 ```
 
-The bounds are the tile's own local units, 0 to 4096, with **x growing east and y growing north from the south edge of the tile**, which is the space the parser leaves geometry in (it flips the incoming MVT y, so the raw `.mvt` value for a stamped `y` is `4096 - y`). The cell code says the same thing: the letter is the column counted from the west, the number is the row counted from the south starting at one. Each cell is self-sufficient on purpose, so a screenshot cropped to one cell still names both the tile and the slice of its geometry to go and read.
+The bounds are the raw `.mvt` units, 0 to 4096, with **x growing east and y growing south from the north edge of the tile**: exactly what a tile decoder or a grep over tile bodies shows, so a stamped range can be pasted into them unchanged. (The engine's parser works in the flipped space; to reach it, take `4096 - y`.) The cell code says the same thing: the letter is the column counted from the west, the number is the row counted from the north starting at one, reading like the rows of a table. Each cell is self-sufficient on purpose, so a screenshot cropped to one cell still names both the tile and the slice of its geometry to go and read.
 
 While a slot is filled with a substitute (a coarser tile standing in for one that has not arrived), the pixels under the stamp were not built from the tile the first line names, so a fifth `src 19807/10243/15` line appears with the tile they did come from. The bounds stay in the drawn tile's space; the source tile's own rectangle for that slot is what `TileLocalClipMath.clipBounds(source:placeIn:)` computes.
 
