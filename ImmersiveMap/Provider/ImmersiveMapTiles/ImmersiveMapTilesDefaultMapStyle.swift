@@ -7,7 +7,7 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 73
+    private static let implementationRevision: UInt32 = 74
 
     /// The automobile tier draws without a grey kerb: the roadway is held
     /// by its fill against the ground and by the paint on it, the way the
@@ -698,9 +698,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// road fill: it is paint on the road, not a road.
     private static let crosswalkClassPriority = 96
 
-    /// Yellow road paint (a centre line that may not be crossed): muted like
-    /// the white, so it sits in the asphalt rather than on it.
-    private static let roadMarkingYellowColor = SIMD4<Float>(0.93, 0.83, 0.44, 0.88)
+    /// Yellow road paint (a centre line that may not be crossed): muted in
+    /// TONE like the white, and fully opaque like it (see roadMarkingColor).
+    private static let roadMarkingYellowColor = SIMD4<Float>(0.93, 0.83, 0.44, 1.0)
     /// A solid line of paint draws visibly thicker than a broken one: on the
     /// map a solid line is a statement (an edge, a line not to cross), and at
     /// the dash's hairline weight it read as just another dash row.
@@ -1366,9 +1366,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     /// The paint of a lane divider: an off-white that reads on the asphalt
-    /// grey without glaring, slightly translucent so the marking sits in the
-    /// surface rather than on top of it.
-    private static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 0.85)
+    /// grey without glaring, and fully OPAQUE. Muting lives in the tone, not
+    /// the alpha: a translucent marking washed out against the surface, and
+    /// wherever two decoration quads of one colour overlapped (the strokes
+    /// of the bus-lane letter, the joints of the stop sawtooth) the alpha
+    /// composited twice and stamped a visibly denser patch.
+    private static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 1.0)
     private static let roadMarkingWidthPoints: Float = 0.9
     /// A city broken lane line: three metres of paint, six of gap.
     private static let roadMarkingDashMetres: Double = 3.0

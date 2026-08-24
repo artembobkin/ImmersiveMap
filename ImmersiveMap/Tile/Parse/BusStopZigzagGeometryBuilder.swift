@@ -8,8 +8,11 @@ import simd
 ///
 /// The tiles ship the zigzag's axis (a slice of the carriageway edge around
 /// the stop, `marking=bus_stop_zigzag`); the builder folds it into a sawtooth
-/// polyline and emits each tooth segment as a quad, like the letter and the
-/// zebra. Input is tile space (y down).
+/// polyline and emits it as one mitered band
+/// (`RoadMarkingStrokeGeometry.miteredBand`), so the joints are seamless at
+/// any angle: the first and last teeth sit on the axis and turn shallower
+/// than the interior right angles, and the old per-segment quads notched
+/// exactly there. Input is tile space (y down).
 struct BusStopZigzagGeometryBuilder {
     /// One full tooth (out and back) per this stretch of axis.
     private static let toothPeriodMetres: Float = 2.4
@@ -26,14 +29,18 @@ struct BusStopZigzagGeometryBuilder {
         let halfPeriod = Self.toothPeriodMetres * unitsPerMetre * 0.5
         guard total >= halfPeriod * 2 else { return [] }
 
-        // Sawtooth vertices every half period, alternating across the axis;
-        // the first and the last sit on the axis so the figure closes clean.
-        let steps = Int(total / halfPeriod)
+        // Sawtooth vertices alternating across the axis, distributed EVENLY:
+        // the step is the total length divided into whole half-periods, so
+        // the figure ends exactly at both ends of the axis instead of
+        // dropping the tail shorter than a nominal half period. The first
+        // and the last vertex sit on the axis so the figure closes clean.
+        let steps = max(2, Int((total / halfPeriod).rounded()))
+        let stepLength = total / Float(steps)
         var teeth: [SIMD2<Float>] = []
-        teeth.reserveCapacity(steps + 2)
+        teeth.reserveCapacity(steps + 1)
         let amplitude = Self.amplitudeMetres * unitsPerMetre
         for step in 0...steps {
-            let distance = Float(step) * halfPeriod
+            let distance = Float(step) * stepLength
             guard let sample = Self.sample(atDistance: min(distance, total), points: renderPoints) else { continue }
             let side = SIMD2<Float>(-sample.tangent.y, sample.tangent.x)
             let sway: Float = step == 0 || step == steps ? 0 : (step.isMultiple(of: 2) ? -amplitude : amplitude)
@@ -42,31 +49,8 @@ struct BusStopZigzagGeometryBuilder {
         guard teeth.count >= 2 else { return [] }
 
         let stroke = Self.strokeMetres * unitsPerMetre
-        var polygons: [TileMvtParser.ParsedPolygon] = []
-        polygons.reserveCapacity(teeth.count - 1)
-        for index in 1..<teeth.count {
-            if let quad = Self.strokeQuad(from: teeth[index - 1], to: teeth[index], stroke: stroke) {
-                polygons.append(quad)
-            }
-        }
-        return polygons
-    }
-
-    private static func strokeQuad(from a: SIMD2<Float>,
-                                   to b: SIMD2<Float>,
-                                   stroke: Float) -> TileMvtParser.ParsedPolygon? {
-        let length = simd_distance(a, b)
-        guard length > 1e-3 else { return nil }
-        let direction = (b - a) / length
-        let normal = SIMD2<Float>(-direction.y, direction.x) * (stroke * 0.5)
-        // The teeth overlap at their shared vertices by half a stroke; one
-        // colour, so the overlap is invisible and the joint never gaps.
-        let along = direction * (stroke * 0.5)
-        return TileMvtParser.ParsedPolygon(
-            vertices: [TileCoordinateSpace.quantized(a + normal - along), TileCoordinateSpace.quantized(a - normal - along),
-                       TileCoordinateSpace.quantized(b - normal + along), TileCoordinateSpace.quantized(b + normal + along)],
-            indices: [0, 1, 2, 0, 2, 3]
-        )
+        guard let band = RoadMarkingStrokeGeometry.miteredBand(points: teeth, stroke: stroke) else { return [] }
+        return [band]
     }
 
     private static func polylineLength(_ points: [SIMD2<Float>]) -> Float {

@@ -524,7 +524,10 @@ final class PreparedTileDiskCaching {
     // 63: the bridger's edge phase paves the tapering wedges beside
     // junction polygons that no street line crosses; prepared tiles gain
     // those hulls.
-    static let preparedFormatVersion: UInt32 = 63
+    // 64: the bus-lane letter and the bus-stop sawtooth are rebuilt with
+    // mitered joints (shared apex edge, one seamless band) instead of
+    // detached butt-capped quads; their prepared geometry changes.
+    static let preparedFormatVersion: UInt32 = 64
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

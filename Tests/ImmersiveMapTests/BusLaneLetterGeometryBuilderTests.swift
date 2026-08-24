@@ -5,11 +5,41 @@
 import simd
 import XCTest
 
-/// The letter A stamped along a bus lane: three strokes per letter, one
-/// letter per stretch of lane, and the apex of the letter points WITH the
-/// direction of travel so the feet face the driver approaching it.
+/// The letter A stamped along a bus lane: three quads per letter (two legs
+/// sharing a mitered apex edge, the crossbar between their centrelines),
+/// one letter per stretch of lane, and the apex of the letter points WITH
+/// the direction of travel so the feet face the driver approaching it.
 final class BusLaneLetterGeometryBuilderTests: XCTestCase {
     private let builder = BusLaneLetterGeometryBuilder()
+
+    func testTheLegsShareTheApexEdgeAndNothingOvershoots() {
+        // Ten units to the metre so quantization cannot blur the assertions.
+        // A 30 m lane gets one letter at its middle, (1150, 3596) in render
+        // space, apex toward +x.
+        let polygons = builder.buildPolygons(points: [SIMD2<Float>(1000, 500), SIMD2<Float>(1300, 500)],
+                                             unitsPerMetre: 10)
+        XCTAssertEqual(polygons.count, 3)
+        let legLeft = Set(polygons[0].vertices.map { [$0.x, $0.y] })
+        let legRight = Set(polygons[1].vertices.map { [$0.x, $0.y] })
+        XCTAssertEqual(legLeft.intersection(legRight).count, 2,
+                       "The legs share exactly the two apex-edge vertices: one sharp point, no crossing butt caps")
+        // Nothing sticks out of the letter's box: half height 13 plus the
+        // mitered apex reach (halfStroke / sin(half spread), about 6 units
+        // here) along the lane, half width 9 plus half a stroke across it.
+        for polygon in polygons {
+            for vertex in polygon.vertices {
+                XCTAssertLessThanOrEqual(abs(Float(vertex.x) - 1150), 20,
+                                         "vertex x=\(vertex.x) overshoots the letter along the lane")
+                XCTAssertLessThanOrEqual(abs(Float(vertex.y) - 3596), 12,
+                                         "vertex y=\(vertex.y) overshoots the letter across the lane")
+            }
+        }
+        // The crossbar ends on the legs' centrelines, inside the spread.
+        for vertex in polygons[2].vertices {
+            XCTAssertLessThanOrEqual(abs(Float(vertex.y) - 3596), 9,
+                                     "The crossbar stays between the legs")
+        }
+    }
 
     func testALetterIsThreeStrokesAndRepeatsAlongTheLane() {
         // One unit = one metre: a 95 m lane fits several letters 30 m apart.

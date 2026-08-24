@@ -70,6 +70,16 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
                              "Yellow paint is warm: more red than blue")
     }
 
+    func testMarkingPaintIsFullyOpaque() {
+        // A translucent marking washed out against the surface, and every
+        // overlap of two decoration quads (the letter's strokes, the
+        // sawtooth's joints) composited its alpha twice into a denser
+        // patch. Muting lives in the tone; the alpha is 1.
+        XCTAssertEqual(markingStyle("dividing").color.w, 1.0, "White paint covers")
+        XCTAssertEqual(markingStyle("dividing", extra: ["paint": "yellow"]).color.w, 1.0,
+                       "and so does the yellow")
+    }
+
     func testALaneSeparatorIsAOneMetreDashAndOnlyAtStreetZoom() {
         let separator = markingStyle("lane_separator")
         let pass = separator.resolvedLineRenderPasses.first
