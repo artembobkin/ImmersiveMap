@@ -8,8 +8,9 @@ import XCTest
 /// A junction area (`subclass=junction_area`, a polygon in `transportation`)
 /// is the carriageway of a junction. Only the graph-reconstructed ones
 /// (`origin=graph`) draw: the parser routes them into the automobile road
-/// phases, fill as the surface and outline as the kerb, sorted among the
-/// roads of their class. A hand-mapped `area:highway` is ignored: in central
+/// phases as the surface fill, sorted among the roads of their class and
+/// kerbless like the whole automobile tier (the roadway is held by its fill
+/// and its paint, not an outline). A hand-mapped `area:highway` is ignored: in central
 /// Moscow it often covers a whole street including the gap between the two
 /// halves of a dual carriageway, welding the reconstructed bodies together.
 final class JunctionAreaSurfaceTests: XCTestCase {
@@ -40,11 +41,12 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         ])
     }
 
-    func testJunctionAreaDrawsInTheAutomobileTierAsSurfaceAndKerb() throws {
+    func testJunctionAreaDrawsInTheAutomobileTierAsSurface() throws {
         let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: makeTile())
         let automobile = parsed.drawingRoadPhases.automobileGround
         XCTAssertGreaterThan(automobile.fill.drawing.indices.count, 0, "The surface draws in the fill role")
-        XCTAssertGreaterThan(automobile.casing.drawing.indices.count, 0, "The kerb draws in the casing role")
+        XCTAssertEqual(automobile.casing.drawing.indices.count, 0,
+                       "and nothing draws in the casing role: the automobile tier is kerbless")
         // The ground polygons carry only what the parser always emits (the
         // synthetic background quad); the area itself is not among them. A
         // control parse of the same tile without the area pins the baseline.
@@ -76,8 +78,9 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         XCTAssertEqual(handMapped.key, 0, "A hand-mapped area draws nothing")
 
         // A surface reconstructed from the graph: the same asphalt, no tone
-        // of its own, the kerb on its outline, and it cuts the paint of the
-        // roads inside it, because the measured paint ships as its own lines.
+        // of its own, no kerb (the automobile tier is kerbless), and it cuts
+        // the paint of the roads inside it, because the measured paint ships
+        // as its own lines.
         let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
         let crossing = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                  properties: ["class": value("primary"),
@@ -88,8 +91,8 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let crossingFill = crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
         XCTAssertEqual(crossingFill?.color, primary,
                        "The crossing is exactly the class colour")
-        XCTAssertNotNil(crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
-                        "and it wears a kerb")
+        XCTAssertNil(crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
+                     "and wears no kerb")
         XCTAssertTrue(crossing.surfaceAreaCutsPaint, "and it cuts the paint of the roads inside it")
         XCTAssertEqual(crossing.roadClassPriority, 80, "sorted among the primaries")
 
@@ -100,33 +103,31 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         XCTAssertFalse(plain.isRoadSurfaceArea)
     }
 
-    /// The kerb traces the area's own outline.
-    ///
-    /// The rings reach the kerb pass in render space (y already flipped) and
-    /// the line tessellator flips again, so a ring handed over unconverted
-    /// drew the kerb mirrored about the tile's mid-line: a dark outline lying
-    /// across whatever was there, and no kerb at the junction. The area in the
-    /// fixture sits in the upper half of the tile, where a mirrored kerb lands
-    /// in the lower half and this assertion catches it.
-    func testJunctionAreaKerbFollowsTheAreaOutline() throws {
+    /// The surface traces the area's own outline (the mirror guard that used
+    /// to watch the kerb, moved to the fill when the automobile tier went
+    /// kerbless): a ring handed to the tessellator unconverted lands
+    /// mirrored about the tile's mid-line. The area in the fixture sits in
+    /// the upper half of the tile, where a mirrored surface lands in the
+    /// lower half and this assertion catches it.
+    func testJunctionAreaSurfaceFollowsTheAreaOutline() throws {
         let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 600), (2300, 600), (2300, 1100), (1800, 1100)]),
                   properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
         ])
         let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
-        let kerb = parsed.drawingRoadPhases.automobileGround.casing.drawing
-        XCTAssertGreaterThan(kerb.vertices.count, 0, "the area wears a kerb")
+        let surface = parsed.drawingRoadPhases.automobileGround.fill.drawing
+        XCTAssertGreaterThan(surface.vertices.count, 0, "the area draws its surface")
 
         // The polygon in render space: y flips, so the ring spans y 2996...3496.
         let margin: Float = 40
-        for vertex in kerb.vertices {
+        for vertex in surface.vertices {
             let x = Float(vertex.position.x)
             let y = Float(vertex.position.y)
             XCTAssertTrue(x >= 1800 - margin && x <= 2300 + margin,
-                          "kerb vertex x=\(x) is outside the area it belongs to")
+                          "surface vertex x=\(x) is outside the area it belongs to")
             XCTAssertTrue(y >= 2996 - margin && y <= 3496 + margin,
-                          "kerb vertex y=\(y) is outside the area it belongs to: a mirrored kerb lands near y=\(4096 - y)")
+                          "surface vertex y=\(y) is outside the area it belongs to: a mirrored surface lands near y=\(4096 - y)")
         }
     }
 

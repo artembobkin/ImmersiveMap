@@ -7,7 +7,18 @@ import simd
 /// OpenMapTiles layer and field contract
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
-    private static let implementationRevision: UInt32 = 72
+    private static let implementationRevision: UInt32 = 73
+
+    /// The automobile tier draws without a grey kerb: the roadway is held
+    /// by its fill against the ground and by the paint on it, the way the
+    /// lane-level modes of commercial engines draw carriageways. The kerb
+    /// doubled every painted edge into two parallel strokes and outlined
+    /// roads that on the ground shade straight into the pavement. Gates the
+    /// casing pass of every drive-tier ribbon and of the reconstructed
+    /// surfaces; parking lots keep their kerb (a lot boundary, not a road
+    /// edge), tunnels and paths never had one. The switch stays for the day
+    /// a palette wants the kerb back.
+    private static let drawsAutomobileKerb = false
 
     private let fallbackKey: UInt8 = 0
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
@@ -860,7 +871,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
         var passes: [LineRenderPass] = []
-        if tunnel == false {
+        if tunnel == false, Self.drawsAutomobileKerb {
             passes.append(
                 LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                                color: roadCasingColor(from: classColor),
@@ -1058,7 +1069,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0
 
         var passes: [LineRenderPass] = []
-        if casing, tunnel == false {
+        if casing, tunnel == false, Self.drawsAutomobileKerb {
             // The casing is a kerb: a fixed margin of ground on each side of
             // the carriageway, not a fraction of it. As a fraction it was a
             // few units on a symbolic width and metres wide on a true one,

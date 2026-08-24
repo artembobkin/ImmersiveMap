@@ -114,9 +114,9 @@ final class RoadSurfaceGapBridgeTests: XCTestCase {
         XCTAssertEqual(paved.drawingRoadPhases.automobileGround.fill.drawing.indices.count,
                        bare.drawingRoadPhases.automobileGround.fill.drawing.indices.count + 6,
                        "The slit gains one quad and the ribbon stub is gone")
-        XCTAssertGreaterThan(paved.drawingRoadPhases.automobileGround.casing.drawing.indices.count,
-                             bare.drawingRoadPhases.automobileGround.casing.drawing.indices.count,
-                             "and the paving wears the kerb that keeps the street edge continuous")
+        XCTAssertEqual(paved.drawingRoadPhases.automobileGround.casing.drawing.indices.count,
+                       bare.drawingRoadPhases.automobileGround.casing.drawing.indices.count,
+                       "and no casing appears anywhere: the automobile tier is kerbless")
     }
 
     func testTwoHalfPiecesMeetingAtTheNodeStillPave() throws {

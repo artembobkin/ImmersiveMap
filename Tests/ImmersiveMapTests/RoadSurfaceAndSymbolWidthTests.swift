@@ -70,9 +70,9 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
                                                                 properties: ["class": v("primary")],
                                                                 tile: Tile(x: 39615, y: 20486, z: 16)))
         let fill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        let casing = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }!
         XCTAssertEqual(fill.maximumWidthPoints, 6.0, "a primary is a 6-point symbol until the surface takes over")
-        XCTAssertGreaterThan(casing.maximumWidthPoints, fill.maximumWidthPoints, "the kerb stays visible on the symbol")
+        XCTAssertNil(primary.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
+                     "the symbol draws kerbless like the rest of the automobile tier")
         XCTAssertGreaterThan(fill.parseGeometryStyleData.lineWidth, 0, "the ribbon is still the true width")
     }
 

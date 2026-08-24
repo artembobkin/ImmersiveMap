@@ -124,18 +124,14 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         XCTAssertEqual(minor, 2 * 5.0, accuracy: 0.5)
     }
 
-    func testCasingIsAKerbNotAProportionOfTheCarriageway() {
+    func testAStreetZoomRoadDrawsKerbless() {
+        // The automobile tier carries no casing pass: the carriageway is its
+        // fill and its paint, and the width stated is the width drawn, with
+        // no kerb margin added around it.
         let featureStyle = roadStyle("primary", lanes: 6, z: 16)
         let passes = featureStyle.resolvedLineRenderPasses
-        guard let fill = passes.first(where: { $0.roadPassRole == .fill }),
-              let casing = passes.first(where: { $0.roadPassRole == .casing }) else {
-            return XCTFail("Expected a casing and a fill at street zoom")
-        }
-        let metres = metresPerUnit(moscowTile(z: 16))
-        let marginPerSide = (casing.parseGeometryStyleData.lineWidth - fill.parseGeometryStyleData.lineWidth)
-            * metres / 2
-        XCTAssertEqual(marginPerSide, 0.7, accuracy: 0.2,
-                       "The kerb is a fixed margin of ground, not a fraction of a 21 m road")
+        XCTAssertNotNil(passes.first { $0.roadPassRole == .fill }, "The fill draws")
+        XCTAssertNil(passes.first { $0.roadPassRole == .casing }, "and nothing outlines it")
     }
 
     // MARK: - Lane markings

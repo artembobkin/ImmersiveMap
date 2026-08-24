@@ -188,29 +188,19 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(rail.lowZoomFadeMask, 2.0)
     }
 
-    func testRoadCasingKeysSortBelowEveryFill() {
-        // Below the separate-road zoom the generic ground path draws by
-        // ascending key, and the intent is casing first with the fill
-        // overdrawing it, so every casing key must sort below every fill key
-        // (and above the building footprints at 30). Keys stay distinct so
-        // classes keep their relative layering.
+    func testAutomobileRoadsCarryNoCasingPass() {
+        // The automobile tier is kerbless: the roadway is held by its fill
+        // and its paint, not an outline (the kerb doubled every painted edge
+        // into two parallel strokes). No drive-tier class carries a casing
+        // pass at any zoom.
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        var fillKeys: [UInt8] = []
-        var casingKeys: [UInt8] = []
         for className in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
-            let roadStyle = makeStyle(style, layerName: "transportation", className: className, zoom: 14)
-            for pass in roadStyle.resolvedLineRenderPasses {
-                if pass.roadPassRole == .casing {
-                    casingKeys.append(pass.key)
-                } else if pass.roadPassRole == .fill {
-                    fillKeys.append(pass.key)
-                }
+            for zoom in [7, 10, 12, 14, 16] {
+                let roadStyle = makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
+                XCTAssertFalse(roadStyle.resolvedLineRenderPasses.contains { $0.roadPassRole == .casing },
+                               "\(className) at z\(zoom) must draw without a kerb")
             }
         }
-        XCTAssertFalse(casingKeys.isEmpty)
-        XCTAssertEqual(Set(casingKeys).count, casingKeys.count, "Casing keys must stay distinct")
-        XCTAssertLessThan(casingKeys.max()!, fillKeys.min()!)
-        XCTAssertGreaterThan(casingKeys.min()!, 30)
     }
 
     func testMajorRoadsHoldAWidthFloorAndAnOverviewAccent() {
@@ -290,20 +280,6 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  className: "primary_construction", zoom: 6).key, 0)
         XCTAssertNotEqual(makeStyle(style, layerName: "transportation",
                                     className: "primary_construction", zoom: 7).key, 0)
-    }
-
-    func testRoadCasingJoinsOnlyFromTileZoomTen() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func hasCasing(_ className: String, zoom: Int) -> Bool {
-            makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
-                .resolvedLineRenderPasses.contains { $0.roadPassRole == .casing }
-        }
-        // Below tile z10 the fill is under about two points and a casing
-        // cannot render as an edge: majors draw as clean single strokes.
-        XCTAssertFalse(hasCasing("motorway", zoom: 7))
-        XCTAssertFalse(hasCasing("primary", zoom: 9))
-        XCTAssertTrue(hasCasing("motorway", zoom: 10))
-        XCTAssertTrue(hasCasing("tertiary", zoom: 12))
     }
 
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {

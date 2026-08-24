@@ -8,7 +8,8 @@ import XCTest
 /// A carriageway area (`subclass=carriageway_area`, a polygon in
 /// `transportation`) is the surface of a stretch of street computed from the
 /// road graph, the same thing a junction area is for a junction. It draws as
-/// fill and kerb in the automobile tier, clips the ribbons of the streets it
+/// fill in the automobile tier (kerbless, like the whole tier), clips the
+/// ribbons of the streets it
 /// covers, and (being `origin=graph`) cuts their synthesized paint, so the
 /// paint the source measured can ship as its own lines instead. A surface
 /// owns only roads of its own structure and layer: a bridge deck polygon
@@ -64,8 +65,8 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
         XCTAssertEqual(area.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.color, primary,
                        "The surface is exactly the class colour")
-        XCTAssertNotNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
-                        "and it wears the kerb on its outline")
+        XCTAssertNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
+                     "and wears no kerb: the automobile tier is kerbless")
         XCTAssertEqual(area.roadClassPriority, 80, "sorted among the primaries")
     }
 
