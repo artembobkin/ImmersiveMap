@@ -521,7 +521,10 @@ final class PreparedTileDiskCaching {
     // connection no polygon ships for) is paved with a bridge quad
     // (RoadSurfaceGapBridger) that also clips the street's fallback ribbon
     // out of the slit; prepared tiles gain the quads and lose the stubs.
-    static let preparedFormatVersion: UInt32 = 62
+    // 63: the bridger's edge phase paves the tapering wedges beside
+    // junction polygons that no street line crosses; prepared tiles gain
+    // those hulls.
+    static let preparedFormatVersion: UInt32 = 63
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

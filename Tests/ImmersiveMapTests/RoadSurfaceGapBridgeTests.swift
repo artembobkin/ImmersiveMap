@@ -171,6 +171,46 @@ final class RoadSurfaceGapBridgeTests: XCTestCase {
                        "A slit is a joint within one structure, not a ramp between two")
     }
 
+    private func junction(_ ring: [(Int32, Int32)], id: UInt64 = 11) -> VectorTileFixture.Feature {
+        .init(id: id, geometry: .polygon(ring: ring),
+              properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"])
+    }
+
+    func testAWedgeBesideAJunctionIsPavedWithoutALine() throws {
+        // A junction polygon and a carriageway piece whose trims disagree:
+        // the facing edges taper from 20 to 50 units apart. No street line
+        // crosses the wedge, so only the edge phase can see it.
+        let carriageway = surface([(1000, 1020), (1500, 1050), (1500, 1300), (1000, 1300)], id: 3)
+        let parsed = try parse([junction([(1000, 700), (1500, 700), (1500, 1000), (1000, 1000)]),
+                                carriageway])
+        XCTAssertTrue(fillCovers(parsed, tileSpacePoint: SIMD2<Float>(1250, 1017)),
+                      "The wedge between the junction and the carriageway is paved")
+    }
+
+    func testAConstantStripBesideAJunctionIsNotPaved() throws {
+        // The same pair, but the gap holds a constant 45 units (about 3.8 m)
+        // and never closes: that is a sidewalk, not a reconstruction wedge.
+        let carriageway = surface([(1000, 1045), (1500, 1045), (1500, 1300), (1000, 1300)], id: 3)
+        let parsed = try parse([junction([(1000, 700), (1500, 700), (1500, 1000), (1000, 1000)]),
+                                carriageway])
+        XCTAssertFalse(fillCovers(parsed, tileSpacePoint: SIMD2<Float>(1250, 1022)),
+                       "A strip that keeps its width stays open ground")
+    }
+
+    func testTwoStreetlessCarriagewaysDoNotEdgePave() throws {
+        // Two service carriageways (the source ships no street id for them)
+        // tapering toward each other like the junction wedge does: without a
+        // junction in the pair the edge phase stays out, because two nearby
+        // carriageways are two roads with real pavement between them.
+        let north = surface([(1000, 700), (1500, 700), (1500, 1000), (1000, 1000)],
+                            street: "", extra: ["class": "service"])
+        let south = surface([(1000, 1020), (1500, 1050), (1500, 1300), (1000, 1300)],
+                            id: 3, street: "", extra: ["class": "service"])
+        let parsed = try parse([north, south])
+        XCTAssertFalse(fillCovers(parsed, tileSpacePoint: SIMD2<Float>(1250, 1017)),
+                       "No junction in the pair: the gap stays open")
+    }
+
     func testAHandMappedAreaDoesNotPave() throws {
         // Hand-mapped junction areas (no origin=graph) are hidden and are
         // not trimmed pieces of anything: no paving may hang off them.
