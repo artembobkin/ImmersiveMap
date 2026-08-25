@@ -373,7 +373,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // carriageway carries where it is, which way it faces and how long it
         // is, which is everything a zebra is made of. It draws as stripes on
         // the asphalt instead of as a footway ribbon.
-        if let crossing = Self.crossingMarking(props: props), tileZoom >= Self.crossingMinimumTileZoom {
+        if let crossing = Self.crossingMarking(props: props), tileZoom >= Self.streetDetailMinimumTileZoom {
             return crosswalkStyle(marked: crossing, tile: tile)
         }
         // A junction area: the carriageway as the tiles map it, a polygon.
@@ -651,10 +651,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
     }
 
-    /// From this tile zoom a crossing is worth drawing: at the latitude of
-    /// Moscow a z16 pixel is about 1.3 m, so a twelve-metre crossing is nine
-    /// pixels of stripes. A level coarser it would be a smudge.
-    private static let crossingMinimumTileZoom = 16
+    /// From this tile zoom the street draws its full detail: crossings, the
+    /// fine lane paint, the bus lane letter and the stop sawtooth, the
+    /// parking bay comb.
+    ///
+    /// z15 is where the measured street starts: the road graph ships its
+    /// junction and carriageway surfaces, its dividing and edge lines and its
+    /// parking lots from that level, so everything painted ON that surface
+    /// starts there too. A street therefore draws the same figures at z15 as
+    /// at z16, and the tile level the engine swaps under a moving camera
+    /// changes only the geometry's resolution, never which markings exist.
+    /// How small a figure may get on screen is decided once, by the camera
+    /// zoom band the paint fades in on (`LowZoomOverviewFade`
+    /// `.roadMarkingStartZoom`), which is continuous in the camera rather
+    /// than a step at a tile boundary.
+    private static let streetDetailMinimumTileZoom = 15
 
     /// A marked crossing: white stripes laid across the carriageway.
     ///
@@ -712,11 +723,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// A dividing (centre) line: two metres of paint, four and a half of gap.
     private static let shippedDividingDashMetres: Double = 2.0
     private static let shippedDividingGapMetres: Double = 4.5
-    /// Below this tile zoom the short-period paint (a one-metre separator
-    /// dash) is sub-pixel mush; the edge and the centre line, with their
-    /// longer figures, draw from the zoom the tiles ship them at.
-    private static let shippedFineMarkingMinimumTileZoom = 16
-
     /// A line of paint the source measured (`marking=...` in the road layer):
     /// the engine draws exactly the polyline the tiles ship, with the kind
     /// deciding stroke, colour and dash pattern. One `detail` pass, above
@@ -728,18 +734,17 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                      tile: Tile) -> FeatureStyle {
         switch kind {
         case "crossing_marked":
-            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return crosswalkStyle(marked: true, tile: tile, shipped: true)
         case "bus_lane":
             // The lane's axis: the letter A stamped along it, feet toward
             // the driver, is what marks a dedicated lane on real asphalt.
-            // A letter is a couple of metres: a smudge below z16.
-            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return busLaneLetterStyle()
         case "bus_stop_zigzag":
             // The stop's stretch of kerb: the yellow sawtooth of the bus
             // stop marking, folded from the shipped axis by the builder.
-            guard tile.z >= Self.crossingMinimumTileZoom else { return hiddenStyle }
+            guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return busStopZigzagStyle()
         case "crossing_unmarked":
             // A place to cross, not a thing to draw: same answer as for the
@@ -760,7 +765,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // guess drawn wrong.
             return hiddenStyle
         }
-        if kind == "lane_separator", tile.z < Self.shippedFineMarkingMinimumTileZoom {
+        if tile.z < Self.streetDetailMinimumTileZoom {
             return hiddenStyle
         }
         // The paint colour: white unless the source says yellow, and yellow
@@ -931,9 +936,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
         ]
-        // The comb only from the zoom where a 2.6 m bay is more than a couple
-        // of pixels; at z15 the lot is clean asphalt.
-        if tile.z >= Self.parkingBayMinimumTileZoom {
+        // The comb from the zoom the lot itself ships at, like every other
+        // figure painted on a road surface: a lot looks the same at z15 as
+        // at z16, and the camera-zoom band decides how faint the stripes are.
+        if tile.z >= Self.streetDetailMinimumTileZoom {
             passes.append(
                 LineRenderPass(key: Self.parkingBayKey,
                                color: Self.roadMarkingColor,
@@ -959,7 +965,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private static let parkingBayKey: UInt8 = 69
-    private static let parkingBayMinimumTileZoom = 16
 
     /// The letter A along a dedicated bus lane: a polygon decoration in the
     /// detail role, like the zebra, in the plain marking paint. The line the

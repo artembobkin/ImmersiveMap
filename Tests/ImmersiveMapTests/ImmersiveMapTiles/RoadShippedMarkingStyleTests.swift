@@ -87,10 +87,40 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
         let metres = metresPerUnit(moscowTile(z: 16))
         XCTAssertEqual(Double(pass?.dashLengthPoints ?? 0) * metres, 1.0, accuracy: 0.05)
         XCTAssertEqual(Double(pass?.dashGapPoints ?? 0) * metres, 1.5, accuracy: 0.05)
-        XCTAssertEqual(markingStyle("lane_separator", z: 15).key, 0,
-                       "A one-metre pattern is sub-pixel mush a level coarser: hidden at z15")
-        XCTAssertNotEqual(markingStyle("dividing", z: 15).key, 0,
-                          "while the longer figures draw from the zoom the tiles ship them at")
+        XCTAssertEqual(markingStyle("lane_separator", z: 14).key, 0,
+                       "Below the measured street's own level there is no surface to paint on")
+    }
+
+    /// Every figure a street is painted with draws at z15 exactly as at z16:
+    /// the tile level swap under a moving camera changes the resolution of
+    /// the geometry, never which markings exist. What keeps a one-metre dash
+    /// off a regional view is the camera-zoom band the paint fades in on, not
+    /// the tile level.
+    func testTheStreetDrawsTheSameMarkingsAtZ15AsAtZ16() {
+        for kind in ["dividing", "lane_separator", "crossing_marked", "bus_lane", "bus_stop_zigzag"] {
+            let fine = markingStyle(kind, z: 16)
+            let coarse = markingStyle(kind, z: 15)
+            XCTAssertEqual(coarse.key, fine.key, "\(kind) draws at z15 under the same baked style")
+            XCTAssertEqual(coarse.roadDecorationKind, fine.roadDecorationKind,
+                           "\(kind) is built by the same decoration builder at z15")
+            XCTAssertEqual(coarse.resolvedLineRenderPasses.count,
+                           fine.resolvedLineRenderPasses.count,
+                           "\(kind) draws the same passes at z15")
+        }
+    }
+
+    /// The dash pattern is a length on the ground, so a coarser tile spends
+    /// fewer of its units on the same metre: the paint sits still on the
+    /// asphalt across the level swap instead of doubling in length.
+    func testTheDashPatternIsTheSameLengthOnTheGroundAtEveryTileLevel() {
+        for z in [15, 16] {
+            let pass = markingStyle("lane_separator", z: z).resolvedLineRenderPasses.first
+            let metres = metresPerUnit(moscowTile(z: z))
+            XCTAssertEqual(Double(pass?.dashLengthPoints ?? 0) * metres, 1.0, accuracy: 0.05,
+                           "One metre of paint at z\(z)")
+            XCTAssertEqual(Double(pass?.dashGapPoints ?? 0) * metres, 1.5, accuracy: 0.05,
+                           "and one and a half of gap at z\(z)")
+        }
     }
 
     func testASolidLineIsAThickerStrokeThanADashedOne() {
@@ -123,8 +153,8 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
                       "and carries the flag, so the surfaces it lies inside never clip it")
         XCTAssertEqual(markingStyle("crossing_unmarked").key, 0,
                        "An unmarked crossing is a place to cross, not a thing to draw")
-        XCTAssertEqual(markingStyle("crossing_marked", z: 15).key, 0,
-                       "A crossing is a smudge a level below z16")
+        XCTAssertEqual(markingStyle("crossing_marked", z: 14).key, 0,
+                       "Below the measured street's own level there is no crossing to draw")
         XCTAssertEqual(markingStyle("stop_line").key, 0,
                        "A kind this style does not know yet draws nothing rather than wrong")
     }

@@ -532,7 +532,11 @@ final class PreparedTileDiskCaching {
     // 66: the gap bridger's edge phase is retired (its hulls could stick
     // out of the roadway at complex junctions); tiles prepared with those
     // hulls baked in must rebuild without them.
-    static let preparedFormatVersion: UInt32 = 66
+    // 67: the street draws its full detail from z15, the level the measured
+    // street itself ships at, instead of z16: a z15 prepared tile gains the
+    // lane paint, the crossings, the bus lane letters and the parking bay
+    // comb it was baked without.
+    static let preparedFormatVersion: UInt32 = 67
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

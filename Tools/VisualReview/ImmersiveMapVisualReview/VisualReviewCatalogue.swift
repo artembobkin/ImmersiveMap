@@ -160,6 +160,14 @@ enum VisualReviewCatalogue {
                                                           zoom: 16.4,
                                                           bearing: 0.3,
                                                           pitch: 0.5)
+        /// The same junction one tile level out: the camera sits in the band
+        /// z15 tiles serve, which is where the street has to draw everything
+        /// the z16 shot draws.
+        static let tverskayaOneLevelOut = ImmersiveMapCameraPosition(latitudeDegrees: 55.7570,
+                                                                     longitudeDegrees: 37.6135,
+                                                                     zoom: 15.4,
+                                                                     bearing: 0.3,
+                                                                     pitch: 0.5)
         static let okhotnyParking = ImmersiveMapCameraPosition(latitudeDegrees: 55.7577,
                                                                longitudeDegrees: 37.6156,
                                                                zoom: 16.5,
@@ -431,6 +439,24 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.tverskaya)),
 
         VisualReviewScenario(
+            id: "roads.osm2streets.tverskaya.z15",
+            title: "Tverskaya junction one zoom level out",
+            lookFor: """
+            The same junction a level coarser, where the engine is serving \
+            z15 tiles instead of z16: it must carry the SAME figures as the \
+            shot above, only smaller. Lane separators, centre lines, zebra \
+            crossings, the letters A of the bus lane and the parking bay \
+            combs are all present; nothing is missing that the closer shot \
+            has, and nothing new appears. The paint is fainter and finer \
+            here, which is the camera-zoom fade doing its work, but it is \
+            paint rather than grey mush, and the dashes still sit on the \
+            asphalt as separate marks. Zooming in past 16 must not pop \
+            anything into existence.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.tverskayaOneLevelOut)),
+
+        VisualReviewScenario(
             id: "roads.parking.okhotny",
             title: "Okhotny Ryad, parking lots",
             lookFor: """
@@ -439,8 +465,7 @@ enum VisualReviewCatalogue {
             bays: short white stripes across the strip, evenly spaced, never \
             poking past the kerb. A deep lot reads as rows of bays separated \
             by clean aisles; parking aisles inside a lot carry no kerb of \
-            their own. The comb appears at street zoom and the lot is clean \
-            asphalt one level out. The dedicated bus lane along Okhotny \
+            their own. The dedicated bus lane along Okhotny \
             Ryad carries large white letters A stamped along it, feet toward \
             the oncoming driver, with no recolored surface under them, and \
             the comb never climbs onto it or onto any carriageway. At the \

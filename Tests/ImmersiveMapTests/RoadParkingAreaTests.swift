@@ -49,10 +49,18 @@ final class RoadParkingAreaTests: XCTestCase {
         XCTAssertEqual(lot.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.color, service,
                        "The lot merges into the service tier it belongs to")
 
+        // z15 is the level the lot itself ships at, and a lot draws the same
+        // there as at z16: same asphalt, same kerb, same comb. The tile level
+        // decides the resolution of the polygon, not what is painted on it.
         let coarse = makeStyle(z: 15)
         XCTAssertTrue(coarse.isRoadSurfaceArea, "At z15 the lot is still asphalt with a kerb")
-        XCTAssertFalse(coarse.resolvedLineRenderPasses.contains { $0.roadPassRole == .detail },
-                       "but a 2.6 m bay is a couple of pixels there: no comb")
+        XCTAssertEqual(coarse.resolvedLineRenderPasses.map(\.roadPassRole),
+                       lot.resolvedLineRenderPasses.map(\.roadPassRole),
+                       "and it keeps the comb: a lot looks the same at z15 as at z16")
+
+        let regional = makeStyle(z: 14)
+        XCTAssertFalse(regional.resolvedLineRenderPasses.contains { $0.roadPassRole == .detail },
+                       "Below the level the lot ships at there is nothing to comb")
     }
 
     private let lotRing: [(Int32, Int32)] = [(1500, 1800), (2700, 1800), (2700, 2100), (1500, 2100)]
@@ -78,6 +86,12 @@ final class RoadParkingAreaTests: XCTestCase {
         XCTAssertGreaterThan(auto.detail.drawing.indices.count, 0, "and the comb draws above them")
         XCTAssertEqual(parsed.drawingRoadPhases.ground.fill.drawing.indices.count, 0,
                        "nothing falls to the pedestrian tier")
+
+        // And the same lot combs itself a tile level out, where the camera
+        // between zoom 15 and 16 is served from.
+        let coarse = try parse([lot()], z: 15)
+        XCTAssertGreaterThan(coarse.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The comb is built at z15 too")
     }
 
     func testAParkingAisleInsideTheLotLosesItsOwnRibbon() throws {
@@ -135,7 +149,11 @@ final class RoadParkingAreaTests: XCTestCase {
         let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                properties: ["marking": value("bus_lane")],
                                                                tile: Tile(x: 19807, y: 10243, z: 15)))
-        XCTAssertEqual(coarse.key, 0, "A letter is a couple of metres: a smudge below z16")
+        XCTAssertEqual(coarse.key, lane.key, "and it is stamped at z15 exactly as at z16")
+        let regional = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                                 properties: ["marking": value("bus_lane")],
+                                                                 tile: Tile(x: 9903, y: 5121, z: 14)))
+        XCTAssertEqual(regional.key, 0, "Below the measured street's own level there is no lane to mark")
         let polygon = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                 properties: ["subclass": value("bus_lane_area")],
                                                                 tile: Tile(x: 39615, y: 20486, z: 16)))
@@ -162,7 +180,11 @@ final class RoadParkingAreaTests: XCTestCase {
         let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                properties: ["marking": value("bus_stop_zigzag")],
                                                                tile: Tile(x: 19807, y: 10243, z: 15)))
-        XCTAssertEqual(coarse.key, 0, "A tooth is a metre: a smudge below z16")
+        XCTAssertEqual(coarse.key, stop.key, "and it folds at z15 exactly as at z16")
+        let regional = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                                 properties: ["marking": value("bus_stop_zigzag")],
+                                                                 tile: Tile(x: 9903, y: 5121, z: 14)))
+        XCTAssertEqual(regional.key, 0, "Below the measured street's own level there is no kerb to fold along")
         let parsed = try parse([.init(id: 8,
                                       geometry: .line(points: [(500, 3200), (700, 3200)]),
                                       properties: ["marking": "bus_stop_zigzag"])])
