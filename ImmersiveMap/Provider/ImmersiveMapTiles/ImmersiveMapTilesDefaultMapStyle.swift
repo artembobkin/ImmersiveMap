@@ -109,9 +109,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "poi":
             return poiLabelStyle(props: props, tileZoom: z)
         case "mountain_peak":
-            return pointLabel(key: 74, appearance: mapBorneTextAppearance())
+            return pointLabel(key: 74, appearance: configuration.labels.poi)
         case "aerodrome_label":
-            return pointLabel(key: 75, appearance: mapBorneTextAppearance())
+            return pointLabel(key: 75, appearance: configuration.labels.poi)
         case "housenumber":
             return pointLabel(key: 76, appearance: houseNumberAppearance())
         default:
@@ -1635,22 +1635,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // one is legible while collision thins out the rest.
         appearance.sizePoints = 6
         appearance.fillColor = SIMD3<Float>(0.55, 0.53, 0.50)
-        appearance.haloEm = Self.mapBorneHaloEm
-        return appearance
-    }
-
-    /// A label that lies directly on the map, with nothing beside it to say
-    /// where it belongs, carries a halo to lift it off what it lies on. A POI
-    /// does not: it comes with a disc of its own colour, so the pair reads as
-    /// one mark without an outline fattening the type. The classes below
-    /// borrow the POI appearance for size and colour and state their own halo,
-    /// because they are the first kind rather than the second.
-    private static let mapBorneHaloEm: Float = 0.225
-
-    /// A peak or an aerodrome: POI-sized text with no icon, on the terrain.
-    private func mapBorneTextAppearance() -> ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance {
-        var appearance = configuration.labels.poi
-        appearance.haloEm = Self.mapBorneHaloEm
         return appearance
     }
 

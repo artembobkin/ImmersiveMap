@@ -537,9 +537,11 @@ final class PreparedTileDiskCaching {
     // lane paint, the crossings, the bus lane letters and the parking bay
     // comb it was baked without.
     // 68: a POI label (icon disc, type and the gap between them) is laid out
-    // at half the size it was, and a POI whose category has no icon is not
-    // labelled at all; both are baked into the prepared label geometry.
-    static let preparedFormatVersion: UInt32 = 68
+    // smaller, and a POI whose category has no icon is not labelled at all;
+    // both are baked into the prepared label geometry.
+    // 69: the POI block's scale settled at 1.05; tiles prepared while it was
+    // 0.7 carry the smaller layout baked in.
+    static let preparedFormatVersion: UInt32 = 69
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

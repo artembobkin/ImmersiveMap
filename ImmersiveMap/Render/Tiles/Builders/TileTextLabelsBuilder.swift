@@ -93,9 +93,9 @@ final class TileTextLabelsBuilder {
     /// together. It used to be 1.4, which made the disc alone forty points
     /// across: the POIs read as buttons dropped onto the map rather than as
     /// marks on it, and a long museum name became a paragraph over the
-    /// buildings. Halved, the disc is twenty points and the name sits beside
-    /// it the way a map label does.
-    private static let poiCombinedLabelScale: Float = 0.7
+    /// buildings. At 1.05 the disc is thirty points and the name is a shade
+    /// under twelve, a little smaller than a city's.
+    private static let poiCombinedLabelScale: Float = 1.05
 
     func build(textLabels: [TileMvtParser.TextLabel], tile: Tile) -> PreparedTileCPU.TextLabels {
         let tileIndices = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))

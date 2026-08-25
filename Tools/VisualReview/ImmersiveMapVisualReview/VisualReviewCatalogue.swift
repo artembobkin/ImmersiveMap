@@ -200,11 +200,11 @@ enum VisualReviewCatalogue {
             open counters in a, e and o rather than letters closed up by their \
             halo. Nothing should be so large that the map disappears under the \
             type, and labels should be thinned out enough to leave the streets \
-            visible between them. A POI is a small disc with its name beside \
-            it, the smallest type on the map: check that the name is still \
-            readable at that size and that the disc reads as a mark on the map \
-            rather than a button dropped onto it. Every POI on screen carries \
-            an icon; a name standing alone, with no disc, is a bug.
+            visible between them. A POI is a disc with its name beside it: \
+            check that the pair reads as one mark on the map rather than as a \
+            button dropped onto it, and that the name does not outweigh the \
+            street it stands on. Every POI on screen carries an icon; a name \
+            standing alone, with no disc, is a bug.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattanFlat),
