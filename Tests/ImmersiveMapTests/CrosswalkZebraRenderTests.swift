@@ -15,18 +15,28 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     /// crossing's own point of the fixture tile (off the tile centre, see
     /// below): the crossing is then in the middle of the frame instead of
     /// somewhere off its edge.
-    private static let camera: ImmersiveMapCameraPosition = {
-        let scale = Double(1 << 16)
-        let longitude = (39616.5 / scale) * 360.0 - 180.0
+    ///
+    /// Written out one step at a time, with every type spelled: as a single
+    /// arithmetic expression of untyped literals inside a multi-statement
+    /// closure it type-checked here and timed the solver out on the CI
+    /// compiler (Swift 6.1.2), which failed the whole test bundle.
+    private static let camera: ImmersiveMapCameraPosition = makeCamera()
+
+    private static func makeCamera() -> ImmersiveMapCameraPosition {
+        let scale: Double = Double(1 << 16)
+        let longitude: Double = (39616.5 / scale) * 360.0 - 180.0
         // The crossing sits at v = 1200/4096 of the fixture tile, OFF the
         // tile's y mirror line on purpose (a camera staring at v = 0.5 would
         // frame a mirrored figure just as well); the camera aims at it.
-        let latitude = atan(sinh(.pi * (1.0 - 2.0 * ((20487.0 + 1200.0 / 4096.0) / scale)))) * 180.0 / .pi
+        let row: Double = 20487.0 + 1200.0 / 4096.0
+        let normalizedY: Double = row / scale
+        let mercatorY: Double = Double.pi * (1.0 - 2.0 * normalizedY)
+        let latitude: Double = atan(sinh(mercatorY)) * 180.0 / Double.pi
         return ImmersiveMapCameraPosition(latitudeDegrees: latitude,
                                           longitudeDegrees: longitude,
                                           zoom: 18,
                                           pitch: 0)
-    }()
+    }
 
     /// The tile the camera sits on, which the fixture fills with the scene.
     func testTheCameraSitsOnTheFixtureTile() {
