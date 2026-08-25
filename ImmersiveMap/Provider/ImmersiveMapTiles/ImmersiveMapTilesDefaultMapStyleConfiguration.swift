@@ -370,11 +370,13 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
         tertiary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         minor: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         service: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
-        // A plain pedestrian path is the ground with a casing-less edge, not a
-        // surface of its own: the same warm off-white as the land, so the
-        // footway network reads as routes across the ground rather than a
-        // second, beige road system laid over it.
-        path: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
+        // A pedestrian path is a warm sand tone a clear step under the
+        // ground, the way Apple draws park walks: visible against the beige
+        // land AND against park green, yet quiet enough that the footway
+        // network stays a texture rather than a second road system. It used
+        // to be the exact ground off-white, which made every path invisible
+        // until it crossed a park.
+        path: SIMD4<Float>(0.898, 0.871, 0.812, 1.0),
         rail: SIMD4<Float>(0.741, 0.741, 0.765, 1.0),
         casing: SIMD4<Float>(0.718, 0.725, 0.735, 1.0)
     )
