@@ -21,6 +21,15 @@ final class TextShaderStrokeClampTests: XCTestCase {
         XCTAssertTrue(source.contains("half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));"))
     }
 
+    /// A class that asks for no halo (the POIs) must get none: fill and outer
+    /// edge come from two different distance fields, so their difference at
+    /// zero width is not reliably zero.
+    func testAZeroWidthStrokeIsSkippedRatherThanDifferenced() throws {
+        let source = try textShaderSource()
+
+        XCTAssertTrue(source.contains("half stroke = strokeWidthPx > 0.0 ? clamp(outer - fill, 0.0h, 1.0h) : 0.0h;"))
+    }
+
     func testBaseTextFragmentCapsStrokeBeforeItFillsGlyphQuad() throws {
         let source = try textShaderSource()
         let baseFragmentSource = try XCTUnwrap(source.components(separatedBy: "fragment half4 roadTextFragment").first)

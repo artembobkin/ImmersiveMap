@@ -65,7 +65,12 @@ static half4 shadeGlyph(TextDistance distance,
                         float vertexAlpha) {
     half fill = half(smoothstep(-0.5, 0.5, fillPxDist));
     half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));
-    half stroke = clamp(outer - fill, 0.0h, 1.0h);
+    // A style that asks for no halo gets none, exactly: the fill and the outer
+    // edge are read from two different distance fields (the MSDF keeps a
+    // corner sharp where the plain SDF rounds it), so at zero width their
+    // difference is not reliably zero and a hairline of stroke colour can
+    // survive around a corner.
+    half stroke = strokeWidthPx > 0.0 ? clamp(outer - fill, 0.0h, 1.0h) : 0.0h;
 
     half coverage = clamp(fill + stroke, 0.0h, 1.0h);
     half alpha = coverage * half(vertexAlpha);

@@ -427,9 +427,15 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles {
         country: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.162, sizePoints: 13, weight: .bold),
+        // No halo: a POI name is short, it sits beside a disc of its own
+        // colour, and the white outline it used to wear (0.225 em, the widest
+        // of any class) fattened every letter at the small size the pair is
+        // drawn at. The other classes keep theirs: a street name lies on the
+        // asphalt and a city name on the landcover, with nothing else to
+        // separate them from it.
         poi: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.225, sizePoints: 8, weight: .thin),
+            haloEm: 0, sizePoints: 8, weight: .thin),
         water: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
             fillColor: SIMD3<Float>(0.24, 0.44, 0.68), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.168, sizePoints: 9.5, weight: .thin),

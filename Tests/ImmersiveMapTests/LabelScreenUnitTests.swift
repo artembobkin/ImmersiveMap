@@ -152,7 +152,14 @@ final class LabelScreenUnitTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(labelTextStyle.sizePoints,
                                         LabelTypeScale.minimumSizePoints,
                                         "\(name) resolves below the readable floor")
-            XCTAssertGreaterThan(labelTextStyle.haloEm, 0, "\(name) lost its halo")
+            // A POI is the one class drawn beside a disc of its own colour,
+            // and it carries no halo; everything that lies directly on the
+            // map has one to lift it off what it lies on.
+            if name == "poi" {
+                XCTAssertEqual(labelTextStyle.haloEm, 0, "a POI wears no outline")
+            } else {
+                XCTAssertGreaterThan(labelTextStyle.haloEm, 0, "\(name) lost its halo")
+            }
         }
     }
 

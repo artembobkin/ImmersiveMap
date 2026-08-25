@@ -380,6 +380,23 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(officeStyle.labelMinCameraZoom, 16, "and it arrives at the iconless floor")
     }
 
+    /// A POI name wears no white outline: it is short, it sits beside a disc
+    /// of its own colour, and at the size the pair is drawn a halo fattened
+    /// every letter. The classes that lie directly on the map keep theirs.
+    func testAPoiLabelCarriesNoHaloWhileTheClassesOnTheMapDo() {
+        let labels = ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles.immersiveMapTilesDefault
+        XCTAssertEqual(labels.poi.haloEm, 0)
+        XCTAssertGreaterThan(labels.road.haloEm, 0)
+        XCTAssertGreaterThan(labels.city.haloEm, 0)
+        XCTAssertGreaterThan(labels.water.haloEm, 0)
+
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let museum = makeStyle(style, layerName: "poi", className: "museum", rank: 2, zoom: 16)
+        let textStyle = museum.labelTextStyle
+        XCTAssertEqual(textStyle?.haloEm, 0, "and the style hands the label the same zero")
+        XCTAssertEqual(textStyle?.haloWidthPixels(screenScale: ScreenScale(pixelsPerPoint: 3)), 0)
+    }
+
     func testPoiRequiresIconChangesPreparedTileRevision() {
         let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let updated = original.labelVisibility { visibility in
