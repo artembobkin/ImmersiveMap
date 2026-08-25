@@ -40,7 +40,7 @@ ImmersiveMapView()
 | Builder | What it groups |
 |---|---|
 | `labels(_:)` | Per-kind text appearance: fill, stroke, stroke width, size, weight for city, town, country, POI, water, road. |
-| `labelVisibility(_:)` | Zoom thresholds for label kinds the style itself gates, e.g. `poiIconlessMinimumZoom`. |
+| `labelVisibility(_:)` | Which labels the style draws at all: `poiRequiresIcon` (a POI whose category has no icon is left out, on by default), `poiIconlessMinimumZoom` (the zoom those text-only POIs arrive at when it is off), `poiMinimumZoom`. |
 | `layers(_:)` | Area and line colors: land, water, wood, grass, farmland, ice, sand, wetland, and the road palette by class through `layers.roads`. |
 | `features(_:)` | Feature-level colors that are not a layer palette, notably `buildingFillColor`. |
 | `globalLandcover(_:)` | The low-zoom biome palette used before detailed land cover arrives. |

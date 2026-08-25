@@ -1518,6 +1518,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             + Float(log2(effectiveRank / Self.poiNativeCellBudget) / 2.0)
         let isIconless = poiSpriteResolver.resolve(attributes: props, layerName: "poi") == nil
         if isIconless {
+            // A category the icon set does not know (an office, a company, a
+            // monument, a named building) has nothing to draw but its name,
+            // and in a city centre those names outnumber everything else: bare
+            // text over the buildings, saying nothing about what the place is.
+            // By default they are left out entirely; a configuration that
+            // wants them back gets them from the iconless zoom floor.
+            guard configuration.labelVisibility.poiRequiresIcon == false else {
+                return hiddenStyle
+            }
             minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiIconlessMinimumZoom))
         }
         minCameraZoom = min(minCameraZoom, Float(tileZoom) + Self.poiMaximumOverzoomAppearanceDelay)

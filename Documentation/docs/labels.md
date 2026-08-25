@@ -81,7 +81,7 @@ Label colors and sizes are not part of `LabelSettings`: they belong to the map s
 
 ## Limitations
 
-- Label sizes are defined in layout points by the style, so a label reads at the same physical size on a 2x desktop display and a 3x phone, and a 4K [video export](tour-video-export.md) is a sharper 1080p export rather than one with relatively smaller labels. A style value under 11 points is raised to it, the floor for type that is meant to be read.
+- Label sizes are defined in layout points by the style, so a label reads at the same physical size on a 2x desktop display and a 3x phone, and a 4K [video export](tour-video-export.md) is a sharper 1080p export rather than one with relatively smaller labels. A style value under 11 points is raised to it, the floor for type that is meant to be read. A POI label is the exception: icon disc, name and the gap between them are laid out as one block and scaled together, at 0.7 of the style size, so its name is the smallest type on the map by design.
 - Which names exist at all is a property of the tile source, not the engine. A source that carries no `name:ja` will fall back however the policy says, in every language you ask for.
 - Changing the language reloads prepared tiles.
 

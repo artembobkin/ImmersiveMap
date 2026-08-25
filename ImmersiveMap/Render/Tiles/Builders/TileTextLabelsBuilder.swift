@@ -86,7 +86,16 @@ final class TileTextLabelsBuilder {
                                                  wrap: extendedWrap,
                                                  weight: weight)
     }
-    private static let poiCombinedLabelScale: Float = 1.4
+    /// How large a POI label draws next to the plain text labels around it.
+    ///
+    /// A POI is a pin plus its name, and the pair is laid out as one block, so
+    /// one factor scales the type, the icon disc and the gap between them
+    /// together. It used to be 1.4, which made the disc alone forty points
+    /// across: the POIs read as buttons dropped onto the map rather than as
+    /// marks on it, and a long museum name became a paragraph over the
+    /// buildings. Halved, the disc is twenty points and the name sits beside
+    /// it the way a map label does.
+    private static let poiCombinedLabelScale: Float = 0.7
 
     func build(textLabels: [TileMvtParser.TextLabel], tile: Tile) -> PreparedTileCPU.TextLabels {
         let tileIndices = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))

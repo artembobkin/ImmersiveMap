@@ -317,14 +317,16 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let deepRankStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 20, zoom: 14)
         XCTAssertEqual(deepRankStyle.labelMinCameraZoom, 14 + log2(Float(20)) / 2, accuracy: 0.001)
 
-        // Infrastructure (bus, rank 2): offset +40 -> log4(42) ~ 2.7 zooms.
-        let busStyle = makeStyle(style, layerName: "poi", className: "bus", rank: 2, zoom: 14)
-        XCTAssertEqual(busStyle.labelMinCameraZoom, 14 + log2(Float(42)) / 2, accuracy: 0.001)
+        // Infrastructure (a filling station, rank 2): offset +40 -> log4(42)
+        // ~ 2.7 zooms. A class with an icon on purpose: an infrastructure
+        // category the icon set does not cover is not labelled at all.
+        let fuelStyle = makeStyle(style, layerName: "poi", className: "fuel", rank: 2, zoom: 14)
+        XCTAssertEqual(fuelStyle.labelMinCameraZoom, 14 + log2(Float(42)) / 2, accuracy: 0.001)
 
-        // Iconless POI (class "office" outside the icon set): the configurable
-        // iconless threshold (16) remains the lower bound.
+        // Iconless POI (class "office" outside the icon set): not drawn at
+        // all, whatever its rank says.
         let officeStyle = makeStyle(style, layerName: "poi", className: "office", rank: 2, zoom: 14)
-        XCTAssertEqual(officeStyle.labelMinCameraZoom, 16)
+        XCTAssertEqual(officeStyle.key, 0, "A POI with no icon carries only its name and is left out")
 
         // Zoom agnosticism: the same shop in a z13 tile appears one zoom earlier.
         let earlierTileStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 13)
@@ -351,6 +353,37 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
         let updated = original.labelVisibility { visibility in
             visibility.poiMinimumZoom = 30
+        }
+
+        XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+    }
+
+    /// A POI the icon set cannot depict is left out by default, and a
+    /// configuration that wants those names back gets them from the iconless
+    /// zoom floor, exactly as before.
+    func testAnIconlessPoiIsHiddenUnlessTheConfigurationAsksForIt() {
+        let byDefault = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        XCTAssertEqual(makeStyle(byDefault, layerName: "poi", className: "office", rank: 2, zoom: 14).key, 0)
+        XCTAssertEqual(makeStyle(byDefault, layerName: "poi", className: "monument", rank: 2, zoom: 16).key, 0)
+        // A category with an icon is untouched.
+        XCTAssertNotEqual(makeStyle(byDefault, layerName: "poi", className: "museum", rank: 2, zoom: 14).key, 0)
+
+        let withText = ImmersiveMapTilesDefaultMapStyle(
+            configuration: .immersiveMapTilesDefault.labelVisibility { visibility in
+                visibility.poiRequiresIcon = false
+            }
+        )
+        let officeStyle = makeStyle(withText, layerName: "poi", className: "office", rank: 2, zoom: 14)
+        XCTAssertNotEqual(officeStyle.key, 0)
+        XCTAssertEqual(officeStyle.labelMinCameraZoom, 16, "and it arrives at the iconless floor")
+    }
+
+    func testPoiRequiresIconChangesPreparedTileRevision() {
+        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let updated = original.labelVisibility { visibility in
+            visibility.poiRequiresIcon = false
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)

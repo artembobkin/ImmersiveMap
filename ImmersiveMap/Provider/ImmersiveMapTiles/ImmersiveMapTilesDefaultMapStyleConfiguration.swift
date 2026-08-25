@@ -57,11 +57,23 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     /// Zoom thresholds that decide whether a label class is drawn at all (as
     /// opposed to `LabelStyles`, which only decides how a drawn label looks).
     public struct LabelVisibility: Equatable, Sendable {
+        /// Whether a POI needs an icon to be labelled at all.
+        ///
+        /// A category the icon set does not recognize (an office, a company, a
+        /// monument, a named building) has nothing to draw but its name, and
+        /// those names are the bulk of a city centre's POIs: bare text over the
+        /// buildings, in the type size of a landmark, saying nothing about what
+        /// the place is. The default is to leave them out, so the map carries
+        /// the categories it can actually depict. Set to `false` to draw them
+        /// as text, from `poiIconlessMinimumZoom`.
+        public var poiRequiresIcon: Bool
+
         /// Minimum tile zoom from which icon-less POIs (offices, companies, and
         /// other categories outside the set of recognized icons) are drawn. POIs
         /// with an icon draw from the regular threshold, so overview zooms keep
         /// only icon POIs while the dense scatter of text-only labels kicks in
-        /// deeper.
+        /// deeper. Read only when `poiRequiresIcon` is `false`, since otherwise
+        /// icon-less POIs are not drawn at any zoom.
         public var poiIconlessMinimumZoom: Int
 
         /// Minimum camera zoom from which any POI label (icon or icon-less) is
@@ -71,9 +83,11 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         public var poiMinimumZoom: Int
 
         public init(poiIconlessMinimumZoom: Int = 16,
-                    poiMinimumZoom: Int = 0) {
+                    poiMinimumZoom: Int = 0,
+                    poiRequiresIcon: Bool = true) {
             self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
             self.poiMinimumZoom = poiMinimumZoom
+            self.poiRequiresIcon = poiRequiresIcon
         }
     }
 
@@ -294,6 +308,7 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         // must participate in the disk-cache identity.
         out.append(Float(labelVisibility.poiIconlessMinimumZoom))
         out.append(Float(labelVisibility.poiMinimumZoom))
+        out.append(labelVisibility.poiRequiresIcon ? 1 : 0)
         return out
     }
 }

@@ -536,7 +536,10 @@ final class PreparedTileDiskCaching {
     // street itself ships at, instead of z16: a z15 prepared tile gains the
     // lane paint, the crossings, the bus lane letters and the parking bay
     // comb it was baked without.
-    static let preparedFormatVersion: UInt32 = 67
+    // 68: a POI label (icon disc, type and the gap between them) is laid out
+    // at half the size it was, and a POI whose category has no icon is not
+    // labelled at all; both are baked into the prepared label geometry.
+    static let preparedFormatVersion: UInt32 = 68
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
