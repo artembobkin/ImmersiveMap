@@ -90,7 +90,7 @@ MVT layers differ between sources (OpenMapTiles is one schema; other tile servic
 
 ## Attribution
 
-The default badge credits the hosted source ("© OpenStreetMap © OpenMapTiles"). An app pointing the map at its own data owns the credit, because the engine cannot know what the endpoint serves. Declare it:
+The default badge credits the hosted source ("© OpenStreetMap"). An app pointing the map at its own data owns the credit, because the engine cannot know what the endpoint serves. Declare it:
 
 ```swift
 ImmersiveMapView()
@@ -99,7 +99,7 @@ ImmersiveMapView()
         attributionOverride: .openStreetMap))
 ```
 
-`.openStreetMap` is the credit for plain OpenStreetMap data and nothing else. A planet built in the OpenMapTiles schema (which includes the source this engine ships with) owes a second credit, so it needs the spelled-out form below rather than the preset.
+`.openStreetMap` is the credit for plain OpenStreetMap data and nothing else, which is what the hosted source is. A dataset that owes a second party a credit of its own (a planet in the OpenMapTiles schema, a commercial basemap mixed in) needs the spelled-out form below rather than the preset.
 
 Or spell it out for a mixed or custom dataset:
 

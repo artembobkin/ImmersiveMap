@@ -2,7 +2,7 @@
 
 A map engine draws tiles, it does not produce them. Here is exactly what you are rendering when you write `ImmersiveMapView()` and nothing else.
 
-**Out of the box.** The default provider fetches vector tiles from `immersivemap.dev`, the tile service run for this project. It serves a planet build in the [OpenMapTiles](https://openmaptiles.org) schema, assembled from [OpenFreeMap](https://openfreemap.org) data, which is [OpenStreetMap](https://www.openstreetmap.org/copyright) data under ODbL. No token, no account, no sign-up, and the demo apps in this repository render against it directly.
+**Out of the box.** The default provider fetches vector tiles from `immersivemap.dev`, the tile service run for this project. It serves a planet build assembled by the ImmersiveMap tile pipeline from [OpenStreetMap](https://www.openstreetmap.org/copyright) data, under ODbL. No token, no account, no sign-up, and the demo apps in this repository render against it directly.
 
 **A key of your own.** The default provider works anonymously on a shared public pool. A free key from [immersivemap.dev/account](https://immersivemap.dev/account) moves you onto your own throughput; attach it as a request header, `.tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt", headers: ["Authorization": "Bearer im_…"])`. The header form is deliberate: a key in the URL becomes part of the CDN cache key, so every customer would get a private copy of tiles that are byte-identical for everyone. The demo apps in this repository read the key from the `IMMERSIVEMAP_API_KEY` environment variable, or, when that is empty, from a gitignored `LocalSecrets.plist` at the repository root. Create it once and git never sees your key: `/usr/libexec/PlistBuddy -c "Add :IMMERSIVEMAP_API_KEY string im_YOUR_KEY" LocalSecrets.plist`. The workspace lists the file at the top level of the `ImmersiveMap` group, so it can be created and edited right in Xcode (the reference shows red until the file exists). A physical device cannot read files off the Mac, so the two device-capable projects (`ImmersiveMapIOS`, `ImmersiveMapVisualReviewIOS`) copy the plist into the app bundle at build time (a "Bundle LocalSecrets" build phase; do not distribute builds made this way), and the schemes also carry the variable with an empty value as a manual override.
 
@@ -21,7 +21,7 @@ ImmersiveMapView()
 
 Map data carries licence obligations, and the most common one, ODbL for OpenStreetMap data, requires visible credit in your app.
 
-For the default source the engine handles this for you: the badge shows the one-line credit "© OpenStreetMap © OpenMapTiles" linking to the full license story, which is what the built-in tiles require. You do not have to write anything.
+For the default source the engine handles this for you: the badge shows the one-line credit "© OpenStreetMap" linking to the full license story, which is what the built-in tiles require. You do not have to write anything.
 
 If you point the map at your own data with `.tileURLTemplate`, the credit is yours to get right, because the engine cannot know what your endpoint serves. Declare it:
 

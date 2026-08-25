@@ -5,14 +5,14 @@
 import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
-    /// The built-in tiles are the OpenFreeMap planet in the OpenMapTiles schema,
-    /// i.e. OpenStreetMap data under ODbL. The one-line badge must name the
-    /// data and the schema, not the engine.
+    /// The built-in tiles are OpenStreetMap data under ODbL, built by the
+    /// ImmersiveMap tile pipeline. The one-line badge names the data, and
+    /// only the data: not the engine, and no second party whose schema the
+    /// tiles no longer follow.
     func testDefaultAttributionCreditsOpenStreetMapAndNotTheEngine() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        XCTAssertTrue(attribution.title.contains("OpenStreetMap"))
-        XCTAssertTrue(attribution.title.contains("OpenMapTiles"))
+        XCTAssertEqual(attribution.title, "© OpenStreetMap")
         XCTAssertTrue(attribution.copyright.isEmpty)
         XCTAssertEqual(attribution.linkURL, URL(string: "https://www.openstreetmap.org/copyright"))
         XCTAssertFalse(attribution.title.contains("ImmersiveMap"))

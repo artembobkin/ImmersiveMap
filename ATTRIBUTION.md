@@ -37,7 +37,7 @@ ImmersiveMapView()
     ))
 ```
 
-With the built-in tiles the credit reads **© OpenStreetMap © OpenMapTiles**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
+With the built-in tiles the credit reads **© OpenStreetMap**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright).
 
 Not enough on its own: the credit only on a Settings or About screen.
 
@@ -51,10 +51,10 @@ The required credit depends on whose tiles you render, not on which parts of the
 
 | Tile provider | Required credit | Link |
 | --- | --- | --- |
-| `ImmersiveMapTilesProvider` (default) | `© OpenStreetMap © OpenMapTiles` | [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) |
+| `ImmersiveMapTilesProvider` (default) | `© OpenStreetMap` | [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) |
 | Custom `VectorTileProvider` | whatever your data source requires, because the engine cannot know | your source's license page |
 
-The hosted service at `tiles.immersivemap.dev` serves an [OpenFreeMap](https://openfreemap.org) planet build in the [OpenMapTiles](https://openmaptiles.org) schema, which is OpenStreetMap data under ODbL. The credit names the data (OpenStreetMap) and the schema (OpenMapTiles); OpenFreeMap asks for no credit of its own, and the engine never asks for one either. A tile source you plug in through `VectorTileProvider` carries whatever its own licence requires, which may or may not include an OpenStreetMap credit: that depends on the data behind it, and the engine cannot know. Read the source's terms and declare the credit they ask for on the provider.
+The hosted service at `tiles.immersivemap.dev` serves a planet build assembled by the ImmersiveMap tile pipeline from OpenStreetMap data, under ODbL. The credit names the data, and the data is all that is owed: the schema is the project's own, so there is no second party asking to be named, and the engine never asks for a credit either. The badge used to read `© OpenStreetMap © OpenMapTiles`, back when the planet was an [OpenFreeMap](https://openfreemap.org) build in the [OpenMapTiles](https://openmaptiles.org) schema. A tile source you plug in through `VectorTileProvider` carries whatever its own licence requires, which may or may not include an OpenStreetMap credit: that depends on the data behind it, and the engine cannot know. Read the source's terms and declare the credit they ask for on the provider.
 
 ### Where it has to appear
 
@@ -84,7 +84,7 @@ A short checklist before shipping:
 
 The badge takes its text from the **active tile provider**. With the built-in tiles it renders the one-line credit:
 
-> © OpenStreetMap © OpenMapTiles
+> © OpenStreetMap
 
 A tap (or click on macOS) opens [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) with the full license story. A custom `VectorTileProvider` shows whatever attribution it declares, and nothing when it declares none (see [the custom tile provider guide](Documentation/docs/custom-tile-provider.md)).
 
@@ -150,7 +150,7 @@ ZStack(alignment: .bottomLeading) {
         .attributionSettings(isVisible: false)
         .attributionProvidedExternally()
 
-    Link("© OpenStreetMap © OpenMapTiles",
+    Link("© OpenStreetMap",
          destination: URL(string: "https://www.openstreetmap.org/copyright")!)
         .font(.caption2)
         .padding(8)
@@ -173,5 +173,4 @@ Nothing in the license requires crediting ImmersiveMap, and the badge deliberate
 - [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/): the license on OpenStreetMap data.
 - [OpenStreetMap copyright and license](https://www.openstreetmap.org/copyright): the user-facing summary the badge links to.
 - [OSMF attribution guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines): where "visible on or next to the map" comes from.
-- [OpenMapTiles license](https://openmaptiles.org/#license): the schema and planet build terms.
-- [OpenFreeMap](https://openfreemap.org): the data source behind the hosted tiles.
+- [OpenStreetMap contributors](https://www.openstreetmap.org/copyright): the data behind the hosted tiles.

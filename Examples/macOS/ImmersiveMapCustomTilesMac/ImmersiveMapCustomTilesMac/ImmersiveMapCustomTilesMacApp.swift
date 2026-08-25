@@ -66,12 +66,12 @@ private struct CustomTilesScreen: View {
             .tileURLTemplate(appliedTemplate, headers: headers)
             // Required by the data licence, and it has to name what is
             // actually being served. This example defaults to the hosted
-            // endpoint, an OpenStreetMap planet in the OpenMapTiles schema, so
-            // the badge credits both. Point the URL field at your own source
-            // and this string becomes yours to get right, see ATTRIBUTION.md.
+            // endpoint, an OpenStreetMap planet, so the badge credits
+            // OpenStreetMap. Point the URL field at your own source and this
+            // string becomes yours to get right, see ATTRIBUTION.md.
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(
                 attributionOverride: ImmersiveMapAttribution(
-                    title: "© OpenStreetMap © OpenMapTiles",
+                    title: "© OpenStreetMap",
                     copyright: "",
                     linkURL: URL(string: "https://www.openstreetmap.org/copyright"))))
         guard usesCustomStyle else {

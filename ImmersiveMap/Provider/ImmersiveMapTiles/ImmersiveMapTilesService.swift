@@ -3,8 +3,8 @@
 
 import Foundation
 
-/// The hosted ImmersiveMap Tiles service: OpenMapTiles-schema vector tiles
-/// from an OpenFreeMap planet build, which is OpenStreetMap data under ODbL.
+/// The hosted ImmersiveMap Tiles service: vector tiles built by the
+/// ImmersiveMap tile pipeline from OpenStreetMap data, under ODbL.
 /// These constants are what a bare `ImmersiveMapView()` renders with; pointing
 /// the map elsewhere is one `.tileURLTemplate(_:headers:)` call.
 public enum ImmersiveMapTilesService {
@@ -32,11 +32,14 @@ public enum ImmersiveMapTilesService {
         return hasher.finalize()
     }
 
-    /// The credit the hosted data requires: the data (OpenStreetMap, per ODbL)
-    /// and the schema (OpenMapTiles, per its attribution terms); the link
-    /// carries the full story. OpenFreeMap asks for no credit of its own.
+    /// The credit the hosted data requires: OpenStreetMap, per ODbL, and the
+    /// link carries the full story. Nothing else is owed. The tiles are built
+    /// by the ImmersiveMap tile pipeline in a schema of its own, so there is
+    /// no second party whose terms ask to be named; the badge used to add
+    /// "© OpenMapTiles" back when the planet was an OpenFreeMap build in that
+    /// project's schema.
     public static let attribution = ImmersiveMapAttribution(
-        title: "© OpenStreetMap © OpenMapTiles",
+        title: "© OpenStreetMap",
         copyright: "",
         linkURL: URL(string: "https://www.openstreetmap.org/copyright")
     )
