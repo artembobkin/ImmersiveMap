@@ -272,6 +272,35 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                        "The paint inside the tunnel is gone")
     }
 
+    /// The tiles now say it themselves: a tunnel surface ships with
+    /// `brunnel=tunnel` (a service driveway under a courtyard carries no
+    /// `layer` at all), its paint is not shipped, and the paint on a bridge
+    /// deck carries the deck's `brunnel` and `layer`. The engine takes the
+    /// attributes as they are and the resolver has nothing left to match.
+    func testASurfaceShippedAsATunnelDrawsAsOneWithoutALayer() throws {
+        let parsed = try parse([surface(coveringRing, extra: ["class": "service", "brunnel": "tunnel"]),
+                                street([(1900, 1050), (2500, 1050)],
+                                       extra: ["class": "service", "brunnel": "tunnel"])])
+        let tunnelFill = parsed.drawingRoadPhases.tunnel.fill
+        XCTAssertGreaterThan(tunnelFill.drawing.indices.count, 0, "The surface draws in the tunnel phases")
+        XCTAssertEqual(tunnelFill.styles.first?.color.w ?? 1, ImmersiveMapTilesDefaultMapStyle.tunnelFillOpacity,
+                       accuracy: 1e-6, "at the tunnel opacity")
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.fill.drawing.indices.count, 0,
+                       "and nothing of it as open road")
+    }
+
+    func testPaintShippedOnABridgeDeckDrawsWithTheDeck() throws {
+        let deck = surface(coveringRing, extra: ["brunnel": "bridge", "layer": "1"])
+        let parsed = try parse([deck,
+                                street([(1900, 1050), (2500, 1050)], extra: ["brunnel": "bridge", "layer": "1"]),
+                                .init(id: 9, geometry: .line(points: [(1900, 1050), (2500, 1050)]),
+                                      properties: ["marking": "lane_separator", "brunnel": "bridge", "layer": "1"])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.bridge.detail.drawing.indices.count, 0,
+                             "The deck's paint draws in the bridge phases, above the roads under it")
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                       "and not on the ground")
+    }
+
     func testATunnelSurfaceWithoutAStreetIdMatchesByContainment() throws {
         // No street id on either side: the centreline running inside the
         // polygon is what makes it the tunnel's surface.
