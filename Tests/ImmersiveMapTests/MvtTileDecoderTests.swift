@@ -440,4 +440,20 @@ final class MvtTileDecoderTests: XCTestCase {
     private func zigzag(_ value: Int32) -> UInt32 {
         UInt32(bitPattern: (value << 1) ^ (value >> 31))
     }
+
+    /// `integerValue` reads a whole number from whichever field the writer
+    /// chose. Planetiler writes `sint` for every integer, so a reader that
+    /// knew only `int` read a tunnel's `layer=-1` as absent.
+    func testIntegerValueReadsEveryNumericField() {
+        XCTAssertEqual(MvtValue.sint(-1).integerValue, -1)
+        XCTAssertEqual(MvtValue.sint(51_050_554).integerValue, 51_050_554)
+        XCTAssertEqual(MvtValue.int(-3).integerValue, -3)
+        XCTAssertEqual(MvtValue.uint(7).integerValue, 7)
+        XCTAssertNil(MvtValue.uint(UInt64.max).integerValue)
+        XCTAssertEqual(MvtValue.double(2.0).integerValue, 2)
+        XCTAssertEqual(MvtValue.string("-1").integerValue, -1)
+        XCTAssertNil(MvtValue.string("tunnel").integerValue)
+        XCTAssertNil(MvtValue.bool(true).integerValue)
+        XCTAssertNil(MvtValue.absent.integerValue)
+    }
 }

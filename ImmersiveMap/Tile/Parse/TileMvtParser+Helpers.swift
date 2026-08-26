@@ -189,21 +189,7 @@ extension TileMvtParser {
     }
 
     func parseIntValue(_ value: MvtValue) -> Int? {
-        switch value {
-        case .int(let number), .sint(let number):
-            return Int(number)
-        case .uint(let number):
-            guard number <= UInt64(Int.max) else { return nil }
-            return Int(number)
-        case .float(let number):
-            return Int(number)
-        case .double(let number):
-            return Int(number)
-        case .string(let text):
-            return Int(text)
-        case .bool, .absent:
-            return nil
-        }
+        value.integerValue
     }
 
     func isTruthy(_ value: MvtValue?) -> Bool {

@@ -107,8 +107,12 @@ enum VectorTileFixture {
                 }
                 if valueIndex[value] == nil {
                     valueIndex[value] = UInt32(layer.values.count)
+                    // A whole number ships as `sint`, the field Planetiler
+                    // writes every integer with (a negative `layer`, a
+                    // `street` id): a reader that only knows `int` must
+                    // fail here as it does on the real tiles.
                     if let integer = Int64(value) {
-                        layer.values.append(.int(integer))
+                        layer.values.append(.sint(integer))
                     } else {
                         layer.values.append(.string(value))
                     }

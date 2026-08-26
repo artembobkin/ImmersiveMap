@@ -612,6 +612,31 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
     }
 
+    /// The style key of everything a tunnel draws, one per class fill key.
+    /// A key is a colour slot per tile: the parser bakes the first style it
+    /// meets under a key and every polygon with that key samples it. A
+    /// translucent tunnel sharing its class key made the first tunnel in a
+    /// tile the colour of every road of that class in it. A tunnel pass
+    /// never derives a casing or marking key from its key (both are skipped
+    /// for tunnels), so the `+1` marking rule does not reach these. From the
+    /// separate-road zoom keys do not order drawing (the road phases sort by
+    /// structure, layer, role and class); below it the generic ground path
+    /// draws by ascending key, where a motorway tunnel stroke sits above the
+    /// other roads, invisible at a point and a half and twenty percent.
+    private static func roadTunnelKey(forFillKey fillKey: UInt8) -> UInt8 {
+        switch fillKey {
+        case 56: return 89
+        case 54: return 88
+        case 52: return 87
+        case 50: return 86
+        case 48: return 85
+        case 44: return 84
+        case 43: return 83
+        case 42: return 82
+        default: return 81
+        }
+    }
+
     /// Casing keys sort below every road fill (and above buildings at 30):
     /// below the separate-road zoom the generic ground path draws by
     /// ascending key, so this is what puts every casing under every fill,
@@ -889,7 +914,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // at the tunnel opacity, and nothing drawn on it (the parser clips
         // the shipped paint out of it).
         let color = tunnel ? Self.tunnelTone(classColor) : classColor
-        let surfaceKey = fillKey
+        let surfaceKey = tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
         var passes: [LineRenderPass] = []
@@ -1055,7 +1080,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let baseColor = accent ?? streetColor
         let baseStreetColor = accent != nil ? streetColor : nil
         return FeatureStyle.pointLockedLine(
-            key: fillKey,
+            key: tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey,
             color: tunnel ? Self.tunnelTone(baseColor) : baseColor,
             streetColor: tunnel ? baseStreetColor.map(Self.tunnelTone) : baseStreetColor,
             widthPoints: widthPoints,
@@ -1091,6 +1116,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let baseFillStreetColor = overviewAccent != nil ? color : nil
         let fillColor = tunnel ? Self.tunnelTone(baseFillColor) : baseFillColor
         let fillStreetColor = tunnel ? baseFillStreetColor.map(Self.tunnelTone) : baseFillStreetColor
+        let fillPassKey = tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey
         // The floor stops mattering once the world width exceeds it, so the
         // casing keeps its proportion by flooring half a point above the fill.
         let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0
@@ -1115,7 +1141,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             )
         }
         passes.append(
-            LineRenderPass(key: fillKey,
+            LineRenderPass(key: fillPassKey,
                            color: fillColor,
                            streetColor: fillStreetColor,
                            lowZoomFadeMask: roadLowZoomFadeMask,
@@ -1198,7 +1224,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         }
 
         return FeatureStyle(
-            key: fillKey,
+            key: fillPassKey,
             color: fillColor,
             streetColor: fillStreetColor,
             lowZoomFadeMask: roadLowZoomFadeMask,

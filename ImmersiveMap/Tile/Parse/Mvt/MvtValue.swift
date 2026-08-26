@@ -53,6 +53,30 @@ enum MvtValue: Hashable, Sendable {
         if case .bool(let value) = self { return value }
         return nil
     }
+
+    /// The value read as an integer whatever numeric field the writer chose.
+    /// Planetiler writes every whole number as `sint` (a negative `layer`, a
+    /// `street` id), other writers use `int` or `uint`, and hand-written
+    /// tiles sometimes ship numbers as strings; a reader that matches one
+    /// case reads zero for the rest, which is how a tunnel's `layer=-1`
+    /// once went unread.
+    var integerValue: Int? {
+        switch self {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            guard number <= UInt64(Int.max) else { return nil }
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text)
+        case .bool, .absent:
+            return nil
+        }
+    }
 }
 
 /// The `Tile.GeomType` enumeration of the Mapbox Vector Tile schema, with the

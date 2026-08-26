@@ -546,7 +546,11 @@ final class PreparedTileDiskCaching {
     // `layer`, matched to its `brunnel=tunnel` centreline) takes the tunnel
     // look instead of open asphalt with a kerb, and the shipped lane paint
     // inside that surface is clipped away; all three are baked geometry.
-    static let preparedFormatVersion: UInt32 = 70
+    // 71: tunnel geometry moves to style keys of its own. Under the class
+    // key the first tunnel in a tile baked its translucent colour into the
+    // slot every road of that class samples, so tiles prepared as v70 carry
+    // whole ghosted streets.
+    static let preparedFormatVersion: UInt32 = 71
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

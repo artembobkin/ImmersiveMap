@@ -215,6 +215,63 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                              "The surface is an ordinary underpass and keeps its paint")
     }
 
+    /// The Arbat Gate layout in one tile: an ordinary street with its own
+    /// surface and paint next to the tunnel. A style key is one baked colour
+    /// per tile, so the tunnel must not share a key with the street: with the
+    /// class key shared, the first tunnel in the tile made every road of its
+    /// class in the tile translucent, and the tunnel span drew doubled.
+    func testATunnelDoesNotTintTheOtherRoadsOfItsClassAndDrawsOnce() throws {
+        let opacity = ImmersiveMapTilesDefaultMapStyle.tunnelFillOpacity
+        let openSurface: [(Int32, Int32)] = [(600, 2400), (1400, 2400), (1400, 2900), (600, 2900)]
+        let tunnel: [VectorTileFixture.Feature] = [
+            surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+            tunnelLine([(1900, 1050), (2500, 1050)]),
+            marking([(1900, 1050), (2500, 1050)]),
+        ]
+        let open: [VectorTileFixture.Feature] = [
+            surface(openSurface, id: 11, extra: ["street": "8"]),
+            street([(700, 2650), (1300, 2650)], id: 12, extra: ["street": "8"]),
+            marking([(700, 2650), (1300, 2650)], id: 13),
+        ]
+        // The tunnel comes first in the tile on purpose: that is the order
+        // that poisoned the shared key.
+        let parsed = try parse(tunnel + open)
+        let surfaces = parsed.drawingRoadPhases.automobileGround.fill
+        XCTAssertGreaterThan(surfaces.drawing.indices.count, 0, "The open street's surface draws")
+        for style in surfaces.styles {
+            XCTAssertEqual(style.color.w, 1, accuracy: 1e-6, "Every open-road fill in the tile stays opaque")
+        }
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "and its paint still draws")
+        let tunnelFill = parsed.drawingRoadPhases.tunnel.fill
+        XCTAssertEqual(tunnelFill.styles.count, 1, "The tunnel bucket holds the tunnel's one style")
+        XCTAssertEqual(tunnelFill.styles.first?.color.w ?? 1, opacity, accuracy: 1e-6,
+                       "at the tunnel opacity")
+        // The ribbon is clipped away under its surface, so the span is one
+        // layer of fill: exactly the polygon alone.
+        let surfaceAlone = try parse([surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+                                      tunnelLine([(1900, 1050), (2500, 1050)])])
+        XCTAssertEqual(tunnelFill.drawing.indices.count,
+                       surfaceAlone.drawingRoadPhases.tunnel.fill.drawing.indices.count)
+        let polygonOnly = try makeParser().parse(tile: tile, mvtData: VectorTileFixture.layerTile(
+            layerName: "transportation",
+            features: [surface(coveringRing, extra: ["layer": "-1", "street": "7", "brunnel": "tunnel"])]))
+        XCTAssertEqual(surfaceAlone.drawingRoadPhases.tunnel.fill.drawing.indices.count,
+                       polygonOnly.drawingRoadPhases.tunnel.fill.drawing.indices.count,
+                       "The tunnel ribbon adds no fill of its own inside its surface")
+    }
+
+    func testATunnelCentrelineEndingJustOutsideItsSurfaceStillClaimsIt() throws {
+        // The graph insets the surface behind a portal quad at each end, so
+        // the centreline's endpoints lie a few units outside the polygon and
+        // only its middle is in. No street id on either side.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1"]),
+                                tunnelLine([(1780, 1050), (2620, 1050)], street: nil),
+                                marking([(1900, 1050), (2500, 1050)])])
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                       "The paint inside the tunnel is gone")
+    }
+
     func testATunnelSurfaceWithoutAStreetIdMatchesByContainment() throws {
         // No street id on either side: the centreline running inside the
         // polygon is what makes it the tunnel's surface.

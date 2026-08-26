@@ -53,9 +53,13 @@ struct RoadTunnelSurfaceResolver {
             // actually run inside the polygon.
             let rings = MvtGeometryDecoder.decodePolygons(layer.features[index].geometry, in: bytes)
                 .map { $0.exteriorRing.map { SIMD2<Float>(Float($0.x), Float($0.y)) } }
+            // A vertex or a segment midpoint inside the polygon counts: the
+            // graph insets the surface behind a portal quad at each end, so
+            // the centreline's endpoints sit just outside it and only the
+            // stretch between them is in.
             let matches = sameLayer.contains { line in
                 (street == nil || line.street == nil)
-                    && line.points.contains { point in rings.contains { contains(ring: $0, point: point) } }
+                    && probes(of: line.points).contains { point in rings.contains { contains(ring: $0, point: point) } }
             }
             if matches {
                 result.insert(index)
@@ -70,11 +74,16 @@ struct RoadTunnelSurfaceResolver {
     }
 
     private static func intValue(_ value: MvtValue?) -> Int? {
-        guard let value else { return nil }
-        if let number = value.intValue { return Int(number) }
-        if let number = value.doubleValue, number.rounded() == number { return Int(number) }
-        if let text = value.stringValue { return Int(text.trimmingCharacters(in: .whitespaces)) }
-        return nil
+        value?.integerValue
+    }
+
+    private static func probes(of points: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        guard points.count >= 2 else { return points }
+        var result = points
+        for index in 1..<points.count {
+            result.append((points[index - 1] + points[index]) * 0.5)
+        }
+        return result
     }
 
     private static func contains(ring: [SIMD2<Float>], point: SIMD2<Float>) -> Bool {
