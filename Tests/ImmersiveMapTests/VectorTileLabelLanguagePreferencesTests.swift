@@ -10,10 +10,8 @@ import XCTest
 /// underscore form left an English-configured map showing native `name`
 /// values ("América", "Afrika;أفريقيا") over tiles that carry `name:en`.
 final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
-    private func stringValue(_ string: String) -> VectorTile_Tile.Value {
-        var value = VectorTile_Tile.Value()
-        value.stringValue = string
-        return value
+    private func stringValue(_ string: String) -> MvtValue {
+        .string(string)
     }
 
     func testEnglishChainTriesBothSpellingsBeforeTheNativeName() {

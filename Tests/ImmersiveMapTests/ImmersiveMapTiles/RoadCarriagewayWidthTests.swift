@@ -28,23 +28,19 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         return 40_075_016.686 * cos(latitude) / tilesCount / 4096.0
     }
 
-    private func intValue(_ value: Int) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value()
-        v.intValue = Int64(value)
-        return v
+    private func intValue(_ value: Int) -> MvtValue {
+        .int(Int64(value))
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value()
-        v.stringValue = value
-        return v
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 
     private func roadStyle(_ className: String,
                            lanes: Int? = nil,
                            z: Int,
                            brunnel: String? = nil) -> FeatureStyle {
-        var props: [String: VectorTile_Tile.Value] = ["class": stringValue(className)]
+        var props: [String: MvtValue] = ["class": stringValue(className)]
         if let lanes { props["lanes"] = intValue(lanes) }
         if let brunnel { props["brunnel"] = stringValue(brunnel) }
         return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
@@ -66,11 +62,15 @@ final class RoadCarriagewayWidthTests: XCTestCase {
     func testAStatedWidthBeatsTheLaneModel() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func widthUnits(_ attributes: [String: Any]) -> Double {
-            var properties: [String: VectorTile_Tile.Value] = [:]
+            var properties: [String: MvtValue] = [:]
             for (key, value) in attributes {
-                var wrapped = VectorTile_Tile.Value()
-                if let text = value as? String { wrapped.stringValue = text } else if let number = value as? Int { wrapped.intValue = Int64(number) }
-                properties[key] = wrapped
+                if let text = value as? String {
+                    properties[key] = .string(text)
+                } else if let number = value as? Int {
+                    properties[key] = .int(Int64(number))
+                } else {
+                    properties[key] = .absent
+                }
             }
             let feature = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                     properties: properties,

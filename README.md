@@ -91,11 +91,11 @@ Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`,
 
 | Part | Size |
 |---|---|
-| **App bundle, total** | **6.7 MB** |
-| Binary (engine, SwiftProtobuf) | 3.9 MB |
-| Resources | 2.8 MB |
-| ├ MSDF font atlases, two weights | 2.2 MB |
-| ├ Compiled Metal library | 276 KB |
+| **App bundle, total** | **6.5 MB** |
+| Binary (engine, no dependencies) | 3.4 MB |
+| Resources | 2.9 MB |
+| ├ MSDF font atlases, two weights | 2.3 MB |
+| ├ Compiled Metal library | 392 KB |
 | └ Glyph metrics | 192 KB |
 
 Most of the resource weight is the bundled Noto Sans MSDF atlases that draw every label on the map. If your app only needs a subset of scripts, regenerate smaller atlases with `Tools/TextAtlas/generate_text_atlas.sh`.

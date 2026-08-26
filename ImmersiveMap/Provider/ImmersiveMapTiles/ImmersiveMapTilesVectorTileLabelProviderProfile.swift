@@ -42,7 +42,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     // the tiles bake population and capital status into it at build time, so
     // there is no second signal to reconcile, and a feature without a rank is
     // the least important thing in its layer.
-    func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int {
+    func sortKey(properties: [String: MvtValue]) -> Int {
         parseIntValue(properties["rank"]) ?? 1_000
     }
 
@@ -62,7 +62,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     }
 
     func includesBasePointLabel(layerName: String,
-                                properties: [String: VectorTile_Tile.Value],
+                                properties: [String: MvtValue],
                                 tileZoom: Int,
                                 sortKey: Int) -> Bool {
         let layer = layerName.lowercased()
@@ -83,7 +83,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
             guard tileZoom >= poiMinimumZoom else {
                 return false
             }
-            if let poiClass = properties["class"]?.stringValue.lowercased(),
+            if let poiClass = properties["class"]?.stringValue?.lowercased(),
                Self.excludedPoiClasses.contains(poiClass) {
                 return false
             }
@@ -108,7 +108,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
                           anchor: feature.anchor)
     }
 
-    func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String {
+    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
         [layerName, properties["class"]?.stringValue, properties["subclass"]?.stringValue]
             .compactMap { value in
                 guard let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
@@ -124,8 +124,8 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         layerName.lowercased() == "housenumber"
     }
 
-    private func includesPlaceLabel(properties: [String: VectorTile_Tile.Value], tileZoom: Int) -> Bool {
-        let cls = properties["class"]?.stringValue.lowercased()
+    private func includesPlaceLabel(properties: [String: MvtValue], tileZoom: Int) -> Bool {
+        let cls = properties["class"]?.stringValue?.lowercased()
         // Continents/countries/oceans dominate the very low zooms.
         if tileZoom <= 2 {
             return cls == "continent" || cls == "country" || cls == "ocean"
@@ -151,8 +151,8 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         return true
     }
 
-    private func isOceanOrSea(_ properties: [String: VectorTile_Tile.Value]) -> Bool {
-        switch properties["class"]?.stringValue.lowercased() {
+    private func isOceanOrSea(_ properties: [String: MvtValue]) -> Bool {
+        switch properties["class"]?.stringValue?.lowercased() {
         case "ocean", "sea":
             return true
         default:
@@ -160,7 +160,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         }
     }
 
-    private func isCapital(_ properties: [String: VectorTile_Tile.Value]) -> Bool {
+    private func isCapital(_ properties: [String: MvtValue]) -> Bool {
         // OpenMapTiles `capital` = 2 (national), 3/4 (regional) when present.
         if let capital = parseIntValue(properties["capital"]), capital > 0 {
             return true
@@ -168,34 +168,26 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
         return false
     }
 
-    private func hasName(_ properties: [String: VectorTile_Tile.Value]) -> Bool {
-        properties["name"]?.stringValue.isEmpty == false
-            || properties["name:en"]?.stringValue.isEmpty == false
-            || properties["name_en"]?.stringValue.isEmpty == false
+    private func hasName(_ properties: [String: MvtValue]) -> Bool {
+        properties["name"]?.stringValue?.isEmpty == false
+            || properties["name:en"]?.stringValue?.isEmpty == false
+            || properties["name_en"]?.stringValue?.isEmpty == false
     }
 
-    private func parseIntValue(_ value: VectorTile_Tile.Value?) -> Int? {
-        guard let value else {
+    private func parseIntValue(_ value: MvtValue?) -> Int? {
+        switch value {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text.trimmingCharacters(in: .whitespaces))
+        case .bool, .absent, nil:
             return nil
         }
-        if value.hasIntValue {
-            return Int(value.intValue)
-        }
-        if value.hasUintValue {
-            return Int(value.uintValue)
-        }
-        if value.hasSintValue {
-            return Int(value.sintValue)
-        }
-        if value.hasDoubleValue {
-            return Int(value.doubleValue)
-        }
-        if value.hasFloatValue {
-            return Int(value.floatValue)
-        }
-        if value.hasStringValue {
-            return Int(value.stringValue.trimmingCharacters(in: .whitespaces))
-        }
-        return nil
     }
 }

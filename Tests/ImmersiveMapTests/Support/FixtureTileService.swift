@@ -39,12 +39,8 @@ final class FixtureTileService: @unchecked Sendable {
         // for every case that needs "the map has ground on it": it paints the
         // same wherever the camera happens to look, so no test has to reason
         // about which tile its viewport landed on.
-        guard let tileBody = try? VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                                     properties: ["class": "water"]) else {
-            server = nil
-            tileBaseURL = nil
-            return
-        }
+        let tileBody = VectorTileFixture.fullCoverageTile(layerName: "water",
+                                                          properties: ["class": "water"])
 
         // The TileJSON document advertises an absolute template, which cannot
         // be written before the system hands out a port. The box is filled the

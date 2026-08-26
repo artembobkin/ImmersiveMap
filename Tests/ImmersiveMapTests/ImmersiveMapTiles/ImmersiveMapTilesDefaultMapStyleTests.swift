@@ -471,18 +471,16 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                            rank: Int? = nil,
                            adminLevel: Int? = nil,
                            zoom: Int) -> FeatureStyle {
-        var properties: [String: VectorTile_Tile.Value] = [:]
+        var properties: [String: MvtValue] = [:]
         if let className {
             properties["class"] = stringValue(className)
         }
         if let rank {
-            var rankValue = VectorTile_Tile.Value()
-            rankValue.intValue = Int64(rank)
+            let rankValue = MvtValue.int(Int64(rank))
             properties["rank"] = rankValue
         }
         if let adminLevel {
-            var adminLevelValue = VectorTile_Tile.Value()
-            adminLevelValue.intValue = Int64(adminLevel)
+            let adminLevelValue = MvtValue.int(Int64(adminLevel))
             properties["admin_level"] = adminLevelValue
         }
         return style.makeStyle(
@@ -492,9 +490,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         )
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 }

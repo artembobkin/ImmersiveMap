@@ -91,7 +91,7 @@ private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderPr
         .from(settingsLanguage: .english, fallbackPolicy: .international)
     }
 
-    func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int {
+    func sortKey(properties: [String: MvtValue]) -> Int {
         0
     }
 
@@ -100,7 +100,7 @@ private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderPr
     }
 
     func includesBasePointLabel(layerName: String,
-                                properties: [String: VectorTile_Tile.Value],
+                                properties: [String: MvtValue],
                                 tileZoom: Int,
                                 sortKey: Int) -> Bool {
         false
@@ -112,7 +112,7 @@ private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderPr
                          featureID: feature.featureID ?? 0)
     }
 
-    func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String {
+    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
         layerName
     }
 

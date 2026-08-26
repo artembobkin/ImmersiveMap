@@ -27,7 +27,7 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
         profile.houseNumberTextKeys
     }
 
-    func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int {
+    func sortKey(properties: [String: MvtValue]) -> Int {
         for key in profile.rankKeys {
             guard let value = properties[key], let rank = parseIntValue(value) else {
                 continue
@@ -42,7 +42,7 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
     }
 
     func includesBasePointLabel(layerName: String,
-                                properties: [String: VectorTile_Tile.Value],
+                                properties: [String: MvtValue],
                                 tileZoom: Int,
                                 sortKey: Int) -> Bool {
         guard profile.includesPointLabelLayer(layerName) else {
@@ -69,7 +69,7 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
                           anchor: feature.anchor)
     }
 
-    func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String {
+    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
         ([layerName] + profile.kindKeys.compactMap { properties[$0]?.stringValue })
             .compactMap { value in
                 let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -85,10 +85,10 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
         profile.houseNumberLayers.contains(layerName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }
 
-    private func hasRenderableText(properties: [String: VectorTile_Tile.Value], keys: [String]) -> Bool {
+    private func hasRenderableText(properties: [String: MvtValue], keys: [String]) -> Bool {
         var seen = Set<String>()
         for key in keys where seen.insert(key).inserted {
-            guard properties[key]?.stringValue.isEmpty == false else {
+            guard properties[key]?.stringValue?.isEmpty == false else {
                 continue
             }
             return true
@@ -96,25 +96,20 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
         return false
     }
 
-    private func parseIntValue(_ value: VectorTile_Tile.Value) -> Int? {
-        if value.hasIntValue {
-            return Int(value.intValue)
+    private func parseIntValue(_ value: MvtValue) -> Int? {
+        switch value {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text)
+        case .bool, .absent:
+            return nil
         }
-        if value.hasUintValue {
-            return Int(value.uintValue)
-        }
-        if value.hasSintValue {
-            return Int(value.sintValue)
-        }
-        if value.hasDoubleValue {
-            return Int(value.doubleValue)
-        }
-        if value.hasFloatValue {
-            return Int(value.floatValue)
-        }
-        if value.hasStringValue {
-            return Int(value.stringValue)
-        }
-        return nil
     }
 }

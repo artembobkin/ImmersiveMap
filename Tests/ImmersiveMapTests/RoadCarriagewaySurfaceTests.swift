@@ -53,7 +53,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
 
     func testACarriagewayAreaStylesLikeAJunctionArea() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }
+        func value(_ s: String) -> MvtValue { .string(s) }
         let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["class": value("primary"),
                                                                           "subclass": value("carriageway_area"),

@@ -28,7 +28,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     /// on purpose: a fixture symmetric about the y mirror line lands back on
     /// itself when a mirror bug ships, which is exactly how one shipped.
     private func makeTile() throws -> Data {
-        try VectorTileFixture.layerTile(layerName: "transportation", features: [
+        VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 900), (2300, 900), (2300, 1400), (1800, 1400)]),
                   properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
@@ -67,7 +67,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
 
     func testAHandMappedAreaIsIgnoredAndAGraphOneWearsTheClassColour() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }
+        func value(_ s: String) -> MvtValue { .string(s) }
         // Hand-mapped area:highway: ignored. In central Moscow it often
         // covers a whole street including the gap between the two halves of
         // a dual carriageway, welding the reconstructed bodies into one mass
@@ -110,7 +110,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     /// the upper half of the tile, where a mirrored surface lands in the
     /// lower half and this assertion catches it.
     func testJunctionAreaSurfaceFollowsTheAreaOutline() throws {
-        let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+        let tileData = VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 600), (2300, 600), (2300, 1100), (1800, 1100)]),
                   properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
@@ -142,7 +142,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     /// sat near the tile middle and mirrored onto itself, which is how the
     /// bug shipped.
     func testMarkingsVanishInsideAnAreaAndSurviveAtItsMirror() throws {
-        let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+        let tileData = VectorTileFixture.layerTile(layerName: "transportation", features: [
             // The crossing near the TOP of the tile (raw y 300...800).
             .init(id: 1,
                   geometry: .polygon(ring: [(1800, 300), (2300, 300), (2300, 800), (1800, 800)]),
@@ -218,7 +218,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     /// backing off by the half-carriageway inset too ate every short piece,
     /// which is how Mokhovaya lost its markings for three hundred metres.
     func testPaintSurvivesBetweenAChainOfCrossings() throws {
-        let tileData = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+        let tileData = VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .polygon(ring: [(1000, 400), (1200, 400), (1200, 700), (1000, 700)]),
                   properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
@@ -257,7 +257,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
 
     func testATunnelJunctionAreaHasNoKerb() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func value(_ s: String) -> VectorTile_Tile.Value { var v = VectorTile_Tile.Value(); v.stringValue = s; return v }
+        func value(_ s: String) -> MvtValue { .string(s) }
         let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["class": value("service"), "subclass": value("junction_area"), "origin": value("graph"), "brunnel": value("tunnel")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))

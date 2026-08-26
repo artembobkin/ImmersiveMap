@@ -12,20 +12,20 @@ import XCTest
 final class RoadStreetStitcherTests: XCTestCase {
     private let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
 
-    private func value(_ string: String) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value(); v.stringValue = string; return v
+    private func value(_ string: String) -> MvtValue {
+        .string(string)
     }
-    private func value(_ int: Int) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value(); v.intValue = Int64(int); return v
+    private func value(_ int: Int) -> MvtValue {
+        .int(Int64(int))
     }
 
-    private func attributes(name: String?, cls: String = "primary", lanes: Int = 4) -> [String: VectorTile_Tile.Value] {
-        var a: [String: VectorTile_Tile.Value] = ["class": value(cls), "lanes": value(lanes)]
+    private func attributes(name: String?, cls: String = "primary", lanes: Int = 4) -> [String: MvtValue] {
+        var a: [String: MvtValue] = ["class": value(cls), "lanes": value(lanes)]
         if let name { a["name"] = value(name) }
         return a
     }
 
-    private func styles(for attributes: [[String: VectorTile_Tile.Value]]) -> [FeatureStyle] {
+    private func styles(for attributes: [[String: MvtValue]]) -> [FeatureStyle] {
         attributes.map {
             style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                       properties: $0,
@@ -227,7 +227,7 @@ final class RoadStreetStitcherTests: XCTestCase {
         /// Where the paint runs, one entry per line. Each line is two passes
         /// (the dashed body and the solid approach to a junction), so the
         /// offsets are what says how many lines there are.
-        func markingOffsets(oneway: VectorTile_Tile.Value?, lanes: Int) -> [Double] {
+        func markingOffsets(oneway: MvtValue?, lanes: Int) -> [Double] {
             var a = attributes(name: "X", lanes: lanes)
             if let oneway { a["oneway"] = oneway }
             let passes = styles(for: [a])[0].resolvedLineRenderPasses.filter { $0.roadPassRole == .detail }

@@ -14,13 +14,13 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
                                    config: config,
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 14),
-                                          mvtData: try makeRoadLabelTile().serializedData())
+                                          mvtData: makeRoadLabelTile().serializedData())
 
         XCTAssertEqual(parsedTile.roadTextLabels.map(\.text), ["Rue de Rivoli"])
     }
 
-    private func makeRoadLabelTile() -> VectorTile_Tile {
-        var feature = VectorTile_Tile.Feature()
+    private func makeRoadLabelTile() -> MvtTileMessage {
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .linestring
         feature.tags = [
@@ -37,7 +37,7 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
             parameter(0)
         ]
 
-        var layer = VectorTile_Tile.Layer()
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = "road"
         layer.extent = 4096
@@ -49,7 +49,7 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
         ]
         layer.features = [feature]
 
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
         tile.layers = [layer]
         return tile
     }
@@ -62,10 +62,8 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
         UInt32(bitPattern: (value << 1) ^ (value >> 31))
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 }
 

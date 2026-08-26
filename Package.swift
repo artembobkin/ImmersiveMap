@@ -14,28 +14,20 @@ let package = Package(
             targets: ["ImmersiveMap"]
         )
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.31.0")
-    ],
     targets: [
         .target(
             name: "ImmersiveMap",
-            dependencies: [
-                .product(name: "SwiftProtobuf", package: "swift-protobuf")
-            ],
             path: "ImmersiveMap",
             exclude: [
                 "Avatars/README.md",
                 "Camera/README.md",
                 "Configuration/README.md",
-                "Generated/README.md",
                 "Geo/README.md",
                 "Globe/README.md",
                 "ImmersiveMap.docc/README.md",
                 "Labels/README.md",
                 "Markers/README.md",
                 "Presentation/README.md",
-                "Proto/README.md",
                 "Render/README.md",
                 "Routes/README.md",
                 "SceneModels/README.md",
@@ -66,7 +58,6 @@ let package = Package(
                 .process("Render/SceneModels/Shaders"),
                 .process("Render/Shaders/Shared/GeoMath.metal"),
                 .process("Render/Tiles/Shaders"),
-                .copy("Proto/vector_tile.proto")
             ]
         ),
         .testTarget(

@@ -5,25 +5,23 @@
 import XCTest
 
 final class RoofAttributesParserTests: XCTestCase {
-    private func stringValue(_ string: String) -> VectorTile_Tile.Value {
-        var value = VectorTile_Tile.Value()
-        value.stringValue = string
-        return value
+    private func stringValue(_ string: String) -> MvtValue {
+        .string(string)
     }
 
-    private func doubleValue(_ double: Double) -> VectorTile_Tile.Value {
-        var value = VectorTile_Tile.Value()
-        value.doubleValue = double
-        return value
+    private func doubleValue(_ double: Double) -> MvtValue {
+        .double(double)
     }
 
-    private func numericParser(_ value: VectorTile_Tile.Value) -> Float? {
-        if value.hasDoubleValue { return Float(value.doubleValue) }
-        if value.hasStringValue { return Float(value.stringValue) }
-        return nil
+    private func numericParser(_ value: MvtValue) -> Float? {
+        switch value {
+        case .double(let number): return Float(number)
+        case .string(let text): return Float(text)
+        default: return nil
+        }
     }
 
-    private func parse(_ attributes: [String: VectorTile_Tile.Value]) -> RoofInfo? {
+    private func parse(_ attributes: [String: MvtValue]) -> RoofInfo? {
         RoofAttributesParser().parse(attributes: attributes, numericParser: numericParser)
     }
 

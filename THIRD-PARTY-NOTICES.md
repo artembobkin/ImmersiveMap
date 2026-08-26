@@ -27,9 +27,6 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-## swift-protobuf (Apple)
-
-[apple/swift-protobuf](https://github.com/apple/swift-protobuf) is not vendored:
-it is resolved by Swift Package Manager as a regular dependency and ships under
-its own [Apache 2.0 license](https://github.com/apple/swift-protobuf/blob/main/LICENSE.txt),
-which travels with that package.
+ImmersiveMap has no package dependencies: the Mapbox Vector Tile decoder in
+`ImmersiveMap/Tile/Parse/Mvt/` is written against the published schema, so
+nothing else ships with it.

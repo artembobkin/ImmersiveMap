@@ -10,8 +10,8 @@ final class RoofAttributesParser {
         self.levelHeight = levelHeight
     }
 
-    func parse(attributes: [String: VectorTile_Tile.Value],
-               numericParser: (VectorTile_Tile.Value) -> Float?) -> RoofInfo? {
+    func parse(attributes: [String: MvtValue],
+               numericParser: (MvtValue) -> Float?) -> RoofInfo? {
         let rawRoofHeight = attributes["roof:height"].flatMap(numericParser)
         let rawRoofLevels = attributes["roof:levels"].flatMap(numericParser)
         let roofHeight = rawRoofHeight ?? rawRoofLevels.map { $0 * levelHeight } ?? 0
@@ -27,9 +27,9 @@ final class RoofAttributesParser {
                                                         numericParser: numericParser))
     }
 
-    private func parseShape(attributes: [String: VectorTile_Tile.Value]) -> RoofShape {
-        guard let value = attributes["roof:shape"], value.hasStringValue else { return .unknown }
-        let raw = value.stringValue.lowercased()
+    private func parseShape(attributes: [String: MvtValue]) -> RoofShape {
+        guard let text = attributes["roof:shape"]?.stringValue else { return .unknown }
+        let raw = text.lowercased()
         let normalized = raw.replacingOccurrences(of: "-", with: "")
             .replacingOccurrences(of: "_", with: "")
         switch normalized {
@@ -52,9 +52,9 @@ final class RoofAttributesParser {
         }
     }
 
-    private func parseOrientation(attributes: [String: VectorTile_Tile.Value]) -> RoofOrientation? {
-        guard let value = attributes["roof:orientation"], value.hasStringValue else { return nil }
-        switch value.stringValue.lowercased() {
+    private func parseOrientation(attributes: [String: MvtValue]) -> RoofOrientation? {
+        guard let text = attributes["roof:orientation"]?.stringValue else { return nil }
+        switch text.lowercased() {
         case "along":
             return .along
         case "across":
@@ -64,15 +64,15 @@ final class RoofAttributesParser {
         }
     }
 
-    private func parseDirection(attributes: [String: VectorTile_Tile.Value],
-                                numericParser: (VectorTile_Tile.Value) -> Float?) -> Float? {
+    private func parseDirection(attributes: [String: MvtValue],
+                                numericParser: (MvtValue) -> Float?) -> Float? {
         guard let value = attributes["roof:direction"] else { return nil }
         if let degrees = numericParser(value) {
             return degrees
         }
-        guard value.hasStringValue else { return nil }
+        guard let text = value.stringValue else { return nil }
         // OSM also allows compass points for roof:direction.
-        switch value.stringValue.trimmingCharacters(in: .whitespaces).lowercased() {
+        switch text.trimmingCharacters(in: .whitespaces).lowercased() {
         case "n": return 0
         case "nne": return 22.5
         case "ne": return 45

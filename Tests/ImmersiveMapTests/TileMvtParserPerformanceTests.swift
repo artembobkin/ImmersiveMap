@@ -7,13 +7,14 @@ import XCTest
 /// Wall-clock benchmark for the tile parse pipeline on a dense synthetic city
 /// tile. It never fails on timing: it prints numbers and asserts only that the
 /// synthetic tile actually exercises every parse path (polygons, extrusions,
-/// separate roads, point and road labels). Run in release for real numbers:
+/// separate roads, point and road labels). Run optimized for real numbers
+/// (the `-DDEBUG` keeps the test-only hooks the suite compiles against):
 ///
-///     swift test -c release --filter TileMvtParserPerformanceTests
+///     swift test -c release -Xswiftc -DDEBUG --filter TileMvtParserPerformanceTests
 final class TileMvtParserPerformanceTests: XCTestCase {
     func testParseDenseCityTileThroughput() throws {
         let tile = Tile(x: 39_167, y: 21_090, z: 16)
-        let mvtData = try Self.makeDenseCityTile().serializedData()
+        let mvtData = Self.makeDenseCityTile().serializedData()
 
         let config = ImmersiveMapSettings.default
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
@@ -40,22 +41,18 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let fullParse = try Self.measure(warmup: 2, iterations: 10) {
             _ = try parser.parse(tile: tile, mvtData: mvtData)
         }
-        let zeroCopyDecode = try Self.measure(warmup: 2, iterations: 10) {
+        let wireDecode = try Self.measure(warmup: 2, iterations: 10) {
             _ = try MvtTileDecoder.decode(data: mvtData)
-        }
-        let protobufDecode = try Self.measure(warmup: 2, iterations: 10) {
-            _ = try VectorTile_Tile(serializedBytes: mvtData)
         }
 
         print("[perf] tile payload: \(mvtData.count) bytes")
-        print("[perf] parse(full)             min \(Self.format(fullParse.min))  median \(Self.format(fullParse.median))")
-        print("[perf] decode(zero-copy)       min \(Self.format(zeroCopyDecode.min))  median \(Self.format(zeroCopyDecode.median))")
-        print("[perf] decode(swift-protobuf)  min \(Self.format(protobufDecode.min))  median \(Self.format(protobufDecode.median))")
+        print("[perf] parse(full)    min \(Self.format(fullParse.min))  median \(Self.format(fullParse.median))")
+        print("[perf] decode(wire)   min \(Self.format(wireDecode.min))  median \(Self.format(wireDecode.median))")
     }
 
     func testParseOceanOverviewTileThroughput() throws {
         let tile = Tile(x: 9, y: 5, z: 4)
-        let mvtData = try Self.makeOceanOverviewTile().serializedData()
+        let mvtData = Self.makeOceanOverviewTile().serializedData()
 
         let config = ImmersiveMapSettings.default
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
@@ -108,9 +105,9 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
     // MARK: - Tile construction
 
-    static func makeDenseCityTile() -> VectorTile_Tile {
+    static func makeDenseCityTile() -> MvtTileMessage {
         var generator = SplitMix64Generator(seed: 0x1AB0_57E5)
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
         tile.layers.append(makeWaterLayer(generator: &generator))
         tile.layers.append(makeLandcoverLayer(generator: &generator))
         tile.layers.append(makeLanduseLayer(generator: &generator))
@@ -123,9 +120,9 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return tile
     }
 
-    static func makeOceanOverviewTile() -> VectorTile_Tile {
+    static func makeOceanOverviewTile() -> MvtTileMessage {
         var generator = SplitMix64Generator(seed: 0x0CEA_0CEA)
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
 
         var layer = layerTemplate(name: "water")
         layer.keys = ["class"]
@@ -144,7 +141,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
                                     vertexCount: generator.int(6...18),
                                     generator: &generator).reversed())
         }
-        var feature = VectorTile_Tile.Feature()
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .polygon
         feature.geometry = encodePolygonGeometry(rings: rings)
@@ -155,7 +152,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return tile
     }
 
-    private static func makeWaterLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeWaterLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "water")
         layer.keys = ["class"]
         layer.values = [stringValue("river"), stringValue("lake")]
@@ -174,7 +171,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
                                         vertexCount: generator.int(8...20),
                                         generator: &generator).reversed())
             }
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .polygon
             feature.geometry = encodePolygonGeometry(rings: rings)
@@ -184,13 +181,13 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeLandcoverLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeLandcoverLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "landcover")
         layer.keys = ["class", "subclass"]
         layer.values = [stringValue("grass"), stringValue("wood"), stringValue("park")]
 
         for featureIndex in 0..<40 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .polygon
             feature.geometry = encodePolygonGeometry(rings: [
@@ -206,13 +203,13 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeLanduseLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeLanduseLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "landuse")
         layer.keys = ["class"]
         layer.values = [stringValue("residential"), stringValue("commercial"), stringValue("industrial")]
 
         for featureIndex in 0..<25 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .polygon
             feature.geometry = encodePolygonGeometry(rings: [
@@ -228,20 +225,17 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeBuildingLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeBuildingLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "building")
         layer.keys = ["render_height", "render_min_height", "building:part", "hide_3d", "colour"]
-        var values: [VectorTile_Tile.Value] = []
+        var values: [MvtValue] = []
         for height in 0..<64 {
-            var value = VectorTile_Tile.Value()
-            value.doubleValue = Double(4 + height * 3)
+            let value = MvtValue.double(Double(4 + height * 3))
             values.append(value)
         }
-        var minHeightValue = VectorTile_Tile.Value()
-        minHeightValue.doubleValue = 3.0
+        let minHeightValue = MvtValue.double(3.0)
         values.append(minHeightValue) // 64
-        var truthyValue = VectorTile_Tile.Value()
-        truthyValue.boolValue = true
+        let truthyValue = MvtValue.bool(true)
         values.append(truthyValue) // 65
         layer.values = values
 
@@ -272,7 +266,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
                 ]
             }
 
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .polygon
             feature.geometry = encodePolygonGeometry(rings: [orientExterior(ring)])
@@ -289,7 +283,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeTransportationLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeTransportationLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "transportation")
         layer.keys = ["class", "brunnel", "oneway", "layer", "subclass"]
         layer.values = [
@@ -305,7 +299,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         ]
 
         for featureIndex in 0..<500 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .linestring
             feature.geometry = encodeLineGeometry(
@@ -330,10 +324,10 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeTransportationNameLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeTransportationNameLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "transportation_name")
         layer.keys = ["class", "name", "name:en", "name:ru", "ref"]
-        var values: [VectorTile_Tile.Value] = [
+        var values: [MvtValue] = [
             stringValue("primary"),
             stringValue("secondary"),
             stringValue("minor")
@@ -355,7 +349,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         layer.values = values
 
         for featureIndex in 0..<120 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .linestring
             feature.geometry = encodeLineGeometry(
@@ -373,10 +367,10 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makePoiLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makePoiLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "poi")
         layer.keys = ["class", "subclass", "name", "name:en", "rank"]
-        var values: [VectorTile_Tile.Value] = [
+        var values: [MvtValue] = [
             stringValue("restaurant"),
             stringValue("cafe"),
             stringValue("shop"),
@@ -392,7 +386,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         layer.values = values
 
         for featureIndex in 0..<150 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .point
             feature.geometry = encodePointGeometry(points: [
@@ -410,10 +404,10 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makePlaceLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makePlaceLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "place")
         layer.keys = ["class", "name", "name:en", "name:ru", "rank", "capital"]
-        var values: [VectorTile_Tile.Value] = [
+        var values: [MvtValue] = [
             stringValue("suburb"),
             stringValue("neighbourhood"),
             stringValue("quarter")
@@ -430,7 +424,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         layer.values = values
 
         for featureIndex in 0..<40 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .point
             feature.geometry = encodePointGeometry(points: [
@@ -448,17 +442,17 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return layer
     }
 
-    private static func makeHousenumberLayer(generator: inout SplitMix64Generator) -> VectorTile_Tile.Layer {
+    private static func makeHousenumberLayer(generator: inout SplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "housenumber")
         layer.keys = ["housenumber"]
-        var values: [VectorTile_Tile.Value] = []
+        var values: [MvtValue] = []
         for number in 0..<100 {
             values.append(stringValue("\(number + 1)"))
         }
         layer.values = values
 
         for featureIndex in 0..<200 {
-            var feature = VectorTile_Tile.Feature()
+            var feature = MvtFeatureMessage()
             feature.id = UInt64(featureIndex + 1)
             feature.type = .point
             feature.geometry = encodePointGeometry(points: [
@@ -472,8 +466,8 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
     // MARK: - Geometry helpers
 
-    private static func layerTemplate(name: String) -> VectorTile_Tile.Layer {
-        var layer = VectorTile_Tile.Layer()
+    private static func layerTemplate(name: String) -> MvtLayerMessage {
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = name
         layer.extent = 4096
@@ -594,15 +588,11 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         return geometry
     }
 
-    private static func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private static func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 
-    private static func intValue(_ value: Int64) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.intValue = value
-        return tileValue
+    private static func intValue(_ value: Int64) -> MvtValue {
+        .int(value)
     }
 }

@@ -56,7 +56,7 @@ enum RoadStreetStitcher {
     private static let drawingKeys = ["class", "subclass", "brunnel", "layer", "oneway", "width"]
 
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
-                       featureAttributes: [[String: VectorTile_Tile.Value]],
+                       featureAttributes: [[String: MvtValue]],
                        featureStyles: [FeatureStyle]) -> [[[SIMD2<Float>]]] {
         let featureCount = linesByFeatureIndex.count
         guard featureCount > 1 else { return linesByFeatureIndex }
@@ -197,15 +197,15 @@ enum RoadStreetStitcher {
         return output
     }
 
-    private static func describe(_ value: VectorTile_Tile.Value?) -> String {
-        guard let value else { return "" }
-        if value.hasStringValue { return value.stringValue }
-        if value.hasIntValue { return String(value.intValue) }
-        if value.hasUintValue { return String(value.uintValue) }
-        if value.hasSintValue { return String(value.sintValue) }
-        if value.hasDoubleValue { return String(value.doubleValue) }
-        if value.hasFloatValue { return String(value.floatValue) }
-        if value.hasBoolValue { return value.boolValue ? "1" : "0" }
-        return ""
+    private static func describe(_ value: MvtValue?) -> String {
+        switch value {
+        case .string(let text): return text
+        case .int(let number), .sint(let number): return String(number)
+        case .uint(let number): return String(number)
+        case .double(let number): return String(number)
+        case .float(let number): return String(number)
+        case .bool(let flag): return flag ? "1" : "0"
+        case .absent, nil: return ""
+        }
     }
 }

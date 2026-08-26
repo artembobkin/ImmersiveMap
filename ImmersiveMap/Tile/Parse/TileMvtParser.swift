@@ -226,10 +226,10 @@ class TileMvtParser {
         return working.count >= 2 ? working : nil
     }
 
-    func roadStructureKind(attributes: [String: VectorTile_Tile.Value]) -> RoadStructureKind {
-        let locationValue = attributes["location"]?.stringValue.lowercased() ?? ""
-        let structureValue = attributes["structure"]?.stringValue.lowercased() ?? ""
-        let brunnelValue = attributes["brunnel"]?.stringValue.lowercased() ?? ""
+    func roadStructureKind(attributes: [String: MvtValue]) -> RoadStructureKind {
+        let locationValue = attributes["location"]?.stringValue?.lowercased() ?? ""
+        let structureValue = attributes["structure"]?.stringValue?.lowercased() ?? ""
+        let brunnelValue = attributes["brunnel"]?.stringValue?.lowercased() ?? ""
         let layerValue = attributes["layer"].flatMap(parseIntValue) ?? 0
 
         let isTunnel = isTruthy(attributes["underground"])
@@ -258,7 +258,7 @@ class TileMvtParser {
         return .ground
     }
 
-    func roadLayerValue(attributes: [String: VectorTile_Tile.Value]) -> Int {
+    func roadLayerValue(attributes: [String: MvtValue]) -> Int {
         attributes["layer"].flatMap(parseIntValue) ?? 0
     }
 
@@ -350,7 +350,7 @@ class TileMvtParser {
 
     private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
                                                  featureStyles: [FeatureStyle],
-                                                 featureAttributes: [[String: VectorTile_Tile.Value]],
+                                                 featureAttributes: [[String: MvtValue]],
                                                  lineClipper: LineClipper,
                                                  data: Data,
                                                  tile: Tile) -> HighZoomRoadPrecomputation {
@@ -974,10 +974,8 @@ class TileMvtParser {
         return labels
     }
 
-    private func stringTileValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringTileValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 
     private func tilePoint(forLatitude latitude: Double,
@@ -1024,7 +1022,7 @@ class TileMvtParser {
                 continue
             }
 
-            let attributes: [String: VectorTile_Tile.Value] = [
+            let attributes: [String: MvtValue] = [
                 "class": stringTileValue(fallback.styleClass),
                 "type": stringTileValue(fallback.styleClass),
                 "name": stringTileValue(name)
@@ -1081,7 +1079,7 @@ class TileMvtParser {
             // Attributes and style resolve exactly once per feature here; the
             // building and road pre-passes below share them instead of
             // re-decoding the tag table per pass.
-            var featureAttributes: [[String: VectorTile_Tile.Value]] = []
+            var featureAttributes: [[String: MvtValue]] = []
             featureAttributes.reserveCapacity(layer.features.count)
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
@@ -1170,7 +1168,7 @@ class TileMvtParser {
                             }
                             return buildingPartFootprintSignatures.contains(signature)
                         }
-                    let locationValue = attributes["location"]?.stringValue.lowercased() ?? ""
+                    let locationValue = attributes["location"]?.stringValue?.lowercased() ?? ""
                     let isUnderground = isTruthy(attributes["underground"])
                         || locationValue.contains("underground")
                         || locationValue.contains("subterranean")

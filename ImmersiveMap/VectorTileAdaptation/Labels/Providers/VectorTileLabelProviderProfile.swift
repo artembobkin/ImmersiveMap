@@ -7,14 +7,14 @@ protocol VectorTileLabelProviderProfile {
     var labelTextKeys: [String] { get }
     var houseNumberTextKeys: [String] { get }
 
-    func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int
+    func sortKey(properties: [String: MvtValue]) -> Int
     func collisionRank(layerName: String, sortKey: Int) -> Int
     func includesBasePointLabel(layerName: String,
-                                properties: [String: VectorTile_Tile.Value],
+                                properties: [String: MvtValue],
                                 tileZoom: Int,
                                 sortKey: Int) -> Bool
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity
-    func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String
+    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String
     func isHouseNumberLayer(_ layerName: String) -> Bool
     func detailCategory(layerName: String) -> VectorTileLabelDetailCategory
 }

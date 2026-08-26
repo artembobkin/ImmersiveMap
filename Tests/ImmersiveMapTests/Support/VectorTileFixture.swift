@@ -8,7 +8,7 @@ import Foundation
 /// through the actual parser instead of a hand-made intermediate structure.
 ///
 /// The bytes are produced by the same generated protobuf type the parser reads
-/// back (`VectorTile_Tile`), which makes the fixture a genuine encode/decode
+/// back (`MvtTileMessage`), which makes the fixture a genuine encode/decode
 /// round trip rather than an assertion about a struct. Writing the geometry
 /// commands out by hand is the point: they are the part of the MVT format the
 /// parser actually has to interpret.
@@ -43,31 +43,25 @@ enum VectorTileFixture {
     /// the tile reached the frame at all.
     static func fullCoverageTile(layerName: String,
                                  properties: [String: String] = [:],
-                                 extent: UInt32 = 4096) throws -> Data {
-        var feature = VectorTile_Tile.Feature()
+                                 extent: UInt32 = 4096) -> Data {
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .polygon
         feature.geometry = squareRingGeometry(side: Int32(extent))
 
-        var layer = VectorTile_Tile.Layer()
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = layerName
         layer.extent = extent
         for (index, key) in properties.keys.sorted().enumerated() {
-            var value = VectorTile_Tile.Value()
-            value.stringValue = properties[key] ?? ""
+            let value = MvtValue.string(properties[key] ?? "")
             layer.keys.append(key)
             layer.values.append(value)
             feature.tags.append(contentsOf: [UInt32(index), UInt32(index)])
         }
         layer.features = [feature]
 
-        var tile = VectorTile_Tile()
-        tile.layers = [layer]
-        // Rethrown rather than turned into empty bytes: an encoding failure
-        // swallowed here would surface downstream as "the parser rejected the
-        // tile", pointing the reader at the wrong component.
-        return try tile.serializedData()
+        return MvtTileMessage(layers: [layer]).serializedData()
     }
 
     /// One feature of a hand-built layer: a polygon ring or a line, with its
@@ -87,15 +81,15 @@ enum VectorTileFixture {
     /// one another (a junction area among the roads that enter it).
     static func layerTile(layerName: String,
                           features: [Feature],
-                          extent: UInt32 = 4096) throws -> Data {
-        var layer = VectorTile_Tile.Layer()
+                          extent: UInt32 = 4096) -> Data {
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = layerName
         layer.extent = extent
         var keyIndex: [String: UInt32] = [:]
         var valueIndex: [String: UInt32] = [:]
         for feature in features {
-            var encoded = VectorTile_Tile.Feature()
+            var encoded = MvtFeatureMessage()
             encoded.id = feature.id
             switch feature.geometry {
             case .polygon(let ring):
@@ -113,21 +107,17 @@ enum VectorTileFixture {
                 }
                 if valueIndex[value] == nil {
                     valueIndex[value] = UInt32(layer.values.count)
-                    var encodedValue = VectorTile_Tile.Value()
                     if let integer = Int64(value) {
-                        encodedValue.intValue = integer
+                        layer.values.append(.int(integer))
                     } else {
-                        encodedValue.stringValue = value
+                        layer.values.append(.string(value))
                     }
-                    layer.values.append(encodedValue)
                 }
                 encoded.tags.append(contentsOf: [keyIndex[key]!, valueIndex[value]!])
             }
             layer.features.append(encoded)
         }
-        var tile = VectorTile_Tile()
-        tile.layers = [layer]
-        return try tile.serializedData()
+        return MvtTileMessage(layers: [layer]).serializedData()
     }
 
     /// A polyline or ring as MVT commands: one moveTo, the rest lineTo, and a

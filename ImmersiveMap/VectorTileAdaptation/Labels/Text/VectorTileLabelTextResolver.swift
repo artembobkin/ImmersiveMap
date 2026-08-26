@@ -8,7 +8,7 @@ struct VectorTileLabelTextResolver {
         self.glyphCoverage = glyphCoverage
     }
 
-    func resolveText(properties: [String: VectorTile_Tile.Value],
+    func resolveText(properties: [String: MvtValue],
                      preferences: VectorTileLabelLanguagePreferences,
                      additionalKeys: [String] = []) -> String? {
         var resolvedKeys = Set<String>()
@@ -36,7 +36,7 @@ struct VectorTileLabelTextResolver {
         return nil
     }
 
-    func resolveHouseNumber(properties: [String: VectorTile_Tile.Value],
+    func resolveHouseNumber(properties: [String: MvtValue],
                             additionalKeys: [String] = []) -> String? {
         for key in ["house_num"] + additionalKeys {
             guard let text = properties[key]?.stringValue,

@@ -35,16 +35,13 @@ final class ImmersiveMapTilesLabelProfilePoiFilterTests: XCTestCase {
     }
 
     private func includesPoi(className: String, rank: Int?, tileZoom: Int = 14) -> Bool {
-        var properties: [String: VectorTile_Tile.Value] = [:]
-        var nameValue = VectorTile_Tile.Value()
-        nameValue.stringValue = "Test"
+        var properties: [String: MvtValue] = [:]
+        let nameValue = MvtValue.string("Test")
         properties["name"] = nameValue
-        var classValue = VectorTile_Tile.Value()
-        classValue.stringValue = className
+        let classValue = MvtValue.string(className)
         properties["class"] = classValue
         if let rank {
-            var rankValue = VectorTile_Tile.Value()
-            rankValue.intValue = Int64(rank)
+            let rankValue = MvtValue.int(Int64(rank))
             properties["rank"] = rankValue
         }
         return profile.includesBasePointLabel(layerName: "poi",

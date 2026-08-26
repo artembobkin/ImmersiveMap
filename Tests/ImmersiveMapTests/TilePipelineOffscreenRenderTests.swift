@@ -129,7 +129,7 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     private func loadFixtureTiles(into harness: OffscreenFrameHarness,
                                   layerName: String,
                                   className: String? = nil) async throws {
-        let data = try VectorTileFixture.fullCoverageTile(layerName: layerName,
+        let data = VectorTileFixture.fullCoverageTile(layerName: layerName,
                                                           properties: ["class": className ?? layerName])
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
                                                                longitude: Self.camera.longitudeDegrees,

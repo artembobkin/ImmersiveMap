@@ -4,29 +4,32 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The hand-written wire decoder is validated against swift-protobuf as
-/// ground truth: every tile a test encodes decodes identically through both,
+/// The hand-written wire decoder is validated two ways: every tile a test
+/// states as messages (`MvtTileMessage`) must decode back to those messages
 /// field by field, with the packed tag/geometry ranges materialized for
-/// comparison.
+/// comparison; and hand-laid wire bytes exercising the encodings the test
+/// encoder never writes (unpacked repeated fields, split packed runs,
+/// unknown fields, groups, duplicate scalars) must decode to the messages
+/// the protobuf encoding rules assign them.
 final class MvtTileDecoderTests: XCTestCase {
-    // MARK: - Equivalence against swift-protobuf
+    // MARK: - Round trips
 
-    func testMatchesProtobufOnDenseCityTile() throws {
-        try assertDecodesLikeProtobuf(TileMvtParserPerformanceTests.makeDenseCityTile())
+    func testRoundTripsDenseCityTile() throws {
+        try assertRoundTrips(TileMvtParserPerformanceTests.makeDenseCityTile())
     }
 
-    func testMatchesProtobufOnOceanOverviewTile() throws {
-        try assertDecodesLikeProtobuf(TileMvtParserPerformanceTests.makeOceanOverviewTile())
+    func testRoundTripsOceanOverviewTile() throws {
+        try assertRoundTrips(TileMvtParserPerformanceTests.makeOceanOverviewTile())
     }
 
-    func testMatchesProtobufOnRandomizedTiles() throws {
+    func testRoundTripsRandomizedTiles() throws {
         var generator = SplitMix64Generator(seed: 0xDEC0DE)
 
         for round in 0..<100 {
-            var tile = VectorTile_Tile()
+            var tile = MvtTileMessage()
             let layerCount = Int(generator.next() % 4)
             for layerNumber in 0..<layerCount {
-                var layer = VectorTile_Tile.Layer()
+                var layer = MvtLayerMessage()
                 layer.version = 2
                 layer.name = "layer_\(round)_\(layerNumber)"
                 if generator.next() % 3 == 0 {
@@ -40,12 +43,12 @@ final class MvtTileDecoderTests: XCTestCase {
                 }
 
                 let featureCount = Int(generator.next() % 8)
-                for featureNumber in 0..<featureCount {
-                    var feature = VectorTile_Tile.Feature()
+                for _ in 0..<featureCount {
+                    var feature = MvtFeatureMessage()
                     if generator.next() % 2 == 0 {
                         feature.id = generator.next()
                     }
-                    if let geomType = VectorTile_Tile.GeomType(rawValue: Int(generator.next() % 4)) {
+                    if let geomType = MvtGeometryType(rawValue: Int(generator.next() % 4)) {
                         feature.type = geomType
                     }
                     let tagCount = Int(generator.next() % 6) * 2
@@ -56,15 +59,41 @@ final class MvtTileDecoderTests: XCTestCase {
                     for _ in 0..<geometryCount {
                         feature.geometry.append(UInt32(truncatingIfNeeded: generator.next()))
                     }
-                    _ = featureNumber
                     layer.features.append(feature)
                 }
 
                 tile.layers.append(layer)
             }
 
-            try assertDecodesLikeProtobuf(tile, context: "round \(round)")
+            try assertRoundTrips(tile, context: "round \(round)")
         }
+    }
+
+    func testValueMessageFieldKinds() throws {
+        var layer = MvtLayerMessage()
+        layer.version = 2
+        layer.name = "values"
+        layer.keys = ["s", "f", "d", "i", "u", "si", "b"]
+        layer.values = [
+            .string("Тверская улица"),
+            .float(3.5),
+            .double(-128.0625),
+            .int(-42),
+            .uint(UInt64.max),
+            .sint(-123456789),
+            .bool(true)
+        ]
+
+        try assertRoundTrips(MvtTileMessage(layers: [layer]))
+    }
+
+    func testEmptyValueMessageDecodesAsAbsent() throws {
+        var layer = MvtLayerMessage()
+        layer.name = "values"
+        layer.keys = ["nothing"]
+        layer.values = [.absent]
+
+        try assertRoundTrips(MvtTileMessage(layers: [layer]))
     }
 
     // MARK: - Wire-format edge cases
@@ -72,125 +101,118 @@ final class MvtTileDecoderTests: XCTestCase {
     func testUnpackedRepeatedFieldsDecodeLikePacked() throws {
         // Feature with tags and geometry encoded element-by-element (wire
         // type 0 per value) instead of one packed LEN run.
-        var featureBody = Data()
-        appendVarintField(&featureBody, fieldNumber: 1, value: 42)
+        var featureBody = MvtWireWriter()
+        featureBody.appendVarint(fieldNumber: 1, value: 42)
         for tag in [0, 1, 2, 3] {
-            appendVarintField(&featureBody, fieldNumber: 2, value: UInt64(tag))
+            featureBody.appendVarint(fieldNumber: 2, value: UInt64(tag))
         }
-        appendVarintField(&featureBody, fieldNumber: 3, value: 1) // point
+        featureBody.appendVarint(fieldNumber: 3, value: 1) // point
         for value in [9, 50, 34] {
-            appendVarintField(&featureBody, fieldNumber: 4, value: UInt64(value))
+            featureBody.appendVarint(fieldNumber: 4, value: UInt64(value))
         }
 
-        let data = wrapFeatureInTile(featureBody: featureBody,
+        let data = wrapFeatureInTile(featureBody: featureBody.data,
                                      keys: ["a", "b"],
                                      values: ["va", "vb"])
-        try assertRawBytesDecodeLikeProtobuf(data)
+        try assertDecodes(data, as: edgeTile(keys: ["a", "b"],
+                                             values: ["va", "vb"],
+                                             feature: MvtFeatureMessage(id: 42,
+                                                                        tags: [0, 1, 2, 3],
+                                                                        type: .point,
+                                                                        geometry: [9, 50, 34])))
     }
 
     func testSplitPackedRunsConcatenate() throws {
         // The same packed field appearing twice must decode as one
         // concatenated sequence.
-        var featureBody = Data()
-        appendPackedVarintField(&featureBody, fieldNumber: 4, values: [9, 50])
-        appendPackedVarintField(&featureBody, fieldNumber: 4, values: [34])
-        appendVarintField(&featureBody, fieldNumber: 3, value: 1)
+        var featureBody = MvtWireWriter()
+        featureBody.appendPackedVarints(fieldNumber: 4, values: [9, 50])
+        featureBody.appendPackedVarints(fieldNumber: 4, values: [34])
+        featureBody.appendVarint(fieldNumber: 3, value: 1)
 
-        let data = wrapFeatureInTile(featureBody: featureBody, keys: [], values: [])
-        try assertRawBytesDecodeLikeProtobuf(data)
+        let data = wrapFeatureInTile(featureBody: featureBody.data, keys: [], values: [])
+        try assertDecodes(data, as: edgeTile(feature: MvtFeatureMessage(type: .point, geometry: [9, 50, 34])))
     }
 
     func testUnknownFieldsAreSkipped() throws {
-        var featureBody = Data()
-        appendVarintField(&featureBody, fieldNumber: 1, value: 7)
+        var featureBody = MvtWireWriter()
+        featureBody.appendVarint(fieldNumber: 1, value: 7)
         // Unknown varint, fixed32, fixed64 and length-delimited fields.
-        appendVarintField(&featureBody, fieldNumber: 9, value: 123456789)
-        appendFixed32Field(&featureBody, fieldNumber: 10, value: 0xAABBCCDD)
-        appendFixed64Field(&featureBody, fieldNumber: 11, value: 0x1122334455667788)
-        appendLengthDelimitedField(&featureBody, fieldNumber: 12, payload: Data([1, 2, 3, 4, 5]))
-        appendPackedVarintField(&featureBody, fieldNumber: 4, values: [9, 4, 4])
+        featureBody.appendVarint(fieldNumber: 9, value: 123456789)
+        featureBody.appendFixed32(fieldNumber: 10, value: 0xAABBCCDD)
+        featureBody.appendFixed64(fieldNumber: 11, value: 0x1122334455667788)
+        featureBody.appendLengthDelimited(fieldNumber: 12, payload: Data([1, 2, 3, 4, 5]))
+        featureBody.appendPackedVarints(fieldNumber: 4, values: [9, 4, 4])
 
-        let data = wrapFeatureInTile(featureBody: featureBody, keys: [], values: [])
-        try assertRawBytesDecodeLikeProtobuf(data)
+        let data = wrapFeatureInTile(featureBody: featureBody.data, keys: [], values: [])
+        try assertDecodes(data, as: edgeTile(feature: MvtFeatureMessage(id: 7, geometry: [9, 4, 4])))
     }
 
     func testUnknownGroupFieldIsSkipped() throws {
-        var featureBody = Data()
-        appendVarintField(&featureBody, fieldNumber: 1, value: 5)
-        // A legacy group: SGROUP(14) { varint(1)=9; EGROUP(14) } wrapped
-        // around a nested group as well.
-        appendVarint(&featureBody, (14 << 3) | 3)
-        appendVarintField(&featureBody, fieldNumber: 1, value: 9)
-        appendVarint(&featureBody, (15 << 3) | 3)
-        appendVarint(&featureBody, (15 << 3) | 4)
-        appendVarint(&featureBody, (14 << 3) | 4)
-        appendPackedVarintField(&featureBody, fieldNumber: 4, values: [9, 2, 2])
+        var featureBody = MvtWireWriter()
+        featureBody.appendVarint(fieldNumber: 1, value: 5)
+        // A legacy group: SGROUP(14) { varint(1)=9; SGROUP(15) EGROUP(15) }
+        // EGROUP(14), a nested group inside the skipped one.
+        featureBody.appendTag(fieldNumber: 14, wireType: 3)
+        featureBody.appendVarint(fieldNumber: 1, value: 9)
+        featureBody.appendTag(fieldNumber: 15, wireType: 3)
+        featureBody.appendTag(fieldNumber: 15, wireType: 4)
+        featureBody.appendTag(fieldNumber: 14, wireType: 4)
+        featureBody.appendPackedVarints(fieldNumber: 4, values: [9, 2, 2])
 
-        let data = wrapFeatureInTile(featureBody: featureBody, keys: [], values: [])
-        try assertRawBytesDecodeLikeProtobuf(data)
-    }
-
-    func testValueMessageFieldKinds() throws {
-        var tile = VectorTile_Tile()
-        var layer = VectorTile_Tile.Layer()
-        layer.version = 2
-        layer.name = "values"
-        layer.keys = ["s", "f", "d", "i", "u", "si", "b"]
-
-        var stringValue = VectorTile_Tile.Value()
-        stringValue.stringValue = "Тверская улица"
-        var floatValue = VectorTile_Tile.Value()
-        floatValue.floatValue = 3.5
-        var doubleValue = VectorTile_Tile.Value()
-        doubleValue.doubleValue = -128.0625
-        var intValue = VectorTile_Tile.Value()
-        intValue.intValue = -42
-        var uintValue = VectorTile_Tile.Value()
-        uintValue.uintValue = UInt64.max
-        var sintValue = VectorTile_Tile.Value()
-        sintValue.sintValue = -123456789
-        var boolValue = VectorTile_Tile.Value()
-        boolValue.boolValue = true
-
-        layer.values = [stringValue, floatValue, doubleValue, intValue, uintValue, sintValue, boolValue]
-        tile.layers = [layer]
-
-        try assertDecodesLikeProtobuf(tile)
+        let data = wrapFeatureInTile(featureBody: featureBody.data, keys: [], values: [])
+        try assertDecodes(data, as: edgeTile(feature: MvtFeatureMessage(id: 5, geometry: [9, 2, 2])))
     }
 
     func testDuplicateScalarFieldsLastOneWins() throws {
-        var layerBody = Data()
-        appendVarintField(&layerBody, fieldNumber: 15, value: 2)
-        appendLengthDelimitedField(&layerBody, fieldNumber: 1, payload: Data("first".utf8))
-        appendLengthDelimitedField(&layerBody, fieldNumber: 1, payload: Data("second".utf8))
-        appendVarintField(&layerBody, fieldNumber: 5, value: 512)
-        appendVarintField(&layerBody, fieldNumber: 5, value: 2048)
+        var layerBody = MvtWireWriter()
+        layerBody.appendVarint(fieldNumber: 15, value: 2)
+        layerBody.appendLengthDelimited(fieldNumber: 1, payload: Data("first".utf8))
+        layerBody.appendLengthDelimited(fieldNumber: 1, payload: Data("second".utf8))
+        layerBody.appendVarint(fieldNumber: 5, value: 512)
+        layerBody.appendVarint(fieldNumber: 5, value: 2048)
 
-        var tileBody = Data()
-        appendLengthDelimitedField(&tileBody, fieldNumber: 3, payload: layerBody)
+        var tileBody = MvtWireWriter()
+        tileBody.appendLengthDelimited(fieldNumber: 3, payload: layerBody.data)
 
-        let decoded = try MvtTileDecoder.decode(data: tileBody)
-        XCTAssertEqual(decoded.layers.count, 1)
-        XCTAssertEqual(decoded.layers[0].name, "second")
-        XCTAssertEqual(decoded.layers[0].extent, 2048)
-        try assertRawBytesDecodeLikeProtobuf(tileBody)
+        try assertDecodes(tileBody.data, as: MvtTileMessage(layers: [MvtLayerMessage(name: "second", extent: 2048)]))
     }
 
-    func testMissingRequiredLayerFieldsThrowLikeProtobuf() {
-        // A layer with a name but no version violates the proto2 required
-        // fields; both decoders must reject the tile.
-        var layerBody = Data()
-        appendLengthDelimitedField(&layerBody, fieldNumber: 1, payload: Data("no-version".utf8))
+    func testDuplicateValueFieldsKeepTheLastOne() throws {
+        // The specification allows one field per Value; a message that sets
+        // two keeps the later one in wire order.
+        var valueBody = MvtWireWriter()
+        valueBody.appendVarint(fieldNumber: 5, value: 12)
+        valueBody.appendLengthDelimited(fieldNumber: 1, payload: Data("twelve".utf8))
 
-        var tileBody = Data()
-        appendLengthDelimitedField(&tileBody, fieldNumber: 3, payload: layerBody)
+        var layerBody = MvtWireWriter()
+        layerBody.appendVarint(fieldNumber: 15, value: 2)
+        layerBody.appendLengthDelimited(fieldNumber: 1, payload: Data("values".utf8))
+        layerBody.appendLengthDelimited(fieldNumber: 3, payload: Data("k".utf8))
+        layerBody.appendLengthDelimited(fieldNumber: 4, payload: valueBody.data)
 
-        XCTAssertThrowsError(try MvtTileDecoder.decode(data: tileBody))
-        XCTAssertThrowsError(try VectorTile_Tile(serializedBytes: tileBody))
+        var tileBody = MvtWireWriter()
+        tileBody.appendLengthDelimited(fieldNumber: 3, payload: layerBody.data)
+
+        try assertDecodes(tileBody.data, as: MvtTileMessage(layers: [
+            MvtLayerMessage(name: "values", keys: ["k"], values: [.string("twelve")])
+        ]))
+    }
+
+    func testMissingRequiredLayerFieldsThrow() {
+        // A layer with a name but no version violates the schema's required
+        // fields; the decoder rejects the tile.
+        var layerBody = MvtWireWriter()
+        layerBody.appendLengthDelimited(fieldNumber: 1, payload: Data("no-version".utf8))
+
+        var tileBody = MvtWireWriter()
+        tileBody.appendLengthDelimited(fieldNumber: 3, payload: layerBody.data)
+
+        XCTAssertThrowsError(try MvtTileDecoder.decode(data: tileBody.data))
     }
 
     func testTruncatedInputThrows() throws {
-        let data = try TileMvtParserPerformanceTests.makeDenseCityTile().serializedData()
+        let data = TileMvtParserPerformanceTests.makeDenseCityTile().serializedData()
         let truncated = data.prefix(data.count / 2)
         XCTAssertThrowsError(try MvtTileDecoder.decode(data: Data(truncated)))
     }
@@ -210,11 +232,11 @@ final class MvtTileDecoderTests: XCTestCase {
         // An odd number of tag integers leaves a dangling key index; attribute
         // decoding drops it and keeps the complete pairs, and the layer
         // survives.
-        var featureBody = Data()
-        appendPackedVarintField(&featureBody, fieldNumber: 2, values: [0, 0, 1])
-        appendVarintField(&featureBody, fieldNumber: 3, value: 1)
+        var featureBody = MvtWireWriter()
+        featureBody.appendPackedVarints(fieldNumber: 2, values: [0, 0, 1])
+        featureBody.appendVarint(fieldNumber: 3, value: 1)
 
-        let data = wrapFeatureInTile(featureBody: featureBody,
+        let data = wrapFeatureInTile(featureBody: featureBody.data,
                                      keys: ["kept", "dangling"],
                                      values: ["value"])
         let decoded = try MvtTileDecoder.decode(data: data)
@@ -232,20 +254,17 @@ final class MvtTileDecoderTests: XCTestCase {
                                                  layer: decoded.layers[0],
                                                  data: data)
         XCTAssertEqual(attributes.count, 1)
-        XCTAssertEqual(attributes["kept"]?.stringValue, "value")
+        XCTAssertEqual(attributes["kept"], .string("value"))
     }
 
     func testInvalidGeometryTypeLeavesPreviousValue() throws {
-        var featureBody = Data()
-        appendVarintField(&featureBody, fieldNumber: 3, value: 2) // linestring
-        appendVarintField(&featureBody, fieldNumber: 3, value: 9) // invalid
+        var featureBody = MvtWireWriter()
+        featureBody.appendVarint(fieldNumber: 3, value: 2) // linestring
+        featureBody.appendVarint(fieldNumber: 3, value: 9) // invalid
 
-        let data = wrapFeatureInTile(featureBody: featureBody, keys: [], values: [])
+        let data = wrapFeatureInTile(featureBody: featureBody.data, keys: [], values: [])
         let decoded = try MvtTileDecoder.decode(data: data)
         XCTAssertEqual(decoded.layers[0].features[0].type, .linestring)
-
-        let reference = try VectorTile_Tile(serializedBytes: data)
-        XCTAssertEqual(reference.layers[0].features[0].type, .linestring)
     }
 
     // MARK: - Geometry reader equivalence
@@ -268,17 +287,9 @@ final class MvtTileDecoderTests: XCTestCase {
                 geometry.append((1 << 3) | 7) // ClosePath
             }
 
-            var feature = VectorTile_Tile.Feature()
-            feature.type = .polygon
-            feature.geometry = geometry
-            var layer = VectorTile_Tile.Layer()
-            layer.version = 2
-            layer.name = "geometry"
-            layer.features = [feature]
-            var tile = VectorTile_Tile()
-            tile.layers = [layer]
-
-            let data = try tile.serializedData()
+            let feature = MvtFeatureMessage(type: .polygon, geometry: geometry)
+            let layer = MvtLayerMessage(name: "geometry", features: [feature])
+            let data = MvtTileMessage(layers: [layer]).serializedData()
             let decoded = try MvtTileDecoder.decode(data: data)
             let decodedFeature = decoded.layers[0].features[0]
 
@@ -311,76 +322,50 @@ final class MvtTileDecoderTests: XCTestCase {
 
     // MARK: - Comparison helpers
 
-    private func assertDecodesLikeProtobuf(_ tile: VectorTile_Tile,
-                                           context: String = "",
-                                           file: StaticString = #filePath,
-                                           line: UInt = #line) throws {
-        let data = try tile.serializedData()
-        try assertRawBytesDecodeLikeProtobuf(data, context: context, file: file, line: line)
+    private func assertRoundTrips(_ tile: MvtTileMessage,
+                                  context: String = "",
+                                  file: StaticString = #filePath,
+                                  line: UInt = #line) throws {
+        try assertDecodes(tile.serializedData(), as: tile, context: context, file: file, line: line)
     }
 
-    private func assertRawBytesDecodeLikeProtobuf(_ data: Data,
-                                                  context: String = "",
-                                                  file: StaticString = #filePath,
-                                                  line: UInt = #line) throws {
-        let reference = try VectorTile_Tile(serializedBytes: data)
+    /// Decodes `data` and compares the result with `expected` field by field,
+    /// reading the schema defaults for the fields the message leaves unset.
+    private func assertDecodes(_ data: Data,
+                               as expected: MvtTileMessage,
+                               context: String = "",
+                               file: StaticString = #filePath,
+                               line: UInt = #line) throws {
         let decoded = try MvtTileDecoder.decode(data: data)
 
         // Count mismatches record a failure and return early so the detailed
         // loops below never index out of bounds.
-        XCTAssertEqual(decoded.layers.count, reference.layers.count, "layer count \(context)", file: file, line: line)
-        guard decoded.layers.count == reference.layers.count else { return }
-        for (layerIndex, referenceLayer) in reference.layers.enumerated() {
+        XCTAssertEqual(decoded.layers.count, expected.layers.count, "layer count \(context)", file: file, line: line)
+        guard decoded.layers.count == expected.layers.count else { return }
+        for (layerIndex, expectedLayer) in expected.layers.enumerated() {
             let decodedLayer = decoded.layers[layerIndex]
-            XCTAssertEqual(decodedLayer.name, referenceLayer.name, "layer name \(context)", file: file, line: line)
-            XCTAssertEqual(decodedLayer.extent, referenceLayer.extent, "extent \(context)", file: file, line: line)
-            XCTAssertEqual(decodedLayer.keys, referenceLayer.keys, "keys \(context)", file: file, line: line)
-            XCTAssertEqual(decodedLayer.values.count, referenceLayer.values.count, "value count \(context)", file: file, line: line)
-            guard decodedLayer.values.count == referenceLayer.values.count else { return }
-            for (valueIndex, referenceValue) in referenceLayer.values.enumerated() {
-                assertValuesEqual(decodedLayer.values[valueIndex], referenceValue,
-                                  context: "\(context) layer \(layerIndex) value \(valueIndex)",
-                                  file: file, line: line)
-            }
+            XCTAssertEqual(decodedLayer.name, expectedLayer.name, "layer name \(context)", file: file, line: line)
+            XCTAssertEqual(decodedLayer.extent, expectedLayer.extent ?? 4096, "extent \(context)", file: file, line: line)
+            XCTAssertEqual(decodedLayer.keys, expectedLayer.keys, "keys \(context)", file: file, line: line)
+            XCTAssertEqual(decodedLayer.values, expectedLayer.values, "values \(context)", file: file, line: line)
 
-            XCTAssertEqual(decodedLayer.features.count, referenceLayer.features.count,
+            XCTAssertEqual(decodedLayer.features.count, expectedLayer.features.count,
                            "feature count \(context)", file: file, line: line)
-            guard decodedLayer.features.count == referenceLayer.features.count else { return }
-            for (featureIndex, referenceFeature) in referenceLayer.features.enumerated() {
+            guard decodedLayer.features.count == expectedLayer.features.count else { return }
+            for (featureIndex, expectedFeature) in expectedLayer.features.enumerated() {
                 let decodedFeature = decodedLayer.features[featureIndex]
-                XCTAssertEqual(decodedFeature.hasID, referenceFeature.hasID,
+                XCTAssertEqual(decodedFeature.hasID, expectedFeature.id != nil,
                                "hasID \(context)", file: file, line: line)
-                XCTAssertEqual(decodedFeature.id, referenceFeature.id,
+                XCTAssertEqual(decodedFeature.id, expectedFeature.id ?? 0,
                                "id \(context)", file: file, line: line)
-                XCTAssertEqual(decodedFeature.type, referenceFeature.type,
+                XCTAssertEqual(decodedFeature.type, expectedFeature.type ?? .unknown,
                                "type \(context)", file: file, line: line)
-                XCTAssertEqual(decodedFeature.tags.materializedValues(data: data), referenceFeature.tags,
+                XCTAssertEqual(decodedFeature.tags.materializedValues(data: data), expectedFeature.tags,
                                "tags \(context)", file: file, line: line)
-                XCTAssertEqual(decodedFeature.geometry.materializedValues(data: data), referenceFeature.geometry,
+                XCTAssertEqual(decodedFeature.geometry.materializedValues(data: data), expectedFeature.geometry,
                                "geometry \(context)", file: file, line: line)
             }
         }
-    }
-
-    private func assertValuesEqual(_ decoded: VectorTile_Tile.Value,
-                                   _ reference: VectorTile_Tile.Value,
-                                   context: String,
-                                   file: StaticString,
-                                   line: UInt) {
-        XCTAssertEqual(decoded.hasStringValue, reference.hasStringValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.stringValue, reference.stringValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasFloatValue, reference.hasFloatValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.floatValue, reference.floatValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasDoubleValue, reference.hasDoubleValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.doubleValue, reference.doubleValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasIntValue, reference.hasIntValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.intValue, reference.intValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasUintValue, reference.hasUintValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.uintValue, reference.uintValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasSintValue, reference.hasSintValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.sintValue, reference.sintValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.hasBoolValue, reference.hasBoolValue, context, file: file, line: line)
-        XCTAssertEqual(decoded.boolValue, reference.boolValue, context, file: file, line: line)
     }
 
     private func assertPolygonsEqual(_ lhs: MultiPolygon,
@@ -400,77 +385,45 @@ final class MvtTileDecoderTests: XCTestCase {
         }
     }
 
-    // MARK: - Wire encoding helpers
+    // MARK: - Wire fixtures
 
-    private func appendVarint(_ data: inout Data, _ value: UInt64) {
-        var remaining = value
-        while remaining >= 0x80 {
-            data.append(UInt8((remaining & 0x7F) | 0x80))
-            remaining >>= 7
-        }
-        data.append(UInt8(remaining))
-    }
-
-    private func appendVarintField(_ data: inout Data, fieldNumber: UInt64, value: UInt64) {
-        appendVarint(&data, (fieldNumber << 3) | 0)
-        appendVarint(&data, value)
-    }
-
-    private func appendFixed32Field(_ data: inout Data, fieldNumber: UInt64, value: UInt32) {
-        appendVarint(&data, (fieldNumber << 3) | 5)
-        withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
-    }
-
-    private func appendFixed64Field(_ data: inout Data, fieldNumber: UInt64, value: UInt64) {
-        appendVarint(&data, (fieldNumber << 3) | 1)
-        withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
-    }
-
-    private func appendLengthDelimitedField(_ data: inout Data, fieldNumber: UInt64, payload: Data) {
-        appendVarint(&data, (fieldNumber << 3) | 2)
-        appendVarint(&data, UInt64(payload.count))
-        data.append(payload)
-    }
-
-    private func appendPackedVarintField(_ data: inout Data, fieldNumber: UInt64, values: [UInt64]) {
-        var payload = Data()
-        for value in values {
-            appendVarint(&payload, value)
-        }
-        appendLengthDelimitedField(&data, fieldNumber: fieldNumber, payload: payload)
+    /// The tile `wrapFeatureInTile` lays out, as the message it must decode
+    /// to: one layer named "edge" with string values and the given feature.
+    private func edgeTile(keys: [String] = [], values: [String] = [], feature: MvtFeatureMessage) -> MvtTileMessage {
+        MvtTileMessage(layers: [
+            MvtLayerMessage(name: "edge", features: [feature], keys: keys, values: values.map(MvtValue.string))
+        ])
     }
 
     private func wrapFeatureInTile(featureBody: Data, keys: [String], values: [String]) -> Data {
-        var layerBody = Data()
-        appendVarintField(&layerBody, fieldNumber: 15, value: 2)
-        appendLengthDelimitedField(&layerBody, fieldNumber: 1, payload: Data("edge".utf8))
-        appendLengthDelimitedField(&layerBody, fieldNumber: 2, payload: featureBody)
+        var layerBody = MvtWireWriter()
+        layerBody.appendVarint(fieldNumber: 15, value: 2)
+        layerBody.appendLengthDelimited(fieldNumber: 1, payload: Data("edge".utf8))
+        layerBody.appendLengthDelimited(fieldNumber: 2, payload: featureBody)
         for key in keys {
-            appendLengthDelimitedField(&layerBody, fieldNumber: 3, payload: Data(key.utf8))
+            layerBody.appendLengthDelimited(fieldNumber: 3, payload: Data(key.utf8))
         }
         for value in values {
-            var valueBody = Data()
-            appendLengthDelimitedField(&valueBody, fieldNumber: 1, payload: Data(value.utf8))
-            appendLengthDelimitedField(&layerBody, fieldNumber: 4, payload: valueBody)
+            var valueBody = MvtWireWriter()
+            valueBody.appendLengthDelimited(fieldNumber: 1, payload: Data(value.utf8))
+            layerBody.appendLengthDelimited(fieldNumber: 4, payload: valueBody.data)
         }
 
-        var tileBody = Data()
-        appendLengthDelimitedField(&tileBody, fieldNumber: 3, payload: layerBody)
-        return tileBody
+        var tileBody = MvtWireWriter()
+        tileBody.appendLengthDelimited(fieldNumber: 3, payload: layerBody.data)
+        return tileBody.data
     }
 
-    private func randomValue(_ generator: inout SplitMix64Generator) -> VectorTile_Tile.Value {
-        var value = VectorTile_Tile.Value()
+    private func randomValue(_ generator: inout SplitMix64Generator) -> MvtValue {
         switch generator.next() % 7 {
-        case 0: value.stringValue = "value_\(generator.next() % 1000)"
-        case 1: value.floatValue = Float(generator.next() % 100_000) / 8.0
-        case 2: value.doubleValue = Double(generator.next() % 1_000_000) / 16.0
-        case 3: value.intValue = Int64(bitPattern: generator.next())
-        case 4: value.uintValue = generator.next()
-        case 5: value.sintValue = Int64(bitPattern: generator.next())
-        default: value.boolValue = generator.next() % 2 == 0
+        case 0: return .string("value_\(generator.next() % 1000)")
+        case 1: return .float(Float(generator.next() % 100_000) / 8.0)
+        case 2: return .double(Double(generator.next() % 1_000_000) / 16.0)
+        case 3: return .int(Int64(bitPattern: generator.next()))
+        case 4: return .uint(generator.next())
+        case 5: return .sint(Int64(bitPattern: generator.next()))
+        default: return .bool(generator.next() % 2 == 0)
         }
-        return value
     }
 
     private func appendZigZagDelta(_ geometry: inout [UInt32],
@@ -487,5 +440,4 @@ final class MvtTileDecoderTests: XCTestCase {
     private func zigzag(_ value: Int32) -> UInt32 {
         UInt32(bitPattern: (value << 1) ^ (value >> 31))
     }
-
 }

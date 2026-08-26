@@ -3,6 +3,6 @@
 
 struct DetFeatureStyleData {
     let layerName: String
-    let properties: [String: VectorTile_Tile.Value]
+    let properties: [String: MvtValue]
     let tile: Tile
 }

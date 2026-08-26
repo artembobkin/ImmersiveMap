@@ -268,12 +268,12 @@ enum RoadSurfaceGapBridger {
     /// The name is deliberately NOT a fallback here, unlike stitching: the
     /// two halves of a dual carriageway share a name, and a name match would
     /// let something bridge the median between them.
-    static func streetIdentity(_ attributes: [String: VectorTile_Tile.Value]) -> String {
-        guard let value = attributes["street"] else { return "" }
-        if value.hasStringValue { return value.stringValue }
-        if value.hasIntValue { return String(value.intValue) }
-        if value.hasUintValue { return String(value.uintValue) }
-        if value.hasSintValue { return String(value.sintValue) }
-        return ""
+    static func streetIdentity(_ attributes: [String: MvtValue]) -> String {
+        switch attributes["street"] {
+        case .string(let text): return text
+        case .int(let number), .sint(let number): return String(number)
+        case .uint(let number): return String(number)
+        case .float, .double, .bool, .absent, nil: return ""
+        }
     }
 }

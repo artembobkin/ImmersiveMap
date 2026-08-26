@@ -41,7 +41,7 @@ enum MvtPackedField {
 struct MvtDecodedFeature {
     var id: UInt64 = 0
     var hasID: Bool = false
-    var type: VectorTile_Tile.GeomType = .unknown
+    var type: MvtGeometryType = .unknown
     var tags: MvtPackedField = .empty
     var geometry: MvtPackedField = .empty
 }
@@ -50,7 +50,7 @@ struct MvtDecodedLayer {
     var name: String = ""
     var extent: UInt32 = 4096
     var keys: [String] = []
-    var values: [VectorTile_Tile.Value] = []
+    var values: [MvtValue] = []
     var features: [MvtDecodedFeature] = []
 }
 
@@ -87,7 +87,7 @@ struct MvtVarintUInt32Reader: MvtUInt32Reading {
             result |= UInt64(byte & 0x7F) &<< shift
             if byte & 0x80 == 0 {
                 // Repeated uint32 fields truncate oversized varints to their
-                // low 32 bits, exactly like swift-protobuf does.
+                // low 32 bits, as the protobuf encoding rules specify.
                 return UInt32(truncatingIfNeeded: result)
             }
             shift += 7

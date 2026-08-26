@@ -80,14 +80,10 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
     }
 }
 
-private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-    var tileValue = VectorTile_Tile.Value()
-    tileValue.stringValue = value
-    return tileValue
+private func stringValue(_ value: String) -> MvtValue {
+    .string(value)
 }
 
-private func intValue(_ value: Int64) -> VectorTile_Tile.Value {
-    var tileValue = VectorTile_Tile.Value()
-    tileValue.intValue = value
-    return tileValue
+private func intValue(_ value: Int64) -> MvtValue {
+    .int(value)
 }

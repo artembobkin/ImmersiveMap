@@ -44,7 +44,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     func testExistingProviderWaterAliasSuppressesLocalizedFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .russian,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: try makeProviderAtlanticOceanTile().serializedData())
+                                                  mvtData: makeProviderAtlanticOceanTile().serializedData())
 
         XCTAssertEqual(labels.filter { $0 == "Atlantic Ocean" }.count, 1)
         XCTAssertFalse(labels.contains("Атлантический океан"))
@@ -92,7 +92,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     func testExistingProviderWaterAliasSuppressesPortugueseFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .portuguese,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: try makeProviderAtlanticOceanTile(name: "Oceano Atlântico",
+                                                  mvtData: makeProviderAtlanticOceanTile(name: "Oceano Atlântico",
                                                                                             englishName: "Atlantic Ocean").serializedData(),
                                                   glyphCoverage: Self.bundledGlyphCoverage(),
                                                   fallbackPolicy: .localFirst)
@@ -110,7 +110,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                    config: config,
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
-                                          mvtData: try makeProviderAtlanticOceanTile().serializedData())
+                                          mvtData: makeProviderAtlanticOceanTile().serializedData())
         let expectedKey = VectorTileLabelIdentity.providerFeature(providerID: "parser-provider",
                                                                   layerName: "water_name",
                                                                   featureID: 1).runtimeKey
@@ -129,7 +129,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                    config: config,
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
-                                          mvtData: try makeFullTilePolygonTile(extent: 2048).serializedData())
+                                          mvtData: makeFullTilePolygonTile(extent: 2048).serializedData())
         let positions = parsedTile.drawingPolygon.vertices
             .filter { $0.styleIndex == 1 }
             .map(\.position)
@@ -147,7 +147,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                    config: config,
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
-                                          mvtData: try makeComplexOceanTile().serializedData())
+                                          mvtData: makeComplexOceanTile().serializedData())
         let backgroundVertexCount = parsedTile.drawingPolygon.vertices
             .filter { $0.styleIndex == 0 }
             .count
@@ -159,8 +159,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         XCTAssertGreaterThan(oceanVertexCount, 0)
     }
 
-    private func makeFullTilePolygonTile(extent: UInt32) -> VectorTile_Tile {
-        var feature = VectorTile_Tile.Feature()
+    private func makeFullTilePolygonTile(extent: UInt32) -> MvtTileMessage {
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .polygon
         feature.geometry = [
@@ -177,18 +177,18 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
             command(id: 7, count: 1)
         ]
 
-        var layer = VectorTile_Tile.Layer()
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = "solid"
         layer.extent = extent
         layer.features = [feature]
 
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
         tile.layers = [layer]
         return tile
     }
 
-    private func makeComplexOceanTile() -> VectorTile_Tile {
+    private func makeComplexOceanTile() -> MvtTileMessage {
         var geometry: [UInt32] = []
         var cursor = SIMD2<Int32>(0, 0)
         appendRing(points: [
@@ -212,18 +212,18 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
             ], to: &geometry, cursor: &cursor)
         }
 
-        var feature = VectorTile_Tile.Feature()
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .polygon
         feature.geometry = geometry
 
-        var layer = VectorTile_Tile.Layer()
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = "ocean"
         layer.extent = 4096
         layer.features = [feature]
 
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
         tile.layers = [layer]
         return tile
     }
@@ -266,7 +266,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
                                    config: config,
                                    glyphCoverage: glyphCoverage)
         let parsedTile = try parser.parse(tile: tile,
-                                          mvtData: mvtData ?? VectorTile_Tile().serializedData())
+                                          mvtData: mvtData ?? MvtTileMessage().serializedData())
 
         return parsedTile.textLabels.map(\.text)
     }
@@ -284,8 +284,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     }
 
     private func makeProviderAtlanticOceanTile(name: String = "Atlantic Ocean",
-                                               englishName: String = "Atlantic Ocean") -> VectorTile_Tile {
-        var feature = VectorTile_Tile.Feature()
+                                               englishName: String = "Atlantic Ocean") -> MvtTileMessage {
+        var feature = MvtFeatureMessage()
         feature.id = 1
         feature.type = .point
         feature.tags = [
@@ -300,7 +300,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
             parameter(2048)
         ]
 
-        var layer = VectorTile_Tile.Layer()
+        var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = "water_name"
         layer.extent = 4096
@@ -313,7 +313,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         ]
         layer.features = [feature]
 
-        var tile = VectorTile_Tile()
+        var tile = MvtTileMessage()
         tile.layers = [layer]
         return tile
     }
@@ -326,10 +326,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         UInt32(bitPattern: (value << 1) ^ (value >> 31))
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 }
 
@@ -415,7 +413,7 @@ private struct ParserProviderIDTestLabelProviderProfile: VectorTileLabelProvider
         .from(settingsLanguage: .english, fallbackPolicy: .international)
     }
 
-    func sortKey(properties: [String: VectorTile_Tile.Value]) -> Int {
+    func sortKey(properties: [String: MvtValue]) -> Int {
         0
     }
 
@@ -424,7 +422,7 @@ private struct ParserProviderIDTestLabelProviderProfile: VectorTileLabelProvider
     }
 
     func includesBasePointLabel(layerName: String,
-                                properties: [String: VectorTile_Tile.Value],
+                                properties: [String: MvtValue],
                                 tileZoom: Int,
                                 sortKey: Int) -> Bool {
         true
@@ -436,7 +434,7 @@ private struct ParserProviderIDTestLabelProviderProfile: VectorTileLabelProvider
                          featureID: feature.featureID ?? 0)
     }
 
-    func normalizedKind(layerName: String, properties: [String: VectorTile_Tile.Value]) -> String {
+    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
         layerName
     }
 

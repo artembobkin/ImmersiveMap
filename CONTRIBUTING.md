@@ -35,7 +35,7 @@ New projects are for integration scenarios: things an app wires up, like a provi
 
 ## Project conventions
 
-- Every hand-written `.swift`, `.metal`, `.h`, `.proto` file starts with the license header:
+- Every hand-written `.swift`, `.metal`, `.h` file starts with the license header:
   ```text
   // Copyright (c) 2025-2026 ImmersiveMap contributors.
   // SPDX-License-Identifier: MIT

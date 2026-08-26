@@ -112,7 +112,7 @@ extension TileMvtParser {
 
     func decodeAttributes(feature: MvtDecodedFeature,
                           layer: MvtDecodedLayer,
-                          data: Data) -> [String: VectorTile_Tile.Value] {
+                          data: Data) -> [String: MvtValue] {
         data.withUnsafeBytes { bytes in
             decodeAttributes(feature: feature, layer: layer, bytes: bytes)
         }
@@ -120,8 +120,8 @@ extension TileMvtParser {
 
     func decodeAttributes(feature: MvtDecodedFeature,
                           layer: MvtDecodedLayer,
-                          bytes: UnsafeRawBufferPointer) -> [String: VectorTile_Tile.Value] {
-        var attributes: [String: VectorTile_Tile.Value] = [:]
+                          bytes: UnsafeRawBufferPointer) -> [String: MvtValue] {
+        var attributes: [String: MvtValue] = [:]
         switch feature.tags {
         case .empty:
             break
@@ -138,7 +138,7 @@ extension TileMvtParser {
 
     private func appendAttributes<Reader: MvtUInt32Reading>(reader: inout Reader,
                                                             layer: MvtDecodedLayer,
-                                                            into attributes: inout [String: VectorTile_Tile.Value]) {
+                                                            into attributes: inout [String: MvtValue]) {
         while let keyIndex = reader.next() {
             guard let valueIndex = reader.next() else { break }
 
@@ -149,77 +149,64 @@ extension TileMvtParser {
         }
     }
 
-    func parseBoolValue(_ value: VectorTile_Tile.Value) -> Bool? {
-        if value.hasBoolValue {
-            return value.boolValue
-        }
-        if value.hasUintValue {
-            return value.uintValue != 0
-        }
-        if value.hasSintValue {
-            return value.sintValue != 0
-        }
-        if value.hasIntValue {
-            return value.intValue != 0
-        }
-        if value.hasFloatValue {
-            return value.floatValue != 0
-        }
-        if value.hasDoubleValue {
-            return value.doubleValue != 0
-        }
-        if value.hasStringValue {
-            let lower = value.stringValue.lowercased()
+    func parseBoolValue(_ value: MvtValue) -> Bool? {
+        switch value {
+        case .bool(let flag):
+            return flag
+        case .uint(let number):
+            return number != 0
+        case .sint(let number), .int(let number):
+            return number != 0
+        case .float(let number):
+            return number != 0
+        case .double(let number):
+            return number != 0
+        case .string(let text):
+            let lower = text.lowercased()
             if lower == "true" || lower == "yes" || lower == "1" {
                 return true
             }
             if lower == "false" || lower == "no" || lower == "0" {
                 return false
             }
+            return nil
+        case .absent:
+            return nil
         }
-        return nil
     }
 
-    func parseUInt64Value(_ value: VectorTile_Tile.Value) -> UInt64? {
-        if value.hasUintValue {
-            return value.uintValue
+    func parseUInt64Value(_ value: MvtValue) -> UInt64? {
+        switch value {
+        case .uint(let number):
+            return number
+        case .sint(let number), .int(let number):
+            return number >= 0 ? UInt64(number) : nil
+        case .string(let text):
+            return UInt64(text)
+        case .float, .double, .bool, .absent:
+            return nil
         }
-        if value.hasSintValue {
-            return value.sintValue >= 0 ? UInt64(value.sintValue) : nil
-        }
-        if value.hasIntValue {
-            return value.intValue >= 0 ? UInt64(value.intValue) : nil
-        }
-        if value.hasStringValue {
-            return UInt64(value.stringValue)
-        }
-        return nil
     }
 
-    func parseIntValue(_ value: VectorTile_Tile.Value) -> Int? {
-        if value.hasIntValue {
-            return Int(value.intValue)
+    func parseIntValue(_ value: MvtValue) -> Int? {
+        switch value {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            guard number <= UInt64(Int.max) else { return nil }
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text)
+        case .bool, .absent:
+            return nil
         }
-        if value.hasSintValue {
-            return Int(value.sintValue)
-        }
-        if value.hasUintValue {
-            guard value.uintValue <= UInt64(Int.max) else { return nil }
-            return Int(value.uintValue)
-        }
-        if value.hasFloatValue {
-            return Int(value.floatValue)
-        }
-        if value.hasDoubleValue {
-            return Int(value.doubleValue)
-        }
-        if value.hasStringValue {
-            return Int(value.stringValue)
-        }
-        return nil
     }
 
-    func isTruthy(_ value: VectorTile_Tile.Value?) -> Bool {
+    func isTruthy(_ value: MvtValue?) -> Bool {
         guard let value = value else { return false }
         return parseBoolValue(value) ?? false
     }
@@ -263,7 +250,7 @@ extension TileMvtParser {
         return true
     }
 
-    func buildingIdentifier(attributes: [String: VectorTile_Tile.Value],
+    func buildingIdentifier(attributes: [String: MvtValue],
                             featureId: UInt64) -> UInt64 {
         if let value = attributes["osm_id"], let id = parseUInt64Value(value) {
             return id
@@ -281,7 +268,7 @@ extension TileMvtParser {
     /// the part footprint signatures, from attributes the caller already
     /// decoded.
     func collectBuildingPartInfo(layer: MvtDecodedLayer,
-                                 featureAttributes: [[String: VectorTile_Tile.Value]],
+                                 featureAttributes: [[String: MvtValue]],
                                  data: Data)
         -> (partIds: Set<UInt64>, footprintSignatures: Set<BuildingFootprintSignature>) {
         var partIds = Set<UInt64>()
@@ -439,7 +426,7 @@ extension TileMvtParser {
         let roof: RoofInfo?
     }
 
-    func extrusionHeights(attributes: [String: VectorTile_Tile.Value], tileZoom: Int, style: FeatureStyle) -> ExtrusionHeights? {
+    func extrusionHeights(attributes: [String: MvtValue], tileZoom: Int, style: FeatureStyle) -> ExtrusionHeights? {
         // `height`/`min_height` are the Mapbox convention; `render_height`/
         // `render_min_height` are the OpenMapTiles convention. Accept either.
         let rawHeight = attributes["height"].flatMap(parseNumericValue)
@@ -481,24 +468,20 @@ extension TileMvtParser {
         return ExtrusionHeights(base: base, top: top, roof: scaledRoof)
     }
 
-    func parseNumericValue(_ value: VectorTile_Tile.Value) -> Float? {
-        if value.hasFloatValue {
-            return value.floatValue
-        }
-        if value.hasDoubleValue {
-            return Float(value.doubleValue)
-        }
-        if value.hasUintValue {
-            return Float(value.uintValue)
-        }
-        if value.hasIntValue {
-            return Float(value.intValue)
-        }
-        if value.hasSintValue {
-            return Float(value.sintValue)
-        }
-        if value.hasStringValue {
-            let raw = value.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    func parseNumericValue(_ value: MvtValue) -> Float? {
+        switch value {
+        case .float(let number):
+            return number
+        case .double(let number):
+            return Float(number)
+        case .uint(let number):
+            return Float(number)
+        case .int(let number), .sint(let number):
+            return Float(number)
+        case .bool, .absent:
+            return nil
+        case .string(let text):
+            let raw = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let token = raw.split(whereSeparator: { $0 == ";" || $0 == "," || $0 == " " }).first
             guard let token else { return nil }
             var numeric = ""
@@ -526,7 +509,6 @@ extension TileMvtParser {
             }
             return value
         }
-        return nil
     }
 
     func buildExtrudedMesh(
@@ -1133,7 +1115,7 @@ extension TileMvtParser {
                                clippedExterior: [SIMD2<Float>],
                                clippedInteriors: [[SIMD2<Float>]],
                                style: FeatureStyle,
-                               attributes: [String: VectorTile_Tile.Value],
+                               attributes: [String: MvtValue],
                                tile: Tile,
                                surfaceAreas: [TileMvtParser.RoadSurfaceArea],
                                roadStyles: inout [UInt8: FeatureStyle],

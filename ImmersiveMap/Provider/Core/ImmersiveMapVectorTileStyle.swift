@@ -4,78 +4,75 @@
 import simd
 
 public struct ImmersiveMapFeatureProperties {
-    private let values: [String: VectorTile_Tile.Value]
+    private let values: [String: MvtValue]
 
-    init(values: [String: VectorTile_Tile.Value]) {
+    init(values: [String: MvtValue]) {
         self.values = values
     }
 
+    /// The property as text: `nil` when the key is absent, and the empty
+    /// string when the key is present with a non-string value (the reading
+    /// this accessor has always given, kept so a style written against it
+    /// keeps working).
     public func string(_ key: String) -> String? {
-        values[key]?.stringValue
+        guard let value = values[key] else {
+            return nil
+        }
+        return value.stringValue ?? ""
     }
 
     public func double(_ key: String) -> Double? {
         guard let value = values[key] else {
             return nil
         }
-        if value.hasDoubleValue {
-            return value.doubleValue
+        switch value {
+        case .double(let number):
+            return number
+        case .float(let number):
+            return Double(number)
+        case .int(let number), .sint(let number):
+            return Double(number)
+        case .uint(let number):
+            return Double(number)
+        case .string(let text):
+            return Double(text)
+        case .bool, .absent:
+            return nil
         }
-        if value.hasFloatValue {
-            return Double(value.floatValue)
-        }
-        if value.hasIntValue {
-            return Double(value.intValue)
-        }
-        if value.hasUintValue {
-            return Double(value.uintValue)
-        }
-        if value.hasSintValue {
-            return Double(value.sintValue)
-        }
-        if value.hasStringValue {
-            return Double(value.stringValue)
-        }
-        return nil
     }
 
     public func integer(_ key: String) -> Int? {
         guard let value = values[key] else {
             return nil
         }
-        if value.hasIntValue {
-            return Int(value.intValue)
+        switch value {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text)
+        case .bool, .absent:
+            return nil
         }
-        if value.hasUintValue {
-            return Int(value.uintValue)
-        }
-        if value.hasSintValue {
-            return Int(value.sintValue)
-        }
-        if value.hasDoubleValue {
-            return Int(value.doubleValue)
-        }
-        if value.hasFloatValue {
-            return Int(value.floatValue)
-        }
-        if value.hasStringValue {
-            return Int(value.stringValue)
-        }
-        return nil
     }
 
     public func bool(_ key: String) -> Bool? {
         guard let value = values[key] else {
             return nil
         }
-        if value.hasBoolValue {
-            return value.boolValue
+        if case .bool(let flag) = value {
+            return flag
         }
         if let integer = integer(key) {
             return integer != 0
         }
-        if value.hasStringValue {
-            let normalized = value.stringValue.lowercased()
+        if case .string(let text) = value {
+            let normalized = text.lowercased()
             if normalized == "true" || normalized == "yes" || normalized == "1" {
                 return true
             }

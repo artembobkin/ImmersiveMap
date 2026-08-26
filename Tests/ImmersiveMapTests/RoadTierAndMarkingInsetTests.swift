@@ -27,8 +27,8 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     func testTheTierLineSitsBetweenServiceRoadsAndPaths() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         func priority(_ className: String) -> Int {
-            var props: [String: VectorTile_Tile.Value] = [:]
-            var v = VectorTile_Tile.Value(); v.stringValue = className; props["class"] = v
+            var props: [String: MvtValue] = [:]
+            let v = MvtValue.string(className); props["class"] = v
             return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: props,
                                                              tile: Tile(x: 39616, y: 20486, z: 16))).roadClassPriority
@@ -89,11 +89,15 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         let tile = Tile(x: 39616, y: 20486, z: 16)
         func markingPasses(_ attributes: [String: Any]) -> [LineRenderPass] {
-            var properties: [String: VectorTile_Tile.Value] = [:]
+            var properties: [String: MvtValue] = [:]
             for (key, value) in attributes {
-                var wrapped = VectorTile_Tile.Value()
-                if let text = value as? String { wrapped.stringValue = text } else if let number = value as? Int { wrapped.intValue = Int64(number) }
-                properties[key] = wrapped
+                if let text = value as? String {
+                    properties[key] = .string(text)
+                } else if let number = value as? Int {
+                    properties[key] = .int(Int64(number))
+                } else {
+                    properties[key] = .absent
+                }
             }
             return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: properties,
@@ -169,9 +173,9 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
 
     func testMarkingsStateAHalfCarriagewayInset() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        var props: [String: VectorTile_Tile.Value] = [:]
-        var c = VectorTile_Tile.Value(); c.stringValue = "primary"; props["class"] = c
-        var l = VectorTile_Tile.Value(); l.intValue = 6; props["lanes"] = l
+        var props: [String: MvtValue] = [:]
+        let c = MvtValue.string("primary"); props["class"] = c
+        let l = MvtValue.int(6); props["lanes"] = l
         let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                      properties: props,
                                                                      tile: Tile(x: 39616, y: 20486, z: 16)))

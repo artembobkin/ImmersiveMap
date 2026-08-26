@@ -10,10 +10,8 @@ import XCTest
 /// the tiles bake population and capital status into the rank at build time,
 /// so the profile must not resurrect them as fallbacks.
 final class ImmersiveMapTilesLabelPriorityContractTests: XCTestCase {
-    private func intValue(_ value: Int) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value()
-        v.intValue = Int64(value)
-        return v
+    private func intValue(_ value: Int) -> MvtValue {
+        .int(Int64(value))
     }
 
     private func makeProfile() -> ImmersiveMapTilesVectorTileLabelProviderProfile {

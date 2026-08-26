@@ -60,8 +60,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let layer = data.layerName.lowercased()
         let props = data.properties
         let z = data.tile.z
-        let cls = props["class"]?.stringValue.lowercased()
-        let subclass = props["subclass"]?.stringValue.lowercased()
+        let cls = props["class"]?.stringValue?.lowercased()
+        let subclass = props["subclass"]?.stringValue?.lowercased()
 
         switch layer {
         case "background":
@@ -305,10 +305,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     // MARK: - Lines
 
-    private func waterwayStyle(cls: String?, props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+    private func waterwayStyle(cls: String?, props: [String: MvtValue]) -> FeatureStyle {
         // Underground/culverted waterways (brunnel=tunnel, e.g. the Neglinnaya
         // under the Alexander Garden) are invisible in reality, so we hide them.
-        if props["brunnel"]?.stringValue.lowercased() == "tunnel" {
+        if props["brunnel"]?.stringValue?.lowercased() == "tunnel" {
             return hiddenStyle
         }
         // The source ships major rivers from z3; without a floor their
@@ -336,19 +336,19 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func transportationStyle(cls: String?,
-                                     props: [String: VectorTile_Tile.Value],
+                                     props: [String: MvtValue],
                                      tile: Tile) -> FeatureStyle {
         let tileZoom = tile.z
-        let brunnel = props["brunnel"]?.stringValue.lowercased()
+        let brunnel = props["brunnel"]?.stringValue?.lowercased()
         let isTunnel = brunnel == "tunnel"
-        let subclass = props["subclass"]?.stringValue.lowercased()
+        let subclass = props["subclass"]?.stringValue?.lowercased()
         let roads = configuration.layers.roads
         // Paint the source measured on the ground, shipped as its own line:
         // a lane line, the carriageway edge, a crossing. It carries no class
         // and no name, only what it is (`marking`) and what colour it is
         // painted (`paint`), and it bypasses every rule below, which are all
         // about roads.
-        if let marking = props["marking"]?.stringValue.lowercased(), marking.isEmpty == false {
+        if let marking = props["marking"]?.stringValue?.lowercased(), marking.isEmpty == false {
             return shippedMarkingStyle(kind: marking, props: props, tile: tile)
         }
         // A `<class>_construction` segment belongs to its base class: the
@@ -473,7 +473,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // none; where the tiles carry `oneway` it decides, and a tile that
         // does not is taken as two-way.
         let isOneWay = (parseIntValue(props["oneway"]).map { $0 != 0 } ?? false)
-            || props["oneway"]?.stringValue.lowercased() == "yes"
+            || props["oneway"]?.stringValue?.lowercased() == "yes"
         // Markings are painted from what the tiles state, never from what a
         // class suggests. `lanes` is the only marking evidence the schema
         // carries, so a road that does not carry it stays bare asphalt: a
@@ -636,11 +636,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// `traffic_signals` are painted on the ground (a signalled crossing
     /// almost always is); `unmarked` is not, and `unknown` is the honest
     /// answer for a crossing nobody described, so neither gets a zebra.
-    private static func crossingMarking(props: [String: VectorTile_Tile.Value]) -> Bool? {
-        guard let crossing = props["crossing"]?.stringValue.lowercased(), crossing.isEmpty == false else {
+    private static func crossingMarking(props: [String: MvtValue]) -> Bool? {
+        guard let crossing = props["crossing"]?.stringValue?.lowercased(), crossing.isEmpty == false else {
             return nil
         }
-        if props["markings"]?.stringValue.isEmpty == false {
+        if props["markings"]?.stringValue?.isEmpty == false {
             return true
         }
         switch crossing {
@@ -730,7 +730,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// (surface clipping, junction insets, stitching) off it, because the
     /// line already ends exactly where the paint ends on the ground.
     private func shippedMarkingStyle(kind: String,
-                                     props: [String: VectorTile_Tile.Value],
+                                     props: [String: MvtValue],
                                      tile: Tile) -> FeatureStyle {
         switch kind {
         case "crossing_marked":
@@ -771,13 +771,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // The paint colour: white unless the source says yellow, and yellow
         // only where it means something (a centre line): a key is a baked
         // style, so every (kind, colour) pair must map to its own.
-        let isYellow = props["paint"]?.stringValue.lowercased() == "yellow" && kind != "lane_separator"
+        let isYellow = props["paint"]?.stringValue?.lowercased() == "yellow" && kind != "lane_separator"
         let color = isYellow ? Self.roadMarkingYellowColor : Self.roadMarkingColor
         // Solid or dashed comes from the source where it says (`style`), with
         // the kind's own default behind it: a separator is dashed, a
         // dividing line dashed unless stated solid.
         let dashed: Bool
-        switch props["style"]?.stringValue.lowercased() {
+        switch props["style"]?.stringValue?.lowercased() {
         case "solid": dashed = false
         case "dashed": dashed = true
         default: dashed = true
@@ -1268,7 +1268,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// a DIFFERENT width model floats like a puddle, because its straight
     /// cuts land in the middle of asphalt instead of on the ribbon's edge.
     /// One width model, one geometry.
-    private func statedWidthMetres(props: [String: VectorTile_Tile.Value]) -> Double? {
+    private func statedWidthMetres(props: [String: MvtValue]) -> Double? {
         guard let decimetres = parseIntValue(props["width"]), decimetres > 0 else {
             return nil
         }
@@ -1278,7 +1278,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return metres
     }
 
-    private func roadWidthMetres(cls: String?, props: [String: VectorTile_Tile.Value]) -> Double {
+    private func roadWidthMetres(cls: String?, props: [String: MvtValue]) -> Double {
         if let stated = statedWidthMetres(props: props) {
             return stated
         }
@@ -1303,7 +1303,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// The lane count a road draws with: the tiles' `lanes` within a sane
     /// range (the tag carries occasional nonsense, and a road hundreds of
     /// metres wide would swamp the frame), else a typical count per class.
-    private func roadLaneCount(cls: String?, props: [String: VectorTile_Tile.Value]) -> Int {
+    private func roadLaneCount(cls: String?, props: [String: MvtValue]) -> Int {
         let defaultLanes: Int
         switch cls {
         case "motorway": defaultLanes = 4
@@ -1338,7 +1338,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     /// The width of a road's carriageway in the tile's own units.
     private func roadWidthUnits(cls: String?,
-                                props: [String: VectorTile_Tile.Value],
+                                props: [String: MvtValue],
                                 tile: Tile) -> Double {
         roadWidthMetres(cls: cls, props: props) * Self.tileUnitsPerMetre(tile: tile)
     }
@@ -1413,7 +1413,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// (admin 3-4) borders are pure clutter there and stay hidden.
     private static let regionalBoundaryMinimumZoom = 4
 
-    private func boundaryStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
+    private func boundaryStyle(props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
         let adminLevel = parseIntValue(props["admin_level"]) ?? 4
         guard adminLevel <= 4 else {
             return hiddenStyle
@@ -1451,8 +1451,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     // MARK: - Labels
 
-    private func placeLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
-        let cls = props["class"]?.stringValue.lowercased()
+    private func placeLabelStyle(props: [String: MvtValue]) -> FeatureStyle {
+        let cls = props["class"]?.stringValue?.lowercased()
         var appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance
         switch cls {
         case "continent", "country":
@@ -1480,9 +1480,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return pointLabel(key: 70, appearance: appearance)
     }
 
-    private func waterLabelStyle(props: [String: VectorTile_Tile.Value]) -> FeatureStyle {
+    private func waterLabelStyle(props: [String: MvtValue]) -> FeatureStyle {
         var appearance = configuration.labels.water
-        switch props["class"]?.stringValue.lowercased() {
+        switch props["class"]?.stringValue?.lowercased() {
         case "ocean":
             appearance.sizePoints += 3
         case "sea":
@@ -1499,7 +1499,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     // the icon glyph is white. All POIs share one key (72): runs are grouped by
     // full style identity (weight + colors), so different categories land in
     // separate draw runs.
-    private func poiLabelStyle(props: [String: VectorTile_Tile.Value], tileZoom: Int) -> FeatureStyle {
+    private func poiLabelStyle(props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
         // POI appearance is derived from budget and priorities, with no
         // absolute zoom ramps: a label is visible once its effective rank fits
         // the grid-cell budget, and the budget quadruples with each zoom of
@@ -1509,8 +1509,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // a priority offset in rank units rather than zooms, so the approach
         // does not depend on the source maxzoom: switching sources shifts the
         // thresholds automatically via tile.z.
-        let cls = props["class"]?.stringValue.lowercased()
-        let subclass = props["subclass"]?.stringValue.lowercased()
+        let cls = props["class"]?.stringValue?.lowercased()
+        let subclass = props["subclass"]?.stringValue?.lowercased()
         let rank = Double(parseIntValue(props["rank"]) ?? Self.poiUnrankedRank)
         let effectiveRank = max(Self.poiNativeCellBudget,
                                 rank + Self.poiClassRankBias(cls: cls, subclass: subclass))
@@ -1760,28 +1760,20 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     // MARK: - Property helpers
 
-    private func parseIntValue(_ value: VectorTile_Tile.Value?) -> Int? {
-        guard let value else {
+    private func parseIntValue(_ value: MvtValue?) -> Int? {
+        switch value {
+        case .int(let number), .sint(let number):
+            return Int(number)
+        case .uint(let number):
+            return Int(number)
+        case .double(let number):
+            return Int(number)
+        case .float(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text.trimmingCharacters(in: .whitespaces))
+        case .bool, .absent, nil:
             return nil
         }
-        if value.hasIntValue {
-            return Int(value.intValue)
-        }
-        if value.hasUintValue {
-            return Int(value.uintValue)
-        }
-        if value.hasSintValue {
-            return Int(value.sintValue)
-        }
-        if value.hasDoubleValue {
-            return Int(value.doubleValue)
-        }
-        if value.hasFloatValue {
-            return Int(value.floatValue)
-        }
-        if value.hasStringValue {
-            return Int(value.stringValue.trimmingCharacters(in: .whitespaces))
-        }
-        return nil
     }
 }

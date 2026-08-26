@@ -36,7 +36,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
                                         streetOfAvenue: String? = nil) throws -> Float {
         var avenue: [String: String] = ["class": "primary", "lanes": "4", "name": "Avenue"]
         if let streetOfAvenue { avenue["street"] = streetOfAvenue }
-        let data = try VectorTileFixture.layerTile(layerName: "transportation", features: [
+        let data = VectorTileFixture.layerTile(layerName: "transportation", features: [
             .init(id: 1,
                   geometry: .line(points: [(200, 2600), (1500, 2600), (3900, 2600)]),
                   properties: avenue),

@@ -23,11 +23,11 @@ final class RoadParkingAreaTests: XCTestCase {
 
     private func makeStyle(z: Int, extra: [String: String] = [:]) -> FeatureStyle {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        var props: [String: VectorTile_Tile.Value] = [:]
-        var subclassValue = VectorTile_Tile.Value(); subclassValue.stringValue = "parking_area"
+        var props: [String: MvtValue] = [:]
+        let subclassValue = MvtValue.string("parking_area")
         props["subclass"] = subclassValue
         for (key, value) in extra {
-            var v = VectorTile_Tile.Value(); v.stringValue = value
+            let v = MvtValue.string(value)
             props[key] = v
         }
         let scale = 1 << max(0, 16 - z)
@@ -139,7 +139,7 @@ final class RoadParkingAreaTests: XCTestCase {
 
     func testADedicatedBusLaneIsTheLetterANotATone() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func value(_ v: String) -> VectorTile_Tile.Value { var x = VectorTile_Tile.Value(); x.stringValue = v; return x }
+        func value(_ v: String) -> MvtValue { .string(v) }
         let lane = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_lane")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
@@ -170,7 +170,7 @@ final class RoadParkingAreaTests: XCTestCase {
 
     func testABusStopWearsTheYellowSawtooth() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func value(_ v: String) -> VectorTile_Tile.Value { var x = VectorTile_Tile.Value(); x.stringValue = v; return x }
+        func value(_ v: String) -> MvtValue { .string(v) }
         let stop = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_stop_zigzag")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))

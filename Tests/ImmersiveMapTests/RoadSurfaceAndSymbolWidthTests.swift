@@ -65,7 +65,7 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
 
     func testRoadsCarryASymbolCeilingThatTheSurfaceReleases() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func v(_ s: String) -> VectorTile_Tile.Value { var x = VectorTile_Tile.Value(); x.stringValue = s; return x }
+        func v(_ s: String) -> MvtValue { .string(s) }
         let primary = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                 properties: ["class": v("primary")],
                                                                 tile: Tile(x: 39615, y: 20486, z: 16)))

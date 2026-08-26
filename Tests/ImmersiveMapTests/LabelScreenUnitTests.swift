@@ -129,7 +129,7 @@ final class LabelScreenUnitTests: XCTestCase {
     func testNoResolvedLabelStyleIsBelowTheReadableFloor() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault,
                                                      settings: ImmersiveMapSettings.default.style)
-        let cases: [(String, String, [String: VectorTile_Tile.Value])] = [
+        let cases: [(String, String, [String: MvtValue])] = [
             ("poi", "poi", ["class": stringValue("restaurant")]),
             ("house number", "housenumber", [:]),
             ("water", "water_name", [:]),
@@ -164,7 +164,7 @@ final class LabelScreenUnitTests: XCTestCase {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault,
                                                      settings: ImmersiveMapSettings.default.style)
         func sizePoints(class classValue: String?) -> Float {
-            var properties: [String: VectorTile_Tile.Value] = [:]
+            var properties: [String: MvtValue] = [:]
             if let classValue {
                 properties["class"] = stringValue(classValue)
             }
@@ -180,10 +180,8 @@ final class LabelScreenUnitTests: XCTestCase {
         XCTAssertEqual(sizePoints(class: "ocean"), 12.5, accuracy: 0.0001)
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 
     func testTypeScaleFloorRaisesUndersizedLabelsOnly() {

@@ -10,31 +10,35 @@ enum MvtWireDecodeError: Error {
     case invalidWireType
     case unmatchedGroupEnd
     case groupNestingTooDeep
-    /// The layer message misses a proto2 `required` field (version or name),
-    /// mirroring swift-protobuf's missing-required-fields failure.
+    /// The layer message misses a field the schema declares `required`
+    /// (version or name), which a conforming protobuf decoder rejects.
     case missingRequiredLayerField
 }
 
-/// Hand-written decoder for the Mapbox Vector Tile protobuf schema.
+/// Hand-written decoder for the Mapbox Vector Tile protobuf schema
+/// (`vector_tile.proto`, version 2.1). It is the only protobuf code in the
+/// package: the schema has four messages and seven value kinds, and reading
+/// them straight off the wire is what a general protobuf runtime cannot do.
 ///
-/// The generated swift-protobuf decode materializes every feature's `tags`
-/// and `geometry` as fresh `[UInt32]` arrays; on a dense city tile that is
-/// thousands of short-lived allocations per parse, thrown away right after
-/// the geometry pass converts them again. This decoder walks the wire format
-/// once via `withUnsafeBytes` and leaves packed fields as byte ranges into
-/// the payload; `MvtGeometryDecoder` then decodes rings straight from those
+/// A generic decoder materializes every feature's `tags` and `geometry` as
+/// fresh `[UInt32]` arrays; on a dense city tile that is thousands of
+/// short-lived allocations per parse, thrown away right after the geometry
+/// pass converts them again. This decoder walks the wire format once via
+/// `withUnsafeBytes` and leaves packed fields as byte ranges into the
+/// payload; `MvtGeometryDecoder` then decodes rings straight from those
 /// bytes.
 ///
-/// Behavior mirrors `VectorTile_Tile(serializedBytes:)` for valid tiles:
-/// packed and unpacked repeated encodings, split packed runs, last-one-wins
-/// scalars, unknown fields (including nested groups) skipped, truncated or
-/// malformed input throws, and a layer without the required `version`/`name`
-/// throws. Two deliberate divergences: invalid UTF-8 in strings decodes with
-/// replacement characters instead of failing the whole tile, and a malformed
-/// varint inside a packed tags/geometry run surfaces later as a short read
-/// that drops the affected feature's geometry or trailing tags instead of
-/// failing the whole tile (swift-protobuf decodes those runs eagerly and
-/// throws).
+/// Wire-format behaviour follows the protobuf encoding rules: packed and
+/// unpacked repeated encodings, split packed runs concatenated, scalars
+/// last-one-wins, unknown fields (including nested groups) skipped, truncated
+/// or malformed input throws, and a layer without the required
+/// `version`/`name` throws. Three deliberate leniencies: invalid UTF-8 in
+/// strings decodes with replacement characters instead of failing the whole
+/// tile; a malformed varint inside a packed tags/geometry run surfaces later
+/// as a short read that drops the affected feature's geometry or trailing
+/// tags instead of failing the whole tile; and a `Value` message that sets
+/// more than one of its fields (which the specification forbids) keeps the
+/// last one in wire order.
 enum MvtTileDecoder {
     private static let lengthDelimitedWireType: UInt64 = 2
     private static let maximumGroupNestingDepth = 32
@@ -135,7 +139,7 @@ enum MvtTileDecoder {
                 let rawType = Int(truncatingIfNeeded: try readVarint(bytes, &offset, end: end))
                 // proto2 keeps unrecognized enum values out of the field, so
                 // an invalid geometry type leaves the previous value alone.
-                if let geomType = VectorTile_Tile.GeomType(rawValue: rawType) {
+                if let geomType = MvtGeometryType(rawValue: rawType) {
                     feature.type = geomType
                 }
             case (4, lengthDelimitedWireType):
@@ -152,8 +156,8 @@ enum MvtTileDecoder {
         return feature
     }
 
-    private static func decodeValue(bytes: UnsafeRawBufferPointer, range: Range<Int>) throws -> VectorTile_Tile.Value {
-        var value = VectorTile_Tile.Value()
+    private static func decodeValue(bytes: UnsafeRawBufferPointer, range: Range<Int>) throws -> MvtValue {
+        var value: MvtValue = .absent
         var offset = range.lowerBound
         let end = range.upperBound
 
@@ -165,19 +169,19 @@ enum MvtTileDecoder {
             switch (fieldNumber, wireType) {
             case (1, lengthDelimitedWireType):
                 let stringRange = try readLengthDelimited(bytes, &offset, end: end)
-                value.stringValue = decodeString(bytes, range: stringRange)
+                value = .string(decodeString(bytes, range: stringRange))
             case (2, 5):
-                value.floatValue = Float(bitPattern: try readFixed32(bytes, &offset, end: end))
+                value = .float(Float(bitPattern: try readFixed32(bytes, &offset, end: end)))
             case (3, 1):
-                value.doubleValue = Double(bitPattern: try readFixed64(bytes, &offset, end: end))
+                value = .double(Double(bitPattern: try readFixed64(bytes, &offset, end: end)))
             case (4, 0):
-                value.intValue = Int64(bitPattern: try readVarint(bytes, &offset, end: end))
+                value = .int(Int64(bitPattern: try readVarint(bytes, &offset, end: end)))
             case (5, 0):
-                value.uintValue = try readVarint(bytes, &offset, end: end)
+                value = .uint(try readVarint(bytes, &offset, end: end))
             case (6, 0):
-                value.sintValue = decodeZigZag64(try readVarint(bytes, &offset, end: end))
+                value = .sint(decodeZigZag64(try readVarint(bytes, &offset, end: end)))
             case (7, 0):
-                value.boolValue = try readVarint(bytes, &offset, end: end) != 0
+                value = .bool(try readVarint(bytes, &offset, end: end) != 0)
             default:
                 try skipField(bytes, &offset, end: end, wireType: wireType)
             }

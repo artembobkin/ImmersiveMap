@@ -26,15 +26,13 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
         return 40_075_016.686 * cos(latitude) / tilesCount / 4096.0
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var v = VectorTile_Tile.Value()
-        v.stringValue = value
-        return v
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 
     private func markingStyle(_ kind: String, z: Int = 16,
                               extra: [String: String] = [:]) -> FeatureStyle {
-        var props: [String: VectorTile_Tile.Value] = ["marking": stringValue(kind)]
+        var props: [String: MvtValue] = ["marking": stringValue(kind)]
         for (key, value) in extra { props[key] = stringValue(value) }
         return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                          properties: props,

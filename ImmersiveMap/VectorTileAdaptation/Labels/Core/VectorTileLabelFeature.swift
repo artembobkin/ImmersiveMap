@@ -9,5 +9,5 @@ struct VectorTileLabelFeature {
     let layerName: String
     let featureID: UInt64?
     let anchor: SIMD2<Int16>
-    let properties: [String: VectorTile_Tile.Value]
+    let properties: [String: MvtValue]
 }

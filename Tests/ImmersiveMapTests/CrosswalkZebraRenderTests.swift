@@ -61,7 +61,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
                       properties: ["class": "path", "subclass": "footway", "crossing": crossing])
             )
         }
-        return try VectorTileFixture.layerTile(layerName: "transportation", features: features)
+        return VectorTileFixture.layerTile(layerName: "transportation", features: features)
     }
 
     func testAMarkedCrossingIsStripedOnTheCarriageway() throws {

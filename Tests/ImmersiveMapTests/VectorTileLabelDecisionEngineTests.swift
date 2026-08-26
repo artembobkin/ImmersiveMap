@@ -6,7 +6,7 @@ import XCTest
 
 final class VectorTileLabelDecisionEngineTests: XCTestCase {
     func testRussianPreferencesPreferRussianThenEnglishThenNative() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
             "name_en": stringValue("Moscow"),
             "name_ru": stringValue("Москва")
@@ -21,7 +21,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testFrenchPreferencesFallBackToEnglishBeforeNativeWhenPreferredNameIsAbsent() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
             "name_en": stringValue("Moscow")
         ]
@@ -32,7 +32,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testLocalFirstPolicyFallsBackToNativeBeforeEnglishWhenPreferredNameIsAbsent() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
             "name_en": stringValue("Moscow")
         ]
@@ -46,7 +46,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testRussianPreferencesFallBackToNativeCyrillicWhenRussianAndEnglishNamesAreAbsent() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Москва")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
@@ -56,7 +56,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testEnglishPreferencesPreferEnglishThenNative() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Moscow Native"),
             "name_en": stringValue("Moscow EN"),
             "name_ru": stringValue("Москва")
@@ -70,7 +70,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testFrenchPreferencesPreferNameFrThenEnglish() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Paris Native"),
             "name_en": stringValue("Paris EN"),
             "name_fr": stringValue("Paris FR")
@@ -83,7 +83,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testSharedResolverCoversRoadLabelFieldSelection() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Rue Native"),
             "name_en": stringValue("Rivoli Street"),
             "name_fr": stringValue("Rue de Rivoli")
@@ -95,7 +95,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testGermanPreferencesFallbackToEnglishWhenPreferredFieldIsMissing() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name_en": stringValue("Munich EN")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
@@ -105,7 +105,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testEnglishPreferencesFallBackToNativeLatinWhenEnglishNameIsAbsent() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Moscow"),
             "name_ru": stringValue("Москва")
         ]
@@ -116,7 +116,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testEnglishPreferencesFallBackToNativeCyrillicWhenEnglishNameIsAbsent() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
             "name_ru": stringValue("Москва")
         ]
@@ -127,7 +127,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
     }
 
     func testUnsupportedGlyphCoverageRejectsText() {
-        let properties: [String: VectorTile_Tile.Value] = [
+        let properties: [String: MvtValue] = [
             "name": stringValue("東京")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
@@ -269,9 +269,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         XCTAssertEqual(ImmersiveMapSettings.LabelLanguage.turkish.code, "tr")
     }
 
-    private func stringValue(_ value: String) -> VectorTile_Tile.Value {
-        var tileValue = VectorTile_Tile.Value()
-        tileValue.stringValue = value
-        return tileValue
+    private func stringValue(_ value: String) -> MvtValue {
+        .string(value)
     }
 }
