@@ -550,7 +550,9 @@ final class PreparedTileDiskCaching {
     // key the first tunnel in a tile baked its translucent colour into the
     // slot every road of that class samples, so tiles prepared as v70 carry
     // whole ghosted streets.
-    static let preparedFormatVersion: UInt32 = 71
+    // 72: a tunnel ribbon ends flat; the round caps baked into v71 stubs
+    // showed as darker semicircles at the portals.
+    static let preparedFormatVersion: UInt32 = 72
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

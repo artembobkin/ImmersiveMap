@@ -301,6 +301,30 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                        "and not on the ground")
     }
 
+    /// The centreline overshoots its surface into the portal quads by a few
+    /// units; the stub left after clipping must be a flat rectangle, never
+    /// a round cap the size of half the carriageway.
+    func testTheStubPastATunnelPortalCarriesNoRoundCap() throws {
+        let overshoot: [(Int32, Int32)] = [(1788, 1050), (2612, 1050)]
+        let withStubs = try parse([surface(coveringRing, extra: ["brunnel": "tunnel", "layer": "-1"]),
+                                   street(overshoot, extra: ["brunnel": "tunnel", "layer": "-1"])])
+        let polygonOnly = try parse([surface(coveringRing, extra: ["brunnel": "tunnel", "layer": "-1"])])
+        let polygonVertices = Set(polygonOnly.drawingRoadPhases.tunnel.fill.drawing.vertices.map {
+            SIMD2<Float>(Float($0.position.x), Float($0.position.y))
+        })
+        let stubVertices = withStubs.drawingRoadPhases.tunnel.fill.drawing.vertices
+            .map { SIMD2<Float>(Float($0.position.x), Float($0.position.y)) }
+            .filter { polygonVertices.contains($0) == false }
+        XCTAssertGreaterThan(stubVertices.count, 0, "The stubs outside the surface still draw")
+        // The surface spans x 1800...2600; a round cap on the cut end would
+        // put vertices 45 units inside it. A flat end keeps every stub
+        // vertex at the cut, give or take the ribbon's extrusion margin.
+        for vertex in stubVertices {
+            XCTAssertTrue(vertex.x < 1808 || vertex.x > 2592,
+                          "A stub vertex reaches inside the tunnel surface: x=\(vertex.x) y=\(vertex.y)")
+        }
+    }
+
     func testATunnelSurfaceWithoutAStreetIdMatchesByContainment() throws {
         // No street id on either side: the centreline running inside the
         // polygon is what makes it the tunnel's surface.

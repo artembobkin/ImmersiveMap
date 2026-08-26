@@ -1103,9 +1103,16 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            overviewAccent: SIMD4<Float>? = nil,
                            construction: Bool = false) -> FeatureStyle {
         // A tunnel is the plain ribbon at the tunnel opacity: no dash, no
-        // kerb, no paint (both are skipped below). The construction
+        // kerb, no paint (both are skipped below), and butt ends. Where the
+        // tiles ship the tunnel's surface the centreline runs a few units
+        // past it into the portal quad; the surface clips the ribbon and the
+        // stub that survives is a rectangle under the quad, whereas a round
+        // cap on the cut end bulged half a carriageway back over the
+        // translucent surface as a darker semicircle. The construction
         // point-dash only applies to surface segments.
-        let fillGeometry = makeRoadGeometry(width: width)
+        let fillGeometry = tunnel
+            ? TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
+            : makeRoadGeometry(width: width)
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
             ? (length: 5.0, gap: 2.5)
             : nil
@@ -1771,7 +1778,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     }
 
     private func makeRoadGeometry(width: Double) -> TileMvtParser.ParseGeometryStyleData {
-        TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: true, lineJoinRound: true)
+        TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
     }
 
     private func makeDashedRoadGeometry(width: Double,

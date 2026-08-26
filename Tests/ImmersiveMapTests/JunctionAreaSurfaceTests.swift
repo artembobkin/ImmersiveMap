@@ -291,6 +291,8 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let ribbonFill = try XCTUnwrap(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .fill })
         XCTAssertEqual(ribbonFill.color.w, opacity, accuracy: 1e-6, "The ribbon carries the tunnel opacity")
         XCTAssertFalse(ribbonFill.parseGeometryStyleData.usesDashPattern, "and is no longer dashed")
+        XCTAssertFalse(ribbonFill.parseGeometryStyleData.lineCapRound,
+                       "and ends flat: a round cap on the stub the surface leaves bulged back over the tunnel")
         XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }, "no kerb")
         XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .detail }, "no paint")
 
