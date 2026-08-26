@@ -156,7 +156,8 @@ final class TileAtlasSubsystem: RenderSubsystem {
                                                nativeTileWorldSize: Float(2.0 * Double.pi
                                                    * frameContext.services.settings.presentation.globeRadiusScale),
                                                streetPaletteBlend: streetPaletteBlend,
-                                               lineWidthDollyScale: lineWidthDollyScale)
+                                               lineWidthDollyScale: lineWidthDollyScale,
+                                               cameraZoom: Float(frameContext.zoom))
             tilesTexture.selectTilePipeline()
 
             for allocation in allocations {

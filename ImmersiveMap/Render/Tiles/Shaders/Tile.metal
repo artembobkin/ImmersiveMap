@@ -80,6 +80,11 @@ struct OverviewFadeUniform {
     // resolves as paint once a three-metre dash is more than a point or two
     // across. See LowZoomOverviewFade.roadMarkingAlpha.
     float roadMarkingAlpha;
+    // The live camera zoom, for the per-class fade: a mask of 10 or more
+    // carries the zoom a road class fades in from (see
+    // LowZoomOverviewFade.classFadeMask), and the class comes in over the
+    // following zoom level, continuous with the camera.
+    float cameraZoom;
 };
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -269,7 +274,11 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
     }
     half4 color = in.color;
     half fade = 1.0h;
-    if (in.lowZoomFadeMask >= 3.5h) {
+    if (in.lowZoomFadeMask >= 9.5h) {
+        float startZoom = float(in.lowZoomFadeMask) - 10.0;
+        float t = clamp(overviewFade.cameraZoom - startZoom, 0.0, 1.0);
+        fade = half(t * t * (3.0 - 2.0 * t));
+    } else if (in.lowZoomFadeMask >= 3.5h) {
         fade = half(overviewFade.roadMarkingAlpha);
     } else if (in.lowZoomFadeMask >= 2.5h) {
         fade = half(overviewFade.landuseAlpha);

@@ -446,6 +446,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
            let stroke = Self.overviewRoadStroke(cls: effectiveClass, tileZoom: tileZoom) {
             return overviewRoadStyle(stroke,
                                      color: Self.streetRoadColor(cls: effectiveClass, roads: roads),
+                                     fadeStartZoom: Self.overviewRoadFadeStartZoom(cls: effectiveClass),
                                      tunnel: isTunnel,
                                      construction: isConstruction)
         }
@@ -1065,6 +1066,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let opacity: Float
     }
 
+    /// The camera zoom a class fades in from, over the following zoom level
+    /// (`LowZoomOverviewFade.classFadeMask`): the tile zoom that first ships
+    /// it readably, so the class comes in with the camera instead of popping
+    /// with the tile. Trunks are gated with motorways at z5 but the source
+    /// only ships them from z6, so their fade starts where they exist.
+    static func overviewRoadFadeStartZoom(cls: String?) -> Int {
+        switch cls {
+        case "motorway": return 5
+        case "trunk": return 6
+        case "primary": return 7
+        case "secondary": return 9
+        default: return 10
+        }
+    }
+
     /// The class grey the road draws in at every zoom: the same asphalt as
     /// the street era, so no colour blends or steps on the way down.
     private static func streetRoadColor(cls: String?,
@@ -1119,6 +1135,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// segments read as point-dashed corridors.
     private func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                                    color: SIMD4<Float>,
+                                   fadeStartZoom: Int,
                                    tunnel: Bool,
                                    construction: Bool) -> FeatureStyle {
         let dashed = construction && tunnel == false
@@ -1135,7 +1152,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return FeatureStyle(
             key: fillKey,
             color: fillColor,
-            lowZoomFadeMask: 1.0,
+            // The class fades in over the zoom level after it first ships,
+            // continuous with the camera, instead of popping with the tile.
+            lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
             lineWidthPoints: stroke.widthPoints,
             dashLengthPoints: dashed ? 4.0 : 0,
             dashGapPoints: dashed ? 2.5 : 0,

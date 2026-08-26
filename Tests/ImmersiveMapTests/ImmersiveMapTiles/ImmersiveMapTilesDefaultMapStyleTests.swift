@@ -172,15 +172,17 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
 
     func testOverviewRoadsAreOpaqueAndOnlyStreetRoadsRideTheRoadFadeBand() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        // The overview skeleton must never be translucent: the road fade band
-        // spans exactly the zooms where the skeleton is the star, and a
-        // translucent stroke composites unevenly where segments overlap.
-        // Overview roads ride the overview band (opaque past z1), borders'
-        // principle.
-        let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 6)
-        XCTAssertEqual(motorway.lowZoomFadeMask, 1.0)
-        for pass in motorway.resolvedLineRenderPasses {
-            XCTAssertEqual(pass.lowZoomFadeMask, 1.0)
+        // An overview class fades in with the camera over the zoom level
+        // after the tile zoom that first ships it (the per-class mask), and
+        // is opaque from then on: never the shared road band, which would
+        // hold every class translucent over the same zooms.
+        for (className, zoom, start) in [("motorway", 6, 5), ("trunk", 7, 6), ("primary", 8, 7),
+                                         ("secondary", 9, 9), ("tertiary", 11, 10)] {
+            let road = makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
+            XCTAssertEqual(road.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: start), className)
+            for pass in road.resolvedLineRenderPasses {
+                XCTAssertEqual(pass.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: start), className)
+            }
         }
         let streetMotorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 12)
         XCTAssertEqual(streetMotorway.lowZoomFadeMask, 2.0)
@@ -217,8 +219,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(motorway.resolvedLineRenderPasses.map(\.roadPassRole), [.fill])
         let fill = motorway.resolvedLineRenderPasses[0]
         XCTAssertEqual(fill.lineWidthPoints, 1.6)
-        XCTAssertEqual(fill.lowZoomFadeMask, 1.0,
-                       "Overview roads must not ride the translucent road fade band")
+        XCTAssertEqual(fill.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 5),
+                       "Overview roads fade in per class, never on the shared road band")
         XCTAssertTrue(fill.parseGeometryStyleData.lineCapRound)
         XCTAssertTrue(fill.parseGeometryStyleData.lineJoinRound)
         XCTAssertEqual(fill.parseGeometryStyleData.lineWidth, Double(fill.lineWidthPoints) * 32, accuracy: 0.01,

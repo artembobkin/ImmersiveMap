@@ -102,4 +102,18 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 15.4), 1)
         XCTAssertEqual(LowZoomOverviewFade.roadMarkingAlpha(for: 16.0), 1)
     }
+
+    func testClassFadeComesInOverTheZoomLevelAfterItsStart() {
+        // The mask carries the start zoom above the fixed-band masks, so the
+        // shader can tell them apart; the band is one zoom level, smooth.
+        XCTAssertEqual(LowZoomOverviewFade.classFadeMask(startZoom: 5), 15)
+        XCTAssertGreaterThan(LowZoomOverviewFade.classFadeMaskBase, 4)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 4.9, startZoom: 5), 0)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 5.0, startZoom: 5), 0)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 5.5, startZoom: 5), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 6.0, startZoom: 5), 1)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 9.0, startZoom: 5), 1)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 7.25, startZoom: 7),
+                       LowZoomOverviewFade.classFadeAlpha(for: 5.25, startZoom: 5))
+    }
 }

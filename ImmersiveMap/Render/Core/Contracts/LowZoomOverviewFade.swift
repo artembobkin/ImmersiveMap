@@ -93,6 +93,26 @@ enum LowZoomOverviewFade {
         return clamped * clamped * (3.0 - 2.0 * clamped)
     }
 
+    /// The per-class road fade. A road class appears at the tile zoom that
+    /// first ships it readably, and it comes in over the following zoom
+    /// level instead of popping with the tile: the style bakes a mask of
+    /// `classFadeMaskBase` plus the start zoom, and the shader evaluates
+    /// the band against the live camera zoom, so the fade is continuous with
+    /// the camera and shared by the flat and the atlas path. Masks below the
+    /// base keep their fixed bands (`Kind`, the markings).
+    static let classFadeMaskBase: Float = 10.0
+    static let classFadeBandZooms: Double = 1.0
+
+    static func classFadeMask(startZoom: Int) -> Float {
+        classFadeMaskBase + Float(startZoom)
+    }
+
+    static func classFadeAlpha(for zoom: Double, startZoom: Int) -> Float {
+        let progress = Float((zoom - Double(startZoom)) / classFadeBandZooms)
+        let clamped = simd_clamp(progress, 0.0, 1.0)
+        return clamped * clamped * (3.0 - 2.0 * clamped)
+    }
+
     static func streetPaletteBlend(for zoom: Double) -> Float {
         let progress = Float((zoom - streetPaletteStartZoom)
             / (streetPaletteEndZoom - streetPaletteStartZoom))

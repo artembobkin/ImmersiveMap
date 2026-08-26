@@ -555,7 +555,9 @@ final class PreparedTileDiskCaching {
     // 73: the overview road stroke is baked in one asphalt grey with round
     // joins and caps through tile z11; v72 tiles carry the earlier stroke
     // and its street-palette blend under the same style fingerprint.
-    static let preparedFormatVersion: UInt32 = 73
+    // 74: the overview stroke bakes the per-class fade mask; v73 tiles carry
+    // the opaque overview band.
+    static let preparedFormatVersion: UInt32 = 74
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
