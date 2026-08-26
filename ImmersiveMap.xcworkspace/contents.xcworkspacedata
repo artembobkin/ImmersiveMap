@@ -81,4 +81,11 @@
          location = "group:Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj">
       </FileRef>
    </Group>
+   <Group
+      location = "container:"
+      name = "Develop">
+      <FileRef
+         location = "group:Develop/ImmersiveMapDevMac/ImmersiveMapDevMac.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>
