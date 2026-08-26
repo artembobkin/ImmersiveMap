@@ -67,7 +67,7 @@ private struct MapScreen: View {
 private let devTileTemplate = ProcessInfo.processInfo
     .environment["IMMERSIVEMAP_DEV_TILE_TEMPLATE"]
     .flatMap { $0.isEmpty ? nil : $0 }
-    ?? "https://immersivemap.dev/tiles/test/{z}/{x}/{y}.mvt"
+    ?? "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
 
 /// The test endpoint takes the same key as the hosted service, so there is one
 /// entry to keep: `IMMERSIVEMAP_API_KEY`.
