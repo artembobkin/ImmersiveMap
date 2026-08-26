@@ -18,6 +18,9 @@ enum FlatMapSurfaceDrawer {
         /// over their own camera-zoom band, above the one the carriageway
         /// widths morph over.
         var roadMarkingAlpha: Float
+        /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
+        /// per-class road fade is evaluated against.
+        var cameraZoom: Float
     }
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -55,7 +58,8 @@ enum FlatMapSurfaceDrawer {
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
             pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
             roadSurfaceBlend: LowZoomOverviewFade.roadSurfaceBlend(for: cameraZoom),
-            roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom)
+            roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
+            cameraZoom: Float(cameraZoom)
         )
         var horizonFogValue = horizonFog
         var shadowUniformValue = shadowBinding.uniform

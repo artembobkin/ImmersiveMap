@@ -552,7 +552,12 @@ final class PreparedTileDiskCaching {
     // whole ghosted streets.
     // 72: a tunnel ribbon ends flat; the round caps baked into v71 stubs
     // showed as darker semicircles at the portals.
-    static let preparedFormatVersion: UInt32 = 72
+    // 73: the overview road stroke is baked in one asphalt grey with round
+    // joins and caps through tile z11; v72 tiles carry the earlier stroke
+    // and its street-palette blend under the same style fingerprint.
+    // 74: the overview stroke bakes the per-class fade mask; v73 tiles carry
+    // the opaque overview band.
+    static let preparedFormatVersion: UInt32 = 74
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

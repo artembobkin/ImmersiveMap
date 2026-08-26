@@ -17,6 +17,9 @@ class TileAtlasTexture {
         var roadSurfaceBlend: Float = 0
         /// and where no road is painted yet.
         var roadMarkingAlpha: Float = 0
+        /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
+        /// per-class road fade is evaluated against.
+        var cameraZoom: Float = 0
     }
 
     private struct LineDashUniform {
@@ -197,7 +200,8 @@ class TileAtlasTexture {
                                drawableHeightPx: Float = 0.0,
                                nativeTileWorldSize: Float = 0.0,
                                streetPaletteBlend: Float = 0.0,
-                               lineWidthDollyScale: Float = 1.0) {
+                               lineWidthDollyScale: Float = 1.0,
+                               cameraZoom: Float = 0.0) {
         guard let renderEncoder else { return }
         // Bound once per page encoding; vertex bytes persist across draws.
         var streetPaletteUniform = StreetPaletteUniform(blend: streetPaletteBlend)
@@ -215,7 +219,8 @@ class TileAtlasTexture {
         activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: overviewAlpha,
                                                     roadAlpha: roadAlpha,
                                                     landuseAlpha: landuseAlpha,
-                                                    pixelsPerPoint: pixelsPerPoint)
+                                                    pixelsPerPoint: pixelsPerPoint,
+                                                    cameraZoom: cameraZoom)
         var uniform = activeFadeUniform
         renderEncoder.setFragmentBytes(&uniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
