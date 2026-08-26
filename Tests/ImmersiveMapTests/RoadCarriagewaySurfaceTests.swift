@@ -155,4 +155,75 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         XCTAssertGreaterThan(withDeck.drawingRoadPhases.bridge.fill.drawing.indices.count, 0,
                              "while the deck surface draws in the bridge phases")
     }
+
+    // MARK: Tunnels
+
+    /// The tunnel's centreline as the tiles ship it: `brunnel=tunnel`, the
+    /// tunnel's layer, the street it belongs to.
+    private func tunnelLine(_ points: [(Int32, Int32)], street: String? = "7") -> VectorTileFixture.Feature {
+        var extra = ["brunnel": "tunnel", "layer": "-1"]
+        if let street { extra["street"] = street }
+        return self.street(points, id: 3, extra: extra)
+    }
+
+    func testATunnelSurfaceIsABareFillWithNoPaintInsideIt() throws {
+        // The surface ships with the tunnel's layer and street but no
+        // `brunnel`; the centreline of the same street says tunnel. The
+        // measured lane paint inside the surface is exactly what a tunnel
+        // never shows.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+                                tunnelLine([(1900, 1050), (2500, 1050)]),
+                                marking([(1900, 1050), (2500, 1050)])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.tunnel.fill.drawing.indices.count, 0,
+                             "The surface draws in the tunnel phases")
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                       "and the shipped paint inside it is gone")
+        XCTAssertEqual(parsed.drawingRoadPhases.tunnel.detail.drawing.indices.count, 0,
+                       "in every tier")
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.fill.drawing.indices.count, 0,
+                       "Nothing of it draws as open road")
+    }
+
+    func testShippedPaintOutsideATunnelSurfaceSurvives() throws {
+        // A marking that starts inside the tunnel and runs on past it keeps
+        // the part outside: only the covered stretch is cut.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+                                tunnelLine([(1900, 1050), (2500, 1050)]),
+                                marking([(2200, 1050), (3600, 1050)])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The paint past the portal still draws")
+    }
+
+    func testAnUnderpassSurfaceIsNotATunnel() throws {
+        // A street diving under a bridge ships as `layer=-1` without any
+        // tunnel flag and is in full view from above: its surface keeps its
+        // paint and never takes the tunnel look.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+                                street([(1900, 1050), (2500, 1050)], extra: ["layer": "-1", "street": "7"]),
+                                marking([(1900, 1050), (2500, 1050)])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The paint under the bridge stays")
+    }
+
+    func testATunnelOfAnotherStreetDoesNotClaimTheSurface() throws {
+        // A tunnel centreline of a different street, far from the polygon:
+        // no match by id and none by containment.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1", "street": "7"]),
+                                tunnelLine([(300, 3500), (900, 3500)], street: "8"),
+                                marking([(1900, 1050), (2500, 1050)])])
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                             "The surface is an ordinary underpass and keeps its paint")
+    }
+
+    func testATunnelSurfaceWithoutAStreetIdMatchesByContainment() throws {
+        // No street id on either side: the centreline running inside the
+        // polygon is what makes it the tunnel's surface.
+        let parsed = try parse([surface(coveringRing, extra: ["layer": "-1"]),
+                                tunnelLine([(1900, 1050), (2500, 1050)], street: nil),
+                                marking([(1900, 1050), (2500, 1050)])])
+        XCTAssertEqual(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
+                       "The paint inside the tunnel is gone")
+        XCTAssertGreaterThan(parsed.drawingRoadPhases.tunnel.fill.drawing.indices.count, 0,
+                             "and the surface draws as the tunnel")
+    }
 }

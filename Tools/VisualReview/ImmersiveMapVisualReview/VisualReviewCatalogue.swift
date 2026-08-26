@@ -168,6 +168,13 @@ enum VisualReviewCatalogue {
                                                                      zoom: 15.4,
                                                                      bearing: 0.3,
                                                                      pitch: 0.5)
+        /// The Boulevard Ring diving under Novy Arbat at Arbat Gate square:
+        /// the one covered stretch of a vehicular tunnel in the centre.
+        static let arbatTunnel = ImmersiveMapCameraPosition(latitudeDegrees: 55.7522,
+                                                            longitudeDegrees: 37.6016,
+                                                            zoom: 17.0,
+                                                            bearing: 0.0,
+                                                            pitch: 0.0)
         static let okhotnyParking = ImmersiveMapCameraPosition(latitudeDegrees: 55.7577,
                                                                longitudeDegrees: 37.6156,
                                                                zoom: 16.5,
@@ -459,6 +466,24 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.tverskayaOneLevelOut)),
+
+        VisualReviewScenario(
+            id: "roads.tunnel.arbat",
+            title: "Arbat Gate, the Boulevard Ring under Novy Arbat",
+            lookFor: """
+            The two carriageways of the Boulevard Ring run north-south \
+            through the square and pass UNDER Novy Arbat. On both sides of \
+            the avenue the covered stretch is a faint ghost of the road: the \
+            asphalt grey at twenty percent over the ground, a flat fill with \
+            no kerb, no lane dashes and no edge line on it, ending square \
+            where the open road resumes with its full grey and its paint. \
+            Novy Arbat itself is solid, its lane paint runs through the \
+            crossing unbroken, and nothing of the tunnel shows through it. \
+            No white dashes float over the ghost, and the ghost does not \
+            continue as a lighter band across the avenue.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.arbatTunnel)),
 
         VisualReviewScenario(
             id: "roads.parking.okhotny",

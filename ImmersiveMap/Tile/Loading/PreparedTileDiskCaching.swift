@@ -541,7 +541,12 @@ final class PreparedTileDiskCaching {
     // both are baked into the prepared label geometry.
     // 69: the POI block's scale settled at 1.05; tiles prepared while it was
     // 0.7 carry the smaller layout baked in.
-    static let preparedFormatVersion: UInt32 = 69
+    // 70: a vehicular tunnel is a bare translucent fill. Its ribbon is no
+    // longer dashed, the road surface the tiles ship for it (negative
+    // `layer`, matched to its `brunnel=tunnel` centreline) takes the tunnel
+    // look instead of open asphalt with a kerb, and the shipped lane paint
+    // inside that surface is clipped away; all three are baked geometry.
+    static let preparedFormatVersion: UInt32 = 70
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

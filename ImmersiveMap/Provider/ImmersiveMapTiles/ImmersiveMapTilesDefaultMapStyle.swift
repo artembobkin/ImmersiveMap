@@ -709,6 +709,20 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// road fill: it is paint on the road, not a road.
     private static let crosswalkClassPriority = 96
 
+    /// The opacity of everything a vehicular tunnel draws: its ribbon at
+    /// the zooms a road is a line, and its road surface where the tiles
+    /// ship one. A tunnel is a plain fill with this alpha and nothing else,
+    /// no kerb, no dash, no paint, so the ground shows through it in
+    /// whichever palette the map wears and the road network stays joined
+    /// across it without pretending to be at grade. Eighty percent
+    /// transparent: the tunnel is a hint of where the road goes, not a road.
+    static let tunnelFillOpacity: Float = 0.2
+
+    /// `color` with the tunnel opacity in place of its own alpha.
+    private static func tunnelTone(_ color: SIMD4<Float>) -> SIMD4<Float> {
+        SIMD4<Float>(color.x, color.y, color.z, tunnelFillOpacity)
+    }
+
     /// Yellow road paint (a centre line that may not be crossed): muted in
     /// TONE like the white, and fully opaque like it (see roadMarkingColor).
     private static let roadMarkingYellowColor = SIMD4<Float>(0.93, 0.83, 0.44, 1.0)
@@ -871,7 +885,10 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // The reconstructed polygons overlap each other, the hand-mapped
         // areas and the ribbons, and overlaps of one colour are invisible
         // where a distinct tone showed every one as a diagonal seam.
-        let color = classColor
+        // A tunnel's surface is its roof seen from above: the class colour
+        // at the tunnel opacity, and nothing drawn on it (the parser clips
+        // the shipped paint out of it).
+        let color = tunnel ? Self.tunnelTone(classColor) : classColor
         let surfaceKey = fillKey
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
@@ -1032,11 +1049,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                    streetColor: SIMD4<Float>,
                                    tunnel: Bool,
                                    construction: Bool) -> FeatureStyle {
-        let dashed = tunnel || construction
+        // A tunnel is the same stroke at the tunnel opacity, not a dash: one
+        // treatment for every zoom the tunnel draws at.
+        let dashed = construction && tunnel == false
+        let baseColor = accent ?? streetColor
+        let baseStreetColor = accent != nil ? streetColor : nil
         return FeatureStyle.pointLockedLine(
             key: fillKey,
-            color: accent ?? streetColor,
-            streetColor: accent != nil ? streetColor : nil,
+            color: tunnel ? Self.tunnelTone(baseColor) : baseColor,
+            streetColor: tunnel ? baseStreetColor.map(Self.tunnelTone) : baseStreetColor,
             widthPoints: widthPoints,
             dashLengthPoints: dashed ? 4.0 : 0,
             dashGapPoints: dashed ? 2.5 : 0,
@@ -1056,19 +1077,20 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            markings: RoadMarkings = .none,
                            overviewAccent: SIMD4<Float>? = nil,
                            construction: Bool = false) -> FeatureStyle {
-        let fillGeometry = tunnel
-            ? makeDashedRoadGeometry(width: width, dashLength: width * 2.0, dashGap: width * 1.2)
-            : makeRoadGeometry(width: width)
-        // A tunnel already dashes its geometry in tile units; the
-        // construction point-dash only applies to surface segments.
+        // A tunnel is the plain ribbon at the tunnel opacity: no dash, no
+        // kerb, no paint (both are skipped below). The construction
+        // point-dash only applies to surface segments.
+        let fillGeometry = makeRoadGeometry(width: width)
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
             ? (length: 5.0, gap: 2.5)
             : nil
         // With an overview accent, the accent is the baked color and the
         // regular palette is its street counterpart: the continuous street
         // blend releases the accent exactly as it lightens the ground.
-        let fillColor = overviewAccent ?? color
-        let fillStreetColor = overviewAccent != nil ? color : nil
+        let baseFillColor = overviewAccent ?? color
+        let baseFillStreetColor = overviewAccent != nil ? color : nil
+        let fillColor = tunnel ? Self.tunnelTone(baseFillColor) : baseFillColor
+        let fillStreetColor = tunnel ? baseFillStreetColor.map(Self.tunnelTone) : baseFillStreetColor
         // The floor stops mattering once the world width exceeds it, so the
         // casing keeps its proportion by flooring half a point above the fill.
         let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0

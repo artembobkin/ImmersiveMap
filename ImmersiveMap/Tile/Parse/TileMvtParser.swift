@@ -336,6 +336,11 @@ class TileMvtParser {
         /// ground surface must not clip the deck above.
         var structureKind: RoadStructureKind = .ground
         var layer: Int = 0
+        /// Whether the surface is the roof of a tunnel (`brunnel=tunnel`,
+        /// stamped by `RoadTunnelSurfaceResolver`). A tunnel surface is a
+        /// bare translucent fill: every line of shipped paint inside it is
+        /// clipped away, unlike on any other surface.
+        var isTunnel: Bool = false
         /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
         /// crossing, false for a hand-mapped carriageway area.
         var cutsPaint: Bool = false
@@ -396,6 +401,7 @@ class TileMvtParser {
                                                             bounds: (lower, upper),
                                                             structureKind: roadStructureKind(attributes: featureAttributes[featureIndex]),
                                                             layer: roadLayerValue(attributes: featureAttributes[featureIndex]),
+                                                            isTunnel: featureAttributes[featureIndex]["brunnel"]?.stringValue?.lowercased() == "tunnel",
                                                             cutsPaint: style.surfaceAreaCutsPaint,
                                                             street: RoadSurfaceGapBridger.streetIdentity(featureAttributes[featureIndex]),
                                                             featureIndex: featureIndex))
@@ -442,6 +448,7 @@ class TileMvtParser {
                                                     bounds: (lower, upper),
                                                     structureKind: owner.structureKind,
                                                     layer: owner.layer,
+                                                    isTunnel: owner.isTunnel,
                                                     cutsPaint: owner.cutsPaint,
                                                     street: owner.street))
             }
@@ -456,12 +463,23 @@ class TileMvtParser {
         // outside keep drawing and end flush at the surface's edge.
         var paintRawLinesByFeatureIndex = rawLinesByFeatureIndex
         if surfaceAreas.isEmpty == false {
+            let tunnelSurfaces = surfaceAreas.filter(\.isTunnel)
             for featureIndex in 0..<rawLinesByFeatureIndex.count where rawLinesByFeatureIndex[featureIndex].isEmpty == false {
                 // Shipped paint already ends exactly where it ends on the
                 // ground: a stop line or a crossing lies INSIDE the surface
                 // polygons on purpose, and clipping it against them would
-                // delete it.
-                guard featureStyles[featureIndex].isShippedRoadPaint == false else { continue }
+                // delete it. The one exception is a tunnel: the source
+                // measures the paint of the road down there like any other,
+                // but from above there is only the tunnel's roof to see, a
+                // bare translucent fill, so the paint inside it goes.
+                guard featureStyles[featureIndex].isShippedRoadPaint == false else {
+                    guard tunnelSurfaces.isEmpty == false else { continue }
+                    rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
+                        RoadSurfaceClipper.clip(polyline: $0, outside: tunnelSurfaces)
+                    }
+                    paintRawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex]
+                    continue
+                }
                 let priority = featureStyles[featureIndex].roadClassPriority
                 let structure = roadStructureKind(attributes: featureAttributes[featureIndex])
                 let layerValue = roadLayerValue(attributes: featureAttributes[featureIndex])
@@ -1085,8 +1103,20 @@ class TileMvtParser {
             featureStyles.reserveCapacity(layer.features.count)
             mvtData.withUnsafeBytes { bytes in
                 for feature in layer.features {
-                    let attributes = decodeAttributes(feature: feature, layer: layer, bytes: bytes)
-                    featureAttributes.append(attributes)
+                    featureAttributes.append(decodeAttributes(feature: feature, layer: layer, bytes: bytes))
+                }
+                // A tunnel's road surface ships with the tunnel's `layer` but
+                // without its `brunnel`; the surface is stamped as the tunnel
+                // it roofs before the style reads it, so it draws the tunnel
+                // look instead of open asphalt (see the resolver).
+                if Self.isSeparateRoadLayer(layerName) {
+                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
+                                                                                  attributes: featureAttributes,
+                                                                                  bytes: bytes) {
+                        featureAttributes[index]["brunnel"] = .string("tunnel")
+                    }
+                }
+                for attributes in featureAttributes {
                     featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
                         properties: attributes,

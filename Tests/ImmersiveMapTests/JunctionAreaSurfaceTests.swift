@@ -263,4 +263,39 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
         XCTAssertNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing })
     }
+
+    /// A tunnel is a bare translucent fill wherever it draws: the surface
+    /// at street zoom, the ribbon at the zooms a road is a line, the
+    /// point-locked stroke over a region. Same opacity, no dash, no paint.
+    func testATunnelIsATranslucentFillAtEveryZoom() throws {
+        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let service = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.service
+        func value(_ s: String) -> MvtValue { .string(s) }
+        func make(_ properties: [String: MvtValue], z: Int) -> FeatureStyle {
+            style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                      properties: properties,
+                                                      tile: Tile(x: 39615 >> (16 - z), y: 20486 >> (16 - z), z: z)))
+        }
+        let opacity = ImmersiveMapTilesDefaultMapStyle.tunnelFillOpacity
+        XCTAssertEqual(opacity, 0.2, accuracy: 1e-6, "Eighty percent transparent")
+
+        let surface = make(["class": value("service"), "subclass": value("carriageway_area"),
+                            "origin": value("graph"), "brunnel": value("tunnel")], z: 16)
+        let surfaceFill = try XCTUnwrap(surface.resolvedLineRenderPasses.first { $0.roadPassRole == .fill })
+        XCTAssertEqual(surfaceFill.color, SIMD4<Float>(service.x, service.y, service.z, opacity),
+                       "The surface is the class colour at the tunnel opacity")
+        XCTAssertEqual(surface.resolvedLineRenderPasses.count, 1, "and nothing else draws on it")
+
+        let ribbon = make(["class": value("primary"), "lanes": value("4"), "oneway": value("1"),
+                           "brunnel": value("tunnel")], z: 14)
+        let ribbonFill = try XCTUnwrap(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .fill })
+        XCTAssertEqual(ribbonFill.color.w, opacity, accuracy: 1e-6, "The ribbon carries the tunnel opacity")
+        XCTAssertFalse(ribbonFill.parseGeometryStyleData.usesDashPattern, "and is no longer dashed")
+        XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }, "no kerb")
+        XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .detail }, "no paint")
+
+        let overview = make(["class": value("motorway"), "brunnel": value("tunnel")], z: 8)
+        XCTAssertEqual(overview.color.w, opacity, accuracy: 1e-6, "The overview stroke carries the tunnel opacity")
+        XCTAssertFalse(overview.parseGeometryStyleData.usesDashPattern, "and is not dashed either")
+    }
 }
