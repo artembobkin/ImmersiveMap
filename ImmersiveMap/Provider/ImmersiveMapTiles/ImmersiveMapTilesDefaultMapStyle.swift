@@ -427,39 +427,27 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // deeper asphalt grey over a country view, released to the light
         // street palette by the same continuous camera-zoom blend the ground
         // uses.
-        let casingZoom = tileZoom >= 10 && isConstruction == false
+        let casingZoom = tileZoom >= 12 && isConstruction == false
         // Over a country or region view a road is a symbol, not a surface,
         // and it draws on the same principle as the country borders: one
-        // point-locked pass in the generic ground path, butt ends, opaque
-        // from the first frame it is visible. The previous overview attempt
-        // kept the road machinery: its fade band held the skeleton
-        // translucent exactly at the zooms it is the star, and translucent
-        // wide round caps composited unevenly at every joint. Borders never
-        // had either problem. From z10 (the casing era) the world width
-        // takes over with the point floors as a safety net.
-        if tileZoom <= 9 {
-            switch effectiveClass {
-            case "motorway":
-                return overviewRoadStyle(fillKey: 56, widthPoints: 1.5, priority: 95,
-                                         accent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
-                                         streetColor: roads.motorway,
-                                         tunnel: isTunnel, construction: isConstruction)
-            case "trunk":
-                return overviewRoadStyle(fillKey: 54, widthPoints: 1.4, priority: 90,
-                                         accent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
-                                         streetColor: roads.trunk,
-                                         tunnel: isTunnel, construction: isConstruction)
-            case "primary":
-                return overviewRoadStyle(fillKey: 52, widthPoints: 1.1, priority: 80,
-                                         accent: nil, streetColor: roads.primary,
-                                         tunnel: isTunnel, construction: isConstruction)
-            case "secondary":
-                return overviewRoadStyle(fillKey: 50, widthPoints: 0.9, priority: 78,
-                                         accent: nil, streetColor: roads.secondary,
-                                         tunnel: isTunnel, construction: isConstruction)
-            default:
-                break
-            }
+        // point-locked stroke in the generic ground path, opaque from the
+        // first frame it is visible. It is the same asphalt grey the street
+        // era draws the class in, so the road never changes colour with the
+        // zoom, and it has no kerb, because the street era has none either.
+        // Joins and caps are round: the tiles chop a corridor into many short
+        // features, and butt ends with plain joins tore the stroke open at
+        // every bend and every feature boundary; on an opaque stroke the
+        // overlaps of round geometry are invisible. The symbol era runs
+        // through tile z11: the world width only starts to carry meaning
+        // past z12, and until then a road drawn from the tile scale is a
+        // uniform hairline that says nothing about its rank. See
+        // `overviewRoadStroke` for the ladder.
+        if tileZoom <= Self.overviewRoadMaximumTileZoom,
+           let stroke = Self.overviewRoadStroke(cls: effectiveClass, tileZoom: tileZoom) {
+            return overviewRoadStyle(stroke,
+                                     color: Self.streetRoadColor(cls: effectiveClass, roads: roads),
+                                     tunnel: isTunnel,
+                                     construction: isConstruction)
         }
         // From here the width is the road's real carriageway, in metres
         // converted to this tile's units: at street zoom a six-lane avenue is
@@ -535,15 +523,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 2.2, maximumWidthPoints: 7.0, unitsPerMetre: unitsPerMetre,
-                             markings: markings,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.427, 0.447, 0.478, 1.0),
-                             construction: isConstruction)
+                             markings: markings, construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: widthMetres, priority: 90, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 2.0, maximumWidthPoints: 6.5, unitsPerMetre: unitsPerMetre,
-                             markings: markings,
-                             overviewAccent: isConstruction ? nil : SIMD4<Float>(0.478, 0.498, 0.525, 1.0),
-                             construction: isConstruction)
+                             markings: markings, construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: widthMetres, priority: 80, casing: casingZoom, tunnel: isTunnel,
                              minimumWidthPoints: 1.6, maximumWidthPoints: 6.0, unitsPerMetre: unitsPerMetre, markings: markings, construction: isConstruction)
@@ -1063,30 +1047,100 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static let busStopZigzagKey: UInt8 = 77
 
 
-    /// A road over a country or region view: a symbolic stroke, drawn through
-    /// the point-locked line factory the borders use (see
-    /// `FeatureStyle.pointLockedLine`). Tunnels and construction segments
-    /// read as point-dashed corridors.
-    private func overviewRoadStyle(fillKey: UInt8,
-                                   widthPoints: Float,
-                                   priority: Int,
-                                   accent: SIMD4<Float>?,
-                                   streetColor: SIMD4<Float>,
+    /// The last tile zoom at which a road is a symbol: through it every
+    /// drive tier that draws is a point-locked stroke (see
+    /// `overviewRoadStroke`); from the next tile level the world width takes
+    /// over with the point floors as a safety net.
+    static let overviewRoadMaximumTileZoom = 11
+
+    /// One class's stroke over a country or region view, in on-screen
+    /// points, so the ladder is a design decision rather than a property of
+    /// the tile scale.
+    struct OverviewRoadStroke: Equatable {
+        let fillKey: UInt8
+        let priority: Int
+        /// Visible width in layout points.
+        let widthPoints: Float
+        /// Opacity of the stroke; 1 is the opaque street asphalt.
+        let opacity: Float
+    }
+
+    /// The class grey the road draws in at every zoom: the same asphalt as
+    /// the street era, so no colour blends or steps on the way down.
+    private static func streetRoadColor(cls: String?,
+                                        roads: ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles) -> SIMD4<Float> {
+        switch cls {
+        case "motorway": return roads.motorway
+        case "trunk": return roads.trunk
+        case "primary": return roads.primary
+        case "secondary": return roads.secondary
+        default: return roads.tertiary
+        }
+    }
+
+    /// The overview ladder: one asphalt grey, rank read as width alone, the
+    /// principle the street era already follows, drawn as a veil: the
+    /// stroke is the street grey at a little over half opacity and a step
+    /// narrower than a full symbol, so the network sits in the land rather
+    /// than on it and the ground colours stay the picture. The widths grow
+    /// in three steps (country, region, city view). Where two pieces of a
+    /// corridor overlap (the inner side of a bend, the round cap of one
+    /// piece over the next) the veil doubles, which is the price of a
+    /// translucent stroke; the street era from z12 draws opaque.
+    static func overviewRoadStroke(cls: String?, tileZoom: Int) -> OverviewRoadStroke? {
+        let band: Int
+        switch tileZoom {
+        case ...6: band = 0
+        case 7...9: band = 1
+        default: band = 2
+        }
+        let veil: Float = 0.6
+        switch cls {
+        case "motorway":
+            return OverviewRoadStroke(fillKey: 56, priority: 95, widthPoints: [1.3, 1.6, 2.2][band], opacity: veil)
+        case "trunk":
+            return OverviewRoadStroke(fillKey: 54, priority: 90, widthPoints: [1.1, 1.4, 1.9][band], opacity: veil)
+        case "primary":
+            return OverviewRoadStroke(fillKey: 52, priority: 80, widthPoints: [0.9, 1.0, 1.4][band], opacity: veil)
+        case "secondary":
+            return OverviewRoadStroke(fillKey: 50, priority: 78, widthPoints: [0.8, 0.8, 1.1][band], opacity: veil)
+        case "tertiary":
+            return OverviewRoadStroke(fillKey: 48, priority: 74, widthPoints: 0.9, opacity: veil)
+        default:
+            return nil
+        }
+    }
+
+    /// A road over a country or region view: a symbolic stroke, drawn
+    /// through the point-locked line factory the borders use (see
+    /// `FeatureStyle.pointLockedLine`) but with round joins and caps, so a
+    /// corridor the tiles ship in pieces reads as one continuous line.
+    /// Tunnels are the same stroke at the tunnel opacity; construction
+    /// segments read as point-dashed corridors.
+    private func overviewRoadStyle(_ stroke: OverviewRoadStroke,
+                                   color: SIMD4<Float>,
                                    tunnel: Bool,
                                    construction: Bool) -> FeatureStyle {
-        // A tunnel is the same stroke at the tunnel opacity, not a dash: one
-        // treatment for every zoom the tunnel draws at.
         let dashed = construction && tunnel == false
-        let baseColor = accent ?? streetColor
-        let baseStreetColor = accent != nil ? streetColor : nil
-        return FeatureStyle.pointLockedLine(
-            key: tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey,
-            color: tunnel ? Self.tunnelTone(baseColor) : baseColor,
-            streetColor: tunnel ? baseStreetColor.map(Self.tunnelTone) : baseStreetColor,
-            widthPoints: widthPoints,
+        let fillKey = tunnel ? Self.roadTunnelKey(forFillKey: stroke.fillKey) : stroke.fillKey
+        let veiled = SIMD4<Float>(color.x, color.y, color.z, color.w * stroke.opacity)
+        let fillColor = tunnel ? Self.tunnelTone(veiled) : veiled
+        // A dashed stroke keeps butt ends: a round cap would lay a disc past
+        // the last dash of a corridor.
+        let geometry = TileMvtParser.ParseGeometryStyleData(
+            lineWidth: Double(stroke.widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+            lineCapRound: dashed == false,
+            lineJoinRound: true
+        )
+        return FeatureStyle(
+            key: fillKey,
+            color: fillColor,
+            lowZoomFadeMask: 1.0,
+            lineWidthPoints: stroke.widthPoints,
             dashLengthPoints: dashed ? 4.0 : 0,
             dashGapPoints: dashed ? 2.5 : 0,
-            roadClassPriority: priority
+            parseGeometryStyleData: geometry,
+            roadClassPriority: stroke.priority
         )
     }
 
