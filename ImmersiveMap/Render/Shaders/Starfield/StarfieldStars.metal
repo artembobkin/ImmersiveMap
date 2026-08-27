@@ -172,13 +172,12 @@ vertex BackgroundVertexOut sunVertexShader(uint vertexID [[vertex_id]]) {
 /// black: no sunset glow spread across the frame. But the sun is drawn the
 /// way the photographs everyone knows show it, warm rather than spectrally
 /// white: a white centre going gold through the disc and amber in a short
-/// bloom, so the disc has a gradient to sit in. The drama of a sun behind
-/// the planet is in the limb: the atmosphere lit from behind draws a ring,
-/// sky-blue away from the sun, warming through amber to a white-gold focus
-/// where the disc is about to break through, and at that focus a flare
-/// elongated along the limb (the diamond ring). The ring is a full circle
-/// with the sun straight behind and narrows to a crescent as the sun comes
-/// round toward the limb.
+/// bloom, so the disc has a gradient to sit in. The air on the limb is
+/// coloured by the atmosphere halo alone (Atmosphere.metal warms it where
+/// the sun grazes it), so this pass paints no ring of its own; what it adds
+/// at the limb is the flare at the point where the disc is about to break
+/// through, elongated along the limb (the diamond ring), which sits on the
+/// halo's already-warm sunrise band and adds to it instead of clashing.
 fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
                                   constant EarthScene& earth [[buffer(0)]],
                                   constant SunVisualState& sun [[buffer(1)]]) {
@@ -199,39 +198,25 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     half diskAlpha = half(sun.diskAlpha) * half(earth.sunDiskIntensity);
     half coreCenter = exp(-diskT * diskT * 8.0h) * diskAlpha;
     half core = exp(-diskT * diskT * 2.6h) * diskAlpha;
-    // The bloom reaches under two disc radii past the disc and no further.
-    half glowT = diskT * (1.0h / 1.8h);
+    // The bloom reaches about one and a half disc radii past the disc and no
+    // further, so a disc near the limb does not wash the air out.
+    half glowT = diskT * (1.0h / 1.5h);
     half glow = exp(-glowT * glowT) * half(sun.diskAlpha);
 
     float edgeDistance = length((uv - sun.clampedScreenCenter) * aspectScale);
     half edgeGlare = exp(half(-edgeDistance) * 8.0h) * half(sun.edgeGlareAlpha) * half(earth.sunEdgeGlareIntensity);
 
-    float globeDistance = length((uv - sun.globeScreenCenter) * aspectScale);
-    float limbDistance = abs(globeDistance - sun.globeScreenRadius);
-    float2 limbVector = (uv - sun.globeScreenCenter) * aspectScale;
     float2 sunVector = (sun.screenCenter - sun.globeScreenCenter) * aspectScale;
-    float limbVectorLength = length(limbVector);
     float sunVectorLength = length(sunVector);
-    float2 limbDirection = limbVector / max(limbVectorLength, 0.0001);
     float2 sunDirection = sunVector / max(sunVectorLength, 0.0001);
-    float limbAlignment = dot(limbDirection, sunDirection);
-    // 0 with the sun straight behind the globe (a full ring), 1 with it at the
-    // limb (a tight crescent on the sun's side).
+    // 0 with the sun straight behind the globe, 1 with it at the limb.
     float closeness = clamp(sunVectorLength / max(sun.globeScreenRadius, 0.0001), 0.0, 1.0);
-    float crescentStart = mix(-1.0, 0.25, closeness);
-    float crescentEnd = mix(-0.6, 0.95, closeness);
-    float directionalLimb = smoothstep(crescentStart, crescentEnd, limbAlignment);
     float haloWidth = max(earth.sunLimbHaloWidth, 0.001);
-    half limbT = half(limbDistance / haloWidth);
-    // A thin bright edge and a faint skirt outside it, so the far side of the
-    // ring stays a clean line and the focus stands out against it.
-    half limbEdge = exp(-limbT * limbT * 6.0h);
-    half limbSkirt = exp(-limbT * limbT * 1.2h);
-    half limbHaloAlpha = half(sun.limbHaloAlpha) * half(earth.sunLimbHaloIntensity);
-    half limb = (limbEdge + 0.15h * limbSkirt) * half(directionalLimb) * limbHaloAlpha;
 
-    // The focus: the point of the limb nearest the sun. A flare sits there,
-    // elongated along the limb tangent, only while the sun is near the limb.
+    // The focus: the point of the limb nearest the sun. The flare sits there,
+    // elongated along the limb tangent, only while the sun is near the limb,
+    // and goes with the terminator: past its fade there is no sunrise to
+    // flare at.
     float2 focus = sun.globeScreenCenter * aspectScale + sunDirection * sun.globeScreenRadius;
     float2 tangent = float2(-sunDirection.y, sunDirection.x);
     float2 toFocus = uv * aspectScale - focus;
@@ -239,16 +224,9 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     float flareAlong = dot(toFocus, tangent) / (haloWidth * 4.5);
     half flare = exp(half(-(flareAcross * flareAcross + flareAlong * flareAlong)))
         * half(smoothstep(0.35, 0.9, closeness))
-        * limbHaloAlpha;
-
-    // Colour temperature along the crescent: sky-blue away from the sun,
-    // amber as it wraps toward it, white-gold at the focus.
-    float warmth = smoothstep(0.0, 1.0, limbAlignment) * closeness;
-    half3 ringSky = half3(0.45h, 0.70h, 1.0h);
-    half3 ringAmber = half3(1.0h, 0.70h, 0.35h);
-    half3 ringHot = half3(1.0h, 0.95h, 0.85h);
-    half3 ringColor = mix(ringSky, ringAmber, half(smoothstep(0.3, 0.9, warmth)));
-    ringColor = mix(ringColor, ringHot, half(smoothstep(0.85, 1.0, warmth)));
+        * half(sun.limbHaloAlpha)
+        * half(earth.sunLimbHaloIntensity)
+        * (1.0h - half(earth.sunShadowFade));
 
     half3 sunWhite = half3(1.0h, 0.99h, 0.96h);
     half3 sunGold = half3(1.0h, 0.85h, 0.55h);
@@ -260,9 +238,8 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     half3 color = mix(sunGold, sunWhite, coreCenter) * core
         + bloomAmber * glow * glowIntensity
         + orangeGlow * edgeGlare
-        + ringColor * limb
         + flareGold * flare;
-    half alpha = saturate(core + glow * glowIntensity * 0.7h + edgeGlare * 0.45h + limb * 0.8h + flare * 0.9h);
+    half alpha = saturate(core + glow * glowIntensity * 0.7h + edgeGlare * 0.45h + flare * 0.9h);
     return float4(float3(color), float(alpha));
 }
 

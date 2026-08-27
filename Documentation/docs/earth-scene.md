@@ -58,9 +58,9 @@ public struct SunSettings: Equatable, Sendable {
 | Field | What it draws |
 |---|---|
 | `diskAngularSize` / `diskIntensity` | The sun's own disk in space, white at the centre going gold, and how bright it is. |
-| `glowIntensity` | The amber bloom immediately around the disk, under two disk radii wide. There is no air in space, so the sky around the sun stays black: no sunset glow spreads across the frame. |
+| `glowIntensity` | The amber bloom immediately around the disk, about one and a half disk radii wide. There is no air in space, so the sky around the sun stays black: no sunset glow spreads across the frame. |
 | `edgeGlareIntensity` | Glare at the viewport edge when the sun is offscreen. Zero by default: an offscreen light source that keeps announcing itself reads as a lens artifact rather than a planet. |
-| `limbHaloIntensity` / `limbHaloWidth` | The ring of atmosphere lit from behind while the sun is behind the globe: sky-blue where it wraps away from the sun, warming through amber to a white-gold focus where the disk is about to emerge, with a flare stretched along the limb there. A full ring with the sun straight behind, a crescent on the sun's side as it comes round to the limb, and it fades out over `limbHaloWidth` once the sun is past the limb, where the day-side rim is the atmosphere halo's job. |
+| `limbHaloIntensity` / `limbHaloWidth` | The flare at the point of the limb where a sun behind the globe is about to break through, stretched along the limb (the diamond ring). It appears as the sun comes round toward the limb, fades out over `limbHaloWidth` once the sun is past it, and goes with the terminator between zoom 1 and 2. The colour of the air itself on the limb is the atmosphere's: see the sunrise band below. |
 
 ## Atmosphere
 
@@ -81,7 +81,7 @@ The atmosphere is what puts air on the planet: a soft halo of scattered light ar
 | `color` | The tint of the scattered light. The very edge of the halo whitens toward the limb on its own, the way saturated scattering does. |
 | `intensity` | Brightness of the halo and of the surface glow together. 0 leaves the sphere bare while keeping the layer on. |
 | `thickness` | Width of the halo relative to the globe radius. The halo scales with the planet on screen, so it looks the same at every zoom of the globe presentation; 2 is twice as wide, 0.5 a thin bright ring. |
-| `sunInfluence` | How much the earth scene's sun shapes the halo. At 1 the halo is full on the day side of the limb and dims to a residual glow on the night side; at 0 it is even all the way around. Ignored while the earth scene is off, since there is no sun to take the direction from, and it fades out with the terminator between zoom 1 and 2, so a planet that shows no night is not ringed by a lopsided halo. |
+| `sunInfluence` | How much the earth scene's sun shapes the halo. At 1 the halo is full on the day side of the limb, dims to a residual glow on the night side, and turns warm and brighter in the sunrise band, where the sun grazes the air: amber in the body of the halo going white-gold at the limb, at the point a sun behind the planet is about to break through (a full warm ring with the sun straight behind), and at the two points where the terminator meets the limb otherwise. The blue on either side and the warm band are one ramp along the limb. At 0 the halo is even all the way around. Ignored while the earth scene is off, since there is no sun to take the direction from, and it fades out with the terminator between zoom 1 and 2, so a planet that shows no night is not ringed by a lopsided halo. |
 
 The halo is resolved per pixel from the view ray and the sphere, not from a circle projected on screen: under perspective the silhouette of the globe is a conic, and at a tilted or off-center camera a screen-space circle would leave the halo detached from the limb on one side. It fades out over the first part of the [globe-to-flat morph](globe.md), before the sphere silhouette it is fitted to starts moving, and the horizon haze of the flat map takes over from there.
 

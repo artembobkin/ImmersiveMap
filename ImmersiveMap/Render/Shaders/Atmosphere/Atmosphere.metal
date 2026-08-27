@@ -61,6 +61,12 @@ constant half kAtmosphereTransitionFadeEnd = 0.35h;
 // planet's air still glows a little in the dark, and a hard cut at the
 // terminator would read as a broken ring.
 constant half kAtmosphereNightFloor = 0.28h;
+// The sunrise band where the sun grazes the air: how much brighter the halo
+// gets there, how far its tint goes toward the warm colours, and the colours.
+constant half kAtmosphereSunriseBoost = 0.6h;
+constant half kAtmosphereSunriseWeight = 0.85h;
+constant half3 kAtmosphereSunriseAmber = half3(1.0h, 0.72h, 0.40h);
+constant half3 kAtmosphereSunriseGold = half3(1.0h, 0.93h, 0.80h);
 
 fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
                                         constant Atmosphere& atmosphere [[buffer(0)]]) {
@@ -96,13 +102,23 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
     // With a sun, the halo follows the day side: the closest-approach point is
     // where this pixel's air sits, and its exposure to the sun decides how
     // much of the halo is lit. Without one the halo is even all around.
+    // Where the sun grazes the air (exposure near zero: the sun on that air's
+    // own horizon, which is the point of the limb a sun behind the planet is
+    // about to break through, and the two points where the terminator meets
+    // the limb otherwise) the air is lit through its longest path and turns
+    // warm and brighter, the sunrise band of every photograph from orbit.
+    // The halo is the one source of colour for the air, so this band and the
+    // blue on either side are one ramp along the limb with no seam.
+    half warmth = 0.0h;
     if (atmosphere.sunInfluence > 0.0 && dot(atmosphere.sunDirection, atmosphere.sunDirection) > 0.5) {
         float3 airPoint = atmosphere.eye + direction * (-along);
         float3 airNormal = normalize(airPoint - atmosphere.center);
         float exposure = dot(airNormal, atmosphere.sunDirection);
         half daylight = half(smoothstep(-0.30, 0.25, exposure));
         half sunFactor = mix(1.0h, mix(kAtmosphereNightFloor, 1.0h, daylight), half(atmosphere.sunInfluence));
-        intensity *= sunFactor;
+        half grazing = half(smoothstep(-0.30, -0.05, exposure) * (1.0 - smoothstep(0.10, 0.40, exposure)));
+        warmth = grazing * half(atmosphere.sunInfluence);
+        intensity *= sunFactor * (1.0h + kAtmosphereSunriseBoost * warmth);
     }
 
     // Premultiplied output over the space behind: the color is the halo tint,
@@ -110,6 +126,9 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
     // brightness itself, so the halo covers space at the limb and thins to
     // nothing with distance, and stars right behind the air dim under it.
     half3 tint = mix(half3(atmosphere.color), half3(1.0h), whiten * kAtmosphereWhitenWeight);
+    // The sunrise band: amber in the body of the halo, white-gold at the limb.
+    half3 sunriseTint = mix(kAtmosphereSunriseAmber, kAtmosphereSunriseGold, whiten);
+    tint = mix(tint, sunriseTint, warmth * kAtmosphereSunriseWeight);
     half coverage = brightness * intensity * fade;
     return half4(tint * coverage, saturate(coverage));
 }

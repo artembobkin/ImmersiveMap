@@ -623,9 +623,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// Viewport-edge glare contribution multiplier. Expected range: `0...1`.
             /// Defaults to zero so offscreen Sun direction is not emphasized at the viewport edge.
             public var edgeGlareIntensity: Float
-            /// The ring of atmosphere lit from behind while the sun is behind the globe. Expected range: `0...1`.
+            /// The flare at the point of the limb where a sun behind the globe is about to break through. Expected range: `0...1`.
             public var limbHaloIntensity: Float
-            /// Positive normalized width of the ring, and the distance past the limb over which it fades out.
+            /// Positive normalized size of the flare, and the distance past the limb over which it fades out.
             public var limbHaloWidth: Float
 
             /// Creates visible Sun settings.

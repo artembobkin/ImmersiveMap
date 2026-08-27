@@ -248,6 +248,32 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
     };
 }
 
+/// The mean colour of the edge row of the tile this cap wedge continues:
+/// what the cap fades into at the pole. A fixed palette colour cannot do it,
+/// because what the last tile row shows at the rim changes with zoom (the
+/// low-zoom land cover paints the Arctic sea ice white, the detailed layers
+/// paint open water), and a pole in the wrong one showed as a disc. Eight
+/// samples spread over the tile's longitude span, at the same clamped edge
+/// texel row the rim samples from.
+static half3 globeCapEdgeRowMean(texture2d<half> texture,
+                                 sampler textureSampler,
+                                 float latitude,
+                                 constant Tile& tileData) {
+    float zPow = exp2(float(tileData.tile.z));
+    const int sampleCount = 8;
+    half3 sum = half3(0.0h);
+    half count = 0.0h;
+    for (int index = 0; index < sampleCount; index++) {
+        float longitude = (float(tileData.tile.x) + (float(index) + 0.5) / float(sampleCount)) / zPow * 2.0 * M_PI_F;
+        GlobeCapAtlasSample sample = globeCapAtlasSampleUV(latitude, longitude, tileData);
+        if (sample.isValid) {
+            sum += texture.sample(textureSampler, sample.uv, level(0.0)).rgb;
+            count += 1.0h;
+        }
+    }
+    return count > 0.0h ? sum / count : half3(0.0h);
+}
+
 /// The atmosphere's glow on the sphere toward the limb. `facing` is how far the
 /// surface turns away from the view (0 face-on, 1 at the limb): the air over
 /// it thickens with the angle, so the surface lifts toward the atmosphere tint,
@@ -476,8 +502,11 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
         // Feather toward the pole color: the edge row continues the surface at
         // the rim (seamBlend 0) but does not reach the pole itself as "needles":
         // narrow coastal features of the rim (e.g. the Ross Sea water at 85°S)
-        // would otherwise smear as radial stripes across the whole cap.
-        color = mix(sampled, half4(params.fillColor), seamBlend);
+        // would otherwise smear as radial stripes across the whole cap. The
+        // pole colour is the mean of that same edge row, so the cap fades into
+        // what the tiles show at this zoom rather than into a palette colour.
+        half3 poleColor = globeCapEdgeRowMean(texture, textureSampler, params.sampleOptions.x, tileData);
+        color = half4(mix(sampled.rgb, poleColor, seamBlend), sampled.a);
     } else {
         color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }
