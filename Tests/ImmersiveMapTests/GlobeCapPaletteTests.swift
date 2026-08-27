@@ -12,14 +12,18 @@ import XCTest
 final class GlobeCapPaletteTests: XCTestCase {
     private let maxLatitude = Float(WebMercatorMath.maxLatitudeRadians)
 
-    func testNorthPoleFollowsPaletteWater() {
+    /// The tiles paint the Arctic sea ice white up to the rim of the last
+    /// row, so the northern cap continues in the palette's ice, not its
+    /// water: a water-coloured pole showed as a dark disc inside the ice.
+    func testNorthPoleFollowsPolarIceRatherThanWater() {
         var baseColors = ImmersiveMapSettings.default.style.baseColors
         baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+        baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
 
         let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors),
                                                    maxLatitude: maxLatitude)
 
-        assertColor(palette.north.fillColor, equals: SIMD4<Float>(0.04, 0.09, 0.20, 1))
+        assertColor(palette.north.fillColor, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
     }
 
     func testSouthPoleFollowsPolarIceRatherThanTileBackground() {

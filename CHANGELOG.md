@@ -8,6 +8,10 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The northern polar cap is filled with the palette's `polarIce` like the southern one, instead of its water. The tiles paint the Arctic sea ice white right up to the rim of the last tile row, and the water-coloured cap inside it showed as a dark disc at the pole, most visibly with the pole near the limb.
+
 ### Changed
 
 - The visible sun no longer paints a sunset across space. The wide orange glow around the disc (a Gaussian a quarter of the screen wide, in a colour that only scattering in air produces) is gone: the sun is a warm disc, white at the centre going gold through the disc and amber in a short bloom under two disc radii wide, and the sky around it stays black. The drama of a sun behind the planet moved to the limb, the atmosphere lit from behind: a ring that is sky-blue where it wraps away from the sun and warms through amber to a white-gold focus where the disc is about to emerge, with a flare stretched along the limb at that focus (the diamond ring), and the surface's last sliver of day along that limb carries a warm rim of its own. It is a full ring with the sun straight behind the globe (which used to draw nothing there) and narrows to a crescent on the sun's side as the sun comes round to the limb, and it stays at full strength for as long as the sun is behind the planet instead of dying away with depth. The `SunSettings` defaults moved with it: `glowIntensity` 0.75 to 0.5 (the bloom is tight now), `limbHaloIntensity` 0.35 to 0.9, `limbHaloWidth` 0.10 to 0.05; every field keeps its name and meaning. New visual review scenarios `sun.behind.limb` and `sun.straight.behind`.
