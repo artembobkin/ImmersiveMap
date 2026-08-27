@@ -268,11 +268,11 @@ static inline half3 globeAtmosphereSurfaceGlow(half facing,
 /// zoom 1, 0 by zoom 2, see GlobeSurfaceToneUniform.swift). The tile palette
 /// is a flat cartographic one, pale so labels read over it up close; on the
 /// small sphere it reads as an atlas wrapped on a ball. A planet seen through
-/// its whole air column is the opposite of vivid: the colours are muted,
-/// cast slightly blue, and darker in the midtones (a dark sea, olive land),
-/// and the lit disc rounds off toward the limb with the view angle before
-/// the atmosphere brightens the rim. So: desaturate around the luma, tint
-/// toward blue, deepen the midtones with a power curve (white stays white),
+/// its whole air column is the opposite of vivid: the colours are muted and
+/// darker in the midtones (a dark sea, olive land), and the lit disc rounds
+/// off toward the limb with the view angle before the atmosphere brightens
+/// the rim. So: desaturate a little around the luma, deepen the midtones
+/// with a power curve (white stays white),
 /// then fall off with `facing`, the cosine of the view angle (1 face-on, 0 at
 /// the limb). Applied to the bare sampled colour, before the day/night
 /// shading and the additive limb glow, so the night side and the rim keep
@@ -283,11 +283,11 @@ static inline half3 globeSurfaceDeepen(half3 color, half facing, constant GlobeS
         return color;
     }
     half luma = dot(color, half3(0.299h, 0.587h, 0.114h));
-    // Light touches only: a heavier mute turned the deserts grey, and a
-    // heavier cast turned the whole disc blue.
+    // A light mute only: a heavier one turned the deserts grey. No blue cast:
+    // the atmosphere's rim glow already lays all the blue the disc can take,
+    // and a cast on top of it read as a blue planet.
     half3 muted = mix(color, half3(luma), 0.12h * depth);
-    half3 cooled = muted * mix(half3(1.0h), half3(0.95h, 0.97h, 1.0h), depth);
-    half3 deepened = pow(clamp(cooled, 0.0h, 1.0h), half3(1.0h + 0.35h * depth));
+    half3 deepened = pow(clamp(muted, 0.0h, 1.0h), half3(1.0h + 0.35h * depth));
     half rounding = mix(0.55h, 1.0h, pow(clamp(facing, 0.0h, 1.0h), 0.6h));
     return deepened * mix(1.0h, rounding, depth);
 }

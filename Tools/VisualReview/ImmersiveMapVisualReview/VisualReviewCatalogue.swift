@@ -293,9 +293,9 @@ enum VisualReviewCatalogue {
             id: "globe.whole.planet.deep",
             title: "Whole planet at zoom 0, deep colours",
             lookFor: """
-            The sphere small against black, in muted, cooler and darker \
+            The sphere small against black, in slightly muted and darker \
             colours than the map palette: a dark sea, olive rather than lime \
-            land, a faint blue cast over everything, and the lit disc rounding \
+            land, no blue cast over the land, and the lit disc rounding \
             off toward the limb before the rim glow takes over. It should read \
             as a planet seen through its air, not as an atlas wrapped on a \
             ball, and not as a dark, muddy one either: coastlines stay crisp \

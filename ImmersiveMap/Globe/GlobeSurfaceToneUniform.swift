@@ -12,7 +12,7 @@ import Foundation
 /// up to zoom 1, while the whole planet is on screen, and eases back to 0
 /// between zoom 1 and 2, together with the terminator fade, so the surface
 /// arrives at the map's own palette before the sphere starts to unfurl. The
-/// shader mutes and cools the colour, deepens the midtones and rounds the lit
+/// shader mutes the colour a little, deepens the midtones and rounds the lit
 /// disc off toward the limb by this amount; at 0 the sampled colour passes
 /// through untouched.
 struct GlobeSurfaceToneUniform {
