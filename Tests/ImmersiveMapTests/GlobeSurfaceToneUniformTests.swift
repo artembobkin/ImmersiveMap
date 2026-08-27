@@ -13,22 +13,23 @@ final class GlobeSurfaceToneUniformTests: XCTestCase {
     }
 
     /// The colours are deepest with the whole planet on screen and ease back
-    /// to the tile palette over the first two zoom levels: full at zoom 0,
-    /// halfway at zoom 1, gone at zoom 2, flat outside the ramp.
-    func testDepthEasesOutOverTheFirstTwoZooms() {
-        XCTAssertEqual(GlobeSurfaceToneUniform.deepZoom, 0)
+    /// to the tile palette between zoom 1 and 2: full up to zoom 1, halfway
+    /// at 1.5, gone at zoom 2, flat outside the ramp.
+    func testDepthEasesOutBetweenZoomOneAndTwo() {
+        XCTAssertEqual(GlobeSurfaceToneUniform.deepZoom, 1)
         XCTAssertEqual(GlobeSurfaceToneUniform.plainZoom, 2)
 
         XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: -1).depth, 1, accuracy: 1e-6)
         XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 0).depth, 1, accuracy: 1e-6)
-        XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 1).depth, 0.5, accuracy: 1e-6)
+        XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 1).depth, 1, accuracy: 1e-6)
+        XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 1.5).depth, 0.5, accuracy: 1e-6)
         XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 2).depth, 0, accuracy: 1e-6)
         XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: 5).depth, 0, accuracy: 1e-6)
         XCTAssertEqual(GlobeSurfaceToneUniform.make(zoom: .nan).depth, 0)
 
         // Monotonic through the ramp, and smooth at both ends: the first and
         // last step are smaller than the one in the middle.
-        let samples = stride(from: 0.0, through: 2.0, by: 0.25).map { GlobeSurfaceToneUniform.depth(zoom: $0) }
+        let samples = stride(from: 1.0, through: 2.0, by: 0.125).map { GlobeSurfaceToneUniform.depth(zoom: $0) }
         for (previous, next) in zip(samples, samples.dropFirst()) {
             XCTAssertGreaterThan(previous, next)
         }

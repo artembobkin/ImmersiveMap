@@ -266,7 +266,7 @@ static inline half3 globeAtmosphereSurfaceGlow(half facing,
 
 /// The colour of the surface seen whole from space: the tile palette, pale so
 /// labels read over it up close, is pushed toward richer and darker on the
-/// small sphere, by `depth` (1 at zoom 0, 0 by zoom 2, see
+/// small sphere, by `depth` (1 up to zoom 1, 0 by zoom 2, see
 /// GlobeSurfaceToneUniform.swift). Saturation rises around the luma, then a
 /// power curve deepens the midtones while white stays white and black stays
 /// black, so coastlines and the sea keep their contrast instead of everything

@@ -9,9 +9,9 @@ import Foundation
 /// Seen whole from space the planet wears richer, darker colours than the map
 /// it becomes up close: the pale tile palette that reads well under labels at
 /// a city zoom looks washed out on a small sphere against black. `depth` is 1
-/// at zoom 0, where the whole planet is on screen, and eases back to 0 over
-/// the first two zoom levels, so the surface arrives at the map's own palette
-/// by the time the terminator has faded and the sphere starts to unfurl. The
+/// up to zoom 1, while the whole planet is on screen, and eases back to 0
+/// between zoom 1 and 2, together with the terminator fade, so the surface
+/// arrives at the map's own palette before the sphere starts to unfurl. The
 /// shader saturates and deepens the midtones by this amount; at 0 the sampled
 /// colour passes through untouched.
 struct GlobeSurfaceToneUniform {
@@ -20,8 +20,8 @@ struct GlobeSurfaceToneUniform {
     var _padding1: Float = 0
     var _padding2: Float = 0
 
-    /// Zoom at which the colours are at their deepest.
-    static let deepZoom: Double = 0.0
+    /// Zoom up to which the colours are at their deepest.
+    static let deepZoom: Double = 1.0
 
     /// Zoom at which the surface is back to the untouched tile palette.
     static let plainZoom: Double = 2.0

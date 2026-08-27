@@ -298,8 +298,8 @@ enum VisualReviewCatalogue {
             green, the deserts warm rather than pale. It should read as a \
             planet seen from space, not as a washed-out map wrapped on a ball, \
             and not as a dark, muddy one either: coastlines stay crisp and the \
-            ice caps stay white. Compare with the zoom 1 scenes: the same \
-            palette, half as deep there, and gone by zoom 2. The polar cap and \
+            ice caps stay white. The zoom 1 scenes wear the same deep palette; \
+            it eases off between zoom 1 and 2 and is gone by 2. The polar cap and \
             any tile still loading must not show in a paler colour than the \
             rest of the surface.
             """,
