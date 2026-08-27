@@ -968,6 +968,18 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     private var downloadContinuations: [Tile: CheckedContinuation<TileDownloader.DownloadResult, Never>] = [:]
     private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
     private var materializeContinuations: [Tile: CheckedContinuation<PreparedTileMaterializeOutcome, Never>] = [:]
+    // A completion that arrives before its stage has started is held and
+    // delivered the moment the stage registers, in order. The loader runs its
+    // stages on child tasks (the disk serve and the download concurrently),
+    // so a test that completes one stage and immediately completes the next
+    // races the scheduler: on a loaded runner the second stage had not yet
+    // suspended on its continuation, the completion was dropped, and the
+    // scenario deadlocked into cascading assertion failures (seen on
+    // testAllocationFailureOnETagMatchedEntryKeepsTheDiskPair in CI, never
+    // natively). Holding it makes a test's completions order-independent.
+    private var pendingDownloadResults: [Tile: [TileDownloader.DownloadResult]] = [:]
+    private var pendingPrepareResults: [Tile: [PreparedTileLoadResult?]] = [:]
+    private var pendingMaterializeOutcomes: [Tile: [PreparedTileMaterializeOutcome]] = [:]
     private var saveContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
 
     init(suspendsSaves: Bool = false, suspendsDiskReads: Bool = false) {
@@ -1219,25 +1231,31 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         let continuation: CheckedContinuation<TileDownloader.DownloadResult, Never>?
         lock.lock()
         continuation = downloadContinuations.removeValue(forKey: tile)
+        if continuation == nil {
+            pendingDownloadResults[tile, default: []].append(result)
+        }
         lock.unlock()
         continuation?.resume(returning: result)
     }
 
     func completePrepare(_ tile: Tile, timings: [TileParseLayerTiming] = []) {
-        let continuation: CheckedContinuation<PreparedTileLoadResult?, Never>?
-        lock.lock()
-        continuation = prepareContinuations.removeValue(forKey: tile)
-        lock.unlock()
-        continuation?.resume(returning: PreparedTileLoadResult(preparedTile: Self.makePreparedTile(tile: tile),
-                                                               parseLayerTimings: timings))
+        completePrepare(tile, result: PreparedTileLoadResult(preparedTile: Self.makePreparedTile(tile: tile),
+                                                             parseLayerTimings: timings))
     }
 
     func completePrepareFailing(_ tile: Tile) {
+        completePrepare(tile, result: nil)
+    }
+
+    private func completePrepare(_ tile: Tile, result: PreparedTileLoadResult?) {
         let continuation: CheckedContinuation<PreparedTileLoadResult?, Never>?
         lock.lock()
         continuation = prepareContinuations.removeValue(forKey: tile)
+        if continuation == nil {
+            pendingPrepareResults[tile, default: []].append(result)
+        }
         lock.unlock()
-        continuation?.resume(returning: nil)
+        continuation?.resume(returning: result)
     }
 
     /// Boolean convenience for the many tests that only distinguish success
@@ -1250,6 +1268,9 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         let continuation: CheckedContinuation<PreparedTileMaterializeOutcome, Never>?
         lock.lock()
         continuation = materializeContinuations.removeValue(forKey: tile)
+        if continuation == nil {
+            pendingMaterializeOutcomes[tile, default: []].append(outcome)
+        }
         lock.unlock()
         continuation?.resume(returning: outcome)
     }
@@ -1339,8 +1360,14 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         lock.lock()
         startedTiles.insert(tile)
         startCounts[tile, default: 0] += 1
-        downloadContinuations[tile] = continuation
+        let pending = Self.takeFirstPending(&pendingDownloadResults, tile)
+        if pending == nil {
+            downloadContinuations[tile] = continuation
+        }
         lock.unlock()
+        if let pending {
+            continuation.resume(returning: pending)
+        }
     }
 
     private func recordPrepareStarted(
@@ -1349,8 +1376,14 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
     ) {
         lock.lock()
         preparedTiles.insert(tile)
-        prepareContinuations[tile] = continuation
+        let pending = Self.takeFirstPending(&pendingPrepareResults, tile)
+        if pending == nil {
+            prepareContinuations[tile] = continuation
+        }
         lock.unlock()
+        if let pending {
+            continuation.resume(returning: pending)
+        }
     }
 
     private func recordMaterializeStarted(
@@ -1360,8 +1393,25 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         lock.lock()
         materializedTiles.insert(tile)
         materializeCounts[tile, default: 0] += 1
-        materializeContinuations[tile] = continuation
+        let pending = Self.takeFirstPending(&pendingMaterializeOutcomes, tile)
+        if pending == nil {
+            materializeContinuations[tile] = continuation
+        }
         lock.unlock()
+        if let pending {
+            continuation.resume(returning: pending)
+        }
+    }
+
+    /// Pops the oldest held completion for the tile, if any. Must run under
+    /// `lock`.
+    private static func takeFirstPending<Value>(_ pending: inout [Tile: [Value]], _ tile: Tile) -> Value? {
+        guard var queue = pending[tile], queue.isEmpty == false else {
+            return nil
+        }
+        let first = queue.removeFirst()
+        pending[tile] = queue.isEmpty ? nil : queue
+        return first
     }
 
     private func recordDownloadCanceled(_ tile: Tile) {
