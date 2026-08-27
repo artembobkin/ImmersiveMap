@@ -283,8 +283,10 @@ static inline half3 globeSurfaceDeepen(half3 color, half facing, constant GlobeS
         return color;
     }
     half luma = dot(color, half3(0.299h, 0.587h, 0.114h));
-    half3 muted = mix(color, half3(luma), 0.30h * depth);
-    half3 cooled = muted * mix(half3(1.0h), half3(0.86h, 0.93h, 1.0h), depth);
+    // Light touches only: a heavier mute turned the deserts grey, and a
+    // heavier cast turned the whole disc blue.
+    half3 muted = mix(color, half3(luma), 0.12h * depth);
+    half3 cooled = muted * mix(half3(1.0h), half3(0.95h, 0.97h, 1.0h), depth);
     half3 deepened = pow(clamp(cooled, 0.0h, 1.0h), half3(1.0h + 0.35h * depth));
     half rounding = mix(0.55h, 1.0h, pow(clamp(facing, 0.0h, 1.0h), 0.6h));
     return deepened * mix(1.0h, rounding, depth);
