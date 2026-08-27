@@ -6,17 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
-## [Unreleased]
+## [0.7.1] - 2026-08-27
+
+### Changed
+
+- The visible sun no longer paints a sunset across space. The wide orange glow around the disc (a Gaussian a quarter of the screen wide, in a colour that only scattering in air produces) is gone: the sun is a warm disc, white at the centre going gold through the disc and amber in a short bloom about one and a half disc radii wide, and the sky around it stays black. The drama of a sun behind the planet moved into the atmosphere halo, which is now the one source of colour for the air on the limb: where the sun grazes the air (the point a sun behind the planet is about to break through, the whole rim with the sun straight behind, and the two points where the terminator meets the limb otherwise) the halo turns warm and brighter, amber in its body and white-gold at the limb, and the blue on either side and that sunrise band are one ramp along the limb with no seam. The sun pass paints no ring of its own any more (its old warm rim, and the blue-and-gold clash where it overlapped the halo, are gone); at the focus it adds a flare stretched along the limb (the diamond ring) that sits on the already-warm halo, and the surface's last sliver of day along that limb carries a warm rim of its own. The `SunSettings` fields keep their names; `limbHaloIntensity` and `limbHaloWidth` now size that flare, and the defaults moved: `glowIntensity` 0.75 to 0.5 (the bloom is tight now), `limbHaloIntensity` 0.35 to 0.9, `limbHaloWidth` 0.10 to 0.05. New visual review scenarios `sun.behind.limb` and `sun.straight.behind`.
+
+- The globe wears deeper colours when the whole planet is on screen. Up to zoom 1 the surface is drawn slightly muted and with darker midtones than the tile palette (which is a flat cartographic one, deliberately pale so labels read over it up close), and the lit disc falls off toward the limb with the view angle before the atmosphere rim brightens it, so the sphere against black looks like a planet seen through its air rather than an atlas wrapped on a ball; the deepening holds up to zoom 1 and eases back smoothly between zoom 1 and 2, alongside the terminator fade, so it is gone before the sphere starts to unfurl. White stays white and black stays black, so ice caps and coastlines keep their contrast. The tiled surface, the placeholder fill under a still-loading tile and the polar caps deepen together, so no part of the sphere shows in the paler palette next to the rest. New visual review scenario `globe.whole.planet.deep`.
 
 ### Fixed
 
 - The polar caps fade into what the tiles show at their rim instead of into a palette colour. What the last tile row holds at 85° changes with zoom (the low-zoom land cover paints the Arctic sea ice white, the detailed layers paint open water), so the northern cap, filled with the palette's water, showed as a dark disc inside the ice at one zoom and, filled with ice, as a white blur on the water at another. The pole colour is now the mean of the edge row of the tile each cap wedge continues, sampled on the GPU, and it is sampled at the mip level the surface reads the rim at, so the cap continues the tiles it sits on in the same shade at every zoom (read from level 0 it stood out as a crisper disc at a far zoom); the palette's `polarIce` (which the northern cap now shares with the southern one) is only what a cap with no tile under it yet draws.
-
-### Changed
-
-- The visible sun no longer paints a sunset across space. The wide orange glow around the disc (a Gaussian a quarter of the screen wide, in a colour that only scattering in air produces) is gone: the sun is a warm disc, white at the centre going gold through the disc and amber in a short bloom under two disc radii wide, and the sky around it stays black. The drama of a sun behind the planet moved into the atmosphere halo, which is now the one source of colour for the air on the limb: where the sun grazes the air (the point a sun behind the planet is about to break through, the whole rim with the sun straight behind, and the two points where the terminator meets the limb otherwise) the halo turns warm and brighter, amber in its body and white-gold at the limb, and the blue on either side and that sunrise band are one ramp along the limb with no seam. The sun pass paints no ring of its own any more (its old warm rim, and the blue-and-gold clash where it overlapped the halo, are gone); at the focus it adds a flare stretched along the limb (the diamond ring) that sits on the already-warm halo, and the surface's last sliver of day along that limb carries a warm rim of its own. The `SunSettings` fields keep their names; `limbHaloIntensity` and `limbHaloWidth` now size that flare, and the defaults moved: `glowIntensity` 0.75 to 0.5 (the bloom is tight now), `limbHaloIntensity` 0.35 to 0.9, `limbHaloWidth` 0.10 to 0.05. New visual review scenarios `sun.behind.limb` and `sun.straight.behind`.
-
-- The globe wears deeper colours when the whole planet is on screen. Up to zoom 1 the surface is drawn slightly muted and with darker midtones than the tile palette (which is a flat cartographic one, deliberately pale so labels read over it up close), and the lit disc falls off toward the limb with the view angle before the atmosphere rim brightens it, so the sphere against black looks like a planet seen through its air rather than an atlas wrapped on a ball; the deepening holds up to zoom 1 and eases back smoothly between zoom 1 and 2, alongside the terminator fade, so it is gone before the sphere starts to unfurl. White stays white and black stays black, so ice caps and coastlines keep their contrast. The tiled surface, the placeholder fill under a still-loading tile and the polar caps deepen together, so no part of the sphere shows in the paler palette next to the rest. New visual review scenario `globe.whole.planet.deep`.
 
 ## [0.7.0] - 2026-08-26
 
@@ -423,6 +423,7 @@ Initial public alpha.
 - Not production-ready yet.
 - Not a drop-in replacement for Mapbox, MapLibre, or MapKit.
 
+[0.7.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.6.1...0.7.0
 [0.6.1]: https://github.com/artembobkin/ImmersiveMap/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/artembobkin/ImmersiveMap/compare/0.5.0...0.6.0
