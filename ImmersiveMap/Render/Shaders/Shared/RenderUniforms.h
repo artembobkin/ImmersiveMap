@@ -111,6 +111,16 @@ struct GlobeAtmosphere {
     float intensity;
 };
 
+// How deep the globe surface colours are drawn: 1 saturates and darkens the
+// sampled tile palette the way the whole planet is seen from space, 0 passes
+// it through untouched. The layout mirrors GlobeSurfaceToneUniform.swift.
+struct GlobeSurfaceTone {
+    float depth;
+    float _padding0;
+    float _padding1;
+    float _padding2;
+};
+
 // Receiver-plane depth gradient dz/duv from screen-space derivatives
 // (Isidoro). Must run in uniform control flow, before any divergent early-out.
 // The clamp value is expressed for the u axis; the same world slope maps to a

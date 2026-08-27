@@ -195,6 +195,9 @@ enum VisualReviewCatalogue {
         static let globe = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                       longitudeDegrees: 10.0,
                                                       zoom: 1)
+        static let wholePlanet = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
+                                                            longitudeDegrees: 10.0,
+                                                            zoom: 0)
     }
 
     static let scenarios: [VisualReviewScenario] = [
@@ -285,6 +288,23 @@ enum VisualReviewCatalogue {
             """,
             settings: .default.transparentSpace(),
             subject: .still(camera: Place.globe)),
+
+        VisualReviewScenario(
+            id: "globe.whole.planet.deep",
+            title: "Whole planet at zoom 0, deep colours",
+            lookFor: """
+            The sphere small against black, wearing richer and darker colours \
+            than the map palette: the sea a deeper blue, the land a fuller \
+            green, the deserts warm rather than pale. It should read as a \
+            planet seen from space, not as a washed-out map wrapped on a ball, \
+            and not as a dark, muddy one either: coastlines stay crisp and the \
+            ice caps stay white. Compare with the zoom 1 scenes: the same \
+            palette, half as deep there, and gone by zoom 2. The polar cap and \
+            any tile still loading must not show in a paler colour than the \
+            rest of the surface.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.wholePlanet)),
 
         VisualReviewScenario(
             id: "globe.no.earth.scene",

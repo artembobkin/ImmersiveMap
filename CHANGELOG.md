@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 once the public API stabilizes.
 
+## [Unreleased]
+
+### Changed
+
+- The globe wears deeper colours when the whole planet is on screen. At zoom 0 the surface is drawn more saturated and with darker midtones than the tile palette (which is deliberately pale so labels read over it up close), so the sphere against black looks like a planet seen from space rather than a washed-out map wrapped on a ball; the deepening eases back smoothly over the first two zoom levels and is gone by zoom 2, before the terminator fades and the sphere starts to unfurl. White stays white and black stays black, so ice caps and coastlines keep their contrast. The tiled surface, the placeholder fill under a still-loading tile and the polar caps deepen together, so no part of the sphere shows in the paler palette next to the rest. New visual review scenario `globe.whole.planet.deep`.
+
 ## [0.7.0] - 2026-08-26
 
 ### Added

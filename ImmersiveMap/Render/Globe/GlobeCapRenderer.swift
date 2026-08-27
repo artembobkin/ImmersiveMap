@@ -83,6 +83,7 @@ final class GlobeCapRenderer {
               globe: GlobeUniform,
               earthScene: EarthSceneUniform,
               atmosphere: GlobeAtmosphereUniform,
+              tone: GlobeSurfaceToneUniform,
               tilesTexture: TileAtlasTexture) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
         // Cap winding differs from the globe tile mesh after geographic-latitude
@@ -92,11 +93,13 @@ final class GlobeCapRenderer {
         var globe = globe
         var earthScene = earthScene
         var atmosphere = atmosphere
+        var tone = tone
         renderEncoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&earthScene, length: MemoryLayout<EarthSceneUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&atmosphere, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 6)
+        renderEncoder.setFragmentBytes(&tone, length: MemoryLayout<GlobeSurfaceToneUniform>.stride, index: 7)
 
         var fallbackTileData = Self.makeFallbackTileData()
         renderEncoder.setFragmentTexture(fallbackTexture, index: 0)

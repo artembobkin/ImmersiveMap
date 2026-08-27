@@ -264,6 +264,26 @@ static inline half3 globeAtmosphereSurfaceGlow(half facing,
     return glow * half(atmosphere.intensity);
 }
 
+/// The colour of the surface seen whole from space: the tile palette, pale so
+/// labels read over it up close, is pushed toward richer and darker on the
+/// small sphere, by `depth` (1 at zoom 0, 0 by zoom 2, see
+/// GlobeSurfaceToneUniform.swift). Saturation rises around the luma, then a
+/// power curve deepens the midtones while white stays white and black stays
+/// black, so coastlines and the sea keep their contrast instead of everything
+/// sliding toward grey. Applied to the bare sampled colour, before the
+/// day/night shading and the additive limb glow, so the night side and the
+/// rim keep their own look on top of it. At depth 0 the colour passes
+/// through exactly.
+static inline half3 globeSurfaceDeepen(half3 color, constant GlobeSurfaceTone& tone) {
+    half depth = clamp(half(tone.depth), 0.0h, 1.0h);
+    if (depth <= 0.0h) {
+        return color;
+    }
+    half luma = dot(color, half3(0.299h, 0.587h, 0.114h));
+    half3 saturated = clamp(mix(half3(luma), color, 1.0h + 0.55h * depth), 0.0h, 1.0h);
+    return pow(saturated, half3(1.0h + 0.45h * depth));
+}
+
 /// Everything the globe surface does to a sampled color: day/night shading, the
 /// limb glow, and the haze that hides the seam at the surface swap. Shared so
 /// the placeholder fill below is lit exactly like the tiles that replace it,
@@ -275,8 +295,10 @@ static inline half4 globeSurfaceShade(half4 color,
                                       constant Camera& camera,
                                       constant EarthScene& earthScene,
                                       constant HorizonFog& horizonFog,
-                                      constant GlobeAtmosphere& atmosphere) {
+                                      constant GlobeAtmosphere& atmosphere,
+                                      constant GlobeSurfaceTone& tone) {
     half transition = half(in.transition);
+    color.rgb = globeSurfaceDeepen(color.rgb, tone);
     if (earthScene.isEnabled != 0) {
         half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
         half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);
@@ -308,7 +330,8 @@ fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
                                    constant EarthScene& earthScene [[buffer(2)]],
                                    constant Tile& tileData [[buffer(3)]],
                                    constant HorizonFog& horizonFog [[buffer(4)]],
-                                   constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
+                                   constant GlobeAtmosphere& atmosphere [[buffer(6)]],
+                                   constant GlobeSurfaceTone& tone [[buffer(7)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
     AtlasTileBounds bounds = atlasTileBounds(in.posU, in.posV, in.lastPos, in.uvSize);
@@ -318,7 +341,7 @@ fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
     }
 
     return globeSurfaceShade(texture.sample(textureSampler, coords.uv, level(coords.lod)),
-                             in, camera, earthScene, horizonFog, atmosphere);
+                             in, camera, earthScene, horizonFog, atmosphere, tone);
 }
 
 /// A blank tile in the map's own background color, drawn into every visible
@@ -337,8 +360,9 @@ fragment half4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
                                                      constant EarthScene& earthScene [[buffer(2)]],
                                                      constant HorizonFog& horizonFog [[buffer(4)]],
                                                      constant float4& fillColor [[buffer(5)]],
-                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
-    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog, atmosphere);
+                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]],
+                                                     constant GlobeSurfaceTone& tone [[buffer(7)]]) {
+    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog, atmosphere, tone);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
@@ -403,7 +427,8 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
                                       constant Camera& camera [[buffer(1)]],
                                       constant EarthScene& earthScene [[buffer(2)]],
                                       constant Tile& tileData [[buffer(3)]],
-                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
+                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]],
+                                      constant GlobeSurfaceTone& tone [[buffer(7)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
     half seamBlend = half(smoothstep(params.blendStartAbsLatitude,
@@ -434,6 +459,9 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
     } else {
         color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }
+    // The same deepening as the tiled surface, so the cap continues its
+    // colour over the pole at every zoom.
+    color.rgb = globeSurfaceDeepen(color.rgb, tone);
 
     if (earthScene.isEnabled != 0) {
         half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));

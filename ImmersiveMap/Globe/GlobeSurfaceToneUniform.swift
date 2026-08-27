@@ -1,0 +1,48 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+import Foundation
+
+/// How deep the globe surface colours are drawn this frame; the layout mirrors
+/// `GlobeSurfaceTone` in RenderUniforms.h (pinned by `GlobeSurfaceToneUniformTests`).
+///
+/// Seen whole from space the planet wears richer, darker colours than the map
+/// it becomes up close: the pale tile palette that reads well under labels at
+/// a city zoom looks washed out on a small sphere against black. `depth` is 1
+/// at zoom 0, where the whole planet is on screen, and eases back to 0 over
+/// the first two zoom levels, so the surface arrives at the map's own palette
+/// by the time the terminator has faded and the sphere starts to unfurl. The
+/// shader saturates and deepens the midtones by this amount; at 0 the sampled
+/// colour passes through untouched.
+struct GlobeSurfaceToneUniform {
+    var depth: Float
+    var _padding0: Float = 0
+    var _padding1: Float = 0
+    var _padding2: Float = 0
+
+    /// Zoom at which the colours are at their deepest.
+    static let deepZoom: Double = 0.0
+
+    /// Zoom at which the surface is back to the untouched tile palette.
+    static let plainZoom: Double = 2.0
+
+    /// The tile palette as baked: what every frame past `plainZoom` draws.
+    static let plain = GlobeSurfaceToneUniform(depth: 0)
+
+    static func make(zoom: Double) -> GlobeSurfaceToneUniform {
+        GlobeSurfaceToneUniform(depth: depth(zoom: zoom))
+    }
+
+    /// Deepening amount by zoom: 1 at `deepZoom` and below, 0 at `plainZoom`
+    /// and above, a smoothstep between so neither end of the ramp shows a kink
+    /// while the camera zooms through it.
+    static func depth(zoom: Double) -> Float {
+        let start = deepZoom
+        let end = plainZoom
+        guard zoom.isFinite, end > start else {
+            return zoom <= start ? 1 : 0
+        }
+        let t = min(max((zoom - start) / (end - start), 0), 1)
+        return Float(1 - t * t * (3 - 2 * t))
+    }
+}
