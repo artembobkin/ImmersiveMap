@@ -618,14 +618,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var diskAngularSize: Float
             /// Disk contribution multiplier. Expected range: `0...1`.
             public var diskIntensity: Float
-            /// Surrounding glow contribution multiplier. Expected range: `0...1`.
+            /// Bloom immediately around the disk, about one disk radius wide. Expected range: `0...1`.
             public var glowIntensity: Float
             /// Viewport-edge glare contribution multiplier. Expected range: `0...1`.
             /// Defaults to zero so offscreen Sun direction is not emphasized at the viewport edge.
             public var edgeGlareIntensity: Float
-            /// Globe limb halo contribution multiplier. Expected range: `0...1`.
+            /// The ring of atmosphere lit from behind while the sun is behind the globe. Expected range: `0...1`.
             public var limbHaloIntensity: Float
-            /// Positive normalized width used to fade the globe limb halo.
+            /// Positive normalized width of the ring, and the distance past the limb over which it fades out.
             public var limbHaloWidth: Float
 
             /// Creates visible Sun settings.
@@ -639,10 +639,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public init(isEnabled: Bool = true,
                         diskAngularSize: Float = 0.075,
                         diskIntensity: Float = 1.0,
-                        glowIntensity: Float = 0.75,
+                        glowIntensity: Float = 0.5,
                         edgeGlareIntensity: Float = 0.0,
-                        limbHaloIntensity: Float = 0.35,
-                        limbHaloWidth: Float = 0.10) {
+                        limbHaloIntensity: Float = 0.9,
+                        limbHaloWidth: Float = 0.05) {
                 self.isEnabled = isEnabled
                 self.diskAngularSize = diskAngularSize
                 self.diskIntensity = diskIntensity

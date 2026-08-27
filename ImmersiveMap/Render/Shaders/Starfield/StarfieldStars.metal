@@ -168,6 +168,14 @@ vertex BackgroundVertexOut sunVertexShader(uint vertexID [[vertex_id]]) {
     return makeFullscreenTriangleVertex(vertexID);
 }
 
+/// The visible sun. There is no air in space, so the sky around it stays
+/// black: the sun is a white-hot disc with a short bloom, not a sunset glow
+/// spread across the frame. The drama of a sun behind the planet is in the
+/// limb ring instead: the atmosphere on the sun's side lit from behind, white
+/// at the very edge, sky-blue just outside it, with a warm note only in the
+/// sliver where the disc is about to emerge (the light there has crossed the
+/// most air). The ring is a full circle when the sun sits straight behind the
+/// globe and narrows to a crescent as it comes round toward the limb.
 fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
                                   constant EarthScene& earth [[buffer(0)]],
                                   constant SunVisualState& sun [[buffer(1)]]) {
@@ -186,7 +194,8 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     // anyway, so the result is unchanged.
     half diskT = half(diskDistance / diskRadius);
     half core = exp(-diskT * diskT * 2.6h) * half(sun.diskAlpha) * half(earth.sunDiskIntensity);
-    half glowT = diskT * (1.0h / 3.5h);
+    // The bloom reaches about one disc radius past the disc and no further.
+    half glowT = diskT * (1.0h / 1.3h);
     half glow = exp(-glowT * glowT) * half(sun.diskAlpha);
 
     float edgeDistance = length((uv - sun.clampedScreenCenter) * aspectScale);
@@ -201,21 +210,38 @@ fragment float4 sunFragmentShader(BackgroundVertexOut in [[stage_in]],
     float2 limbDirection = limbVector / max(limbVectorLength, 0.0001);
     float2 sunDirection = sunVector / max(sunVectorLength, 0.0001);
     float limbAlignment = dot(limbDirection, sunDirection);
-    float directionalLimb = sunVectorLength > 0.0001 ? smoothstep(0.18, 0.92, limbAlignment) : 0.0;
+    // 0 with the sun straight behind the globe (a full ring), 1 with it at the
+    // limb (a tight crescent on the sun's side).
+    float closeness = clamp(sunVectorLength / max(sun.globeScreenRadius, 0.0001), 0.0, 1.0);
+    float crescentStart = mix(-1.0, 0.25, closeness);
+    float crescentEnd = mix(-0.6, 0.95, closeness);
+    float directionalLimb = smoothstep(crescentStart, crescentEnd, limbAlignment);
     half limbT = half(limbDistance / max(earth.sunLimbHaloWidth, 0.001));
-    half limb = exp(-limbT * limbT * 6.0h)
+    // A thin bright edge and a softer skirt outside it.
+    half limbEdge = exp(-limbT * limbT * 6.0h);
+    half limbSkirt = exp(-limbT * limbT * 1.2h);
+    half limb = (limbEdge + 0.35h * limbSkirt)
         * half(sun.limbHaloAlpha)
         * half(directionalLimb)
         * half(earth.sunLimbHaloIntensity);
 
-    half3 warmCore = half3(1.0h, 0.94h, 0.72h);
+    half3 sunWhite = half3(1.0h, 0.98h, 0.94h);
+    half3 bloomWarm = half3(1.0h, 0.93h, 0.82h);
     half3 orangeGlow = half3(1.0h, 0.45h, 0.12h);
+    half3 ringWhite = half3(1.0h, 0.97h, 0.92h);
+    half3 ringSky = half3(0.45h, 0.70h, 1.0h);
+    half3 ringWarm = half3(1.0h, 0.55h, 0.25h);
+    half3 ringColor = mix(ringSky, ringWhite, limbEdge);
+    // The warm note sits only where the sun is about to break the limb.
+    half warmWeight = half(pow(smoothstep(0.6, 1.0, limbAlignment), 3.0) * closeness);
+    ringColor = mix(ringColor, ringWarm, warmWeight * 0.7h);
+
     half glowIntensity = half(earth.sunGlowIntensity);
-    half3 color = warmCore * core
-        + orangeGlow * glow * glowIntensity
+    half3 color = sunWhite * core
+        + bloomWarm * glow * glowIntensity
         + orangeGlow * edgeGlare
-        + warmCore * limb;
-    half alpha = saturate(core + glow * glowIntensity * 0.7h + edgeGlare * 0.45h + limb * 0.55h);
+        + ringColor * limb;
+    half alpha = saturate(core + glow * glowIntensity * 0.7h + edgeGlare * 0.45h + limb * 0.8h);
     return float4(float3(color), float(alpha));
 }
 

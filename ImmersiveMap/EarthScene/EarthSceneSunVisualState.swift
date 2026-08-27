@@ -110,9 +110,14 @@ struct EarthSceneSunVisualState {
                                                         edge1: 0,
                                                         x: signedLimbDistance)
         let edgeGlareAlpha: Float
-        let limbDistance = abs(signedLimbDistance)
         let haloWidth = max(earthScene.sunLimbHaloWidth, EarthSceneUniform.minimumFadeWidth)
-        let limbHaloAlpha = viewportAlpha * Self.clampedUnit(1 - limbDistance / haloWidth)
+        // The limb ring is the atmosphere lit from behind: it is there in full
+        // for as long as the sun is behind the globe (a full ring straight
+        // behind, a crescent near the limb; the shader shapes it), and dies
+        // away over the halo width once the sun is out past the limb, where
+        // the day-side rim is the atmosphere halo's job.
+        let limbHaloAlpha = viewportAlpha
+            * (signedLimbDistance <= 0 ? 1 : Self.clampedUnit(1 - signedLimbDistance / haloWidth))
         if signedLimbDistance <= 0 {
             edgeGlareAlpha = 0
         } else {

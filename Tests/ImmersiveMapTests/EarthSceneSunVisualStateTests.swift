@@ -24,7 +24,9 @@ final class EarthSceneSunVisualStateTests: XCTestCase {
         XCTAssertTrue(state.hasVisibleContribution)
     }
 
-    func testInsideGlobeAwayFromLimbHasNoVisibleContribution() {
+    /// A sun straight behind the globe hides its disc and lights the whole
+    /// rim: the ring stays at full strength however deep behind the sun sits.
+    func testSunStraightBehindGlobeHidesTheDiskAndKeepsTheFullRing() {
         var earthScene = Self.earthScene(limbHaloIntensity: 1)
         earthScene.sunDirection = SIMD3<Float>(0, 0, 1)
 
@@ -38,8 +40,33 @@ final class EarthSceneSunVisualStateTests: XCTestCase {
         XCTAssertEqual(state.isEnabled, 1)
         XCTAssertEqual(state.diskAlpha, 0.0, accuracy: 0.0001)
         XCTAssertEqual(state.edgeGlareAlpha, 0.0, accuracy: 0.0001)
-        XCTAssertEqual(state.limbHaloAlpha, 0.0, accuracy: 0.0001)
-        XCTAssertFalse(state.hasVisibleContribution)
+        XCTAssertEqual(state.limbHaloAlpha, 1.0, accuracy: 0.0001)
+        XCTAssertTrue(state.hasVisibleContribution)
+    }
+
+    /// Out past the limb the ring dies away over the halo width: at the limb
+    /// it is full, one width out it is gone.
+    func testRingFadesOverTheHaloWidthOncePastTheLimb() {
+        var earthScene = Self.earthScene(limbHaloIntensity: 1)
+        earthScene.sunLimbHaloWidth = 0.1
+        var cameraMatrix = matrix_identity_float4x4
+        cameraMatrix[0][0] = 0.5
+        cameraMatrix[1][1] = 0.5
+
+        func alpha(x: Float) -> Float {
+            earthScene.sunDirection = normalize(SIMD3<Float>(x, 0, sqrt(max(0, 1 - x * x))))
+            return Self.makeState(earthScene: earthScene,
+                                  globe: Self.globe,
+                                  cameraMatrix: cameraMatrix,
+                                  drawSize: CGSize(width: 1000, height: 1000),
+                                  starfieldRadiusScale: 2).limbHaloAlpha
+        }
+        // Globe radius on screen is 0.25 here and the sun sits at x / 2 from
+        // its centre, so x = 0.5 is the limb and x = 0.7 is one width out.
+        XCTAssertEqual(alpha(x: 0.3), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(alpha(x: 0.5), 1.0, accuracy: 0.01)
+        XCTAssertEqual(alpha(x: 0.6), 0.5, accuracy: 0.02)
+        XCTAssertEqual(alpha(x: 0.7), 0.0, accuracy: 0.01)
     }
 
     func testDisabledEarthSceneReturnsDisabledState() {
@@ -160,10 +187,6 @@ final class EarthSceneSunVisualStateTests: XCTestCase {
             0.5 + direction.x,
             0.5
         )
-        let distanceFromGlobeCenter = simd_length(expectedScreenCenter - SIMD2<Float>(0.5, 0.5))
-        let limbDistance = abs(distanceFromGlobeCenter - expectedGlobeRadius)
-        let expectedHalo = max(0, 1 - limbDistance / earthScene.sunLimbHaloWidth)
-
         let state = Self.makeState(
             earthScene: earthScene,
             globe: Self.globe,
@@ -178,7 +201,8 @@ final class EarthSceneSunVisualStateTests: XCTestCase {
         XCTAssertEqual(state.globeScreenRadius, expectedGlobeRadius, accuracy: 0.0001)
         XCTAssertEqual(state.diskAlpha, 0.0, accuracy: 0.0001)
         XCTAssertEqual(state.edgeGlareAlpha, 0.0, accuracy: 0.0001)
-        XCTAssertEqual(state.limbHaloAlpha, expectedHalo, accuracy: 0.0001)
+        // Behind the limb the ring is at full strength.
+        XCTAssertEqual(state.limbHaloAlpha, 1.0, accuracy: 0.0001)
     }
 
     func testSunPartiallyBehindGlobeLimbKeepsFadedDiskContribution() {

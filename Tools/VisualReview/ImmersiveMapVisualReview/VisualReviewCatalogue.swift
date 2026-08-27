@@ -136,6 +136,17 @@ enum VisualReviewCatalogue {
     /// last approval for a reason that has nothing to do with the code.
     static let sceneDate = Date(timeIntervalSince1970: 1_749_000_000)
 
+    /// 2026-03-20 12:00 UTC: the sun over the equator near longitude 0, so a
+    /// camera longitude alone says where the sun is relative to the view.
+    static let equinoxNoon = Date(timeIntervalSince1970: 1_774_008_000)
+
+    /// The default map with the sun pinned to `equinoxNoon`.
+    private static let equinoxSettings: ImmersiveMapSettings = {
+        var settings = ImmersiveMapSettings.default
+        settings.scene.earth.timeMode = .fixed(equinoxNoon)
+        return settings
+    }()
+
     /// Places chosen for what they contain rather than for sentiment: dense
     /// blocks with towers, water against a coastline, and mountains.
     private enum Place {
@@ -198,6 +209,14 @@ enum VisualReviewCatalogue {
         static let wholePlanet = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                             longitudeDegrees: 10.0,
                                                             zoom: 0)
+        // At `equinoxNoon` the sun stands over longitude -2: these two put it
+        // just behind the limb and straight behind the planet.
+        static let sunBehindLimb = ImmersiveMapCameraPosition(latitudeDegrees: 0.0,
+                                                              longitudeDegrees: 100.0,
+                                                              zoom: 0.6)
+        static let sunStraightBehind = ImmersiveMapCameraPosition(latitudeDegrees: 0.0,
+                                                                  longitudeDegrees: 178.0,
+                                                                  zoom: 0.6)
     }
 
     static let scenarios: [VisualReviewScenario] = [
@@ -306,6 +325,34 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.wholePlanet)),
+
+        VisualReviewScenario(
+            id: "sun.behind.limb",
+            title: "Sun just behind the limb",
+            lookFor: """
+            Space stays black right up to the planet: no orange glow spread \
+            across the frame. The sun's disc is hidden; what shows is a bright \
+            crescent of lit atmosphere hugging the limb on the sun's side, \
+            white at the very edge, sky-blue just outside it, with a warm \
+            orange note only at its brightest point where the disc is about \
+            to emerge. The crescent thins out to nothing along the rim away \
+            from the sun. The lit sliver of the surface and the crescent \
+            should sit on the same side.
+            """,
+            settings: equinoxSettings,
+            subject: .still(camera: Place.sunBehindLimb)),
+
+        VisualReviewScenario(
+            id: "sun.straight.behind",
+            title: "Sun straight behind the planet",
+            lookFor: """
+            The eclipse view: a dark disc against black space with a thin, \
+            even ring of lit atmosphere all the way around, white at the edge \
+            fading to sky-blue, no warm patch anywhere since no part of the \
+            disc is close to emerging, and no sun glow leaking from behind.
+            """,
+            settings: equinoxSettings,
+            subject: .still(camera: Place.sunStraightBehind)),
 
         VisualReviewScenario(
             id: "globe.no.earth.scene",
