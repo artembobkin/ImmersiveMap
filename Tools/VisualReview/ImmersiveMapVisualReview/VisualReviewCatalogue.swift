@@ -293,12 +293,13 @@ enum VisualReviewCatalogue {
             id: "globe.whole.planet.deep",
             title: "Whole planet at zoom 0, deep colours",
             lookFor: """
-            The sphere small against black, wearing richer and darker colours \
-            than the map palette: the sea a deeper blue, the land a fuller \
-            green, the deserts warm rather than pale. It should read as a \
-            planet seen from space, not as a washed-out map wrapped on a ball, \
-            and not as a dark, muddy one either: coastlines stay crisp and the \
-            ice caps stay white. The zoom 1 scenes wear the same deep palette; \
+            The sphere small against black, in muted, cooler and darker \
+            colours than the map palette: a dark sea, olive rather than lime \
+            land, a faint blue cast over everything, and the lit disc rounding \
+            off toward the limb before the rim glow takes over. It should read \
+            as a planet seen through its air, not as an atlas wrapped on a \
+            ball, and not as a dark, muddy one either: coastlines stay crisp \
+            and the ice caps stay white. The zoom 1 scenes wear the same palette; \
             it eases off between zoom 1 and 2 and is gone by 2. The polar cap and \
             any tile still loading must not show in a paler colour than the \
             rest of the surface.

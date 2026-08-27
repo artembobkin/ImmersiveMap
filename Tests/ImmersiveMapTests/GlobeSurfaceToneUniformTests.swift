@@ -49,14 +49,14 @@ final class GlobeSurfaceToneUniformTests: XCTestCase {
 
         XCTAssertEqual(source.components(separatedBy: "constant GlobeSurfaceTone& tone [[buffer(7)]]").count - 1, 3,
                        "The tiled surface, the placeholder fill and the cap each bind the tone")
-        XCTAssertEqual(source.components(separatedBy: "globeSurfaceDeepen(color.rgb, tone)").count - 1, 2,
+        XCTAssertEqual(source.components(separatedBy: "globeSurfaceDeepen(color.rgb, facingDot, tone)").count - 1, 2,
                        "The shared surface shade and the cap both deepen the colour")
 
         // It works on the bare sampled colour: before the day/night shading,
         // before the glow is added, so those keep their own look on top.
         let shade = try XCTUnwrap(source.range(of: "static inline half4 globeSurfaceShade("))
         let body = source[shade.lowerBound...]
-        let deepen = try XCTUnwrap(body.range(of: "globeSurfaceDeepen(color.rgb, tone)"))
+        let deepen = try XCTUnwrap(body.range(of: "globeSurfaceDeepen(color.rgb, facingDot, tone)"))
         let shading = try XCTUnwrap(body.range(of: "earthScene.isEnabled != 0"))
         XCTAssertLessThan(deepen.lowerBound, shading.lowerBound)
     }
