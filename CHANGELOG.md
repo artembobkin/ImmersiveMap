@@ -10,7 +10,7 @@ once the public API stabilizes.
 
 ### Fixed
 
-- The polar caps fade into what the tiles show at their rim instead of into a palette colour. What the last tile row holds at 85° changes with zoom (the low-zoom land cover paints the Arctic sea ice white, the detailed layers paint open water), so the northern cap, filled with the palette's water, showed as a dark disc inside the ice at one zoom and, filled with ice, as a white blur on the water at another. The pole colour is now the mean of the edge row of the tile each cap wedge continues, sampled on the GPU, so the cap always continues the tiles it sits on; the palette's `polarIce` (which the northern cap now shares with the southern one) is only what a cap with no tile under it yet draws.
+- The polar caps fade into what the tiles show at their rim instead of into a palette colour. What the last tile row holds at 85° changes with zoom (the low-zoom land cover paints the Arctic sea ice white, the detailed layers paint open water), so the northern cap, filled with the palette's water, showed as a dark disc inside the ice at one zoom and, filled with ice, as a white blur on the water at another. The pole colour is now the mean of the edge row of the tile each cap wedge continues, sampled on the GPU, and it is sampled at the mip level the surface reads the rim at, so the cap continues the tiles it sits on in the same shade at every zoom (read from level 0 it stood out as a crisper disc at a far zoom); the palette's `polarIce` (which the northern cap now shares with the southern one) is only what a cap with no tile under it yet draws.
 
 ### Changed
 

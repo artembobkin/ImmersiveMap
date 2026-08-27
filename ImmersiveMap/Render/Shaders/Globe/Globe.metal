@@ -191,6 +191,7 @@ static float globeCapWrapUnit(float value) {
 
 static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
                                                  float longitude,
+                                                 float lod,
                                                  constant Tile& tileData) {
     float textureSize = float(tileData.textureSize);
     float cellSize = float(tileData.cellSize);
@@ -235,7 +236,9 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
     float v = (1.0 - textureV * zPow + float(lastTile - tileY) + float(lastPos - posV)) / float(count);
 
     float uvSize = 1.0 / float(count);
-    float halfTexel = 0.5 / textureSize;
+    // The same inset the surface uses at this mip level: half a texel of the
+    // ceil level, the least at which a trilinear fetch stays in the slot.
+    float halfTexel = 0.5 / textureSize * exp2(ceil(lod));
     float uMin = float(posU) * uvSize;
     float uMax = uMin + uvSize;
     float vMin = float(lastPos - posV) * uvSize;
@@ -258,6 +261,7 @@ static GlobeCapAtlasSample globeCapAtlasSampleUV(float latitude,
 static half3 globeCapEdgeRowMean(texture2d<half> texture,
                                  sampler textureSampler,
                                  float latitude,
+                                 float lod,
                                  constant Tile& tileData) {
     float zPow = exp2(float(tileData.tile.z));
     const int sampleCount = 8;
@@ -265,9 +269,9 @@ static half3 globeCapEdgeRowMean(texture2d<half> texture,
     half count = 0.0h;
     for (int index = 0; index < sampleCount; index++) {
         float longitude = (float(tileData.tile.x) + (float(index) + 0.5) / float(sampleCount)) / zPow * 2.0 * M_PI_F;
-        GlobeCapAtlasSample sample = globeCapAtlasSampleUV(latitude, longitude, tileData);
+        GlobeCapAtlasSample sample = globeCapAtlasSampleUV(latitude, longitude, lod, tileData);
         if (sample.isValid) {
-            sum += texture.sample(textureSampler, sample.uv, level(0.0)).rgb;
+            sum += texture.sample(textureSampler, sample.uv, level(lod)).rgb;
             count += 1.0h;
         }
     }
@@ -483,6 +487,23 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
                                       constant GlobeSurfaceTone& tone [[buffer(7)]]) {
     constexpr sampler textureSampler(filter::linear, mip_filter::linear, mag_filter::linear);
 
+    // The mip level the surface samples the edge row at, so the cap continues
+    // it in the same shade: at a far zoom the tiles show a mip-averaged blend
+    // and a cap read from level 0 stood out as a crisper, different disc.
+    // The level comes from the screen derivative of the longitude, which is
+    // what the atlas u advances with along the rim (Mercator is conformal, so
+    // the v density at the rim is the same and one axis is enough). Taken
+    // through (cos, sin) so the longitude wrap adds no false derivative, and
+    // explicit rather than automatic: automatic LOD explodes near the pole
+    // (meridians converge to a point) and dived into deep atlas mips where
+    // texels average neighbouring page tiles, a fan of grey wedges across the
+    // grid triangles and flicker on every atlas repack. Computed before any
+    // discard, since derivatives need uniform control flow.
+    float2 longitudeDirection = float2(cos(in.longitude), sin(in.longitude));
+    float radiansPerPixel = max(length(dfdx(longitudeDirection)), length(dfdy(longitudeDirection)));
+    float texelsPerPixel = radiansPerPixel * exp2(float(tileData.tile.z)) * float(tileData.cellSize) / (2.0 * M_PI_F);
+    float lod = clamp(log2(max(texelsPerPixel, 1e-6)), 0.0, kAtlasMaxMipLevel);
+
     half seamBlend = half(smoothstep(params.blendStartAbsLatitude,
                                      params.blendEndAbsLatitude,
                                      in.absLatitude));
@@ -491,25 +512,20 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
     if (params.sampleOptions.y > 0.5) {
         GlobeCapAtlasSample sample = globeCapAtlasSampleUV(params.sampleOptions.x,
                                                            in.longitude,
+                                                           lod,
                                                            tileData);
         if (!sample.isValid) {
             discard_fragment();
             return half4(0.0h);
         }
-        // Explicit level(0): the cap smears a single edge row of tile texels,
-        // and the base mip is precise and stable. Automatic LOD explodes near
-        // the pole (meridians converge to a point, and the longitude wrap makes
-        // the uv derivatives discontinuous), so sampling dives into deep atlas
-        // mips where texels average neighboring page tiles: a fan of gray
-        // wedges across the grid triangles and flicker on every atlas repack.
-        half4 sampled = texture.sample(textureSampler, sample.uv, level(0.0));
+        half4 sampled = texture.sample(textureSampler, sample.uv, level(lod));
         // Feather toward the pole color: the edge row continues the surface at
         // the rim (seamBlend 0) but does not reach the pole itself as "needles":
         // narrow coastal features of the rim (e.g. the Ross Sea water at 85°S)
         // would otherwise smear as radial stripes across the whole cap. The
         // pole colour is the mean of that same edge row, so the cap fades into
         // what the tiles show at this zoom rather than into a palette colour.
-        half3 poleColor = globeCapEdgeRowMean(texture, textureSampler, params.sampleOptions.x, tileData);
+        half3 poleColor = globeCapEdgeRowMean(texture, textureSampler, params.sampleOptions.x, lod, tileData);
         // Opaque: the cap is surface. The atlas texel's own alpha must not
         // leak through, since this pipeline blends and a translucent cap over
         // black space read as a dark disc at the pole.
