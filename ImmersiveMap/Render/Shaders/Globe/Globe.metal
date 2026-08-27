@@ -352,13 +352,17 @@ static inline half4 globeSurfaceShade(half4 color,
         // than sitting as a dark disc under it). Confined to the limb and to
         // the band just past the terminator, so a face-on day side is not
         // tinted, and it goes with the terminator and the unfurl.
+        // It is forward scattering, so it needs the sun on the far side of
+        // the air from the eye: with the sun behind the camera the whole limb
+        // has the same grazing angle and would bloom all the way round.
         half rim = pow(max(0.0h, 1.0h - facingDot), 4.0h);
         half dawnBand = smoothstep(-0.10h, 0.12h, sunDot) * (1.0h - smoothstep(0.30h, 0.70h, sunDot));
-        half rimLight = rim * dawnBand
+        half forward = smoothstep(0.0h, 0.45h, half(-dot(atmosphere.sunDirection, viewDir)));
+        half rimLight = rim * dawnBand * forward
             * (1.0h - half(earthScene.sunShadowFade))
             * (1.0h - transition)
             * half(atmosphere.intensity);
-        color.rgb += half3(1.0h, 0.80h, 0.55h) * rimLight * 0.9h;
+        color.rgb += half3(1.0h, 0.80h, 0.55h) * rimLight * 0.7h;
     }
 
     half facing = max(0.0h, 1.0h - facingDot);
@@ -506,7 +510,10 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
         // pole colour is the mean of that same edge row, so the cap fades into
         // what the tiles show at this zoom rather than into a palette colour.
         half3 poleColor = globeCapEdgeRowMean(texture, textureSampler, params.sampleOptions.x, tileData);
-        color = half4(mix(sampled.rgb, poleColor, seamBlend), sampled.a);
+        // Opaque: the cap is surface. The atlas texel's own alpha must not
+        // leak through, since this pipeline blends and a translucent cap over
+        // black space read as a dark disc at the pole.
+        color = half4(mix(sampled.rgb, poleColor, seamBlend), 1.0h);
     } else {
         color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }

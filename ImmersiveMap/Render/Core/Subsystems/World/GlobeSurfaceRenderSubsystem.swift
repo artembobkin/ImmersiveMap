@@ -42,7 +42,9 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: mapClearColor)
-        let atmosphere = GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere)
+        let atmosphere = GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
+                                                     earthScene: frameContext.earthSceneUniform,
+                                                     globe: frameContext.globeRenderUniform)
         let tone = GlobeSurfaceToneUniform.make(zoom: frameContext.zoom)
         // Blank map in every slot the placements leave unpainted, drawn first
         // and with the same depth state. Each fill is the slot its tile will

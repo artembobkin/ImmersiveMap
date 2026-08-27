@@ -75,9 +75,10 @@ final class AtmosphereSettingsTests: XCTestCase {
     /// surface, its placeholder and the polar caps.
     func testGlobeAtmosphereUniformMatchesMetalLayout() {
         // A Metal float3 is 16 bytes wide, so the scalar after it lands at 16.
-        XCTAssertEqual(MemoryLayout<GlobeAtmosphereUniform>.stride, 32)
+        XCTAssertEqual(MemoryLayout<GlobeAtmosphereUniform>.stride, 64)
         XCTAssertEqual(MemoryLayout<GlobeAtmosphereUniform>.offset(of: \.color), 0)
         XCTAssertEqual(MemoryLayout<GlobeAtmosphereUniform>.offset(of: \.intensity), 16)
+        XCTAssertEqual(MemoryLayout<GlobeAtmosphereUniform>.offset(of: \.sunDirection), 32)
     }
 
     /// The surface glow disappears with the atmosphere: off, or at zero
@@ -89,6 +90,25 @@ final class AtmosphereSettingsTests: XCTestCase {
         XCTAssertEqual(GlobeAtmosphereUniform.make(settings: .init(intensity: -2)).intensity, 0)
         XCTAssertEqual(GlobeAtmosphereUniform.make(settings: .init(color: SIMD3<Float>(2, -1, 0.5))).color,
                        SIMD3<Float>(1, 0, 0.5))
+    }
+
+    /// The surface uniform carries the sun in world space, through the same
+    /// rotation the halo uses, so the rim light can tell a sun behind the
+    /// planet from one behind the camera; without an earth scene it is zero.
+    func testSurfaceUniformCarriesTheWorldSpaceSun() {
+        var earthScene = EarthSceneUniform(settings: .init(), now: .distantPast)
+        earthScene.sunDirection = SIMD3<Float>(0, 0, 1)
+        let globe = GlobeUniform(panX: 0.5, panY: 0, radius: 1, transition: 0)
+
+        let surface = GlobeAtmosphereUniform.make(settings: .init(), earthScene: earthScene, globe: globe)
+        let halo = AtmosphereUniform.make(settings: .init(),
+                                          earthScene: earthScene,
+                                          globe: globe,
+                                          projectionView: matrix_identity_float4x4,
+                                          cameraEye: .zero)
+        XCTAssertEqual(simd_length(surface.sunDirection - halo.sunDirection), 0, accuracy: 1e-5)
+        XCTAssertEqual(simd_length(surface.sunDirection), 1, accuracy: 1e-5)
+        XCTAssertEqual(GlobeAtmosphereUniform.make(settings: .init()).sunDirection, .zero)
     }
 
     /// The halo takes the globe's geometry from the frame: the sphere center is

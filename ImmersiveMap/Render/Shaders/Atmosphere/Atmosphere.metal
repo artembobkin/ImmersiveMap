@@ -117,7 +117,12 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
         half daylight = half(smoothstep(-0.30, 0.25, exposure));
         half sunFactor = mix(1.0h, mix(kAtmosphereNightFloor, 1.0h, daylight), half(atmosphere.sunInfluence));
         half grazing = half(smoothstep(-0.30, -0.05, exposure) * (1.0 - smoothstep(0.10, 0.40, exposure)));
-        warmth = grazing * half(atmosphere.sunInfluence);
+        // Forward scattering: the band exists only with the sun on the far
+        // side of the air from the eye. With the sun behind the camera every
+        // point of the limb grazes it alike, and the band would be a bright
+        // ring all the way round.
+        half forward = half(smoothstep(0.0, 0.45, dot(atmosphere.sunDirection, direction)));
+        warmth = grazing * forward * half(atmosphere.sunInfluence);
         intensity *= sunFactor * (1.0h + kAtmosphereSunriseBoost * warmth);
     }
 

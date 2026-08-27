@@ -93,16 +93,37 @@ struct GlobeAtmosphereUniform {
     /// Zero when the atmosphere is off: the surface then carries no glow and
     /// the limb is a hard edge.
     var intensity: Float
+    /// Direction toward the sun in world space (the frame the surface's view
+    /// direction lives in), or zero without an earth scene: the rim light at
+    /// the limb is forward scattering and needs to know whether the sun is
+    /// on the far side of the air from the eye.
+    var sunDirection: SIMD3<Float>
+    var _padding0: Float = 0
 
-    static let disabled = GlobeAtmosphereUniform(color: .zero, intensity: 0)
+    static let disabled = GlobeAtmosphereUniform(color: .zero, intensity: 0, sunDirection: .zero)
 
-    static func make(settings: ImmersiveMapSettings.AtmosphereSettings) -> GlobeAtmosphereUniform {
+    static func make(settings: ImmersiveMapSettings.AtmosphereSettings,
+                     earthScene: EarthSceneUniform = .disabled,
+                     globe: GlobeUniform = GlobeUniform(panX: 0, panY: 0, radius: 1, transition: 0)) -> GlobeAtmosphereUniform {
         guard settings.isEnabled, settings.intensity > 0, settings.intensity.isFinite else {
             return .disabled
         }
         return GlobeAtmosphereUniform(color: SIMD3<Float>(min(max(settings.color.x, 0), 1),
                                                           min(max(settings.color.y, 0), 1),
                                                           min(max(settings.color.z, 0), 1)),
-                                      intensity: settings.intensity)
+                                      intensity: settings.intensity,
+                                      sunDirection: worldSunDirection(earthScene: earthScene, globe: globe))
+    }
+
+    /// The earth-fixed sun carried into world space through the globe's
+    /// rotation, as the halo does; zero without an earth scene.
+    static func worldSunDirection(earthScene: EarthSceneUniform, globe: GlobeUniform) -> SIMD3<Float> {
+        guard earthScene.isEnabled != 0,
+              simd_length_squared(earthScene.sunDirection) > 1e-8 else {
+            return .zero
+        }
+        let rotation = EarthSceneSunVisualState.globeRotationMatrix(globe: globe)
+        let rotated = simd_transpose(rotation) * SIMD4<Float>(simd_normalize(earthScene.sunDirection), 0)
+        return simd_normalize(SIMD3<Float>(rotated.x, rotated.y, rotated.z))
     }
 }

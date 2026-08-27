@@ -36,7 +36,9 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
                               cameraUniform: frameContext.cameraUniform,
                               globe: frameContext.globeRenderUniform,
                               earthScene: frameContext.earthSceneUniform,
-                              atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere),
+                              atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
+                                                     earthScene: frameContext.earthSceneUniform,
+                                                     globe: frameContext.globeRenderUniform),
                               tone: GlobeSurfaceToneUniform.make(zoom: frameContext.zoom),
                               tilesTexture: tilesTexture)
 

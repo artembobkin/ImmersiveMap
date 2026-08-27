@@ -109,6 +109,8 @@ struct Shadow {
 struct GlobeAtmosphere {
     float3 color;
     float intensity;
+    float3 sunDirection;
+    float _padding0;
 };
 
 // How deep the globe surface colours are drawn: 1 saturates and darkens the
