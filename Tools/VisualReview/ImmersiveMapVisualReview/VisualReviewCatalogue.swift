@@ -331,13 +331,14 @@ enum VisualReviewCatalogue {
             title: "Sun just behind the limb",
             lookFor: """
             Space stays black right up to the planet: no orange glow spread \
-            across the frame. The sun's disc is hidden; what shows is a bright \
+            across the frame. The sun's disc is hidden; what shows is a \
             crescent of lit atmosphere hugging the limb on the sun's side, \
-            white at the very edge, sky-blue just outside it, with a warm \
-            orange note only at its brightest point where the disc is about \
-            to emerge. The crescent thins out to nothing along the rim away \
-            from the sun. The lit sliver of the surface and the crescent \
-            should sit on the same side.
+            sky-blue where it wraps away from the sun, warming through amber \
+            to one white-gold focus where the disc is about to emerge, with a \
+            flare stretched along the limb there (the diamond ring). It should \
+            read as a sunrise from orbit, with a clear direction, not as a \
+            white blob on the edge. The surface's last sliver of day along \
+            that limb carries a warm rim, on the same side as the focus.
             """,
             settings: equinoxSettings,
             subject: .still(camera: Place.sunBehindLimb)),
@@ -347,9 +348,9 @@ enum VisualReviewCatalogue {
             title: "Sun straight behind the planet",
             lookFor: """
             The eclipse view: a dark disc against black space with a thin, \
-            even ring of lit atmosphere all the way around, white at the edge \
-            fading to sky-blue, no warm patch anywhere since no part of the \
-            disc is close to emerging, and no sun glow leaking from behind.
+            even sky-blue ring of lit atmosphere all the way around, no warm \
+            focus and no flare anywhere since no part of the disc is close to \
+            emerging, and no sun glow leaking from behind.
             """,
             settings: equinoxSettings,
             subject: .still(camera: Place.sunStraightBehind)),

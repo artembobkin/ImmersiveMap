@@ -57,10 +57,10 @@ public struct SunSettings: Equatable, Sendable {
 
 | Field | What it draws |
 |---|---|
-| `diskAngularSize` / `diskIntensity` | The sun's own disk in space, white-hot, and how bright it is. |
-| `glowIntensity` | The bloom immediately around the disk, about one disk radius wide. There is no air in space, so the sky around the sun stays black: no sunset glow spreads across the frame. |
+| `diskAngularSize` / `diskIntensity` | The sun's own disk in space, white at the centre going gold, and how bright it is. |
+| `glowIntensity` | The amber bloom immediately around the disk, under two disk radii wide. There is no air in space, so the sky around the sun stays black: no sunset glow spreads across the frame. |
 | `edgeGlareIntensity` | Glare at the viewport edge when the sun is offscreen. Zero by default: an offscreen light source that keeps announcing itself reads as a lens artifact rather than a planet. |
-| `limbHaloIntensity` / `limbHaloWidth` | The ring of atmosphere lit from behind while the sun is behind the globe: white at the very edge, sky-blue just outside it, with a warm note only in the sliver where the disk is about to emerge. A full ring with the sun straight behind, a crescent on the sun's side as it comes round to the limb, and it fades out over `limbHaloWidth` once the sun is past the limb, where the day-side rim is the atmosphere halo's job. |
+| `limbHaloIntensity` / `limbHaloWidth` | The ring of atmosphere lit from behind while the sun is behind the globe: sky-blue where it wraps away from the sun, warming through amber to a white-gold focus where the disk is about to emerge, with a flare stretched along the limb there. A full ring with the sun straight behind, a crescent on the sun's side as it comes round to the limb, and it fades out over `limbHaloWidth` once the sun is past the limb, where the day-side rim is the atmosphere halo's job. |
 
 ## Atmosphere
 

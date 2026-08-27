@@ -320,6 +320,19 @@ static inline half4 globeSurfaceShade(half4 color,
         surfaceBrightness = mix(surfaceBrightness, 1.0h, transition);
         surfaceBrightness = mix(surfaceBrightness, 1.0h, half(earthScene.sunShadowFade));
         color.rgb *= surfaceBrightness;
+        // Rim light: with the sun behind the planet its last sliver of day
+        // lies along the limb, and the air there scatters the low sun forward
+        // into a warm edge (the planet joins the lit ring in space rather
+        // than sitting as a dark disc under it). Confined to the limb and to
+        // the band just past the terminator, so a face-on day side is not
+        // tinted, and it goes with the terminator and the unfurl.
+        half rim = pow(max(0.0h, 1.0h - facingDot), 4.0h);
+        half dawnBand = smoothstep(-0.10h, 0.12h, sunDot) * (1.0h - smoothstep(0.30h, 0.70h, sunDot));
+        half rimLight = rim * dawnBand
+            * (1.0h - half(earthScene.sunShadowFade))
+            * (1.0h - transition)
+            * half(atmosphere.intensity);
+        color.rgb += half3(1.0h, 0.80h, 0.55h) * rimLight * 0.9h;
     }
 
     half facing = max(0.0h, 1.0h - facingDot);
