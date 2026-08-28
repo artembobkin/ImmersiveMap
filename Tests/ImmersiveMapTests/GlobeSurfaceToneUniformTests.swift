@@ -45,7 +45,11 @@ final class GlobeSurfaceToneUniformTests: XCTestCase {
     /// bind the tone and run the same function, otherwise a tile that has not
     /// arrived, or the pole, would show in the paler palette next to the rest.
     func testTiledSurfacePlaceholderAndCapsShareTheDeepening() throws {
+        // The shared surface shade lives in its own header (the tile
+        // geometry drawn on the sphere shares it too); the cap keeps its own
+        // call in Globe.metal.
         let source = try shaderSource("Render/Shaders/Globe/Globe.metal")
+            + shaderSource("Render/Shaders/Globe/GlobeSurfaceShading.h")
 
         XCTAssertEqual(source.components(separatedBy: "constant GlobeSurfaceTone& tone [[buffer(7)]]").count - 1, 3,
                        "The tiled surface, the placeholder fill and the cap each bind the tone")

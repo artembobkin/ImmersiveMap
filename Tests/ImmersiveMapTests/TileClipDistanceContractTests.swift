@@ -55,6 +55,35 @@ final class TileClipDistanceContractTests: XCTestCase {
                       "The mask pass samples the cascades exactly the way the ground plane did, with no normal")
     }
 
+    /// The sphere tile shader: the same clip, one more distance for the
+    /// horizon, no textures and no discard, lit through the shared globe
+    /// surface shading.
+    func testSphereShaderClipsWithFiveDistancesAndNeverDiscards() throws {
+        let source = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertNil(source.range(of: "discard_fragment"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [5];"))
+        XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"))
+        XCTAssertTrue(source.contains("constant Globe& globe [[buffer(8)]]"))
+        XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
+        XCTAssertNil(source.range(of: "shadowMap"))
+        XCTAssertNil(source.range(of: "groundShadowMask"))
+        XCTAssertTrue(source.contains("globeVisibilityHorizonThreshold("))
+        XCTAssertTrue(source.contains("globeSurfaceShade("))
+        XCTAssertTrue(source.contains("globeProjectTileUVDetailed("))
+    }
+
+    /// One copy of the globe surface lighting, shared by the grid surface and
+    /// the tile geometry on the sphere.
+    func testGlobeSurfaceShadingLivesInOneHeader() throws {
+        let header = try shaderSource("Render/Shaders/Globe/GlobeSurfaceShading.h")
+        XCTAssertTrue(header.contains("static inline half4 globeSurfaceShade("))
+        let globe = try shaderSource("Render/Shaders/Globe/Globe.metal")
+        XCTAssertNil(globe.range(of: "static inline half4 globeSurfaceShade("))
+        XCTAssertTrue(globe.contains("#include \"GlobeSurfaceShading.h\""))
+        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertTrue(sphere.contains("#include \"../../Shaders/Globe/GlobeSurfaceShading.h\""))
+    }
+
     private func shaderSource(_ relativePath: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

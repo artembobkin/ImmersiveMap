@@ -13,6 +13,7 @@ struct TilePlacementState {
                                           backdropPlaceTilesContext: .empty,
                                           shadowCasterPlaceTilesContext: .empty,
                                           tileAtlasPlaceTilesContext: .empty,
+                                          globeSurfaceSlots: [],
                                           placementVersion: 0,
                                           visibleTilesCount: 0,
                                           readyTilesCount: 0,
@@ -28,6 +29,11 @@ struct TilePlacementState {
     /// the globe and with shadows disabled.
     let shadowCasterPlaceTilesContext: PlaceTilesContext
     let tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext
+    /// Every target slot of the globe surface this frame (the preprocessed
+    /// visible tiles): the placeholder grid draws each one, which is what
+    /// writes the surface depth and paints the base under the tile geometry
+    /// drawn on the sphere. Independent of which tiles have arrived.
+    let globeSurfaceSlots: [Tile]
     let placementVersion: UInt64
     let visibleTilesCount: Int
     let readyTilesCount: Int

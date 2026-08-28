@@ -47,7 +47,7 @@ public struct ViewReuseSettings: Equatable, Sendable {
 }
 ```
 
-When the screen holding a map goes away, the platform view is not destroyed: the renderer, its GPU tile cache and its atlas pages are **parked** for `parkedTimeToLive`, and the next `ImmersiveMapView` adopts it warm. Pushing a detail screen and coming back therefore skips the first-frame rebuild entirely.
+When the screen holding a map goes away, the platform view is not destroyed: the renderer, its GPU tile cache and its text atlases are **parked** for `parkedTimeToLive`, and the next `ImmersiveMapView` adopts it warm. Pushing a detail screen and coming back therefore skips the first-frame rebuild entirely.
 
 An adopted view keeps its previous camera unless the new view supplies an explicit camera position or an attached [camera controller](camera.md). That is usually what you want (returning to a map where you left it) and occasionally not (a fresh map that must open at a fixed place), which is what the explicit position is for.
 

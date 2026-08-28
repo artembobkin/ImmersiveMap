@@ -75,10 +75,32 @@ static inline float3 globeFlatWorldPosition(float lat,
     return float3(flatWorldPosition, 0.0);
 }
 
-static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
-                                                                 float lon,
-                                                                 constant Camera& camera,
-                                                                 constant Globe& globe) {
+/// The surface morph of one geographic point with every intermediate a
+/// receiver of the projection may need: the two end positions, the unfurl
+/// phase that mixes them, and the sphere normals for the lighting. The
+/// visibility test, the label and footprint projections and the tile
+/// geometry drawn on the sphere all take their positions from here, so the
+/// morph geometry exists in exactly one place on the GPU (its CPU mirrors
+/// live in GeoScreenProjectionMath, GeoSurfaceFrameMath and the atlas
+/// footprint planner and must stay bit-compatible).
+struct GlobeSurfaceProjection {
+    float4 clip;
+    float3 worldPosition;
+    float3 sphereWorldPosition;
+    float3 flatWorldPosition;
+    /// The rotated unit sphere direction (pan applied): the surface normal
+    /// the view-angle terms read.
+    float3 normal;
+    /// The earth-fixed unit sphere direction (before the pan rotation): what
+    /// the sun direction is measured against.
+    float3 earthNormal;
+    float localTransition;
+};
+
+static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
+                                                                float lon,
+                                                                constant Camera& camera,
+                                                                constant Globe& globe) {
     float panLatitude = globeVisibilityPanLatitude(globe);
     float panLongitude = globeVisibilityPanLongitude(globe);
     float mapSize = globeVisibilityMapSize(globe, panLatitude);
@@ -93,9 +115,31 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
     float localTransition = globeTransitionLocalPhase(globe.transition, frontDot);
     float3 worldPosition = mix(sphereWorldPosition, flatWorldPosition, localTransition);
 
-    GlobeVisibilityProjectionResult result;
+    // The unrotated unit direction is the sphere point over its radius; the
+    // rotated one is what the surface grid interpolates as its normal.
+    float phi = lat - M_PI_2_F;
+    float theta = lon + M_PI_F;
+    float3 earthDirection = float3(sin(phi) * sin(theta), cos(phi), sin(phi) * cos(theta));
+
+    GlobeSurfaceProjection result;
     result.worldPosition = worldPosition;
     result.clip = camera.matrix * float4(worldPosition, 1.0);
+    result.sphereWorldPosition = sphereWorldPosition;
+    result.flatWorldPosition = flatWorldPosition;
+    result.normal = normalize((float4(earthDirection, 0.0) * rotation).xyz);
+    result.earthNormal = normalize(earthDirection);
+    result.localTransition = localTransition;
+    return result;
+}
+
+static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
+                                                                 float lon,
+                                                                 constant Camera& camera,
+                                                                 constant Globe& globe) {
+    GlobeSurfaceProjection projection = globeProjectLatLonDetailed(lat, lon, camera, globe);
+    GlobeVisibilityProjectionResult result;
+    result.worldPosition = projection.worldPosition;
+    result.clip = projection.clip;
     return result;
 }
 

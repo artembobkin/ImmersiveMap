@@ -20,6 +20,9 @@ final class RenderPersistentContext {
     let polygonPipeline: PolygonsPipeline
     let tilePipeline: TilePipeline
     let globeTileTexturePipeline: TilePipeline
+    let globeVectorSurfacePipeline: TilePipeline
+    /// See `GlobeSurfaceRenderPath`; resolved once per renderer.
+    let globeSurfaceRenderPath: GlobeSurfaceRenderPath
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let globePipeline: GlobePipeline
@@ -120,6 +123,8 @@ final class RenderPersistentContext {
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline
         self.globeTileTexturePipeline = shared.globeTileTexturePipeline
+        self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
+        self.globeSurfaceRenderPath = GlobeSurfaceRenderPath.resolve()
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.globePipeline = shared.globePipeline

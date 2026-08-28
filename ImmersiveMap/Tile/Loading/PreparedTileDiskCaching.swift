@@ -557,7 +557,10 @@ final class PreparedTileDiskCaching {
     // and its street-palette blend under the same style fingerprint.
     // 74: the overview stroke bakes the per-class fade mask; v73 tiles carry
     // the opaque overview band.
-    static let preparedFormatVersion: UInt32 = 74
+    // 75: the ground geometry of tiles up to z9 is split on a grid of 64 to
+    // 1024 units by zoom so it can be drawn straight onto the sphere; v74
+    // tiles carry tile-spanning triangles that cut into the globe as chords.
+    static let preparedFormatVersion: UInt32 = 75
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

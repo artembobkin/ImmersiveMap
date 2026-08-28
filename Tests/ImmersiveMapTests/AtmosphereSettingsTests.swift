@@ -234,7 +234,11 @@ final class AtmosphereSettingsTests: XCTestCase {
     /// same tint. A surface path that forgot the uniform would leave a seam
     /// in the glow at the pole or under a still-loading tile.
     func testGlobeSurfacePlaceholderAndCapsShareTheAtmosphereGlow() throws {
+        // The shared surface shade lives in its own header (the tile
+        // geometry drawn on the sphere shares it too); the cap keeps its own
+        // call in Globe.metal.
         let source = try shaderSource("Render/Shaders/Globe/Globe.metal")
+            + shaderSource("Render/Shaders/Globe/GlobeSurfaceShading.h")
 
         XCTAssertEqual(source.components(separatedBy: "constant GlobeAtmosphere& atmosphere [[buffer(6)]]").count - 1, 3,
                        "The tiled surface, the placeholder fill and the cap each bind the atmosphere")

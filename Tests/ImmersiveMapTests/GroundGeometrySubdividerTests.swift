@@ -1,0 +1,122 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+@testable import ImmersiveMap
+import XCTest
+
+/// The grid split that lets coarse tile geometry follow the sphere: pieces
+/// stay within one cell, area and attributes survive, and shared edges split
+/// identically so no crack opens between neighbours.
+final class GroundGeometrySubdividerTests: XCTestCase {
+    func testStepFollowsTheTileZoom() {
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 0), 64)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 1), 64)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 2), 128)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 3), 128)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 4), 256)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 6), 512)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 9), 1024)
+        XCTAssertNil(GroundGeometrySubdivider.step(forTileZoom: 10),
+                     "From z10 the surface has unfurled: nothing is drawn on the sphere")
+    }
+
+    func testTileSpanningTriangleIsCutIntoCells() {
+        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
+                                                  indices: [0, 1, 2])
+        let step = 1024
+        let split = GroundGeometrySubdivider.subdivide(polygon, step: step)
+        XCTAssertGreaterThan(split.indices.count, polygon.indices.count)
+        XCTAssertEqual(split.indices.count % 3, 0)
+        let maximumEdge = Float(step) * Float(2).squareRoot() + 1
+        for triangle in stride(from: 0, to: split.indices.count, by: 3) {
+            for edge in 0..<3 {
+                let a = split.vertices[Int(split.indices[triangle + edge])]
+                let b = split.vertices[Int(split.indices[triangle + (edge + 1) % 3])]
+                let dx = Float(a.x) - Float(b.x)
+                let dy = Float(a.y) - Float(b.y)
+                XCTAssertLessThanOrEqual((dx * dx + dy * dy).squareRoot(), maximumEdge,
+                                         "Every edge must fit inside one grid cell")
+            }
+        }
+        XCTAssertEqual(signedArea(split), signedArea(polygon), accuracy: 1,
+                       "The pieces cover exactly the input triangle")
+    }
+
+    func testTriangleInsideOneCellPassesThroughUntouched() {
+        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(60, 20), SIMD2(30, 50)],
+                                                  indices: [0, 1, 2])
+        let split = GroundGeometrySubdivider.subdivide(polygon, step: 64)
+        XCTAssertEqual(split.vertices, polygon.vertices)
+        XCTAssertEqual(split.indices, polygon.indices)
+    }
+
+    func testAttributesInterpolateLinearlyAcrossASplit() {
+        // A ribbon quad across one grid line at x = 64: the distance field
+        // runs -127..127 across, the arc length 0..1000 along.
+        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
+                                                  indices: [0, 1, 2, 0, 2, 3],
+                                                  lineDistances: [-127, -127, 127, 127],
+                                                  lineParameters: [0, 1000, 1000, 0])
+        let split = GroundGeometrySubdivider.subdivide(polygon, step: 64)
+        XCTAssertEqual(split.lineDistances.count, split.vertices.count)
+        XCTAssertEqual(split.lineParameters.count, split.vertices.count)
+        let onTheLine = split.vertices.indices.filter { split.vertices[$0].x == 64 }
+        XCTAssertFalse(onTheLine.isEmpty)
+        for index in onTheLine {
+            XCTAssertEqual(split.lineParameters[index], 500, "Arc length halves at the middle of the quad")
+            // The field is -127 on the bottom edge, 127 on the top edge, and
+            // the diagonal's crossing sits halfway between them.
+            switch split.vertices[index].y {
+            case 0: XCTAssertEqual(split.lineDistances[index], -127)
+            case 10: XCTAssertEqual(split.lineDistances[index], 127)
+            case 5: XCTAssertEqual(split.lineDistances[index], 0)
+            default: XCTFail("Unexpected crossing at y = \(split.vertices[index].y)")
+            }
+        }
+    }
+
+    func testSharedEdgesSplitIdentically() {
+        // Two triangles sharing the diagonal (0,0)-(128,128), listed in
+        // opposite directions: the crossing with x = 64 must be one vertex.
+        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 128), SIMD2(0, 128)],
+                                                  indices: [0, 1, 2, 2, 3, 0])
+        let split = GroundGeometrySubdivider.subdivide(polygon, step: 64)
+        let onDiagonal = split.vertices.filter { $0.x == 64 && $0.y == 64 }
+        XCTAssertEqual(onDiagonal.count, 1, "The diagonal's crossing is shared, not duplicated")
+        XCTAssertEqual(signedArea(split), signedArea(polygon), accuracy: 1)
+    }
+
+    func testWindingIsPreserved() {
+        let counterClockwise = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(200, 0), SIMD2(0, 200)],
+                                                           indices: [0, 1, 2])
+        let split = GroundGeometrySubdivider.subdivide(counterClockwise, step: 64)
+        for triangle in stride(from: 0, to: split.indices.count, by: 3) {
+            let a = split.vertices[Int(split.indices[triangle])]
+            let b = split.vertices[Int(split.indices[triangle + 1])]
+            let c = split.vertices[Int(split.indices[triangle + 2])]
+            let cross = (Float(b.x) - Float(a.x)) * (Float(c.y) - Float(a.y))
+                - (Float(b.y) - Float(a.y)) * (Float(c.x) - Float(a.x))
+            XCTAssertGreaterThan(cross, 0, "Every piece keeps the input's counter-clockwise winding")
+        }
+    }
+
+    func testCoordinatesBeyondTheTileAreTolerated() {
+        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(-40, -40), SIMD2(4140, -40), SIMD2(-40, 4140)],
+                                                  indices: [0, 1, 2])
+        let split = GroundGeometrySubdivider.subdivide(polygon, step: 1024)
+        XCTAssertEqual(signedArea(split), signedArea(polygon), accuracy: 1)
+        XCTAssertTrue(split.vertices.contains { $0.x < 0 }, "The stitching margin survives")
+    }
+
+    private func signedArea(_ polygon: TileMvtParser.ParsedPolygon) -> Double {
+        var area = 0.0
+        for triangle in stride(from: 0, to: polygon.indices.count, by: 3) {
+            let a = polygon.vertices[Int(polygon.indices[triangle])]
+            let b = polygon.vertices[Int(polygon.indices[triangle + 1])]
+            let c = polygon.vertices[Int(polygon.indices[triangle + 2])]
+            area += (Double(b.x) - Double(a.x)) * (Double(c.y) - Double(a.y))
+                - (Double(b.y) - Double(a.y)) * (Double(c.x) - Double(a.x))
+        }
+        return area / 2
+    }
+}

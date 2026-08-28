@@ -16,7 +16,7 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.dashInTileUnits), 20,
                        "The flag is the sixth float, the slot that was reserved0")
 
-        let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let source = try shaderSource("Render/Tiles/Shaders/TileShading.h")
         // Field order in the mirror struct: the flag follows minimumWidthPoints.
         let structRange = try XCTUnwrap(source.range(of: "struct LineStyle {"))
         let body = source[structRange.upperBound...]
@@ -32,15 +32,19 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
     }
 
     func testShaderSkipsThePointConversionForWorldLockedDashes() throws {
-        let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let shared = try shaderSource("Render/Tiles/Shaders/TileShading.h")
         // The unit scale is 1 for a world-locked pattern and the draw's
         // unitsPerPoint otherwise; both dash and gap must use it.
-        XCTAssertTrue(source.contains("dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint"))
-        XCTAssertTrue(source.contains("float dashUnits = float(dashLengthPoints) * unitScale;"))
-        XCTAssertTrue(source.contains("float gapUnits = float(lineStyle.w) * unitScale;"))
-        // The flag travels vertex to fragment.
-        XCTAssertTrue(source.contains("out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;"))
-        XCTAssertTrue(source.contains("in.lineDashInTileUnits,"))
+        XCTAssertTrue(shared.contains("dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint"))
+        XCTAssertTrue(shared.contains("float dashUnits = float(dashLengthPoints) * unitScale;"))
+        XCTAssertTrue(shared.contains("float gapUnits = float(lineStyle.w) * unitScale;"))
+        // The flag travels vertex to fragment, on the plane and on the sphere.
+        XCTAssertTrue(shared.contains("out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;"))
+        for shader in ["Render/Tiles/Shaders/Tile.metal", "Render/Tiles/Shaders/TileSphere.metal"] {
+            let source = try shaderSource(shader)
+            XCTAssertTrue(source.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"), shader)
+            XCTAssertTrue(source.contains("style.lineDashInTileUnits = in.lineDashInTileUnits;"), shader)
+        }
     }
 
     func testParserBakesTheFlagIntoTheGPUStyle() {

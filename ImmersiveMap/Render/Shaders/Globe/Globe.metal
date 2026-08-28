@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "GlobeTransitionProjection.h"
+#include "GlobeSurfaceShading.h"
 #include "../Shared/AtlasSampling.h"
 
 // Add necessary structures for transformation and rendering
@@ -278,108 +279,6 @@ static half3 globeCapEdgeRowMean(texture2d<half> texture,
     return count > 0.0h ? sum / count : half3(0.0h);
 }
 
-/// The atmosphere's glow on the sphere toward the limb. `facing` is how far the
-/// surface turns away from the view (0 face-on, 1 at the limb): the air over
-/// it thickens with the angle, so the surface lifts toward the atmosphere tint,
-/// and in the last sliver before the edge toward white, where the scattering
-/// saturates. Additive, so a dark night side still shows a thin lit rim, and
-/// weighted by the atmosphere intensity, which is zero when it is off. The
-/// halo painted in space (Atmosphere.metal) continues this from the limb
-/// outward, from the same tint, so the edge reads as one thing.
-static inline half3 globeAtmosphereSurfaceGlow(half facing,
-                                               constant GlobeAtmosphere& atmosphere) {
-    half rim = pow(facing, 2.6h);
-    half edge = pow(facing, 9.0h);
-    half3 glow = half3(atmosphere.color) * rim * 0.40h + half3(1.0h) * edge * 0.24h;
-    return glow * half(atmosphere.intensity);
-}
-
-/// The colour of the surface seen whole from space, by `depth` (1 up to
-/// zoom 1, 0 by zoom 2, see GlobeSurfaceToneUniform.swift). The tile palette
-/// is a flat cartographic one, pale so labels read over it up close; on the
-/// small sphere it reads as an atlas wrapped on a ball. A planet seen through
-/// its whole air column is the opposite of vivid: the colours are muted and
-/// darker in the midtones (a dark sea, olive land), and the lit disc rounds
-/// off toward the limb with the view angle before the atmosphere brightens
-/// the rim. So: desaturate a little around the luma, deepen the midtones
-/// with a power curve (white stays white),
-/// then fall off with `facing`, the cosine of the view angle (1 face-on, 0 at
-/// the limb). Applied to the bare sampled colour, before the day/night
-/// shading and the additive limb glow, so the night side and the rim keep
-/// their own look on top. At depth 0 the colour passes through exactly.
-static inline half3 globeSurfaceDeepen(half3 color, half facing, constant GlobeSurfaceTone& tone) {
-    half depth = clamp(half(tone.depth), 0.0h, 1.0h);
-    if (depth <= 0.0h) {
-        return color;
-    }
-    half luma = dot(color, half3(0.299h, 0.587h, 0.114h));
-    // A light mute only: a heavier one turned the deserts grey. No blue cast:
-    // the atmosphere's rim glow already lays all the blue the disc can take,
-    // and a cast on top of it read as a blue planet.
-    half3 muted = mix(color, half3(luma), 0.12h * depth);
-    half3 deepened = pow(clamp(muted, 0.0h, 1.0h), half3(1.0h + 0.35h * depth));
-    half rounding = mix(0.55h, 1.0h, pow(clamp(facing, 0.0h, 1.0h), 0.6h));
-    return deepened * mix(1.0h, rounding, depth);
-}
-
-/// Everything the globe surface does to a sampled color: day/night shading, the
-/// limb glow, and the haze that hides the seam at the surface swap. Shared so
-/// the placeholder fill below is lit exactly like the tiles that replace it,
-/// and a tile arriving over it changes only the texture, never the shading.
-/// Unit-range shading runs in half; view direction and fog distances stay
-/// float because they run on world positions.
-static inline half4 globeSurfaceShade(half4 color,
-                                      VertexOut in,
-                                      constant Camera& camera,
-                                      constant EarthScene& earthScene,
-                                      constant HorizonFog& horizonFog,
-                                      constant GlobeAtmosphere& atmosphere,
-                                      constant GlobeSurfaceTone& tone) {
-    half transition = half(in.transition);
-    float3 viewDir = normalize(camera.eye - in.worldPos);
-    half facingDot = half(dot(in.normal, viewDir));
-    color.rgb = globeSurfaceDeepen(color.rgb, facingDot, tone);
-    if (earthScene.isEnabled != 0) {
-        half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
-        half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);
-        half dayFactor = smoothstep(-terminatorFadeWidth,
-                                    terminatorFadeWidth,
-                                    sunDot);
-        half dayBrightness = mix(half(earthScene.daySideMinimumBrightness), 1.0h, dayFactor);
-        half surfaceBrightness = mix(half(earthScene.nightSideBrightness), dayBrightness, dayFactor);
-        surfaceBrightness = mix(surfaceBrightness, 1.0h, transition);
-        surfaceBrightness = mix(surfaceBrightness, 1.0h, half(earthScene.sunShadowFade));
-        color.rgb *= surfaceBrightness;
-        // Rim light: with the sun behind the planet its last sliver of day
-        // lies along the limb, and the air there scatters the low sun forward
-        // into a warm edge (the planet joins the lit ring in space rather
-        // than sitting as a dark disc under it). Confined to the limb and to
-        // the band just past the terminator, so a face-on day side is not
-        // tinted, and it goes with the terminator and the unfurl.
-        // It is forward scattering, so it needs the sun on the far side of
-        // the air from the eye: with the sun behind the camera the whole limb
-        // has the same grazing angle and would bloom all the way round.
-        half rim = pow(max(0.0h, 1.0h - facingDot), 4.0h);
-        half dawnBand = smoothstep(-0.10h, 0.12h, sunDot) * (1.0h - smoothstep(0.30h, 0.70h, sunDot));
-        half forward = smoothstep(0.0h, 0.45h, half(-dot(atmosphere.sunDirection, viewDir)));
-        half rimLight = rim * dawnBand * forward
-            * (1.0h - half(earthScene.sunShadowFade))
-            * (1.0h - transition)
-            * half(atmosphere.intensity);
-        color.rgb += half3(1.0h, 0.80h, 0.55h) * rimLight * 0.7h;
-    }
-
-    half facing = max(0.0h, 1.0h - facingDot);
-    // The glow belongs to the sphere: it fades with the unfurl, since a plane
-    // has no limb for the air to thicken toward.
-    color.rgb += globeAtmosphereSurfaceGlow(facing, atmosphere) * (1.0h - transition);
-    // The haze is gated by the transition phase (strength = transition): a pure
-    // globe in space stays fog-free, and by the moment the surfaces swap, the
-    // morph and the plane are fogged identically - the horizon-line seam is hidden.
-    color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
-    return color;
-}
-
 fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
                                    texture2d<half> texture [[texture(0)]],
                                    constant Camera& camera [[buffer(1)]],
@@ -397,7 +296,8 @@ fragment half4 globeFragmentShader(VertexOut in [[stage_in]],
     }
 
     return globeSurfaceShade(texture.sample(textureSampler, coords.uv, level(coords.lod)),
-                             in, camera, earthScene, horizonFog, atmosphere, tone);
+                             in.worldPos, in.normal, in.earthNormal, in.transition,
+                             camera, earthScene, horizonFog, atmosphere, tone);
 }
 
 /// A blank tile in the map's own background color, drawn into every visible
@@ -418,7 +318,8 @@ fragment half4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
                                                      constant float4& fillColor [[buffer(5)]],
                                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]],
                                                      constant GlobeSurfaceTone& tone [[buffer(7)]]) {
-    return globeSurfaceShade(half4(fillColor), in, camera, earthScene, horizonFog, atmosphere, tone);
+    return globeSurfaceShade(half4(fillColor), in.worldPos, in.normal, in.earthNormal, in.transition,
+                             camera, earthScene, horizonFog, atmosphere, tone);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],

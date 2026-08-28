@@ -31,6 +31,7 @@ final class SharedRenderResourcesTests: XCTestCase {
         XCTAssertTrue(first.poiSpriteAtlas === second.poiSpriteAtlas)
         XCTAssertTrue(first.tilePipeline === second.tilePipeline)
         XCTAssertTrue(first.globeTileTexturePipeline === second.globeTileTexturePipeline)
+        XCTAssertTrue(first.globeVectorSurfacePipeline === second.globeVectorSurfacePipeline)
         XCTAssertTrue(first.extrudedTilePipeline === second.extrudedTilePipeline)
         XCTAssertTrue(first.sceneModelPipeline === second.sceneModelPipeline)
         XCTAssertTrue(first.tilePointScreenPipelines === second.tilePointScreenPipelines)

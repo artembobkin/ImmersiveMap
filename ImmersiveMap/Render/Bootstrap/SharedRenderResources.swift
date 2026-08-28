@@ -75,6 +75,8 @@ final class SharedRenderResources {
     let polygonPipeline: PolygonsPipeline
     let tilePipeline: TilePipeline
     let globeTileTexturePipeline: TilePipeline
+    /// The tile geometry drawn straight onto the sphere in the world pass.
+    let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let globePipeline: GlobePipeline
@@ -139,6 +141,7 @@ final class SharedRenderResources {
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
         self.globeTileTexturePipeline = compiled.globeTileTexturePipeline
+        self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.globePipeline = compiled.globePipeline
@@ -168,6 +171,7 @@ final class SharedRenderResources {
         let polygonPipeline: PolygonsPipeline
         let tilePipeline: TilePipeline
         let globeTileTexturePipeline: TilePipeline
+        let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let globePipeline: GlobePipeline
@@ -202,6 +206,7 @@ final class SharedRenderResources {
         var polygonPipeline: PolygonsPipeline?
         var tilePipeline: TilePipeline?
         var globeTileTexturePipeline: TilePipeline?
+        var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var globePipeline: GlobePipeline?
@@ -251,6 +256,11 @@ final class SharedRenderResources {
             { globeTileTexturePipeline = TilePipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library) },
+            { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
+                                                        pixelFormat: pixelFormat,
+                                                        library: library,
+                                                        sampleCount: sampleCount,
+                                                        surface: .sphere) },
             { globePipeline = GlobePipeline(metalDevice: device,
                                             pixelFormat: pixelFormat,
                                             library: library,
@@ -290,6 +300,7 @@ final class SharedRenderResources {
             polygonPipeline: polygonPipeline!,
             tilePipeline: tilePipeline!,
             globeTileTexturePipeline: globeTileTexturePipeline!,
+            globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             globePipeline: globePipeline!,

@@ -39,3 +39,4 @@ DerivedData/
 Documentation/notes/
 # Performance bench runs: per-machine numbers, regenerated on demand.
 /Tools/PerformanceBench/Output/
+__pycache__/

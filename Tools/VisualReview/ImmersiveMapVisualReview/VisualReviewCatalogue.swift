@@ -209,6 +209,13 @@ enum VisualReviewCatalogue {
         static let wholePlanet = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                             longitudeDegrees: 10.0,
                                                             zoom: 0)
+        /// Pitched over the Gulf of Guinea so the West African and South
+        /// American coastlines run out to the limb on both sides.
+        static let globeLimb = ImmersiveMapCameraPosition(latitudeDegrees: 5.0,
+                                                          longitudeDegrees: -10.0,
+                                                          zoom: 1.5,
+                                                          bearing: 0.4,
+                                                          pitch: 0.6)
         // At `equinoxNoon` the sun stands over longitude -2: these two put it
         // just behind the limb and straight behind the planet.
         static let sunBehindLimb = ImmersiveMapCameraPosition(latitudeDegrees: 0.0,
@@ -379,8 +386,8 @@ enum VisualReviewCatalogue {
             id: "lines.globe.borders",
             title: "Country borders on the globe",
             lookFor: """
-            Thin lines on the sphere, where the atlas has no MSAA and only the \
-            analytic antialiasing keeps their edges. Border dashes should read \
+            Thin lines on the sphere, drawn as geometry with the analytic \
+            antialiasing plus the world pass MSAA. Border dashes should read \
             as clean, evenly spaced dashes with soft edges and softened cut \
             ends, not dots or a smeared quasi-solid line, and the line should \
             hold one width along its length instead of rippling. The width is \
@@ -393,6 +400,21 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.easternEurope)),
+
+        VisualReviewScenario(
+            id: "globe.vector.limb",
+            title: "Coastlines to the limb of the globe",
+            lookFor: """
+            The tiles are drawn as geometry on the sphere. Coastlines and \
+            landcover must run all the way out to the limb with no ring of \
+            blank map colour inside the edge of the planet and no moire or \
+            shimmer where the surface compresses toward the horizon. No \
+            hairlines along tile borders, and no sliver where a coarser tile \
+            meets a finer one. The limb itself stays a clean circle under the \
+            atmosphere; nothing of the far side shows through near the edge.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.globeLimb)),
 
         VisualReviewScenario(
             id: "landcover.overview.plain",

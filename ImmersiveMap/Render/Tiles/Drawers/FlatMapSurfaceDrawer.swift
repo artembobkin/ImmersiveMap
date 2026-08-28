@@ -5,24 +5,6 @@ import Metal
 import simd
 
 enum FlatMapSurfaceDrawer {
-    private struct TileOverviewFadeUniform {
-        var overviewAlpha: Float
-        var roadAlpha: Float
-        var landuseAlpha: Float
-        /// Converts the per-style point-locked line widths into the pixels the
-        /// shader's coverage math runs in.
-        var pixelsPerPoint: Float
-        /// See `LowZoomOverviewFade.roadSurfaceBlend`.
-        var roadSurfaceBlend: Float
-        /// See `LowZoomOverviewFade.roadMarkingAlpha`: road markings come in
-        /// over their own camera-zoom band, above the one the carriageway
-        /// widths morph over.
-        var roadMarkingAlpha: Float
-        /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
-        /// per-class road fade is evaluated against.
-        var cameraZoom: Float
-    }
-
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
@@ -138,13 +120,6 @@ enum FlatMapSurfaceDrawer {
         }
     }
 
-    private struct LineDashUniform {
-        var unitsPerPoint: Float
-    }
-
-    private struct StreetPaletteUniform {
-        var blend: Float
-    }
 
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,

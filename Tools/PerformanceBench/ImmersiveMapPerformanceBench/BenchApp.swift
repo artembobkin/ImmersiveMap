@@ -10,7 +10,7 @@ import UIKit
 /// exits; the driver script launches it once per combination and collects
 /// the JSON it prints. Launch environment:
 ///
-/// - `BENCH_ENGINE`: `immersivemap` (default), `immersivemap-noshadows`, `immersivemap-lean`,
+/// - `BENCH_ENGINE`: `immersivemap` (default), `immersivemap-noshadows`, `immersivemap-lean`, `immersivemap-atlas`,
 ///   `mapbox-standard`, `mapbox-standard-msaa4` (4x MSAA, matching ImmersiveMap's world pass), `mapbox-streets`
 /// - `BENCH_CACHE`: `warm` (default) or `cold` (disk caches cleared before the map is made)
 /// - `BENCH_FPS`: display rate to request, default 120

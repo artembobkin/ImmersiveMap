@@ -20,6 +20,10 @@ enum RenderLayer: String, CaseIterable {
     /// paints over and the surface that paints over it.
     case atmosphere
     case globeSurface
+    /// The tile geometry of the globe drawn straight onto the sphere, over
+    /// the placeholder grid the `globeSurface` layer painted (and whose depth
+    /// it wrote); see `GlobeVectorSurfaceRenderSubsystem`.
+    case globeVectorSurface
     case globeCap
     case flatMapSurface
     case buildingExtrusion
@@ -83,7 +87,7 @@ struct RenderLayerPlanner {
         case .flat:
             [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            [.starfield, .atmosphere, .globeSurface, .globeCap, .sceneModels, .routes]
+            [.starfield, .atmosphere, .globeSurface, .globeVectorSurface, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in

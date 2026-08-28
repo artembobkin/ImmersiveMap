@@ -29,13 +29,23 @@ final class TileAtlasSubsystem: RenderSubsystem {
     private var tileAtlasDebugSummary: TileAtlasDebugSummary?
     private var pageRetention = TileAtlasPageRetention()
 
+    private let renderPath: GlobeSurfaceRenderPath
+
     init(tilesTexture: TileAtlasTexture,
-         tileTraceRecorder: TileTraceRecorder) {
+         tileTraceRecorder: TileTraceRecorder,
+         renderPath: GlobeSurfaceRenderPath = .vector) {
         self.tilesTexture = tilesTexture
         self.tileTraceRecorder = tileTraceRecorder
+        self.renderPath = renderPath
     }
 
     func update(frameContext: FrameContext) {
+        // On the vector path the surface is drawn from the tile geometry and
+        // the atlas is never filled: no plan, no pages, nothing to re-bake.
+        guard renderPath == .atlas else {
+            frameContext.sharedState.tileAtlasDebugSummary = nil
+            return
+        }
         releaseStalePagesIfNeeded(frameContext: frameContext)
 
         let tilePlacementState = frameContext.sharedState.tilePlacementState
@@ -74,7 +84,7 @@ final class TileAtlasSubsystem: RenderSubsystem {
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
-        guard globeTextureVersionTracker.hasPendingChange else {
+        guard renderPath == .atlas, globeTextureVersionTracker.hasPendingChange else {
             return
         }
         guard let commandBuffer = frameContext.commandBuffer else {

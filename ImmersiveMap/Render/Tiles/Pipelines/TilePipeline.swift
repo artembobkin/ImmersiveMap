@@ -4,6 +4,15 @@
 import MetalKit
 
 class TilePipeline {
+    /// Which surface the pipeline draws tiles onto. The flat one projects
+    /// through a model matrix into the plane (Tile.metal); the sphere one
+    /// projects tile-local positions onto the globe through the surface
+    /// morph (TileSphere.metal). Same vertex format, styles and blending.
+    enum Surface {
+        case flat
+        case sphere
+    }
+
     let pipelineState: MTLRenderPipelineState
     /// Variant for the framebuffer-fetch world pass (Apple GPUs, nil
     /// elsewhere): identical, but declares the pass's second building
@@ -20,12 +29,21 @@ class TilePipeline {
          library: MTLLibrary,
          sampleCount: Int = 1,
          supportsFramebufferFetch: Bool = false,
-         readsGroundShadowMask: Bool = false) {
-        let vertexFunction = library.makeFunction(name: "tileVertexShader")
-        let constantValues = MTLFunctionConstantValues()
-        var readsMask = readsGroundShadowMask
-        constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
-        let fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
+         readsGroundShadowMask: Bool = false,
+         surface: Surface = .flat) {
+        let vertexFunction: MTLFunction?
+        let fragmentFunction: MTLFunction?
+        switch surface {
+        case .flat:
+            vertexFunction = library.makeFunction(name: "tileVertexShader")
+            let constantValues = MTLFunctionConstantValues()
+            var readsMask = readsGroundShadowMask
+            constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
+            fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
+        case .sphere:
+            vertexFunction = library.makeFunction(name: "tileSphereVertexShader")
+            fragmentFunction = library.makeFunction(name: "tileSphereFragmentShader")
+        }
         
         let vertexDescriptor = MTLVertexDescriptor()
         vertexDescriptor.attributes[0].format = .short2
@@ -65,7 +83,7 @@ class TilePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
-        if supportsFramebufferFetch {
+        if supportsFramebufferFetch, surface == .flat {
             pipelineDescriptor.colorAttachments[1].pixelFormat = pixelFormat
             pipelineDescriptor.colorAttachments[1].writeMask = []
             self.withBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)

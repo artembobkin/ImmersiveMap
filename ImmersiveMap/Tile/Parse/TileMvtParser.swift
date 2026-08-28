@@ -1750,6 +1750,10 @@ class TileMvtParser {
         
         addBackground(polygonByStyle: &polygonByStyle, styles: &styles, tile: tile)
         if config.tiles.parsing.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }
+        // The ground of a coarse tile is drawn straight onto the sphere:
+        // split its triangles so their chords stay under a pixel of the
+        // true surface (see GroundGeometrySubdivider).
+        GroundGeometrySubdivider.subdivideIfNeeded(&polygonByStyle, tileZoom: tile.z)
 
         let resolvedBuildingExtrusions = resolveExteriorBuildingExtrusions(buildingExtrusionCandidates)
         for candidate in resolvedBuildingExtrusions {

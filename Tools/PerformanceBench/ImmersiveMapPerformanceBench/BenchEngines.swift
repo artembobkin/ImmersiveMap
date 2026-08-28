@@ -32,6 +32,10 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         /// Shadows and the atmosphere halo off: the cheapest frame the
         /// public settings allow without changing what is drawn.
         case lean = "immersivemap-lean"
+        /// The globe drawn from the raster tile atlas instead of the tile
+        /// geometry on the sphere (the engine's internal switch, read from
+        /// the environment when the renderer is created).
+        case atlasGlobe = "immersivemap-atlas"
     }
 
     let name: String
@@ -44,6 +48,9 @@ final class ImmersiveMapBenchEngine: BenchEngine {
 
     init(targetFPS: Int, coldCache: Bool, variant: Variant = .standard) {
         name = variant.rawValue
+        if variant == .atlasGlobe {
+            setenv("IMMERSIVEMAP_GLOBE_SURFACE_PATH", "atlas", 1)
+        }
         version = ImmersiveMapBenchEngine.packageVersion()
         let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: false,
                                                                  interactionFramesPerSecond: targetFPS,
@@ -61,6 +68,8 @@ final class ImmersiveMapBenchEngine: BenchEngine {
             map = map.shadows(isEnabled: false)
         case .lean:
             map = map.shadows(isEnabled: false).atmosphere(isEnabled: false)
+        case .atlasGlobe:
+            break
         }
         let rootView = map.ignoresSafeArea()
         host = UIHostingController(rootView: AnyView(rootView))

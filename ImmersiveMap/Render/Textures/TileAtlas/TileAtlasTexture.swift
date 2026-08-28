@@ -4,32 +4,6 @@
 import MetalKit
 
 class TileAtlasTexture {
-    private struct TileOverviewFadeUniform {
-        var overviewAlpha: Float
-        var roadAlpha: Float
-        var landuseAlpha: Float
-        /// Converts point-locked line widths into raster units. The atlas
-        /// rasterizes in atlas texels, and the placement sizes a slot to the
-        /// tile's device-pixel screen footprint, so a texel approximates a
-        /// device pixel and the same conversion holds.
-        var pixelsPerPoint: Float
-        /// The atlas serves overview zooms, where every road is a symbol.
-        var roadSurfaceBlend: Float = 0
-        /// and where no road is painted yet.
-        var roadMarkingAlpha: Float = 0
-        /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
-        /// per-class road fade is evaluated against.
-        var cameraZoom: Float = 0
-    }
-
-    private struct LineDashUniform {
-        var unitsPerPoint: Float
-    }
-
-    private struct StreetPaletteUniform {
-        var blend: Float
-    }
-
     struct TileData {
         let position: simd_int1
         let textureSize: simd_int1
@@ -82,7 +56,8 @@ class TileAtlasTexture {
     private var activeFadeUniform = TileOverviewFadeUniform(overviewAlpha: 1,
                                                             roadAlpha: 1,
                                                             landuseAlpha: 1,
-                                                            pixelsPerPoint: 1)
+                                                            pixelsPerPoint: 1,
+                                                            cameraZoom: 0)
     private var activeLineWidthZoomTaper: Float = 1.0
     /// Per-encode context for the dash anchor (see LineDashNominalScale):
     /// the raw point-to-pixel scale, the drawable height, and the world size
