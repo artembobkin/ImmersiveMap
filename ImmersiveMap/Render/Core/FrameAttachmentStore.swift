@@ -289,12 +289,15 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// The ground shadow mask: one 8-bit factor per drawable pixel, written
-    /// by the mask pass and read by the flat ground layers of the world pass.
-    /// Single-sample and readable, so `.private` (never memoryless).
+    /// The ground shadow mask: one 8-bit factor per mask pixel (half the
+    /// drawable's resolution, see `GroundShadowMaskPipeline.resolutionScale`),
+    /// written by the mask pass and sampled by the flat ground layers of the
+    /// world pass. Single-sample and readable, so `.private` (never
+    /// memoryless).
     func ensureGroundShadowMaskTexture(drawSize: CGSize) -> MTLTexture? {
-        let width = Int(drawSize.width)
-        let height = Int(drawSize.height)
+        let maskSize = GroundShadowMaskPipeline.maskSize(for: drawSize)
+        let width = Int(maskSize.width)
+        let height = Int(maskSize.height)
         guard width > 0, height > 0 else { return nil }
 
         if let groundShadowMaskTexture,

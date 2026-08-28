@@ -39,9 +39,13 @@ final class GroundShadowMaskRenderSubsystem: RenderSubsystem {
         pipeline.select(renderEncoder: encoder)
         encoder.setDepthStencilState(depthDisabledState)
         encoder.setCullMode(.none)
+        // The pass rasterizes at the mask's own size; the shader maps its
+        // pixel back through that size, so the rays land on the same ground
+        // points the drawable's pixels would.
+        let maskSize = GroundShadowMaskPipeline.maskSize(for: frameContext.drawSize)
         var maskUniform = GroundShadowMaskUniform(
             projectionView: frameContext.cameraMatrices.projectionView,
-            viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
+            viewportSize: SIMD2<Float>(Float(maskSize.width), Float(maskSize.height))
         )
         var shadowUniform = shadowState.shadowUniform
         encoder.setFragmentBytes(&maskUniform, length: MemoryLayout<GroundShadowMaskUniform>.stride, index: 0)

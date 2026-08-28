@@ -13,6 +13,11 @@ using namespace metal;
 // reads (the other argument is compiled out and needs no binding).
 constant bool kGroundShadowMaskEnabled [[function_constant(0)]];
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
+// Mask pixels per drawable pixel; mirrors
+// GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
+// at the pixel's position scaled by this, so a half-size mask upsamples
+// smoothly instead of blocking.
+constant float kGroundShadowMaskScale = 0.5;
 
 // Add necessary structures for transformation and rendering
 struct VertexIn {
@@ -295,15 +300,16 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
                                   depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                  texture2d<half, access::read> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+                                  texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     float shadowFactor;
     if (kGroundShadowMaskEnabled) {
-        // One read of the per-pixel mask instead of a cascade lookup in every
+        // One bilinear tap of the mask instead of a cascade lookup in every
         // ground layer; the strength guard mirrors sampleShadowFactor's, so a
-        // frame without the mask pass (shadows off, no casters) never reads
-        // the 1x1 fallback out of bounds.
+        // frame without the mask pass (shadows off, no casters) never samples
+        // the 1x1 fallback.
+        constexpr sampler maskSampler(coord::pixel, filter::linear, address::clamp_to_edge);
         shadowFactor = shadow.strength > 0.0
-            ? float(groundShadowMask.read(uint2(in.position.xy)).r)
+            ? float(groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r)
             : 1.0;
     } else {
         shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));

@@ -54,6 +54,14 @@ final class ShadowUniformLayoutTests: XCTestCase {
         XCTAssertEqual(uniform.viewportSize, SIMD2<Float>(1290, 2796))
     }
 
+    func testGroundShadowMaskSizeCoversTheDrawable() {
+        XCTAssertEqual(GroundShadowMaskPipeline.maskSize(for: CGSize(width: 1290, height: 2796)),
+                       CGSize(width: 645, height: 1398))
+        XCTAssertEqual(GroundShadowMaskPipeline.maskSize(for: CGSize(width: 1291, height: 2797)),
+                       CGSize(width: 646, height: 1399),
+                       "An odd drawable rounds the mask up so no drawable pixel maps past its edge")
+    }
+
     func testCasterUniformMatchesMetalLayout() {
         XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.stride, 192)
         XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.offset(of: \.near), 0)

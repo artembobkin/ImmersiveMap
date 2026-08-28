@@ -44,9 +44,11 @@ final class TileClipDistanceContractTests: XCTestCase {
     func testGroundShaderReadsTheGroundShadowMaskBehindAFunctionConstant() throws {
         let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
         XCTAssertTrue(source.contains("constant bool kGroundShadowMaskEnabled [[function_constant(0)]];"))
-        XCTAssertTrue(source.contains("texture2d<half, access::read> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]"))
+        XCTAssertTrue(source.contains("texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]"))
         XCTAssertTrue(source.contains("depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]]"))
-        XCTAssertTrue(source.contains("groundShadowMask.read(uint2(in.position.xy)).r"))
+        XCTAssertTrue(source.contains("groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r"))
+        XCTAssertTrue(source.contains("constant float kGroundShadowMaskScale = \(GroundShadowMaskPipeline.resolutionScale);"),
+                      "The shader's mask scale must mirror GroundShadowMaskPipeline.resolutionScale")
         let mask = try shaderSource("Render/Tiles/Shaders/GroundShadowMask.metal")
         XCTAssertTrue(mask.contains("fragment half groundShadowMaskFragmentShader("))
         XCTAssertTrue(mask.contains("sampleShadowFactor(shadow, shadowMap, worldPosition, float3(0.0))"),
