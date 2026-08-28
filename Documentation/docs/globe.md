@@ -24,6 +24,10 @@ The window is widened by latitude. A Mercator plane stretches by `1/cos(latitude
 
 Both a `GlobeRenderState` and a `FlatRenderState` are produced on every frame regardless of the transition value; what changes is how the shaders blend them and which layers the frame graph runs.
 
+## How the sphere is drawn
+
+The globe is drawn from the same vector tiles as the plane. Every visible tile's ground geometry is projected onto the sphere in the vertex shader, through the same surface morph the placeholder grid under it uses, lit by the same globe shading and clipped at the horizon geometrically; nothing is rasterized into an intermediate texture, so zooming re-bakes nothing and coastlines and borders are drawn at the screen's own density with analytic antialiasing plus the world pass's MSAA. Coarse tiles have their large triangles split by the parser so they follow the curvature instead of cutting through the sphere as chords. The polar caps beyond the Mercator edge take their colour from a thin strip baked from the last tile rows, so a pole painted white by the low-zoom land cover, or blue by open water at a closer zoom, continues what the tiles around it show.
+
 ## What is globe-only and what is flat-only
 
 | Feature | Where it draws |

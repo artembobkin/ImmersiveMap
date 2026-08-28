@@ -81,7 +81,8 @@ enum RenderGraphFactory {
                                                                             debugOverlayControls: debugOverlayControls)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,
-                                                        globeCapRenderer: context.globeCapRenderer)
+                                                        globeCapRenderer: context.globeCapRenderer,
+                                                        edgeStrip: context.globeCapEdgeStrip)
         let debugSubsystem = DebugOverlayRenderSubsystem(polygonPipeline: context.polygonPipeline,
                                                          debugOverlayRenderer: context.debugOverlayRenderer,
                                                          textRenderer: context.textRenderer,

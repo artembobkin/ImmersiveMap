@@ -31,6 +31,8 @@ final class RenderPersistentContext {
     // MARK: - Scene Resources
 
     let globeCapRenderer: GlobeCapRenderer
+    /// The caps' rim colour, baked per view from its own placements.
+    let globeCapEdgeStrip: GlobeCapEdgeStrip
     let starfieldRenderer: StarfieldRenderer
     let atmosphereRenderer: AtmosphereRenderer
     let mapSurfaceGridBuffers: MapSurfaceGridBuffers
@@ -144,6 +146,10 @@ final class RenderPersistentContext {
         self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  mapBaseColors: mapBaseColors)
+        self.globeCapEdgeStrip = GlobeCapEdgeStrip(metalDevice: metal.device,
+                                                   pipeline: globeTileTexturePipeline,
+                                                   shadowFallbackTexture: shadowFallbackTexture,
+                                                   depthState: shared.depthDisabledState)
         self.textRenderer = shared.textRenderer
         self.poiSpriteAtlas = shared.poiSpriteAtlas
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,

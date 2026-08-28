@@ -78,7 +78,9 @@ final class GlobeCapRenderer {
               globe: GlobeUniform,
               earthScene: EarthSceneUniform,
               atmosphere: GlobeAtmosphereUniform,
-              tone: GlobeSurfaceToneUniform) {
+              tone: GlobeSurfaceToneUniform,
+              edgeStrip: GlobeCapEdgeStrip,
+              stripUniform: (GlobeCapPole) -> GlobeCapStripUniform) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
         // Cap winding differs from the globe tile mesh after geographic-latitude
         // alignment, so disabling culling keeps the patch visible on both poles.
@@ -95,8 +97,15 @@ final class GlobeCapRenderer {
         renderEncoder.setFragmentBytes(&atmosphere, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 6)
         renderEncoder.setFragmentBytes(&tone, length: MemoryLayout<GlobeSurfaceToneUniform>.stride, index: 7)
 
-        drawNorthCap(renderEncoder: renderEncoder)
-        drawSouthCap(renderEncoder: renderEncoder)
+        for pole in GlobeCapPole.allCases {
+            var strip = stripUniform(pole)
+            renderEncoder.setFragmentTexture(edgeStrip.texture(for: pole), index: 0)
+            renderEncoder.setFragmentBytes(&strip, length: MemoryLayout<GlobeCapStripUniform>.stride, index: 3)
+            switch pole {
+            case .north: drawNorthCap(renderEncoder: renderEncoder)
+            case .south: drawSouthCap(renderEncoder: renderEncoder)
+            }
+        }
     }
 
     static func makePalette(mapBaseColors: ImmersiveMapBaseColors,

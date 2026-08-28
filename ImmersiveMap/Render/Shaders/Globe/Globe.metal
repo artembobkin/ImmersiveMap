@@ -41,6 +41,18 @@ struct CapParams {
     float blendEndAbsLatitude;
 };
 
+/// How a cap reads its edge strip (GlobeCapEdgeStrip: the tiles' polar edge
+/// row, one texel high and a turn of longitude wide, with mips down to one
+/// texel). Mirrors GlobeCapStripUniform.swift.
+struct GlobeCapStrip {
+    uint hasStrip;
+    float poleMeanLod;
+    float2 padding;
+};
+
+constant float kGlobeCapStripWidth = 4096.0;
+constant float kGlobeCapStripMaxLod = 12.0;
+
 /// The slot a placeholder fill covers; mirrors GlobeSurfaceSlotUniform.swift.
 struct Tile {
     int3 tile;
@@ -223,17 +235,50 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
 }
 
 fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
+                                      texture2d<half> strip [[texture(0)]],
                                       constant CapParams& params [[buffer(0)]],
                                       constant Camera& camera [[buffer(1)]],
                                       constant EarthScene& earthScene [[buffer(2)]],
+                                      constant GlobeCapStrip& capStrip [[buffer(3)]],
                                       constant GlobeAtmosphere& atmosphere [[buffer(6)]],
                                       constant GlobeSurfaceTone& tone [[buffer(7)]]) {
+    constexpr sampler stripSampler(filter::linear, mip_filter::linear, mag_filter::linear, address::repeat);
+
+    // The mip level the rim is read at, from the screen derivative of the
+    // longitude, which is what the strip advances with along the rim. Taken
+    // through (cos, sin) so the longitude wrap adds no false derivative, and
+    // explicit rather than automatic: automatic LOD explodes near the pole
+    // (meridians converge to a point). Computed before any divergent flow,
+    // since derivatives need the whole quad.
+    float2 longitudeDirection = float2(cos(in.longitude), sin(in.longitude));
+    float radiansPerPixel = max(length(dfdx(longitudeDirection)), length(dfdy(longitudeDirection)));
+    float texelsPerPixel = radiansPerPixel * kGlobeCapStripWidth / (2.0 * M_PI_F);
+    float lod = clamp(log2(max(texelsPerPixel, 1e-6)), 0.0, kGlobeCapStripMaxLod);
 
     half seamBlend = half(smoothstep(params.blendStartAbsLatitude,
                                      params.blendEndAbsLatitude,
                                      in.absLatitude));
     half capAlpha = half(in.capAlpha);
-    half4 color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
+    half4 color;
+    if (capStrip.hasStrip != 0) {
+        // One turn of longitude across the strip; the sampler wraps the
+        // angle. Opaque: the cap is surface, and a strip texel's own alpha
+        // over black space would read as a dark disc at the pole.
+        float2 stripUV = float2(in.longitude / (2.0 * M_PI_F), 0.5);
+        half3 rim = strip.sample(stripSampler, stripUV, level(lod)).rgb;
+        // Feather toward the windowed mean of the rim (a deeper mip, one
+        // texel per tile of the pole row): the edge row continues the
+        // surface at the rim (seamBlend 0) but does not reach the pole as
+        // "needles", the radial stripes narrow coastal features of the rim
+        // would otherwise smear across the whole cap. The mean is what the
+        // tiles show at this zoom, not a palette colour, so a pole painted
+        // white by the low-zoom land cover and open water by the detailed
+        // layers fades into the right one either way.
+        half3 pole = strip.sample(stripSampler, stripUV, level(capStrip.poleMeanLod)).rgb;
+        color = half4(mix(rim, pole, seamBlend), 1.0h);
+    } else {
+        color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
+    }
     // The same deepening as the tiled surface, so the cap continues its
     // colour over the pole at every zoom.
     float3 viewDir = normalize(camera.eye - in.worldPos);
