@@ -5,6 +5,15 @@
 using namespace metal;
 #include "../../Shaders/Shared/RenderUniforms.h"
 
+// Ground shadow source. The flat world pass reads the per-pixel ground
+// shadow mask (GroundShadowMask.metal), evaluated once per frame for the
+// plane every blended ground layer lies on; the globe atlas bake, which never
+// has shadows, keeps the direct cascade sampling path and binds a disabled
+// uniform. A function constant so each pipeline only declares the texture it
+// reads (the other argument is compiled out and needs no binding).
+constant bool kGroundShadowMaskEnabled [[function_constant(0)]];
+constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
+
 // Add necessary structures for transformation and rendering
 struct VertexIn {
     short2 position [[attribute(0)]];
@@ -23,7 +32,14 @@ struct VertexIn {
 // dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
     float4 position [[position]];
-    float2 localPosition;
+    // Signed distances to the four edges of the placeIn slot, in the source
+    // tile's local units (see localClipBounds): the rasterizer clips the
+    // primitive where any goes negative, so a retained substitute never
+    // overlaps the neighboring exact tiles, and the fragment stage never
+    // needs a discard (which would defeat hidden surface removal for every
+    // ground draw). Exact placements get a disabled clip: all four stay
+    // positive.
+    float clipDistance [[clip_distance]] [4];
     float3 worldPos;
     half4 color;
     half lowZoomFadeMask;
@@ -34,6 +50,22 @@ struct VertexOut {
     half lineMaximumWidthPoints;
     // 1 when the dash pattern is already in tile units (world-locked paint),
     // 0 when it is in points and scales by the draw's unitsPerPoint.
+    half lineDashInTileUnits;
+};
+
+// The fragment stage's view of VertexOut: the same interpolants matched by
+// name, without the clip distances (consumed by the rasterizer; MSL does not
+// allow them in a stage_in struct).
+struct FragmentIn {
+    float4 position [[position]];
+    float3 worldPos;
+    half4 color;
+    half lowZoomFadeMask;
+    float lineDistance;
+    float lineParameter;
+    half4 lineStyle;
+    half lineMinimumWidthPoints;
+    half lineMaximumWidthPoints;
     half lineDashInTileUnits;
 };
 
@@ -101,7 +133,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
-                                  constant StreetPaletteUniform& streetPalette [[buffer(6)]]) {
+                                  constant StreetPaletteUniform& streetPalette [[buffer(6)]],
+                                  constant float4& localClipBounds [[buffer(7)]]) {
     
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
@@ -111,7 +144,13 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     
     VertexOut out;
     out.position = clipPosition;
-    out.localPosition = float2(vertexIn.position.xy);
+    // localClipBounds: (minX, minY, maxX, maxY) of the placeIn slot in the
+    // source tile's local coordinates; positive inside.
+    float2 localPosition = float2(vertexIn.position.xy);
+    out.clipDistance[0] = localPosition.x - localClipBounds.x;
+    out.clipDistance[1] = localClipBounds.z - localPosition.x;
+    out.clipDistance[2] = localPosition.y - localClipBounds.y;
+    out.clipDistance[3] = localClipBounds.w - localPosition.y;
     out.worldPos = worldPosition.xyz;
     out.color = half4(mix(style.color, style.streetColor, streetPalette.blend));
     out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
@@ -245,20 +284,30 @@ static inline half tileLineCoverage(float lineDistance,
     return half(coverage);
 }
 
-// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
-// A retained substitute is drawn as the full source quad - fragments outside the
-// placeIn slot are discarded so they don't overlap neighboring exact tiles.
-fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
+// The placeIn clip of a retained substitute is applied by the rasterizer
+// through the vertex stage's clip distances, so nothing here discards: every
+// fragment that reaches this function is inside its slot, and the GPU can
+// resolve visibility (and drop what later opaque geometry covers) before
+// shading.
+fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                  constant float4& localClipBounds [[buffer(1)]],
                                   constant HorizonFog& horizonFog [[buffer(2)]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
-                                  depth2d_array<float> shadowMap [[texture(0)]]) {
-    // The shadow factor and the line coverage come first: both evaluate
-    // screen-space derivatives, which are undefined in any 2x2 quad after a
-    // divergent discard (MSL spec), so the clip discard must not precede them.
-    float shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
+                                  depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                  texture2d<half, access::read> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+    float shadowFactor;
+    if (kGroundShadowMaskEnabled) {
+        // One read of the per-pixel mask instead of a cascade lookup in every
+        // ground layer; the strength guard mirrors sampleShadowFactor's, so a
+        // frame without the mask pass (shadows off, no casters) never reads
+        // the 1x1 fallback out of bounds.
+        shadowFactor = shadow.strength > 0.0
+            ? float(groundShadowMask.read(uint2(in.position.xy)).r)
+            : 1.0;
+    } else {
+        shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
+    }
     half lineCoverage = tileLineCoverage(in.lineDistance,
                                          in.lineParameter,
                                          in.lineStyle,
@@ -268,10 +317,6 @@ fragment half4 tileFragmentShader(VertexOut in [[stage_in]],
                                          overviewFade.pixelsPerPoint,
                                          overviewFade.roadSurfaceBlend,
                                          lineDash.unitsPerPoint);
-    if (in.localPosition.x < localClipBounds.x || in.localPosition.y < localClipBounds.y ||
-        in.localPosition.x > localClipBounds.z || in.localPosition.y > localClipBounds.w) {
-        discard_fragment();
-    }
     half4 color = in.color;
     half fade = 1.0h;
     if (in.lowZoomFadeMask >= 9.5h) {

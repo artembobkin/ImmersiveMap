@@ -66,7 +66,9 @@ public struct ShadowSettings: Equatable, Sendable {
 
 The defaults are deliberately soft: at a strength of 0.22 with the cool tint a fully shadowed white surface comes out around `(0.69, 0.72, 0.78)`, a light blue-grey. Heavier shadows are one line away (`strength: 0.5, tint: SIMD3<Float>(repeating: 1)` is the neutral darkening earlier versions shipped).
 
-Shadows use two cascades packed into one 2:1 atlas, fitted per frame from the camera. The near cascade always covers two camera distances and stays crisp; the far cascade is stretched over `coverageCameraDistances`, so its texel density scales inversely with the radius you ask for. Raising coverage buys reach and pays in softness at the far end.
+Shadows use three cascades, one per slice of a `depth16Unorm` texture array, fitted per frame from the camera as discs around the point the camera looks at. The near cascade covers one camera distance and stays crisp, the middle one three, and the far cascade is stretched over `coverageCameraDistances`, so its texel density scales inversely with the radius you ask for. Raising coverage buys reach and pays in softness at the far end.
+
+The ground reads its shadow from a screen-sized mask that a small pass computes once per frame right after the shadow map (the shadow factor of the ground plane under every pixel), so the many blended layers the ground is drawn in share one cascade lookup per pixel; buildings and scene models sample the cascades per fragment, since their surfaces are not the plane. Solid buildings draw before the ground and the ground depth-tests against them, so nothing under a building is shaded.
 
 Coverage is expressed in camera **distance**, not in a screen or world rectangle, precisely because distance is independent of pitch and bearing: tilting or rotating the camera never changes how far shadows reach or how sharp they are.
 

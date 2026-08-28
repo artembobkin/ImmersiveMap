@@ -21,6 +21,7 @@ final class RenderPersistentContext {
     let tilePipeline: TilePipeline
     let globeTileTexturePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
+    let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let globePipeline: GlobePipeline
     let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
@@ -37,6 +38,8 @@ final class RenderPersistentContext {
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
+    /// See `SharedRenderResources.groundDepthState`.
+    let groundDepthState: MTLDepthStencilState
     /// See `SharedRenderResources.compositeDepthResetState`.
     let compositeDepthResetState: MTLDepthStencilState
     /// See `SharedRenderResources.supportsFramebufferFetch`.
@@ -47,6 +50,8 @@ final class RenderPersistentContext {
     /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
     /// clears this 1x1 texture to 1.0 ("lit everywhere") at init.
     let shadowFallbackTexture: MTLTexture
+    /// See `SharedRenderResources.groundShadowMaskFallbackTexture`.
+    let groundShadowMaskFallbackTexture: MTLTexture
 
     // MARK: - Tile and Label Resources
 
@@ -101,9 +106,11 @@ final class RenderPersistentContext {
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.depthDisabledState = shared.depthDisabledState
+        self.groundDepthState = shared.groundDepthState
         self.compositeDepthResetState = shared.compositeDepthResetState
         self.supportsFramebufferFetch = shared.supportsFramebufferFetch
         self.shadowFallbackTexture = shared.shadowFallbackTexture
+        self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 
         let mapBaseColors = providerRuntime.mapBaseColors
 
@@ -114,6 +121,7 @@ final class RenderPersistentContext {
         self.tilePipeline = shared.tilePipeline
         self.globeTileTexturePipeline = shared.globeTileTexturePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
+        self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.globePipeline = shared.globePipeline
         self.globeSurfacePlaceholderPipeline = shared.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = shared.fxaaPipeline

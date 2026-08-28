@@ -145,12 +145,14 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
 
-            // Clip fragments to the placeIn slot: buildings of a retained parent
-            // must not overlap neighboring exact tiles.
+            // Clip the geometry to the placeIn slot (clip distances in the
+            // vertex stage, for the main and the shadow-caster path alike):
+            // buildings of a retained parent must not overlap neighboring
+            // exact tiles, nor cast shadows over them.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
-            renderEncoder.setFragmentBytes(&localClipBounds,
-                                           length: MemoryLayout<SIMD4<Float>>.stride,
-                                           index: 4)
+            renderEncoder.setVertexBytes(&localClipBounds,
+                                         length: MemoryLayout<SIMD4<Float>>.stride,
+                                         index: 4)
 
             // The clip cuts a building with a vertical plane and no capping face:
             // with back-face culling the cut looks hollow all the way through.

@@ -19,6 +19,7 @@ final class FrameAttachmentStore {
     private var buildingImageTexture: MTLTexture?
     private var worldBuildingImageTexture: MTLTexture?
     private var shadowMapTexture: MTLTexture?
+    private var groundShadowMaskTexture: MTLTexture?
 
     /// See `SharedRenderResources.supportsFramebufferFetch`; recomputed here
     /// from the device so the pass planner needs no extra plumbing.
@@ -48,6 +49,10 @@ final class FrameAttachmentStore {
 
     var currentShadowMapTexture: MTLTexture? {
         shadowMapTexture
+    }
+
+    var currentGroundShadowMaskTexture: MTLTexture? {
+        groundShadowMaskTexture
     }
 
     var currentPostProcessingInputTexture: MTLTexture? {
@@ -284,6 +289,32 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
+    /// The ground shadow mask: one 8-bit factor per drawable pixel, written
+    /// by the mask pass and read by the flat ground layers of the world pass.
+    /// Single-sample and readable, so `.private` (never memoryless).
+    func ensureGroundShadowMaskTexture(drawSize: CGSize) -> MTLTexture? {
+        let width = Int(drawSize.width)
+        let height = Int(drawSize.height)
+        guard width > 0, height > 0 else { return nil }
+
+        if let groundShadowMaskTexture,
+           groundShadowMaskTexture.width == width,
+           groundShadowMaskTexture.height == height {
+            return groundShadowMaskTexture
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: GroundShadowMaskPipeline.pixelFormat,
+                                                                  width: width,
+                                                                  height: height,
+                                                                  mipmapped: false)
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .private
+        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
+        newTexture?.label = RenderResourceName.groundShadowMaskTexture.rawValue
+        groundShadowMaskTexture = newTexture
+        return newTexture
+    }
+
     func reset() {
         colorTexture = nil
         postProcessingInputTexture = nil
@@ -293,5 +324,6 @@ final class FrameAttachmentStore {
         buildingImageTexture = nil
         worldBuildingImageTexture = nil
         shadowMapTexture = nil
+        groundShadowMaskTexture = nil
     }
 }

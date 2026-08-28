@@ -21,6 +21,27 @@ struct ShadowReceiverBinding {
     }
 }
 
+/// What a flat ground layer binds at its ground shadow mask slot: the mask
+/// the pass wrote this frame with the live uniform, otherwise the 1x1 lit
+/// fallback with `.disabled` (the shader's strength guard then never reads
+/// it). Same gate as the shadow map, so the mask pass and the readers
+/// always agree within a frame.
+struct GroundShadowMaskBinding {
+    let uniform: ShadowUniform
+    let texture: MTLTexture
+
+    static func resolve(frameContext: FrameContext,
+                        maskTexture: MTLTexture?,
+                        fallbackTexture: MTLTexture) -> GroundShadowMaskBinding {
+        guard let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
+              frameContext.renderSurfaceMode == .flat,
+              let maskTexture else {
+            return GroundShadowMaskBinding(uniform: .disabled, texture: fallbackTexture)
+        }
+        return GroundShadowMaskBinding(uniform: shadowState.shadowUniform, texture: maskTexture)
+    }
+}
+
 /// The single per-frame decision "does the shadow pass run": the resolved
 /// shadow state must exist AND at least one caster must be present. Called
 /// identically by `RenderPassGraph.plan` (pass injection) and by the receiver

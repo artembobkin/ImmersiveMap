@@ -10,6 +10,10 @@ import Foundation
 
 enum RenderLayer: String, CaseIterable {
     case shadowCasters
+    /// The per-pixel shadow factor of the flat ground plane, written by its
+    /// own pass right after the shadow map and read by every ground layer of
+    /// the world pass in place of a cascade lookup per layer.
+    case groundShadowMask
     case buildingImage
     case starfield
     /// The atmosphere halo in space around the globe, between the starfield it

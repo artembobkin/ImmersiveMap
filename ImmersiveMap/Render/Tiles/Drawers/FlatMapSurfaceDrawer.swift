@@ -32,7 +32,7 @@ enum FlatMapSurfaceDrawer {
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
                      horizonFog: HorizonFogUniform,
-                     shadowBinding: ShadowReceiverBinding,
+                     groundShadowMask: GroundShadowMaskBinding,
                      tilePipeline: TilePipeline,
                      isWireframeEnabled: Bool,
                      withBuildingImageAttachment: Bool = false) {
@@ -62,7 +62,7 @@ enum FlatMapSurfaceDrawer {
             cameraZoom: Float(cameraZoom)
         )
         var horizonFogValue = horizonFog
-        var shadowUniformValue = shadowBinding.uniform
+        var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&overviewFadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
@@ -73,7 +73,9 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&shadowUniformValue,
                                        length: MemoryLayout<ShadowUniform>.stride,
                                        index: 3)
-        renderEncoder.setFragmentTexture(shadowBinding.texture, index: 0)
+        // The flat ground pipeline reads the per-pixel ground shadow mask
+        // (fragment texture 1) instead of sampling the cascades per layer.
+        renderEncoder.setFragmentTexture(groundShadowMask.texture, index: 1)
 
         let usesSeparateRoadRendering = cameraZoom >= Double(separateRoadRenderingMinimumZoom)
 
@@ -171,14 +173,15 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
         renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
 
-        // A retained substitution draws the source tile in full at its origin:
-        // fragments outside the placeIn slot are discarded in the shader,
-        // otherwise the parent's content would cover neighboring exact tiles
-        // in every layer (roads, backgrounds).
+        // A retained substitution draws the source tile in full at its origin,
+        // clipped to the placeIn slot by the rasterizer (the vertex stage turns
+        // these bounds into clip distances), otherwise the parent's content
+        // would cover neighboring exact tiles in every layer (roads,
+        // backgrounds). Exact placements get the disabled bounds.
         var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
-        renderEncoder.setFragmentBytes(&localClipBounds,
-                                       length: MemoryLayout<SIMD4<Float>>.stride,
-                                       index: 1)
+        renderEncoder.setVertexBytes(&localClipBounds,
+                                     length: MemoryLayout<SIMD4<Float>>.stride,
+                                     index: 7)
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live

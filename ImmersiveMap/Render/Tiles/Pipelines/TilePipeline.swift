@@ -11,13 +11,21 @@ class TilePipeline {
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
 
+    /// - Parameter readsGroundShadowMask: the flat world pass reads the
+    ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
+    ///   bake keeps the direct cascade sampling path (with a disabled uniform)
+    ///   and only binds the shadow map slot.
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1,
-         supportsFramebufferFetch: Bool = false) {
+         supportsFramebufferFetch: Bool = false,
+         readsGroundShadowMask: Bool = false) {
         let vertexFunction = library.makeFunction(name: "tileVertexShader")
-        let fragmentFunction = library.makeFunction(name: "tileFragmentShader")
+        let constantValues = MTLFunctionConstantValues()
+        var readsMask = readsGroundShadowMask
+        constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
+        let fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
         
         let vertexDescriptor = MTLVertexDescriptor()
         vertexDescriptor.attributes[0].format = .short2

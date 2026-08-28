@@ -23,6 +23,7 @@ enum RenderResourceName: String {
     case buildingImageTexture = "BuildingImageTexture"
     case worldBuildingImageTexture = "WorldBuildingImageTexture"
     case shadowMapTexture = "ShadowMapTexture"
+    case groundShadowMaskTexture = "GroundShadowMaskTexture"
     case tileOriginDataBuffer = "TileOriginDataBuffer"
     case polygonPipeline = "PolygonPipeline"
     case tilePipeline = "TilePipeline"

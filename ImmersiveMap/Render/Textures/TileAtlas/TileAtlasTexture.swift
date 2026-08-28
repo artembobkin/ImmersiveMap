@@ -159,12 +159,12 @@ class TileAtlasTexture {
     func selectTilePipeline() {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder!)
         // The placeIn clip is only needed on the flat path: in the atlas the
-        // cell area is already bounded by the scissor, so the shader gets a
-        // disabled clip.
+        // cell area is already bounded by the scissor, so the vertex stage
+        // gets a disabled clip (every clip distance stays positive).
         var localClipBounds = TileLocalClipMath.disabledBounds
-        renderEncoder!.setFragmentBytes(&localClipBounds,
-                                        length: MemoryLayout<SIMD4<Float>>.stride,
-                                        index: 1)
+        renderEncoder!.setVertexBytes(&localClipBounds,
+                                      length: MemoryLayout<SIMD4<Float>>.stride,
+                                      index: 7)
         // Horizon haze is a screen-space effect; when rasterizing into an atlas
         // slot it must be off, otherwise the texture contents get fogged.
         var horizonFog = HorizonFogUniform.disabled

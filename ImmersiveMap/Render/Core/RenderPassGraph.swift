@@ -10,8 +10,8 @@ final class RenderPassGraph {
         case .starfield, .atmosphere, .globeSurface, .globeCap, .flatMapSurface, .buildingExtrusion,
              .sceneModels, .routes:
             return true
-        case .shadowCasters, .buildingImage, .postProcessing, .sceneModelOcclusion, .labels, .avatars,
-             .debugOverlay:
+        case .shadowCasters, .groundShadowMask, .buildingImage, .postProcessing, .sceneModelOcclusion,
+             .labels, .avatars, .debugOverlay:
             return false
         }
     }
@@ -20,10 +20,31 @@ final class RenderPassGraph {
         switch layer {
         case .sceneModelOcclusion, .labels, .avatars, .debugOverlay:
             return true
-        case .shadowCasters, .buildingImage, .starfield, .atmosphere, .globeSurface, .globeCap,
-             .flatMapSurface, .buildingExtrusion, .sceneModels, .routes, .postProcessing:
+        case .shadowCasters, .groundShadowMask, .buildingImage, .starfield, .atmosphere, .globeSurface,
+             .globeCap, .flatMapSurface, .buildingExtrusion, .sceneModels, .routes, .postProcessing:
             return false
         }
+    }
+
+    /// The world pass draw order for the frame. The planner lists the flat
+    /// layers ground first; with solid buildings the order flips so the
+    /// opaque buildings write depth before the ground is drawn and every
+    /// ground fragment under a building fails its depth test unshaded (the
+    /// ground itself never writes depth, so the flip changes nothing else).
+    /// Composited buildings keep the planner's order: the ground must be
+    /// shaded under a translucent building for it to show through.
+    static func worldLayerOrder(_ layers: [RenderLayer],
+                                buildingPath: BuildingExtrusionPathResolver.Path?) -> [RenderLayer] {
+        guard buildingPath == .solid,
+              let surfaceIndex = layers.firstIndex(of: .flatMapSurface),
+              let buildingIndex = layers.firstIndex(of: .buildingExtrusion),
+              surfaceIndex < buildingIndex else {
+            return layers
+        }
+        var ordered = layers
+        ordered.remove(at: buildingIndex)
+        ordered.insert(.buildingExtrusion, at: surfaceIndex)
+        return ordered
     }
 
     /// Depth-only pass of the directional light. Ignores the drawable target:
@@ -46,6 +67,27 @@ final class RenderPassGraph {
             // Layered rendering: the caster vertex stages route each instance
             // to its cascade's slice via [[render_target_array_index]].
             descriptor.renderTargetArrayLength = ShadowCascadeAtlas.cascadeCount
+            return descriptor
+        }
+    }
+
+    /// The ground shadow mask: a single-sample 8-bit target the size of the
+    /// drawable, fully overwritten by one fullscreen triangle (so nothing to
+    /// load) and stored for the world pass to read.
+    private final class GroundShadowMaskDescriptorProvider: RenderPassDescriptorProvider {
+        func makeRenderPassDescriptor(frameContext: FrameContext,
+                                      attachments: FrameAttachmentStore,
+                                      target _: FrameRenderTarget?) -> MTLRenderPassDescriptor? {
+            guard frameContext.renderSurfaceMode == .flat,
+                  ShadowPassGateResolver.resolve(frameContext: frameContext) != nil,
+                  let maskTexture = attachments.ensureGroundShadowMaskTexture(drawSize: frameContext.drawSize) else {
+                return nil
+            }
+
+            let descriptor = MTLRenderPassDescriptor()
+            descriptor.colorAttachments[0].texture = maskTexture
+            descriptor.colorAttachments[0].loadAction = .dontCare
+            descriptor.colorAttachments[0].storeAction = .store
             return descriptor
         }
     }
@@ -235,6 +277,16 @@ final class RenderPassGraph {
             nodes.append(RenderPassNode(name: .shadowMap,
                                         descriptorProvider: ShadowMapDescriptorProvider(),
                                         layers: [.shadowCasters]))
+            // The ground shadow mask follows the map it samples: one cascade
+            // lookup per pixel on the ground plane, read by every blended
+            // ground layer of the world pass instead of a lookup per layer.
+            if frameContext.renderSurfaceMode == .flat,
+               let maskTexture = attachments.ensureGroundShadowMaskTexture(drawSize: frameContext.drawSize) {
+                resourceRegistry.setTexture(maskTexture, named: .groundShadowMaskTexture)
+                nodes.append(RenderPassNode(name: .groundShadowMask,
+                                            descriptorProvider: GroundShadowMaskDescriptorProvider(),
+                                            layers: [.groundShadowMask]))
+            }
         }
         // Composited buildings (translucent, or the solidAtHighZoom zoom
         // transition) render opaquely into a building image (depth test,
@@ -261,7 +313,12 @@ final class RenderPassGraph {
                                         descriptorProvider: BuildingImageDescriptorProvider(),
                                         layers: [.buildingImage]))
         }
-        var worldLayers = layerPlan.filter(Self.isWorldLayer)
+        var worldLayers = Self.worldLayerOrder(
+            layerPlan.filter(Self.isWorldLayer),
+            buildingPath: frameContext.renderSurfaceMode == .flat
+                ? BuildingExtrusionPathResolver.resolve(style: settings.style, zoom: frameContext.zoom)
+                : nil
+        )
         if usesInPassBuildingImage,
            let buildingExtrusionIndex = worldLayers.firstIndex(of: .buildingExtrusion) {
             // The buildings render into the in-pass image right before the

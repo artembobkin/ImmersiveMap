@@ -48,6 +48,12 @@ final class SharedRenderResources {
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
+    /// The flat ground: tested against the depth the opaque buildings wrote
+    /// before it (strictly closer wins, so a wall base never loses to the
+    /// ground plane it stands on), never written, since every ground layer
+    /// is blended and lies on the same plane. Under a solid building the
+    /// ground fails the test before its fragment is shaded.
+    let groundDepthState: MTLDepthStencilState
     /// For the framebuffer-fetch composite: every fragment passes and writes
     /// the far plane back, restoring the pre-building depth mid-pass so the
     /// scene models keep ignoring composited building depth.
@@ -58,6 +64,11 @@ final class SharedRenderResources {
     /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
     /// clears this 1x1 texture to 1.0 ("lit everywhere") at creation.
     let shadowFallbackTexture: MTLTexture
+    /// Bound at the ground shadow mask slot of the flat ground pipeline when
+    /// the mask pass did not run this frame: the shader guards the read with
+    /// the disabled uniform's zero strength, but the binding itself is
+    /// mandatory. A 1x1 "lit" texel, filled from the CPU.
+    let groundShadowMaskFallbackTexture: MTLTexture
 
     // MARK: - Pipelines
 
@@ -65,6 +76,7 @@ final class SharedRenderResources {
     let tilePipeline: TilePipeline
     let globeTileTexturePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
+    let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let globePipeline: GlobePipeline
     /// Same sphere, flat map color: the fill the tiles are painted over.
     let globeSurfacePlaceholderPipeline: GlobePipeline
@@ -114,8 +126,10 @@ final class SharedRenderResources {
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
+        self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
+        self.groundShadowMaskFallbackTexture = Self.makeGroundShadowMaskFallbackTexture(device: device)
 
         let compiled = Self.makeConcurrentlyCompiledResources(device: device,
                                                               library: library,
@@ -126,6 +140,7 @@ final class SharedRenderResources {
         self.tilePipeline = compiled.tilePipeline
         self.globeTileTexturePipeline = compiled.globeTileTexturePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
+        self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.globePipeline = compiled.globePipeline
         self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
@@ -154,6 +169,7 @@ final class SharedRenderResources {
         let tilePipeline: TilePipeline
         let globeTileTexturePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
+        let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let globePipeline: GlobePipeline
         let globeSurfacePlaceholderPipeline: GlobePipeline
         let fxaaPipeline: FXAAPipeline
@@ -187,6 +203,7 @@ final class SharedRenderResources {
         var tilePipeline: TilePipeline?
         var globeTileTexturePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
+        var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var globePipeline: GlobePipeline?
         var globeSurfacePlaceholderPipeline: GlobePipeline?
         var fxaaPipeline: FXAAPipeline?
@@ -226,7 +243,9 @@ final class SharedRenderResources {
                                           pixelFormat: pixelFormat,
                                           library: library,
                                           sampleCount: sampleCount,
-                                          supportsFramebufferFetch: supportsFramebufferFetch) },
+                                          supportsFramebufferFetch: supportsFramebufferFetch,
+                                          readsGroundShadowMask: true) },
+            { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
             // The atlas variant renders into non-MSAA atlas pages, which share
             // the same color format as the drawable.
             { globeTileTexturePipeline = TilePipeline(metalDevice: device,
@@ -272,6 +291,7 @@ final class SharedRenderResources {
             tilePipeline: tilePipeline!,
             globeTileTexturePipeline: globeTileTexturePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
+            groundShadowMaskPipeline: groundShadowMaskPipeline!,
             globePipeline: globePipeline!,
             globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
             fxaaPipeline: fxaaPipeline!,
@@ -288,6 +308,26 @@ final class SharedRenderResources {
     }
 
     // MARK: - Shadow fallback
+
+    /// One lit texel for the ground pipeline's mask slot on frames without
+    /// the mask pass. A color texture, so it can be filled from the CPU.
+    private static func makeGroundShadowMaskFallbackTexture(device: MTLDevice) -> MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: GroundShadowMaskPipeline.pixelFormat,
+                                                                  width: 1,
+                                                                  height: 1,
+                                                                  mipmapped: false)
+        descriptor.usage = [.shaderRead]
+        #if os(macOS)
+        descriptor.storageMode = .managed
+        #else
+        descriptor.storageMode = .shared
+        #endif
+        let texture = device.makeTexture(descriptor: descriptor)!
+        texture.label = "GroundShadowMaskFallbackTexture"
+        var lit: UInt8 = 255
+        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &lit, bytesPerRow: 1)
+        return texture
+    }
 
     private static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
         let descriptor = MTLTextureDescriptor()
@@ -368,6 +408,13 @@ final class SharedRenderResources {
     private static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = false
+        return descriptor
+    }
+
+    private static func makeGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .less
         descriptor.isDepthWriteEnabled = false
         return descriptor
     }

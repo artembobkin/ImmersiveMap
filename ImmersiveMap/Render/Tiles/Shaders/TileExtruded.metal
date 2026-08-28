@@ -17,9 +17,22 @@ struct VertexIn {
 // position stays float for the shadow projection.
 struct VertexOut {
     float4 position [[position]];
+    // Signed distances to the four edges of the placeIn slot in the source
+    // tile's local units (see localClipBounds); the rasterizer clips where
+    // any goes negative, so the fragment stage needs no discard and the GPU
+    // can drop covered fragments before shading them.
+    float clipDistance [[clip_distance]] [4];
     float3 worldPosition;
     half3 worldNormal;
-    float2 localPosition;
+    half4 color;
+};
+
+// The fragment stage's view of VertexOut, matched by name and without the
+// clip distances (consumed by the rasterizer; not allowed in stage_in).
+struct FragmentIn {
+    float4 position [[position]];
+    float3 worldPosition;
+    half3 worldNormal;
     half4 color;
 };
 
@@ -30,10 +43,25 @@ struct Style {
     float4 streetColor;
 };
 
+// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local
+// coordinates. A retained substitution draws the source's buildings in full,
+// clipped to the placeIn slot by the rasterizer, otherwise the parent's
+// buildings would cover neighboring exact tiles. Exact placements carry a
+// disabled clip, so every distance stays positive.
+static inline void writeLocalClipDistances(thread float (&clipDistance)[4],
+                                           float2 localPosition,
+                                           float4 localClipBounds) {
+    clipDistance[0] = localPosition.x - localClipBounds.x;
+    clipDistance[1] = localClipBounds.z - localPosition.x;
+    clipDistance[2] = localPosition.y - localClipBounds.y;
+    clipDistance[3] = localClipBounds.w - localPosition.y;
+}
+
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
-                                          constant float4x4& modelMatrix [[buffer(3)]]) {
+                                          constant float4x4& modelMatrix [[buffer(3)]],
+                                          constant float4& localClipBounds [[buffer(4)]]) {
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
@@ -47,18 +75,10 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.color = half4(style.color);
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = half3(worldNormal);
-    out.localPosition = vertexIn.position.xy;
+    writeLocalClipDistances(out.clipDistance, vertexIn.position.xy, localClipBounds);
     return out;
 }
 
-// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local coordinates.
-// A retained substitution draws the source's buildings in full - fragments outside
-// the placeIn slot are discarded, otherwise the parent's buildings would cover
-// neighboring exact tiles.
-static inline bool isOutsideLocalClip(float2 localPosition, float4 localClipBounds) {
-    return localPosition.x < localClipBounds.x || localPosition.y < localClipBounds.y ||
-           localPosition.x > localClipBounds.z || localPosition.y > localClipBounds.w;
-}
 
 // Depth cues without an analytic lighting model (the shading contract stays
 // "flat base color + shadow map"): two subtle tonal terms multiply the base
@@ -114,18 +134,12 @@ static inline half extrudedDepthCueShade(half3 worldNormal,
 // building image (a separate offscreen pass, or the world pass's second
 // memoryless attachment on GPUs with framebuffer fetch), which is then
 // composited over the map with a shared alpha.
-static inline half4 shadeExtrudedFragment(VertexOut in,
-                                          constant float4& localClipBounds,
+static inline half4 shadeExtrudedFragment(FragmentIn in,
                                           constant Shadow& shadow,
                                           constant float& metersToWorldZ,
                                           depth2d_array<float> shadowMap) {
-    // Derivatives (inside sampleShadowFactor) must precede the divergent
-    // discard, because MSL leaves them undefined in a quad after any lane discards.
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap,
                                                 in.worldPosition, float3(in.worldNormal)));
-    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
-        discard_fragment();
-    }
 
     // The meters conversion stays float: metersToWorldZ can be tiny and the
     // guard ratio overflows half, which the saturating ramp then absorbs.
@@ -143,12 +157,11 @@ static inline half4 shadeExtrudedFragment(VertexOut in,
     return half4(in.color.rgb * appliedCue * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
 }
 
-fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
-                                          constant float4& localClipBounds [[buffer(4)]],
+fragment half4 tileExtrudedFragmentShader(FragmentIn in [[stage_in]],
                                           constant Shadow& shadow [[buffer(5)]],
                                           constant float& metersToWorldZ [[buffer(6)]],
                                           depth2d_array<float> shadowMap [[texture(0)]]) {
-    return shadeExtrudedFragment(in, localClipBounds, shadow, metersToWorldZ, shadowMap);
+    return shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
 }
 
 // Framebuffer-fetch path (Apple GPUs): the same shading lands in the world
@@ -159,13 +172,12 @@ struct ExtrudedIntoImageFragmentOut {
     half4 image [[color(1)]];
 };
 
-fragment ExtrudedIntoImageFragmentOut tileExtrudedIntoImageFragmentShader(VertexOut in [[stage_in]],
-                                                                          constant float4& localClipBounds [[buffer(4)]],
+fragment ExtrudedIntoImageFragmentOut tileExtrudedIntoImageFragmentShader(FragmentIn in [[stage_in]],
                                                                           constant Shadow& shadow [[buffer(5)]],
                                                                           constant float& metersToWorldZ [[buffer(6)]],
                                                                           depth2d_array<float> shadowMap [[texture(0)]]) {
     ExtrudedIntoImageFragmentOut out;
-    out.image = shadeExtrudedFragment(in, localClipBounds, shadow, metersToWorldZ, shadowMap);
+    out.image = shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
     return out;
 }
 
@@ -175,31 +187,23 @@ fragment ExtrudedIntoImageFragmentOut tileExtrudedIntoImageFragmentShader(Vertex
 // slice of the shadow texture array via [[render_target_array_index]].
 struct ExtrudedShadowVertexOut {
     float4 position [[position]];
-    float2 localPosition;
+    float clipDistance [[clip_distance]] [4];
     uint layer [[render_target_array_index]];
 };
 
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
                                                               uint instanceID [[instance_id]],
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
-                                                              constant float4x4& modelMatrix [[buffer(3)]]) {
+                                                              constant float4x4& modelMatrix [[buffer(3)]],
+                                          constant float4& localClipBounds [[buffer(4)]]) {
     float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
     ExtrudedShadowVertexOut out;
     out.position = casters.lightProjectionViews[instanceID] * worldPosition;
-    out.localPosition = vertexIn.position.xy;
+    writeLocalClipDistances(out.clipDistance, vertexIn.position.xy, localClipBounds);
     out.layer = instanceID;
     return out;
 }
 
-// The fragment stage exists solely to replicate the placeIn clip of the main
-// path: without it a retained parent's buildings would cast shadows over
-// neighboring exact tiles.
-fragment void tileExtrudedShadowFragmentShader(ExtrudedShadowVertexOut in [[stage_in]],
-                                               constant float4& localClipBounds [[buffer(4)]]) {
-    if (isOutsideLocalClip(in.localPosition, localClipBounds)) {
-        discard_fragment();
-    }
-}
 
 struct ExtrudedCompositeVertexOut {
     float4 position [[position]];

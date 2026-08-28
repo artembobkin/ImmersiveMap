@@ -11,8 +11,8 @@ class ExtrudedTilePipeline {
     /// triangle using premultiplied blending.
     let compositePipelineState: MTLRenderPipelineState
     /// Depth-only replay of the same geometry from the light's camera into the
-    /// shadow map. No color attachments; the fragment stage only replicates the
-    /// placeIn clip discard.
+    /// shadow map. No color attachments and no fragment stage: the placeIn
+    /// clip rides on the vertex stage's clip distances.
     let shadowPipelineState: MTLRenderPipelineState
     /// Framebuffer-fetch path (Apple GPUs, nil elsewhere): the same building
     /// shading rendered into the world pass's second memoryless attachment,
@@ -83,7 +83,7 @@ class ExtrudedTilePipeline {
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
         shadowDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedShadowVertexShader")
-        shadowDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedShadowFragmentShader")
+        shadowDescriptor.fragmentFunction = nil
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
         shadowDescriptor.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat

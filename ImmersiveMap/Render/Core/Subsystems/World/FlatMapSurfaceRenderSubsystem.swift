@@ -7,23 +7,29 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
 
     private let tilePipeline: TilePipeline
+    private let groundDepthState: MTLDepthStencilState
+    private let depthDisabledState: MTLDepthStencilState
     private let separateRoadRenderingMinimumZoom: Int
     private let debugOverlayControls: DebugOverlayControlState
-    private let shadowMapTextureProvider: () -> MTLTexture?
-    private let shadowFallbackTexture: MTLTexture
+    private let groundShadowMaskTextureProvider: () -> MTLTexture?
+    private let groundShadowMaskFallbackTexture: MTLTexture
     private let supportsFramebufferFetch: Bool
 
     init(tilePipeline: TilePipeline,
+         groundDepthState: MTLDepthStencilState,
+         depthDisabledState: MTLDepthStencilState,
          separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
-         shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture,
+         groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
+         groundShadowMaskFallbackTexture: MTLTexture,
          supportsFramebufferFetch: Bool) {
         self.tilePipeline = tilePipeline
+        self.groundDepthState = groundDepthState
+        self.depthDisabledState = depthDisabledState
         self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
-        self.shadowMapTextureProvider = shadowMapTextureProvider
-        self.shadowFallbackTexture = shadowFallbackTexture
+        self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
+        self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
         self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
@@ -42,9 +48,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: frameContext.services.settings.scene.mapClearColor)
-        let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
-                                                          shadowMapTexture: shadowMapTextureProvider(),
-                                                          fallbackTexture: shadowFallbackTexture)
+        let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
+                                                               maskTexture: groundShadowMaskTextureProvider(),
+                                                               fallbackTexture: groundShadowMaskFallbackTexture)
         // The framebuffer-fetch world pass carries a second building
         // attachment; every pipeline in it must declare that attachment to
         // stay pass-compatible (same decision as RenderPassGraph.plan).
@@ -55,10 +61,15 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
             supportsFramebufferFetch: supportsFramebufferFetch
         )
 
+        // Depth test without write: with solid buildings drawn before the
+        // ground (see RenderPassGraph.worldLayerOrder), everything under a
+        // building fails the test and is never shaded; ground layers never
+        // occlude one another because none of them writes depth.
+        encoder.setDepthStencilState(groundDepthState)
         // The horizon backdrop is drawn first: the main coverage lands on top
         // (painter's order), and beyond its edge the ground is painted all the
-        // way to the horizon. The backdrop binds the same shadow state: it lies
-        // outside the fitted shadow map, so the UV guard keeps it lit.
+        // way to the horizon. The backdrop binds the same mask: it lies outside
+        // the fitted shadow map, so the mask is lit there.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -68,7 +79,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   horizonFog: horizonFog,
-                                  shadowBinding: shadowBinding,
+                                  groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment)
@@ -81,10 +92,11 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   horizonFog: horizonFog,
-                                  shadowBinding: shadowBinding,
+                                  groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment)
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

@@ -108,6 +108,9 @@ final class RenderFrameEngine {
                                                               },
                                                               shadowMapTextureProvider: { [attachments] in
                                                                   attachments.currentShadowMapTexture
+                                                              },
+                                                              groundShadowMaskTextureProvider: { [attachments] in
+                                                                  attachments.currentGroundShadowMaskTexture
                                                               })
 
         let supportsShadowCascades = ShadowCascadeAtlas.supportsLayeredRendering(

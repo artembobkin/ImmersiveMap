@@ -34,6 +34,26 @@ final class ShadowUniformLayoutTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.tint), 384)
     }
 
+    func testGroundShadowMaskUniformMatchesMetalLayout() {
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.stride, 80)
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.inverseProjectionView), 0)
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.viewportSize), 64)
+    }
+
+    func testGroundShadowMaskUniformInvertsTheProjectionView() {
+        let projectionView = Matrix.perspectiveMatrix(fovRadians: 1.0, aspect: 1.5, near: 0.1, far: 100)
+            * Matrix.translationMatrix(x: 3, y: -2, z: -10)
+        let uniform = GroundShadowMaskUniform(projectionView: projectionView,
+                                              viewportSize: SIMD2<Float>(1290, 2796))
+        let roundTrip = uniform.inverseProjectionView * projectionView
+        for column in 0..<4 {
+            for row in 0..<4 {
+                XCTAssertEqual(roundTrip[column][row], column == row ? 1 : 0, accuracy: 1e-4)
+            }
+        }
+        XCTAssertEqual(uniform.viewportSize, SIMD2<Float>(1290, 2796))
+    }
+
     func testCasterUniformMatchesMetalLayout() {
         XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.stride, 192)
         XCTAssertEqual(MemoryLayout<ShadowCasterUniform>.offset(of: \.near), 0)
