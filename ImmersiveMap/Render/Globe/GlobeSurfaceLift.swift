@@ -25,14 +25,20 @@ enum GlobeSurfaceLift {
         return max(minimum, margin * max(polygonSag(tileZoom: zoom), gridSag(tileZoom: zoom)))
     }
 
-    /// Chord sag of one subdivision step of a tile at this zoom: the step is
-    /// a fraction of the tile, the tile a fraction of the equator.
+    /// Chord sag of the longest edge a split piece can have at this zoom:
+    /// the diagonal of one subdivision cell (every piece lies inside a cell,
+    /// so no edge is longer). Measured at the equator, where a Mercator cell
+    /// spans the most arc; the sag is proportional to the square of the
+    /// chord, so the diagonal sags twice as much as the step, and a lift
+    /// sized for the step alone let the water dip under the placeholder in
+    /// a diamond around every cell centre of the equatorial ocean.
     static func polygonSag(tileZoom: Int) -> Float {
         guard let step = GroundGeometrySubdivider.step(forTileZoom: tileZoom) else {
             return 0
         }
         let stepAngle = 2 * Float.pi * Float(step) / (4096 * Float(1 << tileZoom))
-        return 1 - cos(stepAngle / 2)
+        let diagonalAngle = stepAngle * Float(2).squareRoot()
+        return 1 - cos(diagonalAngle / 2)
     }
 
     /// Chord sag of one row of the placeholder grid: the tile's latitude span

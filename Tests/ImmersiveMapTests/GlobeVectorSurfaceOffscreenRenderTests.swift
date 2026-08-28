@@ -61,10 +61,55 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         XCTAssertLessThan(center.blue, 250)
     }
 
+    /// The geometry must clear the placeholder grid's depth everywhere, not
+    /// only at its own vertices: a water polygon split on the parser's grid
+    /// is a lattice of chords, and where a chord dipped below the placeholder
+    /// the water failed the depth test in a diamond around each cell centre,
+    /// showing the layer under it (a lattice of pale diamonds across the
+    /// equatorial Atlantic, largest where the Mercator cells are largest).
+    /// So: with the camera on the equator at zoom 2, a wide disc around the
+    /// centre must be the water colour in every pixel.
+    @MainActor
+    func testWaterCoversTheDiscWithoutTheLayerBelowShowingThrough() async throws {
+        let harness = try makeHarness(size: 512)
+        harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: 0,
+                                                              longitudeDegrees: 0,
+                                                              zoom: 2.0))
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        try await loadFixtureTiles(into: harness, latitude: 0, longitude: 0, maximumZoom: 3)
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                            startingAt: OffscreenFrameHarness.frameTime(1))
+
+        // The disc: from the centre out to where the water is still the
+        // colour it was given (the limb glow and the tone deepening are
+        // gentle this far from the edge). Its radius is the widest run of
+        // water-coloured pixels along the centre row, cut back by a third.
+        let center = painted.size / 2
+        var reach = 0
+        while center + reach + 1 < painted.size, isWaterLike(painted.pixel(x: center + reach + 1, y: center)) {
+            reach += 1
+        }
+        XCTAssertGreaterThan(reach, painted.size / 8, "The water must cover the middle of the frame")
+        let radius = reach * 2 / 3
+        var offColour = 0
+        var checked = 0
+        for y in (center - radius) ... (center + radius) {
+            for x in (center - radius) ... (center + radius)
+            where (x - center) * (x - center) + (y - center) * (y - center) <= radius * radius {
+                checked += 1
+                if isWaterLike(painted.pixel(x: x, y: y)) == false {
+                    offColour += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(checked, 1000)
+        XCTAssertEqual(offColour, 0, "\(offColour) of \(checked) pixels of the water disc show another colour")
+    }
+
     // MARK: - Helpers
 
     @MainActor
-    private func makeHarness() throws -> OffscreenFrameHarness {
+    private func makeHarness(size: Int = 160) throws -> OffscreenFrameHarness {
         // Below the street palette the style paints water with the global
         // landcover blue and only eases toward `layers.water` as the camera
         // zooms in (the street palette blend is zero at these zooms), so the
@@ -77,14 +122,17 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         // The stars twinkle with scene time, so a settle loop over a globe
         // frame never sees two identical pictures while they are drawn.
         settings.scene.starfield.starCount = 0
-        return try OffscreenFrameHarness.makeOrSkip(settings: settings)
+        return try OffscreenFrameHarness.makeOrSkip(settings: settings, size: size)
     }
 
     @MainActor
-    private func loadFixtureTiles(into harness: OffscreenFrameHarness, maximumZoom: Int) async throws {
+    private func loadFixtureTiles(into harness: OffscreenFrameHarness,
+                                  latitude: Double = GlobeVectorSurfaceOffscreenRenderTests.latitude,
+                                  longitude: Double = GlobeVectorSurfaceOffscreenRenderTests.longitude,
+                                  maximumZoom: Int) async throws {
         let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
-        let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.latitude,
-                                                               longitude: Self.longitude,
+        let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: latitude,
+                                                               longitude: longitude,
                                                                maximumZoom: maximumZoom)
         for tile in tiles {
             let didMaterialize = await harness.tileRenderStore.parseTile(tile: tile, data: data)
@@ -94,5 +142,12 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
 
     private func isFixtureWater(_ pixel: RenderedFrame.Pixel) -> Bool {
         pixel.red == 255 && pixel.green == 0 && pixel.blue == 255
+    }
+
+    /// The fixture colour through the globe shading (deepening, glow) but
+    /// nothing else: the placeholder blue and the land under the water both
+    /// carry far more green.
+    private func isWaterLike(_ pixel: RenderedFrame.Pixel) -> Bool {
+        pixel.red > 150 && pixel.green < 60 && pixel.blue > 150
     }
 }

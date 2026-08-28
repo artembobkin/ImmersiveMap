@@ -410,8 +410,11 @@ enum VisualReviewCatalogue {
             blank map colour inside the edge of the planet and no moire or \
             shimmer where the surface compresses toward the horizon. No \
             hairlines along tile borders, and no sliver where a coarser tile \
-            meets a finer one. The limb itself stays a clean circle under the \
-            atmosphere; nothing of the far side shows through near the edge.
+            meets a finer one. No lattice of pale diamonds in the open ocean \
+            around the equator (the layer under the water showing where its \
+            chords dipped under the surface depth). The limb itself stays a \
+            clean circle under the atmosphere; nothing of the far side shows \
+            through near the edge.
             """,
             settings: .default,
             subject: .still(camera: Place.globeLimb)),

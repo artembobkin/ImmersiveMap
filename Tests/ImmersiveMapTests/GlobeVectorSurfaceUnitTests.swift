@@ -32,9 +32,12 @@ final class GlobeSurfaceLiftTests: XCTestCase {
     }
 
     func testSagsComputedIndependently() {
-        // z0, step 64 of 4096 over a full equator: theta = 2 pi 64 / 4096.
+        // z0, step 64 of 4096 over a full equator: theta = 2 pi 64 / 4096,
+        // and the longest chord of a cell is its diagonal, theta * sqrt 2.
         let theta = 2 * Float.pi * 64 / 4096
-        XCTAssertEqual(GlobeSurfaceLift.polygonSag(tileZoom: 0), 1 - cos(theta / 2), accuracy: 1e-7)
+        XCTAssertEqual(GlobeSurfaceLift.polygonSag(tileZoom: 0), 1 - cos(theta * sqrt(2) / 2), accuracy: 1e-7)
+        XCTAssertGreaterThan(GlobeSurfaceLift.polygonSag(tileZoom: 0), 2 * (1 - cos(theta / 2)) * 0.99,
+                             "The diagonal sags about twice the step")
         // z0's tile spans the whole Mercator latitude range over 60 rows.
         let maxLatitude = 2 * atan(exp(Float.pi)) - Float.pi / 2
         XCTAssertEqual(GlobeSurfaceLift.gridSag(tileZoom: 0), 1 - cos(2 * maxLatitude / 60 / 2), accuracy: 1e-7)
