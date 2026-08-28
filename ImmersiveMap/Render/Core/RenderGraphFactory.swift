@@ -14,9 +14,6 @@ enum RenderGraphFactory {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
                                                                         tileTraceRecorder: context.tileTraceRecorder)
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
-        let tileGlobeTextureSubsystem = TileAtlasSubsystem(tilesTexture: context.tilesTexture,
-                                                           tileTraceRecorder: context.tileTraceRecorder,
-                                                           renderPath: context.globeSurfaceRenderPath)
         let baseLabelSubsystem = BaseLabelPrepareSubsystem(baseLabelCache: context.baseLabelCache,
                                                            roadLabelCache: context.roadLabelCache,
                                                            baseLabelTraceRecorder: context.baseLabelTraceRecorder,
@@ -76,21 +73,15 @@ enum RenderGraphFactory {
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
         let globeSurfaceSubsystem = GlobeSurfaceRenderSubsystem(globeDepthState: context.extrudedDepthState,
-                                                                globePipeline: context.globePipeline,
                                                                 placeholderPipeline: context.globeSurfacePlaceholderPipeline,
-                                                                mapSurfaceGridBuffers: context.mapSurfaceGridBuffers,
-                                                                tilesTexture: context.tilesTexture,
-                                                                debugOverlayControls: debugOverlayControls,
-                                                                renderPath: context.globeSurfaceRenderPath)
+                                                                mapSurfaceGridBuffers: context.mapSurfaceGridBuffers)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
                                                                             surfaceDepthState: context.globeCapDepthState,
                                                                             depthDisabledState: context.depthDisabledState,
-                                                                            debugOverlayControls: debugOverlayControls,
-                                                                            renderPath: context.globeSurfaceRenderPath)
+                                                                            debugOverlayControls: debugOverlayControls)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,
-                                                        globeCapRenderer: context.globeCapRenderer,
-                                                        tilesTexture: context.tilesTexture)
+                                                        globeCapRenderer: context.globeCapRenderer)
         let debugSubsystem = DebugOverlayRenderSubsystem(polygonPipeline: context.polygonPipeline,
                                                          debugOverlayRenderer: context.debugOverlayRenderer,
                                                          textRenderer: context.textRenderer,
@@ -99,7 +90,6 @@ enum RenderGraphFactory {
         let subsystems: [any RenderSubsystem] = [
             tileDemandPlacementSubsystem,
             tileProjectionIndexSubsystem,
-            tileGlobeTextureSubsystem,
             baseLabelSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,

@@ -250,67 +250,6 @@ extension TileTraceEvent {
                ])
     }
 
-    static func atlasTextureStage(frameIndex: UInt64,
-                                  textureChanged: Bool,
-                                  placementVersion: UInt64,
-                                  plan: TileAtlasPlan,
-                                  surface: String) -> TileTraceEvent {
-        .event("atlas_texture_stage",
-               frameIndex: frameIndex,
-               fields: [
-                   "textureChanged": .bool(textureChanged),
-                   "placementVersion": .int(Int(placementVersion)),
-                   "allocations": .int(plan.allocations.count),
-                   "pages": .int(plan.pageSummaries.count),
-                   "downgraded": .int(plan.downgradedAllocationCount),
-                   "skipped": .int(plan.skippedAllocationCount),
-                   "surface": .string(surface)
-               ])
-    }
-
-    static func atlasTextureRedraw(frameIndex: UInt64,
-                                   plan: TileAtlasPlan,
-                                   encodedPages: Int) -> TileTraceEvent {
-        .event("atlas_texture_redraw",
-               frameIndex: frameIndex,
-               fields: [
-                   "allocations": .int(plan.allocations.count),
-                   "pages": .int(encodedPages),
-                   "downgraded": .int(plan.downgradedAllocationCount),
-                   "skipped": .int(plan.skippedAllocationCount)
-               ])
-    }
-
-    static func atlasPlanReused(frameIndex: UInt64,
-                                placementVersion: UInt64,
-                                plan: TileAtlasPlan,
-                                surface: String) -> TileTraceEvent {
-        .event("atlas_plan_reused",
-               frameIndex: frameIndex,
-               fields: [
-                   "placementVersion": .int(Int(placementVersion)),
-                   "allocations": .int(plan.allocations.count),
-                   "pages": .int(plan.pageSummaries.count),
-                   "surface": .string(surface)
-               ])
-    }
-
-    static func atlasPlanRebuilt(frameIndex: UInt64,
-                                 placementVersion: UInt64,
-                                 plan: TileAtlasPlan,
-                                 surface: String) -> TileTraceEvent {
-        .event("atlas_plan_rebuilt",
-               frameIndex: frameIndex,
-               fields: [
-                   "placementVersion": .int(Int(placementVersion)),
-                   "allocations": .int(plan.allocations.count),
-                   "pages": .int(plan.pageSummaries.count),
-                   "downgraded": .int(plan.downgradedAllocationCount),
-                   "skipped": .int(plan.skippedAllocationCount),
-                   "surface": .string(surface)
-               ])
-    }
-
     static func tileLoadingStatusSnapshot(frameIndex: UInt64,
                                           snapshot: TileLoadingStatusSnapshot) -> TileTraceEvent {
         var fields: [String: TileTraceValue] = [

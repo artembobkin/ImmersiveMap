@@ -21,7 +21,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertTrue(didRequestSurfaceSwitch)
     }
 
-    func testAtlasTraceControlInvokesCallbackAndReflectsSnapshot() {
+    func testTileTraceControlInvokesCallbackAndReflectsSnapshot() {
         let view = DebugOverlayHUDView()
         let fileURL = URL(fileURLWithPath: "/tmp/immersive-map-tile-trace.jsonl")
         var didToggleRecording = false
@@ -47,7 +47,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          wireframeEnabled: false,
                                                          roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
+        view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateTilesTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -83,7 +83,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          wireframeEnabled: false,
                                                          roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
+        view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateBaseLabelsTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -101,7 +101,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          wireframeEnabled: false,
                                                          roadLabelTilesEnabled: true),
                    earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
+        view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateBaseLabelsTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -129,51 +129,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertTrue(view.isRoadLabelTilesSwitchOnForTesting)
     }
 
-    func testAtlasTabDisplaysAtlasSnapshotPages() {
-        let view = DebugOverlayHUDView()
-        var settings = ImmersiveMapSettings.default.debug
-        settings.enableDebugPanel = true
-        view.apply(isDebugPanelEnabled: true,
-                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
-                                                         tileLayersEnabled: false,
-                                                         wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
-        view.apply(snapshot: DebugOverlayHUDSnapshot(
-            coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
-            diagnosticsLines: [],
-            atlasPages: [
-                TileAtlasDebugPage(pageIndex: 0,
-                                    allocations: [
-                                        TileAtlasDebugAllocation(pageIndex: 0,
-                                                                  slotColumn: 0,
-                                                                  slotRow: 0,
-                                                                  slotsPerSide: 4,
-                                                                  cellSizePx: 1024,
-                                                                  atlasDepth: .depth2,
-                                                                  sourceTile: Tile(x: 0, y: 0, z: 2),
-                                                                  targetTile: Tile(x: 0, y: 0, z: 2),
-                                                                  screenDemandPx: 512,
-                                                                  isFallback: false)
-                                    ])
-            ],
-            tileLoadingStatusLines: [],
-            tileLoadingStatusTiles: [],
-            coordinateScale: settings.coordinateScale,
-            diagnosticsScale: settings.diagnosticsScale,
-            leftPadding: settings.leftPadding,
-            topPadding: settings.topPadding,
-            sectionSpacing: settings.sectionSpacing,
-            textColor: settings.textColor
-        ))
-
-        view.simulateAtlasTabSelectionForTesting()
-
-        XCTAssertTrue(view.isAtlasTabSelectedForTesting)
-        XCTAssertEqual(view.atlasPreviewPageCountForTesting, 1)
-    }
-
-    func testControlsTabDisplaysDebugSwitchesWithoutStatsOrAtlasContent() {
+    func testControlsTabDisplaysDebugSwitchesWithoutStatsContent() {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
@@ -183,7 +139,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          wireframeEnabled: false,
                                                          roadLabelTilesEnabled: false),
                    earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
+        view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateControlsTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -191,7 +147,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertTrue(view.isControlsTabSelectedForTesting)
         XCTAssertTrue(view.areDebugControlsVisibleForTesting)
         XCTAssertFalse(view.isStatsContentVisibleForTesting)
-        XCTAssertFalse(view.isAtlasContentVisibleForTesting)
     }
 
     func testTileGridControlInvokesCallbackAndReflectsState() {
@@ -248,7 +203,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertEqual(view.tileGridDensityForTesting, 2)
     }
 
-    func testTilesTabDisplaysTileLoadingStatusWithoutStatsOrAtlasContent() {
+    func testTilesTabDisplaysTileLoadingStatusWithoutStatsContent() {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
@@ -261,7 +216,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: [
                 "network in:1 done:2 fail:0 bytes:1024",
                 "parse in:1 done:1 fail:0",
@@ -294,7 +248,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertEqual(view.tilesStatusTextForTesting,
                        "network in:1 done:2 fail:0 bytes:1024\nparse in:1 done:1 fail:0\ncurrent net:z4/1/1 parse:z4/2/1\ntiles total: 2")
         XCTAssertFalse(view.isStatsContentVisibleForTesting)
-        XCTAssertFalse(view.isAtlasContentVisibleForTesting)
     }
 
     func testTilesTabExpandsTilePreparationStagesAndParseLayers() {
@@ -311,7 +264,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: [
                 "network in:0 done:1 fail:0 bytes:1024",
                 "parse in:0 done:1 fail:0"
@@ -381,7 +333,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: [],
             tileLoadingStatusTiles: [
                 TileLoadingStatusTileSnapshot(tile: Tile(x: 0, y: 0, z: 0),
@@ -417,7 +368,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: [],
             tileLoadingStatusTiles: [
                 TileLoadingStatusTileSnapshot(tile: Tile(x: 0, y: 0, z: 0),
@@ -457,7 +407,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false),
                    earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings, atlasPages: []))
+        view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateTilesTabSelectionForTesting()
         view.layoutIfNeeded()
@@ -469,7 +419,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
-        let snapshot = makeSnapshot(settings: settings, atlasPages: [])
+        let snapshot = makeSnapshot(settings: settings)
 
         view.apply(snapshot: snapshot)
         let firstUpdateCount = view.textUpdateCountForTesting
@@ -517,7 +467,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: [
                 "network in:0 done:80 fail:0 bytes:1024",
                 "parse in:0 done:80 fail:0"
@@ -563,74 +512,10 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertTrue(view.isEarthSceneSwitchOnForTesting)
     }
 
-    func testAtlasTabCapsPanelHeightWhenManyAtlasPagesAreVisible() {
-        let view = DebugOverlayHUDView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        var settings = ImmersiveMapSettings.default.debug
-        settings.enableDebugPanel = true
-        view.apply(isDebugPanelEnabled: true,
-                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
-                                                         tileLayersEnabled: false,
-                                                         wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings,
-                                          atlasPages: (0..<12).map(makeAtlasPage)))
-
-        view.simulateAtlasTabSelectionForTesting()
-        view.layoutIfNeeded()
-
-        XCTAssertLessThanOrEqual(view.debugPanelFrameForTesting.maxY, view.bounds.maxY)
-        XCTAssertTrue(view.isAtlasScrollEnabledForTesting)
-    }
-
-    func testAtlasPreviewDrawsTargetTileLabelInsideAllocation() throws {
-        let view = DebugOverlayHUDView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        var settings = ImmersiveMapSettings.default.debug
-        settings.enableDebugPanel = true
-        view.apply(isDebugPanelEnabled: true,
-                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
-                                                         tileLayersEnabled: false,
-                                                         wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
-        view.apply(snapshot: makeSnapshot(settings: settings,
-                                          atlasPages: [
-                                              TileAtlasDebugPage(pageIndex: 0,
-                                                                  allocations: [
-                                                                      TileAtlasDebugAllocation(pageIndex: 0,
-                                                                                                slotColumn: 1,
-                                                                                                slotRow: 2,
-                                                                                                slotsPerSide: 4,
-                                                                                                cellSizePx: 1024,
-                                                                                                atlasDepth: .depth2,
-                                                                                                sourceTile: Tile(x: 0, y: 0, z: 2),
-                                                                                                targetTile: Tile(x: 2, y: 1, z: 2),
-                                                                                                screenDemandPx: 512,
-                                                                                                isFallback: false)
-                                                                  ])
-                                          ]))
-
-        view.simulateAtlasTabSelectionForTesting()
-        view.layoutIfNeeded()
-
-        let atlasView = try XCTUnwrap(findAtlasLayoutView(in: view))
-        let image = atlasView.renderedImageForTesting(scale: 2)
-        let pageSide = min(max(atlasView.bounds.width, 1), 260)
-        let cell = pageSide / 4
-        let labelProbeRect = CGRect(x: cell + 4,
-                                    y: 16 + cell + 4,
-                                    width: cell - 8,
-                                    height: min(20, cell - 8))
-
-        XCTAssertGreaterThan(image.brightPixelCountForTesting(in: labelProbeRect, scale: 2), 0)
-    }
-
-    private func makeSnapshot(settings: ImmersiveMapSettings.DebugSettings,
-                              atlasPages: [TileAtlasDebugPage]) -> DebugOverlayHUDSnapshot {
+    private func makeSnapshot(settings: ImmersiveMapSettings.DebugSettings) -> DebugOverlayHUDSnapshot {
         DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: atlasPages,
             tileLoadingStatusLines: [],
             tileLoadingStatusTiles: [],
             coordinateScale: settings.coordinateScale,
@@ -647,7 +532,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
-            atlasPages: [],
             tileLoadingStatusLines: lines,
             tileLoadingStatusTiles: [],
             coordinateScale: settings.coordinateScale,
@@ -657,35 +541,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
             sectionSpacing: settings.sectionSpacing,
             textColor: settings.textColor
         )
-    }
-
-    private func makeAtlasPage(pageIndex: Int) -> TileAtlasDebugPage {
-        TileAtlasDebugPage(pageIndex: pageIndex,
-                            allocations: [
-                                TileAtlasDebugAllocation(pageIndex: pageIndex,
-                                                          slotColumn: 0,
-                                                          slotRow: 0,
-                                                          slotsPerSide: 4,
-                                                          cellSizePx: 1024,
-                                                          atlasDepth: .depth2,
-                                                          sourceTile: Tile(x: 0, y: 0, z: 2),
-                                                          targetTile: Tile(x: 0, y: 0, z: 2),
-                                                          screenDemandPx: 512,
-                                                          isFallback: false)
-                            ])
-    }
-
-    private func findAtlasLayoutView(in view: UIView) -> UIView? {
-        if String(describing: type(of: view)) == "DebugOverlayAtlasLayoutView" {
-            return view
-        }
-
-        for subview in view.subviews {
-            if let match = findAtlasLayoutView(in: subview) {
-                return match
-            }
-        }
-        return nil
     }
 
     private func findTilesStatusListView(in view: UIView) -> UIView? {
@@ -702,25 +557,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
     }
 }
 
-private extension UIView {
-    func renderedImageForTesting(scale: CGFloat) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = false
-        return UIGraphicsImageRenderer(size: bounds.size, format: format).image { context in
-            layer.render(in: context.cgContext)
-        }
-    }
-}
-
 private extension UIImage {
-    func brightPixelCountForTesting(in rect: CGRect, scale: CGFloat) -> Int {
-        guard let cgImage else { return 0 }
-        return pixelCountForTesting(in: rect, scale: scale) { red, green, blue, alpha in
-            alpha > 180 && red > 210 && green > 210 && blue > 210
-        }
-    }
-
     func greenPixelCountForTesting(in rect: CGRect, scale: CGFloat) -> Int {
         guard let cgImage else { return 0 }
         return pixelCountForTesting(in: rect, scale: scale) { red, green, blue, alpha in

@@ -21,7 +21,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var placeTilesContext: PlaceTilesContext = .empty
     private var backdropPlaceTilesContext: PlaceTilesContext = .empty
     private var shadowCasterPlaceTilesContext: PlaceTilesContext = .empty
-    private var tileAtlasPlaceTilesContext: TileAtlasPlaceTilesContext = .empty
     private var globeSurfaceSlots: [Tile] = []
     private var placementVersion: UInt64 = 0
     private var demandGateFingerprint: Int?
@@ -137,10 +136,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                                  readyTilesBySource: readyTilesBySource,
                                                                                  zoom: tileZoomLevel,
                                                                                  previousContext: shadowCasterPlaceTilesContext)
-            tileAtlasPlaceTilesContext = TileAtlasPlaceTilesPlanner.buildPlacements(baseTargets: preprocessedVisibleTiles,
-                                                                                         readyTilesBySource: readyTilesBySource,
-                                                                                         baseZoom: tileZoomLevel,
-                                                                                         previousContext: tileAtlasPlaceTilesContext)
             globeSurfaceSlots = preprocessedVisibleTiles.map(\.tile)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
@@ -202,9 +197,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         for placement in shadowCasterPlaceTilesContext.tilePlacements {
             activeTiles.insert(placement.metalTile.tile)
         }
-        for placement in tileAtlasPlaceTilesContext.tilePlacements {
-            activeTiles.insert(placement.metalTile.tile)
-        }
         activePlacementTiles = activeTiles
     }
 
@@ -217,7 +209,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             placeTilesContext: placeTilesContext,
             backdropPlaceTilesContext: backdropPlaceTilesContext,
             shadowCasterPlaceTilesContext: shadowCasterPlaceTilesContext,
-            tileAtlasPlaceTilesContext: tileAtlasPlaceTilesContext,
             globeSurfaceSlots: globeSurfaceSlots,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
@@ -251,7 +242,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         placeTilesContext = .empty
         backdropPlaceTilesContext = .empty
         shadowCasterPlaceTilesContext = .empty
-        tileAtlasPlaceTilesContext = .empty
         globeSurfaceSlots = []
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil

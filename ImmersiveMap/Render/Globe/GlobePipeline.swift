@@ -6,16 +6,15 @@ import MetalKit
 class GlobePipeline {
     let pipelineState: MTLRenderPipelineState
     
-    /// `fragmentFunctionName` selects between the tiled surface and the
-    /// placeholder fill drawn under it; both share the vertex stage, so the two
-    /// variants land on exactly the same sphere geometry.
+    /// The placeholder fill of the globe surface: the sphere grid of one tile
+    /// slot in the map colour, which writes the surface depth under the tile
+    /// geometry drawn on the sphere (TileSphere.metal).
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
-         sampleCount: Int = 1,
-         fragmentFunctionName: String = "globeFragmentShader") {
+         sampleCount: Int = 1) {
         let vertexFunction = library.makeFunction(name: "globeVertexShader")
-        let fragmentFunction = library.makeFunction(name: fragmentFunctionName)
+        let fragmentFunction = library.makeFunction(name: "globeSurfacePlaceholderFragmentShader")
         
         let vertexDescriptor = MTLVertexDescriptor()
         vertexDescriptor.attributes[0].format = .float2

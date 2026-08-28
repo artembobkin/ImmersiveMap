@@ -79,7 +79,6 @@ final class SharedRenderResources {
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
-    let globePipeline: GlobePipeline
     /// Same sphere, flat map color: the fill the tiles are painted over.
     let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
@@ -144,7 +143,6 @@ final class SharedRenderResources {
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
-        self.globePipeline = compiled.globePipeline
         self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
@@ -174,7 +172,6 @@ final class SharedRenderResources {
         let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
-        let globePipeline: GlobePipeline
         let globeSurfacePlaceholderPipeline: GlobePipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
@@ -209,7 +206,6 @@ final class SharedRenderResources {
         var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
-        var globePipeline: GlobePipeline?
         var globeSurfacePlaceholderPipeline: GlobePipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
@@ -251,8 +247,8 @@ final class SharedRenderResources {
                                           supportsFramebufferFetch: supportsFramebufferFetch,
                                           readsGroundShadowMask: true) },
             { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
-            // The atlas variant renders into non-MSAA atlas pages, which share
-            // the same color format as the drawable.
+            // The single-sample variant, for offscreen bakes in the
+            // drawable's color format (the caps' edge strip).
             { globeTileTexturePipeline = TilePipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library) },
@@ -261,16 +257,11 @@ final class SharedRenderResources {
                                                         library: library,
                                                         sampleCount: sampleCount,
                                                         surface: .sphere) },
-            { globePipeline = GlobePipeline(metalDevice: device,
-                                            pixelFormat: pixelFormat,
-                                            library: library,
-                                            sampleCount: sampleCount) },
             { globeSurfacePlaceholderPipeline = GlobePipeline(
                 metalDevice: device,
                 pixelFormat: pixelFormat,
                 library: library,
-                sampleCount: sampleCount,
-                fragmentFunctionName: "globeSurfacePlaceholderFragmentShader") },
+                sampleCount: sampleCount) },
             { fxaaPipeline = FXAAPipeline(metalDevice: device,
                                           pixelFormat: pixelFormat,
                                           library: library) },
@@ -303,7 +294,6 @@ final class SharedRenderResources {
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
-            globePipeline: globePipeline!,
             globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,

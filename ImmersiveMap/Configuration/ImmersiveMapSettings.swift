@@ -285,7 +285,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     /// Reuse of dismantled map views. When a SwiftUI screen with an
     /// `ImmersiveMapView` goes away, its platform view (renderer, GPU tile
-    /// cache, atlas pages) is parked for `parkedTimeToLive` seconds instead of
+    /// cache, text atlases) is parked for `parkedTimeToLive` seconds instead of
     /// being destroyed, and the next `ImmersiveMapView` adopts it warm. New
     /// settings are reconciled on adoption through the regular settings-apply
     /// path, so adopting with a different configuration is safe. An adopted

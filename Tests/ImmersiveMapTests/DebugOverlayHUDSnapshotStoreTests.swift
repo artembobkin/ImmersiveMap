@@ -34,7 +34,6 @@ final class DebugOverlayHUDSnapshotStoreTests: XCTestCase {
         return DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: zoom, latLon: "lat: 55.756 lon: 37.617"),
             diagnosticsLines: ["frame:1 dt:16.67ms fps:60.0"],
-            atlasPages: [],
             tileLoadingStatusLines: [],
             tileLoadingStatusTiles: [],
             coordinateScale: settings.coordinateScale,

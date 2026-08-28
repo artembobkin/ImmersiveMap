@@ -40,7 +40,7 @@ final class GlobeSurfaceToneUniformTests: XCTestCase {
         XCTAssertLessThan(lastStep, middleStep)
     }
 
-    /// The deepening is one look on the whole sphere: the tiled surface, the
+    /// The deepening is one look on the whole sphere: the tile geometry, the
     /// placeholder fill under a still-loading tile and the polar caps all
     /// bind the tone and run the same function, otherwise a tile that has not
     /// arrived, or the pole, would show in the paler palette next to the rest.
@@ -51,8 +51,11 @@ final class GlobeSurfaceToneUniformTests: XCTestCase {
         let source = try shaderSource("Render/Shaders/Globe/Globe.metal")
             + shaderSource("Render/Shaders/Globe/GlobeSurfaceShading.h")
 
-        XCTAssertEqual(source.components(separatedBy: "constant GlobeSurfaceTone& tone [[buffer(7)]]").count - 1, 3,
-                       "The tiled surface, the placeholder fill and the cap each bind the tone")
+        XCTAssertEqual(source.components(separatedBy: "constant GlobeSurfaceTone& tone [[buffer(7)]]").count - 1, 2,
+                       "The placeholder fill and the cap each bind the tone")
+        let sphereSource = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertEqual(sphereSource.components(separatedBy: "constant GlobeSurfaceTone& tone [[buffer(8)]]").count - 1, 1,
+                       "The tile geometry drawn on the sphere binds the tone")
         XCTAssertEqual(source.components(separatedBy: "globeSurfaceDeepen(color.rgb, facingDot, tone)").count - 1, 2,
                        "The shared surface shade and the cap both deepen the colour")
 

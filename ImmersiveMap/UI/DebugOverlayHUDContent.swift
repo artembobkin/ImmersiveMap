@@ -6,27 +6,6 @@ import Foundation
 /// Platform-neutral construction of debug HUD texts.
 /// UIKit and AppKit views use the same strings; the controls themselves are platform-specific.
 enum DebugOverlayHUDTextComposer {
-    static func atlasDetailsText(pages: [TileAtlasDebugPage]) -> String {
-        guard pages.isEmpty == false else {
-            return "atlas pages: none"
-        }
-
-        let allocationCount = pages.reduce(0) { $0 + $1.allocations.count }
-        let pageSummary = pages
-            .map { "p\($0.pageIndex):\($0.allocations.count)" }
-            .joined(separator: " ")
-        let previewLines = pages.flatMap { page in
-            page.allocations.prefix(4).map { allocation in
-                return "p\(page.pageIndex) d\(allocation.atlasDepth.rawValue) " +
-                    "src z\(allocation.sourceTile.z)/\(allocation.sourceTile.x)/\(allocation.sourceTile.y) " +
-                    "dst z\(allocation.targetTile.z)/\(allocation.targetTile.x)/\(allocation.targetTile.y)" +
-                    allocationStateSuffix(allocation)
-            }
-        }
-        return (["atlas pages:\(pages.count) alloc:\(allocationCount) \(pageSummary)"] + previewLines)
-            .joined(separator: "\n")
-    }
-
     static func tilesStatusText(lines: [String]) -> String {
         guard lines.isEmpty == false else {
             return "tiles: idle"
@@ -78,17 +57,6 @@ enum DebugOverlayHUDTextComposer {
 
         let prefix = snapshot.isRecording ? "Recording" : "Last trace"
         return "\(prefix): \(fileURL.path)"
-    }
-
-    private static func allocationStateSuffix(_ allocation: TileAtlasDebugAllocation) -> String {
-        switch allocation.lodKind {
-        case .exact:
-            return allocation.sourceTile == allocation.targetTile ? "" : " retained"
-        case .coarseSubstitute:
-            return " coarse"
-        case .retainedReplacement:
-            return " retained"
-        }
     }
 }
 

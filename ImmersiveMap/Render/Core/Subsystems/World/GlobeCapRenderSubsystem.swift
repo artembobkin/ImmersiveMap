@@ -9,16 +9,13 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
     private let globeCapDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let globeCapRenderer: GlobeCapRenderer
-    private let tilesTexture: TileAtlasTexture
 
     init(globeCapDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
-         globeCapRenderer: GlobeCapRenderer,
-         tilesTexture: TileAtlasTexture) {
+         globeCapRenderer: GlobeCapRenderer) {
         self.globeCapDepthState = globeCapDepthState
         self.depthDisabledState = depthDisabledState
         self.globeCapRenderer = globeCapRenderer
-        self.tilesTexture = tilesTexture
     }
 
     func update(frameContext _: FrameContext) {}
@@ -39,8 +36,7 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
                               atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
                                                      earthScene: frameContext.earthSceneUniform,
                                                      globe: frameContext.globeRenderUniform),
-                              tone: GlobeSurfaceToneUniform.make(zoom: frameContext.zoom),
-                              tilesTexture: tilesTexture)
+                              tone: GlobeSurfaceToneUniform.make(zoom: frameContext.zoom))
 
         encoder.setDepthStencilState(depthDisabledState)
     }

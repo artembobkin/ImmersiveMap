@@ -375,7 +375,6 @@ final class RenderFrameEngine {
         resourceRegistry.setPipeline(persistentContext.tilePipeline.pipelineState, named: .tilePipeline)
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.pipelineState, named: .extrudedTilePipeline)
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.compositePipelineState, named: .extrudedTileCompositePipeline)
-        resourceRegistry.setPipeline(persistentContext.globePipeline.pipelineState, named: .globePipeline)
         resourceRegistry.setTexture(persistentContext.textRenderer.texture, named: .labelGlyphAtlas)
         resourceRegistry.setTexture(persistentContext.poiSpriteAtlas.texture, named: .poiSpriteAtlas)
     }

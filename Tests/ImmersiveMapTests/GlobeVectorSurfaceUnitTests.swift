@@ -43,24 +43,11 @@ final class GlobeSurfaceLiftTests: XCTestCase {
     }
 }
 
-final class GlobeSurfaceRenderPathTests: XCTestCase {
-    func testVectorIsTheDefaultAndAtlasIsOptIn() {
-        XCTAssertEqual(GlobeSurfaceRenderPath.resolve(environment: [:]), .vector)
-        XCTAssertEqual(GlobeSurfaceRenderPath.resolve(environment: ["IMMERSIVEMAP_GLOBE_SURFACE_PATH": "atlas"]), .atlas)
-        XCTAssertEqual(GlobeSurfaceRenderPath.resolve(environment: ["IMMERSIVEMAP_GLOBE_SURFACE_PATH": "Atlas"]), .atlas)
-        XCTAssertEqual(GlobeSurfaceRenderPath.resolve(environment: ["IMMERSIVEMAP_GLOBE_SURFACE_PATH": "vector"]), .vector)
-        XCTAssertEqual(GlobeSurfaceRenderPath.resolve(environment: ["IMMERSIVEMAP_GLOBE_SURFACE_PATH": ""]), .vector)
-    }
-}
-
 final class GlobeLineDashScaleTests: XCTestCase {
     func testCoarseTilesKeepTheZ1DashProportion() {
         XCTAssertEqual(GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: 0), 0.7)
         XCTAssertEqual(GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: 1), 0.7)
         XCTAssertEqual(GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: 2), 0.9)
         XCTAssertEqual(GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: 3), 1.0)
-        XCTAssertEqual(GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: 0),
-                       TileAtlasAllocation.coarseTileDashScale(sourceTileZoom: 0),
-                       "The globe keeps the dash look the atlas had")
     }
 }

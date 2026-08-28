@@ -52,16 +52,4 @@ enum RendererDebugOverlayDrawer {
                                                         boxesState: frameContext.sharedState.baseLabelDebugBoxesState)
         }
     }
-
-    static func makeAtlasDebugLines(summary: TileAtlasDebugSummary?) -> [String] {
-        guard let summary else { return [] }
-
-        let depthCounts = TileAtlasSlotDepth.allCases
-            .map { "d\($0.rawValue):\(summary.slotCount(depth: $0))" }
-            .joined(separator: " ")
-        return [
-            "atlas pages:\(summary.pageCount) alloc:\(summary.allocationCount) down:\(summary.downgradedAllocationCount) skip:\(summary.skippedAllocationCount)",
-            "atlas \(depthCounts)"
-        ]
-    }
 }

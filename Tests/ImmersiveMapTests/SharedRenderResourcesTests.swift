@@ -43,7 +43,6 @@ final class SharedRenderResourcesTests: XCTestCase {
 
         // Mutable state must stay per view.
         XCTAssertFalse(first.tileRenderStore === second.tileRenderStore)
-        XCTAssertFalse(first.tilesTexture === second.tilesTexture)
         XCTAssertFalse(first.baseLabelCache === second.baseLabelCache)
         XCTAssertFalse(first.avatarsRenderer === second.avatarsRenderer)
         XCTAssertFalse(first.starfieldRenderer === second.starfieldRenderer)

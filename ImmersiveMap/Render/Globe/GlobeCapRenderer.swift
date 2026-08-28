@@ -10,7 +10,6 @@ struct GlobeCapParams {
     var fillColor: SIMD4<Float>
     var blendStartAbsLatitude: Float
     var blendEndAbsLatitude: Float
-    var sampleOptions = SIMD4<Float>(0, 0, 0, 0)
 }
 
 struct GlobeCapPalette {
@@ -22,18 +21,16 @@ final class GlobeCapRenderer {
     private let pipeline: GlobeCapPipeline
     private let northCapBuffers: MapSurfaceGridBuffers
     private let southCapBuffers: MapSurfaceGridBuffers
-    private let fallbackTexture: MTLTexture
     private let palette: GlobeCapPalette
 
-    /// The style-independent half of the renderer: the pipeline, the polar cap
-    /// grids and the fallback texture are pure functions of the device, so one
-    /// set serves every map view in the process. Only the palette bakes style
-    /// colors and stays per instance.
+    /// The style-independent half of the renderer: the pipeline and the polar
+    /// cap grids are pure functions of the device, so one set serves every map
+    /// view in the process. Only the palette bakes style colors and stays per
+    /// instance.
     struct SharedResources {
         let pipeline: GlobeCapPipeline
         let northCapBuffers: MapSurfaceGridBuffers
         let southCapBuffers: MapSurfaceGridBuffers
-        let fallbackTexture: MTLTexture
 
         static func make(metalDevice: MTLDevice,
                          pixelFormat: MTLPixelFormat,
@@ -61,8 +58,7 @@ final class GlobeCapRenderer {
                                                             indices: northCap.indices),
                 southCapBuffers: MapSurfaceGridBuffers.make(metalDevice: metalDevice,
                                                             vertices: southCap.vertices,
-                                                            indices: southCap.indices),
-                fallbackTexture: GlobeCapRenderer.makeFallbackTexture(metalDevice: metalDevice)
+                                                            indices: southCap.indices)
             )
         }
     }
@@ -73,7 +69,6 @@ final class GlobeCapRenderer {
         pipeline = sharedResources.pipeline
         northCapBuffers = sharedResources.northCapBuffers
         southCapBuffers = sharedResources.southCapBuffers
-        fallbackTexture = sharedResources.fallbackTexture
         palette = Self.makePalette(mapBaseColors: mapBaseColors,
                                    maxLatitude: Float(maxLatitude))
     }
@@ -83,8 +78,7 @@ final class GlobeCapRenderer {
               globe: GlobeUniform,
               earthScene: EarthSceneUniform,
               atmosphere: GlobeAtmosphereUniform,
-              tone: GlobeSurfaceToneUniform,
-              tilesTexture: TileAtlasTexture) {
+              tone: GlobeSurfaceToneUniform) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
         // Cap winding differs from the globe tile mesh after geographic-latitude
         // alignment, so disabling culling keeps the patch visible on both poles.
@@ -101,29 +95,8 @@ final class GlobeCapRenderer {
         renderEncoder.setFragmentBytes(&atmosphere, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 6)
         renderEncoder.setFragmentBytes(&tone, length: MemoryLayout<GlobeSurfaceToneUniform>.stride, index: 7)
 
-        var fallbackTileData = Self.makeFallbackTileData()
-        renderEncoder.setFragmentTexture(fallbackTexture, index: 0)
-        renderEncoder.setFragmentBytes(&fallbackTileData, length: MemoryLayout<TileAtlasTexture.TileData>.stride, index: 3)
-        drawCapPair(renderEncoder: renderEncoder, textureSamplingEnabled: false)
-
-        let pageMappings = TileAtlasPageMappingSorter.sortedPageMappings(tilesTexture: tilesTexture)
-        var activePageIndex: Int?
-        for pageMapping in pageMappings {
-            if activePageIndex != pageMapping.pageIndex {
-                renderEncoder.setFragmentTexture(tilesTexture.pages[pageMapping.pageIndex].texture, index: 0)
-                activePageIndex = pageMapping.pageIndex
-            }
-
-            var mapping = pageMapping.mapping
-            renderEncoder.setFragmentBytes(&mapping, length: MemoryLayout<TileAtlasTexture.TileData>.stride, index: 3)
-            let lastTileY = (1 << Int(mapping.tile.z)) - 1
-            if mapping.tile.y == 0 {
-                drawNorthCap(renderEncoder: renderEncoder, textureSamplingEnabled: true)
-            }
-            if Int(mapping.tile.y) == lastTileY {
-                drawSouthCap(renderEncoder: renderEncoder, textureSamplingEnabled: true)
-            }
-        }
+        drawNorthCap(renderEncoder: renderEncoder)
+        drawSouthCap(renderEncoder: renderEncoder)
     }
 
     static func makePalette(mapBaseColors: ImmersiveMapBaseColors,
@@ -144,28 +117,16 @@ final class GlobeCapRenderer {
             north: GlobeCapParams(edgeColor: northComposite,
                                   fillColor: northComposite,
                                   blendStartAbsLatitude: maxLatitude,
-                                  blendEndAbsLatitude: fadeEndAbsLatitude,
-                                  sampleOptions: SIMD4<Float>(maxLatitude, 0, 0, 0)),
+                                  blendEndAbsLatitude: fadeEndAbsLatitude),
             south: GlobeCapParams(edgeColor: southComposite,
                                   fillColor: southComposite,
                                   blendStartAbsLatitude: maxLatitude,
-                                  blendEndAbsLatitude: fadeEndAbsLatitude,
-                                  sampleOptions: SIMD4<Float>(-maxLatitude, 0, 0, 0))
+                                  blendEndAbsLatitude: fadeEndAbsLatitude)
         )
     }
 
-    private func drawCapPair(renderEncoder: MTLRenderCommandEncoder,
-                             textureSamplingEnabled: Bool) {
-        drawNorthCap(renderEncoder: renderEncoder, textureSamplingEnabled: textureSamplingEnabled)
-        drawSouthCap(renderEncoder: renderEncoder, textureSamplingEnabled: textureSamplingEnabled)
-    }
-
-    private func drawNorthCap(renderEncoder: MTLRenderCommandEncoder,
-                              textureSamplingEnabled: Bool) {
-        let textureSampleFlag: Float = textureSamplingEnabled ? 1 : 0
-
+    private func drawNorthCap(renderEncoder: MTLRenderCommandEncoder) {
         var capParams = palette.north
-        capParams.sampleOptions.y = textureSampleFlag
         renderEncoder.setFragmentBytes(&capParams, length: MemoryLayout<GlobeCapParams>.stride, index: 0)
         renderEncoder.setVertexBuffer(northCapBuffers.verticesBuffer, offset: 0, index: 0)
         renderEncoder.drawIndexedPrimitives(type: .triangle,
@@ -175,12 +136,8 @@ final class GlobeCapRenderer {
                                             indexBufferOffset: 0)
     }
 
-    private func drawSouthCap(renderEncoder: MTLRenderCommandEncoder,
-                              textureSamplingEnabled: Bool) {
-        let textureSampleFlag: Float = textureSamplingEnabled ? 1 : 0
-
+    private func drawSouthCap(renderEncoder: MTLRenderCommandEncoder) {
         var capParams = palette.south
-        capParams.sampleOptions.y = textureSampleFlag
         renderEncoder.setFragmentBytes(&capParams, length: MemoryLayout<GlobeCapParams>.stride, index: 0)
         renderEncoder.setVertexBuffer(southCapBuffers.verticesBuffer, offset: 0, index: 0)
         renderEncoder.drawIndexedPrimitives(type: .triangle,
@@ -188,30 +145,6 @@ final class GlobeCapRenderer {
                                             indexType: southCapBuffers.indexType,
                                             indexBuffer: southCapBuffers.indicesBuffer,
                                             indexBufferOffset: 0)
-    }
-
-    private static func makeFallbackTileData() -> TileAtlasTexture.TileData {
-        TileAtlasTexture.TileData(position: simd_int1(0),
-                                   textureSize: simd_int1(1),
-                                   cellSize: simd_int1(1),
-                                   tile: simd_int3(0, 0, 0),
-                                   sourceTile: simd_int3(0, 0, 0))
-    }
-
-    private static func makeFallbackTexture(metalDevice: MTLDevice) -> MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
-                                                                  width: 1,
-                                                                  height: 1,
-                                                                  mipmapped: false)
-        descriptor.usage = [.shaderRead]
-        descriptor.storageMode = .shared
-        let texture = metalDevice.makeTexture(descriptor: descriptor)!
-        var pixel: UInt32 = 0xFFFFFFFF
-        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1),
-                        mipmapLevel: 0,
-                        withBytes: &pixel,
-                        bytesPerRow: MemoryLayout<UInt32>.stride)
-        return texture
     }
 
     private static func compositeOpaqueColor(foreground: SIMD4<Float>,

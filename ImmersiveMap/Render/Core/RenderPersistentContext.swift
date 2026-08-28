@@ -21,11 +21,8 @@ final class RenderPersistentContext {
     let tilePipeline: TilePipeline
     let globeTileTexturePipeline: TilePipeline
     let globeVectorSurfacePipeline: TilePipeline
-    /// See `GlobeSurfaceRenderPath`; resolved once per renderer.
-    let globeSurfaceRenderPath: GlobeSurfaceRenderPath
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
-    let globePipeline: GlobePipeline
     let globeSurfacePlaceholderPipeline: GlobePipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -59,7 +56,6 @@ final class RenderPersistentContext {
     // MARK: - Tile and Label Resources
 
     let tileRenderStore: TileRenderStore
-    let tilesTexture: TileAtlasTexture
     let textRenderer: TextRenderer
     let poiSpriteAtlas: PoiSpriteAtlas
     let baseLabelCache: BaseLabelCache
@@ -124,10 +120,8 @@ final class RenderPersistentContext {
         self.tilePipeline = shared.tilePipeline
         self.globeTileTexturePipeline = shared.globeTileTexturePipeline
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
-        self.globeSurfaceRenderPath = GlobeSurfaceRenderPath.resolve()
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
-        self.globePipeline = shared.globePipeline
         self.globeSurfacePlaceholderPipeline = shared.globeSurfacePlaceholderPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
@@ -145,17 +139,13 @@ final class RenderPersistentContext {
 
         self.mapSurfaceGridBuffers = shared.mapSurfaceGridBuffers
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
-        // The cap palette bakes style colors; grids, pipeline and fallback
-        // texture come from the shared set.
+        // The cap palette bakes style colors; grids and pipeline come from
+        // the shared set.
         self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  mapBaseColors: mapBaseColors)
         self.textRenderer = shared.textRenderer
         self.poiSpriteAtlas = shared.poiSpriteAtlas
-        self.tilesTexture = TileAtlasTexture(metalDevice: metal.device,
-                                              tilePipeline: globeTileTexturePipeline,
-                                              shadowFallbackTexture: shadowFallbackTexture,
-                                              mapBaseColors: mapBaseColors)
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,
                                                metalDevice: metal.device,
                                                textRenderer: textRenderer,

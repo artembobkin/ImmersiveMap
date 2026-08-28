@@ -229,7 +229,7 @@ final class AtmosphereSettingsTests: XCTestCase {
     // MARK: - Shaders
 
     /// The surface glow and the halo are one thing seen from two sides of the
-    /// limb: the tiled surface, its placeholder fill and the polar caps all
+    /// limb: the tile geometry, its placeholder fill and the polar caps all
     /// shade from the same atmosphere uniform, and the halo shader reads the
     /// same tint. A surface path that forgot the uniform would leave a seam
     /// in the glow at the pole or under a still-loading tile.
@@ -240,8 +240,11 @@ final class AtmosphereSettingsTests: XCTestCase {
         let source = try shaderSource("Render/Shaders/Globe/Globe.metal")
             + shaderSource("Render/Shaders/Globe/GlobeSurfaceShading.h")
 
-        XCTAssertEqual(source.components(separatedBy: "constant GlobeAtmosphere& atmosphere [[buffer(6)]]").count - 1, 3,
-                       "The tiled surface, the placeholder fill and the cap each bind the atmosphere")
+        XCTAssertEqual(source.components(separatedBy: "constant GlobeAtmosphere& atmosphere [[buffer(6)]]").count - 1, 2,
+                       "The placeholder fill and the cap each bind the atmosphere")
+        let sphereSource = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertEqual(sphereSource.components(separatedBy: "constant GlobeAtmosphere& atmosphere [[buffer(7)]]").count - 1, 1,
+                       "The tile geometry drawn on the sphere binds the atmosphere")
         XCTAssertEqual(source.components(separatedBy: "globeAtmosphereSurfaceGlow(facing, atmosphere)").count - 1, 2,
                        "The shared surface shade and the cap both add the glow")
         XCTAssertFalse(source.contains("half3(0.28h, 0.54h, 1.0h)"),

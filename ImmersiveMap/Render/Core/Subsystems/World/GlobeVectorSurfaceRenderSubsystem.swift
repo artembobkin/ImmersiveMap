@@ -16,18 +16,15 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
     private let surfaceDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
-    private let renderPath: GlobeSurfaceRenderPath
 
     init(pipeline: TilePipeline,
          surfaceDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
-         debugOverlayControls: DebugOverlayControlState,
-         renderPath: GlobeSurfaceRenderPath) {
+         debugOverlayControls: DebugOverlayControlState) {
         self.pipeline = pipeline
         self.surfaceDepthState = surfaceDepthState
         self.depthDisabledState = depthDisabledState
         self.debugOverlayControls = debugOverlayControls
-        self.renderPath = renderPath
     }
 
     func update(frameContext _: FrameContext) {}
@@ -36,8 +33,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .globeVectorSurface,
-              frameContext.renderSurfaceMode == .spherical,
-              renderPath == .vector else {
+              frameContext.renderSurfaceMode == .spherical else {
             return
         }
 

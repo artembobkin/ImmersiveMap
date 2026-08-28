@@ -33,41 +33,4 @@ final class DebugOverlayPanelLayoutTests: XCTestCase {
 
         XCTAssertEqual(rowRect, CGRect(x: 0, y: 32, width: 360, height: 28))
     }
-
-    func testAtlasPagesUseMultipleColumnsWhenWidthAllows() {
-        let layout = DebugOverlayPanelLayout.atlasGridLayout(
-            pageCount: 3,
-            width: 704,
-            pageLabelHeight: 16,
-            pageSpacing: 10,
-            minimumPageSide: 180,
-            maximumPageSide: 260
-        )
-
-        XCTAssertEqual(layout.columnCount, 3)
-        XCTAssertEqual(layout.height, 244)
-        XCTAssertEqual(layout.pageFrames.map(\.pageRect), [
-            CGRect(x: 0, y: 16, width: 228, height: 228),
-            CGRect(x: 238, y: 16, width: 228, height: 228),
-            CGRect(x: 476, y: 16, width: 228, height: 228)
-        ])
-    }
-
-    func testAtlasPagesStaySingleColumnWhenWidthIsNarrow() {
-        let layout = DebugOverlayPanelLayout.atlasGridLayout(
-            pageCount: 2,
-            width: 320,
-            pageLabelHeight: 16,
-            pageSpacing: 10,
-            minimumPageSide: 180,
-            maximumPageSide: 260
-        )
-
-        XCTAssertEqual(layout.columnCount, 1)
-        XCTAssertEqual(layout.height, 562)
-        XCTAssertEqual(layout.pageFrames.map(\.pageRect), [
-            CGRect(x: 0, y: 16, width: 260, height: 260),
-            CGRect(x: 0, y: 302, width: 260, height: 260)
-        ])
-    }
 }

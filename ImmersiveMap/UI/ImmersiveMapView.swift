@@ -75,8 +75,8 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeUIView(context: Context) -> ImmersiveMapUIView {
-        // Adopt a parked view when reuse is on: renderer, tile cache and atlas
-        // pages come back warm, and the update path reconciles the settings.
+        // Adopt a parked view when reuse is on: renderer and tile cache come
+        // back warm, and the update path reconciles the settings.
         if settings.viewReuse.isEnabled,
            let adopted = ImmersiveMapHostViewPool.shared.adopt() {
             adopted.prepareForAdoption(settings: settings,
@@ -138,8 +138,8 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
     public func makeNSView(context: Context) -> ImmersiveMapNSView {
-        // Adopt a parked view when reuse is on: renderer, tile cache and atlas
-        // pages come back warm, and the update path reconciles the settings.
+        // Adopt a parked view when reuse is on: renderer and tile cache come
+        // back warm, and the update path reconciles the settings.
         if settings.viewReuse.isEnabled,
            let adopted = ImmersiveMapHostViewPool.shared.adopt() {
             adopted.prepareForAdoption(settings: settings,
@@ -342,7 +342,7 @@ public extension ImmersiveMapView {
 
     /// Controls reuse of dismantled map views (on by default). When the screen
     /// with this map goes away, the platform view (renderer, GPU tile cache,
-    /// atlas pages) is parked briefly and the next `ImmersiveMapView` adopts
+    /// text atlases) is parked briefly and the next `ImmersiveMapView` adopts
     /// it warm, so switching between map screens skips the first-frame rebuild.
     /// An adopted view keeps its previous camera unless this view provides an
     /// explicit camera position or an attached camera controller.
