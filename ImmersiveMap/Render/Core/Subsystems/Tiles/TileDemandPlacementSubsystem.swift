@@ -26,10 +26,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var demandGateFingerprint: Int?
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, preprocessed: 0, demanded: 0, ready: 0)
-    /// Union of the tiles the three placement contexts reference, rebuilt on
-    /// every placement change and reported to the cache on every rendered
-    /// frame for the purgeable bookkeeping.
-    private var activePlacementTiles: Set<Tile> = []
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
@@ -48,8 +44,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let tileZoomLevel = visibleContent.tileZoomLevel
 
         // Dirty-gate: preprocess/demand/request depend only on the coverage
-        // (coverageVersion changes when the camera/mode changes) and the tile
-        // cache contents (contentVersion changes on materialization/eviction).
+        // (coverageVersion changes when the camera/mode changes) and the
+        // working set's contents (contentVersion changes on insert/release).
         // Skipping is allowed only when there are no requested-but-not-ready tiles:
         // the loader's retry logic relies on the per-frame request().
         var gateHasher = Hasher()
@@ -58,13 +54,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let gateFingerprint = gateHasher.finalize()
         if gateFingerprint == demandGateFingerprint,
            latestRequestedTilesCount == 0 {
-            // The gated frame still renders the existing placements, so their
-            // tiles must keep fresh activity stamps: otherwise the first
-            // placement rebuild after a long gated stretch would compare
-            // against stamps hundreds of frames old and could park a tile
-            // volatile while in-flight GPU frames still read it.
-            tileRenderStore.recordActiveTiles(activePlacementTiles,
-                                              frameIndex: frameContext.frameIndex)
             publishState(frameContext: frameContext,
                          visibleTilesCount: latestCounts.visible,
                          readyTilesCount: latestCounts.ready,
@@ -139,17 +128,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             globeSurfaceSlots = preprocessedVisibleTiles.map(\.tile)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
-            rebuildActivePlacementTiles()
         }
-
-        // Purgeable bookkeeping: the cache may only park tiles that nothing
-        // references, and the demanded set alone is not that (retained
-        // substitutes in the placements keep drawing after leaving demand).
-        // Report the union of everything the placement contexts hold, on
-        // every rendered frame (the gated branch above reports too), so
-        // stamps stay fresh and the in-flight window is measured from the
-        // frame a tile actually stopped being drawn.
-        tileRenderStore.recordActiveTiles(activePlacementTiles, frameIndex: frameContext.frameIndex)
 
         let visibleTilesCount = visibleTiles.count
         let readyTilesCount = tileRequestResult.readyTilesCount
@@ -183,23 +162,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                      requestedTilesCount: requestedTilesCount)
     }
 
-    private func rebuildActivePlacementTiles() {
-        var activeTiles = Set<Tile>()
-        for placement in placeTilesContext.tilePlacements {
-            activeTiles.insert(placement.metalTile.tile)
-        }
-        for placement in backdropPlaceTilesContext.tilePlacements {
-            activeTiles.insert(placement.metalTile.tile)
-        }
-        // The sun-ward caster strip renders into the cascade maps every flat
-        // frame: its tiles are as live as the visible ones and must never be
-        // parked volatile under the shadow pass.
-        for placement in shadowCasterPlaceTilesContext.tilePlacements {
-            activeTiles.insert(placement.metalTile.tile)
-        }
-        activePlacementTiles = activeTiles
-    }
-
     private func publishState(frameContext: FrameContext,
                               visibleTilesCount: Int,
                               readyTilesCount: Int,
@@ -230,8 +192,9 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
-        // Placement contexts are kept: the store's trim protects visible tiles,
-        // so the map doesn't go blank; the next frame rebuilds placements from scratch.
+        // Placement contexts are kept and hold their tiles strongly; the store
+        // keeps the demanded set, so the map doesn't go blank; the next frame
+        // rebuilds placements from scratch.
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil
         placementVersion &+= 1

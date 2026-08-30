@@ -72,48 +72,44 @@ final class TileTraceRecorderTests: XCTestCase {
         XCTAssertEqual(recorder.snapshot(), TileTraceRecorderSnapshot(isRecording: false, fileURL: fileURL))
     }
 
-    func testRecordsMemoryCacheDiagnosticEventsOnlyWhileRecording() throws {
+    func testRecordsWorkingSetDiagnosticEventsOnlyWhileRecording() throws {
         let recorder = TileTraceRecorder(directoryURL: temporaryDirectory,
                                          now: { Date(timeIntervalSince1970: 1_000) })
 
-        recorder.record(.tileMemoryCacheGet(Tile(x: 2, y: 3, z: 4),
-                                            hit: false,
-                                            knownCost: nil,
-                                            trackedCost: 12,
-                                            trackedCount: 1,
-                                            costLimit: 128))
+        recorder.record(.tileStoreLookup(Tile(x: 2, y: 3, z: 4),
+                                         hit: false,
+                                         residentCount: 0,
+                                         residentBytes: 0))
         let fileURL = try XCTUnwrap(recorder.startRecording())
-        recorder.record(.tileMemoryCacheSet(Tile(x: 2, y: 3, z: 4),
-                                            cost: 64,
-                                            replacedCost: nil,
-                                            trackedCost: 76,
-                                            trackedCount: 2,
-                                            costLimit: 128))
-        recorder.record(.tileMemoryCacheGet(Tile(x: 2, y: 3, z: 4),
-                                            hit: true,
-                                            knownCost: 64,
-                                            trackedCost: 76,
-                                            trackedCount: 2,
-                                            costLimit: 128))
-        recorder.record(.tileMemoryCacheEvict(Tile(x: 2, y: 3, z: 4),
-                                              cost: 64,
-                                              trackedCost: 12,
-                                              trackedCount: 1,
-                                              costLimit: 128))
+        recorder.record(.tileStoreInsert(Tile(x: 2, y: 3, z: 4),
+                                         replaced: false,
+                                         residentCount: 2,
+                                         residentBytes: 76))
+        recorder.record(.tileStoreLookup(Tile(x: 2, y: 3, z: 4),
+                                         hit: true,
+                                         residentCount: 2,
+                                         residentBytes: 76))
+        recorder.record(.tileStoreRelease(Tile(x: 2, y: 3, z: 4),
+                                          reason: "left_demand",
+                                          residentCount: 1,
+                                          residentBytes: 12))
+        recorder.record(.tileStoreRemoveAll(removedCount: 1, removedBytes: 12))
         recorder.stopRecording()
 
         let lines = try readJSONLines(fileURL)
         XCTAssertEqual(lines.map { $0["event"] as? String }, [
-            "tile_memory_cache_set",
-            "tile_memory_cache_get",
-            "tile_memory_cache_evict"
+            "tile_store_insert",
+            "tile_store_lookup",
+            "tile_store_release",
+            "tile_store_remove_all"
         ])
         XCTAssertEqual(lines[0]["tile"] as? String, "4/2/3")
-        XCTAssertEqual(lines[0]["cost"] as? Int, 64)
-        XCTAssertEqual(lines[0]["trackedCost"] as? Int, 76)
+        XCTAssertEqual(lines[0]["replaced"] as? Bool, false)
+        XCTAssertEqual(lines[0]["residentBytes"] as? Int, 76)
         XCTAssertEqual(lines[1]["hit"] as? Bool, true)
-        XCTAssertEqual(lines[1]["knownCost"] as? Int, 64)
-        XCTAssertEqual(lines[2]["trackedCount"] as? Int, 1)
+        XCTAssertEqual(lines[2]["reason"] as? String, "left_demand")
+        XCTAssertEqual(lines[2]["residentCount"] as? Int, 1)
+        XCTAssertEqual(lines[3]["removedCount"] as? Int, 1)
     }
 
     func testPrepareSuccessEventIncludesLayerTimings() throws {

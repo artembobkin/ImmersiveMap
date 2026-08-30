@@ -96,59 +96,52 @@ extension TileTraceEvent {
         .event("tile_materialize_failed", fields: ["tile": .tile(tile)])
     }
 
-    static func tileMemoryCacheGet(_ tile: Tile,
-                                   hit: Bool,
-                                   knownCost: Int?,
-                                   trackedCost: Int,
-                                   trackedCount: Int,
-                                   costLimit: Int) -> TileTraceEvent {
-        var fields: [String: TileTraceValue] = [
-            "tile": .tile(tile),
-            "hit": .bool(hit),
-            "trackedCost": .int(trackedCost),
-            "trackedCount": .int(trackedCount),
-            "costLimit": .int(costLimit)
-        ]
-        if let knownCost {
-            fields["knownCost"] = .int(knownCost)
-        }
-        return .event("tile_memory_cache_get", fields: fields)
+    static func tileStoreLookup(_ tile: Tile,
+                                hit: Bool,
+                                residentCount: Int,
+                                residentBytes: Int) -> TileTraceEvent {
+        .event("tile_store_lookup",
+               fields: [
+                   "tile": .tile(tile),
+                   "hit": .bool(hit),
+                   "residentCount": .int(residentCount),
+                   "residentBytes": .int(residentBytes)
+               ])
     }
 
-    static func tileMemoryCacheSet(_ tile: Tile,
-                                   cost: Int,
-                                   replacedCost: Int?,
-                                   trackedCost: Int,
-                                   trackedCount: Int,
-                                   costLimit: Int) -> TileTraceEvent {
-        var fields: [String: TileTraceValue] = [
-            "tile": .tile(tile),
-            "cost": .int(cost),
-            "trackedCost": .int(trackedCost),
-            "trackedCount": .int(trackedCount),
-            "costLimit": .int(costLimit)
-        ]
-        if let replacedCost {
-            fields["replacedCost"] = .int(replacedCost)
-        }
-        return .event("tile_memory_cache_set", fields: fields)
+    static func tileStoreInsert(_ tile: Tile,
+                                replaced: Bool,
+                                residentCount: Int,
+                                residentBytes: Int) -> TileTraceEvent {
+        .event("tile_store_insert",
+               fields: [
+                   "tile": .tile(tile),
+                   "replaced": .bool(replaced),
+                   "residentCount": .int(residentCount),
+                   "residentBytes": .int(residentBytes)
+               ])
     }
 
-    static func tileMemoryCacheEvict(_ tile: Tile,
-                                     cost: Int?,
-                                     trackedCost: Int,
-                                     trackedCount: Int,
-                                     costLimit: Int) -> TileTraceEvent {
-        var fields: [String: TileTraceValue] = [
-            "tile": .tile(tile),
-            "trackedCost": .int(trackedCost),
-            "trackedCount": .int(trackedCount),
-            "costLimit": .int(costLimit)
-        ]
-        if let cost {
-            fields["cost"] = .int(cost)
-        }
-        return .event("tile_memory_cache_evict", fields: fields)
+    static func tileStoreRelease(_ tile: Tile,
+                                 reason: String,
+                                 residentCount: Int,
+                                 residentBytes: Int) -> TileTraceEvent {
+        .event("tile_store_release",
+               fields: [
+                   "tile": .tile(tile),
+                   "reason": .string(reason),
+                   "residentCount": .int(residentCount),
+                   "residentBytes": .int(residentBytes)
+               ])
+    }
+
+    static func tileStoreRemoveAll(removedCount: Int,
+                                   removedBytes: Int) -> TileTraceEvent {
+        .event("tile_store_remove_all",
+               fields: [
+                   "removedCount": .int(removedCount),
+                   "removedBytes": .int(removedBytes)
+               ])
     }
 
     static func tileSchedulerRequest(input: Int, deduplicated: Int) -> TileTraceEvent {

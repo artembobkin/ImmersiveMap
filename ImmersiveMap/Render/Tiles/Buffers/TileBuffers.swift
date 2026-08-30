@@ -112,8 +112,8 @@ struct TileBuffers {
     }
 
     /// The tile's single backing allocation: every view above points into it.
-    /// nil only for a tile with no GPU content at all. The cache accounts the
-    /// tile's byte cost and drives purgeable transitions through it.
+    /// nil only for a tile with no GPU content at all. The working-set store
+    /// reads the tile's resident byte size from it.
     let backingBuffer: MTLBuffer?
     let ground: GeometryLayer
     let roads: RoadStructureBuckets<RoadGeometryPhases<GeometryLayer>>
@@ -121,22 +121,6 @@ struct TileBuffers {
     let extruded: Extruded
     let textLabels: TextLabels
     let roadLabels: RoadLabels
-
-    /// Offers the backing allocation to the OS as reclaimable-under-pressure.
-    /// Only the cache calls this, and only for tiles outside the demanded set
-    /// and the retained placements, past the in-flight frame window.
-    func markVolatile() {
-        guard let backingBuffer else { return }
-        _ = backingBuffer.setPurgeableState(.volatile)
-    }
-
-    /// Pins the backing allocation back before reuse. Returns false when the
-    /// OS reclaimed its contents while it was volatile: the tile is unusable
-    /// and must be dropped and reloaded.
-    func restoreFromVolatile() -> Bool {
-        guard let backingBuffer else { return true }
-        return backingBuffer.setPurgeableState(.nonVolatile) != .empty
-    }
 }
 
 struct LabelGlyphRange {

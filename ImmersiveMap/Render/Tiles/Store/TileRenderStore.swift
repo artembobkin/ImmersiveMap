@@ -5,7 +5,8 @@ import Foundation
 import MetalKit
 
 /// Thread-safe (`@unchecked Sendable`): references are assigned during wiring
-/// before loads start, `memoryMetalTile` is mutated only on the main actor.
+/// before loads start, `workingSet` is internally synchronized and mutated
+/// only through main-actor hops.
 final class TileRenderStore: @unchecked Sendable {
     struct TileRequestResult {
         let readyTilesBySource: [Tile: MetalTile?]
@@ -14,7 +15,7 @@ final class TileRenderStore: @unchecked Sendable {
     }
 
     private var mapNeedsTile: ImmersiveMapNeedsTile?
-    private var memoryMetalTile: MemoryMetalTileCache!
+    private var workingSet: TileWorkingSetStore!
     // Tiles rendered from an unvalidated disk-first serve. Main-thread only:
     // mutated inside MainActor hops and read from the render frame.
     private var tilesAwaitingRevalidation: Set<Tile> = []
@@ -61,9 +62,7 @@ final class TileRenderStore: @unchecked Sendable {
                                                            textLabelsBuilder: textLabelsBuilder,
                                                            roadLabelsBuilder: roadLabelsBuilder)
         self.metalTileFactory = MetalTileFactory(metalDevice: metalDevice)
-        let maxCachedTilesMemory = config.tiles.cache.memoryCacheSizeInBytes
-        memoryMetalTile = MemoryMetalTileCache(maxCacheSizeInBytes: maxCachedTilesMemory,
-                                               tileTraceRecorder: tileTraceRecorder)
+        workingSet = TileWorkingSetStore(tileTraceRecorder: tileTraceRecorder)
         // The factory owns the MTLIO capability decision: the transport that
         // writes file entries is selected only when the queue that loads them
         // actually exists, so a queue-creation failure degrades to inline
@@ -88,26 +87,17 @@ final class TileRenderStore: @unchecked Sendable {
     }
     
     func getMetalTile(tile: Tile) -> MetalTile? {
-        return memoryMetalTile.getTile(forKey: tile)
+        return workingSet.tile(forKey: tile)
     }
 
-    /// Placements can retain tiles beyond the demanded set (a stale substitute
-    /// keeps drawing until its replacement arrives), so the placement
-    /// subsystem reports the actually referenced tiles whenever it rebuilds:
-    /// everything else in the cache goes volatile for the OS to reclaim under
-    /// memory pressure.
-    func recordActiveTiles(_ tiles: Set<Tile>, frameIndex: UInt64) {
-        memoryMetalTile.recordActiveTiles(tiles, frameIndex: frameIndex)
-    }
-
-    // Tile cache content version: changes on materialization/eviction.
+    // Working-set content version: changes on insert and release.
     // Together with coverageVersion it forms the demand pipeline's dirty-gate key.
     var cacheContentVersion: UInt64 {
-        memoryMetalTile.contentVersion
+        workingSet.contentVersion
     }
 
     func requestTiles(_ tiles: [Tile], frameIndex: UInt64? = nil) -> TileRequestResult {
-        memoryMetalTile.updateProtectedTiles(Set(tiles))
+        workingSet.updateDemandedTiles(Set(tiles))
         var readyTilesBySource: [Tile: MetalTile?] = [:]
         readyTilesBySource.reserveCapacity(tiles.count)
         var request: [Tile] = []
@@ -225,10 +215,7 @@ final class TileRenderStore: @unchecked Sendable {
                                          forKey key: Tile,
                                          awaitingRevalidation: Bool) async {
         await MainActor.run {
-            self.memoryMetalTile.setTileData(
-                tile: metalTile,
-                forKey: key
-            )
+            self.workingSet.insert(metalTile, forKey: key)
             if awaitingRevalidation {
                 self.tilesAwaitingRevalidation.insert(key)
             } else {
@@ -278,14 +265,15 @@ final class TileRenderStore: @unchecked Sendable {
 
     func handleMemoryWarning() {
         mapNeedsTile?.cancelAll()
-        // Trim instead of a full clear: visible (protected) tiles stay in the
-        // cache, so the map does not go blank and does not redownload the
-        // whole screen.
-        memoryMetalTile.trim(toFractionOfLimit: 0.25)
+        // The demanded tiles stay resident, so the map does not go blank and
+        // does not reload the screen; only the off-screen residue (the world
+        // cover included) is handed back, to warm up again from the prepared
+        // disk cache.
+        workingSet.releaseUndemandedTiles()
     }
 
     func evict() {
         mapNeedsTile?.cancelAll()
-        memoryMetalTile.removeAll()
+        workingSet.removeAll()
     }
 }
