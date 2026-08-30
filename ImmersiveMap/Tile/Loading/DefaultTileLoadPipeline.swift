@@ -43,6 +43,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         self.tileRenderStore = tileRenderStore
     }
 
+    var hasPreparedDiskCache: Bool {
+        preparedTileDiskCaching != nil
+    }
+
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: matchingETag)
     }
@@ -94,38 +98,19 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     }
 
     func materialize(preparedTile: PreparedTileCPU,
-                     plan: TileArenaImagePlan?,
-                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
+                     plan: TileArenaImagePlan?) async -> PreparedTileMaterializeOutcome {
         guard let tileRenderStore else {
             return .allocationOrStoreFailed
         }
-        let isMaterialized = await tileRenderStore.materializePreparedTile(
-            preparedTile,
-            plan: plan,
-            awaitingRevalidation: awaitingRevalidation
-        )
+        let isMaterialized = await tileRenderStore.materializePreparedTile(preparedTile,
+                                                                           plan: plan)
         return isMaterialized ? .materialized : .allocationOrStoreFailed
     }
 
-    func materialize(image: PreparedTileArenaImage,
-                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome {
+    func materialize(image: PreparedTileArenaImage) async -> PreparedTileMaterializeOutcome {
         guard let tileRenderStore else {
             return .allocationOrStoreFailed
         }
-        return await tileRenderStore.materializeArenaImage(image,
-                                                           awaitingRevalidation: awaitingRevalidation)
-    }
-
-    func markRevalidated(tile: Tile) async {
-        await tileRenderStore?.markTileRevalidated(tile)
-    }
-
-    func parse(tile: Tile, data: Data) async -> Bool {
-        guard let result = await prepare(tile: tile, data: data) else {
-            return false
-        }
-        return await materialize(preparedTile: result.preparedTile,
-                                 plan: nil,
-                                 awaitingRevalidation: false) == .materialized
+        return await tileRenderStore.materializeArenaImage(image)
     }
 }

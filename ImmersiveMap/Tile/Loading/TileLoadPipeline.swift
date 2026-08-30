@@ -5,8 +5,9 @@ import Foundation
 
 /// A prepared tile read back from the disk cache in arena-image form,
 /// together with the raw-tile ETag it was parsed from. `sourceETag` is nil
-/// when the server sent no ETag at save time; the loader then cannot
-/// revalidate the entry by comparison.
+/// when the server sent no ETag at save time. The disk stage ignores it; the
+/// CPU stage's ETag-matched lookup uses it to reuse an entry another engine
+/// saved from the exact bytes just downloaded.
 struct PreparedTileDiskCacheHit {
     let image: PreparedTileArenaImage
     let sourceETag: String?
@@ -25,6 +26,10 @@ enum PreparedTileMaterializeOutcome {
 }
 
 protocol TileLoadPipeline {
+    /// False when no prepared disk cache exists (the setting is off, or the
+    /// pipeline owns none); the loader then skips the disk stage instead of
+    /// running a guaranteed miss for every tile.
+    var hasPreparedDiskCache: Bool { get }
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit?
     func download(tile: Tile) async -> TileDownloader.DownloadResult
     /// `plan` is the arena plan of the same parse when the caller already
@@ -35,19 +40,9 @@ protocol TileLoadPipeline {
                             sourceETag: String?) async
     func removePreparedFromDisk(tile: Tile)
     func prepare(tile: Tile, data: Data) async -> PreparedTileLoadResult?
-    /// `awaitingRevalidation` marks a disk-first serve whose ETag has not been
-    /// checked against the network yet; the render store keeps such tiles
-    /// requestable (see `requestTiles`) until a later materialize or
-    /// `markRevalidated` resolves them.
     func materialize(preparedTile: PreparedTileCPU,
-                     plan: TileArenaImagePlan?,
-                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome
+                     plan: TileArenaImagePlan?) async -> PreparedTileMaterializeOutcome
     /// Materializes a disk-cached arena image (blob copy or MTLIO load plus
     /// span-table reconstruction) instead of a parsed tile.
-    func materialize(image: PreparedTileArenaImage,
-                     awaitingRevalidation: Bool) async -> PreparedTileMaterializeOutcome
-    /// Resolves a disk-first serve: the download confirmed the served content
-    /// (ETag match) or the loader knowingly accepted it (offline fallback).
-    func markRevalidated(tile: Tile) async
-    func parse(tile: Tile, data: Data) async -> Bool
+    func materialize(image: PreparedTileArenaImage) async -> PreparedTileMaterializeOutcome
 }

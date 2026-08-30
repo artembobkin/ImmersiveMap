@@ -180,6 +180,26 @@ extension TileTraceEvent {
         .event("tile_load_start", fields: ["tile": .tile(tile)])
     }
 
+    static func tileLoadDropped(_ tile: Tile) -> TileTraceEvent {
+        .event("tile_load_dropped", fields: ["tile": .tile(tile)])
+    }
+
+    static func tileDiskLookupStart(_ tile: Tile) -> TileTraceEvent {
+        .event("tile_disk_lookup_start", fields: ["tile": .tile(tile)])
+    }
+
+    static func tileDiskHit(_ tile: Tile) -> TileTraceEvent {
+        .event("tile_disk_hit", fields: ["tile": .tile(tile)])
+    }
+
+    static func tileDiskMiss(_ tile: Tile, reason: String) -> TileTraceEvent {
+        .event("tile_disk_miss",
+               fields: [
+                   "tile": .tile(tile),
+                   "reason": .string(reason)
+               ])
+    }
+
     static func tileDownloadSuccess(_ tile: Tile, bytes: Int) -> TileTraceEvent {
         .event("tile_download_success",
                fields: [
@@ -250,6 +270,9 @@ extension TileTraceEvent {
             "deduplicated": .int(snapshot.deduplicated),
             "activeLoads": .int(snapshot.activeLoads),
             "scheduled": .int(snapshot.scheduled),
+            "diskInFlight": .int(snapshot.disk.inFlight),
+            "diskCompleted": .int(snapshot.disk.completed),
+            "diskFailed": .int(snapshot.disk.failed),
             "networkInFlight": .int(snapshot.network.inFlight),
             "networkCompleted": .int(snapshot.network.completed),
             "networkFailed": .int(snapshot.network.failed),
@@ -260,6 +283,9 @@ extension TileTraceEvent {
             "totalFailed": .int(snapshot.totalFailed),
             "networkBytes": .int(snapshot.networkBytes)
         ]
+        if let latestDiskTile = snapshot.latestDiskTile {
+            fields["latestDiskTile"] = .tile(latestDiskTile)
+        }
         if let latestNetworkTile = snapshot.latestNetworkTile {
             fields["latestNetworkTile"] = .tile(latestNetworkTile)
         }

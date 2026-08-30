@@ -16,9 +16,6 @@ final class TileRenderStore: @unchecked Sendable {
 
     private var mapNeedsTile: ImmersiveMapNeedsTile?
     private var workingSet: TileWorkingSetStore!
-    // Tiles rendered from an unvalidated disk-first serve. Main-thread only:
-    // mutated inside MainActor hops and read from the render frame.
-    private var tilesAwaitingRevalidation: Set<Tile> = []
     private let preparedDataBuilder: TilePreparedDataBuilder
     private let metalTileFactory: MetalTileFactory
     private let tileTraceRecorder: TileTraceRecorder
@@ -106,22 +103,11 @@ final class TileRenderStore: @unchecked Sendable {
             let metalTile = getMetalTile(tile: tile)
 
             // No ready tile to display; request it, load from disk or network
-            // Also parse it and then store it in the cache
+            // Also parse it and then store it in the working set
             if metalTile == nil {
                 request.append(tile)
-                // A flagged tile that lost its memory entry reloads through the
-                // normal full path; the flag would only leak.
-                tilesAwaitingRevalidation.remove(tile)
             } else {
                 readyTilesCount += 1
-                // A disk-first serve renders before it is revalidated. Demand is
-                // miss-driven, so a served tile must stay requestable until some
-                // load confirms or replaces it, otherwise a cancelled or failed
-                // revalidation would pin stale content for as long as the tile
-                // stays cached. The loader dedups in-flight tiles itself.
-                if tilesAwaitingRevalidation.contains(tile) {
-                    request.append(tile)
-                }
             }
 
             // Keep tile availability for the caller.
@@ -156,15 +142,10 @@ final class TileRenderStore: @unchecked Sendable {
         }
     }
 
-    /// `awaitingRevalidation` marks a disk-first serve: content that is shown
-    /// before its ETag is checked against the network. The store keeps such
-    /// tiles requestable (see `requestTiles`) until a later materialize or
-    /// `markTileRevalidated` clears the flag. `plan` is the tile's arena plan
-    /// when the caller already built one (the loader shares it with the disk
-    /// save so the layout work runs once).
+    /// `plan` is the tile's arena plan when the caller already built one
+    /// (the loader shares it with the disk save so the layout work runs once).
     func materializePreparedTile(_ preparedTile: PreparedTileCPU,
-                                 plan: TileArenaImagePlan? = nil,
-                                 awaitingRevalidation: Bool = false) async -> Bool {
+                                 plan: TileArenaImagePlan? = nil) async -> Bool {
         tileTraceRecorder.record(.tileMaterializeStart(preparedTile.tile))
         guard let metalTile = metalTileFactory.makeTile(from: preparedTile, plan: plan) else {
             // Backing allocation failed (memory pressure): report a
@@ -174,9 +155,7 @@ final class TileRenderStore: @unchecked Sendable {
             return false
         }
 
-        await publishMaterializedTile(metalTile,
-                                      forKey: preparedTile.tile,
-                                      awaitingRevalidation: awaitingRevalidation)
+        await publishMaterializedTile(metalTile, forKey: preparedTile.tile)
         tileTraceRecorder.record(.tileMaterializeSuccess(preparedTile.tile))
         return true
     }
@@ -184,8 +163,7 @@ final class TileRenderStore: @unchecked Sendable {
     /// The arena-image sibling of `materializePreparedTile`: a disk hit is
     /// blob bytes plus a span table, so the factory copies (or MTLIO-loads)
     /// instead of rebuilding buffers from decoded arrays.
-    func materializeArenaImage(_ image: PreparedTileArenaImage,
-                               awaitingRevalidation: Bool = false) async -> PreparedTileMaterializeOutcome {
+    func materializeArenaImage(_ image: PreparedTileArenaImage) async -> PreparedTileMaterializeOutcome {
         tileTraceRecorder.record(.tileMaterializeStart(image.tile))
         let result = await metalTileFactory.makeTile(fromImage: image)
         let metalTile: MetalTile
@@ -200,50 +178,18 @@ final class TileRenderStore: @unchecked Sendable {
             return .imageUnreadable
         }
 
-        await publishMaterializedTile(metalTile,
-                                      forKey: image.tile,
-                                      awaitingRevalidation: awaitingRevalidation)
+        await publishMaterializedTile(metalTile, forKey: image.tile)
         tileTraceRecorder.record(.tileMaterializeSuccess(image.tile))
         return .materialized
     }
 
-    /// Shared tail of both materialize paths: stores the tile, maintains the
-    /// awaiting-revalidation set, and invalidates a frame. The revalidation
-    /// bookkeeping is load-bearing (see `requestTiles`), so it lives in one
-    /// place.
+    /// Shared tail of both materialize paths: stores the tile and invalidates
+    /// a frame so the on-demand renderer draws it.
     private func publishMaterializedTile(_ metalTile: MetalTile,
-                                         forKey key: Tile,
-                                         awaitingRevalidation: Bool) async {
+                                         forKey key: Tile) async {
         await MainActor.run {
             self.workingSet.insert(metalTile, forKey: key)
-            if awaitingRevalidation {
-                self.tilesAwaitingRevalidation.insert(key)
-            } else {
-                self.tilesAwaitingRevalidation.remove(key)
-            }
-
             eventSink?.invalidate(.tileAvailable)
-        }
-    }
-
-    /// The revalidation download confirmed (or knowingly accepted, for the
-    /// offline fallback) the content served from disk: the tile no longer needs
-    /// to stay requestable.
-    func markTileRevalidated(_ tile: Tile) async {
-        await MainActor.run {
-            // A superseded load (cancelAll + re-request) must not clear the
-            // flag its successor has just set: the successor's revalidation
-            // is still owed.
-            guard Task.isCancelled == false else {
-                return
-            }
-            if self.tilesAwaitingRevalidation.remove(tile) != nil {
-                // The silent confirm path materializes nothing, so without an
-                // invalidation anyone polling requestedTilesCount off rendered
-                // diagnostics (the video export settle loop) would wait out
-                // its full timeout on an already-resolved tile.
-                self.eventSink?.invalidate(.tileAvailable)
-            }
         }
     }
 

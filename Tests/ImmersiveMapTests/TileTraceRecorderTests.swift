@@ -142,11 +142,13 @@ final class TileTraceRecorderTests: XCTestCase {
                 deduplicated: 29,
                 activeLoads: 4,
                 scheduled: 21,
+                disk: TileLoadingPhaseSnapshot(inFlight: 1, completed: 20, failed: 4),
                 network: TileLoadingPhaseSnapshot(inFlight: 0, completed: 21, failed: 0),
                 parsing: TileLoadingPhaseSnapshot(inFlight: 3, completed: 18, failed: 0),
                 totalCompleted: 17,
                 totalFailed: 0,
                 networkBytes: 1_490_922,
+                latestDiskTile: nil,
                 latestNetworkTile: nil,
                 latestParsingTile: Tile(x: 8, y: 6, z: 4),
                 latestFailure: nil,
@@ -169,6 +171,7 @@ final class TileTraceRecorderTests: XCTestCase {
         XCTAssertEqual(line["frame"] as? Int, 12)
         XCTAssertEqual(line["activeLoads"] as? Int, 4)
         XCTAssertEqual(line["scheduled"] as? Int, 21)
+        XCTAssertEqual(line["diskCompleted"] as? Int, 20)
         XCTAssertEqual(line["parseInFlight"] as? Int, 3)
         XCTAssertEqual(line["latestParsingTile"] as? String, "4/8/6")
         XCTAssertEqual(line["tiles"] as? String, "4/8/6:parsing:materialize")

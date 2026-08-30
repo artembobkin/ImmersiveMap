@@ -56,11 +56,13 @@ struct TileLoadingStatusSnapshot: Equatable {
     let deduplicated: Int
     let activeLoads: Int
     let scheduled: Int
+    let disk: TileLoadingPhaseSnapshot
     let network: TileLoadingPhaseSnapshot
     let parsing: TileLoadingPhaseSnapshot
     let totalCompleted: Int
     let totalFailed: Int
     let networkBytes: Int
+    let latestDiskTile: Tile?
     let latestNetworkTile: Tile?
     let latestParsingTile: Tile?
     let latestFailure: String?
@@ -75,14 +77,16 @@ struct TileLoadingStatusSnapshot: Equatable {
 
         var output = [
             "tiles req:\(requested) dedup:\(deduplicated) active:\(activeLoads) scheduled:\(scheduled)",
+            "disk in:\(disk.inFlight) hit:\(disk.completed) miss:\(disk.failed)",
             "network in:\(network.inFlight) done:\(network.completed) fail:\(network.failed) bytes:\(networkBytes)",
             "parse in:\(parsing.inFlight) done:\(parsing.completed) fail:\(parsing.failed)",
             "total done:\(totalCompleted) fail:\(totalFailed)"
         ]
 
+        let currentDisk = latestDiskTile.map { "disk:\(Self.tileDescription($0))" }
         let currentNetwork = latestNetworkTile.map { "net:\(Self.tileDescription($0))" }
         let currentParsing = latestParsingTile.map { "parse:\(Self.tileDescription($0))" }
-        let current = [currentNetwork, currentParsing].compactMap { $0 }.joined(separator: " ")
+        let current = [currentDisk, currentNetwork, currentParsing].compactMap { $0 }.joined(separator: " ")
         if current.isEmpty == false {
             output.append("current \(current)")
         }
@@ -155,13 +159,16 @@ final class TileLoadingStatusReporter {
     private var activeLoads = 0
     private var activeLoadTiles: Set<Tile> = []
     private var scheduled = 0
+    private var disk = PhaseCounters()
     private var network = PhaseCounters()
     private var parsing = PhaseCounters()
     private var totalCompleted = 0
     private var totalFailed = 0
     private var networkBytes = 0
+    private var activeDiskTiles: Set<Tile> = []
     private var activeNetworkTiles: Set<Tile> = []
     private var activeParsingTiles: Set<Tile> = []
+    private var latestDiskTile: Tile?
     private var latestNetworkTile: Tile?
     private var latestParsingTile: Tile?
     private var latestFailure: String?
@@ -262,6 +269,8 @@ final class TileLoadingStatusReporter {
 
             activeLoadTiles.subtract(cancelledTiles)
             activeLoads = activeLoadTiles.count
+            activeDiskTiles.subtract(cancelledTiles)
+            disk.inFlight = activeDiskTiles.count
             activeNetworkTiles.subtract(cancelledTiles)
             network.inFlight = activeNetworkTiles.count
             activeParsingTiles.subtract(cancelledTiles)
@@ -276,9 +285,71 @@ final class TileLoadingStatusReporter {
                                detail: "displayed")
                 }
             }
+            refreshLatestDiskTile()
             refreshLatestNetworkTile()
             refreshLatestParsingTile()
             pruneInactiveStaleTiles()
+        }
+    }
+
+    /// A load parked between stages (past the disk stage, waiting for a
+    /// network slot) was dropped because demand left the tile: no failure, no
+    /// completion, just bookkeeping so `activeLoads` does not leak.
+    func recordLoadDropped(tile: Tile) {
+        queue.sync {
+            activeLoadTiles.remove(tile)
+            activeLoads = activeLoadTiles.count
+            tileRecords.removeValue(forKey: tile)
+            pruneInactiveStaleTiles()
+        }
+    }
+
+    func recordDiskStarted(tile: Tile) {
+        queue.sync {
+            disk.inFlight += 1
+            activeDiskTiles.insert(tile)
+            latestDiskTile = tile
+            startStage("disk", for: tile)
+            updateTile(tile,
+                       status: .loading,
+                       progress: 0.2,
+                       detail: "disk")
+        }
+    }
+
+    /// The prepared cache answered the load: the read and its materialize
+    /// count as one served disk stage.
+    func recordDiskServed(tile: Tile) {
+        queue.sync {
+            guard activeDiskTiles.remove(tile) != nil else {
+                return
+            }
+            disk.inFlight = max(0, disk.inFlight - 1)
+            disk.completed += 1
+            finishStage("disk", for: tile)
+            updateTile(tile,
+                       status: .loading,
+                       progress: 0.3,
+                       detail: "disk hit")
+            refreshLatestDiskTile()
+        }
+    }
+
+    /// The disk could not answer (no entry, or an entry that would not
+    /// materialize): the load continues to the network stage.
+    func recordDiskMissed(tile: Tile) {
+        queue.sync {
+            guard activeDiskTiles.remove(tile) != nil else {
+                return
+            }
+            disk.inFlight = max(0, disk.inFlight - 1)
+            disk.failed += 1
+            finishStage("disk", for: tile)
+            updateTile(tile,
+                       status: .queued,
+                       progress: 0.25,
+                       detail: "disk miss")
+            refreshLatestDiskTile()
         }
     }
 
@@ -421,11 +492,13 @@ final class TileLoadingStatusReporter {
                                              deduplicated: deduplicated,
                                              activeLoads: activeLoads,
                                              scheduled: scheduled,
+                                             disk: disk.snapshot,
                                              network: network.snapshot,
                                              parsing: parsing.snapshot,
                                              totalCompleted: totalCompleted,
                                              totalFailed: totalFailed,
                                              networkBytes: networkBytes,
+                                             latestDiskTile: latestDiskTile,
                                              latestNetworkTile: latestNetworkTile,
                                              latestParsingTile: latestParsingTile,
                                              latestFailure: latestFailure,
@@ -509,7 +582,8 @@ final class TileLoadingStatusReporter {
     }
 
     private func pruneRecentPreparationStages() {
-        let retainedTiles = currentDemand.union(displayedTiles).union(activeNetworkTiles).union(activeParsingTiles)
+        let retainedTiles = currentDemand.union(displayedTiles)
+            .union(activeDiskTiles).union(activeNetworkTiles).union(activeParsingTiles)
         let maximumRecentPreparationStageCount = 256
         if recentPreparationStagesByTile.count <= maximumRecentPreparationStageCount {
             return
@@ -521,6 +595,10 @@ final class TileLoadingStatusReporter {
         tileRecords = tileRecords.filter { tile, record in
             shouldIncludeTile(tile, record: record)
         }
+    }
+
+    private func refreshLatestDiskTile() {
+        latestDiskTile = latestActiveTile(in: activeDiskTiles)
     }
 
     private func refreshLatestNetworkTile() {
