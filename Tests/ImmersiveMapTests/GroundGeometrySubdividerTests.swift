@@ -42,6 +42,23 @@ final class GroundGeometrySubdividerTests: XCTestCase {
                        "The pieces cover exactly the input triangle")
     }
 
+    /// The tile background is one quad; its diagonal runs corner to corner
+    /// through every grid step that divides 4096, so the pieces are exactly
+    /// the grid cells: two triangles per cell, one vertex per corner.
+    func testTileQuadSubdividesIntoExactlyTheGridCells() {
+        let quad = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(4096, 4096), SIMD2(0, 4096)],
+                                               indices: [0, 1, 2, 0, 2, 3])
+        for step in [64, 128, 256, 512, 1024] {
+            let cells = 4096 / step
+            let split = GroundGeometrySubdivider.subdivide(quad, step: step)
+            XCTAssertEqual(split.indices.count, cells * cells * 2 * 3, "step \(step): two triangles per cell")
+            XCTAssertEqual(split.vertices.count, (cells + 1) * (cells + 1), "step \(step): one vertex per grid corner")
+            XCTAssertEqual(signedArea(split), signedArea(quad), accuracy: 1, "step \(step): the pieces cover the quad")
+            XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: split.vertices, indices: split.indices),
+                         "step \(step): every piece keeps the counter-clockwise winding")
+        }
+    }
+
     func testTriangleInsideOneCellPassesThroughUntouched() {
         let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(60, 20), SIMD2(30, 50)],
                                                   indices: [0, 1, 2])

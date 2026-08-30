@@ -1049,42 +1049,17 @@ extension TileMvtParser {
             tile: tile)
         )
         
-        let numSegments: Int = 64 // Adjustable number of segments per side; change as needed
-        let step: Int16 = Int16(4096 / numSegments)
-
-        // Generate vertices: (numSegments + 1) x (numSegments + 1) grid
-        var vertices = [SIMD2<Int16>]()
-        for i in 0...numSegments {
-            for j in 0...numSegments {
-                let x = Int16(i) * step
-                let y = Int16(j) * step
-                vertices.append(SIMD2(x, y))
-            }
-        }
-
-        // Generate indices for triangles: two triangles per quad
-        var indices = [UInt32]()
-        let numVerticesPerRow = UInt32(numSegments + 1)
-        for i in 0..<numSegments {
-            for j in 0..<numSegments {
-                let a = UInt32(i * Int(numVerticesPerRow) + j)
-                let b = a + 1
-                let c = UInt32((i + 1) * Int(numVerticesPerRow) + j)
-                let d = c + 1
-                
-                // First triangle: a -> c -> b (counter-clockwise assuming y-up)
-                indices.append(a)
-                indices.append(c)
-                indices.append(b)
-                
-                // Second triangle: b -> c -> d (counter-clockwise assuming y-up)
-                indices.append(b)
-                indices.append(c)
-                indices.append(d)
-            }
-        }
-
-        let parsedPolygon = ParsedPolygon(vertices: vertices, indices: indices)
+        // One quad in render space, wound counter-clockwise like every
+        // other ground triangle. The density the sphere needs is not decided
+        // here: GroundGeometrySubdivider cuts it on the per-zoom grid like
+        // any other ground polygon (64x64 cells at z0 and z1, down to 4x4 at
+        // z9, untouched from z10 where the surface is flat), so the
+        // background is exactly as fine as the ground around it. A 64x64
+        // mesh built here carried 8192 triangles into every tile of every
+        // zoom, most of them under a flat plane.
+        let extent = Int16(tileExtent)
+        let parsedPolygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(extent, 0), SIMD2(extent, extent), SIMD2(0, extent)],
+                                          indices: [0, 1, 2, 0, 2, 3])
         
         polygonByStyle[style.key, default: []].insert(parsedPolygon, at: 0)
         styles[style.key] = style

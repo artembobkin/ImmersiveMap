@@ -10,7 +10,7 @@ import XCTest
 /// drawers keep when they cull back faces. Each emitter keeps the contract
 /// by construction; this pins that none of them slipped, on a coarse tile
 /// (fills with holes, the ocean split, the overview road stroke with its
-/// round joins and caps, the background grid, the debug borders) and on a
+/// round joins and caps, the background quad, the debug borders) and on a
 /// street tile (ribbons, kerbs, junction and parking surfaces, one-way
 /// arrows, crossing stripes, bus lane letters and the stop zigzag).
 final class TileGeometryWindingTests: XCTestCase {
@@ -48,45 +48,52 @@ final class TileGeometryWindingTests: XCTestCase {
         let parser = makeParser(addTestBorders: true)
         // Sixty-four holes take the ocean through its split into water plus
         // land-from-holes; one hole takes a fill through earcut's bridging.
+        // Every layer is one the style draws at z6 (water, the global
+        // landcover, the motorway skeleton); a control parse of an empty
+        // layer pins what the parser emits on its own, the background and
+        // the debug borders, so each layer is checked to add to it.
         let holes: [[(Int32, Int32)]] = (0..<TileMvtParser.complexOceanHoleSplitThreshold).map { index in
             Array(Self.square(200 + Int32(index % 8) * 450, 200 + Int32(index / 8) * 450, 200).reversed())
         }
         let layers: [(name: String, features: [VectorTileFixture.Feature])] = [
-            ("ocean", [.init(id: 1,
+            ("water", [.init(id: 1,
                              geometry: .polygonWithHoles(exterior: Self.square(0, 0, 4096), interiors: holes),
                              properties: ["class": "ocean"])]),
             ("water", [.init(id: 1,
                              geometry: .polygonWithHoles(exterior: Self.square(100, 100, 3000),
                                                          interiors: [Array(Self.square(1000, 1000, 800).reversed())]),
                              properties: ["class": "ocean"])]),
-            ("landcover", [.init(id: 1,
-                                 geometry: .polygon(ring: Self.square(300, 300, 1500)),
-                                 properties: ["class": "wood"]),
-                           .init(id: 2,
-                                 geometry: .polygon(ring: [(2000, 2000), (3800, 2000), (3800, 3800),
-                                                           (2900, 2600), (2000, 3800)]),
-                                 properties: ["class": "grass"])]),
+            ("globallandcover", [.init(id: 1,
+                                       geometry: .polygon(ring: Self.square(300, 300, 1500)),
+                                       properties: ["class": "forest"]),
+                                 .init(id: 2,
+                                       geometry: .polygon(ring: [(2000, 2000), (3800, 2000), (3800, 3800),
+                                                                 (2900, 2600), (2000, 3800)]),
+                                       properties: ["class": "grass"])]),
             // The overview stroke with round joins and caps: a right and a
             // left turn inside the tile, a bend leaving the tile (the clip
-            // re-fans it), and a bridge.
+            // re-fans it), and a bridge, which the overview stroke draws like
+            // any other road (the bridge overlay begins at street zooms).
             ("transportation", [.init(id: 1,
                                       geometry: .line(points: [(300, 3000), (1200, 3000), (1200, 3600), (2000, 3600)]),
-                                      properties: ["class": "primary"]),
+                                      properties: ["class": "motorway"]),
                                 .init(id: 2,
                                       geometry: .line(points: [(2500, 500), (3500, 500), (3500, 1500), (4500, 1500)]),
-                                      properties: ["class": "primary"]),
+                                      properties: ["class": "motorway"]),
                                 .init(id: 3,
                                       geometry: .line(points: [(500, 800), (1500, 1200)]),
-                                      properties: ["class": "primary", "brunnel": "bridge"])])
+                                      properties: ["class": "motorway", "brunnel": "bridge"])])
         ]
+        let backgroundOnly = try parser.parse(tile: Self.coarseTile,
+                                              mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))
         for layer in layers {
             let parsed = try parser.parse(tile: Self.coarseTile,
                                           mvtData: VectorTileFixture.layerTile(layerName: layer.name,
                                                                                features: layer.features))
             assertCounterClockwise(parsed.drawingPolygon, "\(layer.name) ground")
             assertCounterClockwise(parsed.drawingBridgePolygon, "\(layer.name) bridge overlay")
-            XCTAssertGreaterThan(parsed.drawingPolygon.indices.count, 64 * 64 * 2 * 3,
-                                 "\(layer.name): more than the background grid, so the features were emitted")
+            XCTAssertGreaterThan(parsed.drawingPolygon.indices.count, backgroundOnly.drawingPolygon.indices.count,
+                                 "\(layer.name): more than the background alone, so the features were emitted")
         }
     }
 

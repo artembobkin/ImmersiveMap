@@ -565,7 +565,10 @@ final class PreparedTileDiskCaching {
     // faces (the far side of the sphere); v75 tiles carry clockwise line
     // quads, right-turn join fans, zebra stripes, one-way arrows and bus
     // lane letters that culling would drop.
-    static let preparedFormatVersion: UInt32 = 76
+    // 77: the background of every tile is one quad that the ground
+    // subdivider cuts on its per-zoom grid; v76 tiles carry a 64x64 mesh
+    // built into every zoom (8192 triangles under a flat plane from z10).
+    static let preparedFormatVersion: UInt32 = 77
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
