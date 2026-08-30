@@ -24,14 +24,6 @@ using namespace metal;
 struct GlobeSurfaceTile {
     /// The source tile the vertices are local to (x, y, z).
     int3 tile;
-    /// Radial lift of the sphere position, as a fraction of the radius, and
-    /// of the flat morph target along +z as the same fraction of the radius.
-    /// The placeholder grid under this geometry is a different chord of the
-    /// same sphere (latitude-linear rows against Mercator-linear triangles),
-    /// so without a lift the two would z-fight; lifted above both chord sags
-    /// (GlobeSurfaceLift), the geometry passes the depth test everywhere the
-    /// placeholder wrote it and never writes depth of its own.
-    float lift;
 };
 
 struct SphereVertexOut {
@@ -40,10 +32,13 @@ struct SphereVertexOut {
     // positive on the camera-facing side of the sphere; the rasterizer clips
     // the far side away geometrically, so nothing on the back of the planet
     // is ever shaded and no fragment needs a discard. Off once the unfurl
-    // has flattened the surface (the same gate as globePointPassesVisibility).
+    // has flattened the surface (the same gate as globePointPassesVisibility);
+    // while it relaxes, back-face culling still drops the far side, since
+    // every tile triangle is counter-clockwise in render space and the far
+    // side is clockwise on screen.
     float clipDistance [[clip_distance]] [5];
-    // The unlifted morphed surface position: fog, view angle and the
-    // horizon test all read the true surface, not the lifted one.
+    // The morphed surface position: fog, view angle and the horizon test
+    // read it.
     float3 worldPos;
     float3 normal;
     float3 earthNormal;
@@ -93,14 +88,15 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     float2 localUv = float2(localPosition.x, kTileSphereExtent - localPosition.y) / kTileSphereExtent;
     GlobeSurfaceProjection projection = globeProjectTileUVDetailed(localUv, surfaceTile.tile, camera, globe);
 
-    float3 globeCenter = float3(0.0, 0.0, -globe.radius);
-    float3 liftedSphere = globeCenter + (projection.sphereWorldPosition - globeCenter) * (1.0 + surfaceTile.lift);
-    float3 liftedFlat = projection.flatWorldPosition + float3(0.0, 0.0, surfaceTile.lift * globe.radius);
-    float3 liftedPosition = mix(liftedSphere, liftedFlat, projection.localTransition);
-
+    // Exactly the surface position the placeholder grid morphs through: the
+    // geometry is not depth-tested against the grid (its extent is the five
+    // clip distances below plus back-face culling, and nothing drawn before
+    // it on the sphere occludes it), so it sits on the sphere itself rather
+    // than on a shell lifted above the grid's chords.
     SphereVertexOut out;
-    out.position = camera.matrix * float4(liftedPosition, 1.0);
+    out.position = projection.clip;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
+    float3 globeCenter = float3(0.0, 0.0, -globe.radius);
     float3 toCamera = camera.eye - globeCenter;
     float horizonDistance = dot(projection.worldPosition - globeCenter, toCamera)
         - globeVisibilityHorizonThreshold(globe);

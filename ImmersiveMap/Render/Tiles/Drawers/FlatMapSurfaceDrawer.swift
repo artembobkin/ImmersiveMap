@@ -20,6 +20,14 @@ enum FlatMapSurfaceDrawer {
                      withBuildingImageAttachment: Bool = false) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder,
                                     withBuildingImageAttachment: withBuildingImageAttachment)
+        // Every tile triangle (ground, road buckets, bridge overlay) is
+        // counter-clockwise in render space, the parser's contract
+        // (ParsedPolygon.firstClockwiseTriangle), and the flat projection
+        // does not mirror, so only front faces are drawn. Declared rather
+        // than inherited: the world pass shares one encoder, and the
+        // buildings drawn before this layer rely on Metal's default.
+        renderEncoder.setFrontFacing(.counterClockwise)
+        renderEncoder.setCullMode(.back)
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.lines)
         }
@@ -118,6 +126,8 @@ enum FlatMapSurfaceDrawer {
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
         }
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setFrontFacing(.clockwise)
     }
 
 

@@ -18,6 +18,12 @@ enum BuildingExtrusionDrawer {
                               depthDisabledState: MTLDepthStencilState,
                               intoImageAttachment: Bool = false) {
         var cameraUniformValue = cameraUniform
+        // The walls and roofs are wound clockwise on purpose (the exterior
+        // ring is forced clockwise in TileMvtParser+Helpers and the roofs
+        // match it in RoofGeometryBuilder), so their front face is Metal's
+        // default. Declared here rather than inherited: the tile drawers in
+        // the same encoder declare counter-clockwise for the ground.
+        renderEncoder.setFrontFacing(.clockwise)
         renderEncoder.setCullMode(.back)
 
         if intoImageAttachment {

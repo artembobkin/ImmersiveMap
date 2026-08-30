@@ -9,11 +9,8 @@ import simd
 struct GlobeSurfaceTileUniform {
     /// The source tile the vertices are local to.
     var tile: SIMD3<Int32>
-    /// See `GlobeSurfaceLift`.
-    var lift: Float
 
-    init(tile: Tile, lift: Float) {
+    init(tile: Tile) {
         self.tile = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))
-        self.lift = lift
     }
 }

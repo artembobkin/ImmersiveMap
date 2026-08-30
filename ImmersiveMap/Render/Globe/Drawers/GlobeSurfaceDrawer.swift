@@ -39,7 +39,13 @@ enum GlobeSurfaceDrawer {
         var fillColorValue = fillColor
 
         placeholderPipeline.selectPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setCullMode(.front)
+        // The grid is counter-clockwise on screen on the near side of the
+        // sphere (SphereGeometry.createGrid, v growing south) and clockwise
+        // on the far side. Declared explicitly rather than as `.front` under
+        // the default winding: the same cut, but no longer depending on no
+        // earlier layer of the shared encoder having changed the front face.
+        renderEncoder.setFrontFacing(.counterClockwise)
+        renderEncoder.setCullMode(.back)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
@@ -68,5 +74,7 @@ enum GlobeSurfaceDrawer {
                                                 indexBuffer: mapSurfaceGridBuffers.indicesBuffer,
                                                 indexBufferOffset: 0)
         }
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setFrontFacing(.clockwise)
     }
 }

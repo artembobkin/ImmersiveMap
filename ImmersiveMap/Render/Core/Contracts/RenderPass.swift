@@ -21,8 +21,9 @@ enum RenderLayer: String, CaseIterable {
     case atmosphere
     case globeSurface
     /// The tile geometry of the globe drawn straight onto the sphere, over
-    /// the placeholder grid the `globeSurface` layer painted (and whose depth
-    /// it wrote); see `GlobeVectorSurfaceRenderSubsystem`.
+    /// the placeholder grid the `globeSurface` layer painted; it neither
+    /// tests nor writes depth, and the far side goes by back-face culling,
+    /// see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
     case globeCap
     case flatMapSurface

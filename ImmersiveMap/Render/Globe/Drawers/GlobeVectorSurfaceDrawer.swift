@@ -26,10 +26,16 @@ enum GlobeVectorSurfaceDrawer {
             return
         }
         pipeline.selectPipeline(renderEncoder: renderEncoder)
-        // Tile triangles carry whatever winding the parser gave them; the
-        // far side of the sphere is removed by the horizon clip distance,
-        // not by face culling.
-        renderEncoder.setCullMode(.none)
+        // Every tile triangle is counter-clockwise in render space (the
+        // parser's contract, ParsedPolygon.firstClockwiseTriangle) and the
+        // sphere projection does not mirror, so the near side of the planet
+        // is counter-clockwise on screen and the far side clockwise: culling
+        // back faces removes the far side by orientation alone, whatever the
+        // horizon clip threshold lets through while the surface unfurls.
+        // Both calls are explicit because the world pass shares one encoder
+        // and the buildings rely on Metal's default front face.
+        renderEncoder.setFrontFacing(.counterClockwise)
+        renderEncoder.setCullMode(.back)
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.lines)
         }
@@ -86,8 +92,7 @@ enum GlobeVectorSurfaceDrawer {
             // substitute is clipped to its placeIn slot by the rasterizer.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeTile.placeIn.tile)
             renderEncoder.setVertexBytes(&localClipBounds, length: MemoryLayout<SIMD4<Float>>.stride, index: 7)
-            var surfaceTile = GlobeSurfaceTileUniform(tile: tile,
-                                                      lift: GlobeSurfaceLift.factor(sourceTileZoom: tile.z))
+            var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
             renderEncoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
 
             // The dash anchor of the flat path, with the source tile's world
@@ -111,5 +116,7 @@ enum GlobeVectorSurfaceDrawer {
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
         }
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setFrontFacing(.clockwise)
     }
 }

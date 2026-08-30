@@ -76,7 +76,6 @@ enum RenderGraphFactory {
                                                                 placeholderPipeline: context.globeSurfacePlaceholderPipeline,
                                                                 mapSurfaceGridBuffers: context.mapSurfaceGridBuffers)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
-                                                                            surfaceDepthState: context.globeCapDepthState,
                                                                             depthDisabledState: context.depthDisabledState,
                                                                             debugOverlayControls: debugOverlayControls)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,

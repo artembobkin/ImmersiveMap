@@ -56,6 +56,38 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
                              "The frame must report the tiles it drew")
     }
 
+    /// The road buckets are drawn with back-face culling on, so a ribbon
+    /// wound the wrong way would vanish: avenues across the tile at every
+    /// zoom of the pyramid must change the frame.
+    @MainActor
+    func testRoadRibbonsReachTheFrameWithBackFaceCullingOn() async throws {
+        let harness = try makeHarness()
+        harness.setCameraPosition(Self.camera)
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+
+        // One avenue every 256 units, so whichever part of the tile the frame
+        // shows, a ribbon crosses it.
+        let avenues: [VectorTileFixture.Feature] = (0..<16).map { row in
+            let y = Int32(128 + row * 256)
+            let points: [(Int32, Int32)] = [(0, y), (4096, y)]
+            return .init(id: UInt64(row + 1),
+                         geometry: .line(points: points),
+                         properties: ["class": "primary", "lanes": "4", "name": "Avenue \(row)"])
+        }
+        let data = VectorTileFixture.layerTile(layerName: "transportation", features: avenues)
+        let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
+                                                               longitude: Self.camera.longitudeDegrees,
+                                                               maximumZoom: Int(Self.renderZoom))
+        for tile in tiles {
+            let didMaterialize = await harness.tileRenderStore.parseTile(tile: tile, data: data)
+            XCTAssertTrue(didMaterialize, "Fixture tile \(tile.z)/\(tile.x)/\(tile.y) must parse")
+        }
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                            startingAt: OffscreenFrameHarness.frameTime(1))
+        XCTAssertGreaterThan(painted.differingByteCount(from: baseline), painted.size * 4,
+                             "A ribbon at least a pixel wide crosses the frame")
+    }
+
     /// The colour is the style's answer about the layer, not a property of the
     /// bytes: the same geometry in a layer the style paints differently must
     /// come out differently. Without this, a tile that reached the frame as an

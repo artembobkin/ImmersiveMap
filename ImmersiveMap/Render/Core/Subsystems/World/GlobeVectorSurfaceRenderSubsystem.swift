@@ -6,23 +6,27 @@ import Metal
 /// Draws the globe's tiles as geometry on the sphere: the ground layer of
 /// every placement, projected per vertex through the surface morph and lit
 /// like the placeholder grid the `globeSurface` layer painted just before.
-/// The grid wrote the depth; this geometry only tests against it (lifted
-/// off the sphere, see `GlobeSurfaceLift`) and blends over it, so routes,
-/// scene models and label occlusion keep the surface depth they had.
+/// The grid wrote the surface depth, which routes, scene models and label
+/// occlusion keep testing against; this geometry neither tests nor writes
+/// depth. Its extent is decided by the clip distances (the placeIn slot and
+/// the horizon) and by back-face culling: every tile triangle is wound
+/// counter-clockwise in render space, so the far side of the planet is
+/// clockwise on screen and dropped by orientation, including the far side
+/// the relaxed horizon clip lets through while the surface unfurls. Nothing
+/// drawn before it on the sphere stands in front of it, so a depth test
+/// would only compare it with the grid, a different chord approximation of
+/// the same sphere, and z-fight.
 final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "GlobeVectorSurface"
 
     private let pipeline: TilePipeline
-    private let surfaceDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
 
     init(pipeline: TilePipeline,
-         surfaceDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState) {
         self.pipeline = pipeline
-        self.surfaceDepthState = surfaceDepthState
         self.depthDisabledState = depthDisabledState
         self.debugOverlayControls = debugOverlayControls
     }
@@ -44,7 +48,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
         let atmosphere = GlobeAtmosphereUniform.make(settings: settings.scene.atmosphere,
                                                      earthScene: frameContext.earthSceneUniform,
                                                      globe: frameContext.globeRenderUniform)
-        encoder.setDepthStencilState(surfaceDepthState)
+        encoder.setDepthStencilState(depthDisabledState)
         GlobeVectorSurfaceDrawer.draw(renderEncoder: encoder,
                                       cameraUniform: frameContext.cameraUniform,
                                       globe: frameContext.globeRenderUniform,
@@ -59,7 +63,6 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                       pipeline: pipeline,
                                       isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled)
-        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

@@ -50,6 +50,8 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                                                               longitudeDegrees: Self.longitude,
                                                               zoom: 1.0))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        XCTAssertNotEqual(baseline.center, baseline.corners[0],
+                          "The placeholder grid paints the disc before any tile arrives")
         try await loadFixtureTiles(into: harness, maximumZoom: 2)
         let painted = try await harness.renderUntilSettled(changedFrom: baseline,
                                                             startingAt: OffscreenFrameHarness.frameTime(1))
@@ -61,14 +63,16 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         XCTAssertLessThan(center.blue, 250)
     }
 
-    /// The geometry must clear the placeholder grid's depth everywhere, not
-    /// only at its own vertices: a water polygon split on the parser's grid
-    /// is a lattice of chords, and where a chord dipped below the placeholder
-    /// the water failed the depth test in a diamond around each cell centre,
-    /// showing the layer under it (a lattice of pale diamonds across the
-    /// equatorial Atlantic, largest where the Mercator cells are largest).
-    /// So: with the camera on the equator at zoom 2, a wide disc around the
-    /// centre must be the water colour in every pixel.
+    /// The geometry must paint over the placeholder grid everywhere, not
+    /// only at its own vertices. When it was still depth-tested against the
+    /// grid, a water polygon split on the parser's grid was a lattice of
+    /// chords, and where a chord dipped below the placeholder the water
+    /// failed the test in a diamond around each cell centre, showing the
+    /// layer under it (a lattice of pale diamonds across the equatorial
+    /// Atlantic, largest where the Mercator cells are largest). The geometry
+    /// is not depth-tested any more; this pins that nothing brings the
+    /// lattice back. So: with the camera on the equator at zoom 2, a wide
+    /// disc around the centre must be the water colour in every pixel.
     @MainActor
     func testWaterCoversTheDiscWithoutTheLayerBelowShowingThrough() async throws {
         let harness = try makeHarness(size: 512)
@@ -104,6 +108,73 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         }
         XCTAssertGreaterThan(checked, 1000)
         XCTAssertEqual(offColour, 0, "\(offColour) of \(checked) pixels of the water disc show another colour")
+    }
+
+    /// Halfway through the unfurl the far side of the planet is placed (the
+    /// CPU stops rejecting tiles by the horizon at transition > 0) and the
+    /// horizon clip has relaxed; what removes it is the winding: every tile
+    /// triangle is counter-clockwise in render space, the far side is
+    /// clockwise on screen, and the drawer culls back faces. Without that the
+    /// far side painted over the near side and its surface glow (a sphere
+    /// normal facing away from the camera) turned the whole frame white.
+    @MainActor
+    func testTheNearSideStaysWaterMidMorph() async throws {
+        let harness = try makeHarness(size: 256)
+        let presentation = ImmersiveMapSettings.default.presentation
+        let latitudeExtension = log2(1.0 / cos(Self.latitude * .pi / 180.0))
+        let midMorphZoom = presentation.automaticTransitionStartZoom
+            + (presentation.automaticTransitionSpan + latitudeExtension) * 0.5
+        let center = ImmersiveMapProjection.worldMercator(latitude: Self.latitude * .pi / 180.0,
+                                                          longitude: Self.longitude * .pi / 180.0)
+        let resolved = PresentationStateResolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: center,
+                                                                                              zoom: midMorphZoom,
+                                                                                              bearing: 0,
+                                                                                              pitch: 0),
+                                                         settings: presentation)
+        XCTAssertGreaterThan(resolved.globeRenderUniform.transition, 0, "The premise: the surface is unfurling")
+        XCTAssertLessThan(resolved.globeRenderUniform.transition, 1, "and has not finished")
+
+        harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.latitude,
+                                                              longitudeDegrees: Self.longitude,
+                                                              zoom: midMorphZoom))
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        try await loadFixtureTiles(into: harness, maximumZoom: 8)
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                            startingAt: OffscreenFrameHarness.frameTime(1))
+        XCTAssertTrue(isWaterLike(painted.center),
+                      "The centre must stay the water colour mid-morph, got \(painted.center)")
+        let middle = painted.size / 2
+        let radius = painted.size / 10
+        var offColour = 0
+        for y in (middle - radius) ... (middle + radius) {
+            for x in (middle - radius) ... (middle + radius)
+            where (x - middle) * (x - middle) + (y - middle) * (y - middle) <= radius * radius {
+                if isWaterLike(painted.pixel(x: x, y: y)) == false {
+                    offColour += 1
+                }
+            }
+        }
+        XCTAssertEqual(offColour, 0, "\(offColour) pixels around the centre are not water mid-morph")
+    }
+
+    /// Under an oblique view the near side is still front-facing: the sense
+    /// of the winding declaration holds when the sphere is seen at an angle,
+    /// not only from straight above.
+    @MainActor
+    func testTheNearSideIsIntactUnderAPitchedCamera() async throws {
+        let harness = try makeHarness()
+        harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.latitude,
+                                                              longitudeDegrees: Self.longitude,
+                                                              zoom: 1.5,
+                                                              bearing: 0,
+                                                              pitch: 0.5))
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        try await loadFixtureTiles(into: harness, maximumZoom: 2)
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                            startingAt: OffscreenFrameHarness.frameTime(1))
+        XCTAssertTrue(isWaterLike(painted.center),
+                      "The near side under an oblique view is front-facing, got \(painted.center)")
+        XCTAssertGreaterThan(painted.count(where: isWaterLike), painted.size * painted.size / 8)
     }
 
     // MARK: - Helpers
