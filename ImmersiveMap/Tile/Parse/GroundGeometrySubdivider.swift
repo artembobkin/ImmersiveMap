@@ -124,30 +124,58 @@ enum GroundGeometrySubdivider {
                 emitTriangle(a, b, c)
                 continue
             }
-            var pieces: [[Point]] = [[a, b, c]]
-            if firstColumn <= lastColumn {
-                for column in firstColumn...lastColumn {
-                    pieces = pieces.flatMap { split($0, axis: 0, at: Float(column) * stepValue) }
-                }
-            }
-            if firstRow <= lastRow {
-                for row in firstRow...lastRow {
-                    pieces = pieces.flatMap { split($0, axis: 1, at: Float(row) * stepValue) }
-                }
-            }
-            for piece in pieces where piece.count >= 3 {
-                for corner in 1..<(piece.count - 1) {
-                    emitTriangle(piece[0], piece[corner], piece[corner + 1])
+            // The grid lines sweep through the triangle: each line hands the
+            // piece below it to the output and keeps only the remainder
+            // above for the next line, one split per line and strip. Cutting
+            // every accumulated piece by every line instead was quadratic in
+            // the cell count (190 ms for a tile-spanning quad at step 64).
+            var strips: [[Point]] = []
+            sweep([a, b, c], axis: 0, from: firstColumn, through: lastColumn, step: stepValue, into: &strips)
+            for strip in strips {
+                var pieces: [[Point]] = []
+                sweep(strip, axis: 1, from: firstRow, through: lastRow, step: stepValue, into: &pieces)
+                for piece in pieces where piece.count >= 3 {
+                    for corner in 1..<(piece.count - 1) {
+                        emitTriangle(piece[0], piece[corner], piece[corner + 1])
+                    }
                 }
             }
         }
         return output
     }
 
+    /// Cuts a convex polygon by the grid lines `first...last` along one
+    /// axis, appending the pieces in ascending order along that axis. A
+    /// piece below a line is final (every later line lies above it), so only
+    /// the remainder above the line is cut again.
+    private static func sweep(_ polygon: [Point], axis: Int, from first: Int, through last: Int,
+                              step: Float, into pieces: inout [[Point]]) {
+        var remainder = polygon
+        if first <= last {
+            for line in first...last {
+                let sides = splitSides(remainder, axis: axis, at: Float(line) * step)
+                if sides.below.count >= 3 { pieces.append(sides.below) }
+                guard sides.above.count >= 3 else { return }
+                remainder = sides.above
+            }
+        }
+        if remainder.count >= 3 { pieces.append(remainder) }
+    }
+
     /// Splits a convex polygon along the line `position[axis] == value`
     /// into the piece below and the piece above (either may be empty),
     /// keeping the input winding.
     static func split(_ polygon: [Point], axis: Int, at value: Float) -> [[Point]] {
+        let sides = splitSides(polygon, axis: axis, at: value)
+        var result: [[Point]] = []
+        if sides.below.count >= 3 { result.append(sides.below) }
+        if sides.above.count >= 3 { result.append(sides.above) }
+        return result
+    }
+
+    /// The two sides of `split`, unfiltered: a side with fewer than three
+    /// points is empty or a degenerate sliver on the line.
+    private static func splitSides(_ polygon: [Point], axis: Int, at value: Float) -> (below: [Point], above: [Point]) {
         var below: [Point] = []
         var above: [Point] = []
         below.reserveCapacity(polygon.count + 1)
@@ -165,10 +193,7 @@ enum GroundGeometrySubdivider {
                 above.append(crossing)
             }
         }
-        var result: [[Point]] = []
-        if below.count >= 3 { result.append(below) }
-        if above.count >= 3 { result.append(above) }
-        return result
+        return (below, above)
     }
 
     /// The crossing of an edge with an axis-aligned line, computed from the
