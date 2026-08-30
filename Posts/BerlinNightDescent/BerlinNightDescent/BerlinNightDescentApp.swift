@@ -66,12 +66,6 @@ private struct DescentScreen: View {
                 .styleSettings(BerlinNightTheme.style)
                 .sceneSettings(BerlinNightTheme.scene)
                 .labelSettings(BerlinNightTheme.labels)
-                // The descent crosses every zoom from the globe to the street
-                // and the preview loops back over the same ground: an enlarged
-                // memory cache of GPU-ready tiles (1 GiB instead of 256 MiB)
-                // keeps the low zooms from being evicted by the high ones and
-                // re-uploaded on the next lap.
-                .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
                 .ignoresSafeArea()
 
             if showChrome {

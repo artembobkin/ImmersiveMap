@@ -84,12 +84,6 @@ private struct CrowdScreen: View {
                                 sizeScale: CrowdScale.sizeScale(frameHeightPx: frameHeightPx),
                                 borderWidthPx: CrowdScale.borderWidthPx(frameHeightPx: frameHeightPx),
                                 maxOffsetPx: CrowdScale.maxOffsetPx(frameHeightPx: frameHeightPx))
-                // The storyboard crosses fifteen zoom levels twice per lap and
-                // comes back over the same ground: an enlarged memory cache of
-                // GPU-ready tiles (1 GiB instead of 256 MiB) keeps the low
-                // zooms from being evicted by the high ones and re-uploaded on
-                // the way back up.
-                .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
                 .onGeometryChange(for: Double.self) { proxy in
                     proxy.size.height
                 } action: { height in

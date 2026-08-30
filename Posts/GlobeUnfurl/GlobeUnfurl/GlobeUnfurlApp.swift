@@ -63,12 +63,6 @@ private struct UnfurlScreen: View {
                 // and how long it takes. See `UnfurlPresentation`.
                 .presentationSettings(UnfurlPresentation.settings)
                 .cameraSettings(UnfurlPresentation.camera)
-                // The tour crosses six zoom levels twice per lap and comes back
-                // over the same ground: an enlarged memory cache of GPU-ready
-                // tiles (1 GiB instead of 256 MiB) keeps the low zooms from
-                // being evicted by the high ones and re-uploaded on the way
-                // back up.
-                .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
                 .ignoresSafeArea()
 
             if showChrome {

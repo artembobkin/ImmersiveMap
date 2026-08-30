@@ -47,7 +47,7 @@ public struct ViewReuseSettings: Equatable, Sendable {
 }
 ```
 
-When the screen holding a map goes away, the platform view is not destroyed: the renderer, its GPU tile cache and its text atlases are **parked** for `parkedTimeToLive`, and the next `ImmersiveMapView` adopts it warm. Pushing a detail screen and coming back therefore skips the first-frame rebuild entirely.
+When the screen holding a map goes away, the platform view is not destroyed: the renderer, its resident tiles and its text atlases are **parked** for `parkedTimeToLive`, and the next `ImmersiveMapView` adopts it warm. Pushing a detail screen and coming back therefore skips the first-frame rebuild entirely.
 
 An adopted view keeps its previous camera unless the new view supplies an explicit camera position or an attached [camera controller](camera.md). That is usually what you want (returning to a map where you left it) and occasionally not (a fresh map that must open at a fixed place), which is what the explicit position is for.
 
@@ -112,7 +112,7 @@ Cells too small on screen to hold the stamp keep their lines and drop their text
 
 ## Where the frame time goes
 
-For the shape of the pipeline (the five passes, the subsystems, the tile path) see [architecture](architecture.md). The two levers most likely to matter to an app are the [memory tile cache size](tile-cache.md), which decides how often GPU-ready tiles are rebuilt, and the [shadow map resolution and coverage](buildings-and-shadows.md), which is the most expensive optional pass.
+For the shape of the pipeline (the five passes, the subsystems, the tile path) see [architecture](architecture.md). The two levers most likely to matter to an app are the [prepared disk cache size](tile-cache.md), which decides how much of a revisited area returns without a re-download, and the [shadow map resolution and coverage](buildings-and-shadows.md), which is the most expensive optional pass.
 
 ## Limitations
 

@@ -83,9 +83,9 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             """
         case .diagnostics:
             """
-            The debug panel, FXAA, how hard the frame loop runs and how much the \
-            tile caches keep. The cheap frame-level switches and the expensive \
-            cache ones sit side by side on purpose.
+            The debug panel, FXAA, how hard the frame loop runs and how large \
+            the disk tile caches may grow. The cheap frame-level switches and \
+            the expensive cache ones sit side by side on purpose.
             """
         }
     }

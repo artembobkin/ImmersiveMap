@@ -81,10 +81,6 @@ private struct FlyoverScreen: View {
                 // badges at the storyboard's street zooms.
                 .labelSettings(cinematicLabelSettings)
                 .mapStyle(cinematicMapStyle)
-                // The flyover loops over the same Manhattan tiles: an enlarged
-                // memory cache of GPU-ready tiles (1 GiB instead of 256 MiB)
-                // so they are not evicted and re-uploaded between laps.
-                .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
                 .ignoresSafeArea()
 
             if showChrome {

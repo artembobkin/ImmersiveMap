@@ -40,10 +40,12 @@ private struct TourScreen: View {
                 .camera(camera, position: CinematicStoryboard.overview)
                 .enableCameraUIControls(showChrome)
                 .tourVideoRecorder(videoRecorder)
-                // The cinematic tour loops the globe and two cities: an enlarged
-                // memory cache of GPU-ready tiles (1 GiB instead of 256 MiB) so
-                // tiles are not evicted and re-uploaded between laps.
-                .tileSettings(memoryCacheSizeInBytes: 1_073_741_824)
+                // The cinematic tour loops the globe and two cities. Tiles
+                // leave GPU memory as soon as the camera has passed them, so
+                // every lap returns through the prepared disk cache: the
+                // quota is doubled so one lap never prunes the previous
+                // lap's tiles.
+                .preparedTileDiskCacheSize(bytes: 4 * 1_024 * 1_024 * 1_024)
                 .ignoresSafeArea()
 
             if showChrome {

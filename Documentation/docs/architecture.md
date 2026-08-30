@@ -52,16 +52,16 @@ Work is organized as ~17 `RenderSubsystem`s registered by `RenderGraphFactory`. 
 ```text
 TileDemandPlacementSubsystem
    ↓
-TileRenderStore (in-memory LRU of MetalTiles)
+TileRenderStore (working set of MetalTiles: the frame's demanded tiles plus the z0-3 world cover)
    ↓  miss
-ImmersiveMapNeedsTile (bounded-concurrency async loading, dedup, retry/backoff, disk caches)
+ImmersiveMapNeedsTile (disk stage first: a prepared tile on disk answers final; misses download with bounded concurrency, dedup, retry/backoff)
    ↓
 TileMvtParser + MvtTileDecoder/MvtGeometryDecoder + clippers + internal Earcut port → PreparedTileCPU
    ↓
 MetalTileFactory → GPU TileBuffers
 ```
 
-Completion invalidates a frame with `.tileAvailable`. There are two disk caches: raw payloads and prepared tiles.
+Completion invalidates a frame with `.tileAvailable`. There are two disk caches: raw payloads and prepared tiles. Tiles stay in GPU memory only while a frame draws them; a revisited place returns through the prepared cache, whose TTL and identity namespace are the freshness contract.
 
 ## Globe vs flat presentation
 

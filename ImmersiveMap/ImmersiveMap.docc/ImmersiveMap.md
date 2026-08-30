@@ -54,7 +54,7 @@ Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-
 
 ### Map data
 
-The built-in tile source renders out of the box; any other MVT endpoint plugs in with one URL template, `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx", headers: [:])`, with parsing and styling configured separately through ``VectorTileMapStyle``. Tiles are cached in memory and on disk (raw and prepared), and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
+The built-in tile source renders out of the box; any other MVT endpoint plugs in with one URL template, `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx", headers: [:])`, with parsing and styling configured separately through ``VectorTileMapStyle``. Tiles are cached on disk twice (raw bytes and GPU-ready prepared geometry) and stay in memory only while a frame draws them, and ``ImmersiveMapOfflineController`` downloads whole regions that keep rendering with no network at all.
 
 ### Export
 
@@ -64,7 +64,7 @@ The built-in tile source renders out of the box; any other MVT endpoint plugs in
 
 Rendering is on-demand: the display link stays paused until something needs a frame (interaction, label fades, camera or avatar animation, an arriving tile). Frame rates follow ProMotion when the display allows it and back off under thermal pressure or Low Power Mode, dismantled map views are parked and reused by the next screen, and `os_signpost` intervals make every frame stage and tile stage visible in Instruments.
 
-> Important: ImmersiveMap is pre-1.0. The public API is still moving: APIs are renamed or removed outright rather than kept as deprecated shims, so read the release notes before updating.
+> Important: ImmersiveMap is pre-1.0. The public API is still moving: a deprecation is short-lived and the symbol is removed in a following release, so read the release notes before updating.
 
 Feature guides, one example app per feature and the changelog live in the [repository](https://github.com/artembobkin/ImmersiveMap). The default tile service, API keys and usage dashboard live at [immersivemap.dev](https://immersivemap.dev).
 

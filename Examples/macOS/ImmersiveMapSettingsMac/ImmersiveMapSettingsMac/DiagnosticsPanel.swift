@@ -4,8 +4,8 @@
 import SwiftUI
 import ImmersiveMap
 
-/// What to turn on while measuring, and the two caches that decide how much of
-/// a revisited area is free.
+/// What to turn on while measuring, and the two disk caches that decide how
+/// much of a revisited area is free.
 ///
 /// Rendering is on demand: the display link is paused until something asks for
 /// a frame, so an idle map costs nothing. `forceContinuousRendering` takes that
@@ -13,9 +13,10 @@ import ImmersiveMap
 /// never in production.
 ///
 /// The caches sit on top of each other. `urlCacheEnabled` keeps the raw tile
-/// bytes, `preparedTileCacheEnabled` keeps them parsed and tessellated, and the
-/// memory cache keeps them as GPU buffers. Turning one off is how you measure
-/// the cost of the stage below it.
+/// bytes and `preparedTileCacheEnabled` keeps them parsed and tessellated,
+/// which is where every tile the camera has already looked at comes back
+/// from: GPU memory holds only what the frame draws. Turning one off is how
+/// you measure the cost of the stage below it.
 struct DiagnosticsPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
@@ -52,13 +53,13 @@ struct DiagnosticsPanel: View {
                     .toggleStyle(.switch)
                     .disabled(settings.tiles.cache.preparedTileCacheEnabled == false)
 
-                DeferredValueSlider("GPU tile cache, MiB",
-                                    value: Double(settings.tiles.cache.memoryCacheSizeInBytes / Self.bytesPerMebibyte),
-                                    range: 64...1024,
-                                    step: 64,
+                DeferredValueSlider("Prepared disk cache, MiB",
+                                    value: Double(settings.tiles.cache.preparedDiskCacheSizeInBytes / Self.bytesPerMebibyte),
+                                    range: 256...4096,
+                                    step: 256,
                                     format: "%.0f",
                                     width: 160) { newValue in
-                    settings.tiles.cache.memoryCacheSizeInBytes = Int(newValue) * Self.bytesPerMebibyte
+                    settings.tiles.cache.preparedDiskCacheSizeInBytes = Int(newValue) * Self.bytesPerMebibyte
                 }
             }
 

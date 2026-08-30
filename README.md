@@ -81,7 +81,7 @@ Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://
 | [Camera flights and scripted tours](Documentation/docs/camera.md) | Available |
 | [Camera travelling along a path](Documentation/docs/camera-path-follow.md) | Available |
 | [Tour video export](Documentation/docs/tour-video-export.md) | Available |
-| [Disk / memory tile cache](Documentation/docs/tile-cache.md) | Available |
+| [Tile caches: two disk layers, a working set in memory](Documentation/docs/tile-cache.md) | Available |
 | [Offline regions: download once, render without a network](Documentation/docs/offline-tiles.md) | Available |
 | [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md) | Available |
 
