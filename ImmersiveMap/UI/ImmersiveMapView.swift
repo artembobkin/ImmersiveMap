@@ -519,6 +519,28 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The byte quota of the prepared tile cache on disk: parsed and
+    /// tessellated tiles, which is where every tile the camera has already
+    /// looked at comes back from.
+    ///
+    /// The default is 2 GiB
+    /// (`ImmersiveMapSettings.TileSettings.CacheSettings.defaultPreparedDiskCacheSizeInBytes`).
+    /// Tiles stay in GPU memory only while a frame draws them, so this quota
+    /// decides how much of a revisited area returns without a re-download and
+    /// re-parse: a looped tour wants it to hold every tile of a lap, an app
+    /// short on storage lowers it. The quota is root-wide, shared by every
+    /// map in the process, and the most recently created map's value is the
+    /// active policy; entries older than `preparedDiskTimeToLive` leave
+    /// regardless of it.
+    public func preparedTileDiskCacheSize(bytes: Int) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.preparedTileDiskCacheSize(bytes: bytes)
+        return view
+    }
+
+    /// Adjusts only the provided cache fields; nil leaves a field unchanged.
+    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
+    /// ignored: tiles stay in GPU memory only while a frame draws them.
     public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,
@@ -534,6 +556,9 @@ public extension ImmersiveMapView {
                      memoryCacheSizeInBytes: memoryCacheSizeInBytes)
     }
 
+    /// Adjusts only the provided cache fields; nil leaves a field unchanged.
+    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
+    /// ignored: tiles stay in GPU memory only while a frame draws them.
     public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,

@@ -364,14 +364,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         public struct CacheSettings: Equatable, Sendable {
-            public static let defaultPreparedDiskCacheSizeInBytes: Int = 256 * 1_024 * 1_024
+            public static let defaultPreparedDiskCacheSizeInBytes: Int = 2 * 1_024 * 1_024 * 1_024
 
             public var clearDiskCachesOnLaunch: Bool
             /// Raw HTTP tile cache (URLSession's URLCache). When false, every tile
             /// download goes to the network (still revalidated by the server ETag).
             public var urlCacheEnabled: Bool
-            /// On-disk cache of parsed/tessellated tiles. When false, tiles are
-            /// re-parsed from the raw bytes on every load.
+            /// On-disk cache of parsed/tessellated tiles: the layer every tile
+            /// the camera has already looked at comes back from, without the
+            /// network. When false, tiles are re-parsed from the raw bytes on
+            /// every load.
             public var preparedTileCacheEnabled: Bool
             /// LZFSE compression of prepared tiles before they hit the disk cache.
             /// When false, entries are written uncompressed: larger cache files in
@@ -379,12 +381,26 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// Both variants stay readable regardless of this flag.
             public var preparedDiskCompressionEnabled: Bool
             public var preparedDiskTimeToLive: TimeInterval
-            /// Root-wide byte quota for all prepared-tile format/style namespaces.
-            /// The most recently initialized map/cache instance makes its quota
-            /// the active root-wide policy.
+            /// Root-wide byte quota for all prepared-tile format/style namespaces
+            /// (2 GiB by default). The most recently initialized map/cache
+            /// instance makes its quota the active root-wide policy. Tiles stay
+            /// in GPU memory only while a frame draws them, so this quota
+            /// decides how much of a revisited area comes back without a
+            /// re-download and re-parse.
             public var preparedDiskCacheSizeInBytes: Int
-            public var memoryCacheSizeInBytes: Int
+            /// Backing storage of the deprecated `memoryCacheSizeInBytes`: kept
+            /// so the public surface round-trips the value without the package
+            /// itself touching a deprecated symbol.
+            var legacyMemoryCacheSizeInBytes: Int
 
+            @available(*, deprecated, message: "Has no effect: tiles stay in GPU memory only while a frame draws them, with no byte budget. Size the prepared disk cache instead: preparedDiskCacheSizeInBytes, or the preparedTileDiskCacheSize(bytes:) modifier.")
+            public var memoryCacheSizeInBytes: Int {
+                get { legacyMemoryCacheSizeInBytes }
+                set { legacyMemoryCacheSizeInBytes = newValue }
+            }
+
+            /// - Parameter memoryCacheSizeInBytes: ignored; kept for source
+            ///   compatibility (see the deprecated property of the same name).
             public init(clearDiskCachesOnLaunch: Bool,
                         urlCacheEnabled: Bool = true,
                         preparedTileCacheEnabled: Bool = true,
@@ -400,6 +416,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                           memoryCacheSizeInBytes: memoryCacheSizeInBytes)
             }
 
+            /// - Parameter memoryCacheSizeInBytes: ignored; kept for source
+            ///   compatibility (see the deprecated property of the same name).
             public init(clearDiskCachesOnLaunch: Bool,
                         urlCacheEnabled: Bool = true,
                         preparedTileCacheEnabled: Bool = true,
@@ -413,7 +431,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.preparedDiskCompressionEnabled = preparedDiskCompressionEnabled
                 self.preparedDiskTimeToLive = preparedDiskTimeToLive
                 self.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
-                self.memoryCacheSizeInBytes = memoryCacheSizeInBytes
+                self.legacyMemoryCacheSizeInBytes = memoryCacheSizeInBytes
+            }
+
+            /// The deprecated `memoryCacheSizeInBytes` is left out on purpose:
+            /// a no-op field must not make two settings unequal, or changing it
+            /// would still recreate the renderer through
+            /// `ImmersiveMapSettingsApplicationPlanner`.
+            public static func == (lhs: CacheSettings, rhs: CacheSettings) -> Bool {
+                lhs.clearDiskCachesOnLaunch == rhs.clearDiskCachesOnLaunch
+                    && lhs.urlCacheEnabled == rhs.urlCacheEnabled
+                    && lhs.preparedTileCacheEnabled == rhs.preparedTileCacheEnabled
+                    && lhs.preparedDiskCompressionEnabled == rhs.preparedDiskCompressionEnabled
+                    && lhs.preparedDiskTimeToLive == rhs.preparedDiskTimeToLive
+                    && lhs.preparedDiskCacheSizeInBytes == rhs.preparedDiskCacheSizeInBytes
             }
         }
 
@@ -1251,6 +1282,19 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The byte quota of the prepared tile cache on disk: parsed and
+    /// tessellated tiles, which is where every tile the camera has already
+    /// looked at comes back from. See
+    /// `ImmersiveMapView.preparedTileDiskCacheSize(bytes:)`.
+    func preparedTileDiskCacheSize(bytes: Int) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.cache.preparedDiskCacheSizeInBytes = bytes
+        return settings
+    }
+
+    /// Adjusts only the provided cache fields; nil leaves a field unchanged.
+    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
+    /// ignored: tiles stay in GPU memory only while a frame draws them.
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                       urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
@@ -1266,6 +1310,9 @@ public extension ImmersiveMapSettings {
                      memoryCacheSizeInBytes: memoryCacheSizeInBytes)
     }
 
+    /// Adjusts only the provided cache fields; nil leaves a field unchanged.
+    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
+    /// ignored: tiles stay in GPU memory only while a frame draws them.
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                       urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
@@ -1293,7 +1340,7 @@ public extension ImmersiveMapSettings {
             settings.tiles.cache.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
         }
         if let memoryCacheSizeInBytes {
-            settings.tiles.cache.memoryCacheSizeInBytes = memoryCacheSizeInBytes
+            settings.tiles.cache.legacyMemoryCacheSizeInBytes = memoryCacheSizeInBytes
         }
         return settings
     }

@@ -87,6 +87,20 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
+    func testChangingOnlyTheDeprecatedMemoryCacheSizeYieldsNoActions() {
+        let oldSettings = ImmersiveMapSettings.default
+        var newSettings = oldSettings
+        newSettings.tiles.cache.legacyMemoryCacheSizeInBytes += 1
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        // The field is deprecated and ignored; a difference in it must not
+        // recreate the renderer or invalidate any cache.
+        XCTAssertTrue(plan.changedDomains.isEmpty)
+        XCTAssertTrue(plan.actions.isEmpty)
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
     func testLabelFallbackPolicyChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings

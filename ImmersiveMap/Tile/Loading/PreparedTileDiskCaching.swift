@@ -82,8 +82,10 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     // The cache root is process-global, so its active policy must be global as
     // well. The most recently initialized map view owns the current policy;
     // operations from older instances never restore stale limits.
-    private var policy = Policy(byteQuota: Int64(256 * 1_024 * 1_024),
-                                timeToLive: 7 * 24 * 60 * 60)
+    private var policy = Policy(
+        byteQuota: Int64(ImmersiveMapSettings.TileSettings.CacheSettings.defaultPreparedDiskCacheSizeInBytes),
+        timeToLive: 7 * 24 * 60 * 60
+    )
     // Pruning sweeps the whole index (and sorts it when over quota), so writes
     // trigger it through a throttle: immediately on quota overshoot, otherwise
     // at most once per interval. Expired files are also rejected on read, so a
