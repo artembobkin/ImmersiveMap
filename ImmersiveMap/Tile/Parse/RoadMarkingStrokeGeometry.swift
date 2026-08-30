@@ -40,6 +40,9 @@ enum RoadMarkingStrokeGeometry {
         let half = stroke * 0.5
         var vertices: [SIMD2<Int16>] = []
         vertices.reserveCapacity(path.count * 2)
+        // The unrounded positions, for the winding decision below.
+        var corners: [SIMD2<Float>] = []
+        corners.reserveCapacity(path.count * 2)
         for index in 0..<path.count {
             let offset: SIMD2<Float>
             if index == 0 {
@@ -60,6 +63,8 @@ enum RoadMarkingStrokeGeometry {
                     offset = miter * (half / max(simd_dot(miter, before), miterLimit))
                 }
             }
+            corners.append(path[index] + offset)
+            corners.append(path[index] - offset)
             vertices.append(TileCoordinateSpace.quantized(path[index] + offset))
             vertices.append(TileCoordinateSpace.quantized(path[index] - offset))
         }
@@ -71,7 +76,23 @@ enum RoadMarkingStrokeGeometry {
             let right = left + 1
             let nextLeft = left + 2
             let nextRight = left + 3
-            indices.append(contentsOf: [left, right, nextRight, left, nextRight, nextLeft])
+            // Counter-clockwise in render space, like every tile triangle.
+            // With `left` on the left of travel the quad runs that way by
+            // itself; a full reversal of the path (the butt fallback above)
+            // or a clamped miter can fold one quad over, so the order is
+            // read off the quad's own area on the unrounded corners.
+            let ring = [corners[Int(left)], corners[Int(right)], corners[Int(nextRight)], corners[Int(nextLeft)]]
+            var doubledArea: Float = 0
+            for corner in 0..<4 {
+                let current = ring[corner]
+                let next = ring[(corner + 1) % 4]
+                doubledArea += current.x * next.y - next.x * current.y
+            }
+            if doubledArea < 0 {
+                indices.append(contentsOf: [left, nextRight, right, left, nextLeft, nextRight])
+            } else {
+                indices.append(contentsOf: [left, right, nextRight, left, nextRight, nextLeft])
+            }
         }
         return TileMvtParser.ParsedPolygon(vertices: vertices, indices: indices)
     }

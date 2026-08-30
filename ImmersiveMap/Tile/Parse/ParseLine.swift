@@ -253,6 +253,9 @@ class ParseLine {
     /// before the flip (tile space) and the tile clip after it (render
     /// space); both are reflection-symmetric about the tile extent, which is
     /// why each is correct in its own space. See `TileCoordinateSpace`.
+    /// Winding contract: every emitted triangle is counter-clockwise in
+    /// render space (`ParsedPolygon.firstClockwiseTriangle`); the tile
+    /// drawers cull back faces.
     func parse(points: [SIMD2<Float>],
                width: Double,
                tileExtent: Float,
@@ -578,14 +581,17 @@ class ParseLine {
                 polygon.parameters.append(row.parameter)
             }
 
+            // Each row is (left, right) with left on the left of travel, so
+            // (L_k, R_k, L_k+1) and (R_k, R_k+1, L_k+1) are counter-clockwise
+            // in render space, the winding every tile triangle carries.
             for rowIndex in 0..<(rows.count - 1) {
                 let rowBase = base + UInt32(rowIndex * 2)
                 polygon.indices.append(rowBase)
-                polygon.indices.append(rowBase + 2)
-                polygon.indices.append(rowBase + 1)
                 polygon.indices.append(rowBase + 1)
                 polygon.indices.append(rowBase + 2)
+                polygon.indices.append(rowBase + 1)
                 polygon.indices.append(rowBase + 3)
+                polygon.indices.append(rowBase + 2)
             }
         }
     }
@@ -644,10 +650,16 @@ class ParseLine {
                 polygon.distances.append(1.0)
                 polygon.parameters.append(joinParameter)
             }
+            // The rim sweeps from outerDirection0 to outerDirection1, which
+            // is counter-clockwise on a left turn and clockwise on a right
+            // one; the fan reads the rim pair in the order that keeps every
+            // triangle counter-clockwise in render space.
             for step in 0..<stepCount {
+                let rim0 = base + 1 + UInt32(step)
+                let rim1 = base + 2 + UInt32(step)
                 polygon.indices.append(base)
-                polygon.indices.append(base + 1 + UInt32(step))
-                polygon.indices.append(base + 2 + UInt32(step))
+                polygon.indices.append(innerIsLeft ? rim1 : rim0)
+                polygon.indices.append(innerIsLeft ? rim0 : rim1)
             }
         }
     }

@@ -109,11 +109,12 @@ struct BusLaneLetterGeometryBuilder {
                                                  withPoint: baseCenter, direction: side) else {
                 return nil
             }
-            return TileMvtParser.ParsedPolygon(
-                vertices: [TileCoordinateSpace.quantized(baseOuter), TileCoordinateSpace.quantized(apexOuter),
-                           TileCoordinateSpace.quantized(apexInner), TileCoordinateSpace.quantized(baseInner)],
-                indices: [0, 1, 2, 0, 2, 3]
-            )
+            // The ring runs one way for the left leg and the other for the
+            // right one (the outer normal is resolved per leg), so the fan
+            // decides the winding from the ring's area: counter-clockwise in
+            // render space either way. The apex floats are shared with the
+            // other leg, so the shared edge still quantizes identically.
+            return TileMvtParser.ParsedPolygon.counterClockwiseConvexFan([baseOuter, apexOuter, apexInner, baseInner])
         }
 
         // The crossbar: a band of the stroke's thickness at the crossbar
@@ -123,10 +124,8 @@ struct BusLaneLetterGeometryBuilder {
         let leftBar = leftFoot + (apex - leftFoot) * crossbarFraction
         let rightBar = rightFoot + (apex - rightFoot) * crossbarFraction
         let barLift = up * halfStroke
-        let crossbar = TileMvtParser.ParsedPolygon(
-            vertices: [TileCoordinateSpace.quantized(leftBar + barLift), TileCoordinateSpace.quantized(rightBar + barLift),
-                       TileCoordinateSpace.quantized(rightBar - barLift), TileCoordinateSpace.quantized(leftBar - barLift)],
-            indices: [0, 1, 2, 0, 2, 3]
+        let crossbar = TileMvtParser.ParsedPolygon.counterClockwiseConvexFan(
+            [leftBar + barLift, rightBar + barLift, rightBar - barLift, leftBar - barLift]
         )
         return [legQuad(foot: leftFoot), legQuad(foot: rightFoot), crossbar].compactMap { $0 }
     }

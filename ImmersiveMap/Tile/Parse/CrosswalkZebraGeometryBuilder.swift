@@ -69,7 +69,9 @@ struct CrosswalkZebraGeometryBuilder {
                         TileCoordinateSpace.quantized(bottomRight),
                         TileCoordinateSpace.quantized(topRight)
                     ],
-                    indices: [0, 1, 2, 0, 2, 3]
+                    // Counter-clockwise in render space, like every tile
+                    // triangle: the ring above runs clockwise.
+                    indices: [0, 2, 1, 0, 3, 2]
                 )
             )
 

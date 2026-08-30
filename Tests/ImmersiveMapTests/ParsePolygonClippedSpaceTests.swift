@@ -72,5 +72,25 @@ final class ParsePolygonClippedSpaceTests: XCTestCase {
                              "Earcut triangles too")
         XCTAssertGreaterThan(try orientation(ring: concave.reversed()), 0,
                              "for both source windings")
+
+        // A ring with a hole goes through earcut's hole bridging, and a ring
+        // poking past the north edge is clipped first: neither path may
+        // leave a clockwise triangle behind, whichever way the source winds.
+        func firstClockwise(exterior: [Point], interiors: [[Point]] = []) throws -> Int? {
+            let parsed = try XCTUnwrap(ParsePolygon().parse(polygon: Polygon(exteriorRing: exterior,
+                                                                             interiorRings: interiors),
+                                                            tileExtent: 4096))
+            return TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: parsed.vertices,
+                                                                      indices: parsed.indices)
+        }
+        let hole = [Point(x: 900, y: 500), Point(x: 1100, y: 500),
+                    Point(x: 1100, y: 700), Point(x: 900, y: 700)]
+        XCTAssertNil(try firstClockwise(exterior: ring, interiors: [hole]), "A ring with a hole")
+        XCTAssertNil(try firstClockwise(exterior: ring.reversed(), interiors: [hole.reversed()]),
+                     "for both source windings")
+        let pastTheNorthEdge = [Point(x: 600, y: -200), Point(x: 1400, y: -200), Point(x: 1400, y: 900),
+                                Point(x: 1000, y: 500), Point(x: 600, y: 900)]
+        XCTAssertNil(try firstClockwise(exterior: pastTheNorthEdge), "A clipped concave ring")
+        XCTAssertNil(try firstClockwise(exterior: pastTheNorthEdge.reversed()), "for both source windings")
     }
 }

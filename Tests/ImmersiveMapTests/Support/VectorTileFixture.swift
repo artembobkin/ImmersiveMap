@@ -64,11 +64,15 @@ enum VectorTileFixture {
         return MvtTileMessage(layers: [layer]).serializedData()
     }
 
-    /// One feature of a hand-built layer: a polygon ring or a line, with its
-    /// properties. Coordinates are MVT tile units (y down).
+    /// One feature of a hand-built layer: a polygon ring, a polygon with
+    /// holes, or a line, with its properties. Coordinates are MVT tile units
+    /// (y down). A shell must have positive signed area in those units (the
+    /// MVT sense of an exterior ring) and a hole the opposite, which is how
+    /// the decoder tells a hole from the next shell.
     struct Feature {
         enum Geometry {
             case polygon(ring: [(Int32, Int32)])
+            case polygonWithHoles(exterior: [(Int32, Int32)], interiors: [[(Int32, Int32)]])
             case line(points: [(Int32, Int32)])
         }
         let id: UInt64
@@ -95,6 +99,12 @@ enum VectorTileFixture {
             case .polygon(let ring):
                 encoded.type = .polygon
                 encoded.geometry = ringGeometry(ring, closed: true)
+            case .polygonWithHoles(let exterior, let interiors):
+                encoded.type = .polygon
+                encoded.geometry = ringGeometry(exterior, closed: true)
+                for interior in interiors {
+                    encoded.geometry.append(contentsOf: ringGeometry(interior, closed: true))
+                }
             case .line(let points):
                 encoded.type = .linestring
                 encoded.geometry = ringGeometry(points, closed: false)
@@ -146,9 +156,11 @@ enum VectorTileFixture {
 
     /// One closed square ring from (0,0) to (side,side), as MVT commands.
     ///
-    /// The ring is emitted counter-clockwise in tile coordinates; the parser
-    /// normalizes winding itself (`ensureWinding`), so the direction here only
-    /// has to be consistent, not to match the renderer's front face.
+    /// The ring has positive signed area in tile coordinates (y down), the
+    /// MVT sense of an exterior ring, which reads as clockwise on screen. The
+    /// parser decides the triangle winding itself (`ParsePolygon` tessellates
+    /// counter-clockwise in render space whichever way the ring runs), so the
+    /// direction here only has to be the exterior one.
     private static func squareRingGeometry(side: Int32) -> [UInt32] {
         [
             GeometryCommand.moveTo.encoded(count: 1),

@@ -87,16 +87,36 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     }
 
     func testWindingIsPreserved() {
+        func crossings(_ split: TileMvtParser.ParsedPolygon) -> [Float] {
+            stride(from: 0, to: split.indices.count, by: 3).map { triangle in
+                let a = split.vertices[Int(split.indices[triangle])]
+                let b = split.vertices[Int(split.indices[triangle + 1])]
+                let c = split.vertices[Int(split.indices[triangle + 2])]
+                return (Float(b.x) - Float(a.x)) * (Float(c.y) - Float(a.y))
+                    - (Float(b.y) - Float(a.y)) * (Float(c.x) - Float(a.x))
+            }
+        }
         let counterClockwise = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(200, 0), SIMD2(0, 200)],
                                                            indices: [0, 1, 2])
-        let split = GroundGeometrySubdivider.subdivide(counterClockwise, step: 64)
-        for triangle in stride(from: 0, to: split.indices.count, by: 3) {
-            let a = split.vertices[Int(split.indices[triangle])]
-            let b = split.vertices[Int(split.indices[triangle + 1])]
-            let c = split.vertices[Int(split.indices[triangle + 2])]
-            let cross = (Float(b.x) - Float(a.x)) * (Float(c.y) - Float(a.y))
-                - (Float(b.y) - Float(a.y)) * (Float(c.x) - Float(a.x))
+        for cross in crossings(GroundGeometrySubdivider.subdivide(counterClockwise, step: 64)) {
             XCTAssertGreaterThan(cross, 0, "Every piece keeps the input's counter-clockwise winding")
+        }
+        // A ribbon quad with attributes takes the fan and the split path alike.
+        let ribbon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
+                                                 indices: [0, 1, 2, 0, 2, 3],
+                                                 lineDistances: [-127, -127, 127, 127],
+                                                 lineParameters: [0, 1000, 1000, 0])
+        for cross in crossings(GroundGeometrySubdivider.subdivide(ribbon, step: 64)) {
+            XCTAssertGreaterThan(cross, 0, "A split ribbon keeps its counter-clockwise winding")
+        }
+        // The subdivider is a pass-through, not the normalizer: a clockwise
+        // input comes out clockwise in every piece. The emitters own the
+        // winding contract (ParsedPolygon.firstClockwiseTriangle).
+        let clockwise = TileMvtParser.ParsedPolygon(vertices: counterClockwise.vertices, indices: [0, 2, 1])
+        let clockwisePieces = crossings(GroundGeometrySubdivider.subdivide(clockwise, step: 64))
+        XCTAssertFalse(clockwisePieces.isEmpty)
+        for cross in clockwisePieces {
+            XCTAssertLessThan(cross, 0, "A clockwise input stays clockwise: the subdivider does not reorient")
         }
     }
 

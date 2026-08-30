@@ -1853,6 +1853,17 @@ class TileMvtParser {
                                       indices: inout UnsafeMutableBufferPointer<UInt32>,
                                       vertexCount: inout Int,
                                       indexCount: inout Int) {
+        #if DEBUG
+        // The winding contract of every tile triangle (counter-clockwise in
+        // render space, see ParsedPolygon.firstClockwiseTriangle) is kept by
+        // each emitter; this is the one funnel the ground, bridge and road
+        // geometry all pass through, so a new emitter that breaks it fails
+        // here in a debug build instead of vanishing under back-face
+        // culling on screen.
+        if let triangle = ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices) {
+            assertionFailure("Tile geometry must be counter-clockwise in render space: triangle \(triangle) of a \(polygon.vertices.count)-vertex polygon is clockwise and back-face culling would drop it")
+        }
+        #endif
         let vertexOffset = UInt32(vertexCount)
         let hasLineAttributes = polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count

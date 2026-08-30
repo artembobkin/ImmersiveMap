@@ -560,7 +560,12 @@ final class PreparedTileDiskCaching {
     // 75: the ground geometry of tiles up to z9 is split on a grid of 64 to
     // 1024 units by zoom so it can be drawn straight onto the sphere; v74
     // tiles carry tile-spanning triangles that cut into the globe as chords.
-    static let preparedFormatVersion: UInt32 = 75
+    // 76: every triangle of the ground, bridge and road geometry is wound
+    // counter-clockwise in render space so the tile drawers can cull back
+    // faces (the far side of the sphere); v75 tiles carry clockwise line
+    // quads, right-turn join fans, zebra stripes, one-way arrows and bus
+    // lane letters that culling would drop.
+    static let preparedFormatVersion: UInt32 = 76
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

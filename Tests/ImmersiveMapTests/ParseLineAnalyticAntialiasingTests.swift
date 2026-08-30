@@ -213,4 +213,53 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertEqual(vertex.lineDistance, 0)
         XCTAssertEqual(vertex.lineParameter, Int16.max)
     }
+
+    /// The winding contract: every ribbon triangle is counter-clockwise in
+    /// render space, on the unclipped fast path as much as through the clip,
+    /// on either turn of a round join, and under every cap and feather.
+    func testEveryTriangleIsCounterClockwiseInRenderSpace() throws {
+        func assertCounterClockwise(_ polygon: TileMvtParser.ParsedPolygon?,
+                                    _ name: String,
+                                    file: StaticString = #filePath,
+                                    line: UInt = #line) throws {
+            let polygon = try XCTUnwrap(polygon, name, file: file, line: line)
+            XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices,
+                                                                             indices: polygon.indices),
+                         "\(name): a clockwise triangle", file: file, line: line)
+            var doubled: Int64 = 0
+            for triangle in stride(from: 0, to: polygon.indices.count, by: 3) {
+                let a = polygon.vertices[Int(polygon.indices[triangle])]
+                let b = polygon.vertices[Int(polygon.indices[triangle + 1])]
+                let c = polygon.vertices[Int(polygon.indices[triangle + 2])]
+                doubled += (Int64(b.x) - Int64(a.x)) * (Int64(c.y) - Int64(a.y))
+                    - (Int64(b.y) - Int64(a.y)) * (Int64(c.x) - Int64(a.x))
+            }
+            XCTAssertGreaterThan(doubled, 0, "\(name): the ribbon has area", file: file, line: line)
+        }
+        let width = 10.0
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: width),
+                                   "a straight segment inside the tile")
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: width,
+                                             featherStart: true, featherEnd: true),
+                                   "feathered ends")
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 250)],
+                                             width: width, emitsArcLength: true),
+                                   "arc length mode")
+        // Tile space is y down: east then south is a right turn in render
+        // space, east then north a left one.
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 250)],
+                                             width: width, lineJoinRound: true),
+                                   "a round join on a right turn")
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 300), SIMD2(200, 300), SIMD2(200, 200)],
+                                             width: width, lineJoinRound: true),
+                                   "a round join on a left turn")
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: width,
+                                             startCapRound: true, endCapRound: true),
+                                   "round caps")
+        try assertCounterClockwise(parseLine(points: [SIMD2(-50, 100), SIMD2(150, 100)], width: width),
+                                   "a segment crossing the tile edge")
+        try assertCounterClockwise(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 250)],
+                                             width: width, lineJoinRound: true, clipGeometryToTileBounds: false),
+                                   "an unclipped bend, the separate roads path")
+    }
 }

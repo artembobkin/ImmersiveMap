@@ -987,6 +987,9 @@ extension TileMvtParser {
         let tileSize: Int16 = 4096
         var polygons = [ParsedPolygon]()
         
+        // Every rectangle lists bottom-left, bottom-right, top-left,
+        // top-right; the two triangles are counter-clockwise in render space
+        // like every other tile triangle.
         // Bottom border
         var vertices: [SIMD2<Int16>] = [
             SIMD2(0, 0),
@@ -994,7 +997,7 @@ extension TileMvtParser {
             SIMD2(0, borderWidth),
             SIMD2(tileSize, borderWidth)
         ]
-        var indices: [UInt32] = [0, 2, 1, 1, 2, 3]
+        var indices: [UInt32] = [0, 1, 2, 1, 3, 2]
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
         
         // Top border
@@ -1004,7 +1007,7 @@ extension TileMvtParser {
             SIMD2(0, tileSize),
             SIMD2(tileSize, tileSize)
         ]
-        indices = [0, 2, 1, 1, 2, 3]
+        indices = [0, 1, 2, 1, 3, 2]
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
         
         // Left border
@@ -1014,7 +1017,7 @@ extension TileMvtParser {
             SIMD2(0, tileSize),
             SIMD2(borderWidth, tileSize)
         ]
-        indices = [0, 2, 1, 1, 2, 3]
+        indices = [0, 1, 2, 1, 3, 2]
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
         
         // Right border
@@ -1024,7 +1027,7 @@ extension TileMvtParser {
             SIMD2(tileSize - borderWidth, tileSize),
             SIMD2(tileSize, tileSize)
         ]
-        indices = [0, 2, 1, 1, 2, 3]
+        indices = [0, 1, 2, 1, 3, 2]
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
         
         polygonByStyle[style.key] = polygons
