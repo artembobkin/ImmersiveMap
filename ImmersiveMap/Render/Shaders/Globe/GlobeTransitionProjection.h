@@ -50,11 +50,28 @@ static inline float globeTransitionPanMercatorY(float panLatitude) {
     return getYMercNorm(panLatitude);
 }
 
+/// The flat x of a normalized world x, in the copy of the wrapped world
+/// nearest the reference's: the seam of the wrap sits opposite the pan, and
+/// a triangle whose vertices fold to opposite sides of it spans the whole
+/// map. Vertices of one tile therefore unwrap around the tile's own centre
+/// (the CPU does the same along a route, GeoSurfaceFrameMath.unwrapped);
+/// a point with no neighbours passes itself as the reference and gets the
+/// plain wrap.
 static inline float globeTransitionFlatWorldX(float normalizedWorldX,
+                                              float referenceNormalizedWorldX,
                                               constant Globe& globe,
                                               float mapSize) {
     float halfMapSize = mapSize * 0.5;
-    return wrap(normalizedWorldX * mapSize - halfMapSize + globe.panX * halfMapSize, mapSize);
+    float panOffset = globe.panX * halfMapSize - halfMapSize;
+    float reference = wrap(referenceNormalizedWorldX * mapSize + panOffset, mapSize);
+    float value = normalizedWorldX * mapSize + panOffset;
+    return reference + wrap(value - reference, mapSize);
+}
+
+static inline float globeTransitionFlatWorldX(float normalizedWorldX,
+                                              constant Globe& globe,
+                                              float mapSize) {
+    return globeTransitionFlatWorldX(normalizedWorldX, normalizedWorldX, globe, mapSize);
 }
 
 static inline float globeTransitionFlatWorldY(float mercatorY,
@@ -62,6 +79,16 @@ static inline float globeTransitionFlatWorldY(float mercatorY,
                                               float mapSize) {
     float halfMapSize = mapSize * 0.5;
     return (mercatorY - panMercatorY) * halfMapSize;
+}
+
+static inline float2 globeTransitionFlatWorldPosition(float normalizedWorldX,
+                                                      float mercatorY,
+                                                      constant Globe& globe,
+                                                      float mapSize,
+                                                      float panMercatorY,
+                                                      float referenceNormalizedWorldX) {
+    return float2(globeTransitionFlatWorldX(normalizedWorldX, referenceNormalizedWorldX, globe, mapSize),
+                  globeTransitionFlatWorldY(mercatorY, panMercatorY, mapSize));
 }
 
 static inline float2 globeTransitionFlatWorldPosition(float normalizedWorldX,

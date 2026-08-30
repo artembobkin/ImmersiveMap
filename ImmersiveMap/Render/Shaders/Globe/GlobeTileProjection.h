@@ -27,12 +27,25 @@ static inline float2 globeTileUVLatLon(float2 localUv, int3 tile) {
     return float2(latitudeAtUv, longitudeAtUv);
 }
 
+/// The normalized world x of the tile's centre: what every vertex of the
+/// tile unwraps its flat morph target around, so a tile touching the seam
+/// of the wrap (opposite the pan) stays in one piece instead of tearing
+/// into a band across the whole map.
+static inline float globeTileReferenceWorldX(int3 tile) {
+    return (float(tile.x) + 0.5) / pow(2.0, tile.z);
+}
+
 static inline GlobeVisibilityProjectionResult globeProjectTileUV(float2 localUv,
                                                                  int3 tile,
                                                                  constant Camera& camera,
                                                                  constant Globe& globe) {
     float2 latLon = globeTileUVLatLon(localUv, tile);
-    return globeProjectLatLon(latLon.x, latLon.y, camera, globe);
+    GlobeSurfaceProjection projection = globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe,
+                                                                   globeTileReferenceWorldX(tile));
+    GlobeVisibilityProjectionResult result;
+    result.worldPosition = projection.worldPosition;
+    result.clip = projection.clip;
+    return result;
 }
 
 /// The full surface projection of a tile-local uv, for geometry drawn on
@@ -42,7 +55,7 @@ static inline GlobeSurfaceProjection globeProjectTileUVDetailed(float2 localUv,
                                                                 constant Camera& camera,
                                                                 constant Globe& globe) {
     float2 latLon = globeTileUVLatLon(localUv, tile);
-    return globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe);
+    return globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe, globeTileReferenceWorldX(tile));
 }
 
 static inline GlobeVisibilityProjectionResult globeProjectLatLonFromTile(float lat,

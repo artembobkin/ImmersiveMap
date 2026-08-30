@@ -141,11 +141,13 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     // relative to geographic latitude and needs the extra negation below.
     float lat_v = M_PI_F * vertexUvY - M_PI_2_F;      // [-pi/2..pi/2]
     float flatMercatorY = -getYMercNorm(lat_v);       // geographic-Mercator sign in flat world space
+    // The slot unwraps around its own centre, like the tile drawn over it.
     float2 flatWorldPosition = globeTransitionFlatWorldPosition(vertexUvX,
                                                                 flatMercatorY,
                                                                 globe,
                                                                 mapSize,
-                                                                panY_merc_norm);
+                                                                panY_merc_norm,
+                                                                (float(tileX) + 0.5) / zPow);
     
     float4x4 translationM = translationMatrix(float3(0, 0, -globeRadius));
     float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;

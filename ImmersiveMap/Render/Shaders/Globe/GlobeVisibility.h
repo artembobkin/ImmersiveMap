@@ -60,18 +60,22 @@ static inline float3 globeSphereWorldPosition(float lat,
     return (rotatedPosition - float4(0.0, 0.0, globe.radius, 0.0)).xyz;
 }
 
+/// `referenceNormalizedWorldX` is the world x the flat position unwraps
+/// around (a tile's centre for its vertices, see globeTransitionFlatWorldX).
 static inline float3 globeFlatWorldPosition(float lat,
                                             float lon,
                                             constant Globe& globe,
                                             float mapSize,
-                                            float panMercatorY) {
+                                            float panMercatorY,
+                                            float referenceNormalizedWorldX) {
     float normalizedWorldX = (lon + M_PI_F) / (2.0 * M_PI_F);
     float mercatorY = getYMercNorm(lat);
     float2 flatWorldPosition = globeTransitionFlatWorldPosition(normalizedWorldX,
                                                                 mercatorY,
                                                                 globe,
                                                                 mapSize,
-                                                                panMercatorY);
+                                                                panMercatorY,
+                                                                referenceNormalizedWorldX);
     return float3(flatWorldPosition, 0.0);
 }
 
@@ -100,7 +104,8 @@ struct GlobeSurfaceProjection {
 static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
                                                                 float lon,
                                                                 constant Camera& camera,
-                                                                constant Globe& globe) {
+                                                                constant Globe& globe,
+                                                                float referenceNormalizedWorldX) {
     float panLatitude = globeVisibilityPanLatitude(globe);
     float panLongitude = globeVisibilityPanLongitude(globe);
     float mapSize = globeVisibilityMapSize(globe, panLatitude);
@@ -108,7 +113,8 @@ static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
     float panMercatorY = globeTransitionPanMercatorY(panLatitude);
 
     float3 sphereWorldPosition = globeSphereWorldPosition(lat, lon, globe, rotation);
-    float3 flatWorldPosition = globeFlatWorldPosition(lat, lon, globe, mapSize, panMercatorY);
+    float3 flatWorldPosition = globeFlatWorldPosition(lat, lon, globe, mapSize, panMercatorY,
+                                                      referenceNormalizedWorldX);
     // The same unfurl wave as in the surface vertex shader: label and
     // footprint projections must sit on the actual morph geometry.
     float frontDot = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6);
@@ -130,6 +136,14 @@ static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
     result.earthNormal = normalize(earthDirection);
     result.localTransition = localTransition;
     return result;
+}
+
+/// A point on its own: its flat x unwraps around itself, the plain wrap.
+static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
+                                                                float lon,
+                                                                constant Camera& camera,
+                                                                constant Globe& globe) {
+    return globeProjectLatLonDetailed(lat, lon, camera, globe, (lon + M_PI_F) / (2.0 * M_PI_F));
 }
 
 static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,

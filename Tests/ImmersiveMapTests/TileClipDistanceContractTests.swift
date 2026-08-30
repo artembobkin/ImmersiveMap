@@ -74,6 +74,21 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(source.contains("globeProjectTileUVDetailed("))
     }
 
+    /// A tile's vertices unwrap their flat morph target around the tile's
+    /// centre, on the sphere pipeline, the label kernel and the placeholder
+    /// grid alike, so no triangle spans the map at the seam of the wrap.
+    func testTileGeometryUnwrapsAroundTheTileCentre() throws {
+        let projection = try shaderSource("Render/Shaders/Globe/GlobeTileProjection.h")
+        XCTAssertTrue(projection.contains("static inline float globeTileReferenceWorldX(int3 tile)"))
+        XCTAssertEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 2,
+                       "Both tile projections pass the tile's centre")
+        let transition = try shaderSource("Render/Shaders/Globe/GlobeTransitionProjection.h")
+        XCTAssertTrue(transition.contains("float referenceNormalizedWorldX,"))
+        XCTAssertTrue(transition.contains("return reference + wrap(value - reference, mapSize);"))
+        let globe = try shaderSource("Render/Shaders/Globe/Globe.metal")
+        XCTAssertTrue(globe.contains("(float(tileX) + 0.5) / zPow);"))
+    }
+
     /// The placeholder grid morphs exactly like the tile geometry over it, so
     /// it clips against the sphere the same way, through the same header.
     func testPlaceholderGridClipsAgainstTheSphere() throws {
