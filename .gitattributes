@@ -1,0 +1,5 @@
+# The .h files in the tree are Metal shader headers, included from .metal
+# sources and compiled by the Metal compiler. Linguist classifies a bare .h
+# by heuristics and lands on C++, which misreports the engine as partly C++
+# when there is no C++ in it.
+ImmersiveMap/Render/**/*.h linguist-language=Metal
