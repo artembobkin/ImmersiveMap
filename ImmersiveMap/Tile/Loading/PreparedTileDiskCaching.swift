@@ -616,10 +616,10 @@ final class PreparedTileDiskCaching {
     }
 
     /// Loads the cached prepared tile. When `matchingETag` is non-nil the entry is
-    /// returned only if it was derived from that exact raw-tile ETag (content-fresh
-    /// reuse); nil accepts any cached entry regardless of ETag (disk-first serve
-    /// and offline fallback), and the hit carries the entry's own source ETag so
-    /// the caller can revalidate it later.
+    /// returned only if it was derived from that exact raw-tile ETag (the CPU
+    /// stage's reuse of an entry another engine saved from the bytes just
+    /// downloaded); nil accepts any cached entry regardless of ETag, which is
+    /// the disk stage's read: a hit there answers the load with no download.
     ///
     /// Only the file read runs on the shared serial IO queue; the decode
     /// (decompression + property-list decoding) runs on the caller's task, so
@@ -676,7 +676,7 @@ final class PreparedTileDiskCaching {
         }
         // Encode, compress, and stage before enqueueing: the shared serial
         // queue carries only cheap file operations (the staged-blob rename and
-        // the metadata write), so disk-first serves are never delayed behind
+        // the metadata write), so disk-stage reads are never delayed behind
         // the LZFSE pass of an unrelated save, and a queued save closure holds
         // no uncompressed arena. (The MTLIO transport still serializes
         // container writes among themselves, on its own queue; see

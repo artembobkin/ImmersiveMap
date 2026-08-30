@@ -172,7 +172,7 @@ class TileDownloader: @unchecked Sendable {
         // or takes over 60 s in total has failed for map purposes; the
         // Foundation defaults (60 s idle, 7 days total) would hold one of
         // those slots hostage. The retry controller backs off failed tiles,
-        // and the disk-first path keeps serving previous content meanwhile.
+        // and the disk stage keeps serving previous content meanwhile.
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
         if urlCacheEnabled {
