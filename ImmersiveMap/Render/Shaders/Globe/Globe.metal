@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "GlobeTransitionProjection.h"
+#include "GlobeOcclusion.h"
 #include "GlobeSurfaceShading.h"
 
 // Add necessary structures for transformation and rendering
@@ -11,7 +12,20 @@ struct VertexIn {
     float2 uv [[attribute(0)]];
 };
 
-struct VertexOut {
+struct SurfaceVertexOut {
+    float4 position [[position]];
+    // The sphere as an occluder (globeOcclusionClearance): the grid morphs
+    // exactly like the tile geometry over it and would leak its far side
+    // through the near one the same way while the sphere unfurls.
+    float clipDistance [[clip_distance]] [1];
+    float3 normal;
+    float3 worldPos;
+    float transition;
+    float3 earthNormal;
+};
+
+// The fragment stage's view of SurfaceVertexOut, without the clip distance.
+struct SurfaceFragmentIn {
     float4 position [[position]];
     float3 normal;
     float3 worldPos;
@@ -59,10 +73,10 @@ struct Tile {
 };
 
 
-vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
-                                   constant Camera& camera [[buffer(1)]],
-                                   constant Globe& globe [[buffer(2)]],
-                                   constant Tile& tileData [[buffer(3)]]) {
+vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
+                                          constant Camera& camera [[buffer(1)]],
+                                          constant Globe& globe [[buffer(2)]],
+                                          constant Tile& tileData [[buffer(3)]]) {
     
     float vertexUvX = vertexIn.uv.x; // goes 0 to 1
     float vertexUvY = vertexIn.uv.y; // goes 0 to 1
@@ -141,9 +155,10 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     float4 position = mix(spherePositionTranslated, flatPosition, localTransition);
     float4 clip = matrix * position;
 
-    VertexOut out;
+    SurfaceVertexOut out;
     // Keep clip-space position; GPU performs the perspective divide.
     out.position = clip;
+    out.clipDistance[0] = globeOcclusionClearance(position.xyz, camera, globe);
     out.normal = rotatedSphereDirection;
     // The morphed position, not the spherical one: fog is computed from it, and
     // its distances must match the flat path (on the sphere chords are shorter,
@@ -157,8 +172,7 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
 }
 
 /// A blank tile in the map's own background color, drawn into every visible
-/// slot that no content paints yet, before the atlas mappings, writing depth
-/// like any other surface.
+/// slot before the tile geometry, writing depth like any other surface.
 ///
 /// Two things depended on the surface being there and had nothing to fall back
 /// on while tiles were still loading, or wherever coverage has a hole: the
@@ -167,7 +181,7 @@ vertex VertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
 /// will draw, so the tile replaces it at identical depth; a single coarser
 /// fill of the whole sphere poked through the finer tile mesh at its own grid
 /// vertices as background-colored dots.
-fragment half4 globeSurfacePlaceholderFragmentShader(VertexOut in [[stage_in]],
+fragment half4 globeSurfacePlaceholderFragmentShader(SurfaceFragmentIn in [[stage_in]],
                                                      constant Camera& camera [[buffer(1)]],
                                                      constant EarthScene& earthScene [[buffer(2)]],
                                                      constant HorizonFog& horizonFog [[buffer(4)]],

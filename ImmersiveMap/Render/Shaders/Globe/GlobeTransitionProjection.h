@@ -36,8 +36,10 @@ static inline float globeTransitionMapSize(constant Globe& globe,
 /// one proportionally to its angular distance from the view center (`frontDot`
 /// is the cosine of that angle): the near area finishes unfurling first, the
 /// wave rolls outward, the corners settle last. The extremes match the uniform
-/// lerp: t = 0 - sphere, t = 1 - plane. CPU mirror -
-/// `GlobeFootprintProjectionConstants.transitionLocalPhase`.
+/// lerp: t = 0 - sphere, t = 1 - plane. CPU mirrors:
+/// `GeoScreenProjectionMath.transitionLocalPhase` (markers, avatars) and
+/// `GeoSurfaceFrameMath` (routes, scene models), which must stay
+/// bit-compatible with this function.
 static inline float globeTransitionLocalPhase(float transition, float frontDot) {
     const float spread = 0.6;
     float lagWeight = acos(clamp(frontDot, -1.0, 1.0)) / M_PI_F;

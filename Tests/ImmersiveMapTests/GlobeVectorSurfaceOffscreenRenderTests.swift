@@ -11,6 +11,8 @@ import XCTest
 final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
     /// A colour that appears nowhere else in the map.
     private static let fixtureWater = SIMD4<Float>(1, 0, 1, 1)
+    /// The far side's colour: cyan, which no water, placeholder or fog can make.
+    private static let fixtureForest = SIMD4<Float>(0, 1, 1, 1)
     private static let latitude = 55.75
     private static let longitude = 37.61
 
@@ -186,7 +188,13 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         // zooms in (the street palette blend is zero at these zooms), so the
         // colour this test owns is the overview one.
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
-            .globalLandcover { $0.water = Self.fixtureWater }
+            .globalLandcover {
+                $0.water = Self.fixtureWater
+                // The overview biomes blend forest toward grass by zoom: both
+                // cyan, so the far side is cyan at every zoom of the morph.
+                $0.forest = Self.fixtureForest
+                $0.grass = Self.fixtureForest
+            }
         var settings = ImmersiveMapSettings.default
             .earthScene(isEnabled: false)
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
@@ -209,6 +217,44 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
             let didMaterialize = await harness.tileRenderStore.parseTile(tile: tile, data: data)
             XCTAssertTrue(didMaterialize, "Fixture tile \(tile.z)/\(tile.x)/\(tile.y) must parse")
         }
+    }
+
+    /// Every tile of every zoom up to `maximumZoom`: water where the tile's
+    /// centre lies within `waterWithinDegrees` of the camera, forest beyond.
+    @MainActor
+    private func loadWorldFixtureTiles(into harness: OffscreenFrameHarness,
+                                       maximumZoom: Int,
+                                       waterWithinDegrees: Double) async throws {
+        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        // The overview zooms draw the continuous `globallandcover` biomes and
+        // hide the OSM `landcover` layer, so the far side is a biome forest.
+        let forest = VectorTileFixture.fullCoverageTile(layerName: "globallandcover", properties: ["class": "forest"])
+        let cameraLatitude = Self.latitude * .pi / 180
+        let cameraLongitude = Self.longitude * .pi / 180
+        for z in 0...maximumZoom {
+            let count = 1 << z
+            for x in 0..<count {
+                for y in 0..<count {
+                    let longitude = (Double(x) + 0.5) / Double(count) * 2 * .pi - .pi
+                    let mercatorY = .pi * (1 - 2 * (Double(y) + 0.5) / Double(count))
+                    let latitude = atan(sinh(mercatorY))
+                    let angle = acos(min(1, sin(latitude) * sin(cameraLatitude)
+                        + cos(latitude) * cos(cameraLatitude) * cos(longitude - cameraLongitude)))
+                    let data = angle * 180 / .pi < waterWithinDegrees ? water : forest
+                    let didMaterialize = await harness.tileRenderStore.parseTile(tile: Tile(x: x, y: y, z: z), data: data)
+                    XCTAssertTrue(didMaterialize, "Fixture tile \(z)/\(x)/\(y) must parse")
+                }
+            }
+        }
+    }
+
+    /// The far side's cyan through the globe shading and the horizon fog,
+    /// which mixes it toward the warm off-white map colour by distance: cyan
+    /// keeps red well under blue up to about 80 per cent fog, while the water
+    /// (red-heavy), the map colour and the fog itself (red at or above blue)
+    /// and the grey of space never do.
+    private func isForestLike(_ pixel: RenderedFrame.Pixel) -> Bool {
+        Int(pixel.red) < Int(pixel.blue) - 40 && Int(pixel.green) > Int(pixel.blue) - 30
     }
 
     private func isFixtureWater(_ pixel: RenderedFrame.Pixel) -> Bool {

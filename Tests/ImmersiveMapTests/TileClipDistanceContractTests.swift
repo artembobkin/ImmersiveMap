@@ -67,9 +67,24 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))
         XCTAssertNil(source.range(of: "groundShadowMask"))
-        XCTAssertTrue(source.contains("globeVisibilityHorizonThreshold("))
+        XCTAssertTrue(source.contains("globeOcclusionClearance("))
+        XCTAssertNil(source.range(of: "globeVisibilityHorizonThreshold"),
+                     "The relaxed horizon threshold is gone: the sphere itself is the occluder")
         XCTAssertTrue(source.contains("globeSurfaceShade("))
         XCTAssertTrue(source.contains("globeProjectTileUVDetailed("))
+    }
+
+    /// The placeholder grid morphs exactly like the tile geometry over it, so
+    /// it clips against the sphere the same way, through the same header.
+    func testPlaceholderGridClipsAgainstTheSphere() throws {
+        let globe = try shaderSource("Render/Shaders/Globe/Globe.metal")
+        XCTAssertTrue(globe.contains("#include \"GlobeOcclusion.h\""))
+        XCTAssertTrue(globe.contains("float clipDistance [[clip_distance]] [1];"))
+        XCTAssertTrue(globe.contains("out.clipDistance[0] = globeOcclusionClearance("))
+        let occlusion = try shaderSource("Render/Shaders/Globe/GlobeOcclusion.h")
+        XCTAssertTrue(occlusion.contains("static inline float globeOcclusionClearance("))
+        XCTAssertTrue(occlusion.contains("constant float kGlobeOcclusionRadiusMargin = 1.0e-4;"),
+                      "The margin is mirrored by GlobeOcclusionMath.radiusMargin")
     }
 
     /// One copy of the globe surface lighting, shared by the grid surface and

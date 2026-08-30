@@ -17,6 +17,7 @@
 using namespace metal;
 #include "TileShading.h"
 #include "../../Shaders/Globe/GlobeTileProjection.h"
+#include "../../Shaders/Globe/GlobeOcclusion.h"
 #include "../../Shaders/Globe/GlobeSurfaceShading.h"
 
 /// Per-draw tile identity for the projection; the layout mirrors
@@ -28,14 +29,14 @@ struct GlobeSurfaceTile {
 
 struct SphereVertexOut {
     float4 position [[position]];
-    // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the horizon,
-    // positive on the camera-facing side of the sphere; the rasterizer clips
-    // the far side away geometrically, so nothing on the back of the planet
-    // is ever shaded and no fragment needs a discard. Off once the unfurl
-    // has flattened the surface (the same gate as globePointPassesVisibility);
-    // while it relaxes, back-face culling still drops the far side, since
-    // every tile triangle is counter-clockwise in render space and the far
-    // side is clockwise on screen.
+    // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the sphere
+    // as an occluder (globeOcclusionClearance), positive where the eye sees
+    // the vertex past the planet's edge or in front of it; the rasterizer
+    // clips everything the planet hides, so nothing on the back of the
+    // planet is ever shaded and no fragment needs a discard. On the pure
+    // sphere this is the horizon; while the sphere unfurls it is what hides
+    // the far side morphing through the planet's interior, which back-face
+    // culling alone cannot (a chord turns front-facing before it is out).
     float clipDistance [[clip_distance]] [5];
     // The morphed surface position: fog, view angle and the horizon test
     // read it.
@@ -96,11 +97,7 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     SphereVertexOut out;
     out.position = projection.clip;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
-    float3 globeCenter = float3(0.0, 0.0, -globe.radius);
-    float3 toCamera = camera.eye - globeCenter;
-    float horizonDistance = dot(projection.worldPosition - globeCenter, toCamera)
-        - globeVisibilityHorizonThreshold(globe);
-    out.clipDistance[4] = globe.transition >= 0.95 ? 1.0 : horizonDistance;
+    out.clipDistance[4] = globeOcclusionClearance(projection.worldPosition, camera, globe);
     out.worldPos = projection.worldPosition;
     out.normal = projection.normal;
     out.earthNormal = projection.earthNormal;

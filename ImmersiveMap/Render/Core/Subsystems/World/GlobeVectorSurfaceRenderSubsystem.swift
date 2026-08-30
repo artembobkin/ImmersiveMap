@@ -9,13 +9,14 @@ import Metal
 /// The grid wrote the surface depth, which routes, scene models and label
 /// occlusion keep testing against; this geometry neither tests nor writes
 /// depth. Its extent is decided by the clip distances (the placeIn slot and
-/// the horizon) and by back-face culling: every tile triangle is wound
-/// counter-clockwise in render space, so the far side of the planet is
-/// clockwise on screen and dropped by orientation, including the far side
-/// the relaxed horizon clip lets through while the surface unfurls. Nothing
-/// drawn before it on the sphere stands in front of it, so a depth test
-/// would only compare it with the grid, a different chord approximation of
-/// the same sphere, and z-fight.
+/// the sphere as an occluder, `GlobeOcclusion.h`: whatever the planet hides
+/// from the eye is clipped, on the pure sphere the horizon and, while the
+/// sphere unfurls, the far side morphing through the planet's interior) and
+/// by back-face culling: every tile triangle is wound counter-clockwise in
+/// render space, so the far side of the pure sphere is clockwise on screen.
+/// Nothing drawn before it on the sphere stands in front of it, so a depth
+/// test would only compare it with the grid, a different chord
+/// approximation of the same sphere, and z-fight.
 final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "GlobeVectorSurface"
 

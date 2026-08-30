@@ -143,29 +143,4 @@ static inline GlobeVisibilityProjectionResult globeProjectLatLon(float lat,
     return result;
 }
 
-static inline float globeVisibilityHorizonThreshold(constant Globe& globe) {
-    // The threshold relaxes continuously across the whole morph and at geometry scale.
-    // The previous mix(R², -1e6, smoothstep(0.8, 0.95, t)), due to the huge -1e6,
-    // dropped below the minimum possible dot already at fade ≈ 0.0003 -
-    // effectively a step exactly at t = 0.8: beyond-horizon geometry
-    // flashed in for a single frame. -4R² is below the minimum dot of any point on the sphere,
-    // so by t = 0.95 culling is fully off, as before, but the path
-    // there is smooth.
-    float horizonFade = smoothstep(0.0, 0.95, globe.transition);
-    float radiusSquared = globe.radius * globe.radius;
-    return mix(radiusSquared, -4.0 * radiusSquared, horizonFade);
-}
-
-static inline bool globePointPassesVisibility(float3 worldPosition,
-                                              constant Camera& camera,
-                                              constant Globe& globe) {
-    float3 globeCenter = float3(0.0, 0.0, -globe.radius);
-    float3 toCamera = camera.eye - globeCenter;
-    if (length(toCamera) <= 0.0 || globe.transition >= 0.95) {
-        return true;
-    }
-    float dotToCamera = dot(worldPosition - globeCenter, toCamera);
-    return dotToCamera >= globeVisibilityHorizonThreshold(globe);
-}
-
 #endif
