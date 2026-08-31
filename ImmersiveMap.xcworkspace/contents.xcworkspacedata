@@ -80,6 +80,12 @@
       <FileRef
          location = "group:Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Tools/PerformanceBench/ImmersiveMapBench.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Tools/PerformanceBench/MapboxBench.xcodeproj">
+      </FileRef>
    </Group>
    <Group
       location = "container:"
