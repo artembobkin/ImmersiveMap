@@ -27,6 +27,15 @@ struct GlobeSurfaceTile {
     int3 tile;
 };
 
+/// True (the default pipeline) lights every fragment inline through
+/// globeSurfaceShade. False is the deferred-lighting world: the layers
+/// blend unlit and the globeSurfaceLighting pass applies the light once
+/// per pixel (GlobeSurfaceLighting.metal), which is exact while the
+/// lighting is affine (transition 0, tone depth 0, fog strength 0). The
+/// lighting inputs below exist only in the lit variant: the unlit layers
+/// neither export, interpolate nor load them.
+constant bool kTileSphereLitInline [[function_constant(0)]];
+
 struct SphereVertexOut {
     float4 position [[position]];
     // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the sphere
@@ -39,11 +48,11 @@ struct SphereVertexOut {
     // culling alone cannot (a chord turns front-facing before it is out).
     float clipDistance [[clip_distance]] [5];
     // The morphed surface position: fog, view angle and the horizon test
-    // read it.
-    float3 worldPos;
-    float3 normal;
-    float3 earthNormal;
-    float transition;
+    // read it. Lit variant only, like the three below.
+    float3 worldPos [[function_constant(kTileSphereLitInline)]];
+    float3 normal [[function_constant(kTileSphereLitInline)]];
+    float3 earthNormal [[function_constant(kTileSphereLitInline)]];
+    float transition [[function_constant(kTileSphereLitInline)]];
     half4 color;
     half lowZoomFadeMask;
     float lineDistance;
@@ -57,10 +66,10 @@ struct SphereVertexOut {
 // The fragment stage's view of SphereVertexOut, without the clip distances.
 struct SphereFragmentIn {
     float4 position [[position]];
-    float3 worldPos;
-    float3 normal;
-    float3 earthNormal;
-    float transition;
+    float3 worldPos [[function_constant(kTileSphereLitInline)]];
+    float3 normal [[function_constant(kTileSphereLitInline)]];
+    float3 earthNormal [[function_constant(kTileSphereLitInline)]];
+    float transition [[function_constant(kTileSphereLitInline)]];
     half4 color;
     half lowZoomFadeMask;
     float lineDistance;
@@ -72,13 +81,6 @@ struct SphereFragmentIn {
 };
 
 constant float kTileSphereExtent = 4096.0;
-
-/// True (the default pipeline) lights every fragment inline through
-/// globeSurfaceShade. False is the deferred-lighting world: the layers
-/// blend unlit and the globeSurfaceLighting pass applies the light once
-/// per pixel (GlobeSurfaceLighting.metal), which is exact while the
-/// lighting is affine (transition 0, tone depth 0, fog strength 0).
-constant bool kTileSphereLitInline [[function_constant(0)]];
 
 vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
                                               constant Camera& camera [[buffer(1)]],
@@ -105,10 +107,12 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     out.position = projection.clip;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
     out.clipDistance[4] = globeOcclusionClearance(projection.worldPosition, camera, globe);
-    out.worldPos = projection.worldPosition;
-    out.normal = projection.normal;
-    out.earthNormal = projection.earthNormal;
-    out.transition = globe.transition;
+    if (kTileSphereLitInline) {
+        out.worldPos = projection.worldPosition;
+        out.normal = projection.normal;
+        out.earthNormal = projection.earthNormal;
+        out.transition = globe.transition;
+    }
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     out.color = style.color;
     out.lowZoomFadeMask = style.lowZoomFadeMask;

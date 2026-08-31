@@ -17,15 +17,20 @@ class GlobePipeline {
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
-        let vertexFunction = library.makeFunction(name: "globeVertexShader")
         let litValues = MTLFunctionConstantValues()
         var litInline = true
         litValues.setConstantValue(&litInline, type: .bool, index: 0)
+        // The vertex stage carries the constant too: the lit-only varyings
+        // exist in its output struct exactly when the fragment reads them.
+        let vertexFunction = try! library.makeFunction(name: "globeVertexShader",
+                                                       constantValues: litValues)
         let fragmentFunction = try! library.makeFunction(name: "globeSurfacePlaceholderFragmentShader",
                                                          constantValues: litValues)
         let unlitValues = MTLFunctionConstantValues()
         var unlitInline = false
         unlitValues.setConstantValue(&unlitInline, type: .bool, index: 0)
+        let unlitVertexFunction = try! library.makeFunction(name: "globeVertexShader",
+                                                            constantValues: unlitValues)
         let unlitFragmentFunction = try! library.makeFunction(name: "globeSurfacePlaceholderFragmentShader",
                                                               constantValues: unlitValues)
         
@@ -48,6 +53,7 @@ class GlobePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
+        pipelineDescriptor.vertexFunction = unlitVertexFunction
         pipelineDescriptor.fragmentFunction = unlitFragmentFunction
         self.unlitPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }

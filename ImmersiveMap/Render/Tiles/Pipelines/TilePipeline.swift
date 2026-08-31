@@ -38,6 +38,7 @@ class TilePipeline {
         let vertexFunction: MTLFunction?
         let fragmentFunction: MTLFunction?
         var sphereUnlitFragmentFunction: MTLFunction?
+        var sphereUnlitVertexFunction: MTLFunction?
         switch surface {
         case .flat:
             vertexFunction = library.makeFunction(name: "tileVertexShader")
@@ -46,14 +47,19 @@ class TilePipeline {
             constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
             fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
         case .sphere:
-            vertexFunction = library.makeFunction(name: "tileSphereVertexShader")
             let litValues = MTLFunctionConstantValues()
             var litInline = true
             litValues.setConstantValue(&litInline, type: .bool, index: 0)
+            // The vertex stage carries the constant too: the lit-only
+            // varyings exist in its output struct exactly when the fragment
+            // reads them.
+            vertexFunction = try! library.makeFunction(name: "tileSphereVertexShader", constantValues: litValues)
             fragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader", constantValues: litValues)
             let unlitValues = MTLFunctionConstantValues()
             var unlitInline = false
             unlitValues.setConstantValue(&unlitInline, type: .bool, index: 0)
+            sphereUnlitVertexFunction = try! library.makeFunction(name: "tileSphereVertexShader",
+                                                                  constantValues: unlitValues)
             sphereUnlitFragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader",
                                                                     constantValues: unlitValues)
         }
@@ -96,9 +102,11 @@ class TilePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
-        if let sphereUnlitFragmentFunction {
+        if let sphereUnlitVertexFunction, let sphereUnlitFragmentFunction {
+            pipelineDescriptor.vertexFunction = sphereUnlitVertexFunction
             pipelineDescriptor.fragmentFunction = sphereUnlitFragmentFunction
             self.sphereUnlitPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
             self.sphereUnlitPipelineState = nil

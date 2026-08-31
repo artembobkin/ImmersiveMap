@@ -12,25 +12,32 @@ struct VertexIn {
     float2 uv [[attribute(0)]];
 };
 
+/// True lights the fill inline; false leaves it unlit for the deferred
+/// globeSurfaceLighting pass (see kTileSphereLitInline in TileSphere.metal).
+/// The lighting inputs of the structs below exist only in the lit variant:
+/// the unlit fill needs nothing past position and clip, so the varyings are
+/// neither exported, interpolated nor loaded.
+constant bool kGlobePlaceholderLitInline [[function_constant(0)]];
+
 struct SurfaceVertexOut {
     float4 position [[position]];
     // The sphere as an occluder (globeOcclusionClearance): the grid morphs
     // exactly like the tile geometry over it and would leak its far side
     // through the near one the same way while the sphere unfurls.
     float clipDistance [[clip_distance]] [1];
-    float3 normal;
-    float3 worldPos;
-    float transition;
-    float3 earthNormal;
+    float3 normal [[function_constant(kGlobePlaceholderLitInline)]];
+    float3 worldPos [[function_constant(kGlobePlaceholderLitInline)]];
+    float transition [[function_constant(kGlobePlaceholderLitInline)]];
+    float3 earthNormal [[function_constant(kGlobePlaceholderLitInline)]];
 };
 
 // The fragment stage's view of SurfaceVertexOut, without the clip distance.
 struct SurfaceFragmentIn {
     float4 position [[position]];
-    float3 normal;
-    float3 worldPos;
-    float transition;
-    float3 earthNormal;
+    float3 normal [[function_constant(kGlobePlaceholderLitInline)]];
+    float3 worldPos [[function_constant(kGlobePlaceholderLitInline)]];
+    float transition [[function_constant(kGlobePlaceholderLitInline)]];
+    float3 earthNormal [[function_constant(kGlobePlaceholderLitInline)]];
 };
 
 struct CapVertexIn {
@@ -71,10 +78,6 @@ constant float kGlobeCapStripMaxLod = 12.0;
 struct Tile {
     int3 tile;
 };
-
-/// True lights the fill inline; false leaves it unlit for the deferred
-/// globeSurfaceLighting pass (see kTileSphereLitInline in TileSphere.metal).
-constant bool kGlobePlaceholderLitInline [[function_constant(0)]];
 
 
 vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
@@ -165,15 +168,17 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     // Keep clip-space position; GPU performs the perspective divide.
     out.position = clip;
     out.clipDistance[0] = globeOcclusionClearance(position.xyz, camera, globe);
-    out.normal = rotatedSphereDirection;
-    // The morphed position, not the spherical one: fog is computed from it, and
-    // its distances must match the flat path (on the sphere chords are shorter,
-    // so the fog was thinner, "catching up" with a jump at the swap). At t = 0
-    // the values are bit-for-bit equal to the spherical ones, so the limb glow
-    // does not change.
-    out.worldPos = position.xyz;
-    out.transition = transition;
-    out.earthNormal = normalize(spherePosition);
+    if (kGlobePlaceholderLitInline) {
+        out.normal = rotatedSphereDirection;
+        // The morphed position, not the spherical one: fog is computed from
+        // it, and its distances must match the flat path (on the sphere
+        // chords are shorter, so the fog was thinner, "catching up" with a
+        // jump at the swap). At t = 0 the values are bit-for-bit equal to
+        // the spherical ones, so the limb glow does not change.
+        out.worldPos = position.xyz;
+        out.transition = transition;
+        out.earthNormal = normalize(spherePosition);
+    }
     return out;
 }
 
