@@ -41,4 +41,37 @@ final class GlobeSurfacePlaceholderRenderTests: XCTestCase {
         XCTAssertGreaterThan(Int(center.blue), Int(center.red))
         XCTAssertGreaterThan(Int(center.blue), Int(center.green))
     }
+
+    /// With resident tiles covering the slots around the view centre, the
+    /// tile geometry paints the sphere over the placeholder. The centre
+    /// pixel must show painted, opaque surface: the sky draws after the
+    /// surface and is clipped by the depth the placeholder grid wrote, so a
+    /// break anywhere in that chain would paint space over the middle of
+    /// the planet or leave a hole into the clear color.
+    @MainActor
+    func testCoveredSlotsStillPaintTheSphereThroughTheTile() async throws {
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: .default.earthScene(isEnabled: false))
+        let camera = ImmersiveMapCameraPosition(latitudeDegrees: 55.75,
+                                               longitudeDegrees: 37.61,
+                                               zoom: 3.0)
+        harness.setCameraPosition(camera)
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+
+        let data = VectorTileFixture.fullCoverageTile(layerName: "water",
+                                                      properties: ["class": "water"])
+        let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: camera.latitudeDegrees,
+                                                               longitude: camera.longitudeDegrees,
+                                                               maximumZoom: 6)
+        for tile in tiles {
+            let didMaterialize = await harness.tileRenderStore.parseTile(tile: tile, data: data)
+            XCTAssertTrue(didMaterialize, "Fixture tile \(tile.z)/\(tile.x)/\(tile.y) must parse")
+        }
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                           startingAt: OffscreenFrameHarness.frameTime(1))
+
+        let center = painted.center
+        XCTAssertGreaterThan(Int(center.alpha), 200, "The middle of the planet must be opaque surface")
+        XCTAssertGreaterThan(Int(center.red) + Int(center.green) + Int(center.blue), 150,
+                             "The middle of the planet must be painted surface, not space")
+    }
 }
