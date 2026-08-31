@@ -46,6 +46,24 @@ def rows(path):
         yield out
 
 
+def event_label_name(r):
+    """The encoder name embedded in the event-label cell.
+
+    Xcode 26 formats the cell as 'Command Buffer N:<name> ( <process> ) <id>'
+    when the app named the encoder, so the name sits between the colon and
+    the parenthesis. Unnamed encoders format as 'GPU Execution ( n/a ) <id>'
+    and yield nothing.
+    """
+    cell = r.get("event-label")
+    fmt = cell.get("fmt") if cell is not None else None
+    if not fmt:
+        return ""
+    head = fmt.split(" (", 1)[0]
+    if ":" not in head:
+        return ""
+    return head.split(":", 1)[1].strip()
+
+
 def text_number(el):
     t = el.text
     try:
@@ -78,7 +96,11 @@ def main():
             continue
         process = r.get("process")
         process_name = (process.get("fmt") or process.text or "") if process is not None else ""
-        if "PerformanceBench" not in process_name:
+        # The bench apps are ImmersiveMapBench and MapboxBench; rows from
+        # other processes (the compositor) are someone else's GPU work. A
+        # per-process trace can also leave the cell empty (a sentinel), and
+        # such a row belongs to the traced app.
+        if process_name and "Bench" not in process_name:
             continue
         depth = r.get("event-depth")
         depth_value = text_number(depth) if depth is not None else 0
@@ -90,7 +112,10 @@ def main():
         if depth_value == 0:
             enc_el = r.get("encoder-id")
             enc_key = (enc_el.text or enc_el.get("fmt")) if enc_el is not None else None
-            label = encoder_labels.get(enc_key, "")
+            # Xcode 26 fills the encoder-id column with an id the encoder
+            # list does not carry, so when the lookup misses the label is
+            # read from the event-label text instead.
+            label = encoder_labels.get(enc_key, "") or event_label_name(r)
             by_label[(channel, label or "(unlabeled)")] += duration / 1e6
             per_second_channels[second][channel] += duration / 1e6
             per_second_busy[second] += duration / 1e6
