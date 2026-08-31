@@ -35,6 +35,10 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         /// Shadows and the atmosphere halo off: the cheapest frame the
         /// public settings allow without changing what is drawn.
         case lean = "immersivemap-lean"
+        /// Transparent space: the space background, the stars, the Sun and
+        /// the atmosphere halo are not drawn at all, which isolates the
+        /// sky's share of a globe frame in an A/B against the default.
+        case noSky = "immersivemap-nosky"
     }
 
     let name: String
@@ -64,6 +68,8 @@ final class ImmersiveMapBenchEngine: BenchEngine {
             map = map.shadows(isEnabled: false)
         case .lean:
             map = map.shadows(isEnabled: false).atmosphere(isEnabled: false)
+        case .noSky:
+            map = map.transparentSpace()
         }
         let rootView = map.ignoresSafeArea()
         host = UIHostingController(rootView: AnyView(rootView))
