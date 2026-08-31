@@ -570,7 +570,11 @@ final class PreparedTileDiskCaching {
     // 77: the background of every tile is one quad that the ground
     // subdivider cuts on its per-zoom grid; v76 tiles carry a 64x64 mesh
     // built into every zoom (8192 triangles under a flat plane from z10).
-    static let preparedFormatVersion: UInt32 = 77
+    // 78: the building vertex shrank from 48 to 12 bytes (14.2 fixed-point
+    // positions, 8-bit normals, and no per-vertex surface id, which no
+    // shader ever read); the extruded spans of a version-77 arena bind
+    // bytes at the wrong stride.
+    static let preparedFormatVersion: UInt32 = 78
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

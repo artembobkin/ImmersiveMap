@@ -756,7 +756,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(isEnabled: Bool = true,
                     strength: Float = 0.22,
-                    mapResolution: Int = 2048,
+                    mapResolution: Int = 1024,
                     coverageCameraDistances: Float = 16.0,
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled

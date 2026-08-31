@@ -51,7 +51,7 @@ This is not the [Earth scene sun](earth-scene.md), which lights the globe. The t
 public struct ShadowSettings: Equatable, Sendable {
     public var isEnabled: Bool                 // true
     public var strength: Float                 // 0.22
-    public var mapResolution: Int              // 2048
+    public var mapResolution: Int              // 1024
     public var coverageCameraDistances: Float  // 16.0
     public var tint: SIMD3<Float>              // (0.88, 0.92, 1.0)
 }

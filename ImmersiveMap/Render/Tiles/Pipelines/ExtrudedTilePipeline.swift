@@ -24,16 +24,6 @@ class ExtrudedTilePipeline {
     /// restore the pre-building depth for the scene models.
     let compositeFetchPipelineState: MTLRenderPipelineState?
 
-    struct VertexIn {
-        let position: SIMD3<Float>
-        let normal: SIMD3<Float>
-        let styleIndex: UInt8
-        let _padding0: UInt8 = 0
-        let _padding1: UInt8 = 0
-        let _padding2: UInt8 = 0
-        let surfaceID: UInt32
-    }
-
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
@@ -42,20 +32,23 @@ class ExtrudedTilePipeline {
         let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
         let fragmentFunction = library.makeFunction(name: "tileExtrudedFragmentShader")
 
+        // The 12-byte layout of TileMvtParser.ExtrudedVertexIn: quantized
+        // positions fed as raw Int16 triples (the fetch converts integer
+        // formats to float with the numeric value; the shader applies the
+        // inverse fixed-point scale), normals as char3Normalized.
+        assert(MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride == 12,
+               "The vertex descriptor mirrors ExtrudedVertexIn byte for byte")
         let vertexDescriptor = MTLVertexDescriptor()
-        vertexDescriptor.attributes[0].format = .float3
+        vertexDescriptor.attributes[0].format = .short3
         vertexDescriptor.attributes[0].offset = 0
         vertexDescriptor.attributes[0].bufferIndex = 0
-        vertexDescriptor.attributes[1].format = .float3
-        vertexDescriptor.attributes[1].offset = MemoryLayout<SIMD3<Float>>.stride
+        vertexDescriptor.attributes[1].format = .char3Normalized
+        vertexDescriptor.attributes[1].offset = 6
         vertexDescriptor.attributes[1].bufferIndex = 0
         vertexDescriptor.attributes[2].format = .uchar
-        vertexDescriptor.attributes[2].offset = MemoryLayout<SIMD3<Float>>.stride * 2
+        vertexDescriptor.attributes[2].offset = 9
         vertexDescriptor.attributes[2].bufferIndex = 0
-        vertexDescriptor.attributes[3].format = .uint
-        vertexDescriptor.attributes[3].offset = MemoryLayout<SIMD3<Float>>.stride * 2 + MemoryLayout<UInt32>.stride
-        vertexDescriptor.attributes[3].bufferIndex = 0
-        vertexDescriptor.layouts[0].stride = MemoryLayout<VertexIn>.stride
+        vertexDescriptor.layouts[0].stride = MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()

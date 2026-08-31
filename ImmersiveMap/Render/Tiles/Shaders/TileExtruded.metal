@@ -5,12 +5,19 @@
 using namespace metal;
 #include "../../Shaders/Shared/RenderUniforms.h"
 
+// Mirror of ExtrudedVertexIn (12 bytes on the CPU side): positions arrive
+// as raw Int16 values in 14.2 fixed point, converted to float by the vertex
+// fetch, and normals as char3Normalized, slightly short of unit length until
+// the normalize below.
 struct VertexIn {
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     unsigned char styleIndex [[attribute(2)]];
-    uint surfaceID [[attribute(3)]];
 };
+
+// The CPU quantizes positions to quarter tile units; see
+// ExtrudedVertexIn.positionScale.
+constant float kExtrudedPositionInverseScale = 0.25;
 
 // color and the unit normal are unit-range, so they interpolate as half:
 // fewer interpolant registers and double-rate ALU on A-series GPUs. World
@@ -65,7 +72,8 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
-    float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
+    float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
+    float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     float4 clipPosition = matrix * worldPosition;
     float3x3 normalMatrix = float3x3(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz);
     float3 worldNormal = normalize(normalMatrix * vertexIn.normal);
@@ -75,7 +83,7 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.color = half4(style.color);
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = half3(worldNormal);
-    writeLocalClipDistances(out.clipDistance, vertexIn.position.xy, localClipBounds);
+    writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
     return out;
 }
 
@@ -196,10 +204,11 @@ vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn 
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
                                                               constant float4x4& modelMatrix [[buffer(3)]],
                                           constant float4& localClipBounds [[buffer(4)]]) {
-    float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
+    float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
+    float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     ExtrudedShadowVertexOut out;
     out.position = casters.lightProjectionViews[instanceID] * worldPosition;
-    writeLocalClipDistances(out.clipDistance, vertexIn.position.xy, localClipBounds);
+    writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
     out.layer = instanceID;
     return out;
 }

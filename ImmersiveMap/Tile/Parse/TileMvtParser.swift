@@ -2145,7 +2145,6 @@ class TileMvtParser {
         var unifiedExtrudedVertices: [ExtrudedVertexIn] = []
         var unifiedExtrudedIndices: [UInt32] = []
         var currentExtrudedVertexOffset: UInt32 = 0
-        var nextGlobalSurfaceID: UInt32 = 1
         let totalExtrudedVertexCount = extrudedByStyle.values.reduce(0) { partial, meshes in
             partial + meshes.reduce(0) { meshPartial, mesh in
                 meshPartial + mesh.vertices.count
@@ -2182,20 +2181,11 @@ class TileMvtParser {
             let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
-                    // Mesh-local surface IDs are allocated sequentially from 1
-                    // and appear in the vertex stream in that order, so the
-                    // first-appearance remap the old per-mesh dictionary
-                    // produced is exactly a constant offset.
-                    let surfaceIDBase = nextGlobalSurfaceID &- 1
-                    var maxLocalSurfaceID: UInt32 = 0
                     for vertex in extrudedMesh.vertices {
-                        maxLocalSurfaceID = max(maxLocalSurfaceID, vertex.surfaceID)
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
                                                                         normal: vertex.normal,
-                                                                        styleIndex: styleBufferIndex,
-                                                                        surfaceID: surfaceIDBase &+ vertex.surfaceID))
+                                                                        styleIndex: styleBufferIndex))
                     }
-                    nextGlobalSurfaceID = surfaceIDBase &+ maxLocalSurfaceID &+ 1
                     for index in extrudedMesh.indices {
                         unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
                     }

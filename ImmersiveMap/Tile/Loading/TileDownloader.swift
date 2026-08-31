@@ -180,8 +180,10 @@ class TileDownloader: @unchecked Sendable {
             // raw-tile cache layer. It revalidates against the tile server's ETag /
             // Cache-Control, so a tile whose server content changed is refreshed
             // instead of served stale. The parsed/tessellated result is cached
-            // separately by PreparedTileDiskCaching. Sized generously for map tiles.
-            configuration.urlCache = URLCache(memoryCapacity: 32 * 1024 * 1024,
+            // separately by PreparedTileDiskCaching. The RAM half is modest on
+            // purpose: raw bytes are read once per download and the prepared
+            // cache answers revisits, so a large in-memory copy bought nothing.
+            configuration.urlCache = URLCache(memoryCapacity: 16 * 1024 * 1024,
                                               diskCapacity: 1024 * 1024 * 1024)
             configuration.requestCachePolicy = .useProtocolCachePolicy
         } else {

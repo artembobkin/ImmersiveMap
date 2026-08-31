@@ -55,7 +55,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
     func testShadowSettingsChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings.shadows(isEnabled: false)
-        newSettings.scene.shadows.mapResolution = 1024
+        newSettings.scene.shadows.mapResolution = 512
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 
