@@ -42,6 +42,9 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         // (drawn on the sphere by the next layer) lands on, whether or not
         // its tile has arrived.
         let placeholderSlots = frameContext.sharedState.tilePlacementState.globeSurfaceSlots
+        let litInline = !GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: frameContext.renderSurfaceMode,
+                                                             transition: frameContext.globeRenderUniform.transition,
+                                                             zoom: frameContext.zoom)
         GlobeSurfaceDrawer.drawPlaceholderTiles(renderEncoder: encoder,
                                                 cameraUniform: frameContext.cameraUniform,
                                                 globe: frameContext.globeRenderUniform,
@@ -55,7 +58,8 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                                                         Float(mapClearColor.y),
                                                                         Float(mapClearColor.z),
                                                                         Float(mapClearColor.w)),
-                                                slots: placeholderSlots)
+                                                slots: placeholderSlots,
+                                                litInline: litInline)
     }
 
     func handleMemoryWarning() {}

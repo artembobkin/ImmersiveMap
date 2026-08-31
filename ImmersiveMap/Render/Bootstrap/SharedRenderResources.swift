@@ -52,6 +52,11 @@ final class SharedRenderResources {
     /// the pixels the sphere left uncovered are shaded instead of the whole
     /// screen being painted and then painted over.
     let skyBackdropDepthState: MTLDepthStencilState
+    /// The deferred surface lighting: drawn at the far plane, it passes only
+    /// where the depth is nearer than that, which is exactly the pixels the
+    /// globe surface wrote; space, still at the cleared far plane, is left
+    /// for the sky. Never writes.
+    let surfaceLightingDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -86,6 +91,9 @@ final class SharedRenderResources {
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     /// Same sphere, flat map color: the fill the tiles are painted over.
     let globeSurfacePlaceholderPipeline: GlobePipeline
+    /// The deferred globe-surface lighting: one fullscreen draw whose blend
+    /// applies the light to the unlit ground layers, once per pixel.
+    let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
     let atmospherePipeline: AtmospherePipeline
@@ -132,6 +140,7 @@ final class SharedRenderResources {
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
+        self.surfaceLightingDepthState = device.makeDepthStencilState(descriptor: Self.makeSurfaceLightingDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
@@ -150,6 +159,7 @@ final class SharedRenderResources {
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
+        self.globeSurfaceLightingPipeline = compiled.globeSurfaceLightingPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
         self.atmospherePipeline = compiled.atmospherePipeline
@@ -179,6 +189,7 @@ final class SharedRenderResources {
         let extrudedTilePipeline: ExtrudedTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let globeSurfacePlaceholderPipeline: GlobePipeline
+        let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
         let atmospherePipeline: AtmospherePipeline
@@ -213,6 +224,7 @@ final class SharedRenderResources {
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var globeSurfacePlaceholderPipeline: GlobePipeline?
+        var globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
         var atmospherePipeline: AtmospherePipeline?
@@ -268,6 +280,10 @@ final class SharedRenderResources {
                 pixelFormat: pixelFormat,
                 library: library,
                 sampleCount: sampleCount) },
+            { globeSurfaceLightingPipeline = GlobeSurfaceLightingPipeline(metalDevice: device,
+                                                                          pixelFormat: pixelFormat,
+                                                                          library: library,
+                                                                          sampleCount: sampleCount) },
             { fxaaPipeline = FXAAPipeline(metalDevice: device,
                                           pixelFormat: pixelFormat,
                                           library: library) },
@@ -301,6 +317,7 @@ final class SharedRenderResources {
             extrudedTilePipeline: extrudedTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
+            globeSurfaceLightingPipeline: globeSurfaceLightingPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
             atmospherePipeline: atmospherePipeline!,
@@ -422,6 +439,13 @@ final class SharedRenderResources {
     private static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = false
+        return descriptor
+    }
+
+    private static func makeSurfaceLightingDepthDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .greater
         descriptor.isDepthWriteEnabled = false
         return descriptor
     }

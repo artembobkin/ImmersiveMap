@@ -73,6 +73,13 @@ struct SphereFragmentIn {
 
 constant float kTileSphereExtent = 4096.0;
 
+/// True (the default pipeline) lights every fragment inline through
+/// globeSurfaceShade. False is the deferred-lighting world: the layers
+/// blend unlit and the globeSurfaceLighting pass applies the light once
+/// per pixel (GlobeSurfaceLighting.metal), which is exact while the
+/// lighting is affine (transition 0, tone depth 0, fog strength 0).
+constant bool kTileSphereLitInline [[function_constant(0)]];
+
 vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
                                               constant Camera& camera [[buffer(1)]],
                                               constant Style* styles [[buffer(2)]],
@@ -138,6 +145,9 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant GlobeAtmosphere& atmosphere [[buffer(7)]],
                                         constant GlobeSurfaceTone& tone [[buffer(8)]]) {
     half4 color = tileGroundColor(tileSphereFragmentStyle(in), overviewFade, lineDash);
+    if (!kTileSphereLitInline) {
+        return color;
+    }
     half4 shaded = globeSurfaceShade(color, in.worldPos, in.normal, in.earthNormal, in.transition,
                                      camera, earthScene, horizonFog, atmosphere, tone);
     shaded.a = color.a;

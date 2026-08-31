@@ -72,6 +72,10 @@ struct Tile {
     int3 tile;
 };
 
+/// True lights the fill inline; false leaves it unlit for the deferred
+/// globeSurfaceLighting pass (see kTileSphereLitInline in TileSphere.metal).
+constant bool kGlobePlaceholderLitInline [[function_constant(0)]];
+
 
 vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
@@ -190,6 +194,9 @@ fragment half4 globeSurfacePlaceholderFragmentShader(SurfaceFragmentIn in [[stag
                                                      constant float4& fillColor [[buffer(5)]],
                                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]],
                                                      constant GlobeSurfaceTone& tone [[buffer(7)]]) {
+    if (!kGlobePlaceholderLitInline) {
+        return half4(fillColor);
+    }
     return globeSurfaceShade(half4(fillColor), in.worldPos, in.normal, in.earthNormal, in.transition,
                              camera, earthScene, horizonFog, atmosphere, tone);
 }

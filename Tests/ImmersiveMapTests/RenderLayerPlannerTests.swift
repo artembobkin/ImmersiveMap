@@ -77,6 +77,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .globeSurface,
             .globeVectorSurface,
+            .globeSurfaceLighting,
             .starfield,
             .atmosphere,
             .globeCap,
@@ -105,6 +106,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .globeSurface,
             .globeVectorSurface,
+            .globeSurfaceLighting,
             .starfield,
             .atmosphere,
             .globeCap,
@@ -115,7 +117,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .starfield, .atmosphere, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .atmosphere, .globeCap, .sceneModels, .routes])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -183,6 +185,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(enabledLayers(in: plan), [
             .globeSurface,
             .globeVectorSurface,
+            .globeSurfaceLighting,
             .globeCap,
             .sceneModels,
             .routes,
@@ -211,7 +214,7 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  atmosphereEnabled: false)
         )
 
-        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .starfield, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .globeCap, .sceneModels, .routes])
         XCTAssertEqual(skipReason(for: .atmosphere, in: plan), .atmosphereDisabled)
         XCTAssertNil(skipReason(for: .starfield, in: plan))
     }

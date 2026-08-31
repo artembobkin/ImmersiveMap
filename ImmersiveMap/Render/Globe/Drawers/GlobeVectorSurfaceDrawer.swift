@@ -21,11 +21,16 @@ enum GlobeVectorSurfaceDrawer {
                      renderMapSize: Double,
                      placeTilesContext: PlaceTilesContext,
                      pipeline: TilePipeline,
-                     isWireframeEnabled: Bool) {
+                     isWireframeEnabled: Bool,
+                     litInline: Bool) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
-        pipeline.selectPipeline(renderEncoder: renderEncoder)
+        if litInline {
+            pipeline.selectPipeline(renderEncoder: renderEncoder)
+        } else {
+            pipeline.selectSphereUnlitPipeline(renderEncoder: renderEncoder)
+        }
         // Every tile triangle is counter-clockwise in render space (the
         // parser's contract, ParsedPolygon.firstClockwiseTriangle) and the
         // sphere projection does not mirror, so the near side of the planet

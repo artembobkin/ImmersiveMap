@@ -30,6 +30,14 @@ enum RenderLayer: String, CaseIterable {
     /// tests nor writes depth: what the planet hides is clipped against the
     /// sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
+    /// The globe surface's lighting as one deferred fullscreen draw, right
+    /// after the unlit ground layers blended: outputs the additive light in
+    /// rgb and the brightness in alpha, and the fixed-function blend applies
+    /// both to the blended surface per sample. Depth-tested `greater` at the
+    /// far plane, so only the sphere's pixels light and space stays for the
+    /// sky. Skipped (with the layers lighting themselves inline) whenever
+    /// the lighting is not affine: during the unfurl and at the deep tone.
+    case globeSurfaceLighting
     case globeCap
     case flatMapSurface
     case buildingExtrusion
@@ -101,7 +109,7 @@ struct RenderLayerPlanner {
             // stay after the sky: the poles lie outside the Mercator slots,
             // so no grid depth covers them, and the caps must paint over
             // the sky there the way they always did.
-            [.globeSurface, .globeVectorSurface, .starfield, .atmosphere, .globeCap, .sceneModels, .routes]
+            [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .atmosphere, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in

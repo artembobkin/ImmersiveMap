@@ -19,6 +19,10 @@ class TilePipeline {
     /// attachment with an empty write mask so the pipeline stays
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
+    /// Sphere surface only: the unlit fragment for the deferred-lighting
+    /// world, where the ground layers blend bare style colours and the
+    /// globeSurfaceLighting pass lights the blend once per pixel.
+    let sphereUnlitPipelineState: MTLRenderPipelineState?
 
     /// - Parameter readsGroundShadowMask: the flat world pass reads the
     ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
@@ -33,6 +37,7 @@ class TilePipeline {
          surface: Surface = .flat) {
         let vertexFunction: MTLFunction?
         let fragmentFunction: MTLFunction?
+        var sphereUnlitFragmentFunction: MTLFunction?
         switch surface {
         case .flat:
             vertexFunction = library.makeFunction(name: "tileVertexShader")
@@ -42,7 +47,15 @@ class TilePipeline {
             fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
         case .sphere:
             vertexFunction = library.makeFunction(name: "tileSphereVertexShader")
-            fragmentFunction = library.makeFunction(name: "tileSphereFragmentShader")
+            let litValues = MTLFunctionConstantValues()
+            var litInline = true
+            litValues.setConstantValue(&litInline, type: .bool, index: 0)
+            fragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader", constantValues: litValues)
+            let unlitValues = MTLFunctionConstantValues()
+            var unlitInline = false
+            unlitValues.setConstantValue(&unlitInline, type: .bool, index: 0)
+            sphereUnlitFragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader",
+                                                                    constantValues: unlitValues)
         }
         
         let vertexDescriptor = MTLVertexDescriptor()
@@ -83,6 +96,14 @@ class TilePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
+        if let sphereUnlitFragmentFunction {
+            pipelineDescriptor.fragmentFunction = sphereUnlitFragmentFunction
+            self.sphereUnlitPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.fragmentFunction = fragmentFunction
+        } else {
+            self.sphereUnlitPipelineState = nil
+        }
+
         if supportsFramebufferFetch, surface == .flat {
             pipelineDescriptor.colorAttachments[1].pixelFormat = pixelFormat
             pipelineDescriptor.colorAttachments[1].writeMask = []
@@ -99,5 +120,12 @@ class TilePipeline {
             return
         }
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+
+    /// The unlit sphere fragment; falls back to the lit pipeline on a
+    /// surface that has no unlit variant, which the deferred path never
+    /// selects.
+    func selectSphereUnlitPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(sphereUnlitPipelineState ?? pipelineState)
     }
 }

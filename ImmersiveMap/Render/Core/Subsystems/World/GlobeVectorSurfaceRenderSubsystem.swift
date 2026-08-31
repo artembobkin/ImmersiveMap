@@ -63,7 +63,11 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       renderMapSize: frameContext.resolvedPresentation.renderNormalizationState.flatRenderMapSize,
                                       placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                       pipeline: pipeline,
-                                      isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled)
+                                      isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled,
+                                      litInline: !GlobeSurfaceLightingPath.isDeferred(
+                                          renderSurfaceMode: frameContext.renderSurfaceMode,
+                                          transition: frameContext.globeRenderUniform.transition,
+                                          zoom: frameContext.zoom))
     }
 
     func handleMemoryWarning() {}

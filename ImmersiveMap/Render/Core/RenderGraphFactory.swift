@@ -81,6 +81,11 @@ enum RenderGraphFactory {
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
                                                                             depthDisabledState: context.depthDisabledState,
                                                                             debugOverlayControls: debugOverlayControls)
+        let globeSurfaceLightingSubsystem = GlobeSurfaceLightingRenderSubsystem(
+            pipeline: context.globeSurfaceLightingPipeline,
+            surfaceLightingDepthState: context.surfaceLightingDepthState,
+            depthDisabledState: context.depthDisabledState
+        )
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,
                                                         globeCapRenderer: context.globeCapRenderer,
@@ -107,6 +112,7 @@ enum RenderGraphFactory {
             atmosphereSubsystem,
             globeSurfaceSubsystem,
             globeVectorSurfaceSubsystem,
+            globeSurfaceLightingSubsystem,
             globeCapSubsystem,
             postProcessingSubsystem,
             debugSubsystem

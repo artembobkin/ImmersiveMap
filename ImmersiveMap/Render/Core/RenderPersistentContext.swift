@@ -24,6 +24,7 @@ final class RenderPersistentContext {
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let globeSurfacePlaceholderPipeline: GlobePipeline
+    let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
@@ -41,6 +42,8 @@ final class RenderPersistentContext {
     let globeCapDepthState: MTLDepthStencilState
     /// See `SharedRenderResources.skyBackdropDepthState`.
     let skyBackdropDepthState: MTLDepthStencilState
+    /// See `SharedRenderResources.surfaceLightingDepthState`.
+    let surfaceLightingDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
@@ -109,6 +112,7 @@ final class RenderPersistentContext {
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.skyBackdropDepthState = shared.skyBackdropDepthState
+        self.surfaceLightingDepthState = shared.surfaceLightingDepthState
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.compositeDepthResetState = shared.compositeDepthResetState
@@ -128,6 +132,7 @@ final class RenderPersistentContext {
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.globeSurfacePlaceholderPipeline = shared.globeSurfacePlaceholderPipeline
+        self.globeSurfaceLightingPipeline = shared.globeSurfaceLightingPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline

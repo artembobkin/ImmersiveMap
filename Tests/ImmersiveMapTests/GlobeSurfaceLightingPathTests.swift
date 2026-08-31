@@ -1,0 +1,55 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+@testable import ImmersiveMap
+import XCTest
+
+/// The deferred surface lighting runs only while `globeSurfaceShade` is an
+/// affine transform of the colour, which is when lighting once after the
+/// blend equals lighting every layer before it: the pure sphere (no fog, no
+/// morphed silhouette) at the plain palette (no deep-space tone). These
+/// tests pin that gate and the uniform layout the pass hands the shader.
+final class GlobeSurfaceLightingPathTests: XCTestCase {
+    func testThePureSphereAtThePlainPaletteDefers() {
+        XCTAssertTrue(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
+                                                          transition: 0,
+                                                          zoom: 3.0))
+    }
+
+    /// The unfurl brings the fog (its strength is the transition) and a
+    /// silhouette that is no longer the sphere's: every layer lights itself.
+    func testTheMorphLightsInline() {
+        XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
+                                                           transition: 0.01,
+                                                           zoom: 5.0))
+    }
+
+    /// Below zoom 2 the deep-space tone deepens the midtones with a power
+    /// curve, which does not commute with blending: inline again.
+    func testTheDeepToneLightsInline() {
+        XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
+                                                           transition: 0,
+                                                           zoom: 1.5))
+        XCTAssertTrue(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
+                                                          transition: 0,
+                                                          zoom: GlobeSurfaceToneUniform.plainZoom))
+    }
+
+    func testTheFlatWorldNeverDefers() {
+        XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .flat,
+                                                           transition: 1,
+                                                           zoom: 15.0))
+    }
+
+    /// The Swift mirror must lay out exactly as the Metal struct at
+    /// buffer 0: the matrix, then three padded float3 fields, then the
+    /// radius.
+    func testUniformLayoutMatchesTheShaderStruct() {
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.offset(of: \.inverseViewProjection), 0)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.offset(of: \.eye), 64)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.offset(of: \.center), 80)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.offset(of: \.worldSunDirection), 96)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.offset(of: \.radius), 112)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceLightingUniform>.stride, 128)
+    }
+}
