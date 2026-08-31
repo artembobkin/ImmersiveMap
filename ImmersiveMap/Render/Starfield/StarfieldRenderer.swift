@@ -6,7 +6,8 @@
 //  - Stars: fixed buffer of unit-sphere positions, rotated by globe pan, drawn with a separate projection
 //    to avoid affecting map depth precision. Tuned via ImmersiveMapSettings.scene.starfield.
 //  - Space: background clear color configured in ImmersiveMapSettings.scene.space.
-//  - Sun: fullscreen glow pass drawn after stars so later globe layers can occlude it.
+//  - Sun: fullscreen glow pass drawn after stars; the globe occludes it through
+//    the sky depth test at the far plane (see StarfieldRenderSubsystem).
 
 import MetalKit
 import simd

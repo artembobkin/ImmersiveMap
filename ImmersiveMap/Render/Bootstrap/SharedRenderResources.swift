@@ -47,6 +47,11 @@ final class SharedRenderResources {
 
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
+    /// The sky layers (the starfield and the atmosphere halo): drawn after
+    /// the globe surface at the far plane, testing without writing, so only
+    /// the pixels the sphere left uncovered are shaded instead of the whole
+    /// screen being painted and then painted over.
+    let skyBackdropDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -126,6 +131,7 @@ final class SharedRenderResources {
 
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
+        self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
@@ -407,6 +413,13 @@ final class SharedRenderResources {
     }
 
     private static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = false
+        return descriptor
+    }
+
+    private static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = false

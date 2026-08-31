@@ -7,9 +7,15 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     let name: String = "Starfield"
 
     private let starfieldRenderer: StarfieldRenderer
+    private let skyBackdropDepthState: MTLDepthStencilState
+    private let depthDisabledState: MTLDepthStencilState
 
-    init(starfieldRenderer: StarfieldRenderer) {
+    init(starfieldRenderer: StarfieldRenderer,
+         skyBackdropDepthState: MTLDepthStencilState,
+         depthDisabledState: MTLDepthStencilState) {
         self.starfieldRenderer = starfieldRenderer
+        self.skyBackdropDepthState = skyBackdropDepthState
+        self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext _: FrameContext) {}
@@ -40,6 +46,10 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             return
         }
 
+        // The sky draws after the globe surface, at the far plane: the
+        // depth test rejects every fragment the sphere covered, so only
+        // space is shaded.
+        encoder.setDepthStencilState(skyBackdropDepthState)
         starfieldRenderer.draw(renderEncoder: encoder,
                                globe: frameContext.globeRenderUniform,
                                earthScene: frameContext.earthSceneUniform,
@@ -47,6 +57,9 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                                cameraEye: frameContext.cameraEye,
                                drawSize: frameContext.drawSize,
                                nowTime: Float(frameContext.time))
+        // Back to the encoder's neutral state, so no later layer inherits
+        // the sky's depth test by accident.
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

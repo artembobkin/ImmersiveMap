@@ -35,7 +35,9 @@ struct AtmosphereVertexOut {
 vertex AtmosphereVertexOut atmosphereVertexShader(uint vertexID [[vertex_id]]) {
     const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
     AtmosphereVertexOut out;
-    out.position = float4(positions[vertexID], 0.0, 1.0);
+    // Far plane: the halo draws after the globe surface and depth-tests
+    // lessEqual, so it only shades where the sphere left the depth cleared.
+    out.position = float4(positions[vertexID], 1.0, 1.0);
     out.ndc = positions[vertexID];
     return out;
 }

@@ -39,6 +39,8 @@ final class RenderPersistentContext {
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
+    /// See `SharedRenderResources.skyBackdropDepthState`.
+    let skyBackdropDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
@@ -106,6 +108,7 @@ final class RenderPersistentContext {
 
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
+        self.skyBackdropDepthState = shared.skyBackdropDepthState
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.compositeDepthResetState = shared.compositeDepthResetState

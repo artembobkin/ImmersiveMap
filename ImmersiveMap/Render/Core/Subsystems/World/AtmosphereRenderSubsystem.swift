@@ -3,18 +3,22 @@
 
 import Metal
 
-/// The atmosphere halo around the globe. Sits between the starfield and the
-/// globe surface in the world pass: it paints over space, and the sphere
-/// then paints over the part of it that lies inside the silhouette.
+/// The atmosphere halo around the globe. Drawn after the globe surface and
+/// the starfield in the world pass, at the far plane: the depth test drops
+/// the part of it inside the silhouette, and the halo blends over the sky
+/// only where space shows.
 final class AtmosphereRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "Atmosphere"
 
     private let atmosphereRenderer: AtmosphereRenderer
+    private let skyBackdropDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
 
     init(atmosphereRenderer: AtmosphereRenderer,
+         skyBackdropDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState) {
         self.atmosphereRenderer = atmosphereRenderer
+        self.skyBackdropDepthState = skyBackdropDepthState
         self.depthDisabledState = depthDisabledState
     }
 
@@ -49,10 +53,12 @@ final class AtmosphereRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                              globe: frameContext.globeRenderUniform,
                                              projectionView: frameContext.cameraMatrices.projectionView,
                                              cameraEye: frameContext.cameraEye)
-        // No depth: the halo is a backdrop, and whatever the sphere and the
-        // content on it write afterwards simply paints over it.
-        encoder.setDepthStencilState(depthDisabledState)
+        // At the far plane, depth-tested: the halo draws after the globe
+        // surface, so the sphere's pixels reject it and only the space
+        // around the silhouette is shaded.
+        encoder.setDepthStencilState(skyBackdropDepthState)
         atmosphereRenderer.draw(renderEncoder: encoder, uniform: uniform)
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}

@@ -112,7 +112,10 @@ BackgroundVertexOut makeFullscreenTriangleVertex(uint vertexID) {
 
     BackgroundVertexOut out;
     float2 clip = positions[vertexID];
-    out.position = float4(clip, 0.0, 1.0);
+    // At the far plane on purpose: the sky layers draw after the globe
+    // surface and depth-test lessEqual, so a cleared pixel (space) passes
+    // and a pixel the sphere covered rejects the fragment before it shades.
+    out.position = float4(clip, 1.0, 1.0);
     out.uv = clip * 0.5 + 0.5;
     return out;
 }
@@ -253,6 +256,10 @@ vertex StarVertexOut starfieldVertexShader(StarVertexIn in [[stage_in]],
     float starRadius = globe.radius * params.radiusScale;
     float4 world = float4(in.position * starRadius, 1.0) * rotation * translationMatrix(float3(0, 0, -globe.radius));
     out.position = camera.matrix * world;
+    // Stars are background: forced to the far plane so the sky depth test
+    // (see makeFullscreenTriangleVertex) rejects them wherever the globe
+    // surface has written depth.
+    out.position.z = out.position.w;
     float sizeScale = starRadius / globe.radius;
     out.pointSize = max(1.2, in.size * sizeScale * 0.32);
     out.brightness = half(in.brightness);

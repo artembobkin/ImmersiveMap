@@ -22,7 +22,7 @@ final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
     }
 
     func testGlobeLayersAreLeftAlone() {
-        let globePlan: [RenderLayer] = [.starfield, .atmosphere, .globeSurface, .globeVectorSurface, .globeCap,
+        let globePlan: [RenderLayer] = [.globeSurface, .globeVectorSurface, .starfield, .atmosphere, .globeCap,
                                         .sceneModels, .routes]
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(globePlan, buildingPath: nil), globePlan)
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(globePlan, buildingPath: .solid), globePlan)

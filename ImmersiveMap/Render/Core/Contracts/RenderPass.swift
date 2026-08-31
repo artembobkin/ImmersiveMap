@@ -15,9 +15,14 @@ enum RenderLayer: String, CaseIterable {
     /// the world pass in place of a cascade lookup per layer.
     case groundShadowMask
     case buildingImage
+    /// The space around the globe: the opaque sky background, the stars and
+    /// the Sun. Drawn after the globe surface at the far plane, depth-tested
+    /// so the pixels the sphere covered reject its fragments instead of
+    /// being painted first and painted over.
     case starfield
-    /// The atmosphere halo in space around the globe, between the starfield it
-    /// paints over and the surface that paints over it.
+    /// The atmosphere halo in space around the globe: drawn after the
+    /// starfield it blends over, depth-tested at the far plane like it, so
+    /// only the space outside the sphere's silhouette is shaded.
     case atmosphere
     case globeSurface
     /// The tile geometry of the globe drawn straight onto the sphere, over
@@ -88,7 +93,15 @@ struct RenderLayerPlanner {
         case .flat:
             [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            [.starfield, .atmosphere, .globeSurface, .globeVectorSurface, .globeCap, .sceneModels, .routes]
+            // Surface first, sky after: the sky layers (the starfield and
+            // the atmosphere halo) rasterize at the far plane and depth-test
+            // against the surface depth the globe wrote, so only the pixels
+            // the sphere left uncovered are shaded instead of the whole
+            // screen being painted and then painted over. The polar caps
+            // stay after the sky: the poles lie outside the Mercator slots,
+            // so no grid depth covers them, and the caps must paint over
+            // the sky there the way they always did.
+            [.globeSurface, .globeVectorSurface, .starfield, .atmosphere, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in

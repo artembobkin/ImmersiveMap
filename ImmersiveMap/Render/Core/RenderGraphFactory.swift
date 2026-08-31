@@ -67,8 +67,11 @@ enum RenderGraphFactory {
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                                           shadowFallbackTexture: context.shadowFallbackTexture,
                                                                           supportsFramebufferFetch: context.supportsFramebufferFetch)
-        let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer)
+        let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
+                                                          skyBackdropDepthState: context.skyBackdropDepthState,
+                                                          depthDisabledState: context.depthDisabledState)
         let atmosphereSubsystem = AtmosphereRenderSubsystem(atmosphereRenderer: context.atmosphereRenderer,
+                                                            skyBackdropDepthState: context.skyBackdropDepthState,
                                                             depthDisabledState: context.depthDisabledState)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
