@@ -22,15 +22,15 @@ enum GlobeVectorSurfaceDrawer {
                      placeTilesContext: PlaceTilesContext,
                      pipeline: TilePipeline,
                      isWireframeEnabled: Bool,
-                     litInline: Bool) {
+                     litInline: Bool,
+                     pureSphere: Bool,
+                     globeFrame: GlobeFrameConstantsUniform) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
-        if litInline {
-            pipeline.selectPipeline(renderEncoder: renderEncoder)
-        } else {
-            pipeline.selectSphereUnlitPipeline(renderEncoder: renderEncoder)
-        }
+        pipeline.selectSpherePipeline(renderEncoder: renderEncoder,
+                                      litInline: litInline,
+                                      pureSphere: pureSphere)
         // Every tile triangle is counter-clockwise in render space (the
         // parser's contract, ParsedPolygon.firstClockwiseTriangle) and the
         // sphere projection does not mirror, so the near side of the planet
@@ -70,6 +70,10 @@ enum GlobeVectorSurfaceDrawer {
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&streetPaletteUniform, length: MemoryLayout<StreetPaletteUniform>.stride, index: 6)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
+        var globeFrameValue = globeFrame
+        renderEncoder.setVertexBytes(&globeFrameValue,
+                                     length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
+                                     index: 10)
         renderEncoder.setFragmentBytes(&overviewFadeUniform, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 0)
         renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 5)

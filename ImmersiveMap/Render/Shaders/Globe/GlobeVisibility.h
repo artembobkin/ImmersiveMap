@@ -101,6 +101,51 @@ struct GlobeSurfaceProjection {
     float localTransition;
 };
 
+/// The same morph fed from GlobeFrameConstants: the pan rotation, the map
+/// size and the Mercator pan are per-frame values, computed once on the CPU
+/// (GlobeFrameConstantsUniform) instead of once per vertex. `pureSphere` is
+/// meant to be a function constant: when true (transition 0 by the caller's
+/// gate, GlobeSphereVertexPath), the flat morph target, the unfurl phase and
+/// the mix fold away and the surface is the sphere itself.
+static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
+                                                                float lon,
+                                                                constant Camera& camera,
+                                                                constant Globe& globe,
+                                                                constant GlobeFrameConstants& frame,
+                                                                float referenceNormalizedWorldX,
+                                                                bool pureSphere) {
+    float3 sphereWorldPosition = globeSphereWorldPosition(lat, lon, globe, frame.rotation);
+    float3 flatWorldPosition;
+    float localTransition;
+    float3 worldPosition;
+    if (pureSphere) {
+        flatWorldPosition = float3(0.0);
+        localTransition = 0.0;
+        worldPosition = sphereWorldPosition;
+    } else {
+        flatWorldPosition = globeFlatWorldPosition(lat, lon, globe, frame.mapSize,
+                                                   frame.panMercatorY, referenceNormalizedWorldX);
+        // The same unfurl wave as the self-contained overload below.
+        float frontDot = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6);
+        localTransition = globeTransitionLocalPhase(globe.transition, frontDot);
+        worldPosition = mix(sphereWorldPosition, flatWorldPosition, localTransition);
+    }
+
+    float phi = lat - M_PI_2_F;
+    float theta = lon + M_PI_F;
+    float3 earthDirection = float3(sin(phi) * sin(theta), cos(phi), sin(phi) * cos(theta));
+
+    GlobeSurfaceProjection result;
+    result.worldPosition = worldPosition;
+    result.clip = camera.matrix * float4(worldPosition, 1.0);
+    result.sphereWorldPosition = sphereWorldPosition;
+    result.flatWorldPosition = flatWorldPosition;
+    result.normal = normalize((float4(earthDirection, 0.0) * frame.rotation).xyz);
+    result.earthNormal = normalize(earthDirection);
+    result.localTransition = localTransition;
+    return result;
+}
+
 static inline GlobeSurfaceProjection globeProjectLatLonDetailed(float lat,
                                                                 float lon,
                                                                 constant Camera& camera,

@@ -19,6 +19,11 @@ struct VertexIn {
 /// neither exported, interpolated nor loaded.
 constant bool kGlobePlaceholderLitInline [[function_constant(0)]];
 
+/// True on the pure sphere (transition 0): the flat morph target, the
+/// unfurl phase and the mix fold away, exactly as kTileSpherePureSphere
+/// does for the tile geometry drawn over this fill.
+constant bool kGlobePlaceholderPureSphere [[function_constant(1)]];
+
 struct SurfaceVertexOut {
     float4 position [[position]];
     // The sphere as an occluder (globeOcclusionClearance): the grid morphs
@@ -83,7 +88,8 @@ struct Tile {
 vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Globe& globe [[buffer(2)]],
-                                          constant Tile& tileData [[buffer(3)]]) {
+                                          constant Tile& tileData [[buffer(3)]],
+                                          constant GlobeFrameConstants& globeFrame [[buffer(4)]]) {
     
     float vertexUvX = vertexIn.uv.x; // goes 0 to 1
     float vertexUvY = vertexIn.uv.y; // goes 0 to 1
@@ -108,15 +114,12 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     float transition = globe.transition; // from globe view to flat view
     
     
-    // Map coordinates
-    float latitude = globeTransitionPanLatitude(globe);
-    float longitude = globeTransitionPanLongitude(globe);
-    
     float globeRadius = globe.radius;
     
     float4x4 matrix = camera.matrix;
     
-    float mapSize = globeTransitionMapSize(globe, latitude);
+    // Per-frame values, computed once on the CPU (GlobeFrameConstants).
+    float mapSize = globeFrame.mapSize;
     
     float phi = -M_PI_F * vertexUvY;
     float theta = 2 * M_PI_F * vertexUvX;
@@ -127,41 +130,36 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
     float3 spherePosition = float3(x, y, z);
     
     
-    // Rotate the planet
-    float cx = cos(-latitude);
-    float sx = sin(-latitude);
-    float cy = cos(-longitude);
-    float sy = sin(-longitude);
+    float4x4 rotation = globeFrame.rotation;
 
-    float4x4 rotation = float4x4(
-        float4(cy,        0,         -sy,       0),
-        float4(sy * sx,   cx,        cy * sx,   0),
-        float4(sy * cx,  -sx,        cy * cx,   0),
-        float4(0,         0,          0,        1)
-    );
-
-
-    // Convert globePanY (-1..1) to a Mercator-aligned vertical pan so the flat map
-    float panY_merc_norm = globeTransitionPanMercatorY(latitude);
-    
-    // `vertexUvY` grows top-to-bottom, so this intermediate latitude is sign-inverted
-    // relative to geographic latitude and needs the extra negation below.
-    float lat_v = M_PI_F * vertexUvY - M_PI_2_F;      // [-pi/2..pi/2]
-    float flatMercatorY = -getYMercNorm(lat_v);       // geographic-Mercator sign in flat world space
-    // The slot unwraps around its own centre, like the tile drawn over it.
-    float2 flatWorldPosition = globeTransitionFlatWorldPosition(vertexUvX,
-                                                                flatMercatorY,
-                                                                globe,
-                                                                mapSize,
-                                                                panY_merc_norm,
-                                                                (float(tileX) + 0.5) / zPow);
-    
     float4x4 translationM = translationMatrix(float3(0, 0, -globeRadius));
     float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
-    float4 flatPosition = float4(flatWorldPosition, 0, 1.0);
     float3 rotatedSphereDirection = normalize((float4(spherePosition, 0.0) * rotation).xyz);
-    float localTransition = globeTransitionLocalPhase(transition, rotatedSphereDirection.z);
-    float4 position = mix(spherePositionTranslated, flatPosition, localTransition);
+    float4 position;
+    if (kGlobePlaceholderPureSphere) {
+        // Transition 0: the surface is the sphere; the flat morph target,
+        // the unfurl phase and the mix fold away.
+        position = spherePositionTranslated;
+    } else {
+        // Convert globePanY (-1..1) to a Mercator-aligned vertical pan so
+        // the flat map lines up.
+        float panY_merc_norm = globeFrame.panMercatorY;
+        // `vertexUvY` grows top-to-bottom, so this intermediate latitude is
+        // sign-inverted relative to geographic latitude and needs the extra
+        // negation below.
+        float lat_v = M_PI_F * vertexUvY - M_PI_2_F;      // [-pi/2..pi/2]
+        float flatMercatorY = -getYMercNorm(lat_v);       // geographic-Mercator sign in flat world space
+        // The slot unwraps around its own centre, like the tile drawn over it.
+        float2 flatWorldPosition = globeTransitionFlatWorldPosition(vertexUvX,
+                                                                    flatMercatorY,
+                                                                    globe,
+                                                                    mapSize,
+                                                                    panY_merc_norm,
+                                                                    (float(tileX) + 0.5) / zPow);
+        float4 flatPosition = float4(flatWorldPosition, 0, 1.0);
+        float localTransition = globeTransitionLocalPhase(transition, rotatedSphereDirection.z);
+        position = mix(spherePositionTranslated, flatPosition, localTransition);
+    }
     float4 clip = matrix * position;
 
     SurfaceVertexOut out;

@@ -59,7 +59,11 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                                                         Float(mapClearColor.z),
                                                                         Float(mapClearColor.w)),
                                                 slots: placeholderSlots,
-                                                litInline: litInline)
+                                                litInline: litInline,
+                                                pureSphere: GlobeSphereVertexPath.isPureSphere(
+                                                    renderSurfaceMode: frameContext.renderSurfaceMode,
+                                                    transition: frameContext.globeRenderUniform.transition),
+                                                globeFrame: GlobeFrameConstantsUniform.make(globe: frameContext.globeRenderUniform))
     }
 
     func handleMemoryWarning() {}

@@ -36,6 +36,12 @@ struct GlobeSurfaceTile {
 /// neither export, interpolate nor load them.
 constant bool kTileSphereLitInline [[function_constant(0)]];
 
+/// True on the pure sphere (transition 0, gated per frame by
+/// GlobeSphereVertexPath): the vertex stage folds away the flat morph
+/// target, the unfurl phase and the mix, and the surface is the sphere
+/// itself. False while the sphere unfurls.
+constant bool kTileSpherePureSphere [[function_constant(1)]];
+
 struct SphereVertexOut {
     float4 position [[position]];
     // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the sphere
@@ -90,13 +96,15 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
                                               constant StreetPaletteUniform& streetPalette [[buffer(6)]],
                                               constant float4& localClipBounds [[buffer(7)]],
                                               constant Globe& globe [[buffer(8)]],
-                                              constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]) {
+                                              constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
+                                              constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
     // The parser stores render-space positions (y up, 4096 - tileY); the
     // projection wants uv.y = 0 at the tile's north edge. Not clamped: the
     // stitching margins of line geometry lie beyond 0..4096 on purpose.
     float2 localPosition = float2(vertexIn.position.xy);
     float2 localUv = float2(localPosition.x, kTileSphereExtent - localPosition.y) / kTileSphereExtent;
-    GlobeSurfaceProjection projection = globeProjectTileUVDetailed(localUv, surfaceTile.tile, camera, globe);
+    GlobeSurfaceProjection projection = globeProjectTileUVDetailed(localUv, surfaceTile.tile, camera, globe,
+                                                                   globeFrame, kTileSpherePureSphere);
 
     // Exactly the surface position the placeholder grid morphs through: the
     // geometry is not depth-tested against the grid (its extent is the five

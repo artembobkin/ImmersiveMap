@@ -21,8 +21,14 @@ class TilePipeline {
     let withBuildingImagePipelineState: MTLRenderPipelineState?
     /// Sphere surface only: the unlit fragment for the deferred-lighting
     /// world, where the ground layers blend bare style colours and the
-    /// globeSurfaceLighting pass lights the blend once per pixel.
+    /// globeSurfaceLighting pass lights the blend once per pixel. Its vertex
+    /// stage is the pure-sphere specialization: the deferred gate implies
+    /// transition 0.
     let sphereUnlitPipelineState: MTLRenderPipelineState?
+    /// Sphere surface only: inline lighting with the pure-sphere vertex
+    /// stage, for frames at transition 0 that still light inline (the deep
+    /// tone below zoom 2).
+    let sphereLitPurePipelineState: MTLRenderPipelineState?
 
     /// - Parameter readsGroundShadowMask: the flat world pass reads the
     ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
@@ -38,7 +44,8 @@ class TilePipeline {
         let vertexFunction: MTLFunction?
         let fragmentFunction: MTLFunction?
         var sphereUnlitFragmentFunction: MTLFunction?
-        var sphereUnlitVertexFunction: MTLFunction?
+        var sphereUnlitPureVertexFunction: MTLFunction?
+        var sphereLitPureVertexFunction: MTLFunction?
         switch surface {
         case .flat:
             vertexFunction = library.makeFunction(name: "tileVertexShader")
@@ -47,21 +54,29 @@ class TilePipeline {
             constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
             fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
         case .sphere:
-            let litValues = MTLFunctionConstantValues()
-            var litInline = true
-            litValues.setConstantValue(&litInline, type: .bool, index: 0)
-            // The vertex stage carries the constant too: the lit-only
-            // varyings exist in its output struct exactly when the fragment
-            // reads them.
-            vertexFunction = try! library.makeFunction(name: "tileSphereVertexShader", constantValues: litValues)
-            fragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader", constantValues: litValues)
-            let unlitValues = MTLFunctionConstantValues()
-            var unlitInline = false
-            unlitValues.setConstantValue(&unlitInline, type: .bool, index: 0)
-            sphereUnlitVertexFunction = try! library.makeFunction(name: "tileSphereVertexShader",
-                                                                  constantValues: unlitValues)
-            sphereUnlitFragmentFunction = try! library.makeFunction(name: "tileSphereFragmentShader",
-                                                                    constantValues: unlitValues)
+            // The vertex stage carries two constants: lit-inline (index 0,
+            // the lit-only varyings exist exactly when the fragment reads
+            // them) and pure-sphere (index 1, the morph folds away at
+            // transition 0). The fragment reads only the first.
+            func sphereVertex(litInline: Bool, pureSphere: Bool) -> MTLFunction {
+                let values = MTLFunctionConstantValues()
+                var lit = litInline
+                var pure = pureSphere
+                values.setConstantValue(&lit, type: .bool, index: 0)
+                values.setConstantValue(&pure, type: .bool, index: 1)
+                return try! library.makeFunction(name: "tileSphereVertexShader", constantValues: values)
+            }
+            func sphereFragment(litInline: Bool) -> MTLFunction {
+                let values = MTLFunctionConstantValues()
+                var lit = litInline
+                values.setConstantValue(&lit, type: .bool, index: 0)
+                return try! library.makeFunction(name: "tileSphereFragmentShader", constantValues: values)
+            }
+            vertexFunction = sphereVertex(litInline: true, pureSphere: false)
+            fragmentFunction = sphereFragment(litInline: true)
+            sphereLitPureVertexFunction = sphereVertex(litInline: true, pureSphere: true)
+            sphereUnlitPureVertexFunction = sphereVertex(litInline: false, pureSphere: true)
+            sphereUnlitFragmentFunction = sphereFragment(litInline: false)
         }
         
         let vertexDescriptor = MTLVertexDescriptor()
@@ -102,14 +117,17 @@ class TilePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
-        if let sphereUnlitVertexFunction, let sphereUnlitFragmentFunction {
-            pipelineDescriptor.vertexFunction = sphereUnlitVertexFunction
+        if let sphereUnlitPureVertexFunction, let sphereLitPureVertexFunction, let sphereUnlitFragmentFunction {
+            pipelineDescriptor.vertexFunction = sphereUnlitPureVertexFunction
             pipelineDescriptor.fragmentFunction = sphereUnlitFragmentFunction
             self.sphereUnlitPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.vertexFunction = sphereLitPureVertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
+            self.sphereLitPurePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.vertexFunction = vertexFunction
         } else {
             self.sphereUnlitPipelineState = nil
+            self.sphereLitPurePipelineState = nil
         }
 
         if supportsFramebufferFetch, surface == .flat {
@@ -130,10 +148,21 @@ class TilePipeline {
         renderEncoder.setRenderPipelineState(pipelineState)
     }
 
-    /// The unlit sphere fragment; falls back to the lit pipeline on a
-    /// surface that has no unlit variant, which the deferred path never
-    /// selects.
-    func selectSphereUnlitPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(sphereUnlitPipelineState ?? pipelineState)
+    /// The sphere variant for the frame: unlit implies the pure sphere (the
+    /// deferred gate requires transition 0); lit picks the pure-sphere
+    /// vertex stage when the frame is at transition 0. Falls back to the
+    /// full pipeline on a surface that has no variants.
+    func selectSpherePipeline(renderEncoder: MTLRenderCommandEncoder,
+                              litInline: Bool,
+                              pureSphere: Bool) {
+        if litInline == false, let sphereUnlitPipelineState {
+            renderEncoder.setRenderPipelineState(sphereUnlitPipelineState)
+            return
+        }
+        if pureSphere, let sphereLitPurePipelineState {
+            renderEncoder.setRenderPipelineState(sphereLitPurePipelineState)
+            return
+        }
+        renderEncoder.setRenderPipelineState(pipelineState)
     }
 }

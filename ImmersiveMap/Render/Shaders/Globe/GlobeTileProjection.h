@@ -58,6 +58,19 @@ static inline GlobeSurfaceProjection globeProjectTileUVDetailed(float2 localUv,
     return globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe, globeTileReferenceWorldX(tile));
 }
 
+/// The frame-constants variant of the projection above; `pureSphere` is a
+/// function constant of the calling vertex stage (see GlobeVisibility.h).
+static inline GlobeSurfaceProjection globeProjectTileUVDetailed(float2 localUv,
+                                                                int3 tile,
+                                                                constant Camera& camera,
+                                                                constant Globe& globe,
+                                                                constant GlobeFrameConstants& frame,
+                                                                bool pureSphere) {
+    float2 latLon = globeTileUVLatLon(localUv, tile);
+    return globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe, frame,
+                                      globeTileReferenceWorldX(tile), pureSphere);
+}
+
 static inline GlobeVisibilityProjectionResult globeProjectLatLonFromTile(float lat,
                                                                          float lon,
                                                                          constant Camera& camera,

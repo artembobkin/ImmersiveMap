@@ -27,7 +27,9 @@ enum GlobeSurfaceDrawer {
                                      tone: GlobeSurfaceToneUniform,
                                      fillColor: SIMD4<Float>,
                                      slots: [Tile],
-                                     litInline: Bool) {
+                                     litInline: Bool,
+                                     pureSphere: Bool,
+                                     globeFrame: GlobeFrameConstantsUniform) {
         guard slots.isEmpty == false else {
             return
         }
@@ -39,11 +41,9 @@ enum GlobeSurfaceDrawer {
         var toneValue = tone
         var fillColorValue = fillColor
 
-        if litInline {
-            placeholderPipeline.selectPipeline(renderEncoder: renderEncoder)
-        } else {
-            placeholderPipeline.selectUnlitPipeline(renderEncoder: renderEncoder)
-        }
+        placeholderPipeline.selectPipeline(renderEncoder: renderEncoder,
+                                           litInline: litInline,
+                                           pureSphere: pureSphere)
         // The grid is counter-clockwise on screen on the near side of the
         // sphere (SphereGeometry.createGrid, v growing south) and clockwise
         // on the far side. Declared explicitly rather than as `.front` under
@@ -53,6 +53,10 @@ enum GlobeSurfaceDrawer {
         renderEncoder.setCullMode(.back)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 2)
+        var globeFrameValue = globeFrame
+        renderEncoder.setVertexBytes(&globeFrameValue,
+                                     length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
+                                     index: 4)
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setFragmentBytes(&earthSceneValue, length: MemoryLayout<EarthSceneUniform>.stride, index: 2)
         renderEncoder.setFragmentBytes(&horizonFogValue,

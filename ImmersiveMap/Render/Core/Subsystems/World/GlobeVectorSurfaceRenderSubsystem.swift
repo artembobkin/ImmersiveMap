@@ -67,7 +67,11 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       litInline: !GlobeSurfaceLightingPath.isDeferred(
                                           renderSurfaceMode: frameContext.renderSurfaceMode,
                                           transition: frameContext.globeRenderUniform.transition,
-                                          zoom: frameContext.zoom))
+                                          zoom: frameContext.zoom),
+                                      pureSphere: GlobeSphereVertexPath.isPureSphere(
+                                          renderSurfaceMode: frameContext.renderSurfaceMode,
+                                          transition: frameContext.globeRenderUniform.transition),
+                                      globeFrame: GlobeFrameConstantsUniform.make(globe: frameContext.globeRenderUniform))
     }
 
     func handleMemoryWarning() {}

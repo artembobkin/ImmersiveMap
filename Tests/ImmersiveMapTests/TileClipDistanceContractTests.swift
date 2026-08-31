@@ -80,8 +80,8 @@ final class TileClipDistanceContractTests: XCTestCase {
     func testTileGeometryUnwrapsAroundTheTileCentre() throws {
         let projection = try shaderSource("Render/Shaders/Globe/GlobeTileProjection.h")
         XCTAssertTrue(projection.contains("static inline float globeTileReferenceWorldX(int3 tile)"))
-        XCTAssertEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 2,
-                       "Both tile projections pass the tile's centre")
+        XCTAssertEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 3,
+                       "All three tile projections pass the tile's centre")
         let transition = try shaderSource("Render/Shaders/Globe/GlobeTransitionProjection.h")
         XCTAssertTrue(transition.contains("float referenceNormalizedWorldX,"))
         XCTAssertTrue(transition.contains("return reference + wrap(value - reference, mapSize);"))

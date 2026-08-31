@@ -25,6 +25,19 @@ struct Globe {
     float transition;
 };
 
+/// Per-frame derivatives of Globe, computed once on the CPU instead of once
+/// per vertex: the pan rotation (in the row-vector column layout the vertex
+/// stages multiply with), the flat morph target's map size and Mercator pan,
+/// and the pan angles. Mirrors GlobeFrameConstantsUniform.swift (layout
+/// pinned by GlobeSphereVertexPathTests).
+struct GlobeFrameConstants {
+    float4x4 rotation;
+    float mapSize;
+    float panMercatorY;
+    float panLatitude;
+    float panLongitude;
+};
+
 struct EarthScene {
     float3 sunDirection;
     uint isEnabled;
