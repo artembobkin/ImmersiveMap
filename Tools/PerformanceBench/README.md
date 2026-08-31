@@ -1,8 +1,8 @@
-# ImmersiveMapPerformanceBench
+# PerformanceBench
 
-A benchmark host that runs the same scripted camera session on ImmersiveMap and on the Mapbox Maps SDK for iOS (v11, from SwiftPM) on a physical iPhone, and reports what each costs: display-link cadence on the main thread, engine frames, process CPU, physical memory footprint. It exists to put a number next to "how does it compare"; it is never part of CI and it is not a test.
+Two benchmark hosts that run the same scripted camera session on a physical iPhone and report what each engine costs: display-link cadence on the main thread, engine frames, process CPU, physical memory footprint. `ImmersiveMapBench` links only ImmersiveMap; `MapboxBench` links only the Mapbox Maps SDK for iOS (v11, from SwiftPM). One SDK per process keeps the picture honest: what a run reports belongs to its engine, with no second map SDK resident in the binary. The scenario, the metrics and the secrets are shared sources in `Shared/`, compiled into both apps, so the two engines replay exactly the same session. It exists to put a number next to "how does it compare"; it is never part of CI and it is not a test.
 
-The app links both SDKs, and one launch measures one engine in one cache state, chosen through the launch environment, then quits. `run_bench.sh` launches it once per combination and collects the JSON each run prints.
+One launch measures one engine variant in one cache state, chosen through the launch environment, then quits. `run_bench.sh` picks the app by the engine name, launches it once per combination and collects the JSON each run prints.
 
 ## What is measured
 
@@ -26,16 +26,18 @@ Keys come from the gitignored `LocalSecrets.plist` at the repository root (`IMME
 
 ```sh
 xcrun xctrace list devices                                   # find the device id
-xcodebuild -project Tools/PerformanceBench/ImmersiveMapPerformanceBench.xcodeproj \
-  -scheme ImmersiveMapPerformanceBench -configuration Release \
-  -destination 'id=<device-id>' -derivedDataPath DerivedData/Bench build
-xcrun devicectl device install app --device <device-id> \
-  DerivedData/Bench/Build/Products/Release-iphoneos/ImmersiveMapPerformanceBench.app
+for app in ImmersiveMapBench MapboxBench; do
+  xcodebuild -project "Tools/PerformanceBench/$app.xcodeproj" \
+    -scheme "$app" -configuration Release \
+    -destination 'id=<device-id>' -derivedDataPath "DerivedData/$app" build
+  xcrun devicectl device install app --device <device-id> \
+    "DerivedData/$app/Build/Products/Release-iphoneos/$app.app"
+done
 Tools/PerformanceBench/run_bench.sh <device-id>              # the default matrix
 Tools/PerformanceBench/run_bench.sh <device-id> immersivemap:warm mapbox-standard:warm
 ```
 
-Launch environment: `BENCH_ENGINE` (`immersivemap`, `immersivemap-noshadows`, `immersivemap-lean` for shadows and atmosphere off, `mapbox-standard`, `mapbox-standard-msaa4`, `mapbox-streets`), `BENCH_CACHE` (`warm`, or `cold` to clear the disk caches before the map is made), `BENCH_FPS` (default 120), `BENCH_EXIT` (`0` keeps the app open after the run). Results land in `Tools/PerformanceBench/Output/` (gitignored) as one log and one JSON per run, and `summarize.py` turns a folder of them into a comparison table (`BENCH_OUT` points the script at another folder).
+Launch environment: `BENCH_ENGINE` picks the variant within its app (`immersivemap`, `immersivemap-noshadows`, `immersivemap-lean` for shadows and atmosphere off in `ImmersiveMapBench`; `mapbox-standard`, `mapbox-standard-msaa4`, `mapbox-streets` in `MapboxBench`), `BENCH_CACHE` (`warm`, or `cold` to clear the disk caches before the map is made), `BENCH_FPS` (default 120), `BENCH_EXIT` (`0` keeps the app open after the run). Results land in `Tools/PerformanceBench/Output/` (gitignored) as one log and one JSON per run, and `summarize.py` turns a folder of them into a comparison table (`BENCH_OUT` points the script at another folder).
 
 The device must be unlocked when a run starts; the app disables auto-lock for its duration. Keep the phone off the charger cable's heat and give it the cooldown the script inserts between runs, and read the thermal state before trusting a number.
 
@@ -46,7 +48,7 @@ GPU time per frame is not visible from inside the process, and the host display 
 ```sh
 xcrun xctrace record --device <device-id> --template 'Metal System Trace' --time-limit 45s \
   --output Traces/bench/im.trace --env BENCH_ENGINE=immersivemap --env BENCH_CACHE=warm --env BENCH_EXIT=0 \
-  --launch -- com.artembobkin.ImmersiveMapPerformanceBench
+  --launch -- com.artembobkin.ImmersiveMapBench
 for t in gpu:metal-gpu-intervals dsps:displayed-surfaces-per-second enc:metal-application-encoders-list; do
   xcrun xctrace export --input Traces/bench/im.trace \
     --xpath "/trace-toc/run[@number=\"1\"]/data/table[@schema=\"${t##*:}\"]" --output Traces/bench/im-${t%%:*}.xml

@@ -1,25 +1,28 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import CoreLocation
 import ImmersiveMap
-import MapboxMaps
 import SwiftUI
 import UIKit
 
-/// What the harness needs from a map engine: a view to put on screen, an
-/// instant camera set, an animated flight, and a per-frame callback.
+/// The variants this binary carries. ImmersiveMap needs no SDK-level setup
+/// before the baseline: credentials travel as request headers, and a cold
+/// cache is the engine's own `clearDiskCachesOnLaunch`.
 @MainActor
-protocol BenchEngine: AnyObject {
-    var name: String { get }
-    var version: String { get }
-    var view: UIView { get }
-    var onFrame: (() -> Void)? { get set }
-    func jump(to pose: BenchPose)
-    func fly(to pose: BenchPose, duration: TimeInterval, completion: @escaping () -> Void)
-}
+final class ImmersiveMapEngineCatalog: BenchEngineCatalog {
+    let defaultEngineName = "immersivemap"
 
-// MARK: - ImmersiveMap
+    func prepare(engineName: String, coldCache: Bool) async -> Bool {
+        true
+    }
+
+    func makeEngine(named name: String, targetFPS: Int, coldCache: Bool) -> BenchEngine? {
+        guard let variant = ImmersiveMapBenchEngine.Variant(rawValue: name) else {
+            return nil
+        }
+        return ImmersiveMapBenchEngine(targetFPS: targetFPS, coldCache: coldCache, variant: variant)
+    }
+}
 
 @MainActor
 final class ImmersiveMapBenchEngine: BenchEngine {
@@ -111,60 +114,5 @@ final class ImmersiveMapBenchEngine: BenchEngine {
             directory = directory.deletingLastPathComponent()
         }
         return "checkout"
-    }
-}
-
-// MARK: - Mapbox
-
-@MainActor
-final class MapboxBenchEngine: BenchEngine {
-    let name: String
-    let version: String
-    let view: UIView
-    var onFrame: (() -> Void)?
-
-    private let mapView: MapView
-    private var tokens: [AnyCancelable] = []
-
-    init(targetFPS: Int, style: StyleURI, styleName: String, sampleCount: Int = 1) {
-        name = "mapbox-\(styleName)" + (sampleCount > 1 ? "-msaa\(sampleCount)" : "")
-        version = MapboxBenchEngine.sdkVersion()
-        let camera = CameraOptions(center: CLLocationCoordinate2D(latitude: BenchScenario.establish.latitude,
-                                                                  longitude: BenchScenario.establish.longitude),
-                                   zoom: BenchScenario.establish.zoom,
-                                   bearing: 0,
-                                   pitch: 0)
-        let options = MapInitOptions(cameraOptions: camera, styleURI: style, antialiasingSampleCount: sampleCount)
-        mapView = MapView(frame: .zero, mapInitOptions: options)
-        mapView.preferredFrameRateRange = CAFrameRateRange(minimum: Float(targetFPS),
-                                                           maximum: Float(targetFPS),
-                                                           preferred: Float(targetFPS))
-        view = mapView
-        tokens.append(mapView.mapboxMap.onRenderFrameFinished.observe { [weak self] _ in
-            self?.onFrame?()
-        })
-    }
-
-    func jump(to pose: BenchPose) {
-        mapView.mapboxMap.setCamera(to: Self.options(pose))
-    }
-
-    func fly(to pose: BenchPose, duration: TimeInterval, completion: @escaping () -> Void) {
-        _ = mapView.camera.fly(to: Self.options(pose), duration: duration) { _ in
-            completion()
-        }
-    }
-
-    private static func options(_ pose: BenchPose) -> CameraOptions {
-        CameraOptions(center: CLLocationCoordinate2D(latitude: pose.latitude, longitude: pose.longitude),
-                      zoom: pose.zoom,
-                      bearing: pose.bearing,
-                      pitch: pose.pitch)
-    }
-
-    /// MapboxMaps is a source package linked into the app, so its bundle is
-    /// the app's; the version is the exact requirement the project pins.
-    private static func sdkVersion() -> String {
-        "11.26.0"
     }
 }

@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "B5000000000000000000000A"
-               BuildableName = "ImmersiveMapPerformanceBench.app"
-               BlueprintName = "ImmersiveMapPerformanceBench"
-               ReferencedContainer = "container:ImmersiveMapPerformanceBench.xcodeproj">
+               BlueprintIdentifier = "B6000000000000000000000A"
+               BuildableName = "ImmersiveMapBench.app"
+               BlueprintName = "ImmersiveMapBench"
+               ReferencedContainer = "container:ImmersiveMapBench.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,20 +45,15 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "B5000000000000000000000A"
-            BuildableName = "ImmersiveMapPerformanceBench.app"
-            BlueprintName = "ImmersiveMapPerformanceBench"
-            ReferencedContainer = "container:ImmersiveMapPerformanceBench.xcodeproj">
+            BlueprintIdentifier = "B6000000000000000000000A"
+            BuildableName = "ImmersiveMapBench.app"
+            BlueprintName = "ImmersiveMapBench"
+            ReferencedContainer = "container:ImmersiveMapBench.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "IMMERSIVEMAP_API_KEY"
-            value = ""
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "MAPBOX_ACCESS_TOKEN"
             value = ""
             isEnabled = "YES">
          </EnvironmentVariable>
@@ -84,10 +79,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "B5000000000000000000000A"
-            BuildableName = "ImmersiveMapPerformanceBench.app"
-            BlueprintName = "ImmersiveMapPerformanceBench"
-            ReferencedContainer = "container:ImmersiveMapPerformanceBench.xcodeproj">
+            BlueprintIdentifier = "B6000000000000000000000A"
+            BuildableName = "ImmersiveMapBench.app"
+            BlueprintName = "ImmersiveMapBench"
+            ReferencedContainer = "container:ImmersiveMapBench.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

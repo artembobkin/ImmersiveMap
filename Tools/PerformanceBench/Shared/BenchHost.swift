@@ -1,25 +1,24 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import ImmersiveMap
-import MapboxMaps
 import SwiftUI
 import UIKit
 
-/// The benchmark host. One launch measures one engine in one cache state and
-/// exits; the driver script launches it once per combination and collects
-/// the JSON it prints. Launch environment:
+/// The shared scene of both bench apps: a full-screen host around the
+/// measuring controller. One launch measures one engine variant in one cache
+/// state and exits; the driver script launches the app once per combination
+/// and collects the JSON it prints. Launch environment:
 ///
-/// - `BENCH_ENGINE`: `immersivemap` (default), `immersivemap-noshadows`, `immersivemap-lean`,
-///   `mapbox-standard`, `mapbox-standard-msaa4` (4x MSAA, matching ImmersiveMap's world pass), `mapbox-streets`
+/// - `BENCH_ENGINE`: a variant from the app's catalog (see each app's doc)
 /// - `BENCH_CACHE`: `warm` (default) or `cold` (disk caches cleared before the map is made)
 /// - `BENCH_FPS`: display rate to request, default 120
 /// - `BENCH_EXIT`: `1` (default) to quit when the run is written
-@main
-struct ImmersiveMapPerformanceBenchApp: App {
+struct BenchRootScene: Scene {
+    let catalog: BenchEngineCatalog
+
     var body: some Scene {
         WindowGroup {
-            BenchRootView()
+            BenchRootView(catalog: catalog)
                 .ignoresSafeArea()
                 .statusBarHidden()
         }
@@ -27,8 +26,10 @@ struct ImmersiveMapPerformanceBenchApp: App {
 }
 
 private struct BenchRootView: UIViewControllerRepresentable {
+    let catalog: BenchEngineCatalog
+
     func makeUIViewController(context: Context) -> BenchViewController {
-        BenchViewController()
+        BenchViewController(catalog: catalog)
     }
 
     func updateUIViewController(_ uiViewController: BenchViewController, context: Context) {}
@@ -36,11 +37,21 @@ private struct BenchRootView: UIViewControllerRepresentable {
 
 @MainActor
 final class BenchViewController: UIViewController {
+    private let catalog: BenchEngineCatalog
     private var engine: BenchEngine?
     private var metrics: BenchMetrics?
     private var windows: [BenchWindow] = []
     private var memoryAtStart: Double = 0
     private var started = false
+
+    init(catalog: BenchEngineCatalog) {
+        self.catalog = catalog
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("BenchViewController is code-only")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -58,7 +69,7 @@ final class BenchViewController: UIViewController {
 
     private func run() async {
         let environment = ProcessInfo.processInfo.environment
-        let engineName = environment["BENCH_ENGINE"] ?? "immersivemap"
+        let engineName = environment["BENCH_ENGINE"] ?? catalog.defaultEngineName
         let cacheState = environment["BENCH_CACHE"] ?? "warm"
         let targetFPS = Int(environment["BENCH_FPS"] ?? "") ?? 120
         let coldCache = cacheState == "cold"
@@ -67,34 +78,19 @@ final class BenchViewController: UIViewController {
         let startedAt = ISO8601DateFormatter().string(from: Date())
         let thermalAtStart = Self.thermalName(ProcessInfo.processInfo.thermalState)
 
-        if engineName.hasPrefix("mapbox") {
-            guard let token = BenchSecrets.mapboxAccessToken() else {
-                print("BENCH_ERROR no MAPBOX_ACCESS_TOKEN in the environment or LocalSecrets.plist")
-                return
-            }
-            MapboxOptions.accessToken = token
-            if coldCache {
-                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                    MapboxMap.clearData { _ in continuation.resume() }
-                }
-            }
+        guard await catalog.prepare(engineName: engineName, coldCache: coldCache) else {
+            return
         }
 
         // The measured baseline: the process with the window up and no map.
         try? await Task.sleep(for: .seconds(1))
         let memoryBaseline = BenchMetrics.physicalFootprintMB()
 
-        let engine: BenchEngine
-        switch engineName {
-        case "mapbox-standard":
-            engine = MapboxBenchEngine(targetFPS: targetFPS, style: .standard, styleName: "standard")
-        case "mapbox-standard-msaa4":
-            engine = MapboxBenchEngine(targetFPS: targetFPS, style: .standard, styleName: "standard", sampleCount: 4)
-        case "mapbox-streets":
-            engine = MapboxBenchEngine(targetFPS: targetFPS, style: .streets, styleName: "streets")
-        default:
-            let variant = ImmersiveMapBenchEngine.Variant(rawValue: engineName) ?? .standard
-            engine = ImmersiveMapBenchEngine(targetFPS: targetFPS, coldCache: coldCache, variant: variant)
+        guard let engine = catalog.makeEngine(named: engineName,
+                                              targetFPS: targetFPS,
+                                              coldCache: coldCache) else {
+            print("BENCH_ERROR engine \(engineName) does not exist in this binary")
+            return
         }
         self.engine = engine
 

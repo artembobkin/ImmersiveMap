@@ -7,14 +7,15 @@
 #
 #   Tools/PerformanceBench/run_bench.sh <device-id> [engine:cache ...]
 #
-# The app must already be built and installed (see README.md). Without an
+# The engine name picks the app: immersivemap* runs ImmersiveMapBench and
+# mapbox* runs MapboxBench, so both apps must already be built and installed
+# for the default matrix (see README.md). Without an
 # explicit list the default matrix runs, interleaving the engines so thermal
 # drift hits both alike. The device must be unlocked when a run starts.
 set -eu
 
 DEVICE="${1:?device id (xcrun xctrace list devices)}"
 shift
-BUNDLE_ID="com.artembobkin.ImmersiveMapPerformanceBench"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${BENCH_OUT:-$HERE/Output}"
 mkdir -p "$OUT"
@@ -29,6 +30,12 @@ index=0
 for combo in "$@"; do
   engine="${combo%%:*}"
   cache="${combo##*:}"
+  # One app per SDK, so a run's memory belongs to its engine alone.
+  case "$engine" in
+    immersivemap*) BUNDLE_ID="com.artembobkin.ImmersiveMapBench" ;;
+    mapbox*) BUNDLE_ID="com.artembobkin.MapboxBench" ;;
+    *) echo "unknown engine $engine"; exit 1 ;;
+  esac
   index=$((index + 1))
   stamp="$(date +%H%M%S)"
   log="$OUT/run-$index-$engine-$cache-$stamp.log"
