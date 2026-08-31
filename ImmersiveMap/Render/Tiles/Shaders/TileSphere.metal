@@ -42,6 +42,15 @@ constant bool kTileSphereLitInline [[function_constant(0)]];
 /// itself. False while the sphere unfurls.
 constant bool kTileSpherePureSphere [[function_constant(1)]];
 
+/// The ground bucket can draw as two class passes on the pure sphere: a
+/// split pipeline keeps exactly one class and clips the other's primitives
+/// whole, which isolates the fills from the line ribbons so the globe
+/// performance work can toggle either on its own
+/// (GlobeVectorSurfaceDrawer). The morph and the flat surface keep the
+/// single combined pass.
+constant bool kTileSphereSplitPass [[function_constant(2)]];
+constant bool kTileSphereLinesClass [[function_constant(3)]];
+
 struct SphereVertexOut {
     float4 position [[position]];
     // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the sphere
@@ -122,6 +131,17 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
         out.transition = globe.transition;
     }
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
+    // A split pipeline keeps only its own class. The class is a property of
+    // the geometry, not the style (a fill shares its style with its
+    // decoration, so the style's edge threshold marks both): extruded line
+    // ribbons carry a non-zero per-vertex side distance, fills carry zero,
+    // and no triangle mixes the two.
+    if (kTileSphereSplitPass) {
+        bool isLine = vertexIn.lineDistance != 0;
+        if (isLine != kTileSphereLinesClass) {
+            out.clipDistance[4] = -1.0;
+        }
+    }
     out.color = style.color;
     out.lowZoomFadeMask = style.lowZoomFadeMask;
     out.lineDistance = style.lineDistance;

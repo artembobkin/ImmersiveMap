@@ -28,9 +28,23 @@ enum GlobeVectorSurfaceDrawer {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
-        pipeline.selectSpherePipeline(renderEncoder: renderEncoder,
-                                      litInline: litInline,
-                                      pureSphere: pureSphere)
+        // On the pure sphere the ground draws as two isolated class passes,
+        // fills first, line ribbons second, so the globe performance work
+        // can toggle either class on its own; the morph and the flat
+        // surface keep the single combined draw. The picture matches the
+        // combined draw: overview content stacks its ribbons above the
+        // fills anyway.
+        let splitsClassPasses = pureSphere
+        let drawsLineRibbons = true
+        if splitsClassPasses {
+            pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder,
+                                               litInline: litInline,
+                                               linesClass: false)
+        } else {
+            pipeline.selectSpherePipeline(renderEncoder: renderEncoder,
+                                          litInline: litInline,
+                                          pureSphere: pureSphere)
+        }
         // Every tile triangle is counter-clockwise in render space (the
         // parser's contract, ParsedPolygon.firstClockwiseTriangle) and the
         // sphere projection does not mirror, so the near side of the planet
@@ -121,6 +135,45 @@ enum GlobeVectorSurfaceDrawer {
                                                 indexType: buffers.indexType,
                                                 indexBuffer: indices.buffer,
                                                 indexBufferOffset: indices.offset)
+        }
+        // The second pass replays the placements through the ribbons-only
+        // pipeline.
+        if splitsClassPasses, drawsLineRibbons {
+            pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder,
+                                               litInline: litInline,
+                                               linesClass: true)
+            for placeTile in placeTilesContext.tilePlacements {
+                let metalTile = placeTile.metalTile
+                let buffers = metalTile.tileBuffers.ground
+                guard buffers.indicesCount > 0,
+                      let indices = buffers.indices,
+                      let vertices = buffers.vertices,
+                      let styles = buffers.styles,
+                      let overviewStyleMask = buffers.overviewStyleMask,
+                      let lineStyles = buffers.lineStyles else { continue }
+                let tile = metalTile.tile
+                renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
+                renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
+                renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
+                renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
+                var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeTile.placeIn.tile)
+                renderEncoder.setVertexBytes(&localClipBounds, length: MemoryLayout<SIMD4<Float>>.stride, index: 7)
+                var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
+                renderEncoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
+                let sourceTileWorldSize = Float(renderMapSize / Double(1 << tile.z))
+                var lineDashUniform = LineDashUniform(
+                    unitsPerPoint: GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: tile.z)
+                        * pixelsPerPoint
+                        * LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: sourceTileWorldSize,
+                                                             drawableHeightPx: drawableHeightPx)
+                )
+                renderEncoder.setFragmentBytes(&lineDashUniform, length: MemoryLayout<LineDashUniform>.stride, index: 4)
+                renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                    indexCount: indices.count,
+                                                    indexType: buffers.indexType,
+                                                    indexBuffer: indices.buffer,
+                                                    indexBufferOffset: indices.offset)
+            }
         }
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
