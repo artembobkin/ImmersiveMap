@@ -580,7 +580,12 @@ final class PreparedTileDiskCaching {
     // 80: the entry carries the ground index buffer's per-style runs
     // (GroundStyleRun), which the sphere drawer layers the ground by; a
     // v79 entry has no run table to draw from.
-    static let preparedFormatVersion: UInt32 = 80
+    // 81: the ground bucket is two class segments, polygon fills first and
+    // line ribbons second (each by ascending style), the run table gained a
+    // class flag bit, and the sphere subdivision grid returned to 64x64
+    // (step 64 to 1024 units by zoom); a v80 entry interleaves the classes
+    // per style and its runs carry no class flag.
+    static let preparedFormatVersion: UInt32 = 81
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

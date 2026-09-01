@@ -9,13 +9,13 @@ import XCTest
 /// identically so no crack opens between neighbours.
 final class GroundGeometrySubdividerTests: XCTestCase {
     func testStepFollowsTheTileZoom() {
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 0), 128)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 1), 128)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 2), 256)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 3), 256)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 4), 512)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 6), 1024)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 9), 2048)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 0), 64)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 1), 64)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 2), 128)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 3), 128)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 4), 256)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 6), 512)
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 9), 1024)
         XCTAssertNil(GroundGeometrySubdivider.step(forTileZoom: 10),
                      "From z10 the surface has unfurled: nothing is drawn on the sphere")
     }

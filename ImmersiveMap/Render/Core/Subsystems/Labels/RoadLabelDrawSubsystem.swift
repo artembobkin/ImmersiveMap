@@ -53,10 +53,11 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        // Labels rasterize at the far plane (see RoadLabelTextVertex.metal),
-        // so lessEqual passes on the cleared overlay depth and fails wherever
-        // the scene model occlusion prepass wrote closer depth.
-        encoder.setDepthStencilState(labelDepthState)
+        // Same depth choice as BaseLabelDrawSubsystem: the occlusion prepass
+        // depth exists only in the separate overlay pass (models on screen);
+        // merged into the world pass the labels draw with depth disabled.
+        let hasOcclusionPrepass = frameContext.sharedState.sceneModelState.hasDrawnModels
+        encoder.setDepthStencilState(hasOcclusionPrepass ? labelDepthState : depthDisabledState)
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            screenScale: frameContext.screenScale,

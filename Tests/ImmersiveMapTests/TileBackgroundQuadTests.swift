@@ -7,7 +7,7 @@ import XCTest
 /// The synthetic background every tile carries under its features is one
 /// quad; the density the sphere needs comes from the ground subdivider, so
 /// the background is exactly as fine as the rest of the ground at that
-/// zoom and no finer: the 32x32 cells of z0, one quad from z10 where the
+/// zoom and no finer: the 64x64 cells of z0, one quad from z10 where the
 /// surface is flat.
 final class TileBackgroundQuadTests: XCTestCase {
     private func parseBackgroundOnly(_ tile: Tile) throws -> TileMvtParser.DrawingPolygonBytes {
@@ -24,7 +24,7 @@ final class TileBackgroundQuadTests: XCTestCase {
 
     func testTheBackgroundFollowsTheSubdividerGridByZoom() throws {
         let cellsPerSideByZoom: [(zoom: Int, cellsPerSide: Int)] = [
-            (0, 32), (1, 32), (2, 16), (3, 16), (4, 8), (5, 8), (6, 4), (7, 4), (8, 2), (9, 2), (10, 1), (12, 1), (16, 1),
+            (0, 64), (1, 64), (2, 32), (3, 32), (4, 16), (5, 16), (6, 8), (7, 8), (8, 4), (9, 4), (10, 1), (12, 1), (16, 1),
         ]
         for entry in cellsPerSideByZoom {
             let drawing = try parseBackgroundOnly(Tile(x: 0, y: 0, z: entry.zoom))

@@ -16,12 +16,18 @@ struct PreparedTileCPU: Sendable {
         /// Per-style line parameters (point-locked width, point dash pattern,
         /// edge threshold), lockstep with `styles`. See `TileLineStyle`.
         let lineStyles: [TileLineStyle]
+        /// The class boundary of the ground bucket: indices below it are
+        /// polygon fills, indices from it on are line ribbons, each segment
+        /// in ascending style order (`unifyPolygonLayer(splitLinesClass:)`).
+        /// Layers that are not class-split keep the whole range as fills.
+        let fillsIndexCount: Int
 
         init(vertices: [TileVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
              overviewStyleMasks: [Float],
-             lineStyles: [TileLineStyle]? = nil) {
+             lineStyles: [TileLineStyle]? = nil,
+             fillsIndexCount: Int? = nil) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
@@ -29,6 +35,7 @@ struct PreparedTileCPU: Sendable {
             // nil defaults to plain polygons while keeping the array in
             // lockstep with `styles`: the vertex shader indexes it per style.
             self.lineStyles = lineStyles ?? Array(repeating: .polygon, count: styles.count)
+            self.fillsIndexCount = fillsIndexCount ?? indices.count
         }
     }
 

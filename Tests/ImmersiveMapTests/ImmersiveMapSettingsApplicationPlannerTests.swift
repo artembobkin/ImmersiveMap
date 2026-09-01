@@ -31,9 +31,10 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
     }
 
     func testPostProcessingFXAAChangeIsLiveApplied() {
+        // FXAA is on by default, so the observed change is turning it off.
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings
-        newSettings.postProcessing.fxaaEnabled = true
+        newSettings.postProcessing.fxaaEnabled = false
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 

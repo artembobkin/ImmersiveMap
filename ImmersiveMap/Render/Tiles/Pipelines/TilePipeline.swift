@@ -19,20 +19,17 @@ class TilePipeline {
     /// attachment with an empty write mask so the pipeline stays
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
-    /// Sphere surface only: the resting-sphere combined pass
-    /// (tileSpherePureVertexShader, both classes), the fallback when the
-    /// split is not used. The morph keeps `pipelineState`
-    /// (tileSphereMorphVertexShader), the only sphere variant with the
-    /// unroll and the fog.
-    let sphereUnlitPipelineState: MTLRenderPipelineState?
-    /// Sphere surface only: resting-sphere split variants drawing one
-    /// ground class each (fills or line ribbons), indexed by linesClass.
-    /// The scaffold the globe performance work isolates the classes with;
-    /// see kTileSphereSplitPass in TileSphere.metal.
-    let sphereSplitStates: [Bool: MTLRenderPipelineState]
+    /// Sphere surface only: the resting-sphere fills class, blended (the
+    /// translucent fill layers). Carries no line fields. The morph keeps
+    /// `pipelineState` (tileSphereMorphVertexShader), the only sphere
+    /// variant with the unroll and the fog.
+    let sphereFillsPipelineState: MTLRenderPipelineState?
     /// The fills class with blending disabled: what the opaque ground
     /// layers draw with, front-to-back under the depth test.
     let sphereOpaqueFillsPipelineState: MTLRenderPipelineState?
+    /// The resting-sphere ribbons class: the line ribbons of the ground
+    /// bucket through the line-field coverage, blended.
+    let sphereRibbonsPipelineState: MTLRenderPipelineState?
 
     /// - Parameter readsGroundShadowMask: the flat world pass reads the
     ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
@@ -47,10 +44,8 @@ class TilePipeline {
          surface: Surface = .flat) {
         let vertexFunction: MTLFunction?
         let fragmentFunction: MTLFunction?
-        var sphereUnlitFragmentFunction: MTLFunction?
-        var sphereUnlitPureVertexFunction: MTLFunction?
-        var sphereTempSplitVertexFunctions: [Bool: MTLFunction] = [:]
-        var sphereTempSplitFragmentFunctions: [Bool: MTLFunction] = [:]
+        var spherePureVertexFunctions: [Bool: MTLFunction] = [:]
+        var spherePureFragmentFunctions: [Bool: MTLFunction] = [:]
         switch surface {
         case .flat:
             vertexFunction = library.makeFunction(name: "tileVertexShader")
@@ -59,41 +54,25 @@ class TilePipeline {
             constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
             fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
         case .sphere:
-            func sphereConstants(fog: Bool, lineFields: Bool, split: Bool, linesClass: Bool) -> MTLFunctionConstantValues {
+            func sphereFunction(_ name: String, fog: Bool, lineFields: Bool) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
                 var fogValue = fog
                 var lineFieldsValue = lineFields
-                var splitValue = split
-                var linesValue = linesClass
                 values.setConstantValue(&fogValue, type: .bool, index: 0)
                 values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
-                values.setConstantValue(&splitValue, type: .bool, index: 2)
-                values.setConstantValue(&linesValue, type: .bool, index: 3)
-                return values
-            }
-            func sphereFunction(_ name: String, fog: Bool, lineFields: Bool,
-                                split: Bool = false, linesClass: Bool = false) -> MTLFunction {
-                try! library.makeFunction(name: name,
-                                          constantValues: sphereConstants(fog: fog,
-                                                                          lineFields: lineFields,
-                                                                          split: split,
-                                                                          linesClass: linesClass))
+                return try! library.makeFunction(name: name, constantValues: values)
             }
             // The morph: the only sphere variant with the unroll and the fog.
             vertexFunction = sphereFunction("tileSphereMorphVertexShader", fog: true, lineFields: true)
             fragmentFunction = sphereFunction("tileSphereFragmentShader", fog: true, lineFields: true)
-            // The resting sphere, combined classes.
-            sphereUnlitPureVertexFunction = sphereFunction("tileSpherePureVertexShader", fog: false, lineFields: true)
-            sphereUnlitFragmentFunction = sphereFunction("tileSphereFragmentShader", fog: false, lineFields: true)
-            // The split vertex variants, one ground class each; the fills
-            // class carries no line fields at all.
-            sphereTempSplitVertexFunctions = [
-                false: sphereFunction("tileSpherePureVertexShader", fog: false, lineFields: false,
-                                      split: true, linesClass: false),
-                true: sphereFunction("tileSpherePureVertexShader", fog: false, lineFields: true,
-                                     split: true, linesClass: true)
+            // The resting-sphere class variants, keyed by lineFields: the
+            // fills class carries no line fields at all, the ribbons class
+            // carries the analytic line coverage.
+            spherePureVertexFunctions = [
+                false: sphereFunction("tileSpherePureVertexShader", fog: false, lineFields: false),
+                true: sphereFunction("tileSpherePureVertexShader", fog: false, lineFields: true)
             ]
-            sphereTempSplitFragmentFunctions = [
+            spherePureFragmentFunctions = [
                 false: sphereFunction("tileSphereFragmentShader", fog: false, lineFields: false),
                 true: sphereFunction("tileSphereFragmentShader", fog: false, lineFields: true)
             ]
@@ -137,31 +116,26 @@ class TilePipeline {
         
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
-        if let sphereUnlitPureVertexFunction, let sphereUnlitFragmentFunction {
-            pipelineDescriptor.vertexFunction = sphereUnlitPureVertexFunction
-            pipelineDescriptor.fragmentFunction = sphereUnlitFragmentFunction
-            self.sphereUnlitPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            // The split pipeline states, one ground class each; the fills
-            // fragment carries no line fields either.
-            var splitStates: [Bool: MTLRenderPipelineState] = [:]
-            for (lines, vertex) in sphereTempSplitVertexFunctions {
-                pipelineDescriptor.vertexFunction = vertex
-                pipelineDescriptor.fragmentFunction = sphereTempSplitFragmentFunctions[lines]
-                splitStates[lines] = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            }
-            self.sphereSplitStates = splitStates
+        if let fillsVertex = spherePureVertexFunctions[false],
+           let fillsFragment = spherePureFragmentFunctions[false],
+           let ribbonsVertex = spherePureVertexFunctions[true],
+           let ribbonsFragment = spherePureFragmentFunctions[true] {
+            pipelineDescriptor.vertexFunction = fillsVertex
+            pipelineDescriptor.fragmentFunction = fillsFragment
+            self.sphereFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             // The opaque fills variant: same functions, no blending.
-            pipelineDescriptor.vertexFunction = sphereTempSplitVertexFunctions[false]
-            pipelineDescriptor.fragmentFunction = sphereTempSplitFragmentFunctions[false]
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.sphereOpaqueFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+            pipelineDescriptor.vertexFunction = ribbonsVertex
+            pipelineDescriptor.fragmentFunction = ribbonsFragment
+            self.sphereRibbonsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
-            self.sphereUnlitPipelineState = nil
-            self.sphereSplitStates = [:]
+            self.sphereFillsPipelineState = nil
             self.sphereOpaqueFillsPipelineState = nil
+            self.sphereRibbonsPipelineState = nil
         }
 
         if supportsFramebufferFetch, surface == .flat {
@@ -183,35 +157,30 @@ class TilePipeline {
     }
 
     /// The opaque fills variant (blending off) for the layered ground;
-    /// falls back to the blended fills split when absent.
+    /// falls back to the blended fills variant when absent.
     func selectSphereOpaqueFillsPipeline(renderEncoder: MTLRenderCommandEncoder) {
         if let sphereOpaqueFillsPipelineState {
             renderEncoder.setRenderPipelineState(sphereOpaqueFillsPipelineState)
             return
         }
-        selectSphereSplitPipeline(renderEncoder: renderEncoder, linesClass: false)
+        selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: false)
     }
 
-    /// The unlit pure-sphere split variant for one ground class; falls back
-    /// to the regular selection when the variants are absent.
-    func selectSphereSplitPipeline(renderEncoder: MTLRenderCommandEncoder,
+    /// The resting-sphere variant for one ground class; falls back to the
+    /// morph pipeline on a surface that has no variants.
+    func selectSphereClassPipeline(renderEncoder: MTLRenderCommandEncoder,
                                    linesClass: Bool) {
-        if let state = sphereSplitStates[linesClass] {
+        let state = linesClass ? sphereRibbonsPipelineState : sphereFillsPipelineState
+        if let state {
             renderEncoder.setRenderPipelineState(state)
             return
         }
-        selectSpherePipeline(renderEncoder: renderEncoder, pureSphere: true)
+        renderEncoder.setRenderPipelineState(pipelineState)
     }
 
-    /// The sphere variant for the frame: the pure sphere blends unlit under
-    /// the deferred lighting pass, the unfurl lights inline. Falls back to
-    /// the full pipeline on a surface that has no variants.
-    func selectSpherePipeline(renderEncoder: MTLRenderCommandEncoder,
-                              pureSphere: Bool) {
-        if pureSphere, let sphereUnlitPipelineState {
-            renderEncoder.setRenderPipelineState(sphereUnlitPipelineState)
-            return
-        }
+    /// The morph pipeline (the unroll with the fog); the resting sphere
+    /// draws through the class variants instead.
+    func selectSphereMorphPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(pipelineState)
     }
 }

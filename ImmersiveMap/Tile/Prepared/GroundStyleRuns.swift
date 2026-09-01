@@ -3,15 +3,18 @@
 
 import Foundation
 
-/// One contiguous run of ground indices belonging to one style, in paint
-/// order (the parser emits the ground bucket grouped by ascending style, so
-/// run order is bottom-to-top layer order). POD with an explicit layout: the
-/// disk codec stores the array byte-wise.
+/// One contiguous run of ground indices belonging to one style and one
+/// geometry class, in paint order. The parser emits the ground bucket as two
+/// class segments, polygon fills first and line ribbons second, each grouped
+/// by ascending style, so run order is bottom-to-top layer order. POD with an
+/// explicit layout: the disk codec stores the array byte-wise.
 ///
-/// The runs are what lets the sphere drawer draw the ground as layers
-/// instead of one call: the opaque layers front-to-back under a depth test,
-/// so a pixel is shaded once by its topmost opaque layer, and the
-/// translucent ones back-to-front blending over the result.
+/// The runs are what lets the sphere drawer draw the ground as class passes:
+/// the opaque fill layers front-to-back under a depth test, so a pixel is
+/// shaded once by its topmost opaque layer, the translucent fills
+/// back-to-front blending over the result, and the ribbons last through the
+/// line-field pipeline, without either class pass reading the other's
+/// vertices.
 struct GroundStyleRun: Equatable, Sendable {
     /// First index element of the run and its length, in index elements.
     var indexStart: UInt32
@@ -21,41 +24,68 @@ struct GroundStyleRun: Equatable, Sendable {
     /// this frame.
     var fadeMask: Float
     /// Bit 0: both palette colours of the style carry alpha 1, so the run is
-    /// opaque whenever its fade is 1.
+    /// opaque whenever its fade is 1. Bit 1: the run is line ribbons and
+    /// draws through the line-field pipeline.
     var flags: UInt32
 
     static let alphaOpaqueFlag: UInt32 = 1
+    static let linesClassFlag: UInt32 = 2
 
     var isAlphaOpaque: Bool {
         flags & Self.alphaOpaqueFlag != 0
     }
+
+    var isLinesClass: Bool {
+        flags & Self.linesClassFlag != 0
+    }
 }
 
 enum GroundStyleRunScanner {
-    /// Splits the ground index buffer into per-style runs. The parser's
-    /// contract is one contiguous run per style in ascending style order
-    /// (`unifyPolygonLayer` appends per sorted style key); a violation falls
-    /// back to a single translucent run covering everything, which draws
-    /// exactly like the unsplit path.
+    /// Splits the ground index buffer into per-style, per-class runs. The
+    /// parser's contract is two class segments meeting at
+    /// `ground.fillsIndexCount`, each one contiguous run per style in
+    /// ascending style order (`unifyPolygonLayer(splitLinesClass:)`); a
+    /// violation falls back to a single ribbons-class run covering
+    /// everything, which draws exactly like the unsplit combined path.
     static func scan(ground: PreparedTileCPU.GeometryLayer) -> [GroundStyleRun] {
+        guard ground.indices.isEmpty == false else { return [] }
+        let boundary = min(max(ground.fillsIndexCount, 0), ground.indices.count)
+        guard boundary % 3 == 0 else { return fallback(ground: ground) }
+
+        guard let fills = scanSegment(ground: ground,
+                                      start: 0,
+                                      end: boundary,
+                                      classFlags: 0),
+              let ribbons = scanSegment(ground: ground,
+                                        start: boundary,
+                                        end: ground.indices.count,
+                                        classFlags: GroundStyleRun.linesClassFlag) else {
+            return fallback(ground: ground)
+        }
+        return fills + ribbons
+    }
+
+    private static func scanSegment(ground: PreparedTileCPU.GeometryLayer,
+                                    start: Int,
+                                    end: Int,
+                                    classFlags: UInt32) -> [GroundStyleRun]? {
         let indices = ground.indices
         let vertices = ground.vertices
-        guard indices.isEmpty == false else { return [] }
-
         var runs: [GroundStyleRun] = []
-        var runStart = 0
+        var runStart = start
         var runStyle = -1
-        var triangleStart = 0
-        while triangleStart + 2 < indices.count {
+        var triangleStart = start
+        while triangleStart + 2 < end {
             let vertexIndex = Int(indices[triangleStart])
-            guard vertexIndex < vertices.count else { return fallback(ground: ground) }
+            guard vertexIndex < vertices.count else { return nil }
             let style = Int(vertices[vertexIndex].styleIndex)
             if style != runStyle {
-                guard style > runStyle else { return fallback(ground: ground) }
+                guard style > runStyle else { return nil }
                 if runStyle >= 0 {
                     runs.append(makeRun(styleIndex: runStyle,
                                         start: runStart,
                                         count: triangleStart - runStart,
+                                        classFlags: classFlags,
                                         ground: ground))
                 }
                 runStyle = style
@@ -66,15 +96,17 @@ enum GroundStyleRunScanner {
         if runStyle >= 0 {
             runs.append(makeRun(styleIndex: runStyle,
                                 start: runStart,
-                                count: indices.count - runStart,
+                                count: end - runStart,
+                                classFlags: classFlags,
                                 ground: ground))
         }
         return runs
     }
 
     private static func makeRun(styleIndex: Int, start: Int, count: Int,
+                                classFlags: UInt32,
                                 ground: PreparedTileCPU.GeometryLayer) -> GroundStyleRun {
-        var flags: UInt32 = 0
+        var flags: UInt32 = classFlags
         if styleIndex < ground.styles.count {
             let style = ground.styles[styleIndex]
             if style.color.w >= 1.0, style.streetColor.w >= 1.0 {
@@ -90,10 +122,13 @@ enum GroundStyleRunScanner {
     }
 
     private static func fallback(ground: PreparedTileCPU.GeometryLayer) -> [GroundStyleRun] {
-        assertionFailure("Ground indices are not grouped by ascending style")
+        assertionFailure("Ground indices are not two class segments grouped by ascending style")
+        // The ribbons class draws through the line-field pipeline, under
+        // which fills paint with coverage 1: one combined translucent run
+        // paints exactly like the unsplit path.
         return [GroundStyleRun(indexStart: 0,
                                indexCount: UInt32(ground.indices.count),
                                fadeMask: 0,
-                               flags: 0)]
+                               flags: GroundStyleRun.linesClassFlag)]
     }
 }

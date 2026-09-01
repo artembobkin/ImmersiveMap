@@ -27,7 +27,8 @@ final class TilePreparedDataBuilder {
                                                   indices: parsedTile.drawingPolygon.indices,
                                                   styles: parsedTile.styles,
                                                   overviewStyleMasks: parsedTile.overviewStyleMasks,
-                                                  lineStyles: parsedTile.lineStyles),
+                                                  lineStyles: parsedTile.lineStyles,
+                                                  fillsIndexCount: parsedTile.drawingPolygon.fillsIndexCount),
             roads: parsedTile.drawingRoadPhases.map { structureBucket in
                 structureBucket.map { phase in
                     PreparedTileCPU.GeometryLayer(vertices: phase.drawing.vertices,

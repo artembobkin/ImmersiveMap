@@ -55,6 +55,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         let presented = presentationStateStore.presentedEntries(at: frameContext.time)
         frameContext.sharedState.sceneModelState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
         frameContext.sharedState.sceneModelState.hasShadowCasters = false
+        frameContext.sharedState.sceneModelState.hasDrawnModels = false
         // Cleared up front so every early return below leaves an empty
         // snapshot: a model that stops being drawn must stop being tappable.
         frameContext.sharedState.sceneModelState.selectionSnapshot = .empty
@@ -125,6 +126,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         drawItems = items
         shadowCasterItems = shadowItems
         frameContext.sharedState.sceneModelState.hasShadowCasters = shadowItems.isEmpty == false
+        frameContext.sharedState.sceneModelState.hasDrawnModels = items.isEmpty == false
         frameContext.sharedState.sceneModelState.selectionSnapshot = SceneModelSelectionSnapshot(
             frameIndex: frameContext.frameIndex,
             drawSize: frameContext.drawSize,

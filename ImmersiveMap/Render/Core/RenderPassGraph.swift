@@ -332,18 +332,26 @@ final class RenderPassGraph {
             renderSampleCount: attachments.sampleCount
         )
 
+        // Without the scene-model occlusion prepass the overlay layers need
+        // no depth of their own: they fold into the end of the world pass
+        // (the labels then draw with depth disabled, the same bit read by
+        // the label subsystems via `sceneModelState.hasDrawnModels`), which
+        // drops a whole drawable load/store round trip and puts the labels
+        // under the post-processing antialiasing. With models on screen the
+        // overlay keeps its own pass and its own cleared depth.
+        let mergesOverlayIntoWorld = overlayLayers.contains(.sceneModelOcclusion) == false
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
                                                                                 depthTexture: depthTexture,
                                                                                 outputPlan: outputPlan,
                                                                                 includesBuildingImageAttachment: usesInPassBuildingImage),
-                                    layers: worldLayers))
+                                    layers: mergesOverlayIntoWorld ? worldLayers + overlayLayers : worldLayers))
         if outputPlan.includesPostProcessingPass {
             nodes.append(RenderPassNode(name: .postProcessing,
                                         descriptorProvider: PostProcessingDescriptorProvider(),
                                         layers: [.postProcessing]))
         }
-        if overlayLayers.isEmpty == false {
+        if mergesOverlayIntoWorld == false, overlayLayers.isEmpty == false {
             nodes.append(RenderPassNode(name: .overlay,
                                         descriptorProvider: OverlayDescriptorProvider(),
                                         layers: overlayLayers))

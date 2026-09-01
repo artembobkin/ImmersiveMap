@@ -8,17 +8,20 @@ import simd
 /// layer (below tile z8 the whole drawable content of a tile lives there)
 /// through the sphere tile pipeline. Bindings mirror TileSphere.metal.
 ///
-/// On the resting sphere the ground draws as layers, not as one call. The
-/// opaque layers (a style whose palette alphas are 1 and whose zoom fade is
-/// 1 this frame) draw first, top layer first, with blending off and a depth
-/// write: each layer's z is its rank in a narrow band at the far plane, so
-/// the depth test rejects every fragment a higher opaque layer already
-/// painted and a pixel is shaded exactly once by its topmost opaque layer.
-/// The translucent layers follow bottom-to-top with the same rank z, tested
-/// without writing: an opaque layer above them still hides them, everything
-/// else blends as before. Placements never contend for a pixel (each is
-/// clipped to its slot), so the rank only has to be consistent within one
-/// tile. The morph keeps the single blended draw.
+/// On the resting sphere the ground draws as class layers, not as one call.
+/// The opaque fill layers (a style whose palette alphas are 1 and whose zoom
+/// fade is 1 this frame) draw first, top layer first, with blending off and
+/// a depth write: each layer's z is its rank in a narrow band at the far
+/// plane, so the depth test rejects every fragment a higher opaque layer
+/// already painted and a pixel is shaded exactly once by its topmost opaque
+/// layer. The translucent fill layers follow bottom-to-top with the same
+/// rank z, tested without writing: an opaque layer above them still hides
+/// them, everything else blends as before. The line ribbons draw last
+/// through the line-field pipeline, above every fill; the classes are
+/// separate index segments baked by the parser, so no class pass reads the
+/// other's vertices. Placements never contend for a pixel (each is clipped
+/// to its slot), so the rank only has to be consistent within one tile. The
+/// morph keeps the single blended draw.
 enum GlobeVectorSurfaceDrawer {
     /// Rank z band at the far plane: layer `rank` draws at
     /// `1 - (rank + 1) * step` in NDC, the top layer nearest. Far enough
@@ -44,12 +47,6 @@ enum GlobeVectorSurfaceDrawer {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
-        // Off while the globe performance work concentrates on the polygon
-        // fills: the ribbons class (boundaries and overview strokes) is not
-        // drawn on the resting sphere at all. The morph keeps the combined
-        // pass, ribbons included.
-        let drawsLineRibbons = false
-
         // Every tile triangle is counter-clockwise in render space (the
         // parser's contract, ParsedPolygon.firstClockwiseTriangle) and the
         // sphere projection does not mirror, so the near side of the planet
@@ -92,7 +89,7 @@ enum GlobeVectorSurfaceDrawer {
         renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
 
         if pureSphere {
-            // The opaque layers, top first, depth-written and unblended.
+            // The opaque fill layers, top first, depth-written and unblended.
             renderEncoder.setDepthStencilState(opaqueDepthState)
             pipeline.selectSphereOpaqueFillsPipeline(renderEncoder: renderEncoder)
             forEachPlacement(renderEncoder: renderEncoder,
@@ -104,13 +101,13 @@ enum GlobeVectorSurfaceDrawer {
                          buffers: buffers,
                          indices: indices,
                          reversed: true) { run in
-                    isOpaque(run, overviewFade: overviewFadeUniform)
+                    run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
                 }
             }
-            // The translucent layers, bottom to top, blended, tested but
-            // never written: an opaque layer above still hides them.
+            // The translucent fill layers, bottom to top, blended, tested
+            // but never written: an opaque layer above still hides them.
             renderEncoder.setDepthStencilState(translucentDepthState)
-            pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder, linesClass: false)
+            pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: false)
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              renderMapSize: renderMapSize,
@@ -120,26 +117,29 @@ enum GlobeVectorSurfaceDrawer {
                          buffers: buffers,
                          indices: indices,
                          reversed: false) { run in
-                    isOpaque(run, overviewFade: overviewFadeUniform) == false
+                    run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
                 }
             }
-            if drawsLineRibbons {
-                pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder, linesClass: true)
-                forEachPlacement(renderEncoder: renderEncoder,
-                                 placeTilesContext: placeTilesContext,
-                                 renderMapSize: renderMapSize,
-                                 pixelsPerPoint: pixelsPerPoint,
-                                 drawableHeightPx: drawableHeightPx) { buffers, indices in
-                    drawRuns(renderEncoder: renderEncoder,
-                             buffers: buffers,
-                             indices: indices,
-                             reversed: false) { _ in true }
+            // The line ribbons (boundaries, overview strokes) last, through
+            // the line-field coverage, at their rank z above every fill.
+            pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true)
+            forEachPlacement(renderEncoder: renderEncoder,
+                             placeTilesContext: placeTilesContext,
+                             renderMapSize: renderMapSize,
+                             pixelsPerPoint: pixelsPerPoint,
+                             drawableHeightPx: drawableHeightPx) { buffers, indices in
+                drawRuns(renderEncoder: renderEncoder,
+                         buffers: buffers,
+                         indices: indices,
+                         reversed: false,
+                         drawsAllWithoutRuns: true) { run in
+                    run.isLinesClass
                 }
             }
             renderEncoder.setDepthStencilState(depthDisabledState)
         } else {
             // The morph: one combined blended draw per placement, no depth.
-            pipeline.selectSpherePipeline(renderEncoder: renderEncoder, pureSphere: false)
+            pipeline.selectSphereMorphPipeline(renderEncoder: renderEncoder)
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              renderMapSize: renderMapSize,
@@ -216,15 +216,18 @@ enum GlobeVectorSurfaceDrawer {
     }
 
     /// Draws the placement's style runs that pass `predicate`, each at its
-    /// rank z. Falls back to one full translucent-style draw when the run
-    /// table is absent, which paints exactly like the unsplit path.
+    /// rank z. When the run table is absent, only the ribbons pass
+    /// (`drawsAllWithoutRuns`) falls back to one full draw, whose line-field
+    /// pipeline paints exactly like the unsplit combined path.
     private static func drawRuns(renderEncoder: MTLRenderCommandEncoder,
                                  buffers: TileBuffers.GeometryLayer,
                                  indices: TileBufferView,
                                  reversed: Bool,
+                                 drawsAllWithoutRuns: Bool = false,
                                  predicate: (GroundStyleRun) -> Bool) {
         let runs = buffers.styleRuns
         guard runs.isEmpty == false else {
+            guard drawsAllWithoutRuns else { return }
             var layerNdcZ: Float = 1.0 - layerDepthStep
             renderEncoder.setVertexBytes(&layerNdcZ, length: MemoryLayout<Float>.stride, index: 3)
             renderEncoder.drawIndexedPrimitives(type: .triangle,

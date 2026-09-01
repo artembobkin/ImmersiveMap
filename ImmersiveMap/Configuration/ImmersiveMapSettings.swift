@@ -811,9 +811,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct PostProcessingSettings: Equatable, Sendable {
+        /// FXAA over the finished frame, on by default: the cheap edge
+        /// antialiasing of the single-sample render (the engine renders at
+        /// one sample per pixel everywhere).
         public var fxaaEnabled: Bool
 
-        public init(fxaaEnabled: Bool = false) {
+        public init(fxaaEnabled: Bool = true) {
             self.fxaaEnabled = fxaaEnabled
         }
     }
@@ -1081,7 +1084,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                 springK: 0.25,
                                 smoothing: 0.35),
         attribution: AttributionSettings(),
-        postProcessing: PostProcessingSettings(fxaaEnabled: false),
+        postProcessing: PostProcessingSettings(fxaaEnabled: true),
         debug: DebugSettings(enableDebugPanel: false,
                              coordinateScale: 80.0,
                              diagnosticsScale: 60.0,

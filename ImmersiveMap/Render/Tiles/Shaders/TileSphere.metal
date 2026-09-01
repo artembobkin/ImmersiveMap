@@ -49,19 +49,12 @@ struct GlobeSurfaceTile {
 constant bool kTileSphereFog [[function_constant(0)]];
 
 /// True when the pass carries the line fields (the morph's combined pass
-/// and the ribbons class); the fills class of a split pass drops them: its
-/// geometry has a zero side distance and a saturated end parameter, so the
-/// analytic coverage is identically 1 and the fields would only be
-/// interpolated to be ignored.
+/// and the ribbons class); the fills class drops them: its geometry has a
+/// zero side distance and a saturated end parameter, so the analytic
+/// coverage is identically 1 and the fields would only be interpolated to
+/// be ignored. The classes are separate index segments baked by the parser
+/// (`fillsIndexCount`), so a class pass never reads the other's vertices.
 constant bool kTileSphereLineFields [[function_constant(1)]];
-
-/// The ground bucket draws as two class passes on the resting sphere: a
-/// split pipeline keeps exactly one class and degenerates the other's
-/// primitives whole (NaN position), which isolates the fills from the line
-/// ribbons (GlobeVectorSurfaceDrawer). The morph keeps the single combined
-/// pass.
-constant bool kTileSphereSplitPass [[function_constant(2)]];
-constant bool kTileSphereLinesClass [[function_constant(3)]];
 
 struct SphereVertexOut {
     float4 position [[position]];
@@ -148,17 +141,6 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     // layer (GlobeVectorSurfaceDrawer).
     out.position.z = layerNdcZ * out.position.w;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
-    // A split pipeline keeps only its own class. The class is a property of
-    // the geometry, not the style (a fill shares its style with its
-    // decoration): extruded line ribbons carry a non-zero per-vertex side
-    // distance, fills carry zero, and no triangle mixes the two. A NaN
-    // position degenerates the whole primitive before rasterization.
-    if (kTileSphereSplitPass) {
-        bool isLine = vertexIn.lineDistance != 0;
-        if (isLine != kTileSphereLinesClass) {
-            out.position = float4(as_type<float>(0x7FC00000u));
-        }
-    }
     tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette));
     return out;
 }

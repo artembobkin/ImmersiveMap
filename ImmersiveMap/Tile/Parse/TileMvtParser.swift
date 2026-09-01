@@ -1884,11 +1884,26 @@ class TileMvtParser {
         }
     }
 
+    /// A line ribbon carries per-vertex line attributes (extruded stroke
+    /// geometry); a fill does not, including the decoration polygons that
+    /// share a line style (they default to the saturated line interior).
+    private static func isLineRibbon(_ polygon: ParsedPolygon) -> Bool {
+        polygon.lineDistances.count == polygon.vertices.count
+            && polygon.lineParameters.count == polygon.vertices.count
+    }
+
+    /// - Parameter splitLinesClass: orders the unified indices as two class
+    ///   segments, fills first then line ribbons (each by ascending style),
+    ///   and records the boundary in `DrawingPolygonBytes.fillsIndexCount`.
+    ///   The sphere's ground passes then draw one class without touching the
+    ///   other's vertices; the paint order becomes "every ribbon above every
+    ///   fill", which is also how the split flat/morph draws paint.
     private func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
-                                   stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
-                                                                           styles: [TilePolygonStyle],
-                                                                           overviewStyleMasks: [Float],
-                                                                           lineStyles: [TileLineStyle]) {
+                                   stylesByKey: [UInt8: FeatureStyle],
+                                   splitLinesClass: Bool = false) -> (drawing: DrawingPolygonBytes,
+                                                                      styles: [TilePolygonStyle],
+                                                                      overviewStyleMasks: [Float],
+                                                                      lineStyles: [TileLineStyle]) {
         var styles: [TilePolygonStyle] = []
         var overviewStyleMasks: [Float] = []
         var lineStyles: [TileLineStyle] = []
@@ -1920,6 +1935,7 @@ class TileMvtParser {
         }
 
         var unifiedIndices: [UInt32] = []
+        var fillsIndexCount: Int?
         let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
@@ -1928,16 +1944,26 @@ class TileMvtParser {
             ) { indexBuffer, initializedIndexCount in
                 var vertexCount = 0
                 var indexCount = 0
-                for styleKey in styleKeys {
-                    let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
-                    guard let polygons = polygonByStyle[styleKey] else { continue }
-                    for polygon in polygons {
-                        Self.appendPolygon(polygon,
-                                           styleBufferIndex: styleBufferIndex,
-                                           vertices: &vertexBuffer,
-                                           indices: &indexBuffer,
-                                           vertexCount: &vertexCount,
-                                           indexCount: &indexCount)
+                // One sweep for the unsplit layer; the split layer sweeps
+                // twice, fills then ribbons, each in ascending style order.
+                let classSweeps: [((ParsedPolygon) -> Bool)] = splitLinesClass
+                    ? [{ Self.isLineRibbon($0) == false }, { Self.isLineRibbon($0) }]
+                    : [{ _ in true }]
+                for (sweep, includesPolygon) in classSweeps.enumerated() {
+                    if sweep == 1 {
+                        fillsIndexCount = indexCount
+                    }
+                    for styleKey in styleKeys {
+                        let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
+                        guard let polygons = polygonByStyle[styleKey] else { continue }
+                        for polygon in polygons where includesPolygon(polygon) {
+                            Self.appendPolygon(polygon,
+                                               styleBufferIndex: styleBufferIndex,
+                                               vertices: &vertexBuffer,
+                                               indices: &indexBuffer,
+                                               vertexCount: &vertexCount,
+                                               indexCount: &indexCount)
+                        }
                     }
                 }
                 initializedVertexCount = vertexCount
@@ -1954,7 +1980,8 @@ class TileMvtParser {
         }
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
-                                             indices: unifiedIndices),
+                                             indices: unifiedIndices,
+                                             fillsIndexCount: fillsIndexCount),
                 styles: styles,
                 overviewStyleMasks: overviewStyleMasks,
                 lineStyles: lineStyles)
@@ -2071,7 +2098,8 @@ class TileMvtParser {
         let extrudedByStyle = readingStageResult.extrudedByStyle
 
         let groundLayer = unifyPolygonLayer(polygonByStyle: polygonByStyle,
-                                            stylesByKey: readingStageResult.styles)
+                                            stylesByKey: readingStageResult.styles,
+                                            splitLinesClass: true)
         let emptyRoadLayer = makeEmptyDrawingGeometryLayer()
         let roadPhases: RoadStructureBuckets<RoadGeometryPhases<DrawingGeometryLayer>>
         if readingStageResult.orderedRoadPolygons.isEmpty {
