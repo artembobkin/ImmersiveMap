@@ -121,7 +121,12 @@ final class RouteWorldGeometryBuilderTests: XCTestCase {
     /// Mid-morph the flat term wraps per point, so without the chained unwrap a
     /// path crossing the seam streaks across the whole world.
     func testAntimeridianCrossingKeepsNeighboursClose() throws {
-        let constants = try makeConstants(latitude: 0, longitude: 0, zoom: 6.5)
+        // The view sits at latitude 40, so the crossing point lies about 140
+        // degrees of arc away: on the far side, but outside the unroll's cut
+        // (the cap past 150 degrees around the point opposite the view,
+        // where the morph legitimately tears; see GlobeUnroll.h). Outside
+        // the cut the unwrap must keep neighbours close through the morph.
+        let constants = try makeConstants(latitude: 40, longitude: 0, zoom: 6.5)
         XCTAssertEqual(constants.mode, .globe)
         XCTAssertGreaterThan(constants.globe.transition, 0)
 

@@ -8,16 +8,22 @@ import simd
 /// models sit exactly on the morphing surface. Change only in sync with the
 /// shader.
 ///
-/// The morph never mixes positions through the planet's interior. Instead
-/// the surface lives on a sphere of radius `1 / curvature` tangent to the
-/// view centre, with `curvature = (1 - transition) / radius`: every point
-/// keeps its distance along the surface from the view centre (blended from
-/// the great-circle arc toward the flat Mercator distance) and its azimuth
-/// (blended likewise), and the growing sphere flattens the cap into the
-/// plane. The surface stays a single-valued convex cap throughout, so
-/// nothing ever passes behind or through the planet and no occlusion clip
-/// is needed while it unfurls.
+/// The morph never mixes positions through the planet's interior. The
+/// surface lives on a sphere of radius `1 / curvature` tangent to the view
+/// centre, with `curvature = (1 - transition) / radius`, and every point
+/// travels a straight line in the chart: between its azimuthal-equidistant
+/// image about the view centre (arc times bearing; wrapping that chart back
+/// onto the sphere of radius R is the identity) and its Mercator position,
+/// with the blended chart point wrapped onto the growing sphere. No
+/// direction snapping, so triangles do not fold into slivers; the blend's
+/// fold-freedom is swept numerically by GlobeUnrollFoldTests.
 enum GlobeUnrollMath {
+    /// cos(150 degrees): the unroll's cut, mirrored from GlobeUnroll.h. A
+    /// point more than 150 degrees of arc from the view centre is clipped
+    /// while the sphere unfurls: that cap is where the unroll tears (the
+    /// blend genuinely folds there), and it is never visible mid-morph.
+    static let cutCosine: Float = -0.8660254
+
     static func worldPosition(sphereWorldPosition: SIMD3<Float>,
                               flatWorldPosition: SIMD2<Float>,
                               transition: Float,
@@ -31,14 +37,15 @@ enum GlobeUnrollMath {
         let arcSphere = radius * acos(cosTheta)
         let dirSphere = SIMD2<Float>(fromCenter.x, fromCenter.y)
         let dirSphereLength = simd_length(dirSphere)
-        let arcFlat = simd_length(flatWorldPosition)
-        let azimuthSphere = dirSphereLength > 1e-6 ? dirSphere / dirSphereLength
-            : (arcFlat > 1e-6 ? flatWorldPosition / arcFlat : SIMD2<Float>(0.0, 1.0))
-        let azimuthFlat = arcFlat > 1e-6 ? flatWorldPosition / arcFlat : azimuthSphere
-        let azimuthMix = azimuthSphere + (azimuthFlat - azimuthSphere) * transition
-        let azimuthLength = simd_length(azimuthMix)
-        let azimuth = azimuthLength > 1e-6 ? azimuthMix / azimuthLength : azimuthSphere
-        let arc = arcSphere + (arcFlat - arcSphere) * transition
+        let azimuthalEquidistant = dirSphereLength > 1e-6
+            ? dirSphere * (arcSphere / dirSphereLength)
+            : SIMD2<Float>(0.0, 0.0)
+        let chartPoint = azimuthalEquidistant + (flatWorldPosition - azimuthalEquidistant) * transition
+        let arc = simd_length(chartPoint)
+        if arc <= 1e-6 {
+            return SIMD3<Float>(chartPoint.x, chartPoint.y, 0.0)
+        }
+        let azimuth = chartPoint / arc
         let angle = arc * curvature
         let rho = sin(angle) / curvature
         let sag = (cos(angle) - 1.0) / curvature

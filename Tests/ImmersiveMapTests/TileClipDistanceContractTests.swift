@@ -61,13 +61,17 @@ final class TileClipDistanceContractTests: XCTestCase {
     func testSphereShaderClipsWithSlotDistancesAndNeverDiscards() throws {
         let source = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
         XCTAssertNil(source.range(of: "discard_fragment"))
+        // The resting sphere carries the four slot clips; the morph adds the
+        // unroll's cut as a fifth.
         XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [4];"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [5];"))
+        XCTAssertTrue(source.contains("kGlobeUnrollCutCosine"))
         XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"))
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))
         XCTAssertNil(source.range(of: "groundShadowMask"))
         XCTAssertNil(source.range(of: "OcclusionClearance"),
-                     "The sphere needs no occlusion clip: back-face culling removes the far side, and the unroll never overlaps the planet")
+                     "The sphere needs no occlusion clip: back-face culling removes the far side; the morph clips only the unroll's cut")
         XCTAssertTrue(source.contains("globeWorldUVLatLon("))
     }
 

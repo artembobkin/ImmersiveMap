@@ -163,11 +163,29 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     return out;
 }
 
+/// The morph's vertex output: the slot clips plus the unroll's cut, the
+/// cap around the point opposite the view centre where the unroll tears
+/// (see GlobeUnroll.h).
+struct SphereMorphVertexOut {
+    float4 position [[position]];
+    // 0..3: the placeIn slot edges; 4: the unroll's cut.
+    float clipDistance [[clip_distance]] [5];
+    float3 worldPos [[function_constant(kTileSphereFog)]];
+    half4 color;
+    half lowZoomFadeMask;
+    float lineDistance [[function_constant(kTileSphereLineFields)]];
+    float lineParameter [[function_constant(kTileSphereLineFields)]];
+    half4 lineStyle [[function_constant(kTileSphereLineFields)]];
+    half lineMinimumWidthPoints [[function_constant(kTileSphereLineFields)]];
+    half lineMaximumWidthPoints [[function_constant(kTileSphereLineFields)]];
+    half lineDashInTileUnits [[function_constant(kTileSphereLineFields)]];
+};
+
 /// The unfurl: the sphere-to-plane unroll of GlobeUnroll.h. The surface
-/// stays a single-valued convex cap on the growing sphere, so nothing ever
-/// passes behind or through the planet and no occlusion clip is needed;
-/// back-face culling still removes what curls away.
-vertex SphereVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stage_in]],
+/// stays a convex cap on the growing sphere, back-face culling removes what
+/// curls away, and the fifth clip removes the cut cap around the point
+/// opposite the view centre, where the unroll tears.
+vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stage_in]],
                                                    constant Camera& camera [[buffer(1)]],
                                                    constant Style* styles [[buffer(2)]],
                                                    constant float* lowZoomFadeMasks [[buffer(4)]],
@@ -187,13 +205,27 @@ vertex SphereVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stage_in]
     float3 worldPosition = globeUnrollWorldPosition(sphereWorldPosition, flatWorldPosition.xy,
                                                     globe.transition, globe.radius);
 
-    SphereVertexOut out;
+    SphereMorphVertexOut out;
     out.position = camera.matrix * float4(worldPosition, 1.0);
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
+    // The unroll's cut: cos(arc from the view centre) past the cut cosine,
+    // linear in the sphere position's z.
+    out.clipDistance[4] = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6)
+        - kGlobeUnrollCutCosine;
     if (kTileSphereFog) {
         out.worldPos = worldPosition;
     }
-    tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette));
+    TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
+    out.color = style.color;
+    out.lowZoomFadeMask = style.lowZoomFadeMask;
+    if (kTileSphereLineFields) {
+        out.lineDistance = style.lineDistance;
+        out.lineParameter = style.lineParameter;
+        out.lineStyle = style.lineStyle;
+        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
+        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
+        out.lineDashInTileUnits = style.lineDashInTileUnits;
+    }
     return out;
 }
 

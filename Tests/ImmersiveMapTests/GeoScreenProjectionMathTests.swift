@@ -177,19 +177,19 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         let sphere = environment.constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
         let flat = environment.constants.globeFlatWorldPosition(basis: basis)
 
-        // An independent copy of the unroll from GlobeUnroll.h: the point
-        // keeps its blended surface distance and azimuth on the growing
-        // sphere, which is not the straight lerp of the two positions.
+        // An independent copy of the unroll from GlobeUnroll.h: a straight
+        // chart line between the point's azimuthal-equidistant image and
+        // its Mercator image, wrapped onto the growing sphere; not the
+        // straight lerp of the two world positions.
         let radius = environment.constants.globe.radius
         let curvature = (1.0 - transition) / radius
         let fromCenter = sphere - SIMD3<Float>(0, 0, -radius)
         let arcSphere = radius * acos(simd_clamp(fromCenter.z / radius, -1.0, 1.0))
         let dirSphere = simd_normalize(SIMD2<Float>(fromCenter.x, fromCenter.y))
         let flat2 = SIMD2<Float>(flat.x, flat.y)
-        let arcFlat = simd_length(flat2)
-        let dirFlat = flat2 / arcFlat
-        let azimuth = simd_normalize(dirSphere + (dirFlat - dirSphere) * transition)
-        let arc = arcSphere + (arcFlat - arcSphere) * transition
+        let chart = dirSphere * arcSphere + (flat2 - dirSphere * arcSphere) * transition
+        let arc = simd_length(chart)
+        let azimuth = chart / arc
         let angle = arc * curvature
         let unrolled = SIMD3<Float>(azimuth.x * sin(angle) / curvature,
                                     azimuth.y * sin(angle) / curvature,
