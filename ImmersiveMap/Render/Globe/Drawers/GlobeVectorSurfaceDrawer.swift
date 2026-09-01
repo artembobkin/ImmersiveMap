@@ -90,6 +90,7 @@ enum GlobeVectorSurfaceDrawer {
 
         if pureSphere {
             // The opaque fill layers, top first, depth-written and unblended.
+            renderEncoder.pushDebugGroup("ground.opaqueFills")
             renderEncoder.setDepthStencilState(opaqueDepthState)
             pipeline.selectSphereOpaqueFillsPipeline(renderEncoder: renderEncoder)
             forEachPlacement(renderEncoder: renderEncoder,
@@ -104,8 +105,10 @@ enum GlobeVectorSurfaceDrawer {
                     run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
                 }
             }
+            renderEncoder.popDebugGroup()
             // The translucent fill layers, bottom to top, blended, tested
             // but never written: an opaque layer above still hides them.
+            renderEncoder.pushDebugGroup("ground.translucentFills")
             renderEncoder.setDepthStencilState(translucentDepthState)
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: false)
             forEachPlacement(renderEncoder: renderEncoder,
@@ -120,8 +123,10 @@ enum GlobeVectorSurfaceDrawer {
                     run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
                 }
             }
+            renderEncoder.popDebugGroup()
             // The line ribbons (boundaries, overview strokes) last, through
             // the line-field coverage, at their rank z above every fill.
+            renderEncoder.pushDebugGroup("ground.lineRibbons")
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true)
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
@@ -136,9 +141,11 @@ enum GlobeVectorSurfaceDrawer {
                     run.isLinesClass
                 }
             }
+            renderEncoder.popDebugGroup()
             renderEncoder.setDepthStencilState(depthDisabledState)
         } else {
             // The morph: one combined blended draw per placement, no depth.
+            renderEncoder.pushDebugGroup("ground.morphCombined")
             pipeline.selectSphereMorphPipeline(renderEncoder: renderEncoder)
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
@@ -151,6 +158,7 @@ enum GlobeVectorSurfaceDrawer {
                                                     indexBuffer: indices.buffer,
                                                     indexBufferOffset: indices.offset)
             }
+            renderEncoder.popDebugGroup()
         }
 
         if isWireframeEnabled {

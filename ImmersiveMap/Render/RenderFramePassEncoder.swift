@@ -56,9 +56,14 @@ final class RenderFramePassEncoder {
             let passStart = CACurrentMediaTime()
             for layer in passNode.layers {
                 let layerStart = CACurrentMediaTime()
+                // Debug group per layer: in a GPU frame capture the pass's
+                // commands fold into nodes named starfield, globeVectorSurface,
+                // labels and so on, instead of one flat run of anonymous calls.
+                renderEncoder.pushDebugGroup(layer.rawValue)
                 renderGraph.encode(layer: layer,
                                    encoder: renderEncoder,
                                    frameContext: frameContext)
+                renderEncoder.popDebugGroup()
                 frameContext.diagnostics.recordLayer(layer,
                                                      duration: CACurrentMediaTime() - layerStart)
             }
