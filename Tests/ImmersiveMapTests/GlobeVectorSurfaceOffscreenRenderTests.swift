@@ -42,9 +42,10 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         XCTAssertGreaterThan(harness.engine.currentDiagnostics?.counterValue(.renderedTiles) ?? 0, 0)
     }
 
-    /// At zoom 1 the surface tone deepens the colour: the sphere path must
-    /// shade through the same globe surface shading as the placeholder
-    /// grid, so magenta comes out deepened, not raw.
+    /// At zoom 1 the sphere path draws through the same globe surface
+    /// shading as the placeholder grid: the fixture magenta must come
+    /// through as magenta (the deep-space tone is gone; day/night and the
+    /// limb glow are gentle at the centre of the disc).
     @MainActor
     func testSphereSurfaceIsShadedLikeTheGlobe() async throws {
         let harness = try makeHarness()
@@ -59,10 +60,8 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                                                             startingAt: OffscreenFrameHarness.frameTime(1))
         let center = painted.center
         XCTAssertGreaterThan(center.red, 200)
-        XCTAssertLessThan(center.red, 250, "The deepening must have applied to the fixture colour")
-        XCTAssertLessThan(center.green, 40)
+        XCTAssertLessThan(center.green, 60)
         XCTAssertGreaterThan(center.blue, 200)
-        XCTAssertLessThan(center.blue, 250)
     }
 
     /// The geometry must paint over the placeholder grid everywhere, not

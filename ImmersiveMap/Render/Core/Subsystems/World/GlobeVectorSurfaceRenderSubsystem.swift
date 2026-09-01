@@ -55,7 +55,6 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       globe: frameContext.globeRenderUniform,
                                       earthScene: frameContext.earthSceneUniform,
                                       atmosphere: atmosphere,
-                                      tone: GlobeSurfaceToneUniform.make(zoom: frameContext.zoom),
                                       horizonFog: horizonFog,
                                       cameraZoom: frameContext.zoom,
                                       pixelsPerPoint: Float(frameContext.pixelsPerPoint),
@@ -64,10 +63,6 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                       pipeline: pipeline,
                                       isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled,
-                                      litInline: !GlobeSurfaceLightingPath.isDeferred(
-                                          renderSurfaceMode: frameContext.renderSurfaceMode,
-                                          transition: frameContext.globeRenderUniform.transition,
-                                          zoom: frameContext.zoom),
                                       pureSphere: GlobeSphereVertexPath.isPureSphere(
                                           renderSurfaceMode: frameContext.renderSurfaceMode,
                                           transition: frameContext.globeRenderUniform.transition),

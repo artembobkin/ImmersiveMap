@@ -36,15 +36,13 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
         let atmosphere = GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
                                                      earthScene: frameContext.earthSceneUniform,
                                                      globe: frameContext.globeRenderUniform)
-        let tone = GlobeSurfaceToneUniform.make(zoom: frameContext.zoom)
         // Blank map under the surface: every target slot gets one. It is
-        // what writes the surface depth and paints the base the tile geometry
-        // (drawn on the sphere by the next layer) lands on, whether or not
-        // its tile has arrived.
+        // what writes the surface depth; a slot a tile placement already
+        // paints writes depth only (no fragment stage), the rest also paint
+        // the base colour a missing tile shows.
         let placeholderSlots = frameContext.sharedState.tilePlacementState.globeSurfaceSlots
-        let litInline = !GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                             transition: frameContext.globeRenderUniform.transition,
-                                                             zoom: frameContext.zoom)
+        let coveredSlots = Set(frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+            .map { $0.placeIn.tile })
         GlobeSurfaceDrawer.drawPlaceholderTiles(renderEncoder: encoder,
                                                 cameraUniform: frameContext.cameraUniform,
                                                 globe: frameContext.globeRenderUniform,
@@ -53,13 +51,12 @@ final class GlobeSurfaceRenderSubsystem: RenderSubsystem {
                                                 mapSurfaceGridBuffers: mapSurfaceGridBuffers,
                                                 horizonFog: horizonFog,
                                                 atmosphere: atmosphere,
-                                                tone: tone,
                                                 fillColor: SIMD4<Float>(Float(mapClearColor.x),
                                                                         Float(mapClearColor.y),
                                                                         Float(mapClearColor.z),
                                                                         Float(mapClearColor.w)),
                                                 slots: placeholderSlots,
-                                                litInline: litInline,
+                                                coveredSlots: coveredSlots,
                                                 pureSphere: GlobeSphereVertexPath.isPureSphere(
                                                     renderSurfaceMode: frameContext.renderSurfaceMode,
                                                     transition: frameContext.globeRenderUniform.transition),

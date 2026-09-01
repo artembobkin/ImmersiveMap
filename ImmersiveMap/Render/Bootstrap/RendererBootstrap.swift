@@ -23,8 +23,12 @@ enum RendererSetup {
                                   renderSampleCount: sharedResources.renderSampleCount)
     }
 
-    static func preferredRenderSampleCount(metalDevice: MTLDevice) -> Int {
-        metalDevice.supportsTextureSampleCount(4) ? 4 : 1
+    /// One sample everywhere: the ground's lines are antialiased
+    /// analytically in the tile shaders, and the frame time the 4x world
+    /// pass cost outweighed the edge smoothing it bought. The resolve
+    /// machinery stays: a value above 1 turns it back on wholesale.
+    static func preferredRenderSampleCount(metalDevice _: MTLDevice) -> Int {
+        1
     }
 
     static func makeLibrary(metalDevice: MTLDevice, bundle: Bundle) -> MTLLibrary {

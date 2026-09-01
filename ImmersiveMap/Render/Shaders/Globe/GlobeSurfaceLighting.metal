@@ -6,7 +6,7 @@
 //  ImmersiveMap
 //
 //  The globe surface's lighting as one deferred fullscreen pass. On the pure
-//  sphere at the plain palette (transition 0, tone depth 0, fog strength 0)
+//  sphere (transition 0, so no fog and the sphere's own silhouette)
 //  everything `globeSurfaceShade` does to a colour is affine: the day/night
 //  factor multiplies, the rim light and the limb glow add, and an affine
 //  transform commutes exactly with alpha blending. The ground layers can
@@ -79,9 +79,9 @@ fragment half4 globeSurfaceLightingFragmentShader(GlobeSurfaceLightingVertexOut 
     float3 viewDir = -direction;
     half facingDot = half(dot(normal, viewDir));
 
-    // The affine pieces of globeSurfaceShade at transition 0 and tone depth
-    // 0, term for term and in the same precision: the brightness that
-    // multiplies the surface colour, and the light that adds to it.
+    // The affine pieces of globeSurfaceShade at transition 0, term for term
+    // and in the same precision: the brightness that multiplies the surface
+    // colour, and the light that adds to it.
     half brightness = 1.0h;
     half3 additive = half3(0.0h);
     if (earthScene.isEnabled != 0) {

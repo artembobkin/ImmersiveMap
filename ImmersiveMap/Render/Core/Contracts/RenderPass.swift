@@ -36,7 +36,7 @@ enum RenderLayer: String, CaseIterable {
     /// both to the blended surface per sample. Depth-tested `greater` at the
     /// far plane, so only the sphere's pixels light and space stays for the
     /// sky. Skipped (with the layers lighting themselves inline) whenever
-    /// the lighting is not affine: during the unfurl and at the deep tone.
+    /// the lighting is not affine: during the unfurl.
     case globeSurfaceLighting
     case globeCap
     case flatMapSurface

@@ -71,7 +71,8 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(source.range(of: "globeVisibilityHorizonThreshold"),
                      "The relaxed horizon threshold is gone: the sphere itself is the occluder")
         XCTAssertTrue(source.contains("globeSurfaceShade("))
-        XCTAssertTrue(source.contains("globeProjectTileUVDetailed("))
+        XCTAssertTrue(source.contains("globeWorldUVLatLon("))
+        XCTAssertTrue(source.contains("globeProjectLatLonDetailed("))
     }
 
     /// A tile's vertices unwrap their flat morph target around the tile's
@@ -86,7 +87,9 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(transition.contains("float referenceNormalizedWorldX,"))
         XCTAssertTrue(transition.contains("return reference + wrap(value - reference, mapSize);"))
         let globe = try shaderSource("Render/Shaders/Globe/Globe.metal")
-        XCTAssertTrue(globe.contains("(float(tileX) + 0.5) / zPow);"))
+        XCTAssertTrue(globe.contains("tileData.referenceWorldX);"))
+        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertTrue(sphere.contains("surfaceTile.referenceWorldX,"))
     }
 
     /// The placeholder grid morphs exactly like the tile geometry over it, so

@@ -17,6 +17,15 @@ using namespace metal;
 /// tile's NORTH edge, Mercator-linear: the axis the raw MVT bytes and the
 /// mercator tile rows use). Values outside 0..1 are allowed and land beyond
 /// the tile, which the stitching margins of line geometry rely on.
+/// The geographic coordinate of a world uv (x east in turns, y the Mercator
+/// row, both 0..1 across the world): the form the per-draw uniforms carry so
+/// no per-vertex pow(2, z) is needed.
+static inline float2 globeWorldUVLatLon(float2 worldUv) {
+    float latitudeAtUv = atan(sinh(M_PI_F * (1.0 - 2.0 * worldUv.y)));
+    float longitudeAtUv = worldUv.x * (2.0 * M_PI_F) - M_PI_F;
+    return float2(latitudeAtUv, longitudeAtUv);
+}
+
 static inline float2 globeTileUVLatLon(float2 localUv, int3 tile) {
     float zPow = pow(2.0, tile.z);
     float size = 1.0 / zPow;

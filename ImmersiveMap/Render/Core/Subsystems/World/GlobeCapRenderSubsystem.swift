@@ -120,7 +120,6 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
                               atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
                                                                       earthScene: frameContext.earthSceneUniform,
                                                                       globe: frameContext.globeRenderUniform),
-                              tone: GlobeSurfaceToneUniform.make(zoom: frameContext.zoom),
                               edgeStrip: edgeStrip,
                               stripUniform: { pole in
                                   GlobeCapStripUniform(hasStrip: self.hasStrip,

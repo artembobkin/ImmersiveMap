@@ -20,18 +20,25 @@ using namespace metal;
 #include "../../Shaders/Globe/GlobeOcclusion.h"
 #include "../../Shaders/Globe/GlobeSurfaceShading.h"
 
-/// Per-draw tile identity for the projection; the layout mirrors
+/// Per-draw tile identity for the projection, precomputed on the CPU so the
+/// vertex stage does no per-vertex pow(2, z); the layout mirrors
 /// GlobeSurfaceTileUniform.swift (pinned by GlobeVectorSurfaceUniformLayoutTests).
 struct GlobeSurfaceTile {
-    /// The source tile the vertices are local to (x, y, z).
-    int3 tile;
+    /// World uv of the tile's north-west corner (x east, y the Mercator row).
+    float2 uvOrigin;
+    /// Tile-local uv to world uv: 1 / 2^z.
+    float uvScale;
+    /// The normalized world x the flat morph target unwraps around: the
+    /// tile's centre, (x + 0.5) / 2^z (see globeTransitionFlatWorldX).
+    float referenceWorldX;
 };
 
 /// True (the default pipeline) lights every fragment inline through
 /// globeSurfaceShade. False is the deferred-lighting world: the layers
 /// blend unlit and the globeSurfaceLighting pass applies the light once
 /// per pixel (GlobeSurfaceLighting.metal), which is exact while the
-/// lighting is affine (transition 0, tone depth 0, fog strength 0). The
+/// lighting is affine (transition 0, so no fog and the sphere's own
+/// silhouette). The
 /// lighting inputs below exist only in the lit variant: the unlit layers
 /// neither export, interpolate nor load them.
 constant bool kTileSphereLitInline [[function_constant(0)]];
@@ -112,8 +119,11 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     // stitching margins of line geometry lie beyond 0..4096 on purpose.
     float2 localPosition = float2(vertexIn.position.xy);
     float2 localUv = float2(localPosition.x, kTileSphereExtent - localPosition.y) / kTileSphereExtent;
-    GlobeSurfaceProjection projection = globeProjectTileUVDetailed(localUv, surfaceTile.tile, camera, globe,
-                                                                   globeFrame, kTileSpherePureSphere);
+    float2 worldUv = surfaceTile.uvOrigin + localUv * surfaceTile.uvScale;
+    float2 latLon = globeWorldUVLatLon(worldUv);
+    GlobeSurfaceProjection projection = globeProjectLatLonDetailed(latLon.x, latLon.y, camera, globe, globeFrame,
+                                                                   surfaceTile.referenceWorldX,
+                                                                   kTileSpherePureSphere);
 
     // Exactly the surface position the placeholder grid morphs through: the
     // geometry is not depth-tested against the grid (its extent is the five
@@ -174,14 +184,13 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant LineDashUniform& lineDash [[buffer(4)]],
                                         constant Camera& camera [[buffer(5)]],
                                         constant EarthScene& earthScene [[buffer(6)]],
-                                        constant GlobeAtmosphere& atmosphere [[buffer(7)]],
-                                        constant GlobeSurfaceTone& tone [[buffer(8)]]) {
+                                        constant GlobeAtmosphere& atmosphere [[buffer(7)]]) {
     half4 color = tileGroundColor(tileSphereFragmentStyle(in), overviewFade, lineDash);
     if (!kTileSphereLitInline) {
         return color;
     }
     half4 shaded = globeSurfaceShade(color, in.worldPos, in.normal, in.earthNormal, in.transition,
-                                     camera, earthScene, horizonFog, atmosphere, tone);
+                                     camera, earthScene, horizonFog, atmosphere);
     shaded.a = color.a;
     return shaded;
 }

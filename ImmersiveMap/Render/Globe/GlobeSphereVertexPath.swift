@@ -9,9 +9,9 @@
 /// that folds them away. The moment the sphere starts unfurling, the full
 /// morph path returns. One rule, consulted by the placeholder fill and the
 /// tile geometry alike, so the two can never disagree within a frame; the
-/// deferred-lighting gate (`GlobeSurfaceLightingPath.isDeferred`) is a
-/// strict subset of this one, so every unlit frame is also a pure-sphere
-/// frame.
+/// deferred-lighting gate (`GlobeSurfaceLightingPath.isDeferred`) is the
+/// same predicate, so every pure-sphere frame blends unlit and the
+/// lit-inline shading exists only for the unfurl.
 enum GlobeSphereVertexPath {
     static func isPureSphere(renderSurfaceMode: ViewMode, transition: Float) -> Bool {
         renderSurfaceMode == .spherical && transition == 0

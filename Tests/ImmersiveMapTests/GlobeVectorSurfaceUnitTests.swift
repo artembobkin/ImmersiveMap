@@ -7,11 +7,15 @@ import XCTest
 /// Pins the Swift mirror of `GlobeSurfaceTile` in TileSphere.metal.
 final class GlobeVectorSurfaceUniformLayoutTests: XCTestCase {
     func testSurfaceTileUniformMatchesMetalLayout() {
-        // int3 in Metal: 16 bytes, 16-aligned.
+        // float2 + float + float in Metal: 16 bytes, the float2 8-aligned at 0.
         XCTAssertEqual(MemoryLayout<GlobeSurfaceTileUniform>.stride, 16)
-        XCTAssertEqual(MemoryLayout<GlobeSurfaceTileUniform>.offset(of: \.tile), 0)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceTileUniform>.offset(of: \.uvOrigin), 0)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceTileUniform>.offset(of: \.uvScale), 8)
+        XCTAssertEqual(MemoryLayout<GlobeSurfaceTileUniform>.offset(of: \.referenceWorldX), 12)
         let uniform = GlobeSurfaceTileUniform(tile: Tile(x: 3, y: 5, z: 4))
-        XCTAssertEqual(uniform.tile, SIMD3<Int32>(3, 5, 4))
+        XCTAssertEqual(uniform.uvOrigin, SIMD2<Float>(3.0 / 16.0, 5.0 / 16.0))
+        XCTAssertEqual(uniform.uvScale, 1.0 / 16.0)
+        XCTAssertEqual(uniform.referenceWorldX, 3.5 / 16.0)
     }
 }
 

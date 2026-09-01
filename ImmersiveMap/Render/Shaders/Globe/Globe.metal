@@ -79,9 +79,21 @@ struct GlobeCapStrip {
 constant float kGlobeCapStripWidth = 4096.0;
 constant float kGlobeCapStripMaxLod = 12.0;
 
-/// The slot a placeholder fill covers; mirrors GlobeSurfaceSlotUniform.swift.
+/// The slot a placeholder fill covers, precomputed on the CPU so the vertex
+/// stage does no per-vertex pow(2, z) or Mercator row bounds; mirrors
+/// GlobeSurfaceSlotUniform.swift.
 struct Tile {
-    int3 tile;
+    /// World x of the slot's west edge, in turns (tile.x / 2^z).
+    float uvOriginX;
+    /// Slot-local uv to world uv: 1 / 2^z.
+    float uvScale;
+    /// The linear-latitude v of the slot's north edge and the v span to its
+    /// south edge (v = 1 - (lat + pi/2) / pi).
+    float vNorth;
+    float vSize;
+    /// The normalized world x the flat morph target unwraps around: the
+    /// slot's centre, (x + 0.5) / 2^z.
+    float referenceWorldX;
 };
 
 
@@ -91,24 +103,10 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Tile& tileData [[buffer(3)]],
                                           constant GlobeFrameConstants& globeFrame [[buffer(4)]]) {
     
-    float vertexUvX = vertexIn.uv.x; // goes 0 to 1
-    float vertexUvY = vertexIn.uv.y; // goes 0 to 1
-    
-    int tileX = tileData.tile.x;
-    int tileY = tileData.tile.y;
-    int tileZ = tileData.tile.z;
-    
-    float zPow = pow(2.0, tileZ);
-    float size = 1.0 / zPow;
-    
-    vertexUvX = vertexUvX / zPow + size * tileX;
-    
-    float latNorth = atan(sinh(M_PI_F * (1.0 - 2.0 * tileY / zPow)));
-    float latSouth = atan(sinh(M_PI_F * (1.0 - 2.0 * (tileY + 1) / zPow)));
-    float vNorth = 1.0 - (latNorth + M_PI_2_F) / M_PI_F;
-    float vSouth = 1.0 - (latSouth + M_PI_2_F) / M_PI_F;
-    float vSize = abs(vSouth - vNorth);
-    vertexUvY = vNorth + vertexUvY * vSize;
+    // Slot-local uv to world uv through the precomputed slot bounds: no
+    // per-vertex pow(2, z) and no Mercator row bounds per vertex.
+    float vertexUvX = tileData.uvOriginX + vertexIn.uv.x * tileData.uvScale;
+    float vertexUvY = tileData.vNorth + vertexIn.uv.y * tileData.vSize;
     
     
     float transition = globe.transition; // from globe view to flat view
@@ -155,7 +153,7 @@ vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
                                                                     globe,
                                                                     mapSize,
                                                                     panY_merc_norm,
-                                                                    (float(tileX) + 0.5) / zPow);
+                                                                    tileData.referenceWorldX);
         float4 flatPosition = float4(flatWorldPosition, 0, 1.0);
         float localTransition = globeTransitionLocalPhase(transition, rotatedSphereDirection.z);
         position = mix(spherePositionTranslated, flatPosition, localTransition);
@@ -195,13 +193,12 @@ fragment half4 globeSurfacePlaceholderFragmentShader(SurfaceFragmentIn in [[stag
                                                      constant EarthScene& earthScene [[buffer(2)]],
                                                      constant HorizonFog& horizonFog [[buffer(4)]],
                                                      constant float4& fillColor [[buffer(5)]],
-                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]],
-                                                     constant GlobeSurfaceTone& tone [[buffer(7)]]) {
+                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
     if (!kGlobePlaceholderLitInline) {
         return half4(fillColor);
     }
     return globeSurfaceShade(half4(fillColor), in.worldPos, in.normal, in.earthNormal, in.transition,
-                             camera, earthScene, horizonFog, atmosphere, tone);
+                             camera, earthScene, horizonFog, atmosphere);
 }
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
@@ -266,8 +263,7 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
                                       constant Camera& camera [[buffer(1)]],
                                       constant EarthScene& earthScene [[buffer(2)]],
                                       constant GlobeCapStrip& capStrip [[buffer(3)]],
-                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]],
-                                      constant GlobeSurfaceTone& tone [[buffer(7)]]) {
+                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
     constexpr sampler stripSampler(filter::linear, mip_filter::linear, mag_filter::linear, address::repeat);
 
     // The mip level the rim is read at, from the screen derivative of the
@@ -305,11 +301,8 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
     } else {
         color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }
-    // The same deepening as the tiled surface, so the cap continues its
-    // colour over the pole at every zoom.
     float3 viewDir = normalize(camera.eye - in.worldPos);
     half facingDot = half(dot(in.normal, viewDir));
-    color.rgb = globeSurfaceDeepen(color.rgb, facingDot, tone);
 
     if (earthScene.isEnabled != 0) {
         half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));

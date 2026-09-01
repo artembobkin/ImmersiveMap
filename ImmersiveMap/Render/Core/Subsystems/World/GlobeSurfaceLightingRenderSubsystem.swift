@@ -37,8 +37,7 @@ final class GlobeSurfaceLightingRenderSubsystem: RenderSubsystem {
         guard layer == .globeSurfaceLighting,
               frameContext.renderSurfaceMode == .spherical,
               GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                  transition: frameContext.globeRenderUniform.transition,
-                                                  zoom: frameContext.zoom) else {
+                                                  transition: frameContext.globeRenderUniform.transition) else {
             return
         }
 

@@ -13,7 +13,6 @@ enum GlobeVectorSurfaceDrawer {
                      globe: GlobeUniform,
                      earthScene: EarthSceneUniform,
                      atmosphere: GlobeAtmosphereUniform,
-                     tone: GlobeSurfaceToneUniform,
                      horizonFog: HorizonFogUniform,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
@@ -22,7 +21,6 @@ enum GlobeVectorSurfaceDrawer {
                      placeTilesContext: PlaceTilesContext,
                      pipeline: TilePipeline,
                      isWireframeEnabled: Bool,
-                     litInline: Bool,
                      pureSphere: Bool,
                      globeFrame: GlobeFrameConstantsUniform) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
@@ -38,11 +36,9 @@ enum GlobeVectorSurfaceDrawer {
         let drawsLineRibbons = true
         if splitsClassPasses {
             pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder,
-                                               litInline: litInline,
                                                linesClass: false)
         } else {
             pipeline.selectSpherePipeline(renderEncoder: renderEncoder,
-                                          litInline: litInline,
                                           pureSphere: pureSphere)
         }
         // Every tile triangle is counter-clockwise in render space (the
@@ -63,7 +59,6 @@ enum GlobeVectorSurfaceDrawer {
         var globeValue = globe
         var earthSceneValue = earthScene
         var atmosphereValue = atmosphere
-        var toneValue = tone
         var horizonFogValue = horizonFog
         var streetPaletteUniform = StreetPaletteUniform(
             blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
@@ -93,7 +88,6 @@ enum GlobeVectorSurfaceDrawer {
         renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 5)
         renderEncoder.setFragmentBytes(&earthSceneValue, length: MemoryLayout<EarthSceneUniform>.stride, index: 6)
         renderEncoder.setFragmentBytes(&atmosphereValue, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 7)
-        renderEncoder.setFragmentBytes(&toneValue, length: MemoryLayout<GlobeSurfaceToneUniform>.stride, index: 8)
 
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
@@ -140,7 +134,6 @@ enum GlobeVectorSurfaceDrawer {
         // pipeline.
         if splitsClassPasses, drawsLineRibbons {
             pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder,
-                                               litInline: litInline,
                                                linesClass: true)
             for placeTile in placeTilesContext.tilePlacements {
                 let metalTile = placeTile.metalTile

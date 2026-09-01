@@ -34,34 +34,6 @@ static inline half3 globeAtmosphereSurfaceGlow(half facing,
     return glow * half(atmosphere.intensity);
 }
 
-/// The colour of the surface seen whole from space, by `depth` (1 up to
-/// zoom 1, 0 by zoom 2, see GlobeSurfaceToneUniform.swift). The tile palette
-/// is a flat cartographic one, pale so labels read over it up close; on the
-/// small sphere it reads as an atlas wrapped on a ball. A planet seen through
-/// its whole air column is the opposite of vivid: the colours are muted and
-/// darker in the midtones (a dark sea, olive land), and the lit disc rounds
-/// off toward the limb with the view angle before the atmosphere brightens
-/// the rim. So: desaturate a little around the luma, deepen the midtones
-/// with a power curve (white stays white),
-/// then fall off with `facing`, the cosine of the view angle (1 face-on, 0 at
-/// the limb). Applied to the bare sampled colour, before the day/night
-/// shading and the additive limb glow, so the night side and the rim keep
-/// their own look on top. At depth 0 the colour passes through exactly.
-static inline half3 globeSurfaceDeepen(half3 color, half facing, constant GlobeSurfaceTone& tone) {
-    half depth = clamp(half(tone.depth), 0.0h, 1.0h);
-    if (depth <= 0.0h) {
-        return color;
-    }
-    half luma = dot(color, half3(0.299h, 0.587h, 0.114h));
-    // A light mute only: a heavier one turned the deserts grey. No blue cast:
-    // the atmosphere's rim glow already lays all the blue the disc can take,
-    // and a cast on top of it read as a blue planet.
-    half3 muted = mix(color, half3(luma), 0.12h * depth);
-    half3 deepened = pow(clamp(muted, 0.0h, 1.0h), half3(1.0h + 0.35h * depth));
-    half rounding = mix(0.55h, 1.0h, pow(clamp(facing, 0.0h, 1.0h), 0.6h));
-    return deepened * mix(1.0h, rounding, depth);
-}
-
 /// Everything the globe surface does to a sampled color: day/night shading, the
 /// limb glow, and the haze that hides the seam at the surface swap. Shared so
 /// the placeholder fill is lit exactly like the tile geometry drawn over it
@@ -79,12 +51,10 @@ static inline half4 globeSurfaceShade(half4 color,
                                       constant Camera& camera,
                                       constant EarthScene& earthScene,
                                       constant HorizonFog& horizonFog,
-                                      constant GlobeAtmosphere& atmosphere,
-                                      constant GlobeSurfaceTone& tone) {
+                                      constant GlobeAtmosphere& atmosphere) {
     half transition = half(transitionPhase);
     float3 viewDir = normalize(camera.eye - worldPos);
     half facingDot = half(dot(normal, viewDir));
-    color.rgb = globeSurfaceDeepen(color.rgb, facingDot, tone);
     if (earthScene.isEnabled != 0) {
         half sunDot = half(dot(normalize(earthNormal), normalize(earthScene.sunDirection)));
         half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);

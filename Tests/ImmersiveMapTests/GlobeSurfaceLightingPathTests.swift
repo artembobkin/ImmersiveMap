@@ -7,38 +7,24 @@ import XCTest
 /// The deferred surface lighting runs only while `globeSurfaceShade` is an
 /// affine transform of the colour, which is when lighting once after the
 /// blend equals lighting every layer before it: the pure sphere (no fog, no
-/// morphed silhouette) at the plain palette (no deep-space tone). These
-/// tests pin that gate and the uniform layout the pass hands the shader.
+/// morphed silhouette). These tests pin that gate and the uniform layout
+/// the pass hands the shader.
 final class GlobeSurfaceLightingPathTests: XCTestCase {
-    func testThePureSphereAtThePlainPaletteDefers() {
+    func testThePureSphereDefers() {
         XCTAssertTrue(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
-                                                          transition: 0,
-                                                          zoom: 3.0))
+                                                          transition: 0))
     }
 
     /// The unfurl brings the fog (its strength is the transition) and a
     /// silhouette that is no longer the sphere's: every layer lights itself.
     func testTheMorphLightsInline() {
         XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
-                                                           transition: 0.01,
-                                                           zoom: 5.0))
-    }
-
-    /// Below zoom 2 the deep-space tone deepens the midtones with a power
-    /// curve, which does not commute with blending: inline again.
-    func testTheDeepToneLightsInline() {
-        XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
-                                                           transition: 0,
-                                                           zoom: 1.5))
-        XCTAssertTrue(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .spherical,
-                                                          transition: 0,
-                                                          zoom: GlobeSurfaceToneUniform.plainZoom))
+                                                           transition: 0.01))
     }
 
     func testTheFlatWorldNeverDefers() {
         XCTAssertFalse(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: .flat,
-                                                           transition: 1,
-                                                           zoom: 15.0))
+                                                           transition: 1))
     }
 
     /// The unlit variants carry no lighting varyings: the members exist
