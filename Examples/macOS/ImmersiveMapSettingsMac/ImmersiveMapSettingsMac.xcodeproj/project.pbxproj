@@ -12,7 +12,7 @@
 		B10000000000000000000043 /* PanelControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000033 /* PanelControls.swift */; };
 		B10000000000000000000044 /* LabelsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000034 /* LabelsPanel.swift */; };
 		B10000000000000000000045 /* BuildingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035 /* BuildingsPanel.swift */; };
-		B10000000000000000000046 /* EarthScenePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* EarthScenePanel.swift */; };
+		B10000000000000000000046 /* SkyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* SkyPanel.swift */; };
 		B10000000000000000000047 /* StylePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* StylePanel.swift */; };
 		B10000000000000000000048 /* PresentationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038 /* PresentationPanel.swift */; };
 		B10000000000000000000049 /* DiagnosticsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000039 /* DiagnosticsPanel.swift */; };
@@ -26,7 +26,7 @@
 		B10000000000000000000033 /* PanelControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelControls.swift; sourceTree = "<group>"; };
 		B10000000000000000000034 /* LabelsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelsPanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000035 /* BuildingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingsPanel.swift; sourceTree = "<group>"; };
-		B10000000000000000000036 /* EarthScenePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarthScenePanel.swift; sourceTree = "<group>"; };
+		B10000000000000000000036 /* SkyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkyPanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000037 /* StylePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylePanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000038 /* PresentationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationPanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000039 /* DiagnosticsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsPanel.swift; sourceTree = "<group>"; };
@@ -62,7 +62,7 @@
 				B10000000000000000000033 /* PanelControls.swift */,
 				B10000000000000000000034 /* LabelsPanel.swift */,
 				B10000000000000000000035 /* BuildingsPanel.swift */,
-				B10000000000000000000036 /* EarthScenePanel.swift */,
+				B10000000000000000000036 /* SkyPanel.swift */,
 				B10000000000000000000037 /* StylePanel.swift */,
 				B10000000000000000000038 /* PresentationPanel.swift */,
 				B1000000000000000000003A /* CameraPanel.swift */,
@@ -159,7 +159,7 @@
 				B10000000000000000000043 /* PanelControls.swift in Sources */,
 				B10000000000000000000044 /* LabelsPanel.swift in Sources */,
 				B10000000000000000000045 /* BuildingsPanel.swift in Sources */,
-				B10000000000000000000046 /* EarthScenePanel.swift in Sources */,
+				B10000000000000000000046 /* SkyPanel.swift in Sources */,
 				B10000000000000000000047 /* StylePanel.swift in Sources */,
 				B10000000000000000000048 /* PresentationPanel.swift in Sources */,
 				B1000000000000000000004A /* CameraPanel.swift in Sources */,

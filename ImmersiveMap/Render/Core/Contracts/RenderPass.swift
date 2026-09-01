@@ -15,29 +15,13 @@ enum RenderLayer: String, CaseIterable {
     /// the world pass in place of a cascade lookup per layer.
     case groundShadowMask
     case buildingImage
-    /// The space around the globe: the opaque sky background, the stars and
-    /// the Sun. Drawn after the globe surface at the far plane, depth-tested
-    /// so the pixels the sphere covered reject its fragments instead of
-    /// being painted first and painted over.
+    /// The space around the globe: the opaque sky background and the stars,
+    /// painted first; the tile geometry blends over them.
     case starfield
-    /// The atmosphere halo in space around the globe: drawn after the
-    /// starfield it blends over, depth-tested at the far plane like it, so
-    /// only the space outside the sphere's silhouette is shaded.
-    case atmosphere
-    case globeSurface
-    /// The tile geometry of the globe drawn straight onto the sphere, over
-    /// the placeholder grid the `globeSurface` layer painted; it neither
-    /// tests nor writes depth: what the planet hides is clipped against the
-    /// sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
+    /// The tile geometry of the globe drawn straight onto the sphere; it
+    /// neither tests nor writes depth: what the planet hides is clipped
+    /// against the sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
-    /// The globe surface's lighting as one deferred fullscreen draw, right
-    /// after the unlit ground layers blended: outputs the additive light in
-    /// rgb and the brightness in alpha, and the fixed-function blend applies
-    /// both to the blended surface per sample. Depth-tested `greater` at the
-    /// far plane, so only the sphere's pixels light and space stays for the
-    /// sky. Skipped (with the layers lighting themselves inline) whenever
-    /// the lighting is not affine: during the unfurl.
-    case globeSurfaceLighting
     case globeCap
     case flatMapSurface
     case buildingExtrusion
@@ -65,12 +49,9 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noAvatarContent
     case noSceneModelContent
     case debugOverlayDisabled
-    /// The starfield layer, which paints the space background, the stars and the
-    /// Sun, is off because space is configured transparent. The atmosphere halo
-    /// reports the same reason: it too is painted in space.
+    /// The starfield layer, which paints the space background and the stars,
+    /// is off because space is configured transparent.
     case transparentSpace
-    /// The atmosphere halo is off by setting.
-    case atmosphereDisabled
 }
 
 struct RenderPassAvailability {
@@ -82,11 +63,8 @@ struct RenderPassAvailability {
     /// clip the labels via the overlay-pass depth prepass.
     let sceneModelOcclusionEnabled: Bool
     /// False when space is configured transparent: nothing outside the globe is
-    /// painted, so the space background, the stars and the Sun are skipped.
+    /// painted, so the space background and the stars are skipped.
     let starfieldEnabled: Bool
-    /// False when the atmosphere is off by setting, or when space is
-    /// transparent (the halo is painted in space).
-    let atmosphereEnabled: Bool
 }
 
 struct RenderLayerPlanItem {
@@ -101,26 +79,17 @@ struct RenderLayerPlanner {
         case .flat:
             [.flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
-            // Surface first, sky after: the sky layers (the starfield and
-            // the atmosphere halo) rasterize at the far plane and depth-test
-            // against the surface depth the globe wrote, so only the pixels
-            // the sphere left uncovered are shaded instead of the whole
-            // screen being painted and then painted over. The polar caps
-            // stay after the sky: the poles lie outside the Mercator slots,
-            // so no grid depth covers them, and the caps must paint over
-            // the sky there the way they always did.
-            [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .atmosphere, .globeCap, .sceneModels, .routes]
+            // Sky first: nothing writes surface depth any more (the
+            // placeholder grid is gone), so the space background and the
+            // stars paint the whole frame and the tile geometry blends over
+            // them, opaque where its background quad lands.
+            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in
             switch layer {
             case .starfield where availability.starfieldEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
-            case .atmosphere where availability.atmosphereEnabled == false:
-                // The halo is painted in space, so transparent space takes it
-                // with the starfield; otherwise it is off by its own setting.
-                let reason: RenderSkipReason = availability.starfieldEnabled ? .atmosphereDisabled : .transparentSpace
-                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: reason)
             default:
                 return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
             }

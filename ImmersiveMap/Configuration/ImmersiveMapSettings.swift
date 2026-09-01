@@ -642,81 +642,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    public struct EarthSceneSettings: Equatable, Sendable {
-        public struct SunSettings: Equatable, Sendable {
-            public var isEnabled: Bool
-            /// Apparent disk angular size in shader-facing normalized units.
-            public var diskAngularSize: Float
-            /// Disk contribution multiplier. Expected range: `0...1`.
-            public var diskIntensity: Float
-            /// Bloom immediately around the disk, about one disk radius wide. Expected range: `0...1`.
-            public var glowIntensity: Float
-            /// Viewport-edge glare contribution multiplier. Expected range: `0...1`.
-            /// Defaults to zero so offscreen Sun direction is not emphasized at the viewport edge.
-            public var edgeGlareIntensity: Float
-            /// The flare at the point of the limb where a sun behind the globe is about to break through. Expected range: `0...1`.
-            public var limbHaloIntensity: Float
-            /// Positive normalized size of the flare, and the distance past the limb over which it fades out.
-            public var limbHaloWidth: Float
-
-            /// Creates visible Sun settings.
-            /// - Parameters:
-            ///   - diskAngularSize: Apparent disk angular size in shader-facing normalized units.
-            ///   - diskIntensity: Disk contribution multiplier in the expected range `0...1`.
-            ///   - glowIntensity: Surrounding glow contribution multiplier in the expected range `0...1`.
-            ///   - edgeGlareIntensity: Viewport-edge glare contribution multiplier in the expected range `0...1`.
-            ///   - limbHaloIntensity: Globe limb halo contribution multiplier in the expected range `0...1`.
-            ///   - limbHaloWidth: Positive normalized globe limb halo fade width.
-            public init(isEnabled: Bool = true,
-                        diskAngularSize: Float = 0.075,
-                        diskIntensity: Float = 1.0,
-                        glowIntensity: Float = 0.5,
-                        edgeGlareIntensity: Float = 0.0,
-                        limbHaloIntensity: Float = 0.9,
-                        limbHaloWidth: Float = 0.05) {
-                self.isEnabled = isEnabled
-                self.diskAngularSize = diskAngularSize
-                self.diskIntensity = diskIntensity
-                self.glowIntensity = glowIntensity
-                self.edgeGlareIntensity = edgeGlareIntensity
-                self.limbHaloIntensity = limbHaloIntensity
-                self.limbHaloWidth = limbHaloWidth
-            }
-        }
-
-        /// Controls the full Earth scene lighting package: visible Sun, planet
-        /// terminator shading and night-side brightness.
-        public var isEnabled: Bool
-        public var timeMode: EarthSceneTimeMode
-        /// Minimum daylight brightness. Expected range: `0...1`.
-        public var daySideMinimumBrightness: Float
-        /// Night-side base brightness. Expected range: `0...1`.
-        public var nightSideBrightness: Float
-        /// Positive normalized dot-product width used to fade across the terminator.
-        public var terminatorFadeWidth: Float
-        public var sun: SunSettings
-
-        /// Creates Earth scene settings.
-        /// - Parameters:
-        ///   - isEnabled: Enables the full Sun and terminator shading package.
-        ///   - daySideMinimumBrightness: Minimum daylight brightness in the expected range `0...1`.
-        ///   - nightSideBrightness: Night-side base brightness in the expected range `0...1`.
-        ///   - terminatorFadeWidth: Positive normalized dot-product fade width.
-        public init(isEnabled: Bool = true,
-                    timeMode: EarthSceneTimeMode = .realtime,
-                    daySideMinimumBrightness: Float = 0.82,
-                    nightSideBrightness: Float = 0.18,
-                    terminatorFadeWidth: Float = 0.12,
-                    sun: SunSettings = SunSettings()) {
-            self.isEnabled = isEnabled
-            self.timeMode = timeMode
-            self.daySideMinimumBrightness = daySideMinimumBrightness
-            self.nightSideBrightness = nightSideBrightness
-            self.terminatorFadeWidth = terminatorFadeWidth
-            self.sun = sun
-        }
-    }
-
     /// The static sun of the flat presentation: its direction defines where
     /// buildings and scene models cast their shadow-map shadows (there is no
     /// analytic surface shading; faces darken only via the shadow map).
@@ -767,75 +692,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    /// The atmosphere of the globe: a soft halo of scattered light around the
-    /// planet's edge, painted in space just outside the sphere, and the matching
-    /// glow on the surface toward the limb, so the sphere reads as a planet
-    /// with air on it rather than as a textured ball. Globe presentation only:
-    /// it fades out as the sphere unrolls into the plane. Off, the surface
-    /// glow disappears too and the limb becomes a hard edge against space.
-    ///
-    /// The halo is painted in space, so it follows the same rule as the stars:
-    /// with `SpaceSettings.isTransparent` nothing outside the globe is drawn
-    /// and the halo is skipped, and only the surface glow remains.
-    public struct AtmosphereSettings: Equatable, Sendable {
-        public var isEnabled: Bool
-        /// The color of the scattered light, RGB in `0...1`. Sky blue by default;
-        /// the very edge of the halo whitens toward the limb on its own.
-        public var color: SIMD3<Float>
-        /// Brightness multiplier of the halo and of the surface glow. Expected
-        /// range: `0...2`; 1 is the designed look, 0 leaves the sphere bare
-        /// while keeping the layer on.
-        public var intensity: Float
-        /// Width multiplier of the halo, relative to the globe radius: 1 is
-        /// the designed look, 2 twice as wide, 0.5 a thin bright ring. The
-        /// halo scales with the globe on screen, so it looks the same at every
-        /// zoom of the globe presentation.
-        public var thickness: Float
-        /// How much the earth scene's sun shapes the halo, `0...1`: at 1 the
-        /// halo is full on the day side of the limb and dims to a residual
-        /// glow on the night side; at 0 it is the same brightness all the way
-        /// around. Ignored while the earth scene is off, since there is no sun
-        /// to take the direction from, and faded out with the terminator
-        /// between zoom 1 and 2, so a planet that shows no night is not ringed
-        /// by a lopsided halo.
-        public var sunInfluence: Float
-
-        public init(isEnabled: Bool = true,
-                    color: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
-                    intensity: Float = 1.0,
-                    thickness: Float = 1.0,
-                    sunInfluence: Float = 0.6) {
-            self.isEnabled = isEnabled
-            self.color = color
-            self.intensity = intensity
-            self.thickness = thickness
-            self.sunInfluence = sunInfluence
-        }
-    }
-
     public struct SceneSettings: Equatable, Sendable {
         public var mapClearColor: SIMD4<Double>
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
-        public var earth: EarthSceneSettings
         public var light: SceneLightSettings
         public var shadows: ShadowSettings
-        public var atmosphere: AtmosphereSettings
 
         public init(mapClearColor: SIMD4<Double>,
                     space: SpaceSettings,
                     starfield: StarfieldSettings,
-                    earth: EarthSceneSettings = EarthSceneSettings(),
                     light: SceneLightSettings = SceneLightSettings(),
-                    shadows: ShadowSettings = ShadowSettings(),
-                    atmosphere: AtmosphereSettings = AtmosphereSettings()) {
+                    shadows: ShadowSettings = ShadowSettings()) {
             self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
-            self.earth = earth
             self.light = light
             self.shadows = shadows
-            self.atmosphere = atmosphere
         }
     }
 
@@ -1174,8 +1047,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           brightnessMax: 1.05,
                                                           near: 0.1,
                                                           far: 6000.0,
-                                                          radiusScale: 10.5),
-                             earth: EarthSceneSettings()),
+                                                          radiusScale: 10.5)),
         style: StyleSettings(preparedTileStyleRevision: 86,
                              flatSeparateRoadRenderingMinimumZoom: 8,
                              buildingExtrusionAlpha: 0.6,
@@ -1372,14 +1244,8 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func earthScene(isEnabled: Bool = true) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.earth.isEnabled = isEnabled
-        return settings
-    }
-
     /// Leaves the area outside the globe unpainted: no space background, no
-    /// stars, no Sun, and a frame that carries its own transparency.
+    /// stars, and a frame that carries its own transparency.
     func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.space.isTransparent = isTransparent
@@ -1401,20 +1267,6 @@ public extension ImmersiveMapSettings {
     func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
-        return settings
-    }
-
-    func atmosphereSettings(_ atmosphere: AtmosphereSettings) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.atmosphere = atmosphere
-        return settings
-    }
-
-    /// The globe's atmosphere: the halo around the planet and the glow on the
-    /// surface toward the limb.
-    func atmosphere(isEnabled: Bool = true) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.atmosphere.isEnabled = isEnabled
         return settings
     }
 

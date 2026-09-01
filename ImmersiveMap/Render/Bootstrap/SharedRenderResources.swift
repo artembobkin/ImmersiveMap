@@ -47,16 +47,10 @@ final class SharedRenderResources {
 
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
-    /// The sky layers (the starfield and the atmosphere halo): drawn after
-    /// the globe surface at the far plane, testing without writing, so only
-    /// the pixels the sphere left uncovered are shaded instead of the whole
-    /// screen being painted and then painted over.
+    /// The sky layers (the space background and the stars): drawn first on
+    /// the sphere at the far plane, tested against the cleared depth without
+    /// writing; the tile geometry blends over them.
     let skyBackdropDepthState: MTLDepthStencilState
-    /// The deferred surface lighting: drawn at the far plane, it passes only
-    /// where the depth is nearer than that, which is exactly the pixels the
-    /// globe surface wrote; space, still at the cleared far plane, is left
-    /// for the sky. Never writes.
-    let surfaceLightingDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -89,14 +83,8 @@ final class SharedRenderResources {
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
-    /// Same sphere, flat map color: the fill the tiles are painted over.
-    let globeSurfacePlaceholderPipeline: GlobePipeline
-    /// The deferred globe-surface lighting: one fullscreen draw whose blend
-    /// applies the light to the unlit ground layers, once per pixel.
-    let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
-    let atmospherePipeline: AtmospherePipeline
     let sceneModelPipeline: SceneModelPipeline
     let routePipeline: RoutePipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -104,7 +92,6 @@ final class SharedRenderResources {
 
     // MARK: - Geometry and atlases
 
-    let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     let globeCap: GlobeCapRenderer.SharedResources
     let avatars: AvatarsRenderer.SharedResources
     let textRenderer: TextRenderer
@@ -140,7 +127,6 @@ final class SharedRenderResources {
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
-        self.surfaceLightingDepthState = device.makeDepthStencilState(descriptor: Self.makeSurfaceLightingDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
@@ -158,11 +144,8 @@ final class SharedRenderResources {
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
-        self.globeSurfacePlaceholderPipeline = compiled.globeSurfacePlaceholderPipeline
-        self.globeSurfaceLightingPipeline = compiled.globeSurfaceLightingPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
-        self.atmospherePipeline = compiled.atmospherePipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.routePipeline = compiled.routePipeline
         self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
@@ -171,7 +154,6 @@ final class SharedRenderResources {
         self.avatars = compiled.avatars
         self.textRenderer = compiled.textRenderer
 
-        self.mapSurfaceGridBuffers = RendererSetup.makeMapSurfaceGridBuffers(metalDevice: device)
         // SF Symbol rasterization goes through UIImage/NSImage and stays on
         // the calling (main) thread rather than joining the concurrent batch.
         self.poiSpriteAtlas = PoiSpriteAtlas(device: device)
@@ -188,11 +170,8 @@ final class SharedRenderResources {
         let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
-        let globeSurfacePlaceholderPipeline: GlobePipeline
-        let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
-        let atmospherePipeline: AtmospherePipeline
         let sceneModelPipeline: SceneModelPipeline
         let routePipeline: RoutePipeline
         let tilePointScreenPipelines: TilePointScreenPipelines
@@ -223,11 +202,8 @@ final class SharedRenderResources {
         var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
-        var globeSurfacePlaceholderPipeline: GlobePipeline?
-        var globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
-        var atmospherePipeline: AtmospherePipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var routePipeline: RoutePipeline?
         var tilePointScreenPipelines: TilePointScreenPipelines?
@@ -275,15 +251,6 @@ final class SharedRenderResources {
                                                         library: library,
                                                         sampleCount: sampleCount,
                                                         surface: .sphere) },
-            { globeSurfacePlaceholderPipeline = GlobePipeline(
-                metalDevice: device,
-                pixelFormat: pixelFormat,
-                library: library,
-                sampleCount: sampleCount) },
-            { globeSurfaceLightingPipeline = GlobeSurfaceLightingPipeline(metalDevice: device,
-                                                                          pixelFormat: pixelFormat,
-                                                                          library: library,
-                                                                          sampleCount: sampleCount) },
             { fxaaPipeline = FXAAPipeline(metalDevice: device,
                                           pixelFormat: pixelFormat,
                                           library: library) },
@@ -291,10 +258,6 @@ final class SharedRenderResources {
                                                     pixelFormat: pixelFormat,
                                                     library: library,
                                                     sampleCount: sampleCount) },
-            { atmospherePipeline = AtmospherePipeline(metalDevice: device,
-                                                      pixelFormat: pixelFormat,
-                                                      library: library,
-                                                      sampleCount: sampleCount) },
             { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
@@ -316,11 +279,8 @@ final class SharedRenderResources {
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
-            globeSurfacePlaceholderPipeline: globeSurfacePlaceholderPipeline!,
-            globeSurfaceLightingPipeline: globeSurfaceLightingPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
-            atmospherePipeline: atmospherePipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             routePipeline: routePipeline!,
             tilePointScreenPipelines: tilePointScreenPipelines!,
@@ -439,13 +399,6 @@ final class SharedRenderResources {
     private static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
-        descriptor.isDepthWriteEnabled = false
-        return descriptor
-    }
-
-    private static func makeSurfaceLightingDepthDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .greater
         descriptor.isDepthWriteEnabled = false
         return descriptor
     }

@@ -193,7 +193,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     @MainActor
     private func renderFrame(crossing: String?) async throws -> RenderedFrame {
         let harness = try OffscreenFrameHarness.makeOrSkip(
-            settings: ImmersiveMapSettings.default.earthScene(isEnabled: false),
+            settings: ImmersiveMapSettings.default,
             size: 300
         )
         harness.setCameraPosition(Self.camera)

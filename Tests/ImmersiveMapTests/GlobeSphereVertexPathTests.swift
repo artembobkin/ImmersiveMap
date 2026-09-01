@@ -22,20 +22,6 @@ final class GlobeSphereVertexPathTests: XCTestCase {
         XCTAssertFalse(GlobeSphereVertexPath.isPureSphere(renderSurfaceMode: .flat, transition: 1))
     }
 
-    /// The deferred-lighting gate and the pure-sphere gate are the same
-    /// predicate: every pure-sphere frame blends unlit, so the unlit
-    /// pipelines carry the pure-sphere vertex stage unconditionally and the
-    /// lit-inline shading exists only for the unfurl.
-    func testTheDeferredGateEqualsThePureSphereGate() {
-        for transition: Float in [0, 0.25, 1] {
-            for mode in [ViewMode.spherical, .flat] {
-                XCTAssertEqual(GlobeSurfaceLightingPath.isDeferred(renderSurfaceMode: mode,
-                                                                   transition: transition),
-                               GlobeSphereVertexPath.isPureSphere(renderSurfaceMode: mode,
-                                                                  transition: transition))
-            }
-        }
-    }
 
     // MARK: - The uniform the shaders read
 
@@ -82,9 +68,6 @@ final class GlobeSphereVertexPathTests: XCTestCase {
         XCTAssertTrue(sphere.contains("constant bool kTileSpherePureSphere [[function_constant(1)]];"))
         XCTAssertTrue(sphere.contains("constant GlobeFrameConstants& globeFrame [[buffer(10)]]"))
         XCTAssertTrue(sphere.contains("kTileSpherePureSphere);"))
-        let globe = try shaderSource("Render/Shaders/Globe/Globe.metal")
-        XCTAssertTrue(globe.contains("constant bool kGlobePlaceholderPureSphere [[function_constant(1)]];"))
-        XCTAssertTrue(globe.contains("constant GlobeFrameConstants& globeFrame [[buffer(4)]]"))
         let visibility = try shaderSource("Render/Shaders/Globe/GlobeVisibility.h")
         XCTAssertTrue(visibility.contains("constant GlobeFrameConstants& frame,"))
     }

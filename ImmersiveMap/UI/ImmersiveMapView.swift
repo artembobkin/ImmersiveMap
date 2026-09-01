@@ -608,14 +608,9 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func earthScene(isEnabled: Bool = true) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.earthScene(isEnabled: isEnabled)
-        return view
-    }
 
-    /// Leaves the area outside the globe unpainted: the space background, the
-    /// stars and the visible Sun are not drawn, and the map view becomes
+    /// Leaves the area outside the globe unpainted: the space background and
+    /// the stars are not drawn, and the map view becomes
     /// transparent there, so the app's own background shows through and around
     /// the globe. A marker hanging off the limb no longer needs the map view
     /// clipped to a circle.
@@ -648,19 +643,7 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// The globe's atmosphere: the soft halo of scattered light around the
-    /// planet's edge and the matching glow on the surface toward the limb.
-    public func atmosphereSettings(_ atmosphere: ImmersiveMapSettings.AtmosphereSettings) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.atmosphereSettings(atmosphere)
-        return view
-    }
 
-    public func atmosphere(isEnabled: Bool = true) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.atmosphere(isEnabled: isEnabled)
-        return view
-    }
 
     public func styleSettings(_ style: ImmersiveMapSettings.StyleSettings) -> ImmersiveMapView {
         var view = self

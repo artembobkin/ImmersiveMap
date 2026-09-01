@@ -76,8 +76,6 @@ final class GlobeCapRenderer {
     func draw(renderEncoder: MTLRenderCommandEncoder,
               cameraUniform: CameraUniform,
               globe: GlobeUniform,
-              earthScene: EarthSceneUniform,
-              atmosphere: GlobeAtmosphereUniform,
               edgeStrip: GlobeCapEdgeStrip,
               stripUniform: (GlobeCapPole) -> GlobeCapStripUniform) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -86,13 +84,8 @@ final class GlobeCapRenderer {
         renderEncoder.setCullMode(.none)
         var cameraUniform = cameraUniform
         var globe = globe
-        var earthScene = earthScene
-        var atmosphere = atmosphere
         renderEncoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 2)
-        renderEncoder.setFragmentBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setFragmentBytes(&earthScene, length: MemoryLayout<EarthSceneUniform>.stride, index: 2)
-        renderEncoder.setFragmentBytes(&atmosphere, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 6)
 
         for pole in GlobeCapPole.allCases {
             var strip = stripUniform(pole)

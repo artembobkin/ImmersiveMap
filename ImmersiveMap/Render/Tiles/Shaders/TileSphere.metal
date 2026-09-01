@@ -18,7 +18,6 @@ using namespace metal;
 #include "TileShading.h"
 #include "../../Shaders/Globe/GlobeTileProjection.h"
 #include "../../Shaders/Globe/GlobeOcclusion.h"
-#include "../../Shaders/Globe/GlobeSurfaceShading.h"
 
 /// Per-draw tile identity for the projection, precomputed on the CPU so the
 /// vertex stage does no per-vertex pow(2, z); the layout mirrors
@@ -33,14 +32,10 @@ struct GlobeSurfaceTile {
     float referenceWorldX;
 };
 
-/// True (the default pipeline) lights every fragment inline through
-/// globeSurfaceShade. False is the deferred-lighting world: the layers
-/// blend unlit and the globeSurfaceLighting pass applies the light once
-/// per pixel (GlobeSurfaceLighting.metal), which is exact while the
-/// lighting is affine (transition 0, so no fog and the sphere's own
-/// silhouette). The
-/// lighting inputs below exist only in the lit variant: the unlit layers
-/// neither export, interpolate nor load them.
+/// True while the sphere unfurls: the fragment applies the horizon fog,
+/// whose strength is the transition. False on the pure sphere, where the
+/// surface needs no shading at all: the style colour is final. The fog
+/// input (the morphed world position) exists only in the fogged variant.
 constant bool kTileSphereLitInline [[function_constant(0)]];
 
 /// True on the pure sphere (transition 0, gated per frame by
@@ -58,6 +53,13 @@ constant bool kTileSpherePureSphere [[function_constant(1)]];
 constant bool kTileSphereSplitPass [[function_constant(2)]];
 constant bool kTileSphereLinesClass [[function_constant(3)]];
 
+/// The fills class of a split pass carries no line fields at all: its
+/// geometry has a zero side distance and a saturated end parameter, so the
+/// analytic coverage is identically 1 and the fields would only be
+/// interpolated to be ignored. The combined pass and the ribbons class
+/// keep them.
+constant bool kTileSphereHasLineFields = !(kTileSphereSplitPass && !kTileSphereLinesClass);
+
 struct SphereVertexOut {
     float4 position [[position]];
     // 0..3: the placeIn slot edges (tileLocalClipDistances). 4: the sphere
@@ -69,37 +71,31 @@ struct SphereVertexOut {
     // the far side morphing through the planet's interior, which back-face
     // culling alone cannot (a chord turns front-facing before it is out).
     float clipDistance [[clip_distance]] [5];
-    // The morphed surface position: fog, view angle and the horizon test
-    // read it. Lit variant only, like the three below.
+    // The morphed surface position the fog distances read; fogged (unfurl)
+    // variant only.
     float3 worldPos [[function_constant(kTileSphereLitInline)]];
-    float3 normal [[function_constant(kTileSphereLitInline)]];
-    float3 earthNormal [[function_constant(kTileSphereLitInline)]];
-    float transition [[function_constant(kTileSphereLitInline)]];
     half4 color;
     half lowZoomFadeMask;
-    float lineDistance;
-    float lineParameter;
-    half4 lineStyle;
-    half lineMinimumWidthPoints;
-    half lineMaximumWidthPoints;
-    half lineDashInTileUnits;
+    float lineDistance [[function_constant(kTileSphereHasLineFields)]];
+    float lineParameter [[function_constant(kTileSphereHasLineFields)]];
+    half4 lineStyle [[function_constant(kTileSphereHasLineFields)]];
+    half lineMinimumWidthPoints [[function_constant(kTileSphereHasLineFields)]];
+    half lineMaximumWidthPoints [[function_constant(kTileSphereHasLineFields)]];
+    half lineDashInTileUnits [[function_constant(kTileSphereHasLineFields)]];
 };
 
 // The fragment stage's view of SphereVertexOut, without the clip distances.
 struct SphereFragmentIn {
     float4 position [[position]];
     float3 worldPos [[function_constant(kTileSphereLitInline)]];
-    float3 normal [[function_constant(kTileSphereLitInline)]];
-    float3 earthNormal [[function_constant(kTileSphereLitInline)]];
-    float transition [[function_constant(kTileSphereLitInline)]];
     half4 color;
     half lowZoomFadeMask;
-    float lineDistance;
-    float lineParameter;
-    half4 lineStyle;
-    half lineMinimumWidthPoints;
-    half lineMaximumWidthPoints;
-    half lineDashInTileUnits;
+    float lineDistance [[function_constant(kTileSphereHasLineFields)]];
+    float lineParameter [[function_constant(kTileSphereHasLineFields)]];
+    half4 lineStyle [[function_constant(kTileSphereHasLineFields)]];
+    half lineMinimumWidthPoints [[function_constant(kTileSphereHasLineFields)]];
+    half lineMaximumWidthPoints [[function_constant(kTileSphereHasLineFields)]];
+    half lineDashInTileUnits [[function_constant(kTileSphereHasLineFields)]];
 };
 
 constant float kTileSphereExtent = 4096.0;
@@ -136,9 +132,6 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     out.clipDistance[4] = globeOcclusionClearance(projection.worldPosition, camera, globe);
     if (kTileSphereLitInline) {
         out.worldPos = projection.worldPosition;
-        out.normal = projection.normal;
-        out.earthNormal = projection.earthNormal;
-        out.transition = globe.transition;
     }
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     // A split pipeline keeps only its own class. The class is a property of
@@ -154,12 +147,14 @@ vertex SphereVertexOut tileSphereVertexShader(VertexIn vertexIn [[stage_in]],
     }
     out.color = style.color;
     out.lowZoomFadeMask = style.lowZoomFadeMask;
-    out.lineDistance = style.lineDistance;
-    out.lineParameter = style.lineParameter;
-    out.lineStyle = style.lineStyle;
-    out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
-    out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
-    out.lineDashInTileUnits = style.lineDashInTileUnits;
+    if (kTileSphereHasLineFields) {
+        out.lineDistance = style.lineDistance;
+        out.lineParameter = style.lineParameter;
+        out.lineStyle = style.lineStyle;
+        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
+        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
+        out.lineDashInTileUnits = style.lineDashInTileUnits;
+    }
     return out;
 }
 
@@ -176,21 +171,25 @@ static inline TileVertexStyle tileSphereFragmentStyle(SphereFragmentIn in) {
     return style;
 }
 
-// No shadows on the globe (a flat-world effect), no textures: the colour
-// comes from the style and the coverage, the light from the sphere.
+// No shadows on the globe (a flat-world effect), no textures, no lighting:
+// the colour comes from the style and the coverage. The unfurl variant adds
+// only the horizon fog, whose strength is the transition, so the morph and
+// the plane are fogged identically at the surface swap.
 fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                         constant HorizonFog& horizonFog [[buffer(2)]],
-                                        constant LineDashUniform& lineDash [[buffer(4)]],
-                                        constant Camera& camera [[buffer(5)]],
-                                        constant EarthScene& earthScene [[buffer(6)]],
-                                        constant GlobeAtmosphere& atmosphere [[buffer(7)]]) {
-    half4 color = tileGroundColor(tileSphereFragmentStyle(in), overviewFade, lineDash);
-    if (!kTileSphereLitInline) {
-        return color;
+                                        constant LineDashUniform& lineDash [[buffer(4)]]) {
+    half4 color;
+    if (kTileSphereHasLineFields) {
+        color = tileGroundColor(tileSphereFragmentStyle(in), overviewFade, lineDash);
+    } else {
+        // The fills class: coverage is identically 1, only the zoom fade
+        // scales the style colour.
+        color = in.color;
+        color.a *= tileStyleFade(in.lowZoomFadeMask, overviewFade);
     }
-    half4 shaded = globeSurfaceShade(color, in.worldPos, in.normal, in.earthNormal, in.transition,
-                                     camera, earthScene, horizonFog, atmosphere);
-    shaded.a = color.a;
-    return shaded;
+    if (kTileSphereLitInline) {
+        color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
+    }
+    return color;
 }

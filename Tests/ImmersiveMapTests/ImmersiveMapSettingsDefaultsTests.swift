@@ -30,19 +30,6 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(tint.z, 1.0)
     }
 
-    /// The atmosphere is part of the default globe: on, sky blue, at the
-    /// designed intensity and width, with the sun shaping it partway.
-    func testDefaultAtmosphereIsOn() {
-        let atmosphere = ImmersiveMapSettings.default.scene.atmosphere
-        XCTAssertTrue(atmosphere.isEnabled)
-        XCTAssertEqual(atmosphere.intensity, 1.0)
-        XCTAssertEqual(atmosphere.thickness, 1.0)
-        XCTAssertGreaterThan(atmosphere.sunInfluence, 0)
-        XCTAssertLessThanOrEqual(atmosphere.sunInfluence, 1)
-        // Sky blue: blue dominates, red is the weakest channel.
-        XCTAssertGreaterThan(atmosphere.color.z, atmosphere.color.y)
-        XCTAssertGreaterThan(atmosphere.color.y, atmosphere.color.x)
-    }
 
     /// The map color, the tile background and the built-in style's land are one
     /// color: a tile that has not arrived, the placeholder globe and the horizon

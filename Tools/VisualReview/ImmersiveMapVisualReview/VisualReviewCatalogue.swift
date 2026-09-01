@@ -131,21 +131,10 @@ struct VisualReviewScenario: Identifiable {
 /// joins the pre-release pass from then on. Keep the identifiers stable, since
 /// they carry the verdict history.
 enum VisualReviewCatalogue {
-    /// Pinned so the sun, the terminator and the night side land in the same
-    /// place every run. A moving sun would make every scene differ from the
-    /// last approval for a reason that has nothing to do with the code.
+    /// Pinned so anything time-driven lands in the same place every run: a
+    /// moving clock would make a scene differ from its last approval for a
+    /// reason that has nothing to do with the code.
     static let sceneDate = Date(timeIntervalSince1970: 1_749_000_000)
-
-    /// 2026-03-20 12:00 UTC: the sun over the equator near longitude 0, so a
-    /// camera longitude alone says where the sun is relative to the view.
-    static let equinoxNoon = Date(timeIntervalSince1970: 1_774_008_000)
-
-    /// The default map with the sun pinned to `equinoxNoon`.
-    private static let equinoxSettings: ImmersiveMapSettings = {
-        var settings = ImmersiveMapSettings.default
-        settings.scene.earth.timeMode = .fixed(equinoxNoon)
-        return settings
-    }()
 
     /// Places chosen for what they contain rather than for sentiment: dense
     /// blocks with towers, water against a coastline, and mountains.
@@ -216,14 +205,6 @@ enum VisualReviewCatalogue {
                                                           zoom: 1.5,
                                                           bearing: 0.4,
                                                           pitch: 0.6)
-        // At `equinoxNoon` the sun stands over longitude -2: these two put it
-        // just behind the limb and straight behind the planet.
-        static let sunBehindLimb = ImmersiveMapCameraPosition(latitudeDegrees: 0.0,
-                                                              longitudeDegrees: 100.0,
-                                                              zoom: 0.6)
-        static let sunStraightBehind = ImmersiveMapCameraPosition(latitudeDegrees: 0.0,
-                                                                  longitudeDegrees: 178.0,
-                                                                  zoom: 0.6)
     }
 
     static let scenarios: [VisualReviewScenario] = [
@@ -263,47 +244,15 @@ enum VisualReviewCatalogue {
             id: "globe.default",
             title: "Globe, default style",
             lookFor: """
-            The planet is round with no seam down the middle, the coastlines are \
-            clean, and the terminator falls where the pinned date puts it. Stars \
-            behind it, no banding in the space gradient. A soft sky-blue \
-            atmosphere hugs the whole limb, brighter on the day side and a \
-            thin residual glow on the night side, whitening right at the \
-            edge, with no gap between the halo and the sphere and no hard \
-            ring; the surface itself lifts toward the same blue at the limb. \
-            Country borders are thin, unobtrusive dashed lines that read as \
-            dashes, not chains of fat dots, and no regional borders clutter \
-            the planet.
+            The planet is round with no seam down the middle, the coastlines \
+            are clean and the limb is a hard, even edge against space (there \
+            is no atmosphere and no day/night shading any more). Stars behind \
+            it, no banding in the space gradient. Country borders are thin, \
+            unobtrusive dashed lines that read as dashes, not chains of fat \
+            dots, and no regional borders clutter the planet.
             """,
             settings: .default,
             subject: .still(camera: Place.globe)),
-
-        VisualReviewScenario(
-            id: "globe.atmosphere.off",
-            title: "Globe with the atmosphere off",
-            lookFor: """
-            The control for the frame above: the same planet with a hard limb \
-            against space, no halo and no glow toward the edge. The sun's warm \
-            rim on the day side is still there (that is the earth scene, not \
-            the atmosphere).
-            """,
-            settings: .default.atmosphere(isEnabled: false),
-            subject: .still(camera: Place.globe)),
-
-        VisualReviewScenario(
-            id: "globe.atmosphere.tilted",
-            title: "Atmosphere on a tilted, off-center globe",
-            lookFor: """
-            The camera is pitched and the planet fills the lower frame, so its \
-            silhouette is no longer a circle. The halo must still hug the limb \
-            all the way along, at the same width, without detaching on one \
-            side or crossing onto the surface on the other.
-            """,
-            settings: .default,
-            subject: .still(camera: ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
-                                                               longitudeDegrees: 10.0,
-                                                               zoom: 3.4,
-                                                               bearing: 0.4,
-                                                               pitch: 0.7))),
 
         VisualReviewScenario(
             id: "globe.transparent.space",
@@ -332,44 +281,6 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.wholePlanet)),
-
-        VisualReviewScenario(
-            id: "sun.behind.limb",
-            title: "Sun just behind the limb",
-            lookFor: """
-            Space stays black right up to the planet: no orange glow spread \
-            across the frame. The sun's disc is hidden; what shows is the \
-            atmosphere halo turning from its blue, where it wraps away from \
-            the sun, through amber to white-gold at one focus where the disc \
-            is about to emerge, with a flare stretched along the limb there \
-            (the diamond ring). One continuous ramp of colour along the limb: \
-            no seam, no green band and no grey where blue and gold would \
-            meet. It should read as a sunrise from orbit, with a clear \
-            direction. The surface's last sliver of day along that limb \
-            carries a warm rim, on the same side as the focus.
-            """,
-            settings: equinoxSettings,
-            subject: .still(camera: Place.sunBehindLimb)),
-
-        VisualReviewScenario(
-            id: "sun.straight.behind",
-            title: "Sun straight behind the planet",
-            lookFor: """
-            The eclipse view: a dark disc against black space with a thin, \
-            even ring of lit atmosphere all the way around, warm white-gold \
-            at the limb going amber outward, since the sun grazes the air on \
-            the whole rim at once; no flare anywhere since no part of the \
-            disc is close to emerging, and no sun glow leaking from behind.
-            """,
-            settings: equinoxSettings,
-            subject: .still(camera: Place.sunStraightBehind)),
-
-        VisualReviewScenario(
-            id: "globe.no.earth.scene",
-            title: "Globe with the earth scene off",
-            lookFor: "Flat, evenly lit planet: no sun, no night side, no glow.",
-            settings: .default.earthScene(isEnabled: false),
-            subject: .still(camera: Place.globe)),
 
         VisualReviewScenario(
             id: "transition.continental",
@@ -621,7 +532,7 @@ enum VisualReviewCatalogue {
             The arcs lift off the surface cleanly, keep an even width along \
             their length, and are hidden where they pass behind the planet.
             """,
-            settings: .default.earthScene(isEnabled: false),
+            settings: .default,
             subject: .still(camera: Place.globe, routes: [
                 ImmersiveMapRoute(id: 1,
                                   path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 40.64, longitude: -73.78),

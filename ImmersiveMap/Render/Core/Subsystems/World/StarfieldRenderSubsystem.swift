@@ -52,7 +52,6 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         encoder.setDepthStencilState(skyBackdropDepthState)
         starfieldRenderer.draw(renderEncoder: encoder,
                                globe: frameContext.globeRenderUniform,
-                               earthScene: frameContext.earthSceneUniform,
                                cameraView: frameContext.cameraMatrices.view,
                                cameraEye: frameContext.cameraEye,
                                drawSize: frameContext.drawSize,

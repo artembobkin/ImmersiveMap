@@ -12,7 +12,7 @@ UI → Render → domain folders → Utils
 
 - **UI** - SwiftUI surface, platform hosts (UIKit on iOS, AppKit on macOS), `CAMetalLayer`, render driver.
 - **Render** - Metal render pipeline, subsystems, shaders.
-- **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `EarthScene`, `Avatars`, `Starfield`, `Geo`.
+- **Domain folders** - `Camera`, `Tile`, `Labels`, `Text`, `Presentation`, `Globe`, `Avatars`, `Starfield`, `Geo`.
 - **Utils** - shared stateless helpers.
 
 Domain folders must not depend on `UI`/`Render` and must not contain Metal code. `Render` must not contain networking or platform UI. Provider-specific MVT schema logic is confined to `VectorTileAdaptation/` and the concrete provider folder `Provider/ImmersiveMapTiles`; `Render`, `Labels`, and `Tile` consume only provider-neutral, normalized data.
@@ -45,7 +45,7 @@ Rendering is **on-demand**. `ImmersiveMapRenderDriver` drives a `CAMetalDisplayL
 collectInput → updateScene → prepareGPU → encodePasses → presentFrame
 ```
 
-Work is organized as ~17 `RenderSubsystem`s registered by `RenderGraphFactory`. `RenderPassGraph` groups render layers into up to six passes: `shadowMap` (flat-only depth pass from the directional light, sampled by later passes), `groundShadowMask` (flat-only, right after the shadow map: the shadow factor of the ground plane evaluated once per screen pixel into an 8-bit texture, which every ground layer of the world pass reads with one texture read instead of sampling the cascades per layer), `buildingImage` (flat-only offscreen render of opaque buildings that the world pass composites translucently, only in the translucent extrusion modes), `world` (MSAA: on the globe the starfield, the atmosphere halo, the surface and the polar caps; on the plane the buildings first and then the ground, which depth-tests against them so nothing under a building is shaded; scene models and routes on both), `postProcessing` (FXAA), and `overlay` (a scene-model label-occlusion depth prepass, then labels/avatars/debug: labels rasterize at the far plane and depth-test against the prepass, so model silhouettes clip them). GPU frame overlap is bounded by `InFlightFramePool`.
+Work is organized as ~17 `RenderSubsystem`s registered by `RenderGraphFactory`. `RenderPassGraph` groups render layers into up to six passes: `shadowMap` (flat-only depth pass from the directional light, sampled by later passes), `groundShadowMask` (flat-only, right after the shadow map: the shadow factor of the ground plane evaluated once per screen pixel into an 8-bit texture, which every ground layer of the world pass reads with one texture read instead of sampling the cascades per layer), `buildingImage` (flat-only offscreen render of opaque buildings that the world pass composites translucently, only in the translucent extrusion modes), `world` (on the globe the starfield first and then the tile geometry on the sphere, which blends over it, and the polar caps; on the plane the buildings first and then the ground, which depth-tests against them so nothing under a building is shaded; scene models and routes on both), `postProcessing` (FXAA), and `overlay` (a scene-model label-occlusion depth prepass, then labels/avatars/debug: labels rasterize at the far plane and depth-test against the prepass, so model silhouettes clip them). GPU frame overlap is bounded by `InFlightFramePool`.
 
 ## Tile pipeline
 

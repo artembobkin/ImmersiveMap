@@ -70,22 +70,11 @@ enum RenderGraphFactory {
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
                                                           depthDisabledState: context.depthDisabledState)
-        let atmosphereSubsystem = AtmosphereRenderSubsystem(atmosphereRenderer: context.atmosphereRenderer,
-                                                            skyBackdropDepthState: context.skyBackdropDepthState,
-                                                            depthDisabledState: context.depthDisabledState)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
-        let globeSurfaceSubsystem = GlobeSurfaceRenderSubsystem(globeDepthState: context.extrudedDepthState,
-                                                                placeholderPipeline: context.globeSurfacePlaceholderPipeline,
-                                                                mapSurfaceGridBuffers: context.mapSurfaceGridBuffers)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
                                                                             depthDisabledState: context.depthDisabledState,
                                                                             debugOverlayControls: debugOverlayControls)
-        let globeSurfaceLightingSubsystem = GlobeSurfaceLightingRenderSubsystem(
-            pipeline: context.globeSurfaceLightingPipeline,
-            surfaceLightingDepthState: context.surfaceLightingDepthState,
-            depthDisabledState: context.depthDisabledState
-        )
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,
                                                         globeCapRenderer: context.globeCapRenderer,
@@ -109,10 +98,7 @@ enum RenderGraphFactory {
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,
-            atmosphereSubsystem,
-            globeSurfaceSubsystem,
             globeVectorSurfaceSubsystem,
-            globeSurfaceLightingSubsystem,
             globeCapSubsystem,
             postProcessingSubsystem,
             debugSubsystem
@@ -123,7 +109,6 @@ enum RenderGraphFactory {
             avatarSubsystem,
             sceneModelSubsystem,
             starfieldSubsystem,
-            atmosphereSubsystem,
             debugSubsystem
         ]
         return RenderGraph(registry: RenderSubsystemRegistry(subsystems: subsystems),

@@ -15,7 +15,6 @@ final class StarfieldPipeline {
 
     let backgroundPipelineState: MTLRenderPipelineState
     let starsPipelineState: MTLRenderPipelineState
-    let sunPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
@@ -23,8 +22,6 @@ final class StarfieldPipeline {
          sampleCount: Int = 1) {
         let backgroundVertexFunction = library.makeFunction(name: "starfieldBackgroundVertexShader")
         let backgroundFragmentFunction = library.makeFunction(name: "starfieldBackgroundFragmentShader")
-        let sunVertexFunction = library.makeFunction(name: "sunVertexShader")
-        let sunFragmentFunction = library.makeFunction(name: "sunFragmentShader")
         let vertexFunction = library.makeFunction(name: "starfieldVertexShader")
         let fragmentFunction = library.makeFunction(name: "starfieldFragmentShader")
 
@@ -74,24 +71,10 @@ final class StarfieldPipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .one
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
 
-        let sunDescriptor = MTLRenderPipelineDescriptor()
-        sunDescriptor.vertexFunction = sunVertexFunction
-        sunDescriptor.fragmentFunction = sunFragmentFunction
-        sunDescriptor.rasterSampleCount = sampleCount
-        sunDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        sunDescriptor.depthAttachmentPixelFormat = .depth32Float
-        sunDescriptor.colorAttachments[0].isBlendingEnabled = true
-        sunDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        sunDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        sunDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
-        sunDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        sunDescriptor.colorAttachments[0].destinationRGBBlendFactor = .one
-        sunDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
 
         do {
             backgroundPipelineState = try metalDevice.makeRenderPipelineState(descriptor: backgroundDescriptor)
             starsPipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            sunPipelineState = try metalDevice.makeRenderPipelineState(descriptor: sunDescriptor)
         } catch {
             fatalError("Failed to create starfield pipeline: \(error)")
         }
@@ -105,7 +88,4 @@ final class StarfieldPipeline {
         renderEncoder.setRenderPipelineState(starsPipelineState)
     }
 
-    func selectSunPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(sunPipelineState)
-    }
 }

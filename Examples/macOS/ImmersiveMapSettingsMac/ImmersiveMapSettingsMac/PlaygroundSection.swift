@@ -10,7 +10,7 @@ import ImmersiveMap
 enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
     case labels
     case buildings
-    case earthScene
+    case sky
     case style
     case presentation
     case camera
@@ -22,7 +22,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .labels: "Labels"
         case .buildings: "Buildings and shadows"
-        case .earthScene: "Earth scene"
+        case .sky: "Sky"
         case .style: "Style"
         case .presentation: "Presentation"
         case .camera: "Camera"
@@ -34,7 +34,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .labels: "textformat"
         case .buildings: "building.2"
-        case .earthScene: "sun.max"
+        case .sky: "sparkles"
         case .style: "paintpalette"
         case .presentation: "globe"
         case .camera: "camera.aperture"
@@ -56,10 +56,10 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             (light, shadows). Flat presentation only, and all of it is per-frame \
             uniforms, so it applies without touching a single tile.
             """
-        case .earthScene:
+        case .sky:
             """
-            `settings.scene.earth`, `.starfield` and `.space`: the visible Sun, \
-            the day/night terminator and what is drawn outside the globe.
+            `settings.scene.starfield` and `.space`: the stars behind the \
+            planet and whether anything outside the globe is painted at all.
             """
         case .style:
             """
@@ -104,7 +104,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
                                        zoom: 16.8,
                                        bearing: 0.55,
                                        pitch: 1.02)
-        case .earthScene:
+        case .sky:
             ImmersiveMapCameraPosition(latitudeDegrees: 20,
                                        longitudeDegrees: 10,
                                        zoom: 1.5,

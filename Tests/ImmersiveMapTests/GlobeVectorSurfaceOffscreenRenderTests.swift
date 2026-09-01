@@ -53,8 +53,6 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                                                               longitudeDegrees: Self.longitude,
                                                               zoom: 1.0))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
-        XCTAssertNotEqual(baseline.center, baseline.corners[0],
-                          "The placeholder grid paints the disc before any tile arrives")
         try await loadFixtureTiles(into: harness, maximumZoom: 2)
         let painted = try await harness.renderUntilSettled(changedFrom: baseline,
                                                             startingAt: OffscreenFrameHarness.frameTime(1))
@@ -195,7 +193,6 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                 $0.grass = Self.fixtureForest
             }
         var settings = ImmersiveMapSettings.default
-            .earthScene(isEnabled: false)
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
         // The stars twinkle with scene time, so a settle loop over a globe
         // frame never sees two identical pictures while they are drawn.

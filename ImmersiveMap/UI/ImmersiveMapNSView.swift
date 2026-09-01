@@ -296,9 +296,6 @@ public class ImmersiveMapNSView: NSView {
     }
     #endif
 
-    func setEarthSceneEnabledFromDebugOverlay(_ isEnabled: Bool) {
-        hostRuntime.setEarthSceneEnabled(isEnabled)
-    }
 
     // MARK: - Cleanup
 

@@ -23,8 +23,6 @@ final class RenderPersistentContext {
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
-    let globeSurfacePlaceholderPipeline: GlobePipeline
-    let globeSurfaceLightingPipeline: GlobeSurfaceLightingPipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
@@ -35,15 +33,11 @@ final class RenderPersistentContext {
     /// The caps' rim colour, baked per view from its own placements.
     let globeCapEdgeStrip: GlobeCapEdgeStrip
     let starfieldRenderer: StarfieldRenderer
-    let atmosphereRenderer: AtmosphereRenderer
-    let mapSurfaceGridBuffers: MapSurfaceGridBuffers
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     /// See `SharedRenderResources.skyBackdropDepthState`.
     let skyBackdropDepthState: MTLDepthStencilState
-    /// See `SharedRenderResources.surfaceLightingDepthState`.
-    let surfaceLightingDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
@@ -112,7 +106,6 @@ final class RenderPersistentContext {
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.skyBackdropDepthState = shared.skyBackdropDepthState
-        self.surfaceLightingDepthState = shared.surfaceLightingDepthState
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.compositeDepthResetState = shared.compositeDepthResetState
@@ -131,8 +124,6 @@ final class RenderPersistentContext {
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
-        self.globeSurfacePlaceholderPipeline = shared.globeSurfacePlaceholderPipeline
-        self.globeSurfaceLightingPipeline = shared.globeSurfaceLightingPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline
@@ -143,11 +134,7 @@ final class RenderPersistentContext {
                                                    spaceColor: config.scene.space.clearColor,
                                                    transitionTargetColor: config.scene.mapClearColor,
                                                    config: config.scene.starfield)
-        // The atmosphere reads its settings per frame, so only the shared
-        // pipeline is behind it.
-        self.atmosphereRenderer = AtmosphereRenderer(pipeline: shared.atmospherePipeline)
 
-        self.mapSurfaceGridBuffers = shared.mapSurfaceGridBuffers
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
         // The cap palette bakes style colors; grids and pipeline come from
         // the shared set.

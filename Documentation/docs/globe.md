@@ -33,8 +33,6 @@ The globe is drawn from the same vector tiles as the plane. Every visible tile's
 | Feature | Where it draws |
 |---|---|
 | Starfield and the globe cap | Globe, fading out through the morph |
-| [Atmosphere](earth-scene.md) | Globe: the halo in space fades out over the first third of the morph, the surface glow with the whole of it |
-| [Sun and day/night terminator](earth-scene.md) | Globe (the terminator shades the sphere) |
 | [Routes](routes.md) | Globe and the whole morph, fading out over its last tenth |
 | [Extruded buildings](buildings-and-shadows.md) | Flat |
 | [Shadows](buildings-and-shadows.md) | Flat |

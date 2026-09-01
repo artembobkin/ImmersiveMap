@@ -43,7 +43,7 @@ public struct SceneLightSettings: Equatable, Sendable {
 
 What the walls do get is a tonal cue, not lighting: a roof keeps the style's building color, a wall square to the light sits a step under it, a wall turned away steps down further (and the shadow map then shades it as self-shadowed), and every wall darkens toward the ground over its first thirty meters, the ambient occlusion of a street canyon. Roof, lit wall, side wall and shaded wall are therefore four distinct tones of one color, which is what makes a block read as a lit solid.
 
-This is not the [Earth scene sun](earth-scene.md), which lights the globe. The two are independent, and an app that wants them to agree has to set both.
+The globe has no analytic sun of its own: this light exists only for the flat presentation's shadows.
 
 ## Shadows
 

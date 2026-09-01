@@ -66,16 +66,14 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             mark(.debug, actions: [.liveApply])
         }
 
-        // Light, shadows and the atmosphere are per-frame uniforms read from
+        // Light and shadows are per-frame uniforms read from
         // `FrameContext`; the shadow-map texture is reallocated lazily on
         // resolution change, so all of them apply live without recreating the
         // renderer.
         let sceneLiveChanged = oldValue.scene.mapClearColor != newValue.scene.mapClearColor
             || oldValue.scene.space != newValue.scene.space
-            || oldValue.scene.earth != newValue.scene.earth
             || oldValue.scene.light != newValue.scene.light
             || oldValue.scene.shadows != newValue.scene.shadows
-            || oldValue.scene.atmosphere != newValue.scene.atmosphere
         if sceneLiveChanged {
             mark(.scene, actions: [.liveApply])
         }

@@ -42,13 +42,6 @@ enum RendererSetup {
         }
     }
 
-    static func makeMapSurfaceGridBuffers(metalDevice: MTLDevice) -> MapSurfaceGridBuffers {
-        let baseGrid = SphereGeometry.createGrid(stacks: 60, slices: 60)
-        return MapSurfaceGridBuffers.make(metalDevice: metalDevice,
-                                          vertices: baseGrid.vertices,
-                                          indices: baseGrid.indices)
-    }
-
     static func configureCamera(_ cameraStateController: CameraStateController) {
         //cameraStateController.setZoom(zoom: 8)
         cameraStateController.setLatLonDeg(latDeg: 55.751244, lonDeg: 37.618423)

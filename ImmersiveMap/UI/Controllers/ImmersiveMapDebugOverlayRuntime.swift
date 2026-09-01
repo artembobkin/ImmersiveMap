@@ -63,9 +63,6 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setRoadLabelBoundsEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
-        hudView.onEarthSceneEnabledChanged = { [weak mapView] isEnabled in
-            mapView?.setEarthSceneEnabledFromDebugOverlay(isEnabled)
-        }
         hudView.onSurfaceModeSwitchRequested = { [weak cameraRuntime, weak cameraAnimationRuntime] in
             cameraAnimationRuntime?.cancelAnimations()
             cameraRuntime?.switchRenderMode()
@@ -111,8 +108,7 @@ final class ImmersiveMapDebugOverlayRuntime {
 
     func apply(settings: ImmersiveMapSettings) {
         hudView.apply(isDebugPanelEnabled: settings.debug.enableDebugPanel,
-                      controls: controls.snapshot(),
-                      earthSceneEnabled: settings.scene.earth.isEnabled)
+                      controls: controls.snapshot())
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
         if settings.debug.enableDebugPanel {

@@ -125,8 +125,8 @@ private struct SettingsPlaygroundScreen: View {
             LabelsPanel(settings: $settings)
         case .buildings:
             BuildingsPanel(settings: $settings)
-        case .earthScene:
-            EarthScenePanel(settings: $settings)
+        case .sky:
+            SkyPanel(settings: $settings)
         case .style:
             StylePanel(settings: $settings)
         case .presentation:

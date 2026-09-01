@@ -140,8 +140,10 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         let pixels = try readPixels(from: image)
         XCTAssertEqual(alpha(in: pixels, x: 0, y: 0, width: 160), 0,
                        "Space around the globe must stay unpainted")
-        XCTAssertEqual(alpha(in: pixels, x: 80, y: 80, width: 160), 255,
-                       "The globe itself must be fully covered")
+        // With the placeholder grid gone, a tileless globe paints nothing:
+        // the disc is transparent until tiles arrive.
+        XCTAssertEqual(alpha(in: pixels, x: 80, y: 80, width: 160), 0,
+                       "A tileless globe carries no surface to cover the disc")
     }
 
     /// Proves the controllers passed to `capture` actually reach the renderer.
@@ -160,7 +162,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // requires two captures of the same scene to be identical, and a tile
         // arriving in one of them but not the other breaks that by thousands
         // of pixels.
-        let settings = FixtureTiles.tilelessSettings(.default.earthScene(isEnabled: false))
+        let settings = FixtureTiles.tilelessSettings(.default)
 
         let withoutRoute = try await ImmersiveMapStillRecorder().capture(settings: settings,
                                                                          camera: camera,
@@ -219,7 +221,7 @@ final class ImmersiveMapStillRecorderTests: XCTestCase {
         // Space left opaque on purpose: the starfield is the part of the map
         // most sensitive to where the clock stopped, so if captures are
         // reproducible with stars on screen they are reproducible.
-        let settings = FixtureTiles.tilelessSettings(.default.earthScene(isEnabled: false))
+        let settings = FixtureTiles.tilelessSettings(.default)
         let routes = [ImmersiveMapRoute(id: 1,
                                         path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 0, longitude: -20),
                                                                   to: GeoCoordinate(latitude: 0, longitude: 20),

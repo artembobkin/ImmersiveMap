@@ -12,17 +12,12 @@ import XCTest
 /// Metal library, so it skips under `swift test` and runs in the xcodebuild
 /// workspace suite.
 final class TransparentSpaceOffscreenRenderTests: XCTestCase {
-    /// The earth scene is on with its Sun, which is the case that has to hold:
-    /// the space background, the stars and the Sun all come from the starfield
-    /// layer, so if any of them still painted, the corners would come back
-    /// opaque.
+    /// The space background and the stars come from the starfield layer, so
+    /// if either still painted, the corners would come back opaque.
     @MainActor
     func testTransparentSpaceLeavesTheAreaOutsideTheGlobeUnpainted() async throws {
         let settings = ImmersiveMapSettings.default
-            .earthScene(isEnabled: true)
             .transparentSpace()
-        XCTAssertTrue(settings.scene.earth.sun.isEnabled,
-                      "The Sun must be on, otherwise this test proves nothing")
         let frame = try await renderFrame(settings: settings, routeAlpha: 1.0)
 
         for corner in frame.corners {

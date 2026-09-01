@@ -18,7 +18,6 @@ struct RenderPassAvailabilityBuilder {
     var starfieldEnabled: Bool = true
     /// On by default like the starfield: the atmosphere halo is part of the
     /// globe look and is turned off by settings (or by transparent space).
-    var atmosphereEnabled: Bool = true
 
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
@@ -26,7 +25,6 @@ struct RenderPassAvailabilityBuilder {
                                avatarsEnabled: avatarsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
                                sceneModelOcclusionEnabled: sceneModelOcclusionEnabled,
-                               starfieldEnabled: starfieldEnabled,
-                               atmosphereEnabled: atmosphereEnabled)
+                               starfieldEnabled: starfieldEnabled)
     }
 }

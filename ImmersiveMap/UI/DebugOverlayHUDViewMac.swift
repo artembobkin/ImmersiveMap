@@ -45,8 +45,6 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    private let earthSceneLabel = NSTextField(labelWithString: "")
-    private let earthSceneSwitch = NSSwitch()
     private let surfaceModeButton = NSButton()
     private let tabControl = NSSegmentedControl(labels: ["Stats", "Tiles", "Base labels", "Controls"],
                                                 trackingMode: .selectOne,
@@ -90,7 +88,6 @@ final class DebugOverlayHUDView: NSView {
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
-    var onEarthSceneEnabledChanged: ((Bool) -> Void)?
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
@@ -121,7 +118,6 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(tileLayersLabel, text: "Tile layers")
         configureControlLabel(tileGridLabel, text: "Tile grid")
         configureControlLabel(wireframeLabel, text: "Wireframe")
-        configureControlLabel(earthSceneLabel, text: "Earth scene")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
@@ -129,7 +125,6 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
-        configureSwitch(earthSceneSwitch, action: #selector(earthSceneSwitchChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -145,8 +140,6 @@ final class DebugOverlayHUDView: NSView {
         containerView.addSubview(tileGridDensityControl)
         containerView.addSubview(wireframeLabel)
         containerView.addSubview(wireframeSwitch)
-        containerView.addSubview(earthSceneLabel)
-        containerView.addSubview(earthSceneSwitch)
         containerView.addSubview(roadLabelTilesLabel)
         containerView.addSubview(roadLabelTilesSwitch)
         containerView.addSubview(baseLabelBoundsLabel)
@@ -217,8 +210,7 @@ final class DebugOverlayHUDView: NSView {
     }
 
     func apply(isDebugPanelEnabled: Bool,
-               controls: DebugOverlayControlSnapshot,
-               earthSceneEnabled: Bool) {
+               controls: DebugOverlayControlSnapshot) {
         isPanelEnabled = isDebugPanelEnabled
         axesSwitch.state = controls.axesEnabled ? .on : .off
         tileLayersSwitch.state = controls.tileLayersEnabled ? .on : .off
@@ -228,7 +220,6 @@ final class DebugOverlayHUDView: NSView {
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
-        earthSceneSwitch.state = earthSceneEnabled ? .on : .off
         updateVisibility()
         needsLayout = true
     }
@@ -392,16 +383,8 @@ final class DebugOverlayHUDView: NSView {
                                        y: wireframeLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
                                        width: switchSize.width,
                                        height: switchSize.height)
-        earthSceneLabel.frame = CGRect(x: Layout.contentInset,
-                                       y: wireframeLabel.frame.maxY + Layout.controlSpacing,
-                                       width: labelWidth,
-                                       height: Layout.controlRowHeight)
-        earthSceneSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                        y: earthSceneLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                        width: switchSize.width,
-                                        height: switchSize.height)
         surfaceModeButton.frame = CGRect(x: Layout.contentInset,
-                                         y: earthSceneLabel.frame.maxY + Layout.controlSpacing,
+                                         y: wireframeLabel.frame.maxY + Layout.controlSpacing,
                                          width: contentWidth,
                                          height: Layout.controlRowHeight)
 
@@ -654,7 +637,7 @@ final class DebugOverlayHUDView: NSView {
         tabControl.isHidden = isContentHidden
         [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
-         earthSceneLabel, earthSceneSwitch, surfaceModeButton].forEach {
+         surfaceModeButton].forEach {
             $0.isHidden = isControlsVisible == false
         }
         [zoomLabel, latLonLabel, diagnosticsLabel].forEach {
@@ -714,9 +697,6 @@ final class DebugOverlayHUDView: NSView {
         onRoadLabelBoundsEnabledChanged?(roadLabelBoundsSwitch.state == .on)
     }
 
-    @objc private func earthSceneSwitchChanged() {
-        onEarthSceneEnabledChanged?(earthSceneSwitch.state == .on)
-    }
 
     @objc private func surfaceModeButtonTapped() {
         onSurfaceModeSwitchRequested?()

@@ -38,23 +38,6 @@ struct GlobeFrameConstants {
     float panLongitude;
 };
 
-struct EarthScene {
-    float3 sunDirection;
-    uint isEnabled;
-    float daySideMinimumBrightness;
-    float nightSideBrightness;
-    float terminatorFadeWidth;
-    uint sunVisualEnabled;
-    float sunDiskAngularSize;
-    float sunDiskIntensity;
-    float sunGlowIntensity;
-    float sunEdgeGlareIntensity;
-    float sunLimbHaloIntensity;
-    float sunLimbHaloWidth;
-    float sunShadowFade;
-    uint _padding0;
-};
-
 struct SunVisualState {
     float2 screenCenter;
     float2 clampedScreenCenter;
@@ -114,16 +97,6 @@ struct Shadow {
     // white keeps the neutral darkening, a bluish tint gives shadows the cool
     // cast of light coming only from the sky.
     float3 tint;
-};
-
-// The glow of the globe's atmosphere on the sphere surface toward the limb;
-// the layout mirrors GlobeAtmosphereUniform.swift. Zero intensity leaves the
-// surface bare (the atmosphere is off).
-struct GlobeAtmosphere {
-    float3 color;
-    float intensity;
-    float3 sunDirection;
-    float _padding0;
 };
 
 // Receiver-plane depth gradient dz/duv from screen-space derivatives

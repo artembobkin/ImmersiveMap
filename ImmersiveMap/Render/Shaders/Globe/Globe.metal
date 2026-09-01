@@ -5,45 +5,6 @@
 using namespace metal;
 #include "GlobeTransitionProjection.h"
 #include "GlobeOcclusion.h"
-#include "GlobeSurfaceShading.h"
-
-// Add necessary structures for transformation and rendering
-struct VertexIn {
-    float2 uv [[attribute(0)]];
-};
-
-/// True lights the fill inline; false leaves it unlit for the deferred
-/// globeSurfaceLighting pass (see kTileSphereLitInline in TileSphere.metal).
-/// The lighting inputs of the structs below exist only in the lit variant:
-/// the unlit fill needs nothing past position and clip, so the varyings are
-/// neither exported, interpolated nor loaded.
-constant bool kGlobePlaceholderLitInline [[function_constant(0)]];
-
-/// True on the pure sphere (transition 0): the flat morph target, the
-/// unfurl phase and the mix fold away, exactly as kTileSpherePureSphere
-/// does for the tile geometry drawn over this fill.
-constant bool kGlobePlaceholderPureSphere [[function_constant(1)]];
-
-struct SurfaceVertexOut {
-    float4 position [[position]];
-    // The sphere as an occluder (globeOcclusionClearance): the grid morphs
-    // exactly like the tile geometry over it and would leak its far side
-    // through the near one the same way while the sphere unfurls.
-    float clipDistance [[clip_distance]] [1];
-    float3 normal [[function_constant(kGlobePlaceholderLitInline)]];
-    float3 worldPos [[function_constant(kGlobePlaceholderLitInline)]];
-    float transition [[function_constant(kGlobePlaceholderLitInline)]];
-    float3 earthNormal [[function_constant(kGlobePlaceholderLitInline)]];
-};
-
-// The fragment stage's view of SurfaceVertexOut, without the clip distance.
-struct SurfaceFragmentIn {
-    float4 position [[position]];
-    float3 normal [[function_constant(kGlobePlaceholderLitInline)]];
-    float3 worldPos [[function_constant(kGlobePlaceholderLitInline)]];
-    float transition [[function_constant(kGlobePlaceholderLitInline)]];
-    float3 earthNormal [[function_constant(kGlobePlaceholderLitInline)]];
-};
 
 struct CapVertexIn {
     float2 latLon [[attribute(0)]];
@@ -53,11 +14,7 @@ struct CapVertexOut {
     float4 position [[position]];
     float capAlpha;
     float absLatitude;
-    float latitude;
     float longitude;
-    float3 normal;
-    float3 worldPos;
-    float3 earthNormal;
 };
 
 struct CapParams {
@@ -78,128 +35,6 @@ struct GlobeCapStrip {
 
 constant float kGlobeCapStripWidth = 4096.0;
 constant float kGlobeCapStripMaxLod = 12.0;
-
-/// The slot a placeholder fill covers, precomputed on the CPU so the vertex
-/// stage does no per-vertex pow(2, z) or Mercator row bounds; mirrors
-/// GlobeSurfaceSlotUniform.swift.
-struct Tile {
-    /// World x of the slot's west edge, in turns (tile.x / 2^z).
-    float uvOriginX;
-    /// Slot-local uv to world uv: 1 / 2^z.
-    float uvScale;
-    /// The linear-latitude v of the slot's north edge and the v span to its
-    /// south edge (v = 1 - (lat + pi/2) / pi).
-    float vNorth;
-    float vSize;
-    /// The normalized world x the flat morph target unwraps around: the
-    /// slot's centre, (x + 0.5) / 2^z.
-    float referenceWorldX;
-};
-
-
-vertex SurfaceVertexOut globeVertexShader(VertexIn vertexIn [[stage_in]],
-                                          constant Camera& camera [[buffer(1)]],
-                                          constant Globe& globe [[buffer(2)]],
-                                          constant Tile& tileData [[buffer(3)]],
-                                          constant GlobeFrameConstants& globeFrame [[buffer(4)]]) {
-    
-    // Slot-local uv to world uv through the precomputed slot bounds: no
-    // per-vertex pow(2, z) and no Mercator row bounds per vertex.
-    float vertexUvX = tileData.uvOriginX + vertexIn.uv.x * tileData.uvScale;
-    float vertexUvY = tileData.vNorth + vertexIn.uv.y * tileData.vSize;
-    
-    
-    float transition = globe.transition; // from globe view to flat view
-    
-    
-    float globeRadius = globe.radius;
-    
-    float4x4 matrix = camera.matrix;
-    
-    // Per-frame values, computed once on the CPU (GlobeFrameConstants).
-    float mapSize = globeFrame.mapSize;
-    
-    float phi = -M_PI_F * vertexUvY;
-    float theta = 2 * M_PI_F * vertexUvX;
-     
-    float x = globeRadius * sin(phi) * sin(theta);
-    float y = globeRadius * cos(phi);
-    float z = globeRadius * sin(phi) * cos(theta);
-    float3 spherePosition = float3(x, y, z);
-    
-    
-    float4x4 rotation = globeFrame.rotation;
-
-    float4x4 translationM = translationMatrix(float3(0, 0, -globeRadius));
-    float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
-    float3 rotatedSphereDirection = normalize((float4(spherePosition, 0.0) * rotation).xyz);
-    float4 position;
-    if (kGlobePlaceholderPureSphere) {
-        // Transition 0: the surface is the sphere; the flat morph target,
-        // the unfurl phase and the mix fold away.
-        position = spherePositionTranslated;
-    } else {
-        // Convert globePanY (-1..1) to a Mercator-aligned vertical pan so
-        // the flat map lines up.
-        float panY_merc_norm = globeFrame.panMercatorY;
-        // `vertexUvY` grows top-to-bottom, so this intermediate latitude is
-        // sign-inverted relative to geographic latitude and needs the extra
-        // negation below.
-        float lat_v = M_PI_F * vertexUvY - M_PI_2_F;      // [-pi/2..pi/2]
-        float flatMercatorY = -getYMercNorm(lat_v);       // geographic-Mercator sign in flat world space
-        // The slot unwraps around its own centre, like the tile drawn over it.
-        float2 flatWorldPosition = globeTransitionFlatWorldPosition(vertexUvX,
-                                                                    flatMercatorY,
-                                                                    globe,
-                                                                    mapSize,
-                                                                    panY_merc_norm,
-                                                                    tileData.referenceWorldX);
-        float4 flatPosition = float4(flatWorldPosition, 0, 1.0);
-        float localTransition = globeTransitionLocalPhase(transition, rotatedSphereDirection.z);
-        position = mix(spherePositionTranslated, flatPosition, localTransition);
-    }
-    float4 clip = matrix * position;
-
-    SurfaceVertexOut out;
-    // Keep clip-space position; GPU performs the perspective divide.
-    out.position = clip;
-    out.clipDistance[0] = globeOcclusionClearance(position.xyz, camera, globe);
-    if (kGlobePlaceholderLitInline) {
-        out.normal = rotatedSphereDirection;
-        // The morphed position, not the spherical one: fog is computed from
-        // it, and its distances must match the flat path (on the sphere
-        // chords are shorter, so the fog was thinner, "catching up" with a
-        // jump at the swap). At t = 0 the values are bit-for-bit equal to
-        // the spherical ones, so the limb glow does not change.
-        out.worldPos = position.xyz;
-        out.transition = transition;
-        out.earthNormal = normalize(spherePosition);
-    }
-    return out;
-}
-
-/// A blank tile in the map's own background color, drawn into every visible
-/// slot before the tile geometry, writing depth like any other surface.
-///
-/// Two things depended on the surface being there and had nothing to fall back
-/// on while tiles were still loading, or wherever coverage has a hole: the
-/// planet read as a see-through shell against space, and the depth buffer had
-/// nothing to occlude with. Each fill draws the exact slot geometry its tile
-/// will draw, so the tile replaces it at identical depth; a single coarser
-/// fill of the whole sphere poked through the finer tile mesh at its own grid
-/// vertices as background-colored dots.
-fragment half4 globeSurfacePlaceholderFragmentShader(SurfaceFragmentIn in [[stage_in]],
-                                                     constant Camera& camera [[buffer(1)]],
-                                                     constant EarthScene& earthScene [[buffer(2)]],
-                                                     constant HorizonFog& horizonFog [[buffer(4)]],
-                                                     constant float4& fillColor [[buffer(5)]],
-                                                     constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
-    if (!kGlobePlaceholderLitInline) {
-        return half4(fillColor);
-    }
-    return globeSurfaceShade(half4(fillColor), in.worldPos, in.normal, in.earthNormal, in.transition,
-                             camera, earthScene, horizonFog, atmosphere);
-}
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
                                          constant Camera& camera [[buffer(1)]],
@@ -249,21 +84,14 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
     out.position = clip;
     out.capAlpha = 1.0 - transitionFade;
     out.absLatitude = abs(lat);
-    out.latitude = lat;
     out.longitude = lon;
-    out.normal = normalize((float4(spherePosition, 0.0) * rotation).xyz);
-    out.worldPos = spherePositionTranslated.xyz;
-    out.earthNormal = normalize(spherePosition);
     return out;
 }
 
 fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
                                       texture2d<half> strip [[texture(0)]],
                                       constant CapParams& params [[buffer(0)]],
-                                      constant Camera& camera [[buffer(1)]],
-                                      constant EarthScene& earthScene [[buffer(2)]],
-                                      constant GlobeCapStrip& capStrip [[buffer(3)]],
-                                      constant GlobeAtmosphere& atmosphere [[buffer(6)]]) {
+                                      constant GlobeCapStrip& capStrip [[buffer(3)]]) {
     constexpr sampler stripSampler(filter::linear, mip_filter::linear, mag_filter::linear, address::repeat);
 
     // The mip level the rim is read at, from the screen derivative of the
@@ -301,26 +129,6 @@ fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
     } else {
         color = mix(half4(params.edgeColor), half4(params.fillColor), seamBlend);
     }
-    float3 viewDir = normalize(camera.eye - in.worldPos);
-    half facingDot = half(dot(in.normal, viewDir));
-
-    if (earthScene.isEnabled != 0) {
-        half sunDot = half(dot(normalize(in.earthNormal), normalize(earthScene.sunDirection)));
-        half terminatorFadeWidth = half(earthScene.terminatorFadeWidth);
-        half dayFactor = smoothstep(-terminatorFadeWidth,
-                                    terminatorFadeWidth,
-                                    sunDot);
-        half dayBrightness = mix(half(earthScene.daySideMinimumBrightness), 1.0h, dayFactor);
-        half surfaceBrightness = mix(half(earthScene.nightSideBrightness), dayBrightness, dayFactor);
-        surfaceBrightness = mix(surfaceBrightness, 1.0h, clamp(1.0h - capAlpha, 0.0h, 1.0h));
-        surfaceBrightness = mix(surfaceBrightness, 1.0h, half(earthScene.sunShadowFade));
-        color.rgb *= surfaceBrightness;
-    }
-
-    half facing = max(0.0h, 1.0h - facingDot);
-    // The same glow as the tiled surface, so the cap continues it seamlessly
-    // over the pole; it goes with the cap's own fade through the unfurl.
-    color.rgb += globeAtmosphereSurfaceGlow(facing, atmosphere) * capAlpha;
     color.a *= capAlpha;
     return color;
 }

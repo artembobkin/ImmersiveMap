@@ -238,9 +238,6 @@ public class ImmersiveMapUIView: UIView {
     }
     #endif
 
-    func setEarthSceneEnabledFromDebugOverlay(_ isEnabled: Bool) {
-        hostRuntime.setEarthSceneEnabled(isEnabled)
-    }
 
     // MARK: - Cleanup
 

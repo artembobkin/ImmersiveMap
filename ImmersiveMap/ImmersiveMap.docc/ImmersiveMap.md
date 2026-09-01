@@ -34,7 +34,7 @@ Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:hea
 
 ### Presentation
 
-Zoom drives a continuous transition between a globe and a flat map: the sphere unrolls as a wave travelling outward from the view center, and the shaders morph between sphere and plane rather than switching modes. Around the globe there is an atmosphere, a starfield and a sun with a day/night terminator, or nothing at all with `.transparentSpace()`, which leaves everything outside the globe unpainted so the app's own background shows through.
+Zoom drives a continuous transition between a globe and a flat map: the sphere unrolls as a wave travelling outward from the view center, and the shaders morph between sphere and plane rather than switching modes. Around the globe there is a starfield, or nothing at all with `.transparentSpace()`, which leaves everything outside the globe unpainted so the app's own background shows through.
 
 ### On the map
 
@@ -187,10 +187,8 @@ Feature guides, one example app per feature and the changelog live in the [repos
 - ``ImmersiveMapSettings/LabelLanguage``
 - ``ImmersiveMapSettings/LabelFallbackPolicy``
 - ``ImmersiveMapSettings/SceneSettings``
-- ``ImmersiveMapSettings/EarthSceneSettings``
 - ``ImmersiveMapSettings/SceneLightSettings``
 - ``ImmersiveMapSettings/ShadowSettings``
-- ``ImmersiveMapSettings/AtmosphereSettings``
 - ``ImmersiveMapSettings/StarfieldSettings``
 - ``ImmersiveMapSettings/SpaceSettings``
 - ``ImmersiveMapSettings/StyleSettings``
@@ -200,4 +198,3 @@ Feature guides, one example app per feature and the changelog live in the [repos
 - ``ImmersiveMapSettings/RenderLoopSettings``
 - ``ImmersiveMapSettings/ViewReuseSettings``
 - ``ImmersiveMapSettings/DebugSettings``
-- ``EarthSceneTimeMode``

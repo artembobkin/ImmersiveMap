@@ -12,8 +12,7 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -30,10 +29,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         // Routes are a globe-only feature in this version, and the plan is
         // where that invariant is enforced.
         XCTAssertFalse(plan.map(\.layer).contains(.routes))
-        // The globe surface layer, which also paints the placeholder fill under
-        // the tile atlas, is absent here: the flat map has its own surface and
-        // clears to the map color by itself.
-        XCTAssertFalse(plan.map(\.layer).contains(.globeSurface))
+        XCTAssertFalse(plan.map(\.layer).contains(.globeVectorSurface))
     }
 
     func testFlatModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {
@@ -43,8 +39,7 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
@@ -70,16 +65,12 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
-            .globeSurface,
-            .globeVectorSurface,
-            .globeSurfaceLighting,
             .starfield,
-            .atmosphere,
+            .globeVectorSurface,
             .globeCap,
             .sceneModels,
             .routes,
@@ -99,16 +90,12 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         XCTAssertEqual(plan.map(\.layer), [
-            .globeSurface,
-            .globeVectorSurface,
-            .globeSurfaceLighting,
             .starfield,
-            .atmosphere,
+            .globeVectorSurface,
             .globeCap,
             .sceneModels,
             .routes,
@@ -117,7 +104,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .atmosphere, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -134,8 +121,7 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
@@ -152,8 +138,7 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
                                                  sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
+                                                 starfieldEnabled: true)
         )
 
         let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
@@ -178,14 +163,11 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
                                                  sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: false,
-                                                 atmosphereEnabled: false)
+                                                 starfieldEnabled: false)
         )
 
         XCTAssertEqual(enabledLayers(in: plan), [
-            .globeSurface,
             .globeVectorSurface,
-            .globeSurfaceLighting,
             .globeCap,
             .sceneModels,
             .routes,
@@ -195,47 +177,9 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertEqual(skipReason(for: .starfield, in: plan), .transparentSpace)
-        // The halo is painted in space, so it goes with the starfield and
-        // reports the same reason: nothing outside the globe is painted.
-        XCTAssertEqual(skipReason(for: .atmosphere, in: plan), .transparentSpace)
     }
 
-    /// The atmosphere halo draws after the surface and the starfield,
-    /// depth-tested at the far plane. Off by setting, it stays in the plan
-    /// disabled with its own reason, and the starfield is untouched.
-    func testAtmosphereOffBySettingKeepsTheStarfield() {
-        let plan = RenderLayerPlanner.plan(
-            availability: RenderPassAvailability(renderSurfaceMode: .spherical,
-                                                 labelsEnabled: false,
-                                                 avatarsEnabled: false,
-                                                 debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: false)
-        )
 
-        XCTAssertEqual(enabledLayers(in: plan), [.globeSurface, .globeVectorSurface, .globeSurfaceLighting, .starfield, .globeCap, .sceneModels, .routes])
-        XCTAssertEqual(skipReason(for: .atmosphere, in: plan), .atmosphereDisabled)
-        XCTAssertNil(skipReason(for: .starfield, in: plan))
-    }
-
-    /// The halo is a world layer of the globe presentation only: the flat map
-    /// has no sphere to wrap it around, and it never runs in the overlay pass.
-    func testAtmosphereIsAGlobeWorldLayer() {
-        XCTAssertTrue(RenderPassGraph.isWorldLayer(.atmosphere))
-        XCTAssertFalse(RenderPassGraph.isOverlayLayer(.atmosphere))
-
-        let flatPlan = RenderLayerPlanner.plan(
-            availability: RenderPassAvailability(renderSurfaceMode: .flat,
-                                                 labelsEnabled: false,
-                                                 avatarsEnabled: false,
-                                                 debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 atmosphereEnabled: true)
-        )
-        XCTAssertFalse(flatPlan.map(\.layer).contains(.atmosphere))
-    }
 
     private func enabledLayers(in plan: [RenderLayerPlanItem]) -> [RenderLayer] {
         plan.filter(\.enabled).map(\.layer)

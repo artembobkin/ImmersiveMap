@@ -11,8 +11,6 @@ enum GlobeVectorSurfaceDrawer {
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      globe: GlobeUniform,
-                     earthScene: EarthSceneUniform,
-                     atmosphere: GlobeAtmosphereUniform,
                      horizonFog: HorizonFogUniform,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
@@ -57,8 +55,6 @@ enum GlobeVectorSurfaceDrawer {
 
         var cameraUniformValue = cameraUniform
         var globeValue = globe
-        var earthSceneValue = earthScene
-        var atmosphereValue = atmosphere
         var horizonFogValue = horizonFog
         var streetPaletteUniform = StreetPaletteUniform(
             blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
@@ -85,9 +81,6 @@ enum GlobeVectorSurfaceDrawer {
                                      index: 10)
         renderEncoder.setFragmentBytes(&overviewFadeUniform, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 0)
         renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
-        renderEncoder.setFragmentBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 5)
-        renderEncoder.setFragmentBytes(&earthSceneValue, length: MemoryLayout<EarthSceneUniform>.stride, index: 6)
-        renderEncoder.setFragmentBytes(&atmosphereValue, length: MemoryLayout<GlobeAtmosphereUniform>.stride, index: 7)
 
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile

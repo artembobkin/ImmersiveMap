@@ -32,17 +32,16 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         case standard = "immersivemap"
         /// Cascade shadows off.
         case noShadows = "immersivemap-noshadows"
-        /// Shadows and the atmosphere halo off: the cheapest frame the
-        /// public settings allow without changing what is drawn.
+        /// Shadows off: the cheapest flat frame the public settings allow
+        /// without changing what is drawn.
         case lean = "immersivemap-lean"
-        /// Transparent space: the space background, the stars, the Sun and
-        /// the atmosphere halo are not drawn at all, which isolates the
-        /// sky's share of a globe frame in an A/B against the default.
+        /// Transparent space: the space background and the stars are not
+        /// drawn at all, which isolates the sky's share of a globe frame in
+        /// an A/B against the default.
         case noSky = "immersivemap-nosky"
-        /// The planet alone: transparent space plus the atmosphere and the
-        /// earth scene off, so the globe surface draws with no starfield,
-        /// no halo, no surface glow and no day/night terminator. The floor
-        /// the public settings allow for a globe frame.
+        /// Kept for measurement continuity: since the engine dropped the
+        /// atmosphere and the earth scene, the planet alone is exactly
+        /// transparent space, the same frame as `noSky`.
         case bare = "immersivemap-bare"
     }
 
@@ -72,11 +71,11 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         case .noShadows:
             map = map.shadows(isEnabled: false)
         case .lean:
-            map = map.shadows(isEnabled: false).atmosphere(isEnabled: false)
+            map = map.shadows(isEnabled: false)
         case .noSky:
             map = map.transparentSpace()
         case .bare:
-            map = map.transparentSpace().atmosphere(isEnabled: false).earthScene(isEnabled: false)
+            map = map.transparentSpace()
         }
         let rootView = map.ignoresSafeArea()
         host = UIHostingController(rootView: AnyView(rootView))

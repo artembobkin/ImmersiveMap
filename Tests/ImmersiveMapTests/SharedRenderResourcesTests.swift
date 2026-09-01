@@ -38,7 +38,6 @@ final class SharedRenderResourcesTests: XCTestCase {
         XCTAssertTrue(first.roadLabelPlacementPipeline === second.roadLabelPlacementPipeline)
         XCTAssertTrue(first.shadowFallbackTexture === second.shadowFallbackTexture)
         XCTAssertTrue(first.extrudedDepthState === second.extrudedDepthState)
-        XCTAssertTrue(first.mapSurfaceGridBuffers.verticesBuffer === second.mapSurfaceGridBuffers.verticesBuffer)
         XCTAssertTrue(first.metalContext.library === second.metalContext.library)
 
         // Mutable state must stay per view.

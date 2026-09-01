@@ -116,10 +116,6 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
         globeCapRenderer.draw(renderEncoder: encoder,
                               cameraUniform: frameContext.cameraUniform,
                               globe: frameContext.globeRenderUniform,
-                              earthScene: frameContext.earthSceneUniform,
-                              atmosphere: GlobeAtmosphereUniform.make(settings: frameContext.services.settings.scene.atmosphere,
-                                                                      earthScene: frameContext.earthSceneUniform,
-                                                                      globe: frameContext.globeRenderUniform),
                               edgeStrip: edgeStrip,
                               stripUniform: { pole in
                                   GlobeCapStripUniform(hasStrip: self.hasStrip,

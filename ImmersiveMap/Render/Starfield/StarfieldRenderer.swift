@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 //  Task Notes
-//  - Purpose: render sky background, globe-aligned starfield, and Sun glow when globe view is active.
+//  - Purpose: render sky background and globe-aligned starfield when globe view is active.
 //  - Stars: fixed buffer of unit-sphere positions, rotated by globe pan, drawn with a separate projection
 //    to avoid affecting map depth precision. Tuned via ImmersiveMapSettings.scene.starfield.
 //  - Space: background clear color configured in ImmersiveMapSettings.scene.space.
-//  - Sun: fullscreen glow pass drawn after stars; the globe occludes it through
-//    the sky depth test at the far plane (see StarfieldRenderSubsystem).
 
 import MetalKit
 import simd
@@ -44,7 +42,7 @@ final class StarfieldRenderer {
 
     private let pipeline: StarfieldPipeline
     /// Nil when the model is empty (`starCount == 0`) or the buffer allocation failed:
-    /// the star pass is then skipped, the sky and the Sun still draw.
+    /// the star pass is then skipped, the sky still draws.
     private let verticesBuffer: MTLBuffer?
     private let verticesCount: Int
     private let config: ImmersiveMapSettings.StarfieldSettings
@@ -93,7 +91,6 @@ final class StarfieldRenderer {
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
               globe: GlobeUniform,
-              earthScene: EarthSceneUniform,
               cameraView: matrix_float4x4,
               cameraEye: SIMD3<Float>,
               drawSize: CGSize,
@@ -143,25 +140,6 @@ final class StarfieldRenderer {
             renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
         }
 
-        var sunState = EarthSceneSunVisualState.make(earthScene: earthScene,
-                                                     globe: globe,
-                                                     cameraMatrix: starCameraMatrix,
-                                                     cameraEye: cameraEye,
-                                                     drawSize: drawSize,
-                                                     starfieldRadiusScale: config.radiusScale)
-        guard sunState.hasVisibleContribution(earthScene: earthScene) else {
-            return
-        }
-
-        var earthSceneData = earthScene
-        pipeline.selectSunPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setFragmentBytes(&earthSceneData,
-                                       length: MemoryLayout<EarthSceneUniform>.stride,
-                                       index: 0)
-        renderEncoder.setFragmentBytes(&sunState,
-                                       length: MemoryLayout<EarthSceneSunVisualState>.stride,
-                                       index: 1)
-        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }
 
     private static func makeBackgroundParams(spaceColor: SIMD4<Double>,

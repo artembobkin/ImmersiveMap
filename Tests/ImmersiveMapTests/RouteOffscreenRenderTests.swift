@@ -264,7 +264,7 @@ final class RouteOffscreenRenderTests: XCTestCase {
 
     /// Flat lighting for the horizon tests: the terminator would sink a red
     /// ribbon into the night side, and the Sun's glow reads as red pixels.
-    private static let flatlitSettings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
+    private static let flatlitSettings = ImmersiveMapSettings.default
 
     @MainActor
     private func makeHarness(zoom: Double,

@@ -141,11 +141,6 @@ final class ImmersiveMapHostRuntime {
         updateMarkerContent(nil)
     }
 
-    func setEarthSceneEnabled(_ isEnabled: Bool) {
-        var settings = runtimeGraph.cameraRuntime.currentSettings
-        settings.scene.earth.isEnabled = isEnabled
-        applySettings(settings)
-    }
 
     /// Applies new settings to the map runtime and, via the planner, chooses whether
     /// to update the existing renderer in place or recreate it for changes

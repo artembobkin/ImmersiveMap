@@ -60,7 +60,7 @@ ImmersiveMapView()
     .postProcessingSettings(ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true))
 ```
 
-The world pass is already MSAA. FXAA is an additional full-screen post-processing pass, off by default: it smooths the edges MSAA does not catch (notably inside shaded fragments) at the cost of some sharpness in labels. Judge it on a device rather than on a screenshot.
+The world pass renders at one sample per pixel (ground lines are antialiased analytically in the tile shaders). FXAA is an additional full-screen post-processing pass, off by default: it smooths geometry edges at the cost of some sharpness in labels. Judge it on a device rather than on a screenshot.
 
 ## Judge speed in Release
 

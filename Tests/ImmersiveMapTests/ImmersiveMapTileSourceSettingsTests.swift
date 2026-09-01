@@ -109,12 +109,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(unwrappedSettings.tiles.network.tileRequestHeaders, ["X-Client": "demo"])
     }
 
-    func testEarthSceneModifierControlsFullSunAndTerminatorPackage() {
-        let settings = ImmersiveMapSettings.default.earthScene(isEnabled: false)
-
-        XCTAssertFalse(settings.scene.earth.isEnabled)
-        XCTAssertTrue(settings.scene.earth.sun.isEnabled)
-    }
 
     func testCacheSettingsLegacyInitializerFunctionReferenceUsesDefaultPreparedDiskCacheSize() {
         let initialize: (Bool, Bool, Bool, Bool, TimeInterval, Int) -> ImmersiveMapSettings.TileSettings.CacheSettings =
@@ -297,14 +291,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
     }
 
-    func testImmersiveMapViewEarthSceneModifierControlsFullSunAndTerminatorPackage() {
-        let view = ImmersiveMapView().earthScene(isEnabled: false)
-
-        let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
-
-        XCTAssertFalse(settings?.scene.earth.isEnabled == true)
-        XCTAssertTrue(settings?.scene.earth.sun.isEnabled == true)
-    }
 
     func testFluentSettingsModifiersReplaceEverySettingsDomain() {
         let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: true,

@@ -46,7 +46,7 @@ try await recorder.export(shots: shots, configuration: configuration, to: url)
 | `codec` | `.hevc` | `.hevc` (what Apple devices record natively) or `.h264` (maximum compatibility). The container is always QuickTime `.mov`. |
 | `averageBitRate` | derived | Target bits per second. The default follows the frame geometry: ~12 Mbit/s for HEVC and ~25 Mbit/s for H.264 at 1080p60. |
 | `tileReadinessTimeout` | 10 s | How long one frame may wait for outstanding tiles before it is captured with whatever has loaded. Also caps the pre-roll. |
-| `sceneDate` | export start | Wall date for the earth scene (sun position), fixed across the whole export for determinism. |
+| `sceneDate` | export start | Wall date the frame clock starts from, fixed across the whole export for determinism. |
 | `includesAvatars` | `true` | Whether avatar markers are rendered into the video. The export uses a detached copy of the avatar state taken at export start, so live avatar updates during the export are not captured. |
 | `includesMarkers` | `true` | Whether SwiftUI markers (`.markers(...)`) are composited into the video. Views are rasterized once at export start and follow the same per-frame projection (anchor, globe-horizon fade) as on screen. |
 | `markerScale` | 2.0 | Rasterization scale of SwiftUI markers in pixels per point (0.5...8). The default sizes markers as on a Retina display whose drawable matches the export resolution; raise it for 4K exports. |

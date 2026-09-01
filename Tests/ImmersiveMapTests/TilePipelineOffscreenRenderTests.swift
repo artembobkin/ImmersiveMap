@@ -145,7 +145,6 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
         let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
             .layers { $0.water = Self.fixtureWater }
         let settings = ImmersiveMapSettings.default
-            .earthScene(isEnabled: false)
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }

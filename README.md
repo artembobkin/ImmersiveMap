@@ -72,7 +72,6 @@ Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://
 | [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
 | [Map styling and colors](Documentation/docs/styling.md) | Available |
 | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) | Available |
-| [Sun, day/night terminator, atmosphere, starfield and transparent space](Documentation/docs/earth-scene.md) | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |
 | [Tap selection of avatars and models](Documentation/docs/selection.md) | Available |
