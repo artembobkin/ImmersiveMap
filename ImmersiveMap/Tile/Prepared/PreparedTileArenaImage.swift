@@ -70,6 +70,9 @@ struct PreparedTileArenaImage: Sendable {
     /// Spans in the canonical `TileArenaSchema` slot order.
     let spans: [TileArenaSpan]
     let arenaByteCount: Int
+    /// Per-style runs of the ground index buffer, in paint order; what the
+    /// sphere drawer draws the ground layers by (see GroundStyleRun).
+    let groundStyleRuns: [GroundStyleRun]
     let textLabelsFull: TextLabelSetMeta
     let textLabelsReduced: TextLabelSetMeta
     let textLabelsMinimal: TextLabelSetMeta

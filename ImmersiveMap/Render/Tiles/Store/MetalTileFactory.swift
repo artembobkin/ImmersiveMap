@@ -104,6 +104,7 @@ final class MetalTileFactory: @unchecked Sendable {
         guard let tileBuffers = Self.buildTileBuffers(
             spans: plan.spans,
             backingBuffer: backingBuffer,
+            groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
             full: Self.textLabelSetMeta(from: preparedTile.textLabels.full),
             reduced: Self.textLabelSetMeta(from: preparedTile.textLabels.reduced),
             minimal: Self.textLabelSetMeta(from: preparedTile.textLabels.minimal),
@@ -191,6 +192,7 @@ final class MetalTileFactory: @unchecked Sendable {
 
         guard let tileBuffers = Self.buildTileBuffers(spans: image.spans,
                                                       backingBuffer: backingBuffer,
+                                                      groundStyleRuns: image.groundStyleRuns,
                                                       full: image.textLabelsFull,
                                                       reduced: image.textLabelsReduced,
                                                       minimal: image.textLabelsMinimal,
@@ -229,6 +231,7 @@ final class MetalTileFactory: @unchecked Sendable {
     /// the parse path shares the check as its final defense.
     private static func buildTileBuffers(spans: [TileArenaSpan],
                                          backingBuffer: MTLBuffer?,
+                                         groundStyleRuns: [GroundStyleRun],
                                          full: PreparedTileArenaImage.TextLabelSetMeta,
                                          reduced: PreparedTileArenaImage.TextLabelSetMeta,
                                          minimal: PreparedTileArenaImage.TextLabelSetMeta,
@@ -240,7 +243,14 @@ final class MetalTileFactory: @unchecked Sendable {
                                 expectedSlots: expectedSlots,
                                 backingBuffer: backingBuffer)
 
-        let ground = takeGeometryLayer(.ground, cursor: &cursor)
+        var ground = takeGeometryLayer(.ground, cursor: &cursor)
+        ground = TileBuffers.GeometryLayer(vertices: ground.vertices,
+                                           indices: ground.indices,
+                                           styles: ground.styles,
+                                           overviewStyleMask: ground.overviewStyleMask,
+                                           lineStyles: ground.lineStyles,
+                                           indexType: ground.indexType,
+                                           styleRuns: groundStyleRuns)
         let roads = RoadStructureBuckets(
             tunnel: takeRoadPhases(.tunnel, cursor: &cursor),
             ground: takeRoadPhases(.ground, cursor: &cursor),

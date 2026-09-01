@@ -331,6 +331,10 @@ enum PreparedTileDiskCodec {
         /// and a re-parse instead of rendering garbage.
         let fileBlobFormatRawValue: UInt8?
         let fileBlobChecksum: UInt64?
+        /// POD array of `GroundStyleRun`: the ground index buffer's
+        /// per-style runs in paint order.
+        let groundStyleRuns: Data
+        let groundStyleRunCount: UInt32
         let textFull: TextLabelSetMetaValue
         let textReduced: TextLabelSetMetaValue
         let textMinimal: TextLabelSetMetaValue
@@ -632,6 +636,7 @@ enum PreparedTileDiskCodec {
             fileBlobFormat = format
         }
 
+        let groundStyleRuns = GroundStyleRunScanner.scan(ground: preparedTile.ground)
         let entry = try Entry(
             preparedFormatVersion: cacheIdentity.preparedFormatVersion,
             styleRevision: cacheIdentity.styleRevision,
@@ -653,6 +658,8 @@ enum PreparedTileDiskCodec {
             geometryBlob: inlineBlob,
             fileBlobFormatRawValue: fileBlobFormat?.rawValue,
             fileBlobChecksum: fileBlob.map(PreparedTileBlobChecksum.checksum),
+            groundStyleRuns: encodePODArray(groundStyleRuns),
+            groundStyleRunCount: encodeUInt32(groundStyleRuns.count, field: "Ground.styleRuns.count"),
             textFull: TextLabelSetMetaValue(preparedTile.textLabels.full),
             textReduced: TextLabelSetMetaValue(preparedTile.textLabels.reduced),
             textMinimal: TextLabelSetMetaValue(preparedTile.textLabels.minimal),
@@ -764,6 +771,10 @@ enum PreparedTileDiskCodec {
             tile: expectedTile,
             spans: spans,
             arenaByteCount: arenaByteCount,
+            groundStyleRuns: try decodePODArray(entry.groundStyleRuns,
+                                                count: Int(entry.groundStyleRunCount),
+                                                as: GroundStyleRun.self,
+                                                field: "Entry.groundStyleRuns"),
             textLabelsFull: try entry.textFull.runtimeValue(),
             textLabelsReduced: try entry.textReduced.runtimeValue(),
             textLabelsMinimal: try entry.textMinimal.runtimeValue(),

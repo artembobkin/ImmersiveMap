@@ -22,13 +22,19 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
 
     private let pipeline: TilePipeline
     private let depthDisabledState: MTLDepthStencilState
+    private let opaqueDepthState: MTLDepthStencilState
+    private let translucentDepthState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
 
     init(pipeline: TilePipeline,
          depthDisabledState: MTLDepthStencilState,
+         opaqueDepthState: MTLDepthStencilState,
+         translucentDepthState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState) {
         self.pipeline = pipeline
         self.depthDisabledState = depthDisabledState
+        self.opaqueDepthState = opaqueDepthState
+        self.translucentDepthState = translucentDepthState
         self.debugOverlayControls = debugOverlayControls
     }
 
@@ -57,6 +63,9 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       renderMapSize: frameContext.resolvedPresentation.renderNormalizationState.flatRenderMapSize,
                                       placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                       pipeline: pipeline,
+                                      opaqueDepthState: opaqueDepthState,
+                                      translucentDepthState: translucentDepthState,
+                                      depthDisabledState: depthDisabledState,
                                       isWireframeEnabled: debugOverlayControls.snapshot().wireframeEnabled,
                                       pureSphere: GlobeSphereVertexPath.isPureSphere(
                                           renderSurfaceMode: frameContext.renderSurfaceMode,

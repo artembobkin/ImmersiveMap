@@ -577,7 +577,10 @@ final class PreparedTileDiskCaching {
     // 79: the sphere subdivision grid coarsened one step (a whole tile is
     // 32x32 cells instead of 64x64, step 128 to 2048 units by zoom), a
     // quarter of the ground vertices; v78 tiles carry the finer mesh.
-    static let preparedFormatVersion: UInt32 = 79
+    // 80: the entry carries the ground index buffer's per-style runs
+    // (GroundStyleRun), which the sphere drawer layers the ground by; a
+    // v79 entry has no run table to draw from.
+    static let preparedFormatVersion: UInt32 = 80
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

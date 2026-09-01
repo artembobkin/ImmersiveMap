@@ -128,6 +128,7 @@ static inline void tileSphereWriteStyle(thread SphereVertexOut& out, TileVertexS
 /// space and the sphere projection does not mirror).
 vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]],
                                                   constant Style* styles [[buffer(2)]],
+                                                  constant float& layerNdcZ [[buffer(3)]],
                                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                                   constant LineStyle* lineStyles [[buffer(5)]],
                                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
@@ -140,6 +141,12 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
 
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
+    // The ground carries no geometric depth of its own (nothing on the
+    // sphere compares against it); its z is the per-draw layer rank in a
+    // band at the far plane, so the opaque layers can draw front-to-back
+    // under a depth test and a pixel is shaded once by its topmost opaque
+    // layer (GlobeVectorSurfaceDrawer).
+    out.position.z = layerNdcZ * out.position.w;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
     // A split pipeline keeps only its own class. The class is a property of
     // the geometry, not the style (a fill shares its style with its

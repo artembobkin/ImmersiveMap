@@ -1272,6 +1272,7 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
             tile: tile,
             spans: [],
             arenaByteCount: 0,
+            groundStyleRuns: [],
             textLabelsFull: emptyMeta,
             textLabelsReduced: emptyMeta,
             textLabelsMinimal: emptyMeta,

@@ -41,6 +41,25 @@ struct TileBuffers {
         /// Element width of `indices`: layers within the 16-bit vertex range
         /// are narrowed at build time, oversized ones stay 32-bit.
         let indexType: MTLIndexType
+        /// Ground only: the index buffer's per-style runs in paint order,
+        /// what the sphere drawer layers the ground by. Empty elsewhere.
+        let styleRuns: [GroundStyleRun]
+
+        init(vertices: TileBufferView?,
+             indices: TileBufferView?,
+             styles: TileBufferView?,
+             overviewStyleMask: TileBufferView?,
+             lineStyles: TileBufferView?,
+             indexType: MTLIndexType,
+             styleRuns: [GroundStyleRun] = []) {
+            self.vertices = vertices
+            self.indices = indices
+            self.styles = styles
+            self.overviewStyleMask = overviewStyleMask
+            self.lineStyles = lineStyles
+            self.indexType = indexType
+            self.styleRuns = styleRuns
+        }
 
         var indicesCount: Int {
             indices?.count ?? 0

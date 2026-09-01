@@ -30,6 +30,9 @@ class TilePipeline {
     /// The scaffold the globe performance work isolates the classes with;
     /// see kTileSphereSplitPass in TileSphere.metal.
     let sphereSplitStates: [Bool: MTLRenderPipelineState]
+    /// The fills class with blending disabled: what the opaque ground
+    /// layers draw with, front-to-back under the depth test.
+    let sphereOpaqueFillsPipelineState: MTLRenderPipelineState?
 
     /// - Parameter readsGroundShadowMask: the flat world pass reads the
     ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
@@ -147,11 +150,18 @@ class TilePipeline {
                 splitStates[lines] = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             }
             self.sphereSplitStates = splitStates
+            // The opaque fills variant: same functions, no blending.
+            pipelineDescriptor.vertexFunction = sphereTempSplitVertexFunctions[false]
+            pipelineDescriptor.fragmentFunction = sphereTempSplitFragmentFunctions[false]
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+            self.sphereOpaqueFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
             self.sphereUnlitPipelineState = nil
             self.sphereSplitStates = [:]
+            self.sphereOpaqueFillsPipelineState = nil
         }
 
         if supportsFramebufferFetch, surface == .flat {
@@ -170,6 +180,16 @@ class TilePipeline {
             return
         }
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+
+    /// The opaque fills variant (blending off) for the layered ground;
+    /// falls back to the blended fills split when absent.
+    func selectSphereOpaqueFillsPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        if let sphereOpaqueFillsPipelineState {
+            renderEncoder.setRenderPipelineState(sphereOpaqueFillsPipelineState)
+            return
+        }
+        selectSphereSplitPipeline(renderEncoder: renderEncoder, linesClass: false)
     }
 
     /// The unlit pure-sphere split variant for one ground class; falls back
