@@ -35,23 +35,24 @@ class CapGeometry {
             }
         }
         
+        // Both caps read counter-clockwise from outside the sphere with this
+        // triangle order (pinned by GlobeCapStripOffscreenRenderTests, one
+        // pole each), so the caps cull back faces the way the tile mesh does
+        // and the far half of the polar fan is never rasterized. Nothing
+        // writes surface depth on the sphere, so without the cull the back
+        // of the fan would draw through the planet.
         for stack in 0..<stacks {
             for slice in 0..<slices {
                 let topLeft = stack * (slices + 1) + slice
                 let topRight = topLeft + 1
                 let bottomLeft = (stack + 1) * (slices + 1) + slice
                 let bottomRight = bottomLeft + 1
-                
-                indices.append(UInt32(topLeft))
-                indices.append(UInt32(bottomLeft))
-                indices.append(UInt32(topRight))
-                
-                indices.append(UInt32(topRight))
-                indices.append(UInt32(bottomLeft))
-                indices.append(UInt32(bottomRight))
+
+                indices.append(contentsOf: [UInt32(topLeft), UInt32(topRight), UInt32(bottomLeft),
+                                            UInt32(bottomLeft), UInt32(topRight), UInt32(bottomRight)])
             }
         }
-        
+
         return Grid(vertices: vertices, indices: indices)
     }
 }

@@ -56,6 +56,38 @@ final class GlobeCapStripOffscreenRenderTests: XCTestCase {
                           "\(offColour) of \(checked) pixels around the pole are not the tiles' colour")
     }
 
+    /// The same disc check over the south pole. Both caps draw with
+    /// back-face culling from one generator whose south fan is flipped to
+    /// match the north's winding: getting the flip wrong culls the whole
+    /// near side of one cap, which is exactly what this catches.
+    @MainActor
+    func testSouthCapContinuesTheTilesColourOverThePole() async throws {
+        let harness = try makeHarness()
+        harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: -85.0,
+                                                              longitudeDegrees: 0,
+                                                              zoom: 2.5))
+        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+        try await loadFixtureTiles(into: harness, maximumZoom: 3, southern: true)
+        let painted = try await harness.renderUntilSettled(changedFrom: baseline,
+                                                            startingAt: OffscreenFrameHarness.frameTime(1))
+        let center = painted.size / 2
+        let radius = painted.size / 10
+        var offColour = 0
+        var checked = 0
+        for y in (center - radius) ... (center + radius) {
+            for x in (center - radius) ... (center + radius) where (x - center) * (x - center) + (y - center) * (y - center) <= radius * radius {
+                checked += 1
+                let pixel = painted.pixel(x: x, y: y)
+                if pixel.red < 240 || pixel.green > 15 || pixel.blue < 240 {
+                    offColour += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(checked, 100)
+        XCTAssertLessThan(offColour, checked / 6,
+                          "\(offColour) of \(checked) pixels around the south pole are not the tiles' colour")
+    }
+
     // MARK: - Helpers
 
     @MainActor
@@ -72,16 +104,17 @@ final class GlobeCapStripOffscreenRenderTests: XCTestCase {
     }
 
     @MainActor
-    private func loadFixtureTiles(into harness: OffscreenFrameHarness, maximumZoom: Int) async throws {
+    private func loadFixtureTiles(into harness: OffscreenFrameHarness, maximumZoom: Int,
+                                  southern: Bool = false) async throws {
         let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
         // Every tile of the pole rows down to `maximumZoom`, plus the
         // neighbourhood under the camera.
-        var tiles = Set(WebMercatorTileScheme.neighbourhoodPyramid(latitude: 85.0,
+        var tiles = Set(WebMercatorTileScheme.neighbourhoodPyramid(latitude: southern ? -85.0 : 85.0,
                                                                    longitude: 0,
                                                                    maximumZoom: maximumZoom))
         for z in 0 ... maximumZoom {
             for x in 0 ..< (1 << z) {
-                tiles.insert(Tile(x: x, y: 0, z: z))
+                tiles.insert(Tile(x: x, y: southern ? (1 << z) - 1 : 0, z: z))
             }
         }
         for tile in tiles.sorted(by: { ($0.z, $0.x) < ($1.z, $1.x) }) {

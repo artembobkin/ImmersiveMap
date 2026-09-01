@@ -79,9 +79,13 @@ final class GlobeCapRenderer {
               edgeStrip: GlobeCapEdgeStrip,
               stripUniform: (GlobeCapPole) -> GlobeCapStripUniform) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
-        // Cap winding differs from the globe tile mesh after geographic-latitude
-        // alignment, so disabling culling keeps the patch visible on both poles.
-        renderEncoder.setCullMode(.none)
+        // Both caps carry the same winding seen from outside the sphere (the
+        // generator flips the south fan), so back-face culling removes the
+        // far half of each polar fan the way it removes the tiles' far side:
+        // nothing writes surface depth on the sphere, and without the cull
+        // the back of the fan would draw through the planet.
+        renderEncoder.setFrontFacing(.counterClockwise)
+        renderEncoder.setCullMode(.back)
         var cameraUniform = cameraUniform
         var globe = globe
         renderEncoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
@@ -96,6 +100,10 @@ final class GlobeCapRenderer {
             case .south: drawSouthCap(renderEncoder: renderEncoder)
             }
         }
+        // The world pass shares one encoder; restore the defaults the later
+        // layers rely on, the way the tile drawer does.
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setFrontFacing(.clockwise)
     }
 
     static func makePalette(mapBaseColors: ImmersiveMapBaseColors,
