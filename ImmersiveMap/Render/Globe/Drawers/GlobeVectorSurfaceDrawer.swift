@@ -31,7 +31,11 @@ enum GlobeVectorSurfaceDrawer {
         // combined draw: overview content stacks its ribbons above the
         // fills anyway.
         let splitsClassPasses = pureSphere
-        let drawsLineRibbons = true
+        // Off while the globe performance work concentrates on the polygon
+        // fills: the ribbons class (boundaries and overview strokes) is not
+        // drawn on the pure sphere at all. The morph keeps the combined
+        // pass, ribbons included.
+        let drawsLineRibbons = false
         if splitsClassPasses {
             pipeline.selectSphereSplitPipeline(renderEncoder: renderEncoder,
                                                linesClass: false)
