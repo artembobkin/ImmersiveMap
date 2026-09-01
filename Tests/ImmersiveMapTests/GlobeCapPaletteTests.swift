@@ -5,47 +5,43 @@
 import simd
 import XCTest
 
-/// The polar caps fill the latitudes Mercator tiles never reach, and each one
-/// fades from the last row of tiles at its rim into a single color at the pole.
-/// These tests pin where that color comes from, because getting it from the
-/// wrong place is invisible in a light palette and a bright spot in a dark one.
+/// The polar caps fill the latitudes Mercator tiles never reach, each in one
+/// constant colour straight from the style: the north cap continues the open
+/// ocean, the south the polar ice sheet. These tests pin where each colour
+/// comes from.
 final class GlobeCapPaletteTests: XCTestCase {
-    private let maxLatitude = Float(WebMercatorMath.maxLatitudeRadians)
-
-    /// The tiles paint the Arctic sea ice white up to the rim of the last
-    /// row, so the northern cap continues in the palette's ice, not its
-    /// water: a water-coloured pole showed as a dark disc inside the ice.
-    func testNorthPoleFollowsPolarIceRatherThanWater() {
+    /// The northern cap is the palette's water: past the last tile row the
+    /// planet is the Arctic Ocean.
+    func testNorthPoleFollowsWater() {
         var baseColors = ImmersiveMapSettings.default.style.baseColors
         baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
         baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
 
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors),
-                                                   maxLatitude: maxLatitude)
+        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
 
-        assertColor(palette.north.fillColor, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
+        assertColor(palette.north.color, equals: SIMD4<Float>(0.04, 0.09, 0.20, 1))
     }
 
-    func testSouthPoleFollowsPolarIceRatherThanTileBackground() {
+    /// The southern cap is the palette's polar ice: past the last tile row
+    /// the planet is the Antarctic ice sheet.
+    func testSouthPoleFollowsPolarIce() {
         var baseColors = ImmersiveMapSettings.default.style.baseColors
         baseColors.tileBackground = SIMD4<Float>(0.09, 0.10, 0.13, 1)
         baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
 
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors),
-                                                   maxLatitude: maxLatitude)
+        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
 
-        assertColor(palette.south.fillColor, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
+        assertColor(palette.south.color, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
     }
 
-    /// A style that says nothing about ice keeps the white pole the default
-    /// daylight palette has always drawn.
+    /// A style that says nothing about ice keeps the white south pole the
+    /// default daylight palette has always drawn.
     func testDefaultPaletteKeepsWhiteSouthPole() {
         let baseColors = ImmersiveMapSettings.default.style.baseColors
 
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors),
-                                                   maxLatitude: maxLatitude)
+        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
 
-        assertColor(palette.south.fillColor, equals: SIMD4<Float>(1, 1, 1, 1))
+        assertColor(palette.south.color, equals: SIMD4<Float>(1, 1, 1, 1))
     }
 
     private func assertColor(_ color: SIMD4<Float>,

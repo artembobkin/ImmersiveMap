@@ -19,7 +19,6 @@ final class RenderPersistentContext {
 
     let polygonPipeline: PolygonsPipeline
     let tilePipeline: TilePipeline
-    let globeTileTexturePipeline: TilePipeline
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
@@ -31,7 +30,6 @@ final class RenderPersistentContext {
 
     let globeCapRenderer: GlobeCapRenderer
     /// The caps' rim colour, baked per view from its own placements.
-    let globeCapEdgeStrip: GlobeCapEdgeStrip
     let starfieldRenderer: StarfieldRenderer
     let atmosphereRenderer: AtmosphereRenderer
     let flatTileOriginCalculator: FlatTileOriginCalculator
@@ -121,7 +119,6 @@ final class RenderPersistentContext {
 
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline
-        self.globeTileTexturePipeline = shared.globeTileTexturePipeline
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
@@ -141,10 +138,6 @@ final class RenderPersistentContext {
         self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  mapBaseColors: mapBaseColors)
-        self.globeCapEdgeStrip = GlobeCapEdgeStrip(metalDevice: metal.device,
-                                                   pipeline: globeTileTexturePipeline,
-                                                   shadowFallbackTexture: shadowFallbackTexture,
-                                                   depthState: shared.depthDisabledState)
         self.textRenderer = shared.textRenderer
         self.poiSpriteAtlas = shared.poiSpriteAtlas
         self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,

@@ -30,7 +30,6 @@ final class SharedRenderResourcesTests: XCTestCase {
                       "Text atlases and glyph tables must not be rebuilt per view")
         XCTAssertTrue(first.poiSpriteAtlas === second.poiSpriteAtlas)
         XCTAssertTrue(first.tilePipeline === second.tilePipeline)
-        XCTAssertTrue(first.globeTileTexturePipeline === second.globeTileTexturePipeline)
         XCTAssertTrue(first.globeVectorSurfacePipeline === second.globeVectorSurfacePipeline)
         XCTAssertTrue(first.extrudedTilePipeline === second.extrudedTilePipeline)
         XCTAssertTrue(first.sceneModelPipeline === second.sceneModelPipeline)

@@ -38,16 +38,13 @@ class ImmersiveMapBaseColors {
         self.backgroundColor = settings.globeBackground
         self.waterColor = settings.water
         self.landCoverColor = settings.landCover
-        // Both poles are ice as far as the tiles go: the Arctic sea ice is
-        // painted white right up to the northern rim of the last tile row,
-        // and Antarctica is ice all the way. The palette says which ice. The
-        // northern cap used to take the palette's water on the assumption of
-        // open ocean under it, and showed as a dark disc against the white
-        // ice around it, worst with the pole near the limb where the surface
-        // darkens. Deriving either from the tile background would only hold
-        // for a light style: a dark one paints that background near black
-        // and the cap fades from the snow at its rim into a dark hole.
-        self.northPoleColor = settings.polarIce
+        // Constant cap colours straight from the style, no bake: the
+        // northern cap is the palette's open ocean, the southern the polar
+        // ice sheet. If the tiles paint Arctic sea ice white up to the
+        // northern rim, a water-coloured north cap reads as a darker disc
+        // inside it; that trade was made deliberately when the baked edge
+        // strip was removed, and either pole is one palette constant away.
+        self.northPoleColor = settings.water
         self.southPoleColor = settings.polarIce
     }
 }

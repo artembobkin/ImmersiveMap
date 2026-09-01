@@ -78,7 +78,6 @@ final class SharedRenderResources {
 
     let polygonPipeline: PolygonsPipeline
     let tilePipeline: TilePipeline
-    let globeTileTexturePipeline: TilePipeline
     /// The tile geometry drawn straight onto the sphere in the world pass.
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
@@ -141,7 +140,6 @@ final class SharedRenderResources {
                                                               supportsFramebufferFetch: supportsFramebufferFetch)
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
-        self.globeTileTexturePipeline = compiled.globeTileTexturePipeline
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
@@ -168,7 +166,6 @@ final class SharedRenderResources {
     private struct ConcurrentlyCompiledResources {
         let polygonPipeline: PolygonsPipeline
         let tilePipeline: TilePipeline
-        let globeTileTexturePipeline: TilePipeline
         let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
@@ -201,7 +198,6 @@ final class SharedRenderResources {
     ) -> ConcurrentlyCompiledResources {
         var polygonPipeline: PolygonsPipeline?
         var tilePipeline: TilePipeline?
-        var globeTileTexturePipeline: TilePipeline?
         var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
@@ -245,11 +241,6 @@ final class SharedRenderResources {
                                           supportsFramebufferFetch: supportsFramebufferFetch,
                                           readsGroundShadowMask: true) },
             { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
-            // The single-sample variant, for offscreen bakes in the
-            // drawable's color format (the caps' edge strip).
-            { globeTileTexturePipeline = TilePipeline(metalDevice: device,
-                                                      pixelFormat: pixelFormat,
-                                                      library: library) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -283,7 +274,6 @@ final class SharedRenderResources {
         return ConcurrentlyCompiledResources(
             polygonPipeline: polygonPipeline!,
             tilePipeline: tilePipeline!,
-            globeTileTexturePipeline: globeTileTexturePipeline!,
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,

@@ -4,21 +4,22 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The polar caps continue the tiles: on a planet whose tiles are one
-/// colour, the pole is that colour, not the palette's. Requires the compiled
-/// Metal library, so it skips under `swift test` and runs in the xcodebuild
-/// workspace suite.
-final class GlobeCapStripOffscreenRenderTests: XCTestCase {
+/// The polar caps paint constant style colours: the north cap the palette's
+/// water, the south its polar ice. The harness sets both palette constants
+/// and the fixture tiles to one magenta, so the disc over either pole (the
+/// cap plus the last tile rows) must be that colour once the tiles are in.
+/// Requires the compiled Metal library, so it skips under `swift test` and
+/// runs in the xcodebuild workspace suite.
+final class GlobeCapOffscreenRenderTests: XCTestCase {
     /// A colour that appears nowhere else in the map.
     private static let fixtureWater = SIMD4<Float>(1, 0, 1, 1)
 
-    /// Looking at the north pole at zoom 2.5 (past the tone deepening, no
-    /// earth scene): the rim of the cap reads the strip baked from the
-    /// magenta tiles, and the pole its windowed mean, so the whole cap is
-    /// magenta once the tiles are in. Before they are, the cap paints the
-    /// palette, which is not magenta.
+    /// Looking at the north pole at zoom 2.5: the cap is the palette's
+    /// water (set to magenta) and the tile rows around it are the magenta
+    /// fixture ocean, so the whole disc is magenta once the tiles are in.
+    /// Before they are, the cap alone cannot fill the disc.
     @MainActor
-    func testCapContinuesTheTilesColourOverThePole() async throws {
+    func testNorthCapPaintsThePaletteWaterOverThePole() async throws {
         let harness = try makeHarness()
         // The camera centre cannot leave Mercator, so it sits on the last
         // tile row, a few pixels short of the cap; the disc checked below
@@ -27,8 +28,6 @@ final class GlobeCapStripOffscreenRenderTests: XCTestCase {
                                                               longitudeDegrees: 0,
                                                               zoom: 2.5))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
-        XCTAssertEqual(baseline.count(where: isFixtureWater), 0,
-                       "Nothing may be this colour before the fixture tiles are loaded")
 
         try await loadFixtureTiles(into: harness, maximumZoom: 3)
         let painted = try await harness.renderUntilSettled(changedFrom: baseline,
@@ -56,12 +55,13 @@ final class GlobeCapStripOffscreenRenderTests: XCTestCase {
                           "\(offColour) of \(checked) pixels around the pole are not the tiles' colour")
     }
 
-    /// The same disc check over the south pole. Both caps draw with
-    /// back-face culling from one generator whose south fan is flipped to
-    /// match the north's winding: getting the flip wrong culls the whole
-    /// near side of one cap, which is exactly what this catches.
+    /// The same disc check over the south pole, where the cap is the
+    /// palette's polar ice (set to magenta). Both caps draw with back-face
+    /// culling from one generator whose south fan is flipped to match the
+    /// north's winding: getting the flip wrong culls the whole near side of
+    /// one cap, which is exactly what this catches.
     @MainActor
-    func testSouthCapContinuesTheTilesColourOverThePole() async throws {
+    func testSouthCapPaintsThePalettePolarIceOverThePole() async throws {
         let harness = try makeHarness()
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: -85.0,
                                                               longitudeDegrees: 0,
@@ -98,6 +98,10 @@ final class GlobeCapStripOffscreenRenderTests: XCTestCase {
             .globalLandcover { $0.water = Self.fixtureWater }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+        // The caps are constant palette colours now: paint both poles with
+        // the fixture magenta so the disc checks cover cap and tiles alike.
+        settings.style.baseColors.water = Self.fixtureWater
+        settings.style.baseColors.polarIce = Self.fixtureWater
         // The stars twinkle with scene time; a settle loop needs a still sky.
         settings.scene.starfield.starCount = 0
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)

@@ -5,11 +5,15 @@ import Metal
 import QuartzCore
 import simd
 
+/// The two polar caps of the globe.
+enum GlobeCapPole: CaseIterable {
+    case north
+    case south
+}
+
+/// One cap's constant colour; the layout mirrors `CapParams` in Globe.metal.
 struct GlobeCapParams {
-    var edgeColor: SIMD4<Float>
-    var fillColor: SIMD4<Float>
-    var blendStartAbsLatitude: Float
-    var blendEndAbsLatitude: Float
+    var color: SIMD4<Float>
 }
 
 struct GlobeCapPalette {
@@ -69,15 +73,12 @@ final class GlobeCapRenderer {
         pipeline = sharedResources.pipeline
         northCapBuffers = sharedResources.northCapBuffers
         southCapBuffers = sharedResources.southCapBuffers
-        palette = Self.makePalette(mapBaseColors: mapBaseColors,
-                                   maxLatitude: Float(maxLatitude))
+        palette = Self.makePalette(mapBaseColors: mapBaseColors)
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
               globeFrame: GlobeFrameConstantsUniform,
-              globe: GlobeUniform,
-              edgeStrip: GlobeCapEdgeStrip,
-              stripUniform: (GlobeCapPole) -> GlobeCapStripUniform) {
+              globe: GlobeUniform) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
         // Both caps carry the same winding seen from outside the sphere (the
         // generator flips the south fan), so back-face culling removes the
@@ -94,9 +95,6 @@ final class GlobeCapRenderer {
                                      index: 10)
 
         for pole in GlobeCapPole.allCases {
-            var strip = stripUniform(pole)
-            renderEncoder.setFragmentTexture(edgeStrip.texture(for: pole), index: 0)
-            renderEncoder.setFragmentBytes(&strip, length: MemoryLayout<GlobeCapStripUniform>.stride, index: 3)
             switch pole {
             case .north: drawNorthCap(renderEncoder: renderEncoder)
             case .south: drawSouthCap(renderEncoder: renderEncoder)
@@ -108,30 +106,16 @@ final class GlobeCapRenderer {
         renderEncoder.setFrontFacing(.clockwise)
     }
 
-    static func makePalette(mapBaseColors: ImmersiveMapBaseColors,
-                            maxLatitude: Float,
-                            featherDegrees: Float = 6.0) -> GlobeCapPalette {
-        let waterColor = mapBaseColors.getWaterColor()
-        let tileBackgroundColor = mapBaseColors.getTileBgColor()
-        let northPoleColor = mapBaseColors.getNorthPoleColor()
-        let southPoleColor = mapBaseColors.getSouthPoleColor()
-        let featherRadians = featherDegrees * (.pi / 180.0)
-        let fadeEndAbsLatitude = min(Float.pi / 2.0, maxLatitude + featherRadians)
-        let northComposite = compositeOpaqueColor(foreground: northPoleColor,
-                                                  background: waterColor)
-        let southComposite = compositeOpaqueColor(foreground: southPoleColor,
-                                                  background: tileBackgroundColor)
-
-        return GlobeCapPalette(
-            north: GlobeCapParams(edgeColor: northComposite,
-                                  fillColor: northComposite,
-                                  blendStartAbsLatitude: maxLatitude,
-                                  blendEndAbsLatitude: fadeEndAbsLatitude),
-            south: GlobeCapParams(edgeColor: southComposite,
-                                  fillColor: southComposite,
-                                  blendStartAbsLatitude: maxLatitude,
-                                  blendEndAbsLatitude: fadeEndAbsLatitude)
-        )
+    /// Constant cap colours from the style: the north cap is the palette's
+    /// open ocean, the south its polar ice (ImmersiveMapBaseColors decides),
+    /// each composited to opaque over its natural background.
+    static func makePalette(mapBaseColors: ImmersiveMapBaseColors) -> GlobeCapPalette {
+        let northComposite = compositeOpaqueColor(foreground: mapBaseColors.getNorthPoleColor(),
+                                                  background: mapBaseColors.getWaterColor())
+        let southComposite = compositeOpaqueColor(foreground: mapBaseColors.getSouthPoleColor(),
+                                                  background: mapBaseColors.getTileBgColor())
+        return GlobeCapPalette(north: GlobeCapParams(color: northComposite),
+                               south: GlobeCapParams(color: southComposite))
     }
 
     private func drawNorthCap(renderEncoder: MTLRenderCommandEncoder) {

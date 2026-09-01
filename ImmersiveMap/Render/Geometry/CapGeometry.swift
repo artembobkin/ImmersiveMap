@@ -36,7 +36,7 @@ class CapGeometry {
         }
         
         // Both caps read counter-clockwise from outside the sphere with this
-        // triangle order (pinned by GlobeCapStripOffscreenRenderTests, one
+        // triangle order (pinned by GlobeCapOffscreenRenderTests, one
         // pole each), so the caps cull back faces the way the tile mesh does
         // and the far half of the polar fan is never rasterized. Nothing
         // writes surface depth on the sphere, so without the cull the back
