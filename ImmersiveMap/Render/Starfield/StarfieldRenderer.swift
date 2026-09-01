@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 //  Task Notes
-//  - Purpose: render sky background and globe-aligned starfield when globe view is active.
+//  - Purpose: render the globe-aligned starfield when globe view is active.
 //  - Stars: fixed buffer of unit-sphere positions, rotated by globe pan, drawn with a separate projection
 //    to avoid affecting map depth precision. Tuned via ImmersiveMapSettings.scene.starfield.
-//  - Space: background clear color configured in ImmersiveMapSettings.scene.space.
+//  - Space itself is the world pass's clear color (ImmersiveMapSettings.scene.space), not a draw.
 
 import MetalKit
 import simd
@@ -26,51 +26,20 @@ final class StarfieldRenderer {
         let padding: SIMD3<Float>
     }
 
-    private struct BackgroundParams {
-        let deepColor: SIMD4<Float>
-        let hazeColor: SIMD4<Float>
-        let nebulaColorA: SIMD4<Float>
-        let nebulaColorB: SIMD4<Float>
-        let transitionTargetColor: SIMD4<Float>
-        let controls: SIMD4<Float>
-    }
-
-    private struct BackgroundViewParams {
-        let rotation: matrix_float4x4
-        let aspect: Float
-        let tanHalfFov: Float
-        let padding: SIMD2<Float>
-    }
-
-    /// The equirect resolution of the baked nebula. The field is smooth and
-    /// low-frequency, so half a degree per texel keeps every octave.
-    private static let nebulaTextureSize = (width: 1024, height: 512)
-
     private let pipeline: StarfieldPipeline
     /// Nil when the model is empty (`starCount == 0`) or the buffer allocation failed:
-    /// the star pass is then skipped, the sky still draws.
+    /// the star pass is then skipped, space (the pass clear color) still shows.
     private let verticesBuffer: MTLBuffer?
     private let verticesCount: Int
     private let config: ImmersiveMapSettings.StarfieldSettings
-    private let backgroundParams: BackgroundParams
-    private let metalDevice: MTLDevice
-    /// The nebula field, a pure function of the earth-fixed view direction,
-    /// baked once on the first spherical frame; the background pass then
-    /// samples it instead of evaluating five fractal noise fields per pixel.
-    private var nebulaTexture: MTLTexture?
     private var cachedAspect: Float?
     private var cachedProjection: matrix_float4x4?
 
     init(metalDevice: MTLDevice,
          pipeline: StarfieldPipeline,
-         spaceColor: SIMD4<Double>,
-         transitionTargetColor: SIMD4<Double>,
          config: ImmersiveMapSettings.StarfieldSettings) {
         self.pipeline = pipeline
         self.config = config
-        self.metalDevice = metalDevice
-        backgroundParams = Self.makeBackgroundParams(spaceColor: spaceColor,
-                                                     transitionTargetColor: transitionTargetColor)
 
         let stars = StarfieldModel.makeStars(config: config)
         let buffer = Self.makeVerticesBuffer(metalDevice: metalDevice, stars: stars)
@@ -101,40 +70,15 @@ final class StarfieldRenderer {
                                       length: MemoryLayout<StarVertex>.stride * vertices.count)
     }
 
-    /// Bakes the nebula into its equirect texture if this renderer has not
-    /// yet: one offscreen pass, encoded ahead of the frame's world pass on
-    /// the same command buffer.
-    func bakeNebulaIfNeeded(commandBuffer: MTLCommandBuffer) {
-        guard nebulaTexture == nil else { return }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pipeline.pixelFormat,
-                                                                  width: Self.nebulaTextureSize.width,
-                                                                  height: Self.nebulaTextureSize.height,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .private
-        guard let texture = metalDevice.makeTexture(descriptor: descriptor) else { return }
-        texture.label = "StarfieldNebula"
-
-        let passDescriptor = MTLRenderPassDescriptor()
-        passDescriptor.colorAttachments[0].texture = texture
-        passDescriptor.colorAttachments[0].loadAction = .dontCare
-        passDescriptor.colorAttachments[0].storeAction = .store
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
-        encoder.label = "StarfieldNebulaBake"
-        var params = backgroundParams
-        encoder.setRenderPipelineState(pipeline.nebulaBakePipelineState)
-        encoder.setFragmentBytes(&params, length: MemoryLayout<BackgroundParams>.stride, index: 0)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        encoder.endEncoding()
-        nebulaTexture = texture
-    }
-
     func draw(renderEncoder: MTLRenderCommandEncoder,
               globe: GlobeUniform,
               cameraView: matrix_float4x4,
               cameraEye: SIMD3<Float>,
               drawSize: CGSize,
               nowTime: Float) {
+        guard let verticesBuffer, verticesCount > 0 else {
+            return
+        }
         let aspect = Float(drawSize.width) / Float(drawSize.height)
         if cachedAspect != aspect || cachedProjection == nil {
             cachedProjection = Matrix.perspectiveMatrix(fovRadians: Float.pi / 4,
@@ -151,72 +95,24 @@ final class StarfieldRenderer {
                                               eye: cameraEye,
                                               padding: 0)
         // The pan rotation, once per frame on the CPU, in the row-vector
-        // layout the shaders multiply with (the exact matrix the tile
+        // layout the shader multiplies with (the exact matrix the tile
         // stages use, see GlobeFrameConstantsUniform).
         let rotation = GlobeFrameConstantsUniform.rotationMatrix(
             panLatitude: globe.panY * Float(ImmersiveMapProjection.maxMercatorLatitude),
             panLongitude: globe.panX * Float.pi
         )
-        var backgroundViewParams = BackgroundViewParams(rotation: rotation,
-                                                        aspect: aspect,
-                                                        tanHalfFov: tan(Float.pi / 8.0),
-                                                        padding: SIMD2<Float>(repeating: 0))
         var globeData = globe
         var params = StarfieldParams(rotation: rotation,
                                      radiusScale: config.radiusScale,
                                      padding: SIMD3<Float>(repeating: 0))
-        var backgroundParams = backgroundParams
         var time = nowTime
 
-        if let nebulaTexture {
-            pipeline.selectBackgroundPipeline(renderEncoder: renderEncoder)
-            renderEncoder.setFragmentBytes(&backgroundParams,
-                                           length: MemoryLayout<BackgroundParams>.stride,
-                                           index: 0)
-            renderEncoder.setFragmentBytes(&backgroundViewParams,
-                                           length: MemoryLayout<BackgroundViewParams>.stride,
-                                           index: 1)
-            renderEncoder.setFragmentBytes(&globeData,
-                                           length: MemoryLayout<GlobeUniform>.stride,
-                                           index: 2)
-            renderEncoder.setFragmentTexture(nebulaTexture, index: 0)
-            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        }
-
-        if let verticesBuffer, verticesCount > 0 {
-            pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
-            renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
-            renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
-            renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
-            renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
-            renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
-            renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
-        }
-
-    }
-
-    private static func makeBackgroundParams(spaceColor: SIMD4<Double>,
-                                             transitionTargetColor: SIMD4<Double>) -> BackgroundParams {
-        let base = SIMD3<Float>(Float(spaceColor.x), Float(spaceColor.y), Float(spaceColor.z))
-        let deep = simd_clamp(base * SIMD3<Float>(0.55, 0.58, 0.82) + SIMD3<Float>(0.002, 0.004, 0.018),
-                              SIMD3<Float>(repeating: 0.0),
-                              SIMD3<Float>(repeating: 1.0))
-        let haze = simd_clamp(base * SIMD3<Float>(1.5, 1.45, 1.7) + SIMD3<Float>(0.015, 0.028, 0.075),
-                              SIMD3<Float>(repeating: 0.0),
-                              SIMD3<Float>(repeating: 1.0))
-        let nebulaA = SIMD3<Float>(0.10, 0.19, 0.42)
-        let nebulaB = SIMD3<Float>(0.05, 0.32, 0.48)
-
-        return BackgroundParams(
-            deepColor: SIMD4<Float>(deep, 1.0),
-            hazeColor: SIMD4<Float>(haze, 1.0),
-            nebulaColorA: SIMD4<Float>(nebulaA, 1.0),
-            nebulaColorB: SIMD4<Float>(nebulaB, 1.0),
-            transitionTargetColor: SIMD4<Float>(Float(transitionTargetColor.x),
-                                                Float(transitionTargetColor.y),
-                                                Float(transitionTargetColor.z),
-                                                Float(transitionTargetColor.w)),
-            controls: SIMD4<Float>(0.33, 2.15, 0.22, 0.0)
-        )
+        pipeline.selectStarsPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setVertexBuffer(verticesBuffer, offset: 0, index: 0)
+        renderEncoder.setVertexBytes(&starCameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        renderEncoder.setVertexBytes(&globeData, length: MemoryLayout<GlobeUniform>.stride, index: 2)
+        renderEncoder.setVertexBytes(&params, length: MemoryLayout<StarfieldParams>.stride, index: 3)
+        renderEncoder.setFragmentBytes(&time, length: MemoryLayout<Float>.stride, index: 0)
+        renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: verticesCount)
     }
 }

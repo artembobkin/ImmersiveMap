@@ -128,12 +128,10 @@ final class RenderPersistentContext {
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline
-        // The starfield renderer bakes scene colors and star-generation
-        // settings, so it stays per renderer; only its pipelines are shared.
+        // The starfield renderer bakes the star-generation settings, so it
+        // stays per renderer; only its pipeline is shared.
         self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,
                                                    pipeline: shared.starfieldPipeline,
-                                                   spaceColor: config.scene.space.clearColor,
-                                                   transitionTargetColor: config.scene.mapClearColor,
                                                    config: config.scene.starfield)
         self.atmosphereRenderer = AtmosphereRenderer(pipeline: shared.atmospherePipeline)
 

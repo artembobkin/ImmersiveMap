@@ -1,15 +1,32 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+@testable import ImmersiveMap
 import XCTest
 
 final class StarfieldTransitionFadeTests: XCTestCase {
-    func testStarfieldBackgroundFadesTowardMapColorDuringGlobeTransition() throws {
-        let source = try starfieldShaderSource()
+    /// Space is the world pass's clear color, and the unfurl fades it toward
+    /// the flat map's color there: exactly the space color at transition 0,
+    /// exactly the map color at 1, strictly between in the middle.
+    func testSpaceClearColorBlendsTowardMapColorDuringGlobeTransition() {
+        let settings = ImmersiveMapSettings.default
+        let space = settings.scene.space.clearColor
+        let map = settings.scene.mapClearColor
 
-        XCTAssertTrue(source.contains("transitionTargetColor"))
-        XCTAssertTrue(source.contains("half transitionFade = smoothstep(0.0h, 1.0h, half(globe.transition));"))
-        XCTAssertTrue(source.contains("color = mix(color, half3(params.transitionTargetColor.rgb), transitionFade);"))
+        let sphere = RenderFrameClearColor.make(transition: 0, settings: settings)
+        XCTAssertEqual(sphere.red, space.x, accuracy: 1e-9)
+        XCTAssertEqual(sphere.green, space.y, accuracy: 1e-9)
+        XCTAssertEqual(sphere.blue, space.z, accuracy: 1e-9)
+
+        let flat = RenderFrameClearColor.make(transition: 1, settings: settings)
+        XCTAssertEqual(flat.red, map.x, accuracy: 1e-9)
+        XCTAssertEqual(flat.green, map.y, accuracy: 1e-9)
+        XCTAssertEqual(flat.blue, map.z, accuracy: 1e-9)
+
+        let mid = RenderFrameClearColor.make(transition: 0.5, settings: settings)
+        XCTAssertEqual(mid.red, (space.x + map.x) * 0.5, accuracy: 1e-9)
+        XCTAssertEqual(mid.green, (space.y + map.y) * 0.5, accuracy: 1e-9)
+        XCTAssertEqual(mid.blue, (space.z + map.z) * 0.5, accuracy: 1e-9)
     }
 
     func testStarfieldStarsFadeOutDuringGlobeTransition() throws {
@@ -20,13 +37,6 @@ final class StarfieldTransitionFadeTests: XCTestCase {
         XCTAssertTrue(source.contains("half3 emissive = color * (core * 1.3h + halo * 0.75h + crossGlow * 1.6h) * intensity * transitionAlpha;"))
     }
 
-    func testStarfieldRendererUsesMapClearColorAsTransitionTarget() throws {
-        let source = try starfieldRendererSource()
-
-        XCTAssertTrue(source.contains("transitionTargetColor: SIMD4<Double>"))
-        XCTAssertTrue(source.contains("transitionTargetColor: transitionTargetColor"))
-    }
-
     private func starfieldShaderSource() throws -> String {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let packageRootURL = testFileURL
@@ -34,16 +44,6 @@ final class StarfieldTransitionFadeTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let shaderURL = packageRootURL.appendingPathComponent("ImmersiveMap/Render/Shaders/Starfield/StarfieldStars.metal")
-        return try String(contentsOf: shaderURL, encoding: .utf8)
-    }
-
-    private func starfieldRendererSource() throws -> String {
-        let testFileURL = URL(fileURLWithPath: #filePath)
-        let packageRootURL = testFileURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let shaderURL = packageRootURL.appendingPathComponent("ImmersiveMap/Render/Starfield/StarfieldRenderer.swift")
         return try String(contentsOf: shaderURL, encoding: .utf8)
     }
 }

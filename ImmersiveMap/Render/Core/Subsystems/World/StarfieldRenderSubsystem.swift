@@ -20,15 +20,9 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
 
     func update(frameContext _: FrameContext) {}
 
-    /// Whether anything outside the globe gets painted at all.
-    ///
-    /// This layer is the only one that paints there, and it paints all of it:
-    /// the opaque fullscreen background, the stars, and the earth scene's Sun,
-    /// whose disk, glow and limb halo all come out of `StarfieldRenderer`
-    /// (`EarthSceneSettings.sun` only shapes them). Turning the layer off is
-    /// therefore also what turns the Sun off, which is why transparent space
-    /// needs no separate rule for it, and why the earth scene stays free to
-    /// light the globe surface itself.
+    /// Whether the space décor is painted at all. Space itself is the world
+    /// pass's clear color; this layer draws only the stars over it, and the
+    /// atmosphere layer follows the same flag.
     static func isStarfieldEnabled(settings: ImmersiveMapSettings) -> Bool {
         settings.scene.space.isTransparent == false
     }
@@ -38,17 +32,7 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         builder.starfieldEnabled = Self.isStarfieldEnabled(settings: settings)
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
-        // The nebula bake, once per renderer: encoded ahead of the world
-        // pass on the frame's own command buffer, so the background's
-        // sample always finds the texture written.
-        guard frameContext.renderSurfaceMode == .spherical,
-              Self.isStarfieldEnabled(settings: frameContext.services.settings),
-              let commandBuffer = frameContext.commandBuffer else {
-            return
-        }
-        starfieldRenderer.bakeNebulaIfNeeded(commandBuffer: commandBuffer)
-    }
+    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .starfield,

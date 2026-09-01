@@ -13,22 +13,12 @@ final class StarfieldPipeline {
         let halo: Float
     }
 
-    let backgroundPipelineState: MTLRenderPipelineState
     let starsPipelineState: MTLRenderPipelineState
-    /// Renders the nebula into its equirect texture once per renderer; the
-    /// texture uses the drawable's pixel format so the bake's write and the
-    /// background's sample round-trip the same encoding.
-    let nebulaBakePipelineState: MTLRenderPipelineState
-    let pixelFormat: MTLPixelFormat
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
-        self.pixelFormat = pixelFormat
-        let backgroundVertexFunction = library.makeFunction(name: "starfieldBackgroundVertexShader")
-        let backgroundFragmentFunction = library.makeFunction(name: "starfieldBackgroundFragmentShader")
-        let nebulaBakeFragmentFunction = library.makeFunction(name: "starfieldNebulaBakeFragmentShader")
         let vertexFunction = library.makeFunction(name: "starfieldVertexShader")
         let fragmentFunction = library.makeFunction(name: "starfieldFragmentShader")
 
@@ -54,13 +44,6 @@ final class StarfieldPipeline {
         vertexDescriptor.layouts[0].stride = MemoryLayout<StarVertex>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 
-        let backgroundDescriptor = MTLRenderPipelineDescriptor()
-        backgroundDescriptor.vertexFunction = backgroundVertexFunction
-        backgroundDescriptor.fragmentFunction = backgroundFragmentFunction
-        backgroundDescriptor.rasterSampleCount = sampleCount
-        backgroundDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        backgroundDescriptor.depthAttachmentPixelFormat = .depth32Float
-
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.vertexFunction = vertexFunction
         pipelineDescriptor.fragmentFunction = fragmentFunction
@@ -78,28 +61,14 @@ final class StarfieldPipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .one
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
 
-
-        let bakeDescriptor = MTLRenderPipelineDescriptor()
-        bakeDescriptor.label = "StarfieldNebulaBake"
-        bakeDescriptor.vertexFunction = backgroundVertexFunction
-        bakeDescriptor.fragmentFunction = nebulaBakeFragmentFunction
-        bakeDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-
         do {
-            backgroundPipelineState = try metalDevice.makeRenderPipelineState(descriptor: backgroundDescriptor)
             starsPipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            nebulaBakePipelineState = try metalDevice.makeRenderPipelineState(descriptor: bakeDescriptor)
         } catch {
             fatalError("Failed to create starfield pipeline: \(error)")
         }
     }
 
-    func selectBackgroundPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(backgroundPipelineState)
-    }
-
     func selectStarsPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(starsPipelineState)
     }
-
 }

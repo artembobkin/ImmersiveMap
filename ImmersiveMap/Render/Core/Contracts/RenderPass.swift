@@ -15,8 +15,8 @@ enum RenderLayer: String, CaseIterable {
     /// the world pass in place of a cascade lookup per layer.
     case groundShadowMask
     case buildingImage
-    /// The space around the globe: the opaque sky background and the stars,
-    /// painted first; the tile geometry blends over them.
+    /// The stars around the globe, painted first over the pass's clear
+    /// color (which is space); the tile geometry blends over them.
     case starfield
     /// The tile geometry of the globe drawn straight onto the sphere; it
     /// neither tests nor writes depth: what the planet hides is clipped
