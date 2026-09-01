@@ -60,6 +60,16 @@ fragment half4 fxaaFragmentShader(PostProcessingVertexOut in [[stage_in]],
     half lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
     half lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
 
+    // Low-contrast early out: a pixel whose neighbourhood has no visible
+    // luma edge is returned as is, so the flat interiors that dominate a
+    // frame (space, water, landmass fills) cost five samples instead of
+    // nine plus the blend arithmetic. The thresholds are the canonical
+    // FXAA ones: an absolute floor for dark areas and an eighth of the
+    // local maximum elsewhere.
+    if (lumaMax - lumaMin < max(0.0312h, lumaMax * 0.125h)) {
+        return centerSample;
+    }
+
     half2 direction;
     direction.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
     direction.y = ((lumaNW + lumaSW) - (lumaNE + lumaSE));
