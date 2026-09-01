@@ -7,7 +7,7 @@ import SwiftUI
 /// its memory footprint and CPU are the engine's own: no second map SDK is
 /// resident in the process to blur the numbers. `BENCH_ENGINE` picks a
 /// variant: `immersivemap` (default), `immersivemap-noshadows`,
-/// `immersivemap-lean`, `immersivemap-nosky`; the rest of the launch
+/// `immersivemap-lean`, `immersivemap-nosky`, `immersivemap-bare`; the rest of the launch
 /// environment is shared with
 /// the Mapbox app, see `BenchRootScene`.
 @main

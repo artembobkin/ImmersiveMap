@@ -39,6 +39,11 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         /// the atmosphere halo are not drawn at all, which isolates the
         /// sky's share of a globe frame in an A/B against the default.
         case noSky = "immersivemap-nosky"
+        /// The planet alone: transparent space plus the atmosphere and the
+        /// earth scene off, so the globe surface draws with no starfield,
+        /// no halo, no surface glow and no day/night terminator. The floor
+        /// the public settings allow for a globe frame.
+        case bare = "immersivemap-bare"
     }
 
     let name: String
@@ -70,6 +75,8 @@ final class ImmersiveMapBenchEngine: BenchEngine {
             map = map.shadows(isEnabled: false).atmosphere(isEnabled: false)
         case .noSky:
             map = map.transparentSpace()
+        case .bare:
+            map = map.transparentSpace().atmosphere(isEnabled: false).earthScene(isEnabled: false)
         }
         let rootView = map.ignoresSafeArea()
         host = UIHostingController(rootView: AnyView(rootView))
