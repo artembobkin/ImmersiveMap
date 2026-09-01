@@ -34,6 +34,9 @@ struct StarVertexOut {
 };
 
 struct StarfieldParams {
+    /// The globe's pan rotation, row-vector layout (`v * M`), computed once
+    /// per frame on the CPU.
+    float4x4 rotation;
     float radiusScale;
     float3 padding;
 };
@@ -48,10 +51,29 @@ struct BackgroundParams {
 };
 
 struct BackgroundViewParams {
+    /// The globe's pan rotation, row-vector layout (`v * M`), computed once
+    /// per frame on the CPU.
+    float4x4 rotation;
     float aspect;
     float tanHalfFov;
     float2 padding;
 };
+
+/// The equirect parametrization the nebula bake and its runtime sample
+/// share: longitude across, latitude down, in the earth-fixed frame the
+/// noise lattice lives in.
+static inline float2 starfieldEquirectUV(float3 direction) {
+    float longitude = atan2(direction.x, -direction.z);
+    float latitude = asin(clamp(direction.y, -1.0, 1.0));
+    return float2(longitude / (2.0 * M_PI_F) + 0.5, latitude / M_PI_F + 0.5);
+}
+
+static inline float3 starfieldEquirectDirection(float2 uv) {
+    float longitude = (uv.x - 0.5) * 2.0 * M_PI_F;
+    float latitude = (uv.y - 0.5) * M_PI_F;
+    float cosLatitude = cos(latitude);
+    return float3(cosLatitude * sin(longitude), sin(latitude), -cosLatitude * cos(longitude));
+}
 
 float hash21(float2 value) {
     value = fract(value * float2(123.34, 345.45));
@@ -85,24 +107,6 @@ float fractalNoise(float2 uv) {
     return sum;
 }
 
-float4x4 starfieldRotationMatrix(Globe globe) {
-    float maxLatitude = 2.0 * atan(exp(M_PI_F)) - M_PI_2_F;
-    float latitude = globe.panY * maxLatitude;
-    float longitude = globe.panX * M_PI_F;
-
-    float cx = cos(-latitude);
-    float sx = sin(-latitude);
-    float cy = cos(-longitude);
-    float sy = sin(-longitude);
-
-    return float4x4(
-        float4(cy,        0,         -sy,       0),
-        float4(sy * sx,   cx,        cy * sx,   0),
-        float4(sy * cx,  -sx,        cy * cx,   0),
-        float4(0,         0,          0,        1)
-    );
-}
-
 BackgroundVertexOut makeFullscreenTriangleVertex(uint vertexID) {
     float2 positions[3] = {
         float2(-1.0, -1.0),
@@ -124,16 +128,14 @@ vertex BackgroundVertexOut starfieldBackgroundVertexShader(uint vertexID [[verte
     return makeFullscreenTriangleVertex(vertexID);
 }
 
-fragment float4 starfieldBackgroundFragmentShader(BackgroundVertexOut in [[stage_in]],
-                                                  constant BackgroundParams& params [[buffer(0)]],
-                                                  constant BackgroundViewParams& viewParams [[buffer(1)]],
-                                                  constant Globe& globe [[buffer(2)]]) {
-    float2 uv = in.uv * 2.0 - 1.0;
-    float4x4 rotation = starfieldRotationMatrix(globe);
-    float3 baseViewDirection = normalize(float3(uv.x * viewParams.aspect * viewParams.tanHalfFov,
-                                                uv.y * viewParams.tanHalfFov,
-                                                -1.0));
-    float3 localDirection = normalize((float4(baseViewDirection, 0.0) * transpose(rotation)).xyz);
+/// The nebula bake: the whole background composition below is a pure
+/// function of the earth-fixed view direction, so it is evaluated once per
+/// process into an equirect texture and the per-frame background pass
+/// becomes one sample. Five fractal noise fields (sixteen hashes each) per
+/// texel run here, at bake time, instead of per pixel per frame.
+fragment float4 starfieldNebulaBakeFragmentShader(BackgroundVertexOut in [[stage_in]],
+                                                  constant BackgroundParams& params [[buffer(0)]]) {
+    float3 localDirection = starfieldEquirectDirection(in.uv);
 
     float3 directionWeights = pow(abs(localDirection), float3(2.4));
     float weightSum = max(directionWeights.x + directionWeights.y + directionWeights.z, 0.0001);
@@ -161,6 +163,30 @@ fragment float4 starfieldBackgroundFragmentShader(BackgroundVertexOut in [[stage
     color += half3(params.nebulaColorA.rgb) * nebulaA * half(params.controls.z);
     color += half3(params.nebulaColorB.rgb) * nebulaB * half(params.controls.z) * 0.85h;
     color *= 1.0h - half(smoothstep(0.15, 0.98, abs(localDirection.y))) * half(params.controls.x) * 0.22h;
+
+    return float4(float3(color), 1.0);
+}
+
+/// The per-frame background: rotate the pixel's view ray into the
+/// earth-fixed frame with the CPU-computed pan rotation and sample the
+/// baked nebula there; only the flat-map transition mix stays live.
+fragment float4 starfieldBackgroundFragmentShader(BackgroundVertexOut in [[stage_in]],
+                                                  constant BackgroundParams& params [[buffer(0)]],
+                                                  constant BackgroundViewParams& viewParams [[buffer(1)]],
+                                                  constant Globe& globe [[buffer(2)]],
+                                                  texture2d<half> nebulaTexture [[texture(0)]]) {
+    // Repeat across the longitude seam, clamp at the poles.
+    constexpr sampler nebulaSampler(coord::normalized,
+                                    s_address::repeat,
+                                    t_address::clamp_to_edge,
+                                    filter::linear);
+    float2 uv = in.uv * 2.0 - 1.0;
+    float3 baseViewDirection = normalize(float3(uv.x * viewParams.aspect * viewParams.tanHalfFov,
+                                                uv.y * viewParams.tanHalfFov,
+                                                -1.0));
+    float3 localDirection = normalize((float4(baseViewDirection, 0.0) * transpose(viewParams.rotation)).xyz);
+
+    half3 color = nebulaTexture.sample(nebulaSampler, starfieldEquirectUV(localDirection)).rgb;
     half transitionFade = smoothstep(0.0h, 1.0h, half(globe.transition));
     color = mix(color, half3(params.transitionTargetColor.rgb), transitionFade);
 
@@ -172,10 +198,8 @@ vertex StarVertexOut starfieldVertexShader(StarVertexIn in [[stage_in]],
                                            constant Globe& globe [[buffer(2)]],
                                            constant StarfieldParams& params [[buffer(3)]]) {
     StarVertexOut out;
-    float4x4 rotation = starfieldRotationMatrix(globe);
-
     float starRadius = globe.radius * params.radiusScale;
-    float4 world = float4(in.position * starRadius, 1.0) * rotation * translationMatrix(float3(0, 0, -globe.radius));
+    float4 world = float4(in.position * starRadius, 1.0) * params.rotation * translationMatrix(float3(0, 0, -globe.radius));
     out.position = camera.matrix * world;
     // Stars are background: forced to the far plane so the sky depth test
     // (see makeFullscreenTriangleVertex) rejects them wherever the globe

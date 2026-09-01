@@ -60,7 +60,7 @@ struct GlobeFrameConstantsUniform {
     /// The pan rotation exactly as `globeVisibilityRotationMatrix` builds it
     /// on the GPU: column constructor arguments in the row-vector layout the
     /// shaders consume with `v * M`.
-    private static func rotationMatrix(panLatitude: Float,
+    static func rotationMatrix(panLatitude: Float,
                                        panLongitude: Float) -> matrix_float4x4 {
         let cx = cos(-panLatitude)
         let sx = sin(-panLatitude)

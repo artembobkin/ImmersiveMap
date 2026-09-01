@@ -38,7 +38,17 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         builder.starfieldEnabled = Self.isStarfieldEnabled(settings: settings)
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
+    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+        // The nebula bake, once per renderer: encoded ahead of the world
+        // pass on the frame's own command buffer, so the background's
+        // sample always finds the texture written.
+        guard frameContext.renderSurfaceMode == .spherical,
+              Self.isStarfieldEnabled(settings: frameContext.services.settings),
+              let commandBuffer = frameContext.commandBuffer else {
+            return
+        }
+        starfieldRenderer.bakeNebulaIfNeeded(commandBuffer: commandBuffer)
+    }
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .starfield,
