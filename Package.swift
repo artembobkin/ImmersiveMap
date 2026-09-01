@@ -49,6 +49,7 @@ let package = Package(
                 .process("Render/Text/Shaders"),
                 .process("Text/Resources"),
                 .process("Render/PostProcessing/Shaders"),
+                .process("Render/Shaders/Atmosphere"),
                 .process("Render/Shaders/Globe"),
                 .process("Render/Shaders/Starfield"),
                 .process("Render/Compute/TilePoints/Shaders/TilePointToScreen.metal"),

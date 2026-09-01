@@ -23,6 +23,11 @@ enum RenderLayer: String, CaseIterable {
     /// against the sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
     case globeCap
+    /// The atmosphere around the globe's limb: the halo into space and the
+    /// rim glow over the surface, one analytic fullscreen draw after the
+    /// surface and the caps. Gated with the starfield: transparent space
+    /// paints nothing around the globe.
+    case atmosphere
     case flatMapSurface
     case buildingExtrusion
     case sceneModels
@@ -83,12 +88,13 @@ struct RenderLayerPlanner {
             // placeholder grid is gone), so the space background and the
             // stars paint the whole frame and the tile geometry blends over
             // them, opaque where its background quad lands.
-            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes]
+            [.starfield, .globeVectorSurface, .globeCap, .atmosphere, .sceneModels, .routes]
         }
 
         return worldLayers.map { layer in
             switch layer {
-            case .starfield where availability.starfieldEnabled == false:
+            case .starfield where availability.starfieldEnabled == false,
+                 .atmosphere where availability.starfieldEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
             default:
                 return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
