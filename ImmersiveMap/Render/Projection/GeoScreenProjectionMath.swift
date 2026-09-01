@@ -93,17 +93,26 @@ enum GeoScreenProjectionMath {
     }
 
     /// Soft horizon against the unrolling sphere the surface lives on
-    /// (GlobeUnrollMath.horizonAlpha): a point beyond its edge fades out over
-    /// a narrow band instead of a hard step. The growing sphere hides less
-    /// and less as the morph advances and nothing at all by the plane, so no
-    /// per-point release or gate is needed: the unroll never carries a point
-    /// through the planet's interior.
+    /// (GlobeUnrollMath.horizonAlpha), times the unroll's cut: a point whose
+    /// remaining chart travel is long is hidden exactly like the ground
+    /// under it (GlobeUnrollMath.cutClearance), so a marker never flies
+    /// across the view on its way to its Mercator home.
     static func globeVisibility(worldPosition: SIMD3<Float>,
+                                sphereWorldPosition: SIMD3<Float>,
+                                flatWorldPosition: SIMD2<Float>,
                                 constants: FrameConstants) -> (visible: Bool, alpha: Float) {
-        let alpha = GlobeUnrollMath.horizonAlpha(worldPosition: worldPosition,
+        var alpha = GlobeUnrollMath.horizonAlpha(worldPosition: worldPosition,
                                                  cameraEye: constants.cameraUniform.eye,
                                                  transition: constants.globe.transition,
                                                  radius: constants.globe.radius)
+        if constants.globe.transition > 0 {
+            let clearance = GlobeUnrollMath.cutClearance(sphereWorldPosition: sphereWorldPosition,
+                                                         flatWorldPosition: flatWorldPosition,
+                                                         transition: constants.globe.transition,
+                                                         radius: constants.globe.radius)
+            let t = simd_clamp(clearance / 0.05, 0.0, 1.0)
+            alpha *= t * t * (3.0 - 2.0 * t)
+        }
         return (alpha > 0.0, alpha)
     }
 
@@ -138,7 +147,11 @@ enum GeoScreenProjectionMath {
             return point
         }
 
+        let flatForCut = constants.globe.transition > 0
+            ? constants.globeFlatWorldPosition(basis: basis) : SIMD3<Float>(0, 0, 0)
         let visibility = globeVisibility(worldPosition: worldPosition,
+                                         sphereWorldPosition: sphereWorldPosition,
+                                         flatWorldPosition: SIMD2<Float>(flatForCut.x, flatForCut.y),
                                          constants: constants)
         guard visibility.alpha > 0.0 else {
             return ScreenPointOutput(position: point.position,

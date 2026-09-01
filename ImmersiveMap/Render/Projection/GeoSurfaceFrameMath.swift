@@ -115,6 +115,9 @@ enum GeoSurfaceFrameMath {
             let unitsPerMeter = sphereScale + (flatScale - sphereScale) * transition
 
             let visibility = GeoScreenProjectionMath.globeVisibility(worldPosition: worldPosition,
+                                                                     sphereWorldPosition: sphereWorldPosition,
+                                                                     flatWorldPosition: SIMD2<Float>(flatWorldPosition.x,
+                                                                                                     flatWorldPosition.y),
                                                                      constants: constants)
 
             return GeoSurfaceFrame(worldPosition: worldPosition,

@@ -18,14 +18,19 @@
 //  straight chart lines: no direction snapping, so triangles do not fold
 //  into slivers.
 //
-//  A sphere cannot unroll without a cut. The cut is the cap around the
-//  point opposite the view centre (the tear is dynamic, it follows the
-//  view): inside it the two charts comb the polar fan apart and the blend
-//  genuinely folds, so the morph vertex stage clips everything past
-//  kGlobeUnrollCutCosine as its fifth clip distance. Outside the cut the
-//  blend's residual folds paint no closer than half a radius from the view
-//  centre, far off-screen at the zooms the morph runs at; both facts are
-//  swept numerically by GlobeUnrollFoldTests. The CPU mirror is
+//  A sphere cannot unroll without tearing, and some content genuinely has
+//  to travel: whatever lies past a pole or past the point opposite the view
+//  has a Mercator home half a map sideways, and its chart line lawfully
+//  crosses the visible region. The cut therefore follows the JOURNEY, not a
+//  fixed cap: a vertex is clipped while its remaining travel
+//  (1 - t) * |mercator - azimuthal| exceeds kGlobeUnrollCutTravel of a
+//  radius, and appears only when it is nearly home. At transition 0 the
+//  clipped set is exactly the content whose two charts disagree, which is
+//  never visible on the resting sphere (near the view the charts agree);
+//  by transition 1 everything has arrived and nothing is clipped, so the
+//  cut opens and closes without a pop. GlobeUnrollFoldTests sweeps the
+//  production morph and pins that nothing folded and no long-haul traveller
+//  survives the clip anywhere near the view. The CPU mirror is
 //  GlobeUnrollMath.swift and must stay bit-compatible.
 //
 
@@ -35,11 +40,34 @@ using namespace metal;
 #ifndef GLOBE_UNROLL
 #define GLOBE_UNROLL
 
-/// cos(150 degrees): the unroll's cut. A vertex whose sphere direction lies
-/// more than 150 degrees of arc from the view centre is clipped while the
-/// sphere unfurls (visible iff cos(theta) exceeds this). Mirrored by
-/// GlobeUnrollMath.cutCosine.
-constant float kGlobeUnrollCutCosine = -0.8660254;
+/// The unroll's cut, as a fraction of the planet radius: a vertex is
+/// clipped while its remaining chart travel exceeds this. Mirrored by
+/// GlobeUnrollMath.cutTravelFraction.
+constant float kGlobeUnrollCutTravel = 0.25;
+
+/// The azimuthal-equidistant image of a sphere position about the view
+/// centre: arc times departure bearing. Wrapping it back onto the sphere of
+/// radius R is the identity.
+static inline float2 globeUnrollChartAE(float3 sphereWorldPosition, float radius) {
+    float3 fromCenter = sphereWorldPosition - float3(0.0, 0.0, -radius);
+    float cosTheta = clamp(fromCenter.z / max(radius, 1e-6), -1.0, 1.0);
+    float arcSphere = radius * acos(cosTheta);
+    float2 dirSphere = fromCenter.xy;
+    float dirSphereLength = length(dirSphere);
+    return dirSphereLength > 1e-6 ? dirSphere * (arcSphere / dirSphereLength) : float2(0.0, 0.0);
+}
+
+/// The cut clearance the morph vertex stage hands to the rasterizer:
+/// positive once the vertex's remaining chart travel is short enough to
+/// show. Normalized by the radius so the clip distances stay of order one.
+static inline float globeUnrollCutClearance(float3 sphereWorldPosition,
+                                            float2 flatWorldPosition,
+                                            float transition,
+                                            float radius) {
+    float2 chartAE = globeUnrollChartAE(sphereWorldPosition, radius);
+    float remaining = (1.0 - transition) * length(flatWorldPosition - chartAE);
+    return kGlobeUnrollCutTravel - remaining / max(radius, 1e-6);
+}
 
 static inline float3 globeUnrollWorldPosition(float3 sphereWorldPosition,
                                               float2 flatWorldPosition,
@@ -49,18 +77,8 @@ static inline float3 globeUnrollWorldPosition(float3 sphereWorldPosition,
     if (curvature <= 1e-9) {
         return float3(flatWorldPosition, 0.0);
     }
-    // The azimuthal-equidistant image: arc from the view centre times the
-    // departure bearing. Wrapping it back at curvature 1/R is the identity.
-    float3 fromCenter = sphereWorldPosition - float3(0.0, 0.0, -radius);
-    float cosTheta = clamp(fromCenter.z / max(radius, 1e-6), -1.0, 1.0);
-    float arcSphere = radius * acos(cosTheta);
-    float2 dirSphere = fromCenter.xy;
-    float dirSphereLength = length(dirSphere);
-    float2 azimuthalEquidistant = dirSphereLength > 1e-6
-        ? dirSphere * (arcSphere / dirSphereLength)
-        : float2(0.0, 0.0);
     // The straight chart line between the two flat images of the point.
-    float2 chartPoint = mix(azimuthalEquidistant, flatWorldPosition, transition);
+    float2 chartPoint = mix(globeUnrollChartAE(sphereWorldPosition, radius), flatWorldPosition, transition);
     float arc = length(chartPoint);
     if (arc <= 1e-6) {
         return float3(chartPoint, 0.0);

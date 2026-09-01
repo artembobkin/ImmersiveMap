@@ -18,11 +18,34 @@ import simd
 /// direction snapping, so triangles do not fold into slivers; the blend's
 /// fold-freedom is swept numerically by GlobeUnrollFoldTests.
 enum GlobeUnrollMath {
-    /// cos(150 degrees): the unroll's cut, mirrored from GlobeUnroll.h. A
-    /// point more than 150 degrees of arc from the view centre is clipped
-    /// while the sphere unfurls: that cap is where the unroll tears (the
-    /// blend genuinely folds there), and it is never visible mid-morph.
-    static let cutCosine: Float = -0.8660254
+    /// The unroll's cut as a fraction of the planet radius, mirrored from
+    /// GlobeUnroll.h: a point is hidden while its remaining chart travel
+    /// exceeds this, and appears only when it is nearly home. At transition
+    /// 0 the hidden set is exactly the content whose two charts disagree,
+    /// never visible on the resting sphere; by 1 everything has arrived.
+    static let cutTravelFraction: Float = 0.25
+
+    /// The azimuthal-equidistant image of a sphere position about the view
+    /// centre, mirroring `globeUnrollChartAE`.
+    static func chartAE(sphereWorldPosition: SIMD3<Float>, radius: Float) -> SIMD2<Float> {
+        let fromCenter = sphereWorldPosition - SIMD3<Float>(0.0, 0.0, -radius)
+        let cosTheta = simd_clamp(fromCenter.z / max(radius, 1e-6), -1.0, 1.0)
+        let arcSphere = radius * acos(cosTheta)
+        let dirSphere = SIMD2<Float>(fromCenter.x, fromCenter.y)
+        let dirSphereLength = simd_length(dirSphere)
+        return dirSphereLength > 1e-6 ? dirSphere * (arcSphere / dirSphereLength) : SIMD2<Float>(0.0, 0.0)
+    }
+
+    /// Mirror of `globeUnrollCutClearance`: positive once the point's
+    /// remaining chart travel is short enough to show.
+    static func cutClearance(sphereWorldPosition: SIMD3<Float>,
+                             flatWorldPosition: SIMD2<Float>,
+                             transition: Float,
+                             radius: Float) -> Float {
+        let chart = chartAE(sphereWorldPosition: sphereWorldPosition, radius: radius)
+        let remaining = (1.0 - transition) * simd_length(flatWorldPosition - chart)
+        return cutTravelFraction - remaining / max(radius, 1e-6)
+    }
 
     static func worldPosition(sphereWorldPosition: SIMD3<Float>,
                               flatWorldPosition: SIMD2<Float>,
@@ -32,14 +55,7 @@ enum GlobeUnrollMath {
         if curvature <= 1e-9 {
             return SIMD3<Float>(flatWorldPosition.x, flatWorldPosition.y, 0.0)
         }
-        let fromCenter = sphereWorldPosition - SIMD3<Float>(0.0, 0.0, -radius)
-        let cosTheta = simd_clamp(fromCenter.z / max(radius, 1e-6), -1.0, 1.0)
-        let arcSphere = radius * acos(cosTheta)
-        let dirSphere = SIMD2<Float>(fromCenter.x, fromCenter.y)
-        let dirSphereLength = simd_length(dirSphere)
-        let azimuthalEquidistant = dirSphereLength > 1e-6
-            ? dirSphere * (arcSphere / dirSphereLength)
-            : SIMD2<Float>(0.0, 0.0)
+        let azimuthalEquidistant = chartAE(sphereWorldPosition: sphereWorldPosition, radius: radius)
         let chartPoint = azimuthalEquidistant + (flatWorldPosition - azimuthalEquidistant) * transition
         let arc = simd_length(chartPoint)
         if arc <= 1e-6 {

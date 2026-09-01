@@ -163,9 +163,9 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     return out;
 }
 
-/// The morph's vertex output: the slot clips plus the unroll's cut, the
-/// cap around the point opposite the view centre where the unroll tears
-/// (see GlobeUnroll.h).
+/// The morph's vertex output: the slot clips plus the unroll's cut, which
+/// hides a vertex while its remaining chart travel is long (see
+/// GlobeUnroll.h).
 struct SphereMorphVertexOut {
     float4 position [[position]];
     // 0..3: the placeIn slot edges; 4: the unroll's cut.
@@ -208,10 +208,9 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     SphereMorphVertexOut out;
     out.position = camera.matrix * float4(worldPosition, 1.0);
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
-    // The unroll's cut: cos(arc from the view centre) past the cut cosine,
-    // linear in the sphere position's z.
-    out.clipDistance[4] = (sphereWorldPosition.z + globe.radius) / max(globe.radius, 1e-6)
-        - kGlobeUnrollCutCosine;
+    // The unroll's cut: hidden while the remaining chart travel is long.
+    out.clipDistance[4] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition.xy,
+                                                  globe.transition, globe.radius);
     if (kTileSphereFog) {
         out.worldPos = worldPosition;
     }

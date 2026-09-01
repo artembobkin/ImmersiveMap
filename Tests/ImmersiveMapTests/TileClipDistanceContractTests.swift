@@ -65,7 +65,7 @@ final class TileClipDistanceContractTests: XCTestCase {
         // unroll's cut as a fifth.
         XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [4];"))
         XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [5];"))
-        XCTAssertTrue(source.contains("kGlobeUnrollCutCosine"))
+        XCTAssertTrue(source.contains("globeUnrollCutClearance("))
         XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"))
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))

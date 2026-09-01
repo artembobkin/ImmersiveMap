@@ -76,19 +76,19 @@ final class GlobeUnrollFoldTests: XCTestCase {
         return (position, flat.x)
     }
 
-    func testTheCutCosineMirrorsTheShader() throws {
+    func testTheCutTravelMirrorsTheShader() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let header = try String(contentsOf: root.appendingPathComponent("ImmersiveMap/Render/Shaders/Globe/GlobeUnroll.h"),
                                 encoding: .utf8)
-        XCTAssertTrue(header.contains("constant float kGlobeUnrollCutCosine = -0.8660254;"))
-        XCTAssertEqual(GlobeUnrollMath.cutCosine, -0.8660254)
+        XCTAssertTrue(header.contains("constant float kGlobeUnrollCutTravel = 0.25;"))
+        XCTAssertEqual(GlobeUnrollMath.cutTravelFraction, 0.25)
     }
 
-    func testEveryFoldIsInsideTheCutOrPaintsFarOffScreen() {
-        let panLatitudes: [Float] = [0, 0.7, -0.7, 1.05, -1.05, 1.31]
+    func testEveryFoldAndTravellerIsCutOrPaintsFarOffScreen() {
+        let panLatitudes: [Float] = [0, 0.7, -0.7, 0.98, 1.05, -1.05, 1.31]
         let transitions: [Float] = [0.02, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.98]
         let step: Float = 3.0 * .pi / 180.0
         let h: Float = 0.02 * .pi / 180.0
@@ -123,22 +123,30 @@ final class GlobeUnrollFoldTests: XCTestCase {
                         // The sphere's own orientation at transition 0 is the
                         // reference: d/dLat x d/dLon points inward on this
                         // parametrization, so a healthy sample is negative.
-                        if orientation > 0 {
-                            // Harmless folds: inside the cut the morph clips,
-                            // and past half a radius nothing reaches the
-                            // screen at the zooms the morph runs at.
-                            let sphere = sphereWorld(latitude: latitude, longitude: longitude,
-                                                     rotation: rotation)
-                            let cosArc = (sphere.z + radius) / radius
-                            let insideCut = cosArc <= GlobeUnrollMath.cutCosine
-                            let paintRadius = simd_length(SIMD2<Float>(center.position.x, center.position.y))
-                            if insideCut == false, paintRadius < 0.5 * radius {
-                                if violations.count < 8 {
-                                    violations.append((panLatitude, transition,
-                                                       latitude * 180 / .pi, longitude * 180 / .pi))
-                                } else {
-                                    violations.append((0, 0, 0, 0))
-                                }
+                        let sphere = sphereWorld(latitude: latitude, longitude: longitude,
+                                                 rotation: rotation)
+                        let flat = flatWorld(latitude: latitude, longitude: longitude,
+                                             panLatitude: panLatitude, transition: transition,
+                                             unwrapNear: center.flatX)
+                        let clipped = GlobeUnrollMath.cutClearance(sphereWorldPosition: sphere,
+                                                                   flatWorldPosition: flat,
+                                                                   transition: transition,
+                                                                   radius: radius) < 0
+                        let paintRadius = simd_length(SIMD2<Float>(center.position.x, center.position.y))
+                        let travel = simd_length(flat - GlobeUnrollMath.chartAE(sphereWorldPosition: sphere,
+                                                                               radius: radius))
+                        // Two harms, both must be absent among unclipped
+                        // content anywhere near the view: a fold (flipped
+                        // winding paints garbage) and a long-haul traveller
+                        // crossing the visible region on its way home.
+                        let harmfulFold = clipped == false && orientation > 0 && paintRadius < 0.5 * radius
+                        let harmfulTourist = clipped == false && travel > 0.6 * radius && paintRadius < 0.4 * radius
+                        if harmfulFold || harmfulTourist {
+                            if violations.count < 8 {
+                                violations.append((panLatitude, transition,
+                                                   latitude * 180 / .pi, longitude * 180 / .pi))
+                            } else {
+                                violations.append((0, 0, 0, 0))
                             }
                         }
                         longitude += step
