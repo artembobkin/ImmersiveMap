@@ -23,53 +23,123 @@ struct BenchShot: Sendable {
     let holdAfter: TimeInterval
 }
 
-/// The scripted run both engines replay. Same poses, same durations, same
-/// order; the engine is the only variable.
+/// One scripted run: the same four windows (warm-up, tour, pan, idle) with
+/// scenario-specific poses. `BENCH_SCENARIO` picks one by name.
+struct BenchScenarioScript: Sendable {
+    let name: String
+    /// Seconds the map is given after creation before anything is measured:
+    /// style load, first tiles, atlas uploads.
+    let warmUp: TimeInterval
+    let tour: [BenchShot]
+    /// Programmatic pan: the camera is set on every display tick, the way a
+    /// drag gesture drives it.
+    let panDuration: TimeInterval
+    let panStart: BenchPose
+    let panPose: @Sendable (Double) -> BenchPose
+    /// Idle: the pan's end pose, nothing moving, after a settle period.
+    let idleSettle: TimeInterval
+    let idleDuration: TimeInterval
+}
+
+/// The scripted runs both engines replay. Same poses, same durations, same
+/// order; the engine is the only variable within a scenario.
 enum BenchScenario {
     /// Where every run starts: a globe view, well above the flat transition.
     static let establish = BenchPose(latitude: 30, longitude: 0, zoom: 2, bearing: 0, pitch: 0)
 
-    /// Seconds the map is given after creation before anything is measured:
-    /// style load, first tiles, atlas uploads.
-    static let warmUp: TimeInterval = 8
-
-    /// Cinematic city tour: dense downtowns at street zoom with tilt, chained
-    /// by long flights so both tile loading and steady rendering are on the
-    /// clock.
-    static let tour: [BenchShot] = [
-        BenchShot(name: "manhattan",
-                  pose: BenchPose(latitude: 40.7484, longitude: -73.9857, zoom: 15.5, bearing: 30, pitch: 55),
-                  duration: 6, holdAfter: 2),
-        BenchShot(name: "berlin",
-                  pose: BenchPose(latitude: 52.5194, longitude: 13.3985, zoom: 16, bearing: -40, pitch: 60),
-                  duration: 6, holdAfter: 2),
-        BenchShot(name: "paris",
-                  pose: BenchPose(latitude: 48.8584, longitude: 2.2945, zoom: 14, bearing: 0, pitch: 45),
-                  duration: 5, holdAfter: 2),
-        BenchShot(name: "tokyo",
-                  pose: BenchPose(latitude: 35.6896, longitude: 139.6917, zoom: 16.5, bearing: 90, pitch: 60),
-                  duration: 6, holdAfter: 2),
-        BenchShot(name: "globe",
-                  pose: BenchPose(latitude: 20, longitude: 100, zoom: 2.5, bearing: 0, pitch: 0),
-                  duration: 4, holdAfter: 1),
-    ]
-
-    /// Programmatic pan: the camera is set on every display tick, the way a
-    /// drag gesture drives it, sliding east across Midtown while rotating.
-    /// Tiles stream in continuously for the whole window.
-    static let panDuration: TimeInterval = 20
-    static let panStart = BenchPose(latitude: 40.7484, longitude: -73.9857, zoom: 15.5, bearing: 30, pitch: 55)
-
-    static func panPose(progress: Double) -> BenchPose {
-        let p = min(max(progress, 0), 1)
-        return BenchPose(latitude: panStart.latitude + 0.012 * p,
-                         longitude: panStart.longitude + 0.035 * p,
-                         zoom: panStart.zoom,
-                         bearing: panStart.bearing + 90 * p,
-                         pitch: panStart.pitch)
+    static func script(named name: String) -> BenchScenarioScript? {
+        switch name {
+        case "full": return full
+        case "globe": return globe
+        default: return nil
+        }
     }
 
-    /// Idle: the same Midtown pose, nothing moving, after a settle period.
-    static let idleSettle: TimeInterval = 4
-    static let idleDuration: TimeInterval = 10
+    /// The default mixed session: dense downtowns at street zoom with tilt,
+    /// chained by long flights, so both tile loading and steady rendering are
+    /// on the clock, then a street-zoom pan and an idle street map.
+    static let full = BenchScenarioScript(
+        name: "full",
+        warmUp: 8,
+        tour: [
+            BenchShot(name: "manhattan",
+                      pose: BenchPose(latitude: 40.7484, longitude: -73.9857, zoom: 15.5, bearing: 30, pitch: 55),
+                      duration: 6, holdAfter: 2),
+            BenchShot(name: "berlin",
+                      pose: BenchPose(latitude: 52.5194, longitude: 13.3985, zoom: 16, bearing: -40, pitch: 60),
+                      duration: 6, holdAfter: 2),
+            BenchShot(name: "paris",
+                      pose: BenchPose(latitude: 48.8584, longitude: 2.2945, zoom: 14, bearing: 0, pitch: 45),
+                      duration: 5, holdAfter: 2),
+            BenchShot(name: "tokyo",
+                      pose: BenchPose(latitude: 35.6896, longitude: 139.6917, zoom: 16.5, bearing: 90, pitch: 60),
+                      duration: 6, holdAfter: 2),
+            BenchShot(name: "globe",
+                      pose: BenchPose(latitude: 20, longitude: 100, zoom: 2.5, bearing: 0, pitch: 0),
+                      duration: 4, holdAfter: 1),
+        ],
+        panDuration: 20,
+        panStart: fullPanStart,
+        panPose: { progress in
+            // Sliding east across Midtown while rotating; tiles stream in
+            // continuously for the whole window.
+            let p = min(max(progress, 0), 1)
+            return BenchPose(latitude: fullPanStart.latitude + 0.012 * p,
+                             longitude: fullPanStart.longitude + 0.035 * p,
+                             zoom: fullPanStart.zoom,
+                             bearing: fullPanStart.bearing + 90 * p,
+                             pitch: fullPanStart.pitch)
+        },
+        idleSettle: 4,
+        idleDuration: 10
+    )
+
+    /// The sphere only: every pose stays well below the flat transition, so
+    /// the whole run renders the globe presentation. The tour covers the two
+    /// shading regimes of the sphere surface: the whole planet below zoom 2
+    /// (deep tone, layers lit inline per fragment) and the region zooms at
+    /// 2 and above (plain palette, layers blend unlit under the deferred
+    /// lighting pass), chained by flights whose overview arcs dip through
+    /// the low-zoom regime again. The pan spins the planet the way a drag
+    /// does.
+    static let globe = BenchScenarioScript(
+        name: "globe",
+        warmUp: 8,
+        tour: [
+            BenchShot(name: "planet",
+                      pose: BenchPose(latitude: 25, longitude: 10, zoom: 1.3, bearing: 0, pitch: 0),
+                      duration: 5, holdAfter: 3),
+            BenchShot(name: "africa",
+                      pose: BenchPose(latitude: 5, longitude: 20, zoom: 2.5, bearing: 0, pitch: 0),
+                      duration: 5, holdAfter: 2),
+            BenchShot(name: "asia",
+                      pose: BenchPose(latitude: 35, longitude: 105, zoom: 3.5, bearing: 0, pitch: 0),
+                      duration: 6, holdAfter: 2),
+            BenchShot(name: "europe",
+                      pose: BenchPose(latitude: 48, longitude: 12, zoom: 4.8, bearing: 0, pitch: 0),
+                      duration: 6, holdAfter: 2),
+            BenchShot(name: "pacific",
+                      pose: BenchPose(latitude: -15, longitude: -150, zoom: 2, bearing: 0, pitch: 0),
+                      duration: 6, holdAfter: 2),
+        ],
+        panDuration: 20,
+        panStart: globePanStart,
+        panPose: { progress in
+            // A drag-like spin: a third of the planet passes under the
+            // camera while it drifts north, all of it on the sphere.
+            let p = min(max(progress, 0), 1)
+            return BenchPose(latitude: globePanStart.latitude + 12 * p,
+                             longitude: globePanStart.longitude + 120 * p,
+                             zoom: globePanStart.zoom,
+                             bearing: globePanStart.bearing,
+                             pitch: globePanStart.pitch)
+        },
+        idleSettle: 4,
+        idleDuration: 10
+    )
+
+    private static let fullPanStart = BenchPose(latitude: 40.7484, longitude: -73.9857,
+                                                zoom: 15.5, bearing: 30, pitch: 55)
+    private static let globePanStart = BenchPose(latitude: 20, longitude: -60,
+                                                 zoom: 2.8, bearing: 0, pitch: 0)
 }

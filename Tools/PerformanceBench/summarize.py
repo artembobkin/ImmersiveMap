@@ -5,7 +5,8 @@
 
     Tools/PerformanceBench/summarize.py [Tools/PerformanceBench/Output]
 
-Runs of the same engine and cache state are averaged; the run count is shown.
+Runs of the same engine, cache state and scenario are averaged; the run count
+is shown. Runs written before scenarios existed count as the full scenario.
 """
 import glob
 import json
@@ -52,22 +53,23 @@ def main():
     first = runs[0]
     print(f"Device {first['device']}, iOS {first['systemVersion']}, view {first['viewSizePoints']} pt @{first['screenScale']}x, "
           f"target {first['targetFramesPerSecond']} Hz\n")
-    print("| run | engine | cache | version | low power | thermal start -> end | baseline MB |")
-    print("|---|---|---|---|---|---|---|")
+    print("| run | engine | cache | scenario | version | low power | thermal start -> end | baseline MB |")
+    print("|---|---|---|---|---|---|---|---|")
     for r in runs:
-        print(f"| {r['_file']} | {r['engine']} | {r['cacheState']} | {r['engineVersion']} | {r.get('lowPowerMode')} | "
+        print(f"| {r['_file']} | {r['engine']} | {r['cacheState']} | {r.get('scenario', 'full')} | {r['engineVersion']} | "
+              f"{r.get('lowPowerMode')} | "
               f"{r.get('thermalStateAtStart')} -> {r.get('thermalStateAtEnd')} | {r['memoryBaselineMB']:.0f} |")
     print()
 
     groups = defaultdict(list)
     for r in runs:
-        groups[(r["engine"], r["cacheState"])].append(r)
+        groups[(r["engine"], r["cacheState"], r.get("scenario", "full"))].append(r)
 
     for window in WINDOWS:
         print(f"### {window}\n")
-        print("| engine | cache | runs | " + " | ".join(c[1] for c in COLUMNS) + " |")
-        print("|---|---|---|" + "|".join("---:" for _ in COLUMNS) + "|")
-        for (engine, cache), rs in sorted(groups.items()):
+        print("| engine | cache | scenario | runs | " + " | ".join(c[1] for c in COLUMNS) + " |")
+        print("|---|---|---|---|" + "|".join("---:" for _ in COLUMNS) + "|")
+        for (engine, cache, scenario), rs in sorted(groups.items()):
             values = []
             for key, _, fmt in COLUMNS:
                 samples = []
@@ -76,7 +78,7 @@ def main():
                     if w is not None and key in w:
                         samples.append(w[key])
                 values.append(fmt.format(sum(samples) / len(samples)) if samples else "-")
-            print(f"| {engine} | {cache} | {len(rs)} | " + " | ".join(values) + " |")
+            print(f"| {engine} | {cache} | {scenario} | {len(rs)} | " + " | ".join(values) + " |")
         print()
 
 

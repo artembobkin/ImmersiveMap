@@ -10,6 +10,7 @@ import UIKit
 /// and collects the JSON it prints. Launch environment:
 ///
 /// - `BENCH_ENGINE`: a variant from the app's catalog (see each app's doc)
+/// - `BENCH_SCENARIO`: `full` (default) or `globe` (the sphere only, see BenchScenario)
 /// - `BENCH_CACHE`: `warm` (default) or `cold` (disk caches cleared before the map is made)
 /// - `BENCH_FPS`: display rate to request, default 120
 /// - `BENCH_EXIT`: `1` (default) to quit when the run is written
@@ -73,6 +74,11 @@ final class BenchViewController: UIViewController {
         let cacheState = environment["BENCH_CACHE"] ?? "warm"
         let targetFPS = Int(environment["BENCH_FPS"] ?? "") ?? 120
         let coldCache = cacheState == "cold"
+        let scenarioName = environment["BENCH_SCENARIO"] ?? "full"
+        guard let scenario = BenchScenario.script(named: scenarioName) else {
+            print("BENCH_ERROR scenario \(scenarioName) does not exist")
+            return
+        }
 
         memoryAtStart = BenchMetrics.physicalFootprintMB()
         let startedAt = ISO8601DateFormatter().string(from: Date())
@@ -107,12 +113,12 @@ final class BenchViewController: UIViewController {
         // Warm-up is measured too, as its own window: it is where style and
         // first tiles arrive, so its CPU and memory say what opening costs.
         metrics.beginWindow()
-        try? await Task.sleep(for: .seconds(BenchScenario.warmUp))
+        try? await Task.sleep(for: .seconds(scenario.warmUp))
         windows.append(metrics.endWindow(name: "warmup"))
 
         // Tour: one window per shot (flight plus hold), and the whole tour.
         var tourWindows: [BenchWindow] = []
-        for shot in BenchScenario.tour {
+        for shot in scenario.tour {
             metrics.beginWindow()
             await fly(engine, to: shot.pose, duration: shot.duration)
             if shot.holdAfter > 0 {
@@ -124,23 +130,23 @@ final class BenchViewController: UIViewController {
         windows.append(Self.combine(tourWindows, name: "tour"))
 
         // Pan: the camera is set from every host tick.
-        engine.jump(to: BenchScenario.panStart)
+        engine.jump(to: scenario.panStart)
         try? await Task.sleep(for: .seconds(2))
         let panStart = CACurrentMediaTime()
         metrics.onTick = { [weak engine] now in
-            let progress = (now - panStart) / BenchScenario.panDuration
+            let progress = (now - panStart) / scenario.panDuration
             guard progress <= 1 else { return }
-            engine?.jump(to: BenchScenario.panPose(progress: progress))
+            engine?.jump(to: scenario.panPose(progress))
         }
         metrics.beginWindow()
-        try? await Task.sleep(for: .seconds(BenchScenario.panDuration))
+        try? await Task.sleep(for: .seconds(scenario.panDuration))
         windows.append(metrics.endWindow(name: "pan"))
         metrics.onTick = nil
 
         // Idle: settle, then measure a still map.
-        try? await Task.sleep(for: .seconds(BenchScenario.idleSettle))
+        try? await Task.sleep(for: .seconds(scenario.idleSettle))
         metrics.beginWindow()
-        try? await Task.sleep(for: .seconds(BenchScenario.idleDuration))
+        try? await Task.sleep(for: .seconds(scenario.idleDuration))
         windows.append(metrics.endWindow(name: "idle"))
 
         metrics.stop()
@@ -149,6 +155,7 @@ final class BenchViewController: UIViewController {
         let result = BenchResult(engine: engine.name,
                                  engineVersion: engine.version,
                                  cacheState: cacheState,
+                                 scenario: scenario.name,
                                  device: Self.deviceModel(),
                                  systemVersion: UIDevice.current.systemVersion,
                                  screenScale: Double(screen?.scale ?? 0),

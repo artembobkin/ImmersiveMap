@@ -43,6 +43,7 @@ struct BenchResult: Codable {
     var engine: String
     var engineVersion: String
     var cacheState: String
+    var scenario: String
     var device: String
     var systemVersion: String
     var screenScale: Double
