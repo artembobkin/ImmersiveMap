@@ -738,22 +738,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var globeBackground: SIMD4<Double>
             public var water: SIMD4<Float>
             public var landCover: SIMD4<Float>
-            /// The ice both polar caps fade into, and with it the color of the
-            /// poles themselves. Mercator tiles stop at the maximum latitude,
-            /// and the cap that fills the rest continues the last row of tiles
-            /// at its rim but has to invent the pole: this is what it invents,
-            /// at both ends, since the tiles paint the Arctic sea ice white up
-            /// to the northern rim just as they do Antarctica. It belongs to
-            /// the palette rather than to the tile
-            /// background, which a dark style paints near black while
-            /// Antarctica stays white.
+            /// The southern polar cap's colour: the Antarctic ice sheet past
+            /// the last Mercator tile row. The default matches the snow the
+            /// built-in style paints Antarctica with
+            /// (`ImmersiveMapTilesDefaultMapStyleConfiguration.globalLandcover.snow`),
+            /// so the cap continues the tiles seamlessly; a style with its own
+            /// ice sets both in step. The northern cap takes `water` instead:
+            /// past the northern rim the planet is the Arctic Ocean.
             public var polarIce: SIMD4<Float>
 
             public init(tileBackground: SIMD4<Float>,
                         globeBackground: SIMD4<Double>,
                         water: SIMD4<Float>,
                         landCover: SIMD4<Float>,
-                        polarIce: SIMD4<Float> = SIMD4<Float>(1.0, 1.0, 1.0, 1.0)) {
+                        polarIce: SIMD4<Float> = SIMD4<Float>(0.937, 0.957, 0.973, 1.0)) {
                 self.tileBackground = tileBackground
                 self.globeBackground = globeBackground
                 self.water = water

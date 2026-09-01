@@ -34,14 +34,16 @@ final class GlobeCapPaletteTests: XCTestCase {
         assertColor(palette.south.color, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
     }
 
-    /// A style that says nothing about ice keeps the white south pole the
-    /// default daylight palette has always drawn.
-    func testDefaultPaletteKeepsWhiteSouthPole() {
+    /// A style that says nothing about ice gets the built-in style's snow:
+    /// the same constant the tiles paint Antarctica with, so the default cap
+    /// continues the default tiles seamlessly.
+    func testDefaultPaletteMatchesTheTilesSnow() {
         let baseColors = ImmersiveMapSettings.default.style.baseColors
 
         let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
 
-        assertColor(palette.south.color, equals: SIMD4<Float>(1, 1, 1, 1))
+        assertColor(palette.south.color,
+                    equals: ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.globalLandcover.snow)
     }
 
     private func assertColor(_ color: SIMD4<Float>,
