@@ -93,16 +93,19 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.pushDebugGroup("ground.opaqueFills")
             renderEncoder.setDepthStencilState(opaqueDepthState)
             pipeline.selectSphereOpaqueFillsPipeline(renderEncoder: renderEncoder)
+            let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
+                run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
+            }
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              renderMapSize: renderMapSize,
                              pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx) { buffers, indices in
+                             drawableHeightPx: drawableHeightPx,
+                             worthBinding: { $0.styleRuns.contains(where: isOpaqueFillRun) }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
-                         indices: indices) { run in
-                    run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
-                }
+                         indices: indices,
+                         predicate: isOpaqueFillRun)
             }
             renderEncoder.popDebugGroup()
             // The translucent fill layers, bottom to top, blended, tested
@@ -110,16 +113,19 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.pushDebugGroup("ground.translucentFills")
             renderEncoder.setDepthStencilState(translucentDepthState)
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: false)
+            let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
+                run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
+            }
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
                              renderMapSize: renderMapSize,
                              pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx) { buffers, indices in
+                             drawableHeightPx: drawableHeightPx,
+                             worthBinding: { $0.styleRuns.contains(where: isTranslucentFillRun) }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
-                         indices: indices) { run in
-                    run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
-                }
+                         indices: indices,
+                         predicate: isTranslucentFillRun)
             }
             renderEncoder.popDebugGroup()
             // The line ribbons (boundaries, overview strokes) last, through
@@ -130,13 +136,15 @@ enum GlobeVectorSurfaceDrawer {
                              placeTilesContext: placeTilesContext,
                              renderMapSize: renderMapSize,
                              pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx) { buffers, indices in
+                             drawableHeightPx: drawableHeightPx,
+                             worthBinding: { buffers in
+                                 buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: \.isLinesClass)
+                             }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
-                         drawsAllWithoutRuns: true) { run in
-                    run.isLinesClass
-                }
+                         drawsAllWithoutRuns: true,
+                         predicate: \.isLinesClass)
             }
             renderEncoder.popDebugGroup()
             renderEncoder.setDepthStencilState(depthDisabledState)
@@ -174,17 +182,21 @@ enum GlobeVectorSurfaceDrawer {
     }
 
     /// Binds one placement's buffers and per-draw uniforms, then hands the
-    /// draw to `body`.
+    /// draw to `body`. `worthBinding` runs first: a placement with nothing
+    /// for this pass is skipped before a single buffer is bound, so a pass
+    /// that draws from few tiles does not encode bind trains for the rest.
     private static func forEachPlacement(renderEncoder: MTLRenderCommandEncoder,
                                          placeTilesContext: PlaceTilesContext,
                                          renderMapSize: Double,
                                          pixelsPerPoint: Float,
                                          drawableHeightPx: Float,
+                                         worthBinding: (TileBuffers.GeometryLayer) -> Bool = { _ in true },
                                          body: (TileBuffers.GeometryLayer, TileBufferView) -> Void) {
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let buffers = metalTile.tileBuffers.ground
             guard buffers.indicesCount > 0,
+                  worthBinding(buffers),
                   let indices = buffers.indices,
                   let vertices = buffers.vertices,
                   let styles = buffers.styles,
