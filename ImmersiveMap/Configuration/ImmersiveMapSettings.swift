@@ -811,12 +811,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct PostProcessingSettings: Equatable, Sendable {
-        /// FXAA over the finished frame, on by default: the cheap edge
-        /// antialiasing of the single-sample render (the engine renders at
-        /// one sample per pixel everywhere).
+        /// FXAA over the finished frame, off by default: the engine renders
+        /// at one sample per pixel with the ground lines antialiased
+        /// analytically in the tile shaders, and FXAA is the optional extra
+        /// smoothing of geometry silhouettes (building edges most visibly),
+        /// at the price of one fullscreen pass.
         public var fxaaEnabled: Bool
 
-        public init(fxaaEnabled: Bool = true) {
+        public init(fxaaEnabled: Bool = false) {
             self.fxaaEnabled = fxaaEnabled
         }
     }
@@ -1084,7 +1086,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                 springK: 0.25,
                                 smoothing: 0.35),
         attribution: AttributionSettings(),
-        postProcessing: PostProcessingSettings(fxaaEnabled: true),
+        postProcessing: PostProcessingSettings(fxaaEnabled: false),
         debug: DebugSettings(enableDebugPanel: false,
                              coordinateScale: 80.0,
                              diagnosticsScale: 60.0,
@@ -1409,6 +1411,14 @@ public extension ImmersiveMapSettings {
     func postProcessingSettings(_ postProcessing: PostProcessingSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.postProcessing = postProcessing
+        return settings
+    }
+
+    /// FXAA over the finished frame, applied as the last pass. Off by
+    /// default; see `PostProcessingSettings.fxaaEnabled`.
+    func fxaa(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.postProcessing.fxaaEnabled = isEnabled
         return settings
     }
 

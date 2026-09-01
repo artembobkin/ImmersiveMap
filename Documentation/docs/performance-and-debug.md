@@ -57,10 +57,10 @@ Turn reuse off when you genuinely need a clean renderer, for instance when measu
 
 ```swift
 ImmersiveMapView()
-    .postProcessingSettings(ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true))
+    .fxaa(isEnabled: true)
 ```
 
-The world pass renders at one sample per pixel (ground lines are antialiased analytically in the tile shaders). FXAA is an additional full-screen post-processing pass, off by default: it smooths geometry edges at the cost of some sharpness in labels. Judge it on a device rather than on a screenshot.
+The world pass renders at one sample per pixel (ground lines are antialiased analytically in the tile shaders). FXAA is an additional full-screen post-processing pass, off by default: it smooths geometry edges at the cost of some sharpness in labels. Judge it on a device rather than on a screenshot. `.fxaa(isEnabled:)` is the one-line switch; `.postProcessingSettings(_:)` takes the whole `PostProcessingSettings` value.
 
 ## Judge speed in Release
 

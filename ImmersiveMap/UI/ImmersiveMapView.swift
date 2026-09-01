@@ -747,6 +747,16 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// FXAA over the finished frame, applied as the last pass. Off by
+    /// default: the map's own lines are antialiased analytically, and FXAA
+    /// adds the optional smoothing of geometry silhouettes (building edges
+    /// most visibly) at the price of one fullscreen pass.
+    public func fxaa(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.fxaa(isEnabled: isEnabled)
+        return view
+    }
+
     public func debugSettings(_ debug: ImmersiveMapSettings.DebugSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.debugSettings(debug)
