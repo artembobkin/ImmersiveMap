@@ -12,9 +12,12 @@ import Foundation
 /// way to follow the curvature is more vertices. Every triangle of every
 /// ground polygon (fills and line ribbons alike) is cut along the grid lines
 /// `x = k * step` and `y = m * step`, each piece fan-triangulated; the step
-/// per tile zoom keeps the chord sag of one cell under about half a pixel at
-/// the zoom the tile is native to (edge angle theta = 2 pi step / (4096 2^z),
-/// sag = R theta^2 / 8, with the sphere's screen radius doubling per zoom).
+/// per tile zoom keeps the chord sag of one cell around two pixels at the
+/// zoom the tile is native to (edge angle theta = 2 pi step / (4096 2^z),
+/// sag = R theta^2 / 8, with the sphere's screen radius doubling per zoom):
+/// a 32x32 grid on a whole tile, a quarter of the vertices the half-pixel
+/// grid of one step finer carried, traded for a sag that stays under the
+/// width of the thinnest drawn line.
 /// Tiles from z10 are never on the sphere: the surface has unfurled by then.
 ///
 /// Attributes ride along linearly (the signed line distance is a linear
@@ -30,11 +33,11 @@ enum GroundGeometrySubdivider {
     /// sphere while the surface unfurls.
     static func step(forTileZoom zoom: Int) -> Int? {
         switch zoom {
-        case ...1: return 64
-        case 2...3: return 128
-        case 4...5: return 256
-        case 6...7: return 512
-        case 8...9: return 1024
+        case ...1: return 128
+        case 2...3: return 256
+        case 4...5: return 512
+        case 6...7: return 1024
+        case 8...9: return 2048
         default: return nil
         }
     }

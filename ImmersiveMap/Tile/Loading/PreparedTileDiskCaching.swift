@@ -574,7 +574,10 @@ final class PreparedTileDiskCaching {
     // positions, 8-bit normals, and no per-vertex surface id, which no
     // shader ever read); the extruded spans of a version-77 arena bind
     // bytes at the wrong stride.
-    static let preparedFormatVersion: UInt32 = 78
+    // 79: the sphere subdivision grid coarsened one step (a whole tile is
+    // 32x32 cells instead of 64x64, step 128 to 2048 units by zoom), a
+    // quarter of the ground vertices; v78 tiles carry the finer mesh.
+    static let preparedFormatVersion: UInt32 = 79
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

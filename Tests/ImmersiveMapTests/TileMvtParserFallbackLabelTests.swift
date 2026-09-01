@@ -155,7 +155,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
             .filter { $0.styleIndex == 1 }
             .count
 
-        XCTAssertGreaterThan(backgroundVertexCount, 65 * 65)
+        XCTAssertGreaterThan(backgroundVertexCount, 33 * 33)
         XCTAssertGreaterThan(oceanVertexCount, 0)
     }
 
