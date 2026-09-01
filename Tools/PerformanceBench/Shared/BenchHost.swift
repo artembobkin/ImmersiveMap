@@ -107,7 +107,7 @@ final class BenchViewController: UIViewController {
         engine.view.frame = view.bounds
         engine.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(engine.view)
-        engine.jump(to: BenchScenario.establish)
+        engine.jump(to: scenario.establish)
         metrics.start()
 
         // Warm-up is measured too, as its own window: it is where style and

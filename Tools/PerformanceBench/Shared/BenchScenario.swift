@@ -27,6 +27,8 @@ struct BenchShot: Sendable {
 /// scenario-specific poses. `BENCH_SCENARIO` picks one by name.
 struct BenchScenarioScript: Sendable {
     let name: String
+    /// Where the run starts, jumped to before the warm-up.
+    let establish: BenchPose
     /// Seconds the map is given after creation before anything is measured:
     /// style load, first tiles, atlas uploads.
     let warmUp: TimeInterval
@@ -44,13 +46,16 @@ struct BenchScenarioScript: Sendable {
 /// The scripted runs both engines replay. Same poses, same durations, same
 /// order; the engine is the only variable within a scenario.
 enum BenchScenario {
-    /// Where every run starts: a globe view, well above the flat transition.
+    /// Where the default scripts start: a globe view, well above the flat
+    /// transition. Also the initial camera an engine is built with, before
+    /// the host jumps to its script's own establish.
     static let establish = BenchPose(latitude: 30, longitude: 0, zoom: 2, bearing: 0, pitch: 0)
 
     static func script(named name: String) -> BenchScenarioScript? {
         switch name {
         case "full": return full
         case "globe": return globe
+        case "globe0": return globe0
         default: return nil
         }
     }
@@ -60,6 +65,7 @@ enum BenchScenario {
     /// on the clock, then a street-zoom pan and an idle street map.
     static let full = BenchScenarioScript(
         name: "full",
+        establish: establish,
         warmUp: 8,
         tour: [
             BenchShot(name: "manhattan",
@@ -104,6 +110,7 @@ enum BenchScenario {
     /// does.
     static let globe = BenchScenarioScript(
         name: "globe",
+        establish: establish,
         warmUp: 8,
         tour: [
             BenchShot(name: "planet",
@@ -138,8 +145,42 @@ enum BenchScenario {
         idleDuration: 10
     )
 
+    /// Zoom 0 only, and short: the whole run fits in about fifteen seconds,
+    /// so an A/B is a pair of quick launches. Every window holds the camera
+    /// at zoom 0, the whole planet on screen, where the surface tone is at
+    /// its deepest and every tile fragment is lit inline (the deferred
+    /// lighting pass needs tone depth 0, which begins at zoom 2). The
+    /// flight and the pan only rotate the planet, so the frames differ only
+    /// in which hemisphere faces the eye; at 120 Hz even the short windows
+    /// hold hundreds of frames.
+    static let globe0 = BenchScenarioScript(
+        name: "globe0",
+        establish: BenchPose(latitude: 10, longitude: 0, zoom: 0, bearing: 0, pitch: 0),
+        warmUp: 2,
+        tour: [
+            BenchShot(name: "spin",
+                      pose: BenchPose(latitude: 5, longitude: 120, zoom: 0, bearing: 0, pitch: 0),
+                      duration: 3, holdAfter: 1),
+        ],
+        panDuration: 4,
+        panStart: globeZeroPanStart,
+        panPose: { progress in
+            // A drag-like spin of the whole planet at zoom 0.
+            let p = min(max(progress, 0), 1)
+            return BenchPose(latitude: globeZeroPanStart.latitude + 8 * p,
+                             longitude: globeZeroPanStart.longitude + 120 * p,
+                             zoom: 0,
+                             bearing: 0,
+                             pitch: 0)
+        },
+        idleSettle: 1,
+        idleDuration: 1
+    )
+
     private static let fullPanStart = BenchPose(latitude: 40.7484, longitude: -73.9857,
                                                 zoom: 15.5, bearing: 30, pitch: 55)
+    private static let globeZeroPanStart = BenchPose(latitude: 10, longitude: -60,
+                                                     zoom: 0, bearing: 0, pitch: 0)
     private static let globePanStart = BenchPose(latitude: 20, longitude: -60,
                                                  zoom: 2.8, bearing: 0, pitch: 0)
 }
