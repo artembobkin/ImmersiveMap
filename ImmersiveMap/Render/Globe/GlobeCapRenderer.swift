@@ -74,7 +74,7 @@ final class GlobeCapRenderer {
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
-              cameraUniform: CameraUniform,
+              globeFrame: GlobeFrameConstantsUniform,
               globe: GlobeUniform,
               edgeStrip: GlobeCapEdgeStrip,
               stripUniform: (GlobeCapPole) -> GlobeCapStripUniform) {
@@ -86,10 +86,12 @@ final class GlobeCapRenderer {
         // the back of the fan would draw through the planet.
         renderEncoder.setFrontFacing(.counterClockwise)
         renderEncoder.setCullMode(.back)
-        var cameraUniform = cameraUniform
+        var globeFrame = globeFrame
         var globe = globe
-        renderEncoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globe, length: MemoryLayout<GlobeUniform>.stride, index: 2)
+        renderEncoder.setVertexBytes(&globeFrame,
+                                     length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
+                                     index: 10)
 
         for pole in GlobeCapPole.allCases {
             var strip = stripUniform(pole)

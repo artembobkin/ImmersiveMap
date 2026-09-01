@@ -36,42 +36,24 @@ constant float kGlobeCapStripWidth = 4096.0;
 constant float kGlobeCapStripMaxLod = 12.0;
 
 vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
-                                         constant Camera& camera [[buffer(1)]],
-                                         constant Globe& globe [[buffer(2)]]) {
+                                         constant Globe& globe [[buffer(2)]],
+                                         constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
     float lat = vertexIn.latLon.x;
     float lon = vertexIn.latLon.y;
-    
-    float globeRadius = globe.radius;
+
     // Cap geometry stores geographic latitude directly. The globe tile path uses
     // phi = geographicLatitude - pi/2 after Mercator->sphere conversion, so caps
-    // must use the same convention or north/south hemispheres get swapped.
+    // must use the same convention or north/south hemispheres get swapped. The
+    // longitude keeps the cap's own origin: the strip u and the fragment's LOD
+    // are indexed with it.
     float phi = lat - M_PI_2_F;
     float theta = lon;
-    
-    float x = globeRadius * sin(phi) * sin(theta);
-    float y = globeRadius * cos(phi);
-    float z = globeRadius * sin(phi) * cos(theta);
-    float3 spherePosition = float3(x, y, z);
-    
-    float maxLatitude = 2.0 * atan(exp(M_PI_F)) - M_PI_2_F;
-    float latitude = globe.panY * maxLatitude;
-    float longitude = globe.panX * M_PI_F;
-    
-    float cx = cos(-latitude);
-    float sx = sin(-latitude);
-    float cy = cos(-longitude);
-    float sy = sin(-longitude);
-    
-    float4x4 rotation = float4x4(
-        float4(cy,        0,         -sy,       0),
-        float4(sy * sx,   cx,        cy * sx,   0),
-        float4(sy * cx,  -sx,        cy * cx,   0),
-        float4(0,         0,          0,        1)
-    );
-    
-    float4x4 translationM = translationMatrix(float3(0, 0, -globeRadius));
-    float4 spherePositionTranslated = float4(spherePosition, 1.0) * rotation * translationM;
-    float4 clip = camera.matrix * spherePositionTranslated;
+    float3 unitDirection = float3(sin(phi) * sin(theta), cos(phi), sin(phi) * cos(theta));
+
+    // One composed matrix (camera x translate x pan rotation x radius), built
+    // once per frame on the CPU: the same path the tile vertices take, instead
+    // of rebuilding the pan rotation and the translation per vertex.
+    float4 clip = globeFrame.sphereClip * float4(unitDirection, 1.0);
     
     // The cap does not morph into the plane: during the unfurl it diverges from
     // the tile surface, so it fades out in the first third of the transition,
