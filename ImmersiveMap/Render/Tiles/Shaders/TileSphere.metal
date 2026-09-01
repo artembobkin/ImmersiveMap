@@ -89,6 +89,19 @@ struct SphereFragmentIn {
 
 constant float kTileSphereExtent = 4096.0;
 
+// The ground's rank depth on the resting sphere: layer rank r draws at
+// 1 - r * step in NDC, a narrow band at the far plane, so the opaque fill
+// layers can draw under a depth test and a pixel is shaded once by its
+// topmost opaque layer (GlobeVectorSurfaceDrawer). The rank comes straight
+// from the per-vertex style index (the paint order is ascending style), so
+// no per-draw uniform is needed and runs going to the same pass can merge
+// into one call. The ribbons class sits in its own band nearer than every
+// fill: a ribbon must pass the depth test over its own style's fill. Far
+// enough from everything real (routes, models) and wide enough for the 256
+// styles a tile can carry.
+constant float kTileSphereLayerDepthStep = 2e-6;
+constant float kTileSphereRibbonDepthBand = 257.0 * kTileSphereLayerDepthStep;
+
 /// The tile-local vertex position as geographic coordinates. The parser
 /// stores render-space positions (y up, 4096 - tileY); the projection wants
 /// uv.y = 0 at the tile's north edge. Not clamped: the stitching margins of
@@ -121,7 +134,6 @@ static inline void tileSphereWriteStyle(thread SphereVertexOut& out, TileVertexS
 /// space and the sphere projection does not mirror).
 vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]],
                                                   constant Style* styles [[buffer(2)]],
-                                                  constant float& layerNdcZ [[buffer(3)]],
                                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                                   constant LineStyle* lineStyles [[buffer(5)]],
                                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
@@ -135,10 +147,12 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
     // The ground carries no geometric depth of its own (nothing on the
-    // sphere compares against it); its z is the per-draw layer rank in a
-    // band at the far plane, so the opaque layers can draw front-to-back
-    // under a depth test and a pixel is shaded once by its topmost opaque
-    // layer (GlobeVectorSurfaceDrawer).
+    // sphere compares against it); its z is the layer rank derived from the
+    // vertex's own style index, see kTileSphereLayerDepthStep.
+    float layerNdcZ = 1.0 - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
+    if (kTileSphereLineFields) {
+        layerNdcZ -= kTileSphereRibbonDepthBand;
+    }
     out.position.z = layerNdcZ * out.position.w;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
     tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette));

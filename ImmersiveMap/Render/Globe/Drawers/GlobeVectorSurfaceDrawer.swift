@@ -10,23 +10,23 @@ import simd
 ///
 /// On the resting sphere the ground draws as class layers, not as one call.
 /// The opaque fill layers (a style whose palette alphas are 1 and whose zoom
-/// fade is 1 this frame) draw first, top layer first, with blending off and
-/// a depth write: each layer's z is its rank in a narrow band at the far
-/// plane, so the depth test rejects every fragment a higher opaque layer
-/// already painted and a pixel is shaded exactly once by its topmost opaque
-/// layer. The translucent fill layers follow bottom-to-top with the same
-/// rank z, tested without writing: an opaque layer above them still hides
-/// them, everything else blends as before. The line ribbons draw last
-/// through the line-field pipeline, above every fill; the classes are
-/// separate index segments baked by the parser, so no class pass reads the
-/// other's vertices. Placements never contend for a pixel (each is clipped
-/// to its slot), so the rank only has to be consistent within one tile. The
+/// fade is 1 this frame) draw first with blending off and a depth write:
+/// each layer's z is its style rank in a narrow band at the far plane
+/// (computed in the vertex stage from the style index, see
+/// kTileSphereLayerDepthStep in TileSphere.metal), and on a TBDR GPU hidden
+/// surface removal resolves the opaque layers by that depth before shading,
+/// so a pixel is shaded exactly once by its topmost opaque layer regardless
+/// of submission order. The translucent fill layers follow in buffer order
+/// (which is bottom-to-top), tested without writing: an opaque layer above
+/// them still hides them, everything else blends as before. The line
+/// ribbons draw last through the line-field pipeline, in their own depth
+/// band above every fill; the classes are separate index segments baked by
+/// the parser, so no class pass reads the other's vertices. With the rank
+/// in the vertex stage, adjacent runs headed for the same pass merge into
+/// one draw call. Placements never contend for a pixel (each is clipped to
+/// its slot), so the rank only has to be consistent within one tile. The
 /// morph keeps the single blended draw.
 enum GlobeVectorSurfaceDrawer {
-    /// Rank z band at the far plane: layer `rank` draws at
-    /// `1 - (rank + 1) * step` in NDC, the top layer nearest. Far enough
-    /// from everything real (routes, models) and wide enough for 256 styles.
-    private static let layerDepthStep: Float = 2e-6
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
@@ -100,8 +100,7 @@ enum GlobeVectorSurfaceDrawer {
                              drawableHeightPx: drawableHeightPx) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
-                         indices: indices,
-                         reversed: true) { run in
+                         indices: indices) { run in
                     run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
                 }
             }
@@ -118,8 +117,7 @@ enum GlobeVectorSurfaceDrawer {
                              drawableHeightPx: drawableHeightPx) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
-                         indices: indices,
-                         reversed: false) { run in
+                         indices: indices) { run in
                     run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
                 }
             }
@@ -136,7 +134,6 @@ enum GlobeVectorSurfaceDrawer {
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
-                         reversed: false,
                          drawsAllWithoutRuns: true) { run in
                     run.isLinesClass
                 }
@@ -223,21 +220,20 @@ enum GlobeVectorSurfaceDrawer {
         }
     }
 
-    /// Draws the placement's style runs that pass `predicate`, each at its
-    /// rank z. When the run table is absent, only the ribbons pass
+    /// Draws the placement's style runs that pass `predicate`, coalescing
+    /// adjacent index-contiguous runs into one call: the rank depth comes
+    /// from the vertex stage (per style index), so a merged span still
+    /// layers correctly. When the run table is absent, only the ribbons pass
     /// (`drawsAllWithoutRuns`) falls back to one full draw, whose line-field
     /// pipeline paints exactly like the unsplit combined path.
     private static func drawRuns(renderEncoder: MTLRenderCommandEncoder,
                                  buffers: TileBuffers.GeometryLayer,
                                  indices: TileBufferView,
-                                 reversed: Bool,
                                  drawsAllWithoutRuns: Bool = false,
                                  predicate: (GroundStyleRun) -> Bool) {
         let runs = buffers.styleRuns
         guard runs.isEmpty == false else {
             guard drawsAllWithoutRuns else { return }
-            var layerNdcZ: Float = 1.0 - layerDepthStep
-            renderEncoder.setVertexBytes(&layerNdcZ, length: MemoryLayout<Float>.stride, index: 3)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: indices.count,
                                                 indexType: buffers.indexType,
@@ -246,17 +242,30 @@ enum GlobeVectorSurfaceDrawer {
             return
         }
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
-        let order = reversed ? Array(runs.indices.reversed()) : Array(runs.indices)
-        for rank in order {
-            let run = runs[rank]
-            guard run.indexCount > 0, predicate(run) else { continue }
-            var layerNdcZ: Float = 1.0 - Float(rank + 1) * layerDepthStep
-            renderEncoder.setVertexBytes(&layerNdcZ, length: MemoryLayout<Float>.stride, index: 3)
+        var spanStart = 0
+        var spanCount = 0
+        func flush() {
+            guard spanCount > 0 else { return }
             renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: Int(run.indexCount),
+                                                indexCount: spanCount,
                                                 indexType: buffers.indexType,
                                                 indexBuffer: indices.buffer,
-                                                indexBufferOffset: indices.offset + Int(run.indexStart) * indexByteWidth)
+                                                indexBufferOffset: indices.offset + spanStart * indexByteWidth)
+            spanCount = 0
         }
+        for run in runs {
+            guard run.indexCount > 0, predicate(run) else {
+                flush()
+                continue
+            }
+            if spanCount > 0, spanStart + spanCount == Int(run.indexStart) {
+                spanCount += Int(run.indexCount)
+            } else {
+                flush()
+                spanStart = Int(run.indexStart)
+                spanCount = Int(run.indexCount)
+            }
+        }
+        flush()
     }
 }

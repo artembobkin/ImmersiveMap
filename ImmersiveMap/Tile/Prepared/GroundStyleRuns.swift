@@ -10,11 +10,12 @@ import Foundation
 /// explicit layout: the disk codec stores the array byte-wise.
 ///
 /// The runs are what lets the sphere drawer draw the ground as class passes:
-/// the opaque fill layers front-to-back under a depth test, so a pixel is
-/// shaded once by its topmost opaque layer, the translucent fills
-/// back-to-front blending over the result, and the ribbons last through the
+/// the opaque fill layers under a depth write (their rank depth, computed in
+/// the vertex stage from the style index, lets hidden surface removal shade
+/// a pixel once by its topmost opaque layer), the translucent fills blending
+/// bottom-to-top over the result, and the ribbons last through the
 /// line-field pipeline, without either class pass reading the other's
-/// vertices.
+/// vertices; adjacent runs headed for the same pass merge into one draw.
 struct GroundStyleRun: Equatable, Sendable {
     /// First index element of the run and its length, in index elements.
     var indexStart: UInt32
