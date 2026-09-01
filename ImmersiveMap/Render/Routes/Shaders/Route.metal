@@ -82,8 +82,15 @@ struct RouteVertexOut {
 /// independent of how finely the surface is tessellated, whether its tiles have
 /// arrived, and whether the polar caps wrote depth.
 static inline float routeGlobeClearance(float3 position, constant Camera& camera, constant Globe& globe) {
-    float radius = max(globe.radius, 1e-6);
-    float3 globeCenter = float3(0.0, 0.0, -globe.radius);
+    // The occluder is the unrolling sphere the surface lives on
+    // (GlobeUnroll.h): radius grows as the morph advances and hides nothing
+    // by the plane, so no per-vertex release is needed.
+    float curvature = (1.0 - globe.transition) / max(globe.radius, 1e-6);
+    if (curvature <= 1e-9) {
+        return 1.0;
+    }
+    float radius = 1.0 / curvature;
+    float3 globeCenter = float3(0.0, 0.0, -radius);
     float3 toPosition = position - camera.eye;
     float lengthSquared = dot(toPosition, toPosition);
     if (lengthSquared <= 0.0) {
@@ -118,13 +125,9 @@ vertex RouteVertexOut routeVertexShader(uint vid [[vertex_id]],
     out.offsetPx = side * (route.halfWidthPx + kRouteFeatherPx);
     out.arcPx = screenLengths[index];
     out.worldPosition = samples[index].xyz;
-    // Mirror of GeoScreenProjectionMath.globeVisibility: a point that has
-    // already unfurled towards the plane is no longer on a sphere, so the
-    // sphere test is released as its local phase advances.
-    float3 fromCenter = samples[index].xyz - float3(0.0, 0.0, -globe.radius);
-    float frontDot = fromCenter.z / max(length(fromCenter), 1e-6);
-    out.horizonRelease = smoothstep(0.0, 0.95,
-                                    globeTransitionLocalPhase(globe.transition, frontDot));
+    // The clearance below tests the unrolling sphere itself, which releases
+    // everything by the end of the morph on its own.
+    out.horizonRelease = 0.0;
 
     float4 clip = camera.matrix * float4(samples[index].xyz, 1.0);
     // At the near plane both side vertices collapse onto the centerline: the

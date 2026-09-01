@@ -6,8 +6,8 @@ import simd
 
 /// Unified CPU projector of a geo coordinate into a drawable screen point
 /// (pixels, origin bottom-left, y up), consistent with the render vertex path:
-/// GlobeVisibility.h::globeProjectLatLon and
-/// GlobeTransitionProjection.h::globeTransitionLocalPhase.
+/// GlobeVisibility.h::globeProjectLatLon and the sphere-to-plane unroll in
+/// GlobeUnroll.h (mirrored by GlobeUnrollMath).
 /// Change only in sync with the shaders.
 enum GeoScreenProjectionMath {
 
@@ -82,15 +82,6 @@ enum GeoScreenProjectionMath {
         }
     }
 
-    /// Mirror of globeTransitionLocalPhase from GlobeTransitionProjection.h:
-    /// the sphere unfurl wave, the area nearest the view center settles into
-    /// the plane first, the far corners last.
-    static func transitionLocalPhase(_ transition: Float, frontDot: Float) -> Float {
-        let spread: Float = 0.6
-        let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
-        return simd_clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0)
-    }
-
     static func project(basis: GeoProjectionBasis,
                         constants: FrameConstants) -> ScreenPointOutput {
         switch constants.mode {
@@ -101,79 +92,19 @@ enum GeoScreenProjectionMath {
         }
     }
 
-    /// Soft horizon: a point beyond the globe's edge fades out within a
-    /// ±`horizonFadeBandWidth` band instead of a hard step; the alpha is
-    /// usable as an opacity coefficient.
-    ///
-    /// The threshold for the morphed position is relaxed by this point's LOCAL
-    /// unfurl-wave phase (`transitionLocalPhase`), not by the global transition
-    /// as in GlobeVisibility.h: a point on the still-spherical part (local
-    /// phase 0) must pass the strict spherical test, otherwise the back side
-    /// of the globe leaks through mid-morph. For tiles this leak is hidden by
-    /// the depth test; the overlay (SwiftUI markers, avatars) has no depth.
-    ///
-    /// An additional gate on the SPHERICAL position: while the morph is not
-    /// finished, a point far past the sphere's horizon stays hidden even when
-    /// its local phase has already unfurled the position toward the plane.
-    /// Otherwise far markers "fly" through the viewport on the way to their
-    /// flat spots: tiles do not show that transit (far coverage is not drawn),
-    /// and the marker hangs over empty ocean for several frames. The
-    /// `unfurlVisibilityMarginRadians` margin past the spherical horizon keeps
-    /// visible the points that the unfurl legitimately brings into frame (at
-    /// strong tilt the visible range of the plane exceeds the spherical one).
-    static let unfurlVisibilityMarginRadians: Float = 0.5
-
+    /// Soft horizon against the unrolling sphere the surface lives on
+    /// (GlobeUnrollMath.horizonAlpha): a point beyond its edge fades out over
+    /// a narrow band instead of a hard step. The growing sphere hides less
+    /// and less as the morph advances and nothing at all by the plane, so no
+    /// per-point release or gate is needed: the unroll never carries a point
+    /// through the planet's interior.
     static func globeVisibility(worldPosition: SIMD3<Float>,
-                                sphereWorldPosition: SIMD3<Float>,
-                                localTransition: Float,
                                 constants: FrameConstants) -> (visible: Bool, alpha: Float) {
-        let globeCenter = SIMD3<Float>(0.0, 0.0, -constants.globe.radius)
-        let toCamera = constants.cameraUniform.eye - globeCenter
-        let toCameraLength = simd_length(toCamera)
-        if toCameraLength <= 0.0 || constants.globe.transition >= 0.95 {
-            return (true, 1.0)
-        }
-
-        let radius = max(constants.globe.radius, 1e-6)
-        let radiusSquared = radius * radius
-        let normalization = max(toCameraLength * radius, 1e-6)
-        let horizonFade = smoothstep(edge0: 0.0, edge1: 0.95, x: localTransition)
-        let morphedThreshold = (1.0 - horizonFade) * radiusSquared + horizonFade * (-4.0 * radiusSquared)
-
-        let horizonAngle = acos(simd_clamp(radius / toCameraLength, -1.0, 1.0))
-        let gateAngle = min(horizonAngle + Self.unfurlVisibilityMarginRadians, Float.pi)
-        let gateThreshold = cos(gateAngle) * normalization
-
-        guard let morphedAlpha = horizonAlpha(position: worldPosition,
-                                              globeCenter: globeCenter,
-                                              toCamera: toCamera,
-                                              threshold: morphedThreshold,
-                                              normalization: normalization),
-              let gateAlpha = horizonAlpha(position: sphereWorldPosition,
-                                           globeCenter: globeCenter,
-                                           toCamera: toCamera,
-                                           threshold: gateThreshold,
-                                           normalization: normalization) else {
-            return (false, 0.0)
-        }
-
-        return (true, min(morphedAlpha, gateAlpha))
-    }
-
-    private static func horizonAlpha(position: SIMD3<Float>,
-                                     globeCenter: SIMD3<Float>,
-                                     toCamera: SIMD3<Float>,
-                                     threshold: Float,
-                                     normalization: Float) -> Float? {
-        let normalizedDot = simd_dot(position - globeCenter, toCamera) / normalization
-        let visibilityDelta = normalizedDot - threshold / normalization
-        guard visibilityDelta > -horizonFadeBandWidth else {
-            return nil
-        }
-
-        return smoothstep(edge0: -horizonFadeBandWidth,
-                          edge1: horizonFadeBandWidth,
-                          x: visibilityDelta)
+        let alpha = GlobeUnrollMath.horizonAlpha(worldPosition: worldPosition,
+                                                 cameraEye: constants.cameraUniform.eye,
+                                                 transition: constants.globe.transition,
+                                                 radius: constants.globe.radius)
+        return (alpha > 0.0, alpha)
     }
 
     private static func projectFlat(basis: GeoProjectionBasis,
@@ -190,10 +121,17 @@ enum GeoScreenProjectionMath {
     private static func projectGlobe(basis: GeoProjectionBasis,
                                      constants: FrameConstants) -> ScreenPointOutput {
         let sphereWorldPosition = constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
-        let flatWorldPosition = constants.globeFlatWorldPosition(basis: basis)
-        let frontDot = (sphereWorldPosition.z + constants.globe.radius) / max(constants.globe.radius, 1e-6)
-        let localTransition = transitionLocalPhase(constants.globe.transition, frontDot: frontDot)
-        let worldPosition = sphereWorldPosition + (flatWorldPosition - sphereWorldPosition) * localTransition
+        let worldPosition: SIMD3<Float>
+        if constants.globe.transition <= 0.0 {
+            worldPosition = sphereWorldPosition
+        } else {
+            let flatWorldPosition = constants.globeFlatWorldPosition(basis: basis)
+            worldPosition = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphereWorldPosition,
+                                                          flatWorldPosition: SIMD2<Float>(flatWorldPosition.x,
+                                                                                          flatWorldPosition.y),
+                                                          transition: constants.globe.transition,
+                                                          radius: constants.globe.radius)
+        }
         let clip = constants.cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
         var point = screenPointFromClip(clip: clip, viewportSize: constants.viewport)
         guard point.visible != 0 else {
@@ -201,8 +139,6 @@ enum GeoScreenProjectionMath {
         }
 
         let visibility = globeVisibility(worldPosition: worldPosition,
-                                         sphereWorldPosition: sphereWorldPosition,
-                                         localTransition: localTransition,
                                          constants: constants)
         guard visibility.alpha > 0.0 else {
             return ScreenPointOutput(position: point.position,

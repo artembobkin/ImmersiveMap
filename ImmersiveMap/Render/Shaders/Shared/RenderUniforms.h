@@ -27,15 +27,28 @@ struct Globe {
 
 /// Per-frame derivatives of Globe, computed once on the CPU instead of once
 /// per vertex: the pan rotation (in the row-vector column layout the vertex
-/// stages multiply with), the flat morph target's map size and Mercator pan,
-/// and the pan angles. Mirrors GlobeFrameConstantsUniform.swift (layout
-/// pinned by GlobeSphereVertexPathTests).
+/// stages multiply with), the composed sphere matrices, the flat morph
+/// target's map size and Mercator pan, the pan angles, and the unroll
+/// curvature. Mirrors GlobeFrameConstantsUniform.swift (layout pinned by
+/// GlobeSphereVertexPathTests).
 struct GlobeFrameConstants {
     float4x4 rotation;
+    /// Unit earth direction straight to clip space: camera x translate x
+    /// pan rotation x radius, composed on the CPU. Column-vector layout
+    /// (multiply as M * v), unlike `rotation`.
+    float4x4 sphereClip;
+    /// Unit earth direction to the world-space sphere position: translate x
+    /// pan rotation x radius. Column-vector layout.
+    float4x4 sphereWorld;
     float mapSize;
     float panMercatorY;
     float panLatitude;
     float panLongitude;
+    /// The unroll curvature (1 - transition) / radius: the surface lives on
+    /// a sphere of radius 1 / curvature tangent to the view centre, and 0
+    /// means the plane itself.
+    float curvature;
+    float3 _padding;
 };
 
 struct SunVisualState {

@@ -58,20 +58,17 @@ final class TileClipDistanceContractTests: XCTestCase {
     /// The sphere tile shader: the same clip, one more distance for the
     /// horizon, no textures and no discard, lit through the shared globe
     /// surface shading.
-    func testSphereShaderClipsWithFiveDistancesAndNeverDiscards() throws {
+    func testSphereShaderClipsWithSlotDistancesAndNeverDiscards() throws {
         let source = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
         XCTAssertNil(source.range(of: "discard_fragment"))
-        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [5];"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [4];"))
         XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"))
-        XCTAssertTrue(source.contains("constant Globe& globe [[buffer(8)]]"))
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))
         XCTAssertNil(source.range(of: "groundShadowMask"))
-        XCTAssertTrue(source.contains("globeOcclusionClearance("))
-        XCTAssertNil(source.range(of: "globeVisibilityHorizonThreshold"),
-                     "The relaxed horizon threshold is gone: the sphere itself is the occluder")
+        XCTAssertNil(source.range(of: "OcclusionClearance"),
+                     "The sphere needs no occlusion clip: back-face culling removes the far side, and the unroll never overlaps the planet")
         XCTAssertTrue(source.contains("globeWorldUVLatLon("))
-        XCTAssertTrue(source.contains("globeProjectLatLonDetailed("))
     }
 
     /// A tile's vertices unwrap their flat morph target around the tile's
@@ -80,22 +77,15 @@ final class TileClipDistanceContractTests: XCTestCase {
     func testTileGeometryUnwrapsAroundTheTileCentre() throws {
         let projection = try shaderSource("Render/Shaders/Globe/GlobeTileProjection.h")
         XCTAssertTrue(projection.contains("static inline float globeTileReferenceWorldX(int3 tile)"))
-        XCTAssertEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 3,
-                       "All three tile projections pass the tile's centre")
+        XCTAssertGreaterThanOrEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 1,
+                       "The tile projection passes the tile's centre")
         let transition = try shaderSource("Render/Shaders/Globe/GlobeTransitionProjection.h")
         XCTAssertTrue(transition.contains("float referenceNormalizedWorldX,"))
         XCTAssertTrue(transition.contains("return reference + wrap(value - reference, mapSize);"))
         let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
-        XCTAssertTrue(sphere.contains("surfaceTile.referenceWorldX,"))
+        XCTAssertTrue(sphere.contains("surfaceTile.referenceWorldX)"))
     }
 
-    /// The sphere-as-occluder header is mirrored on the CPU.
-    func testOcclusionMarginIsPinned() throws {
-        let occlusion = try shaderSource("Render/Shaders/Globe/GlobeOcclusion.h")
-        XCTAssertTrue(occlusion.contains("static inline float globeOcclusionClearance("))
-        XCTAssertTrue(occlusion.contains("constant float kGlobeOcclusionRadiusMargin = 1.0e-4;"),
-                      "The margin is mirrored by GlobeOcclusionMath.radiusMargin")
-    }
 
 
     private func shaderSource(_ relativePath: String) throws -> String {

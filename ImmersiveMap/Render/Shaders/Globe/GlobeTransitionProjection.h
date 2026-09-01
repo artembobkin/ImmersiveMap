@@ -30,22 +30,6 @@ static inline float globeTransitionMapSize(constant Globe& globe,
     return 2.0 * M_PI_F * globe.radius * mapSizeScale;
 }
 
-/// The wave of the sphere unfurling into a plane. With a uniform lerp the far
-/// corners of the mercator sheet, which have to travel the farthest, start
-/// immediately and "settle" first. Here a vertex's local phase lags the global
-/// one proportionally to its angular distance from the view center (`frontDot`
-/// is the cosine of that angle): the near area finishes unfurling first, the
-/// wave rolls outward, the corners settle last. The extremes match the uniform
-/// lerp: t = 0 - sphere, t = 1 - plane. CPU mirrors:
-/// `GeoScreenProjectionMath.transitionLocalPhase` (markers, avatars) and
-/// `GeoSurfaceFrameMath` (routes, scene models), which must stay
-/// bit-compatible with this function.
-static inline float globeTransitionLocalPhase(float transition, float frontDot) {
-    const float spread = 0.6;
-    float lagWeight = acos(clamp(frontDot, -1.0, 1.0)) / M_PI_F;
-    return clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0);
-}
-
 static inline float globeTransitionPanMercatorY(float panLatitude) {
     return getYMercNorm(panLatitude);
 }

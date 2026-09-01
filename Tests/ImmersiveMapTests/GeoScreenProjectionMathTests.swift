@@ -159,7 +159,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
 
     /// Mid-morph, a point must ride the unfurl wave (transitionLocalPhase)
     /// rather than a uniform lerp of the global transition.
-    func testMidMorphAppliesUnfurlWaveInsteadOfUniformLerp() throws {
+    func testMidMorphAppliesTheUnrollInsteadOfUniformLerp() throws {
         let midMorphZoom = presentationSettings.automaticTransitionStartZoom
             + presentationSettings.automaticTransitionSpan * 0.45
         let environment = try makeEnvironment(
@@ -176,17 +176,29 @@ final class GeoScreenProjectionMathTests: XCTestCase {
 
         let sphere = environment.constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
         let flat = environment.constants.globeFlatWorldPosition(basis: basis)
-        let frontDot = (sphere.z + environment.constants.globe.radius) / environment.constants.globe.radius
 
-        // An independent copy of the wave from GlobeTransitionProjection.h.
-        let spread: Float = 0.6
-        let lagWeight = acos(simd_clamp(frontDot, -1.0, 1.0)) / Float.pi
-        let localPhase = simd_clamp((transition - lagWeight * spread) / (1.0 - spread), 0.0, 1.0)
-        XCTAssertGreaterThan(abs(localPhase - transition), 1e-3,
-                             "Far from the centre the wave must differ from a uniform lerp")
+        // An independent copy of the unroll from GlobeUnroll.h: the point
+        // keeps its blended surface distance and azimuth on the growing
+        // sphere, which is not the straight lerp of the two positions.
+        let radius = environment.constants.globe.radius
+        let curvature = (1.0 - transition) / radius
+        let fromCenter = sphere - SIMD3<Float>(0, 0, -radius)
+        let arcSphere = radius * acos(simd_clamp(fromCenter.z / radius, -1.0, 1.0))
+        let dirSphere = simd_normalize(SIMD2<Float>(fromCenter.x, fromCenter.y))
+        let flat2 = SIMD2<Float>(flat.x, flat.y)
+        let arcFlat = simd_length(flat2)
+        let dirFlat = flat2 / arcFlat
+        let azimuth = simd_normalize(dirSphere + (dirFlat - dirSphere) * transition)
+        let arc = arcSphere + (arcFlat - arcSphere) * transition
+        let angle = arc * curvature
+        let unrolled = SIMD3<Float>(azimuth.x * sin(angle) / curvature,
+                                    azimuth.y * sin(angle) / curvature,
+                                    (cos(angle) - 1.0) / curvature)
+        let lerp = sphere + (flat - sphere) * transition
+        XCTAssertGreaterThan(simd_length(unrolled - lerp), 1e-2,
+                             "Far from the centre the unroll must differ from a uniform lerp")
 
-        let waveWorld = sphere + (flat - sphere) * localPhase
-        let expected = try XCTUnwrap(screenPoint(worldPosition: waveWorld,
+        let expected = try XCTUnwrap(screenPoint(worldPosition: unrolled,
                                                  constants: environment.constants))
         XCTAssertEqual(point.position.x, expected.x, accuracy: 0.01)
         XCTAssertEqual(point.position.y, expected.y, accuracy: 0.01)

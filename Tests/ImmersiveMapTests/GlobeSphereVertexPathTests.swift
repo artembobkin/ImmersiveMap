@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import simd
 @testable import ImmersiveMap
 import XCTest
 
@@ -30,11 +31,14 @@ final class GlobeSphereVertexPathTests: XCTestCase {
     /// row.
     func testFrameConstantsLayoutMatchesTheShaderStruct() {
         XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.rotation), 0)
-        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.mapSize), 64)
-        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panMercatorY), 68)
-        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panLatitude), 72)
-        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panLongitude), 76)
-        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.stride, 80)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.sphereClip), 64)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.sphereWorld), 128)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.mapSize), 192)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panMercatorY), 196)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panLatitude), 200)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.panLongitude), 204)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.offset(of: \.curvature), 208)
+        XCTAssertEqual(MemoryLayout<GlobeFrameConstantsUniform>.stride, 240)
     }
 
     /// The frame constants mirror the shader helpers term for term: the pan
@@ -43,7 +47,7 @@ final class GlobeSphereVertexPathTests: XCTestCase {
     /// of the same shader math) computes for the same globe.
     func testFrameConstantsMirrorTheProjectionMathMirror() {
         let globe = GlobeUniform(panX: 0.3, panY: -0.2, radius: 1000, transition: 0.4)
-        let uniform = GlobeFrameConstantsUniform.make(globe: globe)
+        let uniform = GlobeFrameConstantsUniform.make(globe: globe, cameraMatrix: matrix_identity_float4x4)
 
         let panLatitude = globe.panY * Float(ImmersiveMapProjection.maxMercatorLatitude)
         let panLongitude = globe.panX * Float.pi
@@ -61,15 +65,18 @@ final class GlobeSphereVertexPathTests: XCTestCase {
 
     // MARK: - Shader source contract
 
-    /// The pure-sphere constants sit at function-constant index 1 in both
-    /// sphere vertex stages, and both stages consume the frame constants.
-    func testTheSphereVertexStagesCarryThePureSphereConstant() throws {
+    /// The sphere is drawn by two dedicated vertex stages: the resting
+    /// sphere through the composed sphereClip matrix, the unfurl through the
+    /// unroll, both consuming the frame constants.
+    func testTheSphereVertexStagesAreSplitByWorld() throws {
         let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
-        XCTAssertTrue(sphere.contains("constant bool kTileSpherePureSphere [[function_constant(1)]];"))
+        XCTAssertTrue(sphere.contains("vertex SphereVertexOut tileSpherePureVertexShader("))
+        XCTAssertTrue(sphere.contains("vertex SphereVertexOut tileSphereMorphVertexShader("))
+        XCTAssertTrue(sphere.contains("globeFrame.sphereClip * float4(unitDirection, 1.0)"))
+        XCTAssertTrue(sphere.contains("globeUnrollWorldPosition("))
         XCTAssertTrue(sphere.contains("constant GlobeFrameConstants& globeFrame [[buffer(10)]]"))
-        XCTAssertTrue(sphere.contains("kTileSpherePureSphere);"))
-        let visibility = try shaderSource("Render/Shaders/Globe/GlobeVisibility.h")
-        XCTAssertTrue(visibility.contains("constant GlobeFrameConstants& frame,"))
+        let unroll = try shaderSource("Render/Shaders/Globe/GlobeUnroll.h")
+        XCTAssertTrue(unroll.contains("static inline float3 globeUnrollWorldPosition("))
     }
 
     /// Reads a shader off the checkout, the way the other shader-source

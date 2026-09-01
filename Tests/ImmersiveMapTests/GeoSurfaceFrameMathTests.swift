@@ -34,7 +34,7 @@ final class GeoSurfaceFrameMathTests: XCTestCase {
         }
     }
 
-    func testMidMorphFrameRidesTheUnfurlWave() throws {
+    func testMidMorphFrameRidesTheUnroll() throws {
         let constants = try makeConstants(latitude: 0, longitude: 0, zoom: 6.3)
         XCTAssertEqual(constants.mode, .globe)
         XCTAssertGreaterThan(constants.globe.transition, 0)
@@ -45,12 +45,12 @@ final class GeoSurfaceFrameMathTests: XCTestCase {
 
         let sphere = constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
         let flat = constants.globeFlatWorldPosition(basis: basis)
-        let frontDot = (sphere.z + constants.globe.radius) / max(constants.globe.radius, 1e-6)
-        let localTransition = GeoScreenProjectionMath.transitionLocalPhase(constants.globe.transition,
-                                                                           frontDot: frontDot)
-        let expected = sphere + (flat - sphere) * localTransition
+        let expected = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphere,
+                                                     flatWorldPosition: SIMD2<Float>(flat.x, flat.y),
+                                                     transition: constants.globe.transition,
+                                                     radius: constants.globe.radius)
 
-        XCTAssertEqual(frame.localTransition, localTransition, accuracy: 1e-6)
+        XCTAssertEqual(frame.localTransition, constants.globe.transition, accuracy: 1e-6)
         assertPosition(frame.worldPosition, expected)
     }
 

@@ -4,7 +4,6 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "GlobeTransitionProjection.h"
-#include "GlobeOcclusion.h"
 
 struct CapVertexIn {
     float2 latLon [[attribute(0)]];

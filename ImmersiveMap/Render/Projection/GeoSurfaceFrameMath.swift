@@ -17,7 +17,8 @@ struct GeoSurfaceFrame {
     let north: SIMD3<Float>
     let up: SIMD3<Float>
     let unitsPerMeter: Float
-    /// Phase of the sphere-to-plane unfurl wave at this point, 0...1.
+    /// Phase of the sphere-to-plane unroll, 0...1 (uniform across the
+    /// surface: the unroll has no per-point wave).
     let localTransition: Float
     /// X of the flat morph target after unwrapping. Feed it back as the next
     /// `flatWorldXReference` when resolving a chain of points, otherwise
@@ -77,12 +78,17 @@ enum GeoSurfaceFrameMath {
             flatWorldPosition.x = unwrapped(flatWorldPosition.x,
                                             reference: flatWorldXReference,
                                             size: constants.globeMapSize)
-            let frontDot = (sphereWorldPosition.z + constants.globe.radius)
-                / max(constants.globe.radius, 1e-6)
-            let localTransition = GeoScreenProjectionMath.transitionLocalPhase(constants.globe.transition,
-                                                                               frontDot: frontDot)
-            let worldPosition = sphereWorldPosition
-                + (flatWorldPosition - sphereWorldPosition) * localTransition
+            let transition = constants.globe.transition
+            let worldPosition: SIMD3<Float>
+            if transition <= 0.0 {
+                worldPosition = sphereWorldPosition
+            } else {
+                worldPosition = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphereWorldPosition,
+                                                              flatWorldPosition: SIMD2<Float>(flatWorldPosition.x,
+                                                                                              flatWorldPosition.y),
+                                                              transition: transition,
+                                                              radius: constants.globe.radius)
+            }
 
             // Tangent frame on the unit sphere (pre-rotation): up is the sphere
             // normal, east is d/dLongitude; degenerate exactly at the poles.
@@ -93,11 +99,11 @@ enum GeoSurfaceFrameMath {
             let rotatedUp = rotateDirection(sphereUp, constants: constants)
             let rotatedEast = rotateDirection(sphereEast, constants: constants)
 
-            // Blend toward the flat basis by the point's local unfurl phase and
+            // Blend toward the flat basis by the unroll phase and
             // re-orthonormalize: geometry tilts upright together with the
             // surface it stands on.
-            let up = simd_normalize(blend(rotatedUp, SIMD3<Float>(0, 0, 1), localTransition))
-            let eastReference = simd_normalize(blend(rotatedEast, SIMD3<Float>(1, 0, 0), localTransition))
+            let up = simd_normalize(blend(rotatedUp, SIMD3<Float>(0, 0, 1), transition))
+            let eastReference = simd_normalize(blend(rotatedEast, SIMD3<Float>(1, 0, 0), transition))
             let north = simd_normalize(simd_cross(up, eastReference))
             let east = simd_cross(north, up)
 
@@ -106,11 +112,9 @@ enum GeoSurfaceFrameMath {
             // convention as the point unfurls into the plane.
             let sphereScale = 2 * Float.pi * constants.globe.radius / earthCircumference
             let flatScale = constants.globeMapSize / (earthCircumference * cosLatitude)
-            let unitsPerMeter = sphereScale + (flatScale - sphereScale) * localTransition
+            let unitsPerMeter = sphereScale + (flatScale - sphereScale) * transition
 
             let visibility = GeoScreenProjectionMath.globeVisibility(worldPosition: worldPosition,
-                                                                     sphereWorldPosition: sphereWorldPosition,
-                                                                     localTransition: localTransition,
                                                                      constants: constants)
 
             return GeoSurfaceFrame(worldPosition: worldPosition,
@@ -119,7 +123,7 @@ enum GeoSurfaceFrameMath {
                                    north: north,
                                    up: up,
                                    unitsPerMeter: unitsPerMeter,
-                                   localTransition: localTransition,
+                                   localTransition: transition,
                                    flatWorldX: flatWorldPosition.x,
                                    passesHorizonGate: visibility.visible && visibility.alpha > 0)
         }

@@ -61,7 +61,8 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       pureSphere: GlobeSphereVertexPath.isPureSphere(
                                           renderSurfaceMode: frameContext.renderSurfaceMode,
                                           transition: frameContext.globeRenderUniform.transition),
-                                      globeFrame: GlobeFrameConstantsUniform.make(globe: frameContext.globeRenderUniform))
+                                      globeFrame: GlobeFrameConstantsUniform.make(globe: frameContext.globeRenderUniform,
+                                                                 cameraMatrix: frameContext.cameraUniform.matrix))
     }
 
     func handleMemoryWarning() {}

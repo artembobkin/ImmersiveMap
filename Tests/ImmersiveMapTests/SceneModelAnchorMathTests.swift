@@ -83,9 +83,10 @@ final class SceneModelAnchorMathTests: XCTestCase {
         let basis = presented.projectionBasis
         let sphere = environment.constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
         let flat = environment.constants.globeFlatWorldPosition(basis: basis)
-        let frontDot = (sphere.z + environment.constants.globe.radius) / environment.constants.globe.radius
-        let localPhase = GeoScreenProjectionMath.transitionLocalPhase(transition, frontDot: frontDot)
-        let waveWorld = sphere + (flat - sphere) * localPhase
+        let waveWorld = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphere,
+                                                      flatWorldPosition: SIMD2<Float>(flat.x, flat.y),
+                                                      transition: transition,
+                                                      radius: environment.constants.globe.radius)
 
         let anchorScreen = try XCTUnwrap(screenPoint(worldPosition: translation(of: anchor.modelMatrix),
                                                      constants: environment.constants))
