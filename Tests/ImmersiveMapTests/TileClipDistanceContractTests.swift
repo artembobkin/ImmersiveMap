@@ -63,8 +63,21 @@ final class TileClipDistanceContractTests: XCTestCase {
                       "The shader's mask scale must mirror GroundShadowMaskPipeline.resolutionScale")
         let mask = try shaderSource("Render/Tiles/Shaders/GroundShadowMask.metal")
         XCTAssertTrue(mask.contains("fragment half groundShadowMaskFragmentShader("))
-        XCTAssertTrue(mask.contains("sampleShadowFactor(shadow, shadowMap, worldPosition, float3(0.0))"),
-                      "The mask pass samples the cascades exactly the way the ground plane did, with no normal")
+        // The mask takes no screen derivatives (the plane gradients arrive as
+        // analytic constants), which is what licenses its early exits: a
+        // pixel above the horizon or beyond the fade returns lit without
+        // touching a cascade.
+        XCTAssertNil(mask.range(of: "sampleShadowFactor("),
+                     "The mask uses the specialized ground-plane path, not the generic receiver sampling")
+        XCTAssertNil(mask.range(of: "dfdx"), "No screen derivatives: control flow may diverge")
+        XCTAssertTrue(mask.contains("if (distanceToEye >= shadow.fadeEndDistance) {"),
+                      "Pixels beyond the shadow fade exit before sampling")
+        XCTAssertTrue(mask.contains("return shadowCascadeVisibility(cascade, shadowMap, cascadeIndex, uvz, dzduv);"),
+                      "The near cascade keeps the shared tent-PCF kernel for contact shadows")
+        XCTAssertTrue(mask.contains("groundCascadeSingleTapVisibility"),
+                      "The middle and far cascades read one bilinear compare tap")
+        XCTAssertTrue(mask.contains("mask.planeGradients[i]"),
+                      "The receiver-plane gradient is the analytic per-cascade constant")
     }
 
     /// The sphere tile shader: the same clip, one more distance for the

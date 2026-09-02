@@ -36,6 +36,10 @@ struct FrameContext {
     /// Directional-shadow state of the frame; nil when shadows are off or the
     /// frame cannot cast (globe mode, degenerate light or footprint).
     let shadowFrameState: ShadowFrameState?
+    /// The engine's shadow-map reuse controller: pass planning asks it once
+    /// per frame whether the caster pass must run or the rendered map still
+    /// serves (see ShadowMapReuseController).
+    let shadowMapReuse: ShadowMapReuseController
 
     var cameraUniform: CameraUniform {
         CameraUniform(matrix: cameraMatrices.projectionView, eye: cameraEye, padding: 0)
@@ -105,6 +109,7 @@ struct FrameContext {
          visibleContent: VisibleContentState = .empty,
          sharedState: FrameContextSharedState = FrameContextSharedState(),
          shadowFrameState: ShadowFrameState? = nil,
+         shadowMapReuse: ShadowMapReuseController = ShadowMapReuseController(),
          diagnostics: FrameDiagnostics) {
         let fallbackResolvedPresentation = resolvedPresentation ?? PresentationStateResolver.resolve(cameraState: mapCameraState,
                                                                                               settings: ImmersiveMapSettings.default.presentation,
@@ -126,6 +131,7 @@ struct FrameContext {
         self.services = services
         self.sharedState = sharedState
         self.shadowFrameState = shadowFrameState
+        self.shadowMapReuse = shadowMapReuse
         self.diagnostics = diagnostics
     }
 }

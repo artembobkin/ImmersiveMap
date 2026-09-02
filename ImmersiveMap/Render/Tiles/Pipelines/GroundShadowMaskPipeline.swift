@@ -17,7 +17,7 @@ final class GroundShadowMaskPipeline {
     /// mask is indistinguishable from a full-size one and the pass costs a
     /// quarter of the fragments. Mirrored by `kGroundShadowMaskScale` in
     /// Tile.metal, where the ground turns its pixel position into mask UV.
-    static let resolutionScale: CGFloat = 0.5
+    static let resolutionScale: CGFloat = 0.4
 
     /// The mask size for a drawable, rounded up so the mask always covers it.
     static func maskSize(for drawSize: CGSize) -> CGSize {

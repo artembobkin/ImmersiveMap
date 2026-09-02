@@ -35,16 +35,21 @@ final class ShadowUniformLayoutTests: XCTestCase {
     }
 
     func testGroundShadowMaskUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.stride, 80)
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.stride, 112)
         XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.inverseProjectionView), 0)
         XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.viewportSize), 64)
+        // The three plane gradients mirror `float2 planeGradients[3]`.
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.planeGradientNear), 80)
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.planeGradientMiddle), 88)
+        XCTAssertEqual(MemoryLayout<GroundShadowMaskUniform>.offset(of: \.planeGradientFar), 96)
     }
 
     func testGroundShadowMaskUniformInvertsTheProjectionView() {
         let projectionView = Matrix.perspectiveMatrix(fovRadians: 1.0, aspect: 1.5, near: 0.1, far: 100)
             * Matrix.translationMatrix(x: 3, y: -2, z: -10)
         let uniform = GroundShadowMaskUniform(projectionView: projectionView,
-                                              viewportSize: SIMD2<Float>(1290, 2796))
+                                              viewportSize: SIMD2<Float>(1290, 2796),
+                                              shadow: .disabled)
         let roundTrip = uniform.inverseProjectionView * projectionView
         for column in 0..<4 {
             for row in 0..<4 {
@@ -56,10 +61,10 @@ final class ShadowUniformLayoutTests: XCTestCase {
 
     func testGroundShadowMaskSizeCoversTheDrawable() {
         XCTAssertEqual(GroundShadowMaskPipeline.maskSize(for: CGSize(width: 1290, height: 2796)),
-                       CGSize(width: 645, height: 1398))
+                       CGSize(width: 516, height: 1119))
         XCTAssertEqual(GroundShadowMaskPipeline.maskSize(for: CGSize(width: 1291, height: 2797)),
-                       CGSize(width: 646, height: 1399),
-                       "An odd drawable rounds the mask up so no drawable pixel maps past its edge")
+                       CGSize(width: 517, height: 1119),
+                       "A fractional product rounds the mask up so no drawable pixel maps past its edge")
     }
 
     func testCasterUniformMatchesMetalLayout() {

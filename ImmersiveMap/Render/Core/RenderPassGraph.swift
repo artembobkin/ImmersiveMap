@@ -293,9 +293,17 @@ final class RenderPassGraph {
         if let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
            let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) {
             resourceRegistry.setTexture(shadowMapTexture, named: .shadowMapTexture)
-            nodes.append(RenderPassNode(name: .shadowMap,
-                                        descriptorProvider: ShadowMapDescriptorProvider(),
-                                        layers: [.shadowCasters]))
+            // The sun is static and the buildings do not move: the caster
+            // pass runs only when the rendered map went stale (fresh fit,
+            // new caster tile, new texture, or animating model casters);
+            // otherwise the receivers keep sampling the map rendered some
+            // frames ago through matrices re-materialized for this frame.
+            if frameContext.shadowMapReuse.planShadowRender(frameContext: frameContext,
+                                                            texture: shadowMapTexture) {
+                nodes.append(RenderPassNode(name: .shadowMap,
+                                            descriptorProvider: ShadowMapDescriptorProvider(),
+                                            layers: [.shadowCasters]))
+            }
             // The ground shadow mask follows the map it samples: one cascade
             // lookup per pixel on the ground plane, read by every blended
             // ground layer of the world pass instead of a lookup per layer.

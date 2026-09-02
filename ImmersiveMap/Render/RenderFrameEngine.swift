@@ -51,6 +51,8 @@ final class RenderFrameEngine {
 
     private let attachments: FrameAttachmentStore
     private let inFlightFramePool = InFlightFramePool(slotsCount: InFlightFramePool.inFlightFramesCount)
+    /// Keeps the rendered shadow map alive across frames; see the type.
+    private let shadowMapReuse = ShadowMapReuseController()
     private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
     /// Cascade shadow maps need layered rendering; where it is missing the
@@ -339,7 +341,7 @@ final class RenderFrameEngine {
         // without layered rendering renders the frame without shadows rather
         // than failing validation when the cascade pass is encoded.
         let shadowFrameState = supportsShadowCascades
-            ? ShadowFrameStateResolver.resolve(
+            ? shadowMapReuse.resolveFrameState(
                 renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                 cameraEye: cameraFrameState.cameraEye,
                 centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
@@ -365,6 +367,7 @@ final class RenderFrameEngine {
                             resolvedPresentation: resolvedPresentation,
                             visibleContent: visibleContent,
                             shadowFrameState: shadowFrameState,
+                            shadowMapReuse: shadowMapReuse,
                             diagnostics: diagnostics)
     }
 

@@ -10,6 +10,21 @@ once the public API stabilizes.
 
 ### Added
 
+- The cascade shadow map is cached across frames (`ShadowMapReuseController`):
+  the sun is static and buildings do not move, so the caster pass re-runs only
+  when the camera travels outside the margined cascade fit, the light or map
+  resolution changes, a caster tile the map has not seen arrives, or scene
+  models cast; every other frame reuses the rendered atlas through matrices
+  re-materialized for the current pan, and the fitted windows stay glued to
+  the map content so shadow edges do not move when a refit lands. The ground
+  shadow mask got cheaper too: analytic per-cascade plane gradients replace
+  screen derivatives (letting pixels above the horizon or beyond the shadow
+  fade exit before sampling), the middle and far cascades read one bilinear
+  compare tap instead of the 3x3 tent (the near cascade keeps the tent for
+  contact shadows), and the mask renders at 0.4 of the drawable size. On the
+  street benchmark the whole shadow cost fell from 2.7 to 3.7 ms per frame to
+  0.29 to 0.40 ms per frame, measured across holds, a 20 second pan, and idle.
+
 - The flat passes open with a tile-ownership stencil prepass: one vertex-only
   quad per unique source writes the tile-priority stencil before anything
   draws. The world-pass buildings now test those marks instead of carrying

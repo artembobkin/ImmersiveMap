@@ -23,7 +23,7 @@ constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
 // at the pixel's position scaled by this, so a half-size mask upsamples
 // smoothly instead of blocking.
-constant float kGroundShadowMaskScale = 0.5;
+constant float kGroundShadowMaskScale = 0.4;
 
 // color and the fade mask are unit-range, so they interpolate as half: fewer
 // interpolant registers and double-rate ALU on A-series GPUs (the same split

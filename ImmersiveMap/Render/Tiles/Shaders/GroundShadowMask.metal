@@ -29,11 +29,50 @@ struct GroundShadowMaskUniform {
     // Mask size in pixels, the same as the drawable.
     float2 viewportSize;
     float2 _padding;
+    // Per-cascade receiver-plane gradient of the ground plane, computed
+    // analytically on the CPU (the plane is z = 0 and the projections are
+    // affine, so it is one constant per cascade). No screen derivatives are
+    // needed, so the fragment below is free to exit early.
+    float2 planeGradients[3];
+    float2 _padding1;
 };
 
 struct GroundShadowMaskVertexOut {
     float4 position [[position]];
 };
+
+// One hardware-bilinear compare tap: a 2x2 PCF with the same receiver-plane
+// bias discipline as the tent kernel. The middle and far cascades read
+// through this instead of the 3x3 tent: their texels span meters, the mask
+// is sampled at half resolution and bilinearly upsampled by the ground
+// layers, so the tent's wider diagonal ramp adds nothing visible there,
+// while the near cascade (crisp contact shadows) keeps the full tent.
+static inline float groundCascadeSingleTapVisibility(constant ShadowCascade& cascade,
+                                                     depth2d_array<float> shadowMap,
+                                                     uint cascadeIndex,
+                                                     float3 uvz,
+                                                     float2 dzduv) {
+    constexpr sampler shadowSampler(coord::normalized,
+                                    filter::linear,
+                                    mip_filter::none,
+                                    address::clamp_to_edge,
+                                    compare_func::less_equal);
+    float slopeBias = 0.71 * (abs(dzduv.x) * cascade.texelSizeUV.x
+                              + abs(dzduv.y) * cascade.texelSizeUV.y);
+    return shadowMap.sample_compare(shadowSampler, uvz.xy, cascadeIndex,
+                                    uvz.z - cascade.depthBias - slopeBias);
+}
+
+static inline float groundCascadeVisibility(constant ShadowCascade& cascade,
+                                            depth2d_array<float> shadowMap,
+                                            uint cascadeIndex,
+                                            float3 uvz,
+                                            float2 dzduv) {
+    if (cascadeIndex == 0) {
+        return shadowCascadeVisibility(cascade, shadowMap, cascadeIndex, uvz, dzduv);
+    }
+    return groundCascadeSingleTapVisibility(cascade, shadowMap, cascadeIndex, uvz, dzduv);
+}
 
 vertex GroundShadowMaskVertexOut groundShadowMaskVertexShader(uint vertexID [[vertex_id]]) {
     const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
@@ -43,12 +82,17 @@ vertex GroundShadowMaskVertexOut groundShadowMaskVertexShader(uint vertexID [[ve
 }
 
 // Intersects the pixel's view ray with the ground plane and samples the
-// cascades there. `sampleShadowFactor` takes screen-space derivatives of the
-// projected point, and the neighbours of a ground pixel are ground pixels,
-// so the receiver-plane gradient comes out the same as it did for the
-// ground geometry. Pixels whose ray misses the plane (above the horizon)
-// still run the sampling in uniform control flow, on a clamped point, and
-// are then written lit: nothing of the ground is drawn there anyway.
+// cascades there. Unlike the generic `sampleShadowFactor`, this path takes
+// no screen-space derivatives: the receiver-plane gradients arrive as
+// analytic per-cascade constants (the ground is a plane), so control flow
+// is free to diverge. That pays twice: pixels above the horizon and pixels
+// beyond the shadow fade return lit before touching a single cascade, and
+// the pixels that do sample project only the cascades they actually read
+// (the containing one, plus its neighbour inside the edge blend band)
+// instead of all three. The math on the sampling path is exactly the
+// zero-normal specialization of `sampleShadowFactor`: geometric visibility
+// is 1 on the up-facing plane, so the factor reduces to
+// 1 - (1 - mapVisibility) * strength * fade.
 fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stage_in]],
                                              constant GroundShadowMaskUniform& mask [[buffer(0)]],
                                              constant Shadow& shadow [[buffer(1)]],
@@ -63,11 +107,58 @@ fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stag
     // Where along the ray the plane lies; negative or past the far plane
     // means the ray never reaches the ground within the view volume.
     float denominator = rayDirection.z;
-    bool hitsGround = abs(denominator) > 1e-12;
-    float t = hitsGround ? -rayStart.z / denominator : 0.0;
-    hitsGround = hitsGround && t >= 0.0 && t <= 1.0;
-    float3 worldPosition = rayStart + rayDirection * clamp(t, 0.0, 1.0);
+    if (abs(denominator) <= 1e-12) {
+        return 1.0h;
+    }
+    float t = -rayStart.z / denominator;
+    if (t < 0.0 || t > 1.0) {
+        return 1.0h;
+    }
+    float3 worldPosition = rayStart + rayDirection * t;
     worldPosition.z = 0.0;
-    float factor = sampleShadowFactor(shadow, shadowMap, worldPosition, float3(0.0));
-    return hitsGround ? half(factor) : 1.0h;
+
+    if (shadow.strength <= 0.0) {
+        return 1.0h;
+    }
+    float distanceToEye = length(worldPosition - shadow.eye);
+    if (distanceToEye >= shadow.fadeEndDistance) {
+        return 1.0h;
+    }
+
+    float mapVisibility = 1.0;
+    for (int i = 0; i < 3; ++i) {
+        float4 projected = shadow.cascades[i].worldToShadowTexture * float4(worldPosition, 1.0);
+        float3 uvz = projected.xyz / projected.w;
+        if (!shadowCascadeContains(shadow.cascades[i], uvz)) {
+            continue;
+        }
+        float cascadeVisibility = groundCascadeVisibility(shadow.cascades[i], shadowMap,
+                                                          uint(i), uvz, mask.planeGradients[i]);
+        // Cross-fade to the next cascade near this window's edge, exactly
+        // like sampleShadowFactor: the sharp-to-coarse texel boundary must
+        // not read as a traveling seam during fast movement.
+        float2 uv = uvz.xy;
+        float2 distanceToMin = uv - shadow.cascades[i].uvMinimum;
+        float2 distanceToMax = shadow.cascades[i].uvMaximum - uv;
+        float edgeDistance = min(min(distanceToMin.x, distanceToMin.y),
+                                 min(distanceToMax.x, distanceToMax.y));
+        float blendBand = 8.0 * max(shadow.cascades[i].texelSizeUV.x,
+                                    shadow.cascades[i].texelSizeUV.y);
+        if (i + 1 < 3 && edgeDistance < blendBand) {
+            float4 nextProjected = shadow.cascades[i + 1].worldToShadowTexture * float4(worldPosition, 1.0);
+            float3 nextUvz = nextProjected.xyz / nextProjected.w;
+            if (shadowCascadeContains(shadow.cascades[i + 1], nextUvz)) {
+                float nextVisibility = groundCascadeVisibility(shadow.cascades[i + 1], shadowMap,
+                                                               uint(i + 1), nextUvz,
+                                                               mask.planeGradients[i + 1]);
+                cascadeVisibility = mix(nextVisibility, cascadeVisibility,
+                                        saturate(edgeDistance / blendBand));
+            }
+        }
+        mapVisibility = cascadeVisibility;
+        break;
+    }
+
+    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
+    return half(1.0 - (1.0 - mapVisibility) * shadow.strength * fade);
 }
