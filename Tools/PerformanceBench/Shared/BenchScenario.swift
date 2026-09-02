@@ -56,6 +56,7 @@ enum BenchScenario {
         case "full": return full
         case "globe": return globe
         case "globe0": return globe0
+        case "globe16": return globe16
         default: return nil
         }
     }
@@ -177,6 +178,47 @@ enum BenchScenario {
         idleDuration: 1
     )
 
+    /// Zooms 1 through 6, short: the region zooms where the ground ribbons
+    /// (boundaries, road strokes) are actually visible, ending past the
+    /// start of the flat transition so the morph frames are on the clock
+    /// too. The ladder climbs one continent so the flights are zoom ramps
+    /// more than pans; the pan drifts across boundary-dense Europe at the
+    /// zoom where every admin line is on screen.
+    static let globe16 = BenchScenarioScript(
+        name: "globe16",
+        establish: BenchPose(latitude: 30, longitude: 15, zoom: 1, bearing: 0, pitch: 0),
+        warmUp: 3,
+        tour: [
+            BenchShot(name: "planet",
+                      pose: BenchPose(latitude: 20, longitude: 15, zoom: 1.5, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+            BenchShot(name: "africa",
+                      pose: BenchPose(latitude: 10, longitude: 20, zoom: 3, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+            BenchShot(name: "europe",
+                      pose: BenchPose(latitude: 48, longitude: 12, zoom: 4.5, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+            BenchShot(name: "alps",
+                      pose: BenchPose(latitude: 47, longitude: 10, zoom: 6, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+        ],
+        panDuration: 4,
+        panStart: globeMidPanStart,
+        panPose: { progress in
+            // A drag across boundary-dense central Europe at region zoom.
+            let p = min(max(progress, 0), 1)
+            return BenchPose(latitude: globeMidPanStart.latitude + 4 * p,
+                             longitude: globeMidPanStart.longitude + 14 * p,
+                             zoom: globeMidPanStart.zoom,
+                             bearing: 0,
+                             pitch: 0)
+        },
+        idleSettle: 1,
+        idleDuration: 1
+    )
+
+    private static let globeMidPanStart = BenchPose(latitude: 46, longitude: 6,
+                                                    zoom: 4.2, bearing: 0, pitch: 0)
     private static let fullPanStart = BenchPose(latitude: 40.7484, longitude: -73.9857,
                                                 zoom: 15.5, bearing: 30, pitch: 55)
     private static let globeZeroPanStart = BenchPose(latitude: 10, longitude: -60,

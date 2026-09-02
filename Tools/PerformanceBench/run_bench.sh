@@ -10,7 +10,8 @@
 # The engine name picks the app: immersivemap* runs ImmersiveMapBench and
 # mapbox* runs MapboxBench, so both apps must already be built and installed
 # for the default matrix (see README.md). The scenario is `full` when
-# omitted; `globe` replays the sphere-only script. Without an
+# omitted; `globe` replays the sphere-only script, `globe0` the
+# fifteen-second zoom-0 spin, `globe16` the zoom 1-6 ladder. Without an
 # explicit list the default matrix runs, interleaving the engines so thermal
 # drift hits both alike. The device must be unlocked when a run starts.
 set -eu

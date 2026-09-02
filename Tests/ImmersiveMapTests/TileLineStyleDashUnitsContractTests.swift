@@ -38,13 +38,15 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertTrue(shared.contains("dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint"))
         XCTAssertTrue(shared.contains("float dashUnits = float(dashLengthPoints) * unitScale;"))
         XCTAssertTrue(shared.contains("float gapUnits = float(lineStyle.w) * unitScale;"))
-        // The flag travels vertex to fragment, on the plane and on the sphere.
+        // The flag travels vertex to fragment, on the plane and on the sphere
+        // (the sphere fragment hands it straight to the coverage call).
         XCTAssertTrue(shared.contains("out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;"))
-        for shader in ["Render/Tiles/Shaders/Tile.metal", "Render/Tiles/Shaders/TileSphere.metal"] {
-            let source = try shaderSource(shader)
-            XCTAssertTrue(source.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"), shader)
-            XCTAssertTrue(source.contains("style.lineDashInTileUnits = in.lineDashInTileUnits;"), shader)
-        }
+        let flat = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        XCTAssertTrue(flat.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"))
+        XCTAssertTrue(flat.contains("style.lineDashInTileUnits = in.lineDashInTileUnits;"))
+        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        XCTAssertTrue(sphere.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"))
+        XCTAssertTrue(sphere.contains("in.lineDashInTileUnits,"))
     }
 
     func testParserBakesTheFlagIntoTheGPUStyle() {

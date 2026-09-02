@@ -63,8 +63,10 @@ struct SphereVertexOut {
     float clipDistance [[clip_distance]] [4];
     // The morphed surface position the fog distances read; morph only.
     float3 worldPos [[function_constant(kTileSphereFog)]];
+    // The zoom fade is already folded into the alpha: it is a function of
+    // the style and the frame only, so the vertex stage applies it and the
+    // fragment neither interpolates the mask nor walks the fade bands.
     half4 color;
-    half lowZoomFadeMask;
     float lineDistance [[function_constant(kTileSphereLineFields)]];
     float lineParameter [[function_constant(kTileSphereLineFields)]];
     half4 lineStyle [[function_constant(kTileSphereLineFields)]];
@@ -78,7 +80,6 @@ struct SphereFragmentIn {
     float4 position [[position]];
     float3 worldPos [[function_constant(kTileSphereFog)]];
     half4 color;
-    half lowZoomFadeMask;
     float lineDistance [[function_constant(kTileSphereLineFields)]];
     float lineParameter [[function_constant(kTileSphereLineFields)]];
     half4 lineStyle [[function_constant(kTileSphereLineFields)]];
@@ -118,9 +119,11 @@ static inline float2 tileSphereWorldUv(float2 localPosition,
 
 /// Copies the resolved style into the vertex output; the line fields only
 /// when the pass carries them.
-static inline void tileSphereWriteStyle(thread SphereVertexOut& out, TileVertexStyle style) {
+static inline void tileSphereWriteStyle(thread SphereVertexOut& out,
+                                        TileVertexStyle style,
+                                        constant OverviewFadeUniform& overviewFade) {
     out.color = style.color;
-    out.lowZoomFadeMask = style.lowZoomFadeMask;
+    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     if (kTileSphereLineFields) {
         out.lineDistance = style.lineDistance;
         out.lineParameter = style.lineParameter;
@@ -142,7 +145,8 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
                                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
                                                   constant float4& localClipBounds [[buffer(7)]],
                                                   constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
-                                                  constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
+                                                  constant GlobeFrameConstants& globeFrame [[buffer(10)]],
+                                                  constant OverviewFadeUniform& overviewFade [[buffer(11)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float3 unitDirection = globeWorldUVUnitDirection(tileSphereWorldUv(localPosition, surfaceTile));
 
@@ -157,7 +161,8 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     }
     out.position.z = layerNdcZ * out.position.w;
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
-    tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette));
+    tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette),
+                         overviewFade);
     return out;
 }
 
@@ -170,7 +175,6 @@ struct SphereMorphVertexOut {
     float clipDistance [[clip_distance]] [5];
     float3 worldPos [[function_constant(kTileSphereFog)]];
     half4 color;
-    half lowZoomFadeMask;
     float lineDistance [[function_constant(kTileSphereLineFields)]];
     float lineParameter [[function_constant(kTileSphereLineFields)]];
     half4 lineStyle [[function_constant(kTileSphereLineFields)]];
@@ -192,7 +196,8 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
                                                    constant float4& localClipBounds [[buffer(7)]],
                                                    constant Globe& globe [[buffer(8)]],
                                                    constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
-                                                   constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
+                                                   constant GlobeFrameConstants& globeFrame [[buffer(10)]],
+                                                   constant OverviewFadeUniform& overviewFade [[buffer(11)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float2 worldUv = tileSphereWorldUv(localPosition, surfaceTile);
     float3 unitDirection = globeWorldUVUnitDirection(worldUv);
@@ -220,7 +225,7 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     }
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     out.color = style.color;
-    out.lowZoomFadeMask = style.lowZoomFadeMask;
+    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     if (kTileSphereLineFields) {
         out.lineDistance = style.lineDistance;
         out.lineParameter = style.lineParameter;
@@ -232,19 +237,6 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     return out;
 }
 
-static inline TileVertexStyle tileSphereFragmentStyle(SphereFragmentIn in) {
-    TileVertexStyle style;
-    style.color = in.color;
-    style.lowZoomFadeMask = in.lowZoomFadeMask;
-    style.lineDistance = in.lineDistance;
-    style.lineParameter = in.lineParameter;
-    style.lineStyle = in.lineStyle;
-    style.lineMinimumWidthPoints = in.lineMinimumWidthPoints;
-    style.lineMaximumWidthPoints = in.lineMaximumWidthPoints;
-    style.lineDashInTileUnits = in.lineDashInTileUnits;
-    return style;
-}
-
 // No shadows on the globe (a flat-world effect), no textures, no lighting:
 // the colour comes from the style and the coverage. The morph variant adds
 // only the horizon fog, whose strength is the transition, so the morph and
@@ -253,14 +245,20 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                         constant HorizonFog& horizonFog [[buffer(2)]],
                                         constant LineDashUniform& lineDash [[buffer(4)]]) {
-    half4 color;
+    // The zoom fade arrived folded into the alpha from the vertex stage;
+    // the ribbons class multiplies in the analytic line coverage, the fills
+    // class is the colour as is.
+    half4 color = in.color;
     if (kTileSphereLineFields) {
-        color = tileGroundColor(tileSphereFragmentStyle(in), overviewFade, lineDash);
-    } else {
-        // The fills class: coverage is identically 1, only the zoom fade
-        // scales the style colour.
-        color = in.color;
-        color.a *= tileStyleFade(in.lowZoomFadeMask, overviewFade);
+        color.a *= tileLineCoverage(in.lineDistance,
+                                    in.lineParameter,
+                                    in.lineStyle,
+                                    in.lineMinimumWidthPoints,
+                                    in.lineMaximumWidthPoints,
+                                    in.lineDashInTileUnits,
+                                    overviewFade.pixelsPerPoint,
+                                    overviewFade.roadSurfaceBlend,
+                                    lineDash.unitsPerPoint);
     }
     if (kTileSphereFog) {
         color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);

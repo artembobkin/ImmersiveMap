@@ -86,6 +86,9 @@ enum GlobeVectorSurfaceDrawer {
                                      length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
                                      index: 10)
         renderEncoder.setFragmentBytes(&overviewFadeValue, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 0)
+        // The vertex stages fold the zoom fade into the colour's alpha, so
+        // they read the same uniform (TileSphere.metal, buffer 11).
+        renderEncoder.setVertexBytes(&overviewFadeValue, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 11)
         renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
 
         if pureSphere {
