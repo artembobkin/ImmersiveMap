@@ -19,6 +19,11 @@ class TilePipeline {
     /// attachment with an empty write mask so the pipeline stays
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
+    /// Flat surface only: the opaque ground layers with blending disabled
+    /// (the layered depth pass, like the sphere's), plus its
+    /// framebuffer-fetch twin.
+    let flatOpaquePipelineState: MTLRenderPipelineState?
+    let flatOpaqueWithBuildingImagePipelineState: MTLRenderPipelineState?
     /// Sphere surface only: the resting-sphere fills class, blended (the
     /// translucent fill layers). Carries no line fields. The morph keeps
     /// `pipelineState` (tileSphereMorphVertexShader), the only sphere
@@ -171,12 +176,23 @@ class TilePipeline {
             self.sphereMorphRibbonsPipelineState = nil
         }
 
+        if surface == .flat {
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+            self.flatOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+        } else {
+            self.flatOpaquePipelineState = nil
+        }
         if supportsFramebufferFetch, surface == .flat {
             pipelineDescriptor.colorAttachments[1].pixelFormat = pixelFormat
             pipelineDescriptor.colorAttachments[1].writeMask = []
             self.withBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+            self.flatOpaqueWithBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         } else {
             self.withBuildingImagePipelineState = nil
+            self.flatOpaqueWithBuildingImagePipelineState = nil
         }
     }
 
@@ -187,6 +203,21 @@ class TilePipeline {
             return
         }
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+
+    /// The flat opaque ground variant (blending off); falls back to the
+    /// blended pipeline when absent.
+    func selectFlatOpaquePipeline(renderEncoder: MTLRenderCommandEncoder,
+                                  withBuildingImageAttachment: Bool = false) {
+        if withBuildingImageAttachment, let flatOpaqueWithBuildingImagePipelineState {
+            renderEncoder.setRenderPipelineState(flatOpaqueWithBuildingImagePipelineState)
+            return
+        }
+        if let flatOpaquePipelineState {
+            renderEncoder.setRenderPipelineState(flatOpaquePipelineState)
+            return
+        }
+        selectPipeline(renderEncoder: renderEncoder, withBuildingImageAttachment: withBuildingImageAttachment)
     }
 
     /// The opaque fills variant (blending off) for the layered ground;

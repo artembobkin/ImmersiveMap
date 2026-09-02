@@ -24,6 +24,10 @@ final class TileClipDistanceContractTests: XCTestCase {
         // sphere. Only the buildings keep their clips (TileExtruded).
         XCTAssertNil(source.range(of: "[[clip_distance]]"))
         XCTAssertNil(source.range(of: "localClipBounds"))
+        // The flat rank-depth step is one value with the sphere's, both
+        // mirrored by GlobeSurfaceDepthRank.
+        XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
+        XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
     }
 
     func testBuildingShadersClipWithClipDistancesAndNeverDiscard() throws {

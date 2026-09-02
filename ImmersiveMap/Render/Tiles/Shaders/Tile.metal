@@ -25,6 +25,11 @@ constant float kGroundShadowMaskScale = 0.5;
 // The line distances stay float: the antialiasing band can be a small
 // fraction of the normalized field on wide lines, below half's precision
 // near 1.0, and the arc parameter spans thousands of tile units.
+// The flat rank-depth step, one value with the sphere's
+// (kTileSphereLayerDepthStep; mirrored by GlobeSurfaceDepthRank and pinned
+// by TileClipDistanceContractTests).
+constant float kFlatTileLayerDepthStep = 4e-7;
+
 // lineStyle packs the per-style constants (edge threshold, width points,
 // dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
@@ -80,11 +85,24 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
+                                  constant float& depthBandOffset [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float4 worldPosition = modelMatrix * float4(float2(vertexIn.position.xy), 0.0, 1.0);
 
     VertexOut out;
     out.position = camera.matrix * worldPosition;
+    // The flat surface carries no geometric depth of its own (every layer
+    // lies on one plane): its z is the layer rank in a band at the far
+    // plane, like the sphere's, so the opaque fill layers can draw under a
+    // depth write and a pixel is shaded once by its topmost opaque layer,
+    // while the whole band stays farther than every real fragment and the
+    // buildings' depth test keeps working unchanged. The per-draw offset
+    // places the group: ground fills at 0, ground ribbons one class band
+    // nearer, the road buckets and the bridge overlay nearer still
+    // (GlobeSurfaceDepthRank mirrors the constants).
+    float layerNdcZ = 1.0 - depthBandOffset
+        - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
+    out.position.z = layerNdcZ * out.position.w;
     out.worldPos = worldPosition.xyz;
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     out.color = style.color;

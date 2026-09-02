@@ -97,7 +97,9 @@ enum FlatMapSurfaceDrawer {
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
 
-        func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>) {
+        func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
+                       bandOffset: Float,
+                       runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             for source in uniqueSources {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
@@ -106,16 +108,38 @@ enum FlatMapSurfaceDrawer {
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableHeightPx,
-                                      overviewFade: overviewFadeUniform)
+                                      overviewFade: overviewFadeUniform,
+                                      bandOffset: bandOffset,
+                                      runFilter: runFilter)
             }
         }
 
-        // The ground owns the stencil: depth tested against the buildings
-        // (never written), the source's priority replaced where it paints.
+        // The ground draws as class layers, the sphere's scheme: the opaque
+        // fill layers first, unblended, writing the rank-band depth (a
+        // pixel is shaded once by its topmost opaque layer) and owning the
+        // tile-priority stencil; the translucent fills and the ribbons
+        // follow, tested only. The band sits at the far plane, farther than
+        // every real fragment, so the buildings' occlusion is untouched.
+        let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
+            run.isLinesClass == false
+                && run.isAlphaOpaque
+                && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
+        }
+        let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
+            run.isLinesClass == false && isOpaqueFillRun(run) == false
+        }
         renderEncoder.setDepthStencilState(groundOwnerState)
-        drawLayer(\.ground)
+        tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder,
+                                              withBuildingImageAttachment: withBuildingImageAttachment)
+        drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
         // Everything after only tests the priority.
         renderEncoder.setDepthStencilState(tileStencilTestState)
+        tilePipeline.selectPipeline(renderEncoder: renderEncoder,
+                                    withBuildingImageAttachment: withBuildingImageAttachment)
+        drawLayer(\.ground, bandOffset: 0, runFilter: isTranslucentFillRun)
+        drawLayer(\.ground,
+                  bandOffset: GlobeSurfaceDepthRank.classDepthBand,
+                  runFilter: { $0.isLinesClass })
 
         if usesSeparateRoadRendering {
             func drawRoadGroup(_ structureKind: TileMvtParser.RoadStructureKind) {
@@ -129,7 +153,8 @@ enum FlatMapSurfaceDrawer {
                                               flatRenderState: flatRenderState,
                                               pixelsPerPoint: pixelsPerPoint,
                                               drawableHeightPx: drawableHeightPx,
-                                              overviewFade: overviewFadeUniform)
+                                              overviewFade: overviewFadeUniform,
+                                              bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
                     }
                 }
             }
@@ -137,7 +162,7 @@ enum FlatMapSurfaceDrawer {
             drawRoadGroup(.tunnel)
             drawRoadGroup(.ground)
             drawRoadGroup(.automobileGround)
-            drawLayer(\.bridgeOverlay)
+            drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
             drawRoadGroup(.bridge)
 
             for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
@@ -150,11 +175,12 @@ enum FlatMapSurfaceDrawer {
                                           flatRenderState: flatRenderState,
                                           pixelsPerPoint: pixelsPerPoint,
                                           drawableHeightPx: drawableHeightPx,
-                                          overviewFade: overviewFadeUniform)
+                                          overviewFade: overviewFadeUniform,
+                                          bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
                 }
             }
         } else {
-            drawLayer(\.bridgeOverlay)
+            drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
         }
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
@@ -171,12 +197,17 @@ enum FlatMapSurfaceDrawer {
                                               flatRenderState: FlatRenderState,
                                               pixelsPerPoint: Float,
                                               drawableHeightPx: Float,
-                                              overviewFade: TileOverviewFadeUniform) {
+                                              overviewFade: TileOverviewFadeUniform,
+                                              bandOffset: Float,
+                                              runFilter: ((GroundStyleRun) -> Bool)? = nil) {
         // A run whose zoom fade is exactly 0 this frame would rasterize
         // with alpha 0: the ground bucket carries a run table (the road
         // buckets do not and draw whole, as before), so its invisible runs
-        // are skipped and the visible spans coalesce, before any binding.
-        let visibleSpans = visibleRunSpans(buffers: buffers, overviewFade: overviewFade)
+        // are skipped, the class filter picks the pass's runs, and the
+        // visible spans coalesce, before any binding.
+        let visibleSpans = visibleRunSpans(buffers: buffers,
+                                           overviewFade: overviewFade,
+                                           runFilter: runFilter)
         guard buffers.indicesCount > 0,
               visibleSpans.isEmpty == false,
               let indices = buffers.indices,
@@ -202,6 +233,9 @@ enum FlatMapSurfaceDrawer {
         // painter (TileSourceStencilPriority). No slot clip: a substitute
         // draws at full extent and the stencil keeps it out of covered slots.
         renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
+        // The group's place in the rank-depth band (Tile.metal, buffer 7).
+        var bandOffsetValue = bandOffset
+        renderEncoder.setVertexBytes(&bandOffsetValue, length: MemoryLayout<Float>.stride, index: 7)
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live
@@ -239,15 +273,17 @@ enum FlatMapSurfaceDrawer {
     /// zero-fade runs drop out and the contiguous survivors merge. The
     /// paint order is the buffer order either way.
     private static func visibleRunSpans(buffers: TileBuffers.GeometryLayer,
-                                        overviewFade: TileOverviewFadeUniform) -> [(start: Int, count: Int)] {
+                                        overviewFade: TileOverviewFadeUniform,
+                                        runFilter: ((GroundStyleRun) -> Bool)? = nil) -> [(start: Int, count: Int)] {
         guard buffers.indicesCount > 0 else { return [] }
         let runs = buffers.styleRuns
-        guard runs.isEmpty == false else { return [(0, buffers.indicesCount)] }
+        guard runs.isEmpty == false else { return runFilter == nil ? [(0, buffers.indicesCount)] : [] }
         var spans: [(start: Int, count: Int)] = []
         var spanStart = 0
         var spanCount = 0
         for run in runs {
             guard run.indexCount > 0,
+                  runFilter?(run) != false,
                   TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFade) == false else {
                 if spanCount > 0 { spans.append((spanStart, spanCount)) }
                 spanCount = 0

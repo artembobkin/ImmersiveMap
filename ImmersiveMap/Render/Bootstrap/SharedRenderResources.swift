@@ -441,10 +441,14 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The flat ground's single blended pass: tested against the buildings'
-    /// depth without writing it, and owning the tile-priority stencil.
+    /// The flat ground's opaque pass: tested against the buildings' depth
+    /// (the rank band is farther than every real fragment, so the test
+    /// still rejects everything under a building), WRITING the band so a
+    /// pixel is shaded once by its topmost opaque layer, and owning the
+    /// tile-priority stencil.
     private static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
+        descriptor.isDepthWriteEnabled = true
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
         return descriptor
