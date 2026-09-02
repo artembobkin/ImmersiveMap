@@ -67,25 +67,14 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
         // buildings, never written), the road buckets only test it.
-        // The horizon backdrop is drawn first: the main coverage lands on top
-        // (painter's order), and beyond its edge the ground is painted all the
-        // way to the horizon. The backdrop binds the same mask: it lies outside
-        // the fitted shadow map, so the mask is lit there.
-        FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
-                                  cameraUniform: frameContext.cameraUniform,
-                                  cameraZoom: frameContext.zoom,
-                                  pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableHeightPx: Float(frameContext.drawSize.height),
-                                  separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
-                                  placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
-                                  flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                  horizonFog: horizonFog,
-                                  groundShadowMask: groundShadowMask,
-                                  tilePipeline: tilePipeline,
-                                  groundOwnerState: groundOwnerState,
-                                  tileStencilTestState: tileStencilTestState,
-                                  isWireframeEnabled: isWireframeEnabled,
-                                  withBuildingImageAttachment: withBuildingImageAttachment)
+        // The MAIN coverage draws first and the coarse horizon backdrop
+        // last: the layered ground writes rank depth, so everything must
+        // draw finest-first (the sphere's rule), and the stencil carves the
+        // backdrop out of every pixel the main coverage owns instead of the
+        // old painter's order; beyond the coverage's edge the backdrop
+        // still paints all the way to the horizon. The backdrop binds the
+        // same shadow mask: it lies outside the fitted shadow map, so the
+        // mask is lit there.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -101,7 +90,22 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment)
-        encoder.setDepthStencilState(depthDisabledState)
+FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
+                                  cameraUniform: frameContext.cameraUniform,
+                                  cameraZoom: frameContext.zoom,
+                                  pixelsPerPoint: Float(frameContext.pixelsPerPoint),
+                                  drawableHeightPx: Float(frameContext.drawSize.height),
+                                  separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
+                                  placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
+                                  flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                  horizonFog: horizonFog,
+                                  groundShadowMask: groundShadowMask,
+                                  tilePipeline: tilePipeline,
+                                  groundOwnerState: groundOwnerState,
+                                  tileStencilTestState: tileStencilTestState,
+                                  isWireframeEnabled: isWireframeEnabled,
+                                  withBuildingImageAttachment: withBuildingImageAttachment)
+                encoder.setDepthStencilState(depthDisabledState)
     }
 
     func handleMemoryWarning() {}
