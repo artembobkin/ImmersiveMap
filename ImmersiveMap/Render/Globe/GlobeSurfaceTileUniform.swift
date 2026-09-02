@@ -15,11 +15,17 @@ struct GlobeSurfaceTileUniform {
     /// The normalized world x the flat morph target unwraps around: the
     /// tile's centre.
     var referenceWorldX: Float
+    /// The source zoom's rank-depth band offset (GlobeSurfaceDepthRank): a
+    /// finer source sits nearer, which is what rejects a coarser
+    /// substitute's overflow wherever a finer tile painted.
+    var depthBias: Float
+    var padding: Float = 0
 
     init(tile: Tile) {
         let zPow = Float(1 << tile.z)
         self.uvOrigin = SIMD2<Float>(Float(tile.x) / zPow, Float(tile.y) / zPow)
         self.uvScale = 1.0 / zPow
         self.referenceWorldX = (Float(tile.x) + 0.5) / zPow
+        self.depthBias = GlobeSurfaceDepthRank.bias(sourceZoom: tile.z)
     }
 }

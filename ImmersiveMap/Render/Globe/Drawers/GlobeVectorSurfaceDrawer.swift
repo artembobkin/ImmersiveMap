@@ -92,19 +92,36 @@ enum GlobeVectorSurfaceDrawer {
         renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
 
         if pureSphere {
-            // The opaque fill layers, top first, depth-written and unblended.
+            // The resting sphere draws unique SOURCES, not placements: a
+            // coarse tile standing in for several missing slots is drawn
+            // once at its full extent, and the slot clip is gone entirely.
+            // What keeps a substitute out of a covered slot is the depth
+            // band: sources draw finest first, every tile's opaque
+            // background quad writes depth over its whole slot, and a
+            // coarser source's overflow fails the test wherever a finer
+            // tile painted (see kTileSphereLayerDepthStep in TileSphere.metal).
+            var seenSources = Set<MetalTile>()
+            var uniqueSources: [MetalTile] = []
+            uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
+            for placement in placeTilesContext.tilePlacements
+            where seenSources.insert(placement.metalTile).inserted {
+                uniqueSources.append(placement.metalTile)
+            }
+            uniqueSources.sort { $0.tile.z > $1.tile.z }
+
+            // The opaque fill layers, depth-written and unblended.
             renderEncoder.pushDebugGroup("ground.opaqueFills")
             renderEncoder.setDepthStencilState(opaqueDepthState)
             pipeline.selectSphereOpaqueFillsPipeline(renderEncoder: renderEncoder)
             let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
                 run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
             }
-            forEachPlacement(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             renderMapSize: renderMapSize,
-                             pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx,
-                             worthBinding: { $0.styleRuns.contains(where: isOpaqueFillRun) }) { buffers, indices in
+            forEachSource(renderEncoder: renderEncoder,
+                          sources: uniqueSources,
+                          renderMapSize: renderMapSize,
+                          pixelsPerPoint: pixelsPerPoint,
+                          drawableHeightPx: drawableHeightPx,
+                          worthBinding: { $0.styleRuns.contains(where: isOpaqueFillRun) }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
@@ -124,12 +141,12 @@ enum GlobeVectorSurfaceDrawer {
                     && isOpaque(run, overviewFade: overviewFadeUniform) == false
                     && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
             }
-            forEachPlacement(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             renderMapSize: renderMapSize,
-                             pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx,
-                             worthBinding: { $0.styleRuns.contains(where: isTranslucentFillRun) }) { buffers, indices in
+            forEachSource(renderEncoder: renderEncoder,
+                          sources: uniqueSources,
+                          renderMapSize: renderMapSize,
+                          pixelsPerPoint: pixelsPerPoint,
+                          drawableHeightPx: drawableHeightPx,
+                          worthBinding: { $0.styleRuns.contains(where: isTranslucentFillRun) }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
@@ -146,14 +163,14 @@ enum GlobeVectorSurfaceDrawer {
             }
             renderEncoder.pushDebugGroup("ground.lineRibbons")
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true)
-            forEachPlacement(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             renderMapSize: renderMapSize,
-                             pixelsPerPoint: pixelsPerPoint,
-                             drawableHeightPx: drawableHeightPx,
-                             worthBinding: { buffers in
-                                 buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: isVisibleRibbonRun)
-                             }) { buffers, indices in
+            forEachSource(renderEncoder: renderEncoder,
+                          sources: uniqueSources,
+                          renderMapSize: renderMapSize,
+                          pixelsPerPoint: pixelsPerPoint,
+                          drawableHeightPx: drawableHeightPx,
+                          worthBinding: { buffers in
+                              buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: isVisibleRibbonRun)
+                          }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
@@ -199,6 +216,53 @@ enum GlobeVectorSurfaceDrawer {
     /// draw to `body`. `worthBinding` runs first: a placement with nothing
     /// for this pass is skipped before a single buffer is bound, so a pass
     /// that draws from few tiles does not encode bind trains for the rest.
+    /// Binds one unique source tile's buffers and per-draw uniforms for the
+    /// resting sphere, then hands the draw to `body`. Unlike
+    /// `forEachPlacement` there is no slot clip: the sphere passes draw each
+    /// source once at full extent and the rank depth rejects a coarser
+    /// source's overflow (see kTileSphereLayerDepthStep). `worthBinding`
+    /// runs first so a source with nothing for the pass encodes no binds.
+    private static func forEachSource(renderEncoder: MTLRenderCommandEncoder,
+                                      sources: [MetalTile],
+                                      renderMapSize: Double,
+                                      pixelsPerPoint: Float,
+                                      drawableHeightPx: Float,
+                                      worthBinding: (TileBuffers.GeometryLayer) -> Bool = { _ in true },
+                                      body: (TileBuffers.GeometryLayer, TileBufferView) -> Void) {
+        for metalTile in sources {
+            let buffers = metalTile.tileBuffers.ground
+            guard buffers.indicesCount > 0,
+                  worthBinding(buffers),
+                  let indices = buffers.indices,
+                  let vertices = buffers.vertices,
+                  let styles = buffers.styles,
+                  let overviewStyleMask = buffers.overviewStyleMask,
+                  let lineStyles = buffers.lineStyles else { continue }
+
+            let tile = metalTile.tile
+            renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
+            renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
+            renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
+            renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
+            var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
+            renderEncoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
+
+            // The dash anchor of the flat path, with the source tile's world
+            // size on the equator: the pattern holds still under camera
+            // motion and matches the plane at the surface swap.
+            let sourceTileWorldSize = Float(renderMapSize / Double(1 << tile.z))
+            var lineDashUniform = LineDashUniform(
+                unitsPerPoint: GlobeLineDashScale.coarseTileDashScale(sourceTileZoom: tile.z)
+                    * pixelsPerPoint
+                    * LineDashNominalScale.unitsPerPixel(sourceTileWorldSize: sourceTileWorldSize,
+                                                         drawableHeightPx: drawableHeightPx)
+            )
+            renderEncoder.setFragmentBytes(&lineDashUniform, length: MemoryLayout<LineDashUniform>.stride, index: 4)
+
+            body(buffers, indices)
+        }
+    }
+
     private static func forEachPlacement(renderEncoder: MTLRenderCommandEncoder,
                                          placeTilesContext: PlaceTilesContext,
                                          renderMapSize: Double,

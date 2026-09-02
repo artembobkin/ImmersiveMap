@@ -40,6 +40,12 @@ struct GlobeSurfaceTile {
     /// The normalized world x the flat morph target unwraps around: the
     /// tile's centre, (x + 0.5) / 2^z (see globeTransitionFlatWorldX).
     float referenceWorldX;
+    /// The source zoom's rank-depth band offset (GlobeSurfaceDepthRank):
+    /// a finer source carries a larger bias and so a nearer z, which is
+    /// what rejects a coarser substitute's overflow wherever a finer tile
+    /// has painted. Computed on the CPU from the source tile's zoom.
+    float depthBias;
+    float padding;
 };
 
 /// True while the sphere unfurls: the fragment applies the horizon fog,
@@ -58,9 +64,6 @@ constant bool kTileSphereLineFields [[function_constant(1)]];
 
 struct SphereVertexOut {
     float4 position [[position]];
-    // The placeIn slot edges (tileLocalClipDistances): a retained substitute
-    // is clipped to the slot it stands in for by the rasterizer.
-    float clipDistance [[clip_distance]] [4];
     // The morphed surface position the fog distances read; morph only.
     float3 worldPos [[function_constant(kTileSphereFog)]];
     // The zoom fade is already folded into the alpha: it is a function of
@@ -90,17 +93,28 @@ struct SphereFragmentIn {
 
 constant float kTileSphereExtent = 4096.0;
 
-// The ground's rank depth on the resting sphere: layer rank r draws at
-// 1 - r * step in NDC, a narrow band at the far plane, so the opaque fill
-// layers can draw under a depth test and a pixel is shaded once by its
-// topmost opaque layer (GlobeVectorSurfaceDrawer). The rank comes straight
-// from the per-vertex style index (the paint order is ascending style), so
-// no per-draw uniform is needed and runs going to the same pass can merge
-// into one call. The ribbons class sits in its own band nearer than every
-// fill: a ribbon must pass the depth test over its own style's fill. Far
-// enough from everything real (routes, models) and wide enough for the 256
-// styles a tile can carry.
-constant float kTileSphereLayerDepthStep = 2e-6;
+// The ground's rank depth on the resting sphere: a band at the far plane
+// ordered source zoom first, class second, style rank third, so one depth
+// test carries three jobs at once (GlobeVectorSurfaceDrawer):
+//  - a finer source rejects a coarser substitute's overflow (every tile's
+//    opaque background quad covers its whole slot, so a finer tile writes
+//    depth in every pixel it owns and the coarse geometry underneath fails
+//    the test; no slot clip distances are needed on the sphere),
+//  - the opaque fill layers of one tile shade a pixel once by the topmost
+//    opaque layer, submission order free (TBDR hidden surface removal),
+//  - the ribbons of one tile pass over every fill of the same tile.
+// The style rank comes from the per-vertex style index, the class from the
+// pipeline's function constant, the zoom band from the per-draw uniform
+// (GlobeSurfaceTile.depthBias). The whole structure must stay nearer than
+// nothing and farther than everything real: the sphere's own limb reaches
+// z about 0.9954 at zoom 6, and the caps, routes and models depth-test
+// lessEqual with real geometry, so ten zoom bands of two classes at this
+// step span about 2.1e-3 and the ground stays in [0.9979, 1], well behind
+// them all. The step is about 7 float32 ULP at 1.0; z is constant within a
+// draw call (never interpolated), so no precision is lost to blending of
+// vertex values. Mirrored by GlobeSurfaceDepthRank.swift (pinned by
+// TileClipDistanceContractTests).
+constant float kTileSphereLayerDepthStep = 4e-7;
 constant float kTileSphereRibbonDepthBand = 257.0 * kTileSphereLayerDepthStep;
 
 /// The tile-local vertex position as a world uv (x east in turns, y the
@@ -143,7 +157,6 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
                                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                                   constant LineStyle* lineStyles [[buffer(5)]],
                                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
-                                                  constant float4& localClipBounds [[buffer(7)]],
                                                   constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                   constant GlobeFrameConstants& globeFrame [[buffer(10)]],
                                                   constant OverviewFadeUniform& overviewFade [[buffer(11)]]) {
@@ -152,15 +165,15 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
 
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
-    // The ground carries no geometric depth of its own (nothing on the
-    // sphere compares against it); its z is the layer rank derived from the
-    // vertex's own style index, see kTileSphereLayerDepthStep.
-    float layerNdcZ = 1.0 - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
+    // The ground carries no geometric depth of its own; its z is the rank
+    // band described at kTileSphereLayerDepthStep: source zoom (the
+    // per-draw bias), then class, then style.
+    float layerNdcZ = 1.0 - surfaceTile.depthBias
+        - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
     if (kTileSphereLineFields) {
         layerNdcZ -= kTileSphereRibbonDepthBand;
     }
     out.position.z = layerNdcZ * out.position.w;
-    tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
     tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette),
                          overviewFade);
     return out;
