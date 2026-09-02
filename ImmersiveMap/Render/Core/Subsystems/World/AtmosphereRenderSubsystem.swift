@@ -28,7 +28,10 @@ final class AtmosphereRenderSubsystem: RenderSubsystem {
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .atmosphere,
-              frameContext.renderSurfaceMode == .spherical else {
+              frameContext.renderSurfaceMode == .spherical,
+              // The atmosphere hugs the limb: with the planet filling the
+              // whole viewport there is neither halo nor rim on screen.
+              StarfieldRenderSubsystem.frameShowsSky(frameContext: frameContext) else {
             return
         }
         // Depth off explicitly: the rim glow paints over the ground, whose

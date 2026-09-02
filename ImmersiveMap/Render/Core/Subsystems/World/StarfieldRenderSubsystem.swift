@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Metal
+import simd
 
 final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "Starfield"
@@ -32,11 +33,26 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         builder.starfieldEnabled = Self.isStarfieldEnabled(settings: settings)
     }
 
+    /// At region zooms the planet fills the whole viewport: no sky pixel
+    /// exists, and the stars (drawn first, painted over by the opaque
+    /// ground) would be pure waste. Valid on the resting sphere only;
+    /// mid-morph the décor draws and fades with the transition as before.
+    static func frameShowsSky(frameContext: FrameContext) -> Bool {
+        let globe = frameContext.globeRenderUniform
+        guard globe.transition <= 0 else { return true }
+        return GlobeSkyVisibilityMath.isSkyVisible(
+            inverseProjectionView: simd_inverse(frameContext.cameraMatrices.projectionView),
+            eye: frameContext.cameraEye,
+            radius: globe.radius
+        )
+    }
+
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .starfield,
-              frameContext.renderSurfaceMode == .spherical else {
+              frameContext.renderSurfaceMode == .spherical,
+              Self.frameShowsSky(frameContext: frameContext) else {
             return
         }
 
