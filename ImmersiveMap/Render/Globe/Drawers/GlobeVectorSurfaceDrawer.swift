@@ -218,6 +218,10 @@ enum GlobeVectorSurfaceDrawer {
                   let lineStyles = buffers.lineStyles else { continue }
 
             let tile = metalTile.tile
+            // The tile-priority stencil reference: the opaque owner pass
+            // replaces the stencil with it, every pass tests greaterEqual
+            // against the finest painter (TileSourceStencilPriority).
+            renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
             renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
             renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
             renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)

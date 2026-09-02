@@ -18,7 +18,8 @@ final class AtmospherePipeline {
         descriptor.fragmentFunction = library.makeFunction(name: "atmosphereFragmentShader")
         descriptor.rasterSampleCount = sampleCount
         descriptor.colorAttachments[0].pixelFormat = pixelFormat
-        descriptor.depthAttachmentPixelFormat = .depth32Float
+        descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         // Premultiplied "over": the shader hands out the halo tint already
         // weighted by its coverage, and the coverage in alpha, so the halo
         // covers the limb and thins to nothing with distance. Alpha composes

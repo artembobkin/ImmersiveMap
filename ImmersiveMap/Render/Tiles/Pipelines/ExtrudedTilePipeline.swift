@@ -57,14 +57,16 @@ class ExtrudedTilePipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
+        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
 
         let compositeDescriptor = MTLRenderPipelineDescriptor()
         compositeDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedCompositeVertexShader")
         compositeDescriptor.fragmentFunction = library.makeFunction(name: "tileExtrudedCompositeFragmentShader")
         compositeDescriptor.rasterSampleCount = sampleCount
         compositeDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        compositeDescriptor.depthAttachmentPixelFormat = .depth32Float
+        compositeDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        compositeDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         // Premultiplied alpha: the building image color is already multiplied by the silhouette coverage.
         compositeDescriptor.colorAttachments[0].isBlendingEnabled = true
         compositeDescriptor.colorAttachments[0].rgbBlendOperation = .add
@@ -97,7 +99,8 @@ class ExtrudedTilePipeline {
             intoImageDescriptor.colorAttachments[0].pixelFormat = pixelFormat
             intoImageDescriptor.colorAttachments[0].writeMask = []
             intoImageDescriptor.colorAttachments[1].pixelFormat = pixelFormat
-            intoImageDescriptor.depthAttachmentPixelFormat = .depth32Float
+            intoImageDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+            intoImageDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
 
             let compositeFetchDescriptor = MTLRenderPipelineDescriptor()
             compositeFetchDescriptor.vertexFunction = compositeDescriptor.vertexFunction
@@ -106,7 +109,8 @@ class ExtrudedTilePipeline {
             compositeFetchDescriptor.colorAttachments[0].pixelFormat = pixelFormat
             compositeFetchDescriptor.colorAttachments[1].pixelFormat = pixelFormat
             compositeFetchDescriptor.colorAttachments[1].writeMask = []
-            compositeFetchDescriptor.depthAttachmentPixelFormat = .depth32Float
+            compositeFetchDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+            compositeFetchDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
             compositeFetchDescriptor.colorAttachments[0].isBlendingEnabled = true
             compositeFetchDescriptor.colorAttachments[0].rgbBlendOperation = .add
             compositeFetchDescriptor.colorAttachments[0].alphaBlendOperation = .add

@@ -51,7 +51,8 @@ class SceneModelPipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
+        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
@@ -81,7 +82,8 @@ class SceneModelPipeline {
         occlusionDescriptor.rasterSampleCount = 1
         occlusionDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         occlusionDescriptor.colorAttachments[0].writeMask = []
-        occlusionDescriptor.depthAttachmentPixelFormat = .depth32Float
+        occlusionDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        occlusionDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         self.labelOcclusionPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: occlusionDescriptor)
 
         let samplerDescriptor = MTLSamplerDescriptor()

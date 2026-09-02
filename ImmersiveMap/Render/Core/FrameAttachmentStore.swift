@@ -164,7 +164,7 @@ final class FrameAttachmentStore {
             return depthTexture
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float_stencil8,
                                                                   width: width,
                                                                   height: height,
                                                                   mipmapped: false)
@@ -191,7 +191,7 @@ final class FrameAttachmentStore {
             return overlayDepthTexture
         }
 
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float_stencil8,
                                                                   width: width,
                                                                   height: height,
                                                                   mipmapped: false)

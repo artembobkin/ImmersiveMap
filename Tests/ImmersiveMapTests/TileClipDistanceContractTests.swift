@@ -73,12 +73,12 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
         XCTAssertTrue(source.contains("globeUnrollCutClearance("))
         XCTAssertNil(source.range(of: "localClipBounds"))
-        XCTAssertTrue(source.contains("surfaceTile.depthBias"))
+        // Which tile owns a pixel is the stencil's job now, not depth's.
+        XCTAssertNil(source.range(of: "depthBias"))
         // The depth constants are a binding contract with the CPU mirror.
         XCTAssertTrue(source.contains("constant float kTileSphereLayerDepthStep = 4e-7;"))
         XCTAssertEqual(GlobeSurfaceDepthRank.layerDepthStep, 4e-7)
         XCTAssertEqual(GlobeSurfaceDepthRank.classDepthBand, 257 * 4e-7)
-        XCTAssertEqual(GlobeSurfaceDepthRank.zoomDepthBand, 2 * 257 * 4e-7)
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))
         XCTAssertNil(source.range(of: "groundShadowMask"))

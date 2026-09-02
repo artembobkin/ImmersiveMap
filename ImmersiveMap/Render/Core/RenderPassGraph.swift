@@ -128,6 +128,10 @@ final class RenderPassGraph {
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .dontCare
             descriptor.depthAttachment.clearDepth = 1.0
+            descriptor.stencilAttachment.texture = depthTexture
+            descriptor.stencilAttachment.loadAction = .clear
+            descriptor.stencilAttachment.storeAction = .dontCare
+            descriptor.stencilAttachment.clearStencil = 0
             return descriptor
         }
     }
@@ -206,6 +210,13 @@ final class RenderPassGraph {
                 descriptor.depthAttachment.loadAction = .clear
                 descriptor.depthAttachment.storeAction = .dontCare
                 descriptor.depthAttachment.clearDepth = 1.0
+                // The stencil half of the texture carries the tile-priority
+                // marks (TileSourceStencilPriority): cleared to 0, written by
+                // the ground's owner passes, never stored.
+                descriptor.stencilAttachment.texture = depthTexture
+                descriptor.stencilAttachment.loadAction = .clear
+                descriptor.stencilAttachment.storeAction = .dontCare
+                descriptor.stencilAttachment.clearStencil = 0
             }
             return descriptor
         }
@@ -244,6 +255,13 @@ final class RenderPassGraph {
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .dontCare
             descriptor.depthAttachment.clearDepth = 1.0
+            // The pipelines of the overlay layers are shared with the world
+            // pass (where the overlay merges on model-free frames), so the
+            // two passes must agree on the depth-stencil format.
+            descriptor.stencilAttachment.texture = depthTexture
+            descriptor.stencilAttachment.loadAction = .clear
+            descriptor.stencilAttachment.storeAction = .dontCare
+            descriptor.stencilAttachment.clearStencil = 0
             return descriptor
         }
     }

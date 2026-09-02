@@ -76,8 +76,8 @@ enum RenderGraphFactory {
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
                                                                             depthDisabledState: context.depthDisabledState,
-                                                                            opaqueDepthState: context.extrudedDepthState,
-                                                                            translucentDepthState: context.groundDepthState,
+                                                                            opaqueDepthState: context.sphereOpaqueOwnerState,
+                                                                            translucentDepthState: context.tileStencilTestState,
                                                                             debugOverlayControls: debugOverlayControls)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,

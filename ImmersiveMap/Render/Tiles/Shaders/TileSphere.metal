@@ -40,12 +40,6 @@ struct GlobeSurfaceTile {
     /// The normalized world x the flat morph target unwraps around: the
     /// tile's centre, (x + 0.5) / 2^z (see globeTransitionFlatWorldX).
     float referenceWorldX;
-    /// The source zoom's rank-depth band offset (GlobeSurfaceDepthRank):
-    /// a finer source carries a larger bias and so a nearer z, which is
-    /// what rejects a coarser substitute's overflow wherever a finer tile
-    /// has painted. Computed on the CPU from the source tile's zoom.
-    float depthBias;
-    float padding;
 };
 
 /// True while the sphere unfurls: the fragment applies the horizon fog,
@@ -93,27 +87,19 @@ struct SphereFragmentIn {
 
 constant float kTileSphereExtent = 4096.0;
 
-// The ground's rank depth on the resting sphere: a band at the far plane
-// ordered source zoom first, class second, style rank third, so one depth
-// test carries three jobs at once (GlobeVectorSurfaceDrawer):
-//  - a finer source rejects a coarser substitute's overflow (every tile's
-//    opaque background quad covers its whole slot, so a finer tile writes
-//    depth in every pixel it owns and the coarse geometry underneath fails
-//    the test; no slot clip distances are needed on the sphere),
+// The ground's rank depth: a band at the far plane ordered class first,
+// style rank second (GlobeVectorSurfaceDrawer):
 //  - the opaque fill layers of one tile shade a pixel once by the topmost
 //    opaque layer, submission order free (TBDR hidden surface removal),
 //  - the ribbons of one tile pass over every fill of the same tile.
-// The style rank comes from the per-vertex style index, the class from the
-// pipeline's function constant, the zoom band from the per-draw uniform
-// (GlobeSurfaceTile.depthBias). The whole structure must stay nearer than
-// nothing and farther than everything real: the sphere's own limb reaches
-// z about 0.9954 at zoom 6, and the caps, routes and models depth-test
-// lessEqual with real geometry, so ten zoom bands of two classes at this
-// step span about 2.1e-3 and the ground stays in [0.9979, 1], well behind
-// them all. The step is about 7 float32 ULP at 1.0; z is constant within a
-// draw call (never interpolated), so no precision is lost to blending of
-// vertex values. Mirrored by GlobeSurfaceDepthRank.swift (pinned by
-// TileClipDistanceContractTests).
+// WHICH tile owns a pixel is not depth's job any more: the tile-priority
+// STENCIL decides it (TileSourceStencilPriority; the owner passes write
+// the source's mark, every pass tests greaterEqual), the same mechanism
+// the flat map uses. The band spans about 2.1e-4 at the far plane, far
+// behind the sphere's limb (z about 0.9954 at zoom 6) and everything that
+// depth-tests with real geometry (caps, routes, models). The step is about
+// 7 float32 ULP at 1.0; z is constant within a draw call. Mirrored by
+// GlobeSurfaceDepthRank.swift (pinned by TileClipDistanceContractTests).
 constant float kTileSphereLayerDepthStep = 4e-7;
 constant float kTileSphereRibbonDepthBand = 257.0 * kTileSphereLayerDepthStep;
 
@@ -166,9 +152,8 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
     // The ground carries no geometric depth of its own; its z is the rank
-    // band described at kTileSphereLayerDepthStep: source zoom (the
-    // per-draw bias), then class, then style.
-    float layerNdcZ = 1.0 - surfaceTile.depthBias
+    // band described at kTileSphereLayerDepthStep: class, then style.
+    float layerNdcZ = 1.0
         - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
     if (kTileSphereLineFields) {
         layerNdcZ -= kTileSphereRibbonDepthBand;
@@ -236,7 +221,7 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     out.position = camera.matrix * float4(worldPosition, 1.0);
     // The rank band replaces the surface's own z, exactly as on the
     // resting sphere (see kTileSphereLayerDepthStep).
-    float layerNdcZ = 1.0 - surfaceTile.depthBias
+    float layerNdcZ = 1.0
         - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
     if (kTileSphereLineFields) {
         layerNdcZ -= kTileSphereRibbonDepthBand;

@@ -62,6 +62,13 @@ final class SharedRenderResources {
     /// the far plane back, restoring the pre-building depth mid-pass so the
     /// scene models keep ignoring composited building depth.
     let compositeDepthResetState: MTLDepthStencilState
+    /// The tile-priority stencil states (TileSourceStencilPriority): the
+    /// sphere's opaque owner (rank depth written), the flat ground's owner
+    /// (building depth tested, not written), and the shared non-owning test
+    /// for translucent fills, ribbons and roads.
+    let sphereOpaqueOwnerState: MTLDepthStencilState
+    let groundOwnerState: MTLDepthStencilState
+    let tileStencilTestState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -130,6 +137,9 @@ final class SharedRenderResources {
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
+        self.sphereOpaqueOwnerState = device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!
+        self.groundOwnerState = device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!
+        self.tileStencilTestState = device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
         self.groundShadowMaskFallbackTexture = Self.makeGroundShadowMaskFallbackTexture(device: device)
 
@@ -406,6 +416,46 @@ final class SharedRenderResources {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .less
         descriptor.isDepthWriteEnabled = false
+        return descriptor
+    }
+
+    /// The tile-priority stencil (TileSourceStencilPriority): every tile
+    /// pass tests greaterEqual against the finest painter's mark, and the
+    /// owner passes replace it where they pass both tests, so a coarser
+    /// substitute's overflow is rejected wherever a finer tile painted.
+    private static func makeTilePriorityStencil(writes: Bool) -> MTLStencilDescriptor {
+        let stencil = MTLStencilDescriptor()
+        stencil.stencilCompareFunction = .greaterEqual
+        stencil.stencilFailureOperation = .keep
+        stencil.depthFailureOperation = .keep
+        stencil.depthStencilPassOperation = writes ? .replace : .keep
+        return stencil
+    }
+
+    /// The sphere's opaque ground pass: the layer-rank depth (lessEqual,
+    /// written) plus the owning tile-priority stencil write.
+    private static func makeSphereOpaqueOwnerDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeSceneDepthDescriptor()
+        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        return descriptor
+    }
+
+    /// The flat ground's single blended pass: tested against the buildings'
+    /// depth without writing it, and owning the tile-priority stencil.
+    private static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeGroundDepthDescriptor()
+        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        return descriptor
+    }
+
+    /// Every non-owning tile pass (translucent fills, ribbons, roads): the
+    /// ground depth test plus the tile-priority stencil test, no writes.
+    private static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeGroundDepthDescriptor()
+        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
         return descriptor
     }
 

@@ -40,6 +40,10 @@ final class RenderPersistentContext {
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
+    /// The tile-priority stencil states; see SharedRenderResources.
+    let sphereOpaqueOwnerState: MTLDepthStencilState
+    let groundOwnerState: MTLDepthStencilState
+    let tileStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.compositeDepthResetState`.
     let compositeDepthResetState: MTLDepthStencilState
     /// See `SharedRenderResources.supportsFramebufferFetch`.
@@ -107,6 +111,9 @@ final class RenderPersistentContext {
         self.skyBackdropDepthState = shared.skyBackdropDepthState
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
+        self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
+        self.groundOwnerState = shared.groundOwnerState
+        self.tileStencilTestState = shared.tileStencilTestState
         self.compositeDepthResetState = shared.compositeDepthResetState
         self.supportsFramebufferFetch = shared.supportsFramebufferFetch
         self.shadowFallbackTexture = shared.shadowFallbackTexture
