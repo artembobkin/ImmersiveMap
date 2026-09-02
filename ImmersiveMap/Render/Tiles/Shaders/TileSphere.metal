@@ -102,15 +102,18 @@ constant float kTileSphereExtent = 4096.0;
 constant float kTileSphereLayerDepthStep = 2e-6;
 constant float kTileSphereRibbonDepthBand = 257.0 * kTileSphereLayerDepthStep;
 
-/// The tile-local vertex position as geographic coordinates. The parser
-/// stores render-space positions (y up, 4096 - tileY); the projection wants
-/// uv.y = 0 at the tile's north edge. Not clamped: the stitching margins of
-/// line geometry lie beyond 0..4096 on purpose.
-static inline float2 tileSphereLatLon(float2 localPosition,
-                                      constant GlobeSurfaceTile& surfaceTile) {
+/// The tile-local vertex position as a world uv (x east in turns, y the
+/// Mercator row). The parser stores render-space positions (y up,
+/// 4096 - tileY); the projection wants uv.y = 0 at the tile's north edge.
+/// Not clamped: the stitching margins of line geometry lie beyond 0..4096
+/// on purpose. The vertex stages never compute the latitude angle from it:
+/// the sphere direction comes through globeWorldUVUnitDirection and the
+/// flat morph target IS this uv (the Mercator plane), so the old
+/// uv -> atan(sinh) -> latitude -> log(tan) -> uv round trip is gone.
+static inline float2 tileSphereWorldUv(float2 localPosition,
+                                       constant GlobeSurfaceTile& surfaceTile) {
     float2 localUv = float2(localPosition.x, kTileSphereExtent - localPosition.y) / kTileSphereExtent;
-    float2 worldUv = surfaceTile.uvOrigin + localUv * surfaceTile.uvScale;
-    return globeWorldUVLatLon(worldUv);
+    return surfaceTile.uvOrigin + localUv * surfaceTile.uvScale;
 }
 
 /// Copies the resolved style into the vertex output; the line fields only
@@ -141,8 +144,7 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
                                                   constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                   constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
-    float2 latLon = tileSphereLatLon(localPosition, surfaceTile);
-    float3 unitDirection = globeSphereUnitDirection(latLon.x, latLon.y);
+    float3 unitDirection = globeWorldUVUnitDirection(tileSphereWorldUv(localPosition, surfaceTile));
 
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
@@ -192,20 +194,26 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
                                                    constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                    constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
-    float2 latLon = tileSphereLatLon(localPosition, surfaceTile);
-    float3 unitDirection = globeSphereUnitDirection(latLon.x, latLon.y);
+    float2 worldUv = tileSphereWorldUv(localPosition, surfaceTile);
+    float3 unitDirection = globeWorldUVUnitDirection(worldUv);
     float3 sphereWorldPosition = (globeFrame.sphereWorld * float4(unitDirection, 1.0)).xyz;
-    float3 flatWorldPosition = globeFlatWorldPosition(latLon.x, latLon.y, globe,
-                                                      globeFrame.mapSize, globeFrame.panMercatorY,
-                                                      surfaceTile.referenceWorldX);
-    float3 worldPosition = globeUnrollWorldPosition(sphereWorldPosition, flatWorldPosition.xy,
+    // The flat morph target is the Mercator plane, and the vertex's world
+    // uv already IS its Mercator coordinate: no latitude round trip, only
+    // the convention change (the uv row runs 0..1 from the north edge, the
+    // transition projection wants -1..1 north-positive, clamped the way
+    // getYMercNorm clamps to the Mercator range).
+    float mercatorY = clamp(1.0 - 2.0 * worldUv.y, -1.0, 1.0);
+    float2 flatWorldPosition = globeTransitionFlatWorldPosition(worldUv.x, mercatorY, globe,
+                                                                globeFrame.mapSize, globeFrame.panMercatorY,
+                                                                surfaceTile.referenceWorldX);
+    float3 worldPosition = globeUnrollWorldPosition(sphereWorldPosition, flatWorldPosition,
                                                     globe.transition, globe.radius);
 
     SphereMorphVertexOut out;
     out.position = camera.matrix * float4(worldPosition, 1.0);
     tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
     // The unroll's cut: hidden while the remaining chart travel is long.
-    out.clipDistance[4] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition.xy,
+    out.clipDistance[4] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
                                                   globe.transition, globe.radius);
     if (kTileSphereFog) {
         out.worldPos = worldPosition;

@@ -22,6 +22,23 @@ static inline float2 globeWorldUVLatLon(float2 worldUv) {
     return float2(latitudeAtUv, longitudeAtUv);
 }
 
+/// The unit earth-fixed direction of a world uv, straight from the Mercator
+/// row through the Gudermannian identities (sin lat = tanh x, cos lat =
+/// sech x for x = pi (1 - 2 v)): the latitude angle is never computed,
+/// which drops the atan + sinh chain and the sincos of their result from
+/// every sphere vertex. Equal to feeding globeWorldUVLatLon through
+/// globeSphereUnitDirection, up to float rounding; only sincos of the
+/// longitude and one exp remain.
+static inline float3 globeWorldUVUnitDirection(float2 worldUv) {
+    float x = M_PI_F * (1.0 - 2.0 * worldUv.y);
+    float e = exp(x);
+    float inverseE = 1.0 / e;
+    float sinLatitude = (e - inverseE) / (e + inverseE);
+    float cosLatitude = 2.0 / (e + inverseE);
+    float longitude = worldUv.x * (2.0 * M_PI_F) - M_PI_F;
+    return float3(cosLatitude * sin(longitude), sinLatitude, cosLatitude * cos(longitude));
+}
+
 /// The geographic coordinate of a tile-local uv (x east, uv.y = 0 at the
 /// tile's NORTH edge, Mercator-linear: the axis the raw MVT bytes and the
 /// mercator tile rows use). Values outside 0..1 are allowed and land beyond

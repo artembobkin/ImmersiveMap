@@ -72,7 +72,7 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(source.range(of: "groundShadowMask"))
         XCTAssertNil(source.range(of: "OcclusionClearance"),
                      "The sphere needs no occlusion clip: back-face culling removes the far side; the morph clips only the unroll's cut")
-        XCTAssertTrue(source.contains("globeWorldUVLatLon("))
+        XCTAssertTrue(source.contains("globeWorldUVUnitDirection("))
     }
 
     /// A tile's vertices unwrap their flat morph target around the tile's
