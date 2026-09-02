@@ -128,18 +128,26 @@ enum FlatMapSurfaceDrawer {
         let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
             run.isLinesClass == false && isOpaqueFillRun(run) == false
         }
+        renderEncoder.pushDebugGroup("ground.opaqueFills")
         renderEncoder.setDepthStencilState(groundOwnerState)
         tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder,
                                               withBuildingImageAttachment: withBuildingImageAttachment)
         drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
+        renderEncoder.popDebugGroup()
         // Everything after only tests the priority.
+        renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)
+        tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder,
+                                             withBuildingImageAttachment: withBuildingImageAttachment)
+        drawLayer(\.ground, bandOffset: 0, runFilter: isTranslucentFillRun)
+        renderEncoder.popDebugGroup()
+        renderEncoder.pushDebugGroup("ground.lineRibbons")
         tilePipeline.selectPipeline(renderEncoder: renderEncoder,
                                     withBuildingImageAttachment: withBuildingImageAttachment)
-        drawLayer(\.ground, bandOffset: 0, runFilter: isTranslucentFillRun)
         drawLayer(\.ground,
                   bandOffset: GlobeSurfaceDepthRank.classDepthBand,
                   runFilter: { $0.isLinesClass })
+        renderEncoder.popDebugGroup()
 
         if usesSeparateRoadRendering {
             func drawRoadGroup(_ structureKind: TileMvtParser.RoadStructureKind) {
@@ -159,6 +167,7 @@ enum FlatMapSurfaceDrawer {
                 }
             }
 
+            renderEncoder.pushDebugGroup("roads")
             drawRoadGroup(.tunnel)
             drawRoadGroup(.ground)
             drawRoadGroup(.automobileGround)
@@ -179,6 +188,7 @@ enum FlatMapSurfaceDrawer {
                                           bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
                 }
             }
+            renderEncoder.popDebugGroup()
         } else {
             drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
         }

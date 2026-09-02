@@ -19,9 +19,13 @@ class TilePipeline {
     /// attachment with an empty write mask so the pipeline stays
     /// pass-compatible.
     let withBuildingImagePipelineState: MTLRenderPipelineState?
-    /// Flat surface only: the opaque ground layers with blending disabled
-    /// (the layered depth pass, like the sphere's), plus its
-    /// framebuffer-fetch twin.
+    /// Flat surface only: the fills classes without the line fields (no
+    /// export, no interpolation, no coverage math), blended for the
+    /// translucent layers and unblended for the opaque depth pass, each
+    /// with its framebuffer-fetch twin. `pipelineState` remains the
+    /// line-fields variant (ribbons, road buckets, bridge overlay).
+    let flatFillsPipelineState: MTLRenderPipelineState?
+    let flatFillsWithBuildingImagePipelineState: MTLRenderPipelineState?
     let flatOpaquePipelineState: MTLRenderPipelineState?
     let flatOpaqueWithBuildingImagePipelineState: MTLRenderPipelineState?
     /// Sphere surface only: the resting-sphere fills class, blended (the
@@ -59,13 +63,22 @@ class TilePipeline {
         var spherePureFragmentFunctions: [Bool: MTLFunction] = [:]
         var sphereMorphVertexFunctions: [Bool: MTLFunction] = [:]
         var sphereMorphFragmentFunctions: [Bool: MTLFunction] = [:]
+        var flatFillsVertexFunction: MTLFunction?
+        var flatFillsFragmentFunction: MTLFunction?
         switch surface {
         case .flat:
-            vertexFunction = library.makeFunction(name: "tileVertexShader")
-            let constantValues = MTLFunctionConstantValues()
-            var readsMask = readsGroundShadowMask
-            constantValues.setConstantValue(&readsMask, type: .bool, index: 0)
-            fragmentFunction = try! library.makeFunction(name: "tileFragmentShader", constantValues: constantValues)
+            func flatFunction(_ name: String, lineFields: Bool) -> MTLFunction {
+                let values = MTLFunctionConstantValues()
+                var readsMask = readsGroundShadowMask
+                var lineFieldsValue = lineFields
+                values.setConstantValue(&readsMask, type: .bool, index: 0)
+                values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
+                return try! library.makeFunction(name: name, constantValues: values)
+            }
+            vertexFunction = flatFunction("tileVertexShader", lineFields: true)
+            fragmentFunction = flatFunction("tileFragmentShader", lineFields: true)
+            flatFillsVertexFunction = flatFunction("tileVertexShader", lineFields: false)
+            flatFillsFragmentFunction = flatFunction("tileFragmentShader", lineFields: false)
         case .sphere:
             func sphereFunction(_ name: String, fog: Bool, lineFields: Bool) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
@@ -176,22 +189,35 @@ class TilePipeline {
             self.sphereMorphRibbonsPipelineState = nil
         }
 
-        if surface == .flat {
+        if surface == .flat, let flatFillsVertexFunction, let flatFillsFragmentFunction {
+            pipelineDescriptor.vertexFunction = flatFillsVertexFunction
+            pipelineDescriptor.fragmentFunction = flatFillsFragmentFunction
+            self.flatFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
+            self.flatFillsPipelineState = nil
             self.flatOpaquePipelineState = nil
         }
-        if supportsFramebufferFetch, surface == .flat {
+        if supportsFramebufferFetch, surface == .flat,
+           let flatFillsVertexFunction, let flatFillsFragmentFunction {
             pipelineDescriptor.colorAttachments[1].pixelFormat = pixelFormat
             pipelineDescriptor.colorAttachments[1].writeMask = []
             self.withBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.vertexFunction = flatFillsVertexFunction
+            pipelineDescriptor.fragmentFunction = flatFillsFragmentFunction
+            self.flatFillsWithBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatOpaqueWithBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
             self.withBuildingImagePipelineState = nil
+            self.flatFillsWithBuildingImagePipelineState = nil
             self.flatOpaqueWithBuildingImagePipelineState = nil
         }
     }
@@ -205,8 +231,23 @@ class TilePipeline {
         renderEncoder.setRenderPipelineState(pipelineState)
     }
 
-    /// The flat opaque ground variant (blending off); falls back to the
-    /// blended pipeline when absent.
+    /// The flat translucent fills variant (no line fields); falls back to
+    /// the line-fields pipeline when absent.
+    func selectFlatFillsPipeline(renderEncoder: MTLRenderCommandEncoder,
+                                 withBuildingImageAttachment: Bool = false) {
+        if withBuildingImageAttachment, let flatFillsWithBuildingImagePipelineState {
+            renderEncoder.setRenderPipelineState(flatFillsWithBuildingImagePipelineState)
+            return
+        }
+        if let flatFillsPipelineState {
+            renderEncoder.setRenderPipelineState(flatFillsPipelineState)
+            return
+        }
+        selectPipeline(renderEncoder: renderEncoder, withBuildingImageAttachment: withBuildingImageAttachment)
+    }
+
+    /// The flat opaque ground variant (no line fields, blending off); falls
+    /// back to the blended pipeline when absent.
     func selectFlatOpaquePipeline(renderEncoder: MTLRenderCommandEncoder,
                                   withBuildingImageAttachment: Bool = false) {
         if withBuildingImageAttachment, let flatOpaqueWithBuildingImagePipelineState {

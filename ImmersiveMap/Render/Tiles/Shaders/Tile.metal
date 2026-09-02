@@ -12,6 +12,12 @@ using namespace metal;
 // uniform. A function constant so each pipeline only declares the texture it
 // reads (the other argument is compiled out and needs no binding).
 constant bool kGroundShadowMaskEnabled [[function_constant(0)]];
+
+/// True when the pass carries the analytic line fields (the ribbons class,
+/// the road buckets and the bridge overlay); the fills classes drop them,
+/// exactly like the sphere's variants: no export, no interpolation, and a
+/// fragment that is the colour as is.
+constant bool kTileLineFields [[function_constant(1)]];
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 // Mask pixels per drawable pixel; mirrors
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
@@ -40,14 +46,14 @@ struct VertexOut {
     // uses.
     float3 worldPos;
     half4 color;
-    float lineDistance;
-    float lineParameter;
-    half4 lineStyle;
-    half lineMinimumWidthPoints;
-    half lineMaximumWidthPoints;
+    float lineDistance [[function_constant(kTileLineFields)]];
+    float lineParameter [[function_constant(kTileLineFields)]];
+    half4 lineStyle [[function_constant(kTileLineFields)]];
+    half lineMinimumWidthPoints [[function_constant(kTileLineFields)]];
+    half lineMaximumWidthPoints [[function_constant(kTileLineFields)]];
     // 1 when the dash pattern is already in tile units (world-locked paint),
     // 0 when it is in points and scales by the draw's unitsPerPoint.
-    half lineDashInTileUnits;
+    half lineDashInTileUnits [[function_constant(kTileLineFields)]];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -56,12 +62,12 @@ struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
     half4 color;
-    float lineDistance;
-    float lineParameter;
-    half4 lineStyle;
-    half lineMinimumWidthPoints;
-    half lineMaximumWidthPoints;
-    half lineDashInTileUnits;
+    float lineDistance [[function_constant(kTileLineFields)]];
+    float lineParameter [[function_constant(kTileLineFields)]];
+    half4 lineStyle [[function_constant(kTileLineFields)]];
+    half lineMinimumWidthPoints [[function_constant(kTileLineFields)]];
+    half lineMaximumWidthPoints [[function_constant(kTileLineFields)]];
+    half lineDashInTileUnits [[function_constant(kTileLineFields)]];
 };
 
 static inline TileVertexStyle tileFragmentStyle(FragmentIn in) {
@@ -110,12 +116,14 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     // the frame only, so the fragment neither interpolates the mask nor
     // walks the fade bands.
     out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
-    out.lineDistance = style.lineDistance;
-    out.lineParameter = style.lineParameter;
-    out.lineStyle = style.lineStyle;
-    out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
-    out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
-    out.lineDashInTileUnits = style.lineDashInTileUnits;
+    if (kTileLineFields) {
+        out.lineDistance = style.lineDistance;
+        out.lineParameter = style.lineParameter;
+        out.lineStyle = style.lineStyle;
+        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
+        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
+        out.lineDashInTileUnits = style.lineDashInTileUnits;
+    }
     return out;
 }
 
@@ -142,7 +150,14 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
     } else {
         shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
     }
-    half4 color = tileGroundColor(tileFragmentStyle(in), overviewFade, lineDash);
+    // The fills classes carry no line fields: their coverage is identically
+    // 1 and the colour (fade already folded in the vertex stage) is final.
+    half4 color;
+    if (kTileLineFields) {
+        color = tileGroundColor(tileFragmentStyle(in), overviewFade, lineDash);
+    } else {
+        color = in.color;
+    }
     // Shadow before fog: fog wins at distance, so the shadow-coverage edge
     // dissolves into the haze instead of cutting a visible line. Zero normal
     // (passed above): the ground always faces the sun and keeps its tight
