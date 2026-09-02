@@ -49,7 +49,8 @@ enum RenderGraphFactory {
                                                   depthDisabledState: context.depthDisabledState,
                                                   metalDevice: context.metalContext.device)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
-                                                                    groundDepthState: context.groundDepthState,
+                                                                    groundOwnerState: context.groundOwnerState,
+                                                                    tileStencilTestState: context.tileStencilTestState,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls,

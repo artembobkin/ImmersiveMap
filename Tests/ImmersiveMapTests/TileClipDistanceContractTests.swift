@@ -18,12 +18,12 @@ final class TileClipDistanceContractTests: XCTestCase {
         let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The ground shader must not discard: it blocks hidden surface removal for every ground draw")
-        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [4];"),
-                      "The placeIn slot is cut by four clip distances in the vertex stage")
-        XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"),
-                      "The bounds arrive in the vertex stage at buffer 7, where the drawers bind them")
-        XCTAssertNil(source.range(of: "localClipBounds [[buffer(1)]]"),
-                     "The fragment stage no longer takes the bounds")
+        // The flat tiles carry NO slot clip distances any more: a retained
+        // substitute draws at full extent and the tile-priority stencil
+        // rejects it wherever a finer tile painted, exactly like the
+        // sphere. Only the buildings keep their clips (TileExtruded).
+        XCTAssertNil(source.range(of: "[[clip_distance]]"))
+        XCTAssertNil(source.range(of: "localClipBounds"))
     }
 
     func testBuildingShadersClipWithClipDistancesAndNeverDiscard() throws {

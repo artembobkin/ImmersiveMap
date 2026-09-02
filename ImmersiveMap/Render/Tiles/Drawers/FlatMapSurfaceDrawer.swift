@@ -16,6 +16,8 @@ enum FlatMapSurfaceDrawer {
                      horizonFog: HorizonFogUniform,
                      groundShadowMask: GroundShadowMaskBinding,
                      tilePipeline: TilePipeline,
+                     groundOwnerState: MTLDepthStencilState,
+                     tileStencilTestState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      withBuildingImageAttachment: Bool = false) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder,
@@ -74,13 +76,33 @@ enum FlatMapSurfaceDrawer {
 
         let usesSeparateRoadRendering = cameraZoom >= Double(separateRoadRenderingMinimumZoom)
 
+        // Unique SOURCES, not placements: a coarse tile standing in for
+        // several missing slots draws once at full extent, and the
+        // tile-priority stencil keeps it out of every slot a finer tile
+        // owns (TileSourceStencilPriority). The loop is part of the key:
+        // the flat world's wrap copies place the same tile at different
+        // origins across the seam. Finest first, so the owner writes win.
+        struct SourceKey: Hashable {
+            let tile: Tile
+            let loop: Int8
+        }
+        var seenSources = Set<SourceKey>()
+        var uniqueSources: [(metalTile: MetalTile, loop: Int8)] = []
+        uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
+        for placeTile in placeTilesContext.tilePlacements {
+            let key = SourceKey(tile: placeTile.metalTile.tile, loop: placeTile.placeIn.loop)
+            if seenSources.insert(key).inserted {
+                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.loop))
+            }
+        }
+        uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
+
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>) {
-            for placeTile in placeTilesContext.tilePlacements {
-                let metalTile = placeTile.metalTile
+            for source in uniqueSources {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                      buffers: metalTile.tileBuffers[keyPath: keyPath],
-                                      tile: metalTile.tile,
-                                      placeIn: placeTile.placeIn,
+                                      buffers: source.metalTile.tileBuffers[keyPath: keyPath],
+                                      tile: source.metalTile.tile,
+                                      loop: source.loop,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableHeightPx,
@@ -88,18 +110,22 @@ enum FlatMapSurfaceDrawer {
             }
         }
 
+        // The ground owns the stencil: depth tested against the buildings
+        // (never written), the source's priority replaced where it paints.
+        renderEncoder.setDepthStencilState(groundOwnerState)
         drawLayer(\.ground)
+        // Everything after only tests the priority.
+        renderEncoder.setDepthStencilState(tileStencilTestState)
 
         if usesSeparateRoadRendering {
             func drawRoadGroup(_ structureKind: TileMvtParser.RoadStructureKind) {
                 for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
-                    for placeTile in placeTilesContext.tilePlacements {
-                        let metalTile = placeTile.metalTile
-                        let structureBucket = metalTile.tileBuffers.roads.bucket(for: structureKind)
+                    for source in uniqueSources {
+                        let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                         drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                               buffers: structureBucket.layer(for: role),
-                                              tile: metalTile.tile,
-                                              placeIn: placeTile.placeIn,
+                                              tile: source.metalTile.tile,
+                                              loop: source.loop,
                                               flatRenderState: flatRenderState,
                                               pixelsPerPoint: pixelsPerPoint,
                                               drawableHeightPx: drawableHeightPx,
@@ -115,13 +141,12 @@ enum FlatMapSurfaceDrawer {
             drawRoadGroup(.bridge)
 
             for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
-                for placeTile in placeTilesContext.tilePlacements {
-                    let metalTile = placeTile.metalTile
-                    let structureBucket = metalTile.tileBuffers.roads.bucket(for: structureKind)
+                for source in uniqueSources {
+                    let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                           buffers: structureBucket.layer(for: .overlay),
-                                          tile: metalTile.tile,
-                                          placeIn: placeTile.placeIn,
+                                          tile: source.metalTile.tile,
+                                          loop: source.loop,
                                           flatRenderState: flatRenderState,
                                           pixelsPerPoint: pixelsPerPoint,
                                           drawableHeightPx: drawableHeightPx,
@@ -142,7 +167,7 @@ enum FlatMapSurfaceDrawer {
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,
                                               tile: Tile,
-                                              placeIn: VisibleTile,
+                                              loop: Int8,
                                               flatRenderState: FlatRenderState,
                                               pixelsPerPoint: Float,
                                               drawableHeightPx: Float,
@@ -163,7 +188,7 @@ enum FlatMapSurfaceDrawer {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
                                                                          z: tile.z,
-                                                                         loop: placeIn.loop,
+                                                                         loop: loop,
                                                                          flatRenderPan: flatRenderState.pan,
                                                                          renderMapSize: flatRenderState.renderMapSize)
         let scale = originAndSize.z / 4096.0
@@ -172,16 +197,11 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
         renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
         renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
-
-        // A retained substitution draws the source tile in full at its origin,
-        // clipped to the placeIn slot by the rasterizer (the vertex stage turns
-        // these bounds into clip distances), otherwise the parent's content
-        // would cover neighboring exact tiles in every layer (roads,
-        // backgrounds). Exact placements get the disabled bounds.
-        var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
-        renderEncoder.setVertexBytes(&localClipBounds,
-                                     length: MemoryLayout<SIMD4<Float>>.stride,
-                                     index: 7)
+        // The tile-priority stencil reference: the ground pass replaces the
+        // stencil with it, every pass tests greaterEqual against the finest
+        // painter (TileSourceStencilPriority). No slot clip: a substitute
+        // draws at full extent and the stencil keeps it out of covered slots.
+        renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live

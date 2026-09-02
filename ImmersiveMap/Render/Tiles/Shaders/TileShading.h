@@ -129,22 +129,6 @@ static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
     return out;
 }
 
-/// The placeIn clip of a retained substitute as four signed distances to the
-/// slot's edges, in the source tile's local units (see localClipBounds);
-/// positive inside. The rasterizer clips the primitive where any goes
-/// negative, so a substitute never overlaps the neighboring exact tiles and
-/// the fragment stage never needs a discard (which would defeat hidden
-/// surface removal). Exact placements get a disabled clip: all four stay
-/// positive. Written into the first four entries of a clip distance array.
-static inline void tileLocalClipDistances(float2 localPosition,
-                                          float4 localClipBounds,
-                                          thread float* clipDistance) {
-    clipDistance[0] = localPosition.x - localClipBounds.x;
-    clipDistance[1] = localClipBounds.z - localPosition.x;
-    clipDistance[2] = localPosition.y - localClipBounds.y;
-    clipDistance[3] = localClipBounds.w - localPosition.y;
-}
-
 /// Analytic coverage of line geometry: the tessellator extrudes lines wider
 /// than their styled width and stores a signed distance field in the vertices
 /// (see `TileVertexIn`), so the visible edge is an isoline of the

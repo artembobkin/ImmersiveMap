@@ -29,14 +29,10 @@ constant float kGroundShadowMaskScale = 0.5;
 // dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
     float4 position [[position]];
-    // Signed distances to the four edges of the placeIn slot, in the source
-    // tile's local units (see localClipBounds): the rasterizer clips the
-    // primitive where any goes negative, so a retained substitute never
-    // overlaps the neighboring exact tiles, and the fragment stage never
-    // needs a discard (which would defeat hidden surface removal for every
-    // ground draw). Exact placements get a disabled clip: all four stay
-    // positive.
-    float clipDistance [[clip_distance]] [4];
+    // No slot clip distances: a retained substitute draws at full extent
+    // and the tile-priority stencil rejects it wherever a finer tile
+    // painted (TileSourceStencilPriority), the same mechanism the sphere
+    // uses.
     float3 worldPos;
     half4 color;
     float lineDistance;
@@ -50,8 +46,7 @@ struct VertexOut {
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
-// name, without the clip distances (consumed by the rasterizer; MSL does not
-// allow them in a stage_in struct).
+// name.
 struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
@@ -85,15 +80,11 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
-                                  constant float4& localClipBounds [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float4 worldPosition = modelMatrix * float4(float2(vertexIn.position.xy), 0.0, 1.0);
 
     VertexOut out;
     out.position = camera.matrix * worldPosition;
-    // localClipBounds: (minX, minY, maxX, maxY) of the placeIn slot in the
-    // source tile's local coordinates; positive inside.
-    tileLocalClipDistances(float2(vertexIn.position.xy), localClipBounds, out.clipDistance);
     out.worldPos = worldPosition.xyz;
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     out.color = style.color;
@@ -110,11 +101,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     return out;
 }
 
-// The placeIn clip of a retained substitute is applied by the rasterizer
-// through the vertex stage's clip distances, so nothing here discards: every
-// fragment that reaches this function is inside its slot, and the GPU can
-// resolve visibility (and drop what later opaque geometry covers) before
-// shading.
+// Nothing here discards: a retained substitute is kept out of covered
+// slots by the tile-priority stencil test (early, before shading), so the
+// GPU can resolve visibility before the fragment runs.
 fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                   constant HorizonFog& horizonFog [[buffer(2)]],

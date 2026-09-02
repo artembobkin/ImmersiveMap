@@ -57,6 +57,7 @@ enum BenchScenario {
         case "globe": return globe
         case "globe0": return globe0
         case "globe16": return globe16
+        case "flat9": return flat9
         default: return nil
         }
     }
@@ -217,6 +218,42 @@ enum BenchScenario {
         idleDuration: 1
     )
 
+    /// Flat overview zooms, short: past the transition (flat from about
+    /// zoom 7), below the street tiers, where the ground bucket carries
+    /// everything and the stencil-owned substitutes replace the old slot
+    /// clips. The ladder climbs over boundary- and landuse-dense central
+    /// Europe, the pan drifts at region scale.
+    static let flat9 = BenchScenarioScript(
+        name: "flat9",
+        establish: BenchPose(latitude: 48, longitude: 11, zoom: 7.5, bearing: 0, pitch: 0),
+        warmUp: 3,
+        tour: [
+            BenchShot(name: "region",
+                      pose: BenchPose(latitude: 48.5, longitude: 12.5, zoom: 8, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+            BenchShot(name: "closer",
+                      pose: BenchPose(latitude: 48.14, longitude: 11.58, zoom: 9.5, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+            BenchShot(name: "back",
+                      pose: BenchPose(latitude: 47.5, longitude: 9.5, zoom: 8, bearing: 0, pitch: 0),
+                      duration: 2, holdAfter: 1),
+        ],
+        panDuration: 4,
+        panStart: flatMidPanStart,
+        panPose: { progress in
+            let p = min(max(progress, 0), 1)
+            return BenchPose(latitude: flatMidPanStart.latitude + 1.2 * p,
+                             longitude: flatMidPanStart.longitude + 3.5 * p,
+                             zoom: flatMidPanStart.zoom,
+                             bearing: 0,
+                             pitch: 0)
+        },
+        idleSettle: 1,
+        idleDuration: 1
+    )
+
+    private static let flatMidPanStart = BenchPose(latitude: 47.8, longitude: 8.5,
+                                                   zoom: 8.5, bearing: 0, pitch: 0)
     private static let globeMidPanStart = BenchPose(latitude: 46, longitude: 6,
                                                     zoom: 4.2, bearing: 0, pitch: 0)
     private static let fullPanStart = BenchPose(latitude: 40.7484, longitude: -73.9857,

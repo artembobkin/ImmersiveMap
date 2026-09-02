@@ -7,7 +7,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
 
     private let tilePipeline: TilePipeline
-    private let groundDepthState: MTLDepthStencilState
+    private let groundOwnerState: MTLDepthStencilState
+    private let tileStencilTestState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let separateRoadRenderingMinimumZoom: Int
     private let debugOverlayControls: DebugOverlayControlState
@@ -16,7 +17,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let supportsFramebufferFetch: Bool
 
     init(tilePipeline: TilePipeline,
-         groundDepthState: MTLDepthStencilState,
+         groundOwnerState: MTLDepthStencilState,
+         tileStencilTestState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
@@ -24,7 +26,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          groundShadowMaskFallbackTexture: MTLTexture,
          supportsFramebufferFetch: Bool) {
         self.tilePipeline = tilePipeline
-        self.groundDepthState = groundDepthState
+        self.groundOwnerState = groundOwnerState
+        self.tileStencilTestState = tileStencilTestState
         self.depthDisabledState = depthDisabledState
         self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
@@ -61,11 +64,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
             supportsFramebufferFetch: supportsFramebufferFetch
         )
 
-        // Depth test without write: with solid buildings drawn before the
-        // ground (see RenderPassGraph.worldLayerOrder), everything under a
-        // building fails the test and is never shaded; ground layers never
-        // occlude one another because none of them writes depth.
-        encoder.setDepthStencilState(groundDepthState)
+        // The drawer sets its own depth-stencil states per group: the
+        // ground owns the tile-priority stencil (depth tested against the
+        // buildings, never written), the road buckets only test it.
         // The horizon backdrop is drawn first: the main coverage lands on top
         // (painter's order), and beyond its edge the ground is painted all the
         // way to the horizon. The backdrop binds the same mask: it lies outside
@@ -81,6 +82,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   horizonFog: horizonFog,
                                   groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
+                                  groundOwnerState: groundOwnerState,
+                                  tileStencilTestState: tileStencilTestState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
@@ -94,6 +97,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   horizonFog: horizonFog,
                                   groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
+                                  groundOwnerState: groundOwnerState,
+                                  tileStencilTestState: tileStencilTestState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment)
         encoder.setDepthStencilState(depthDisabledState)
