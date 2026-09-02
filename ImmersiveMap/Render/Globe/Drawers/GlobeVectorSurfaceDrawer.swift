@@ -113,8 +113,13 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.pushDebugGroup("ground.translucentFills")
             renderEncoder.setDepthStencilState(translucentDepthState)
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: false)
+            // A run whose fade is exactly 0 this frame would rasterize with
+            // alpha 0: skipped here, before a single buffer is bound (road
+            // strokes below their start zoom are whole invisible layers).
             let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
-                run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform) == false
+                run.isLinesClass == false
+                    && isOpaque(run, overviewFade: overviewFadeUniform) == false
+                    && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
             }
             forEachPlacement(renderEncoder: renderEncoder,
                              placeTilesContext: placeTilesContext,
@@ -129,7 +134,13 @@ enum GlobeVectorSurfaceDrawer {
             }
             renderEncoder.popDebugGroup()
             // The line ribbons (boundaries, overview strokes) last, through
-            // the line-field coverage, at their rank z above every fill.
+            // the line-field coverage, at their rank z above every fill;
+            // fully faded ribbons (road strokes below their start zoom) are
+            // skipped the same way.
+            let isVisibleRibbonRun: (GroundStyleRun) -> Bool = { run in
+                run.isLinesClass
+                    && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
+            }
             renderEncoder.pushDebugGroup("ground.lineRibbons")
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true)
             forEachPlacement(renderEncoder: renderEncoder,
@@ -138,13 +149,13 @@ enum GlobeVectorSurfaceDrawer {
                              pixelsPerPoint: pixelsPerPoint,
                              drawableHeightPx: drawableHeightPx,
                              worthBinding: { buffers in
-                                 buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: \.isLinesClass)
+                                 buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: isVisibleRibbonRun)
                              }) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
                          drawsAllWithoutRuns: true,
-                         predicate: \.isLinesClass)
+                         predicate: isVisibleRibbonRun)
             }
             renderEncoder.popDebugGroup()
             renderEncoder.setDepthStencilState(depthDisabledState)
