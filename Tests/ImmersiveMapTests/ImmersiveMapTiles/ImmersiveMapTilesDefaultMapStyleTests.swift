@@ -223,7 +223,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                        "Overview roads fade in per class, never on the shared road band")
         XCTAssertTrue(fill.parseGeometryStyleData.lineCapRound)
         XCTAssertTrue(fill.parseGeometryStyleData.lineJoinRound)
-        XCTAssertEqual(fill.parseGeometryStyleData.lineWidth, Double(fill.lineWidthPoints) * 32, accuracy: 0.01,
+        XCTAssertEqual(fill.parseGeometryStyleData.lineWidth,
+                       Double(fill.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                       accuracy: 0.01,
                        "The ribbon must host the point width")
 
         // The stroke is the street grey of its class, at every zoom, with no

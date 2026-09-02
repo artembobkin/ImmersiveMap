@@ -25,13 +25,20 @@ import simd
 ///    per fragment from arc length, so it reads as dashes at every zoom.
 /// 5. **A ribbon that can host the width**: the shader clamps the point edge
 ///    to the tessellated ribbon (`tileLineCoverage` in Tile.metal), so the
-///    geometry is provisioned as a ceiling well above the request. The ribbon
-///    is never the visible width; over-provisioning costs only a wider quad.
+///    geometry is provisioned as a ceiling above the request. The ribbon is
+///    never the visible width, but over-provisioning is not free either:
+///    every ribbon fragment outside the visible stroke still runs the
+///    coverage math to produce alpha 0, so the ceiling is sized to the
+///    actual worst case rather than "well above".
 extension FeatureStyle {
     /// Tile units of tessellated ribbon per requested point of visible width.
-    /// Sized so the ceiling stays above the request on large, dense displays;
-    /// see decision 5 above.
-    static let pointLockedRibbonUnitsPerPoint: Double = 32
+    /// A tile is at least 512 points across at its native level (fractional
+    /// zoom and fallback substitutes only ever show it larger), so one point
+    /// is at most 4096 / 512 = 8 tile units; 12 keeps half again of headroom
+    /// for the sphere's foreshortening toward the limb, where the rim clamp
+    /// thins the stroke anyway. Part of the prepared tile geometry, so a
+    /// change here bumps `PreparedTileDiskCaching.preparedFormatVersion`.
+    static let pointLockedRibbonUnitsPerPoint: Double = 12
 
     static func pointLockedLine(key: UInt8,
                                 color: SIMD4<Float>,
