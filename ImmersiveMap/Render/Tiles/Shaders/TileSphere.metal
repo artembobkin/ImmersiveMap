@@ -184,8 +184,11 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
 /// GlobeUnroll.h).
 struct SphereMorphVertexOut {
     float4 position [[position]];
-    // 0..3: the placeIn slot edges; 4: the unroll's cut.
-    float clipDistance [[clip_distance]] [5];
+    // The unroll's cut: hidden while the remaining chart travel is long.
+    // The slot clip is gone here too: the morph layers by the same rank
+    // depth band as the resting sphere, which is what rejects a coarse
+    // substitute wherever a finer tile painted.
+    float clipDistance [[clip_distance]] [1];
     float3 worldPos [[function_constant(kTileSphereFog)]];
     half4 color;
     float lineDistance [[function_constant(kTileSphereLineFields)]];
@@ -198,15 +201,17 @@ struct SphereMorphVertexOut {
 
 /// The unfurl: the sphere-to-plane unroll of GlobeUnroll.h. The surface
 /// stays a convex cap on the growing sphere, back-face culling removes what
-/// curls away, and the fifth clip removes the cut cap around the point
-/// opposite the view centre, where the unroll tears.
+/// curls away, and the one clip removes the cut cap around the point
+/// opposite the view centre, where the unroll tears. The surface never
+/// self-intersects toward the camera, so its z carries no occlusion of its
+/// own and the morph draws in the same rank depth band as the resting
+/// sphere (source zoom, class, style), with the same layered class passes.
 vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stage_in]],
                                                    constant Camera& camera [[buffer(1)]],
                                                    constant Style* styles [[buffer(2)]],
                                                    constant float* lowZoomFadeMasks [[buffer(4)]],
                                                    constant LineStyle* lineStyles [[buffer(5)]],
                                                    constant StreetPaletteUniform& streetPalette [[buffer(6)]],
-                                                   constant float4& localClipBounds [[buffer(7)]],
                                                    constant Globe& globe [[buffer(8)]],
                                                    constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                    constant GlobeFrameConstants& globeFrame [[buffer(10)]],
@@ -229,9 +234,16 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
 
     SphereMorphVertexOut out;
     out.position = camera.matrix * float4(worldPosition, 1.0);
-    tileLocalClipDistances(localPosition, localClipBounds, out.clipDistance);
+    // The rank band replaces the surface's own z, exactly as on the
+    // resting sphere (see kTileSphereLayerDepthStep).
+    float layerNdcZ = 1.0 - surfaceTile.depthBias
+        - (float(vertexIn.styleIndex) + 1.0) * kTileSphereLayerDepthStep;
+    if (kTileSphereLineFields) {
+        layerNdcZ -= kTileSphereRibbonDepthBand;
+    }
+    out.position.z = layerNdcZ * out.position.w;
     // The unroll's cut: hidden while the remaining chart travel is long.
-    out.clipDistance[4] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
+    out.clipDistance[0] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
                                                   globe.transition, globe.radius);
     if (kTileSphereFog) {
         out.worldPos = worldPosition;

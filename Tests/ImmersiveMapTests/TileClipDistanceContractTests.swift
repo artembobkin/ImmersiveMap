@@ -63,14 +63,16 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(source.range(of: "discard_fragment"))
         // The resting sphere carries the four slot clips; the morph adds the
         // unroll's cut as a fifth.
-        // The resting sphere carries NO slot clip distances: unique sources
-        // draw at full extent and the source-zoom depth band rejects a
-        // coarse substitute's overflow (kTileSphereLayerDepthStep). Only the
-        // morph keeps the five clips: four slot edges plus the unroll's cut.
+        // The sphere carries NO slot clip distances at all: unique sources
+        // draw at full extent, on the resting sphere and during the morph
+        // alike, and the source-zoom depth band rejects a coarse
+        // substitute's overflow (kTileSphereLayerDepthStep). The morph
+        // keeps exactly one clip: the unroll's cut.
         XCTAssertNil(source.range(of: "[[clip_distance]] [4]"))
-        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [5];"))
+        XCTAssertNil(source.range(of: "[[clip_distance]] [5]"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
         XCTAssertTrue(source.contains("globeUnrollCutClearance("))
-        XCTAssertTrue(source.contains("constant float4& localClipBounds [[buffer(7)]]"))
+        XCTAssertNil(source.range(of: "localClipBounds"))
         XCTAssertTrue(source.contains("surfaceTile.depthBias"))
         // The depth constants are a binding contract with the CPU mirror.
         XCTAssertTrue(source.contains("constant float kTileSphereLayerDepthStep = 4e-7;"))
