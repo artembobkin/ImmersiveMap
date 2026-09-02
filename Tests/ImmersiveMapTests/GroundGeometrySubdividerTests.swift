@@ -20,6 +20,46 @@ final class GroundGeometrySubdividerTests: XCTestCase {
                      "From z10 the surface has unfurled: nothing is drawn on the sphere")
     }
 
+    func testRibbonsSplitOnADoubleStepGrid() {
+        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 64), 128)
+        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 1024), 2048)
+
+        // One fill and one ribbon triangle of the same shape: after the
+        // split the ribbon (line attributes present) must carry fewer
+        // vertices than the fill, and both must respect their grid bound.
+        let fill = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
+                                               indices: [0, 1, 2])
+        var ribbon = fill
+        ribbon.lineDistances = [127, 127, -127]
+        ribbon.lineParameters = [0, Int16.max, Int16.max]
+        var byStyle: [UInt8: [TileMvtParser.ParsedPolygon]] = [0: [fill], 1: [ribbon]]
+        GroundGeometrySubdivider.subdivideIfNeeded(&byStyle, tileZoom: 0)
+
+        let splitFill = byStyle[0]![0]
+        let splitRibbon = byStyle[1]![0]
+        XCTAssertLessThan(splitRibbon.vertices.count, splitFill.vertices.count,
+                          "The ribbon grid is coarser, so it must produce fewer split vertices")
+        let fillEdgeBound = Float(64) * Float(2).squareRoot() + 1
+        let ribbonEdgeBound = Float(128) * Float(2).squareRoot() + 1
+        assertEdges(of: splitFill, within: fillEdgeBound)
+        assertEdges(of: splitRibbon, within: ribbonEdgeBound)
+    }
+
+    private func assertEdges(of polygon: TileMvtParser.ParsedPolygon, within bound: Float,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        for triangle in stride(from: 0, to: polygon.indices.count, by: 3) {
+            for edge in 0..<3 {
+                let a = polygon.vertices[Int(polygon.indices[triangle + edge])]
+                let b = polygon.vertices[Int(polygon.indices[triangle + (edge + 1) % 3])]
+                let dx = Float(a.x) - Float(b.x)
+                let dy = Float(a.y) - Float(b.y)
+                XCTAssertLessThanOrEqual((dx * dx + dy * dy).squareRoot(), bound,
+                                         "Every edge must fit inside one grid cell",
+                                         file: file, line: line)
+            }
+        }
+    }
+
     func testTileSpanningTriangleIsCutIntoCells() {
         let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
                                                   indices: [0, 1, 2])

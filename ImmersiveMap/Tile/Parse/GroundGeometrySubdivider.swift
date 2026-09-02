@@ -15,8 +15,8 @@ import Foundation
 /// per tile zoom keeps the chord sag of one cell around half a pixel at the
 /// zoom the tile is native to (edge angle theta = 2 pi step / (4096 2^z),
 /// sag = R theta^2 / 8, with the sphere's screen radius doubling per zoom):
-/// a 64x64 grid on a whole tile, so the curvature holds up under the
-/// analytic line antialiasing that the returning ribbons draw with.
+/// a 64x64 grid on a whole tile for the fills, and half that density for
+/// the line ribbons (see `ribbonStep`).
 /// Tiles from z10 are never on the sphere: the surface has unfurled by then.
 ///
 /// Attributes ride along linearly (the signed line distance is a linear
@@ -41,12 +41,24 @@ enum GroundGeometrySubdivider {
         }
     }
 
+    /// Line ribbons split on a grid twice as coarse as the fills: their
+    /// vertex cost on the sphere is dominated by the split (long borders,
+    /// extruded to quads, every attribute interpolated and exported), and a
+    /// thin line tolerates twice the chord sag that would show on a fill
+    /// edge shared between two contrasting areas.
+    static func ribbonStep(fillStep: Int) -> Int {
+        min(fillStep * 2, 4096)
+    }
+
     static func subdivideIfNeeded(_ polygonByStyle: inout [UInt8: [TileMvtParser.ParsedPolygon]],
                                   tileZoom: Int) {
         guard let step = step(forTileZoom: tileZoom) else { return }
+        let ribbonStep = Self.ribbonStep(fillStep: step)
         for key in polygonByStyle.keys {
             guard let polygons = polygonByStyle[key] else { continue }
-            polygonByStyle[key] = polygons.map { subdivide($0, step: step) }
+            polygonByStyle[key] = polygons.map { polygon in
+                subdivide(polygon, step: TileMvtParser.isLineRibbon(polygon) ? ribbonStep : step)
+            }
         }
     }
 

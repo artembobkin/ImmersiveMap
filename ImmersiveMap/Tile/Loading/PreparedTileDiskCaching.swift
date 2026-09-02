@@ -585,7 +585,10 @@ final class PreparedTileDiskCaching {
     // class flag bit, and the sphere subdivision grid returned to 64x64
     // (step 64 to 1024 units by zoom); a v80 entry interleaves the classes
     // per style and its runs carry no class flag.
-    static let preparedFormatVersion: UInt32 = 81
+    // 82: the line ribbons split on a grid twice as coarse as the fills
+    // (half the split vertices per border); a v81 entry carries the finer
+    // ribbon mesh.
+    static let preparedFormatVersion: UInt32 = 82
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

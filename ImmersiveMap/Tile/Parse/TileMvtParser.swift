@@ -1887,7 +1887,8 @@ class TileMvtParser {
     /// A line ribbon carries per-vertex line attributes (extruded stroke
     /// geometry); a fill does not, including the decoration polygons that
     /// share a line style (they default to the saturated line interior).
-    private static func isLineRibbon(_ polygon: ParsedPolygon) -> Bool {
+    /// Shared with `GroundGeometrySubdivider`, whose ribbon grid is coarser.
+    static func isLineRibbon(_ polygon: ParsedPolygon) -> Bool {
         polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count
     }
