@@ -10,6 +10,18 @@ once the public API stabilizes.
 
 ### Added
 
+- The flat passes open with a tile-ownership stencil prepass: one vertex-only
+  quad per unique source writes the tile-priority stencil before anything
+  draws. The world-pass buildings now test those marks instead of carrying
+  slot clip distances, so a substitute's buildings are rejected in streets
+  and courtyards of finer tiles too, each building source draws once instead
+  of once per slot it stands in, and the building vertex stage exports four
+  fewer values. The shadow-caster path keeps its clips (the shadow pass has
+  no stencil attachment). Device hold measurements on the street scenario
+  stayed at parity or slightly better (span p50 5.7 to 5.6 ms on the
+  Manhattan hold, 5.8 to 5.5 ms on the Paris hold); the win concentrates on
+  loading frames, where a parent no longer redraws its buildings per slot.
+
 - `.fxaa(isEnabled:)` on `ImmersiveMapView` and `ImmersiveMapSettings`: the one-line switch for the FXAA post-processing pass, which stays off by default (the engine renders at one sample per pixel with the ground lines antialiased analytically; FXAA adds the optional smoothing of geometry silhouettes at the price of one fullscreen pass, and with the overlay merged into the world pass it now smooths the labels too). `.postProcessingSettings(_:)` keeps taking the whole value.
 
 ### Removed

@@ -28,6 +28,11 @@ enum RenderLayer: String, CaseIterable {
     /// surface and the caps. Gated with the starfield: transparent space
     /// paints nothing around the globe.
     case atmosphere
+    /// The flat passes' stencil prepass: one full-extent quad per unique
+    /// source writes the tile-priority stencil before anything else draws,
+    /// so the buildings (drawn before the ground) can test a complete
+    /// ownership map instead of carrying slot clip distances.
+    case tileOwnership
     case flatMapSurface
     case buildingExtrusion
     case sceneModels
@@ -82,7 +87,7 @@ struct RenderLayerPlanner {
     static func plan(availability: RenderPassAvailability) -> [RenderLayerPlanItem] {
         let worldLayers: [RenderLayer] = switch availability.renderSurfaceMode {
         case .flat:
-            [.flatMapSurface, .buildingExtrusion, .sceneModels]
+            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the

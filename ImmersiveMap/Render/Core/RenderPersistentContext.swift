@@ -21,6 +21,7 @@ final class RenderPersistentContext {
     let tilePipeline: TilePipeline
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
+    let tileOwnershipPipeline: TileOwnershipPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -44,6 +45,8 @@ final class RenderPersistentContext {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    let tileOwnershipWriteState: MTLDepthStencilState
+    let extrudedStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.compositeDepthResetState`.
     let compositeDepthResetState: MTLDepthStencilState
     /// See `SharedRenderResources.supportsFramebufferFetch`.
@@ -113,6 +116,8 @@ final class RenderPersistentContext {
         self.groundDepthState = shared.groundDepthState
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
         self.groundOwnerState = shared.groundOwnerState
+        self.tileOwnershipWriteState = shared.tileOwnershipWriteState
+        self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.tileStencilTestState = shared.tileStencilTestState
         self.compositeDepthResetState = shared.compositeDepthResetState
         self.supportsFramebufferFetch = shared.supportsFramebufferFetch
@@ -128,6 +133,7 @@ final class RenderPersistentContext {
         self.tilePipeline = shared.tilePipeline
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
+        self.tileOwnershipPipeline = shared.tileOwnershipPipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines

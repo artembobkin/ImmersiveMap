@@ -69,6 +69,14 @@ final class SharedRenderResources {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    /// The tile-ownership prepass: no depth interaction at all, only the
+    /// owning stencil write, so the quads mark every pixel of their source's
+    /// extent (buildings included) before anything draws.
+    let tileOwnershipWriteState: MTLDepthStencilState
+    /// The world-pass buildings: the scene depth (lessEqual, written, for
+    /// their own walls and roofs) plus the tile-priority stencil test, which
+    /// replaces the old per-placement slot clip.
+    let extrudedStencilTestState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -88,6 +96,8 @@ final class SharedRenderResources {
     /// The tile geometry drawn straight onto the sphere in the world pass.
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
+    /// The tile-ownership stencil prepass of the flat passes.
+    let tileOwnershipPipeline: TileOwnershipPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
@@ -140,6 +150,8 @@ final class SharedRenderResources {
         self.sphereOpaqueOwnerState = device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!
         self.groundOwnerState = device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!
         self.tileStencilTestState = device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!
+        self.tileOwnershipWriteState = device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!
+        self.extrudedStencilTestState = device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
         self.groundShadowMaskFallbackTexture = Self.makeGroundShadowMaskFallbackTexture(device: device)
 
@@ -152,6 +164,7 @@ final class SharedRenderResources {
         self.tilePipeline = compiled.tilePipeline
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
+        self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
@@ -178,6 +191,7 @@ final class SharedRenderResources {
         let tilePipeline: TilePipeline
         let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
+        let tileOwnershipPipeline: TileOwnershipPipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
@@ -210,6 +224,7 @@ final class SharedRenderResources {
         var tilePipeline: TilePipeline?
         var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
+        var tileOwnershipPipeline: TileOwnershipPipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
@@ -251,6 +266,11 @@ final class SharedRenderResources {
                                           supportsFramebufferFetch: supportsFramebufferFetch,
                                           readsGroundShadowMask: true) },
             { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
+            { tileOwnershipPipeline = TileOwnershipPipeline(metalDevice: device,
+                                                            pixelFormat: pixelFormat,
+                                                            library: library,
+                                                            sampleCount: sampleCount,
+                                                            supportsFramebufferFetch: supportsFramebufferFetch) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -286,6 +306,7 @@ final class SharedRenderResources {
             tilePipeline: tilePipeline!,
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
+            tileOwnershipPipeline: tileOwnershipPipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
@@ -458,6 +479,24 @@ final class SharedRenderResources {
     /// ground depth test plus the tile-priority stencil test, no writes.
     private static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
+        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        return descriptor
+    }
+
+    /// The tile-ownership prepass: depth always passes and is never written,
+    /// so the owning stencil write lands on every pixel of the quad.
+    private static func makeTileOwnershipWriteDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeDepthDisabledDescriptor()
+        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        return descriptor
+    }
+
+    /// The world-pass buildings: scene depth for their own occlusion, plus
+    /// the non-owning tile-priority test against the ownership prepass.
+    private static func makeExtrudedStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
         return descriptor

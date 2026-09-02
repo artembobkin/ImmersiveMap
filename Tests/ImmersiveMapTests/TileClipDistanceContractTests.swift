@@ -30,14 +30,22 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
     }
 
-    func testBuildingShadersClipWithClipDistancesAndNeverDiscard() throws {
+    func testBuildingShadersClipOnlyOnTheShadowCasterPath() throws {
         let source = try shaderSource("Render/Tiles/Shaders/TileExtruded.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The building shaders must not discard, on the main path or the shadow-caster path")
-        XCTAssertEqual(source.components(separatedBy: "float clipDistance [[clip_distance]] [4];").count - 1, 2,
-                       "Both the main and the shadow-caster vertex outputs carry the clip distances")
-        XCTAssertEqual(source.components(separatedBy: "constant float4& localClipBounds [[buffer(4)]]").count - 1, 2,
-                       "Both vertex stages take the bounds at buffer 4, where the drawer binds them")
+        // The world-pass buildings are rejected per pixel by the
+        // tile-priority stencil test against the ownership prepass; only the
+        // shadow-caster path keeps the slot clip, because the shadow pass
+        // renders into a plain depth texture array with no stencil.
+        XCTAssertEqual(source.components(separatedBy: "float clipDistance [[clip_distance]] [4];").count - 1, 1,
+                       "Only the shadow-caster vertex output carries the clip distances")
+        XCTAssertEqual(source.components(separatedBy: "constant float4& localClipBounds [[buffer(4)]]").count - 1, 1,
+                       "Only the shadow-caster vertex stage takes the bounds at buffer 4")
+        let mainVertex = source.components(separatedBy: "vertex VertexOut tileExtrudedVertexShader")[1]
+            .components(separatedBy: "fragment")[0]
+        XCTAssertNil(mainVertex.range(of: "ClipDistances"),
+                     "The main vertex stage must not write clip distances")
         XCTAssertNil(source.range(of: "tileExtrudedShadowFragmentShader"),
                      "The shadow-caster pass is depth-only: no fragment function replicates the clip")
     }

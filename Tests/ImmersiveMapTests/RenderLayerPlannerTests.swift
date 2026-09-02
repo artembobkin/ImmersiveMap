@@ -16,6 +16,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
+            .tileOwnership,
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
@@ -43,6 +44,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
+            .tileOwnership,
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
@@ -51,7 +53,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .buildingExtrusion, .sceneModels])
+        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)

@@ -60,9 +60,14 @@ enum RenderGraphFactory {
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
+        let tileOwnershipSubsystem = TileOwnershipRenderSubsystem(pipeline: context.tileOwnershipPipeline,
+                                                                  tileOwnershipWriteState: context.tileOwnershipWriteState,
+                                                                  depthDisabledState: context.depthDisabledState,
+                                                                  supportsFramebufferFetch: context.supportsFramebufferFetch)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingImageTextureProvider: buildingImageTextureProvider,
                                                                           extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
+                                                                          extrudedStencilTestState: context.extrudedStencilTestState,
                                                                           depthDisabledState: context.depthDisabledState,
                                                                           compositeDepthResetState: context.compositeDepthResetState,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
@@ -99,6 +104,7 @@ enum RenderGraphFactory {
             sceneModelSubsystem,
             routeSubsystem,
             groundShadowMaskSubsystem,
+            tileOwnershipSubsystem,
             flatMapSurfaceSubsystem,
             buildingExtrusionSubsystem,
             starfieldSubsystem,

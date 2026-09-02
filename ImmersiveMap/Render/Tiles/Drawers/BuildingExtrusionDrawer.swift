@@ -7,14 +7,18 @@ import simd
 enum BuildingExtrusionDrawer {
     /// Opaque building geometry with depth test and depth write:
     /// solid mode draws it straight into the world pass, translucent into the
-    /// offscreen building image.
+    /// offscreen building image. Each unique source draws once at full
+    /// extent; the tile-priority stencil test against the ownership prepass
+    /// keeps a substitute's buildings out of every pixel a finer tile owns
+    /// (the old per-placement slot clip, which also multiplied a parent's
+    /// geometry by the number of slots it stood in).
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               shadowBinding: ShadowReceiverBinding,
                               placeTilesContext: PlaceTilesContext,
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
-                              extrudedDepthState: MTLDepthStencilState,
+                              extrudedStencilTestState: MTLDepthStencilState,
                               depthDisabledState: MTLDepthStencilState,
                               intoImageAttachment: Bool = false) {
         var cameraUniformValue = cameraUniform
@@ -31,7 +35,7 @@ enum BuildingExtrusionDrawer {
         } else {
             extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
         }
-        renderEncoder.setDepthStencilState(extrudedDepthState)
+        renderEncoder.setDepthStencilState(extrudedStencilTestState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
         var shadowUniformValue = shadowBinding.uniform
@@ -48,9 +52,9 @@ enum BuildingExtrusionDrawer {
         var metersToWorldZ = Float(flatRenderState.renderMapSize / (4096.0 * 65536.0))
         renderEncoder.setFragmentBytes(&metersToWorldZ, length: MemoryLayout<Float>.stride, index: 6)
 
-        drawExtrudedGeometry(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             flatRenderState: flatRenderState)
+        drawExtrudedSources(renderEncoder: renderEncoder,
+                            placeTilesContext: placeTilesContext,
+                            flatRenderState: flatRenderState)
 
         renderEncoder.setCullMode(.none)
         renderEncoder.setDepthStencilState(depthDisabledState)
@@ -79,11 +83,10 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setDepthClipMode(.clamp)
         var castersValue = ShadowCasterUniform(lightProjectionViews: lightProjectionViews)
         renderEncoder.setVertexBytes(&castersValue, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
-        drawExtrudedGeometry(renderEncoder: renderEncoder,
-                             placeTilesContext: placeTilesContext,
-                             flatRenderState: flatRenderState,
-                             usesBackFaceCulling: false,
-                             instanceCount: ShadowCascadeAtlas.cascadeCount)
+        drawClippedCasterGeometry(renderEncoder: renderEncoder,
+                                  placeTilesContext: placeTilesContext,
+                                  flatRenderState: flatRenderState,
+                                  instanceCount: ShadowCascadeAtlas.cascadeCount)
         renderEncoder.setDepthClipMode(.clip)
     }
 
@@ -123,12 +126,66 @@ enum BuildingExtrusionDrawer {
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }
 
-    private static func drawExtrudedGeometry(renderEncoder: MTLRenderCommandEncoder,
-                                             placeTilesContext: PlaceTilesContext,
-                                             flatRenderState: FlatRenderState,
-                                             usesBackFaceCulling: Bool = true,
-                                             instanceCount: Int = 1) {
-        var isBackCullingEnabled = usesBackFaceCulling
+    /// World-pass building draws: each unique (source, loop) once, at full
+    /// extent, with the source's tile-priority stencil reference. Whole
+    /// buildings are drawn or rejected per pixel, so back-face culling stays
+    /// on throughout (no clipped placement ever exposes an open cut).
+    private static func drawExtrudedSources(renderEncoder: MTLRenderCommandEncoder,
+                                            placeTilesContext: PlaceTilesContext,
+                                            flatRenderState: FlatRenderState) {
+        struct SourceKey: Hashable {
+            let tile: Tile
+            let loop: Int8
+        }
+        var seenSources = Set<SourceKey>()
+        for placeTile in placeTilesContext.tilePlacements {
+            let metalTile = placeTile.metalTile
+            let tile = metalTile.tile
+            let buffers = metalTile.tileBuffers
+            let loop = placeTile.placeIn.loop
+
+            guard buffers.extruded.indicesCount > 0,
+                  let extrudedIndices = buffers.extruded.indices,
+                  let extrudedVertices = buffers.extruded.vertices,
+                  let extrudedStyles = buffers.extruded.styles else { continue }
+            guard seenSources.insert(SourceKey(tile: tile, loop: loop)).inserted else { continue }
+
+            let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
+                                                                             y: tile.y,
+                                                                             z: tile.z,
+                                                                             loop: loop,
+                                                                             flatRenderPan: flatRenderState.pan,
+                                                                             renderMapSize: flatRenderState.renderMapSize)
+            let scale = originAndSize.z / 4096.0
+
+            renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
+            renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
+            renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
+
+            var modelMatrix = Matrix.translationMatrix(
+                x: originAndSize.x,
+                y: originAndSize.y,
+                z: 0
+            ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale)
+            renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
+
+            renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                indexCount: extrudedIndices.count,
+                                                indexType: buffers.extruded.indexType,
+                                                indexBuffer: extrudedIndices.buffer,
+                                                indexBufferOffset: extrudedIndices.offset)
+        }
+    }
+
+    /// Shadow-caster draws: per placement, clipped to the placeIn slot by
+    /// the vertex stage's clip distances. The shadow pass renders into a
+    /// plain depth texture array with no stencil attachment, so the caster
+    /// path is the one place the slot clip remains: a retained parent's
+    /// buildings must not cast shadows over neighboring exact tiles.
+    private static func drawClippedCasterGeometry(renderEncoder: MTLRenderCommandEncoder,
+                                                  placeTilesContext: PlaceTilesContext,
+                                                  flatRenderState: FlatRenderState,
+                                                  instanceCount: Int) {
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -151,24 +208,10 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
 
-            // Clip the geometry to the placeIn slot (clip distances in the
-            // vertex stage, for the main and the shadow-caster path alike):
-            // buildings of a retained parent must not overlap neighboring
-            // exact tiles, nor cast shadows over them.
             var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
             renderEncoder.setVertexBytes(&localClipBounds,
                                          length: MemoryLayout<SIMD4<Float>>.stride,
                                          index: 4)
-
-            // The clip cuts a building with a vertical plane and no capping face:
-            // with back-face culling the cut looks hollow all the way through.
-            // For clipped placements we also draw the inner walls, giving a dark
-            // cut instead of a hole.
-            let isClipped = localClipBounds != TileLocalClipMath.disabledBounds
-            if usesBackFaceCulling, isClipped == isBackCullingEnabled {
-                isBackCullingEnabled = !isClipped
-                renderEncoder.setCullMode(isBackCullingEnabled ? .back : .none)
-            }
 
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,

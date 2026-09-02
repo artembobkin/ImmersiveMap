@@ -14,7 +14,10 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     private let buildingImageTextureProvider: () -> MTLTexture?
     private let extrudedTilePipeline: ExtrudedTilePipeline
+    /// Depth-only state of the shadow-caster pass (no stencil attachment there).
     private let extrudedDepthState: MTLDepthStencilState
+    /// World-pass buildings: scene depth plus the tile-priority stencil test.
+    private let extrudedStencilTestState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let compositeDepthResetState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
@@ -24,6 +27,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     init(buildingImageTextureProvider: @escaping () -> MTLTexture?,
          extrudedTilePipeline: ExtrudedTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
+         extrudedStencilTestState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          compositeDepthResetState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
@@ -32,6 +36,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         self.buildingImageTextureProvider = buildingImageTextureProvider
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
+        self.extrudedStencilTestState = extrudedStencilTestState
         self.depthDisabledState = depthDisabledState
         self.compositeDepthResetState = compositeDepthResetState
         self.shadowMapTextureProvider = shadowMapTextureProvider
@@ -124,7 +129,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               extrudedTilePipeline: extrudedTilePipeline,
-                                              extrudedDepthState: extrudedDepthState,
+                                              extrudedStencilTestState: extrudedStencilTestState,
                                               depthDisabledState: depthDisabledState,
                                               intoImageAttachment: intoImageAttachment)
     }

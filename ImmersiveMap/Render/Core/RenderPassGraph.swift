@@ -7,8 +7,8 @@ import QuartzCore
 final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
-        case .starfield, .globeVectorSurface, .globeCap, .atmosphere, .flatMapSurface,
-             .buildingExtrusion, .sceneModels, .routes:
+        case .starfield, .globeVectorSurface, .globeCap, .atmosphere, .tileOwnership,
+             .flatMapSurface, .buildingExtrusion, .sceneModels, .routes:
             return true
         case .shadowCasters, .groundShadowMask, .buildingImage, .postProcessing, .sceneModelOcclusion,
              .labels, .avatars, .debugOverlay:
@@ -21,8 +21,8 @@ final class RenderPassGraph {
         case .sceneModelOcclusion, .labels, .avatars, .debugOverlay:
             return true
         case .shadowCasters, .groundShadowMask, .buildingImage, .starfield,
-             .globeVectorSurface, .globeCap, .atmosphere, .flatMapSurface, .buildingExtrusion,
-             .sceneModels, .routes, .postProcessing:
+             .globeVectorSurface, .globeCap, .atmosphere, .tileOwnership, .flatMapSurface,
+             .buildingExtrusion, .sceneModels, .routes, .postProcessing:
             return false
         }
     }
@@ -328,9 +328,12 @@ final class RenderPassGraph {
            let buildingImageTexture = attachments.ensureBuildingImageTexture(drawSize: frameContext.drawSize,
                                                                              pixelFormat: target.texture.pixelFormat) {
             resourceRegistry.setTexture(buildingImageTexture, named: .buildingImageTexture)
+            // The ownership prepass repeats at the start of the offscreen
+            // building pass: its stencil is its own, cleared on load, and the
+            // composited buildings test the same tile-priority marks there.
             nodes.append(RenderPassNode(name: .buildingImage,
                                         descriptorProvider: BuildingImageDescriptorProvider(),
-                                        layers: [.buildingImage]))
+                                        layers: [.tileOwnership, .buildingImage]))
         }
         var worldLayers = Self.worldLayerOrder(
             layerPlan.filter(Self.isWorldLayer),
