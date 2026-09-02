@@ -279,7 +279,9 @@ static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUnif
 }
 
 /// The ground colour of a fragment before lighting: the style colour with
-/// its alpha scaled by the zoom fade and the analytic line coverage. Takes
+/// its alpha scaled by the analytic line coverage. The zoom fade is already
+/// folded into the colour's alpha by the vertex stage (a function of the
+/// style and the frame only), on the plane and on the sphere alike. Takes
 /// screen-space derivatives (inside `tileLineCoverage`), so it must run in
 /// uniform control flow.
 static inline half4 tileGroundColor(TileVertexStyle style,
@@ -295,7 +297,7 @@ static inline half4 tileGroundColor(TileVertexStyle style,
                                          overviewFade.roadSurfaceBlend,
                                          lineDash.unitsPerPoint);
     half4 color = style.color;
-    color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade) * lineCoverage;
+    color.a *= lineCoverage;
     return color;
 }
 

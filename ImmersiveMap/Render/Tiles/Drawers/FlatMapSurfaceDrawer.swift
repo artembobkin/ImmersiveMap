@@ -54,6 +54,11 @@ enum FlatMapSurfaceDrawer {
         var horizonFogValue = horizonFog
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        // The vertex stage folds the zoom fade into the colour's alpha, so
+        // it reads the same uniform (Tile.metal, buffer 8).
+        renderEncoder.setVertexBytes(&overviewFadeUniform,
+                                     length: MemoryLayout<TileOverviewFadeUniform>.stride,
+                                     index: 8)
         renderEncoder.setFragmentBytes(&overviewFadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)
@@ -78,7 +83,8 @@ enum FlatMapSurfaceDrawer {
                                       placeIn: placeTile.placeIn,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
-                                      drawableHeightPx: drawableHeightPx)
+                                      drawableHeightPx: drawableHeightPx,
+                                      overviewFade: overviewFadeUniform)
             }
         }
 
@@ -96,7 +102,8 @@ enum FlatMapSurfaceDrawer {
                                               placeIn: placeTile.placeIn,
                                               flatRenderState: flatRenderState,
                                               pixelsPerPoint: pixelsPerPoint,
-                                              drawableHeightPx: drawableHeightPx)
+                                              drawableHeightPx: drawableHeightPx,
+                                              overviewFade: overviewFadeUniform)
                     }
                 }
             }
@@ -117,7 +124,8 @@ enum FlatMapSurfaceDrawer {
                                           placeIn: placeTile.placeIn,
                                           flatRenderState: flatRenderState,
                                           pixelsPerPoint: pixelsPerPoint,
-                                          drawableHeightPx: drawableHeightPx)
+                                          drawableHeightPx: drawableHeightPx,
+                                          overviewFade: overviewFadeUniform)
                 }
             }
         } else {
@@ -137,8 +145,15 @@ enum FlatMapSurfaceDrawer {
                                               placeIn: VisibleTile,
                                               flatRenderState: FlatRenderState,
                                               pixelsPerPoint: Float,
-                                              drawableHeightPx: Float) {
+                                              drawableHeightPx: Float,
+                                              overviewFade: TileOverviewFadeUniform) {
+        // A run whose zoom fade is exactly 0 this frame would rasterize
+        // with alpha 0: the ground bucket carries a run table (the road
+        // buckets do not and draw whole, as before), so its invisible runs
+        // are skipped and the visible spans coalesce, before any binding.
+        let visibleSpans = visibleRunSpans(buffers: buffers, overviewFade: overviewFade)
         guard buffers.indicesCount > 0,
+              visibleSpans.isEmpty == false,
               let indices = buffers.indices,
               let vertices = buffers.vertices,
               let styles = buffers.styles,
@@ -189,10 +204,44 @@ enum FlatMapSurfaceDrawer {
         ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1)
         renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
-        renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: indices.count,
-                                            indexType: buffers.indexType,
-                                            indexBuffer: indices.buffer,
-                                            indexBufferOffset: indices.offset)
+        let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
+        for span in visibleSpans {
+            renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                indexCount: span.count,
+                                                indexType: buffers.indexType,
+                                                indexBuffer: indices.buffer,
+                                                indexBufferOffset: indices.offset + span.start * indexByteWidth)
+        }
+    }
+
+    /// The index spans of a layer worth drawing this frame: without a run
+    /// table the whole layer is one span (the road buckets), with one the
+    /// zero-fade runs drop out and the contiguous survivors merge. The
+    /// paint order is the buffer order either way.
+    private static func visibleRunSpans(buffers: TileBuffers.GeometryLayer,
+                                        overviewFade: TileOverviewFadeUniform) -> [(start: Int, count: Int)] {
+        guard buffers.indicesCount > 0 else { return [] }
+        let runs = buffers.styleRuns
+        guard runs.isEmpty == false else { return [(0, buffers.indicesCount)] }
+        var spans: [(start: Int, count: Int)] = []
+        var spanStart = 0
+        var spanCount = 0
+        for run in runs {
+            guard run.indexCount > 0,
+                  TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFade) == false else {
+                if spanCount > 0 { spans.append((spanStart, spanCount)) }
+                spanCount = 0
+                continue
+            }
+            if spanCount > 0, spanStart + spanCount == Int(run.indexStart) {
+                spanCount += Int(run.indexCount)
+            } else {
+                if spanCount > 0 { spans.append((spanStart, spanCount)) }
+                spanStart = Int(run.indexStart)
+                spanCount = Int(run.indexCount)
+            }
+        }
+        if spanCount > 0 { spans.append((spanStart, spanCount)) }
+        return spans
     }
 }

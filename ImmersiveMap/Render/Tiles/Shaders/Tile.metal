@@ -39,7 +39,6 @@ struct VertexOut {
     float clipDistance [[clip_distance]] [4];
     float3 worldPos;
     half4 color;
-    half lowZoomFadeMask;
     float lineDistance;
     float lineParameter;
     half4 lineStyle;
@@ -57,7 +56,6 @@ struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
     half4 color;
-    half lowZoomFadeMask;
     float lineDistance;
     float lineParameter;
     half4 lineStyle;
@@ -69,7 +67,8 @@ struct FragmentIn {
 static inline TileVertexStyle tileFragmentStyle(FragmentIn in) {
     TileVertexStyle style;
     style.color = in.color;
-    style.lowZoomFadeMask = in.lowZoomFadeMask;
+    // The fade is already in the alpha; the member is dead here.
+    style.lowZoomFadeMask = 0.0h;
     style.lineDistance = in.lineDistance;
     style.lineParameter = in.lineParameter;
     style.lineStyle = in.lineStyle;
@@ -86,7 +85,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
-                                  constant float4& localClipBounds [[buffer(7)]]) {
+                                  constant float4& localClipBounds [[buffer(7)]],
+                                  constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float4 worldPosition = modelMatrix * float4(float2(vertexIn.position.xy), 0.0, 1.0);
 
     VertexOut out;
@@ -97,7 +97,10 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.worldPos = worldPosition.xyz;
     TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
     out.color = style.color;
-    out.lowZoomFadeMask = style.lowZoomFadeMask;
+    // The zoom fade folds into the alpha here: a function of the style and
+    // the frame only, so the fragment neither interpolates the mask nor
+    // walks the fade bands.
+    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     out.lineDistance = style.lineDistance;
     out.lineParameter = style.lineParameter;
     out.lineStyle = style.lineStyle;
