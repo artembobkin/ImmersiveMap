@@ -65,6 +65,11 @@ final class ImmersiveMapBenchEngine: BenchEngine {
             .renderLoopSettings(renderLoop)
             .tileSettings(clearDiskCachesOnLaunch: coldCache)
             .viewReuse(false)
+        // BENCH_ROOFS=1 turns the shaped building roofs on (they are off by
+        // default), for A/B measurements of the roof geometry cost.
+        if ProcessInfo.processInfo.environment["BENCH_ROOFS"] == "1" {
+            map = map.buildingRoofShapes()
+        }
         switch variant {
         case .standard:
             break

@@ -176,7 +176,7 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
 
     func testDisabledRoofShapesFallBackToTheFlatLid() throws {
         let shaped = try XCTUnwrap(heights(roofShapesEnabled: true))
-        XCTAssertEqual(shaped.roof?.shape, .gabled, "The default keeps the shaped roof")
+        XCTAssertEqual(shaped.roof?.shape, .gabled, "Enabled roof shapes keep the shaped roof")
         let flat = try XCTUnwrap(heights(roofShapesEnabled: false))
         XCTAssertNil(flat.roof, "Disabled roof shapes never raise a shaped roof")
         XCTAssertEqual(flat.top, shaped.top, "The flat lid keeps the full building height")
@@ -204,10 +204,14 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
                           "A tile prepared with flat lids must not answer a map that wants shaped roofs")
     }
 
+    func testRoofShapesAreOffByDefault() {
+        XCTAssertFalse(ImmersiveMapSettings.default.style.buildingRoofShapesEnabled)
+    }
+
     func testTogglingTheFlagIsAHeavySettingsChange() {
         let old = ImmersiveMapSettings.default
         var new = old
-        new.style.buildingRoofShapesEnabled = false
+        new.style.buildingRoofShapesEnabled = true
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: old, to: new)
         XCTAssertTrue(plan.actions.contains(.rebuildPreparedData),
                       "Roof shapes are baked at parse time: the prepared tiles must rebuild")

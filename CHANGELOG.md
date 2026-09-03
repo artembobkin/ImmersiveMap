@@ -12,11 +12,14 @@ once the public API stabilizes.
 
 - `.buildingRoofShapes(isEnabled:)` on `ImmersiveMapView` and
   `ImmersiveMapSettings`, backed by `StyleSettings.buildingRoofShapesEnabled`
-  (on by default): whether buildings raise shaped roofs (`roof:shape`) where
-  the tiles describe one. Off, every building takes a flat lid at its full
-  height. The roofs are baked into the prepared tiles, so the flag is part
-  of the prepared-cache identity and toggling re-parses the tiles like any
-  other style change.
+  (off by default): whether buildings raise shaped roofs (`roof:shape`)
+  where the tiles describe one. Off, every building takes a flat lid at its
+  full height and the roof attributes are never parsed. The roofs are baked
+  into the prepared tiles, so the flag is part of the prepared-cache
+  identity and toggling re-parses the tiles like any other style change.
+  Measured on the street benchmark, shaped roofs cost nothing visible on
+  the GPU (the roof surface replaces the flat lid rather than adding to
+  it); the default is off as a stylistic choice, not a performance one.
 
 - Two street-frame cuts that change no pixels anyone can see. Label
   placement compute runs on every other rendered frame: labels are slow

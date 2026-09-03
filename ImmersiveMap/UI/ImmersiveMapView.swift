@@ -758,10 +758,11 @@ public extension ImmersiveMapView {
     }
 
     /// Whether buildings raise shaped roofs (gabled, hipped, skillion, domes
-    /// and the rest of `roof:shape`) where the tiles describe one. Off,
-    /// every building gets a flat lid at its full height. On by default.
-    /// The roofs are baked into the prepared tiles, so toggling re-parses
-    /// them, like any other style change.
+    /// and the rest of `roof:shape`) where the tiles describe one. Off by
+    /// default: every building gets a flat lid at its full height, and the
+    /// shaped-roof geometry is never parsed. The roofs are baked into the
+    /// prepared tiles, so toggling re-parses them, like any other style
+    /// change.
     public func buildingRoofShapes(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.buildingRoofShapes(isEnabled: isEnabled)
