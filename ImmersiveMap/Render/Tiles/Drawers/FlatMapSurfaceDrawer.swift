@@ -19,7 +19,8 @@ enum FlatMapSurfaceDrawer {
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
-                     withBuildingImageAttachment: Bool = false) {
+                     withBuildingImageAttachment: Bool = false,
+                     opaqueFillsOnly: Bool = false) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder,
                                     withBuildingImageAttachment: withBuildingImageAttachment)
         // Every tile triangle (ground, road buckets, bridge overlay) is
@@ -137,6 +138,19 @@ enum FlatMapSurfaceDrawer {
                                               withBuildingImageAttachment: withBuildingImageAttachment)
         drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
+        // The horizon backdrop stops here: its job is the painted far band
+        // under the fog, where its z3 linework (rivers, borders, roads) is
+        // sub-pixel; skipping those sweeps also skips the tile's dense
+        // sphere-split ribbon mesh, whose vertices the flat pass would
+        // transform only to fog them away.
+        guard opaqueFillsOnly == false else {
+            if isWireframeEnabled {
+                renderEncoder.setTriangleFillMode(.fill)
+            }
+            renderEncoder.setCullMode(.none)
+            renderEncoder.setFrontFacing(.clockwise)
+            return
+        }
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)

@@ -10,6 +10,18 @@ once the public API stabilizes.
 
 ### Added
 
+- The lines classes resolve their style in the fragment stage: the vertex
+  exports one flat style index plus the two per-vertex line fields instead
+  of the unpacked style, cutting a ribbon vertex's interpolants to a third
+  on the sphere and the plane. Receiver shadow sampling (buildings, scene
+  models) switched to an exact analytic receiver-plane gradient: no screen
+  derivatives, so fragments beyond the shadow fade or fully turned from the
+  sun exit before projecting a single cascade. The sphere's ribbon split
+  grid is four times as coarse as the fills (prepared format v84), and the
+  flat horizon backdrop draws only its opaque fills (its z3 linework is
+  sub-pixel under the horizon fog). Device spans: globe z1-6 ladder p50
+  3.5 to 3.1 ms, flat overview 2.3 to 2.2 ms.
+
 - The cascade shadow map is cached across frames (`ShadowMapReuseController`):
   the sun is static and buildings do not move, so the caster pass re-runs only
   when the camera travels outside the margined cascade fit, the light or map

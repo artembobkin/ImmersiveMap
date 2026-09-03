@@ -104,7 +104,11 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  withBuildingImageAttachment: withBuildingImageAttachment)
+                                  withBuildingImageAttachment: withBuildingImageAttachment,
+                                  // The far band under the fog needs only the painted
+                                  // ground: the backdrop's sub-pixel linework is skipped
+                                  // (see the drawer).
+                                  opaqueFillsOnly: true)
                 encoder.setDepthStencilState(depthDisabledState)
     }
 
