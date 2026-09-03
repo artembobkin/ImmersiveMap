@@ -250,13 +250,11 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     return out;
 }
 
-// No shadows on the globe (a flat-world effect), no textures, no lighting:
-// the colour comes from the style and the coverage. The morph variant adds
-// only the horizon fog, whose strength is the transition, so the morph and
-// the plane are fogged identically at the surface swap.
+// No shadows on the globe (a flat-world effect), no textures, no lighting,
+// no fog: the colour comes from the style and the coverage, on the resting
+// sphere and through the morph alike.
 fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                        constant HorizonFog& horizonFog [[buffer(2)]],
                                         constant LineDashUniform& lineDash [[buffer(4)]],
                                         constant Style* styles [[buffer(5), function_constant(kTileSphereLineFields)]],
                                         constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileSphereLineFields)]],
@@ -272,9 +270,6 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                       overviewFade, lineDash);
     } else {
         color = in.color;
-    }
-    if (kTileSphereFog) {
-        color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     }
     return color;
 }

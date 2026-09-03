@@ -63,8 +63,7 @@ struct ShadowUniform {
     var cascades: [ShadowCascadeUniform] {
         [cascadeNear, cascadeMiddle, cascadeFar]
     }
-    /// Camera eye in world space, for the distance fade (same convention as
-    /// `HorizonFogUniform`).
+    /// Camera eye in world space, for the distance fade.
     var eye: SIMD3<Float>
     /// Shadow darkening amount in [0, 1]; 0 disables sampling entirely.
     var strength: Float

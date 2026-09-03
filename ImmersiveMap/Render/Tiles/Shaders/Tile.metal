@@ -147,7 +147,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 // GPU can resolve visibility before the fragment runs.
 fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                  constant HorizonFog& horizonFog [[buffer(2)]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
                                   constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
@@ -211,11 +210,8 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
         float edgeDistancePx = length(edgePx - in.position.xy);
         color.a *= half(1.0 - smoothstep(0.0, 1.0, edgeDistancePx));
     }
-    // Shadow before fog: fog wins at distance, so the shadow-coverage edge
-    // dissolves into the haze instead of cutting a visible line. Zero normal
-    // (passed above): the ground always faces the sun and keeps its tight
-    // contact (no normal-offset shift).
+    // Zero normal (passed above): the ground always faces the sun and
+    // keeps its tight contact (no normal-offset shift).
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
-    color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
     return color;
 }

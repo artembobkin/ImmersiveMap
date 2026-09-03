@@ -31,7 +31,6 @@ enum GlobeVectorSurfaceDrawer {
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      globe: GlobeUniform,
-                     horizonFog: HorizonFogUniform,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
                      drawableHeightPx: Float,
@@ -62,7 +61,6 @@ enum GlobeVectorSurfaceDrawer {
 
         var cameraUniformValue = cameraUniform
         var globeValue = globe
-        var horizonFogValue = horizonFog
         var streetPaletteUniform = StreetPaletteUniform(
             blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
         )
@@ -92,7 +90,6 @@ enum GlobeVectorSurfaceDrawer {
         // The vertex stages fold the zoom fade into the colour's alpha, so
         // they read the same uniform (TileSphere.metal, buffer 11).
         renderEncoder.setVertexBytes(&overviewFadeValue, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 11)
-        renderEncoder.setFragmentBytes(&horizonFogValue, length: MemoryLayout<HorizonFogUniform>.stride, index: 2)
 
         // Both worlds draw the same layered class passes; the morph only
         // swaps in the pipeline variants that carry the unroll and the fog.

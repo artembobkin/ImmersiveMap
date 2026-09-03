@@ -51,9 +51,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
 
         let tilePlacementState = frameContext.sharedState.tilePlacementState
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
-        let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
-                                                cameraEye: frameContext.cameraUniform.eye,
-                                                mapClearColor: frameContext.services.settings.scene.mapClearColor)
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),
                                                                fallbackTexture: groundShadowMaskFallbackTexture)
@@ -98,7 +95,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                  horizonFog: horizonFog,
                                   groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
                                   groundOwnerState: groundOwnerState,
@@ -116,7 +112,6 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                  horizonFog: horizonFog,
                                   groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
                                   groundOwnerState: groundOwnerState,

@@ -11,10 +11,10 @@ once the public API stabilizes.
 ### Removed
 
 - The atmosphere halo around the globe's limb, the luminous planet body
-  under still-loading tiles and the horizon haze are gone: the stars are
-  the only space décor, a slot whose tile has not arrived shows the space
-  behind the planet, and the flat horizon keeps only the seam fog to the
-  clear colour that hides the coverage edge.
+  under still-loading tiles, the horizon haze and the horizon fog are
+  gone: the stars are the only space décor, a slot whose tile has not
+  arrived shows the space behind the planet, and the flat ground meets the
+  clear colour at the horizon line with nothing blended in between.
 
 ### Added
 

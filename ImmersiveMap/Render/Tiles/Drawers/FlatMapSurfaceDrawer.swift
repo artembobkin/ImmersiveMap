@@ -13,7 +13,6 @@ enum FlatMapSurfaceDrawer {
                      separateRoadRenderingMinimumZoom: Int,
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
-                     horizonFog: HorizonFogUniform,
                      groundShadowMask: GroundShadowMaskBinding,
                      tilePipeline: TilePipeline,
                      groundOwnerState: MTLDepthStencilState,
@@ -59,7 +58,6 @@ enum FlatMapSurfaceDrawer {
             roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
             cameraZoom: Float(cameraZoom)
         )
-        var horizonFogValue = horizonFog
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         // The vertex stage folds the zoom fade into the colour's alpha, so
@@ -70,9 +68,6 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&overviewFadeUniform,
                                        length: MemoryLayout<TileOverviewFadeUniform>.stride,
                                        index: 0)
-        renderEncoder.setFragmentBytes(&horizonFogValue,
-                                       length: MemoryLayout<HorizonFogUniform>.stride,
-                                       index: 2)
         renderEncoder.setFragmentBytes(&shadowUniformValue,
                                        length: MemoryLayout<ShadowUniform>.stride,
                                        index: 3)

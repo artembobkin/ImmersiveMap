@@ -22,9 +22,8 @@ final class VisibleTilesPreprocessor {
     /// The candidate clamp in `FlatVisibleTileResolver` relies on it too:
     /// enumerating tiles beyond this radius is pointless - the filter drops them.
     ///
-    /// The radius defines the visible range of the spherical presentation: fog
-    /// must saturate at the coverage edge (`HorizonFogUniform`), so a short
-    /// radius literally pulls the horizon closer. In flat mode the far range is
+    /// The radius defines the visible range of the spherical presentation: a
+    /// short radius literally pulls the horizon closer. In flat mode the far range is
     /// not limited by the radius: beyond `farRingRelativeDistance` the coverage
     /// is fully handed to the solid z3 horizon backdrop (`TileCulling.resolveFlatBackdropTiles`).
     static let defaultMaxVisibleRelativeDistance = 40
