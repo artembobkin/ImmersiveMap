@@ -10,6 +10,18 @@ once the public API stabilizes.
 
 ### Added
 
+- The loading globe glows instead of showing space: a luminous near-white
+  planet body draws between the stars and the tiles (part of the
+  atmosphere's rendering), so a slot whose tile has not arrived reads as
+  lit planet and the map appears over it slot by slot. The body is an
+  opaque coarse sphere at the very back of the rank-depth band: hidden
+  surface removal erases it under every painted slot, so a fully loaded
+  globe pays about five hundred vertices and zero fragments for it. It
+  brightens toward the limb, hides its coarse silhouette under the
+  atmosphere's rim glow, fades out over the unfurl's early window like the
+  halo, and disappears with the rest of the space decor under
+  `transparentSpace()`.
+
 - `.buildingRoofShapes(isEnabled:)` on `ImmersiveMapView` and
   `ImmersiveMapSettings`, backed by `StyleSettings.buildingRoofShapesEnabled`
   (off by default): whether buildings raise shaped roofs (`roof:shape`)

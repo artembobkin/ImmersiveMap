@@ -103,3 +103,73 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
     half coverage = brightness * half(atmosphere.intensity) * fade;
     return half4(tint * coverage, saturate(coverage));
 }
+
+// The luminous body of the planet, drawn right after the stars and BEFORE
+// the tiles: a coarse opaque sphere at the very back of the rank-depth
+// band, glowing white, so a slot whose tile has not arrived shows lit
+// planet instead of open space. Opaque and depth-tested on purpose: the
+// tiles' opaque backgrounds sit nearer in the band, so hidden surface
+// removal kills the body's fragments wherever the map has painted, and the
+// body costs fragments only in the holes it exists to fill. The slight
+// polygonality of the coarse silhouette hides under the atmosphere's rim
+// glow, exactly like the tile mesh's own edge. During the unfurl the body
+// fades out over the same early window as the halo (the sphere it is
+// fitted to starts leaving), through the blended variant of the same
+// shader.
+//
+// Layout mirrors GlobeBackdropUniform.swift (pinned by
+// AtmosphereUniformLayoutTests).
+struct GlobeBackdrop {
+    float4x4 sphereClip;
+    float4x4 sphereWorld;
+    float3 eye;
+    float fade;
+};
+
+struct GlobeBackdropVertexOut {
+    float4 position [[position]];
+    float3 worldNormal;
+    float3 worldPos;
+};
+
+vertex GlobeBackdropVertexOut globeBackdropVertexShader(uint vertexID [[vertex_id]],
+                                                        constant packed_float3* unitDirections [[buffer(0)]],
+                                                        constant GlobeBackdrop& backdrop [[buffer(1)]]) {
+    float3 unitDirection = float3(unitDirections[vertexID]);
+    GlobeBackdropVertexOut out;
+    out.position = backdrop.sphereClip * float4(unitDirection, 1.0);
+    // The very back of the band: farther than every tile rank, so a loaded
+    // slot's background always wins the pixel.
+    out.position.z = out.position.w;
+    // The sphere's normal is its unit direction; sphereWorld's linear part
+    // is rotation times uniform scale, so the rotated direction stays the
+    // normal after normalization.
+    out.worldNormal = (backdrop.sphereWorld * float4(unitDirection, 0.0)).xyz;
+    out.worldPos = (backdrop.sphereWorld * float4(unitDirection, 1.0)).xyz;
+    return out;
+}
+
+constant half kGlobeBackdropBody = 0.94h;
+constant half kGlobeBackdropRimBoost = 0.3h;
+
+static inline half3 globeBackdropColor(GlobeBackdropVertexOut in, constant GlobeBackdrop& backdrop) {
+    float3 normal = normalize(in.worldNormal);
+    float3 toEye = normalize(backdrop.eye - in.worldPos);
+    // Brighter toward the limb, where the viewer looks through more air:
+    // the body reads as a planet full of light, not flat paint.
+    half rim = half(pow(1.0 - abs(dot(normal, toEye)), 2.0));
+    half brightness = kGlobeBackdropBody + kGlobeBackdropRimBoost * rim;
+    return min(half3(brightness), half3(1.0h));
+}
+
+fragment half4 globeBackdropFragmentShader(GlobeBackdropVertexOut in [[stage_in]],
+                                           constant GlobeBackdrop& backdrop [[buffer(1)]]) {
+    return half4(globeBackdropColor(in, backdrop), 1.0h);
+}
+
+// The unfurl's fade frames: same body, premultiplied by the fade, blended.
+fragment half4 globeBackdropFadeFragmentShader(GlobeBackdropVertexOut in [[stage_in]],
+                                               constant GlobeBackdrop& backdrop [[buffer(1)]]) {
+    half fade = half(backdrop.fade);
+    return half4(globeBackdropColor(in, backdrop) * fade, fade);
+}

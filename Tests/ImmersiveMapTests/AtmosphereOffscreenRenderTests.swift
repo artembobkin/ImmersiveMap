@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import simd
 import XCTest
 
 /// End-to-end: the atmosphere rings the globe's limb and nothing else. A
@@ -20,9 +21,21 @@ final class AtmosphereOffscreenRenderTests: XCTestCase {
         let frame = try await renderGlobe(settings: settings())
         let center = frame.size / 2
 
-        var peakBlue = 0
-        var peakX = center
+        // The luminous planet body fills the disc (near-white); the halo
+        // claim is about the ring OUTSIDE it. Find the body's edge along
+        // the center row, then look for the halo beyond it.
+        var bodyEnd = center
         for x in center ..< frame.size {
+            let pixel = frame.pixel(x: x, y: center)
+            if pixel.red > 200 && pixel.green > 200 && pixel.blue > 200 {
+                bodyEnd = x
+            }
+        }
+        XCTAssertLessThan(bodyEnd, frame.size - 12, "The glowing body ends inside the frame")
+
+        var peakBlue = 0
+        var peakX = bodyEnd + 3
+        for x in (bodyEnd + 3) ..< frame.size {
             let blue = Int(frame.pixel(x: x, y: center).blue)
             if blue > peakBlue {
                 peakBlue = blue
@@ -83,5 +96,30 @@ final class AtmosphereUniformLayoutTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.transition), 116)
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.intensity), 120)
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.thickness), 124)
+    }
+
+    /// GlobeBackdropUniform mirrors `GlobeBackdrop` in Atmosphere.metal.
+    func testBackdropLayoutMirrorsTheShaderStruct() {
+        XCTAssertEqual(MemoryLayout<GlobeBackdropUniform>.stride, 160)
+        XCTAssertEqual(MemoryLayout<GlobeBackdropUniform>.offset(of: \.sphereClip), 0)
+        XCTAssertEqual(MemoryLayout<GlobeBackdropUniform>.offset(of: \.sphereWorld), 64)
+        XCTAssertEqual(MemoryLayout<GlobeBackdropUniform>.offset(of: \.eye), 128)
+        XCTAssertEqual(MemoryLayout<GlobeBackdropUniform>.offset(of: \.fade), 144)
+    }
+
+    /// The unfurl fade: full on the resting sphere, gone past the halo's
+    /// early window, so the body never lingers behind the unrolling map.
+    func testBackdropFadeFollowsTheUnfurlWindow() {
+        func fade(_ transition: Float) -> Float {
+            let globe = GlobeUniform(panX: 0, panY: 0, radius: 1, transition: transition)
+            return GlobeBackdropUniform.make(globe: globe,
+                                             cameraMatrix: matrix_identity_float4x4,
+                                             cameraEye: SIMD3<Float>(0, 0, 1)).fade
+        }
+        XCTAssertEqual(fade(0), 1)
+        XCTAssertGreaterThan(fade(0.1), 0)
+        XCTAssertLessThan(fade(0.1), 1)
+        XCTAssertEqual(fade(GlobeBackdropUniform.transitionFadeEnd), 0)
+        XCTAssertEqual(fade(1), 0)
     }
 }

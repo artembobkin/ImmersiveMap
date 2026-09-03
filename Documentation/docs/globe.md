@@ -28,6 +28,10 @@ Both a `GlobeRenderState` and a `FlatRenderState` are produced on every frame re
 
 The globe is drawn from the same vector tiles as the plane. Every visible tile's ground geometry is projected onto the sphere in the vertex shader, through the same surface morph the placeholder grid under it uses, lit by the same globe shading and clipped against the sphere itself (every vertex asks whether the planet stands between it and the camera: on the pure globe that is the horizon, and while the sphere unfurls it is what hides the far side morphing through the planet's interior); nothing is rasterized into an intermediate texture, so zooming re-bakes nothing and coastlines and borders are drawn at the screen's own density with analytic antialiasing plus the world pass's MSAA. Coarse tiles have their large triangles split by the parser so they follow the curvature instead of cutting through the sphere as chords. The polar caps beyond the Mercator edge take their colour from a thin strip baked from the last tile rows, so a pole painted white by the low-zoom land cover, or blue by open water at a closer zoom, continues what the tiles around it show.
 
+### The loading globe
+
+While a tile is still on its way, its slot shows the planet's luminous body: a glowing near-white sphere drawn between the stars and the tiles, part of the atmosphere's rendering. The map appears over it slot by slot as tiles arrive. The body costs nothing where the map has painted (the GPU discards it under every covered pixel) and fades out with the atmosphere's halo as the globe unfurls into the plane. With `transparentSpace()` the body is dropped along with the stars and the halo.
+
 ## What is globe-only and what is flat-only
 
 | Feature | Where it draws |
