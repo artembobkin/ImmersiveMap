@@ -54,6 +54,17 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),
                                                                fallbackTexture: groundShadowMaskFallbackTexture)
+        // Distance LOD for road paint: beyond this camera distance the
+        // world-locked markings are sub-pixel, and a tile entirely past it
+        // skips its marking draws (RoadMarkingDistanceLOD).
+        let latitudeRadians = ImmersiveMapProjection.latitude(
+            fromNormalizedWorldY: frameContext.mapCameraState.centerWorldMercator.y)
+        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(
+            latitudeRadians: latitudeRadians,
+            renderMapSize: frameContext.resolvedPresentation.flatRenderState.renderMapSize)
+        let markingCutoff = RoadMarkingDistanceLOD.cutoffWorldDistance(
+            drawableHeightPx: Float(frameContext.drawSize.height),
+            unitsPerMeter: Float(unitsPerMeter))
         // The framebuffer-fetch world pass carries a second building
         // attachment; every pipeline in it must declare that attachment to
         // stay pass-compatible (same decision as RenderPassGraph.plan).
@@ -89,7 +100,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  withBuildingImageAttachment: withBuildingImageAttachment)
+                                  withBuildingImageAttachment: withBuildingImageAttachment,
+                                  markingCutoffWorldDistance: markingCutoff)
 FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,

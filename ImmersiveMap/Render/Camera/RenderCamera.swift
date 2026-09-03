@@ -5,6 +5,10 @@ import MetalKit
 import Metal
 
 class RenderCamera {
+    /// The fixed vertical field of view of the render camera; shared with
+    /// the screen-resolvability math (RoadMarkingDistanceLOD).
+    static let verticalFovRadians = Float.pi / 4
+
     var projection: matrix_float4x4?
     var view: matrix_float4x4?
 
@@ -25,7 +29,7 @@ class RenderCamera {
         // scale doubles while the clip stays at the same 20 units).
         // With far = 200 the clip lies within ~a pixel of the vanishing line, whose
         // position does not depend on zoom.
-        self.projection = Matrix.perspectiveMatrix(fovRadians: Float.pi / 4, aspect: aspect, near: 0.01, far: 200.0)
+        self.projection = Matrix.perspectiveMatrix(fovRadians: Self.verticalFovRadians, aspect: aspect, near: 0.01, far: 200.0)
         recalculateMatrix()
     }
 

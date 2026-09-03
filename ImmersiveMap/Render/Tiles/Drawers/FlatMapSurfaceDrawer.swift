@@ -20,7 +20,8 @@ enum FlatMapSurfaceDrawer {
                      tileStencilTestState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      withBuildingImageAttachment: Bool = false,
-                     opaqueFillsOnly: Bool = false) {
+                     opaqueFillsOnly: Bool = false,
+                     markingCutoffWorldDistance: Float = .infinity) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder,
                                     withBuildingImageAttachment: withBuildingImageAttachment)
         // Every tile triangle (ground, road buckets, bridge overlay) is
@@ -114,6 +115,8 @@ enum FlatMapSurfaceDrawer {
                                       drawableHeightPx: drawableHeightPx,
                                       overviewFade: overviewFadeUniform,
                                       bandOffset: bandOffset,
+                                      cameraEye: cameraUniform.eye,
+                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
                                       runFilter: runFilter)
             }
         }
@@ -179,7 +182,14 @@ enum FlatMapSurfaceDrawer {
                                               pixelsPerPoint: pixelsPerPoint,
                                               drawableHeightPx: drawableHeightPx,
                                               overviewFade: overviewFadeUniform,
-                                              bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
+                                              bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                                              cameraEye: cameraUniform.eye,
+                                              markingCutoffWorldDistance: markingCutoffWorldDistance,
+                                              // The detail role is road paint through and
+                                              // through (every detail pass carries the
+                                              // marking fade band), so past the cutoff the
+                                              // whole layer skips.
+                                              skipsWholeLayerBeyondMarkingCutoff: role == .detail)
                     }
                 }
             }
@@ -202,7 +212,9 @@ enum FlatMapSurfaceDrawer {
                                           pixelsPerPoint: pixelsPerPoint,
                                           drawableHeightPx: drawableHeightPx,
                                           overviewFade: overviewFadeUniform,
-                                          bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
+                                          bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                                          cameraEye: cameraUniform.eye,
+                                          markingCutoffWorldDistance: markingCutoffWorldDistance)
                 }
             }
             renderEncoder.popDebugGroup()
@@ -226,7 +238,31 @@ enum FlatMapSurfaceDrawer {
                                               drawableHeightPx: Float,
                                               overviewFade: TileOverviewFadeUniform,
                                               bandOffset: Float,
+                                              cameraEye: SIMD3<Float>,
+                                              markingCutoffWorldDistance: Float,
+                                              skipsWholeLayerBeyondMarkingCutoff: Bool = false,
                                               runFilter: ((GroundStyleRun) -> Bool)? = nil) {
+        let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
+                                                                         y: tile.y,
+                                                                         z: tile.z,
+                                                                         loop: loop,
+                                                                         flatRenderPan: flatRenderState.pan,
+                                                                         renderMapSize: flatRenderState.renderMapSize)
+        let scale = originAndSize.z / 4096.0
+
+        // Distance LOD for road paint: a tile whose nearest point is past
+        // the marking cutoff cannot resolve its world-locked paint on
+        // screen (RoadMarkingDistanceLOD). Its marking-band runs drop with
+        // the other invisible runs below, and a layer that is nothing but
+        // paint (the road buckets' detail role) skips wholesale.
+        let dropsMarkingRuns = RoadMarkingDistanceLOD.tileBeyondCutoff(
+            cameraEye: cameraEye,
+            tileOriginAndSize: originAndSize,
+            cutoffWorldDistance: markingCutoffWorldDistance)
+        if dropsMarkingRuns, skipsWholeLayerBeyondMarkingCutoff {
+            return
+        }
+
         // A run whose zoom fade is exactly 0 this frame would rasterize
         // with alpha 0: the ground bucket carries a run table (the road
         // buckets do not and draw whole, as before), so its invisible runs
@@ -234,6 +270,7 @@ enum FlatMapSurfaceDrawer {
         // visible spans coalesce, before any binding.
         let visibleSpans = visibleRunSpans(buffers: buffers,
                                            overviewFade: overviewFade,
+                                           dropsMarkingRuns: dropsMarkingRuns,
                                            runFilter: runFilter)
         guard buffers.indicesCount > 0,
               visibleSpans.isEmpty == false,
@@ -242,14 +279,6 @@ enum FlatMapSurfaceDrawer {
               let styles = buffers.styles,
               let overviewStyleMask = buffers.overviewStyleMask,
               let lineStyles = buffers.lineStyles else { return }
-
-        let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
-                                                                         y: tile.y,
-                                                                         z: tile.z,
-                                                                         loop: loop,
-                                                                         flatRenderPan: flatRenderState.pan,
-                                                                         renderMapSize: flatRenderState.renderMapSize)
-        let scale = originAndSize.z / 4096.0
 
         renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
         renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
@@ -306,9 +335,13 @@ enum FlatMapSurfaceDrawer {
     /// paint order is the buffer order either way.
     private static func visibleRunSpans(buffers: TileBuffers.GeometryLayer,
                                         overviewFade: TileOverviewFadeUniform,
+                                        dropsMarkingRuns: Bool = false,
                                         runFilter: ((GroundStyleRun) -> Bool)? = nil) -> [(start: Int, count: Int)] {
         guard buffers.indicesCount > 0 else { return [] }
         let runs = buffers.styleRuns
+        // Without a run table the marking drop cannot pick its runs and the
+        // layer keeps its historical behavior: whole without a class filter,
+        // nothing with one.
         guard runs.isEmpty == false else { return runFilter == nil ? [(0, buffers.indicesCount)] : [] }
         var spans: [(start: Int, count: Int)] = []
         var spanStart = 0
@@ -316,6 +349,7 @@ enum FlatMapSurfaceDrawer {
         for run in runs {
             guard run.indexCount > 0,
                   runFilter?(run) != false,
+                  (dropsMarkingRuns && TileStyleFadeMath.isMarkingBand(mask: run.fadeMask)) == false,
                   TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFade) == false else {
                 if spanCount > 0 { spans.append((spanStart, spanCount)) }
                 spanCount = 0

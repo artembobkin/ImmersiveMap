@@ -25,6 +25,12 @@ enum TileStyleFadeMath {
 
     /// True when the style's fade resolves to exactly 0 this frame: the run
     /// would rasterize with alpha 0, so the drawer skips it entirely.
+    /// The road-marking fade band of the baked mask (the shader's
+    /// `roadMarkingAlpha` band): the styles the distance LOD may skip.
+    static func isMarkingBand(mask: Float) -> Bool {
+        mask >= 3.5 && mask < 4.5
+    }
+
     static func fadeIsZero(mask: Float, overviewFade: TileOverviewFadeUniform) -> Bool {
         if mask >= 9.5 {
             // Class fade: nothing shows until the camera passes its start zoom.

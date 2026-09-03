@@ -10,6 +10,19 @@ once the public API stabilizes.
 
 ### Added
 
+- Two street-frame cuts that change no pixels anyone can see. Label
+  placement compute runs on every other rendered frame: labels are slow
+  entities, so the reused screen positions lag the camera by one frame at
+  the interaction frame rate, and the per-frame placement cost halves
+  (0.27 to 0.13 ms on the street benchmark); fades keep their per-frame
+  meta, and any content change recomputes immediately. Road paint gets a
+  distance LOD: past the camera distance where the thinnest marking is
+  under half a pixel, a tile skips its marking draws entirely (the road
+  buckets' detail role wholesale, the ground bucket per run), which is
+  invisible by construction because the analytic antialiasing has already
+  faded that paint to a sub-pixel smear. Street pan span p50 4.2 to 4.0 ms,
+  p90 6.1 to 5.8 ms.
+
 - The lines classes resolve their style in the fragment stage: the vertex
   exports one flat style index plus the two per-vertex line fields instead
   of the unpacked style, cutting a ribbon vertex's interpolants to a third
