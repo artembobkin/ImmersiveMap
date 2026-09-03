@@ -166,6 +166,13 @@ struct FeatureStyle {
     /// and filling them with the line color is wrong. The parser skips the
     /// polygon geometry of such features, keeping only the lines.
     let suppressPolygonFill: Bool
+    /// A plain fill whose ring edges are antialiased by the fill-outline
+    /// pass: the parser keeps the fill's ring edges as a line list and the
+    /// flat drawer rasterizes them as one-pixel lines in the fill's colour,
+    /// with alpha by distance to the edge, over the fill's own staircase
+    /// (`ParsedPolygon.outlineIndices`). Fills only; a line style or an
+    /// extruded polygon leaves it false.
+    let fillOutlineAntialiasing: Bool
 
     init(
         key: UInt8,
@@ -194,7 +201,8 @@ struct FeatureStyle {
         surfaceAreaCutsPaint: Bool = false,
         isShippedRoadPaint: Bool = false,
         labelMinCameraZoom: Float = 0,
-        suppressPolygonFill: Bool = false
+        suppressPolygonFill: Bool = false,
+        fillOutlineAntialiasing: Bool = false
     ) {
         self.key = key
         self.color = color
@@ -223,6 +231,7 @@ struct FeatureStyle {
         self.isShippedRoadPaint = isShippedRoadPaint
         self.labelMinCameraZoom = labelMinCameraZoom
         self.suppressPolygonFill = suppressPolygonFill
+        self.fillOutlineAntialiasing = fillOutlineAntialiasing
     }
 
     var resolvedLineRenderPasses: [LineRenderPass] {

@@ -1893,12 +1893,14 @@ class TileMvtParser {
             && polygon.lineParameters.count == polygon.vertices.count
     }
 
-    /// - Parameter splitLinesClass: orders the unified indices as two class
-    ///   segments, fills first then line ribbons (each by ascending style),
-    ///   and records the boundary in `DrawingPolygonBytes.fillsIndexCount`.
+    /// - Parameter splitLinesClass: orders the unified indices as three class
+    ///   segments, fills first, then line ribbons, then the fills' outlines
+    ///   (each by ascending style), and records the boundaries in
+    ///   `DrawingPolygonBytes.fillsIndexCount` and `fillOutlinesIndexStart`.
     ///   The sphere's ground passes then draw one class without touching the
     ///   other's vertices; the paint order becomes "every ribbon above every
-    ///   fill", which is also how the split flat/morph draws paint.
+    ///   fill", which is also how the split flat/morph draws paint. The
+    ///   outline segment is a line list the flat drawer alone reads.
     private func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
                                    stylesByKey: [UInt8: FeatureStyle],
                                    splitLinesClass: Bool = false) -> (drawing: DrawingPolygonBytes,
@@ -1914,9 +1916,16 @@ class TileMvtParser {
                 polygonPartial + polygon.vertices.count
             }
         }
-        let totalPolygonIndexCount = polygonByStyle.values.reduce(0) { partial, polygons in
-            partial + polygons.reduce(0) { polygonPartial, polygon in
-                polygonPartial + polygon.indices.count
+        // The fill outlines are the split layer's third class segment: the
+        // ring edges of every fill whose style asks for them, as a line
+        // list over the fill's own vertices (no vertex is added).
+        func emitsFillOutline(_ styleKey: UInt8) -> Bool {
+            splitLinesClass && stylesByKey[styleKey]?.fillOutlineAntialiasing == true
+        }
+        let totalPolygonIndexCount = polygonByStyle.reduce(0) { partial, entry in
+            let outlines = emitsFillOutline(entry.key)
+            return partial + entry.value.reduce(0) { polygonPartial, polygon in
+                polygonPartial + polygon.indices.count + (outlines ? polygon.outlineIndices.count : 0)
             }
         }
 
@@ -1937,6 +1946,7 @@ class TileMvtParser {
 
         var unifiedIndices: [UInt32] = []
         var fillsIndexCount: Int?
+        var fillOutlinesIndexStart: Int?
         let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
@@ -1945,6 +1955,9 @@ class TileMvtParser {
             ) { indexBuffer, initializedIndexCount in
                 var vertexCount = 0
                 var indexCount = 0
+                // The fills sweep remembers where each outlined fill's
+                // vertices landed, so the outline segment can index them.
+                var outlinedFills: [(polygon: ParsedPolygon, vertexOffset: UInt32)] = []
                 // One sweep for the unsplit layer; the split layer sweeps
                 // twice, fills then ribbons, each in ascending style order.
                 let classSweeps: [((ParsedPolygon) -> Bool)] = splitLinesClass
@@ -1957,13 +1970,28 @@ class TileMvtParser {
                     for styleKey in styleKeys {
                         let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
                         guard let polygons = polygonByStyle[styleKey] else { continue }
+                        let recordsOutline = sweep == 0 && emitsFillOutline(styleKey)
                         for polygon in polygons where includesPolygon(polygon) {
+                            if recordsOutline, polygon.outlineIndices.isEmpty == false {
+                                outlinedFills.append((polygon, UInt32(vertexCount)))
+                            }
                             Self.appendPolygon(polygon,
                                                styleBufferIndex: styleBufferIndex,
                                                vertices: &vertexBuffer,
                                                indices: &indexBuffer,
                                                vertexCount: &vertexCount,
                                                indexCount: &indexCount)
+                        }
+                    }
+                }
+                if splitLinesClass {
+                    // The third segment: the outlines in the fills' order,
+                    // which is ascending style, as index pairs.
+                    fillOutlinesIndexStart = indexCount
+                    for (polygon, vertexOffset) in outlinedFills {
+                        for index in polygon.outlineIndices {
+                            indexBuffer.initializeElement(at: indexCount, to: index &+ vertexOffset)
+                            indexCount += 1
                         }
                     }
                 }
@@ -1982,7 +2010,8 @@ class TileMvtParser {
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
                                              indices: unifiedIndices,
-                                             fillsIndexCount: fillsIndexCount),
+                                             fillsIndexCount: fillsIndexCount,
+                                             fillOutlinesIndexStart: fillOutlinesIndexStart),
                 styles: styles,
                 overviewStyleMasks: overviewStyleMasks,
                 lineStyles: lineStyles)

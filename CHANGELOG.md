@@ -10,6 +10,19 @@ once the public API stabilizes.
 
 ### Added
 
+- Fill-outline antialiasing on the flat map, the `fill-antialias`
+  construction of Mapbox GL: every ground fill's ring edges are drawn once
+  more as one-pixel line primitives in the fill's colour, alpha by the
+  fragment's distance to the projected edge, so the staircase the triangle
+  rasterizer leaves on a fill edge softens into a fringe that slides
+  continuously under camera motion instead of jumping a pixel at a time.
+  The lines index the fill's own vertices (no vertex is added; the parser
+  keeps the ring edges as a third class segment of the ground bucket, tile
+  boundary edges left out), sit at their fill's rank depth under a
+  lessEqual test so a fringe shows only over the layers below its fill,
+  and draw only for the styles that are opaque that frame. The globe keeps
+  its fills as they were. Prepared tiles are re-baked (prepared format 85).
+
 - The loading globe glows instead of showing space: a luminous near-white
   planet body draws between the stars and the tiles (part of the
   atmosphere's rendering), so a slot whose tile has not arrived reads as

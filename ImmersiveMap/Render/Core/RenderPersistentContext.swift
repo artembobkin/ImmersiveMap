@@ -45,6 +45,7 @@ final class RenderPersistentContext {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    let groundOutlineState: MTLDepthStencilState
     let tileOwnershipWriteState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.compositeDepthResetState`.
@@ -119,6 +120,7 @@ final class RenderPersistentContext {
         self.tileOwnershipWriteState = shared.tileOwnershipWriteState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.tileStencilTestState = shared.tileStencilTestState
+        self.groundOutlineState = shared.groundOutlineState
         self.compositeDepthResetState = shared.compositeDepthResetState
         self.supportsFramebufferFetch = shared.supportsFramebufferFetch
         self.shadowFallbackTexture = shared.shadowFallbackTexture

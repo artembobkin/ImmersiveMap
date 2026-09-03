@@ -107,6 +107,23 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         XCTAssertEqual(split.indices, polygon.indices)
     }
 
+    /// The fill outline rides through the split unsplit: its pairs are
+    /// remapped to the deduplicated corner vertices and still name the
+    /// same ring edges.
+    func testFillOutlineIsRemappedToTheSplitVertices() {
+        let quad = TileMvtParser.ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(200, 10), SIMD2(200, 150), SIMD2(10, 150)],
+                                               indices: [0, 1, 2, 0, 2, 3],
+                                               outlineIndices: [0, 1, 1, 2, 2, 3, 3, 0])
+        let split = GroundGeometrySubdivider.subdivide(quad, step: 64)
+        XCTAssertGreaterThan(split.vertices.count, quad.vertices.count, "The quad was split")
+        XCTAssertEqual(split.outlineIndices.count, 8, "The outline keeps its four edges")
+        let edges = stride(from: 0, to: 8, by: 2).map {
+            (split.vertices[Int(split.outlineIndices[$0])], split.vertices[Int(split.outlineIndices[$0 + 1])])
+        }
+        XCTAssertEqual(edges.map { $0.0 }, quad.vertices)
+        XCTAssertEqual(edges.map { $0.1 }, [quad.vertices[1], quad.vertices[2], quad.vertices[3], quad.vertices[0]])
+    }
+
     func testAttributesInterpolateLinearlyAcrossASplit() {
         // A ribbon quad across one grid line at x = 64: the distance field
         // runs -127..127 across, the arc length 0..1000 along.

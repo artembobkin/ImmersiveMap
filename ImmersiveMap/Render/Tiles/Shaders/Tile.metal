@@ -22,7 +22,21 @@ constant bool kTileLineFields [[function_constant(1)]];
 /// flat style index and the fragment resolves the style itself
 /// (tileLineFragmentColor), cutting a line vertex's interpolants to a third.
 constant bool kTileFillFields = !kTileLineFields;
+/// The fill-outline variant of the fills class: the fill's ring edges drawn
+/// as one-pixel LINE primitives in the fill's colour, alpha by the
+/// fragment's distance to the projected edge (the fill-antialias
+/// construction of Mapbox GL). It softens the staircase the triangle
+/// rasterizer leaves on every fill edge, and under camera motion the
+/// fringe's alpha slides continuously instead of the edge jumping a pixel.
+/// Line fields never accompany it (a line primitive has no ribbon field).
+constant bool kTileFillOutline [[function_constant(2)]];
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
+
+/// The drawable size in pixels, what the outline needs to place the
+/// interpolated clip position in the fragment's pixel space.
+struct FillOutlineUniform {
+    float2 viewportSizePx;
+};
 // Mask pixels per drawable pixel; mirrors
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
 // at the pixel's position scaled by this, so a half-size mask upsamples
@@ -57,6 +71,12 @@ struct VertexOut {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
+    // The outline variant carries the clip position once more, as an
+    // ordinary (perspective-correct) interpolant: divided by w in the
+    // fragment it is the point of the projected edge the rasterizer paired
+    // with this fragment, and unlike a screen position computed per vertex
+    // it survives a segment clipped by the near plane.
+    float4 clipPosition [[function_constant(kTileFillOutline)]];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -68,6 +88,7 @@ struct FragmentIn {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
+    float4 clipPosition [[function_constant(kTileFillOutline)]];
 };
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
@@ -96,6 +117,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
     out.worldPos = worldPosition.xyz;
+    if (kTileFillOutline) {
+        out.clipPosition = out.position;
+    }
     if (kTileLineFields) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
@@ -124,6 +148,7 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileLineFields)]],
+                                  constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
                                   depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     float shadowFactor;
@@ -150,6 +175,20 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                       overviewFade, lineDash);
     } else {
         color = in.color;
+    }
+    if (kTileFillOutline) {
+        // The projected edge point paired with this fragment, in pixels of
+        // the drawable (origin top-left, like [[position]]), and its
+        // distance to the fragment centre: zero when the edge runs through
+        // the centre, about half a pixel when it grazes the pixel's side.
+        // The one-pixel line covers only the pixels along the edge, so the
+        // ramp is the edge's fringe: full colour on the edge, half a pixel
+        // out it is half, and the fill's own interior underneath is the
+        // same colour, so only the outside fringe is what shows.
+        float2 edgeNdc = in.clipPosition.xy / in.clipPosition.w;
+        float2 edgePx = (edgeNdc * float2(0.5, -0.5) + 0.5) * fillOutline.viewportSizePx;
+        float edgeDistancePx = length(edgePx - in.position.xy);
+        color.a *= half(1.0 - smoothstep(0.0, 1.0, edgeDistancePx));
     }
     // Shadow before fog: fog wins at distance, so the shadow-coverage edge
     // dissolves into the haze instead of cutting a visible line. Zero normal

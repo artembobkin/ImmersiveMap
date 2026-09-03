@@ -32,9 +32,11 @@ final class TileGeometryWindingTests: XCTestCase {
                                         file: StaticString = #filePath,
                                         line: UInt = #line) {
         let positions = drawing.vertices.map(\.position)
+        // The fill outline segment at the end is a line list, not triangles.
+        let triangles = Array(drawing.triangleIndices)
         if let triangle = TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: positions,
-                                                                             indices: drawing.indices) {
-            XCTFail("\(name): triangle \(triangle) of \(drawing.indices.count / 3) is clockwise",
+                                                                             indices: triangles) {
+            XCTFail("\(name): triangle \(triangle) of \(triangles.count / 3) is clockwise",
                     file: file, line: line)
         }
     }

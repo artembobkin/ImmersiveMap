@@ -120,7 +120,7 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.setDepthStencilState(opaqueDepthState)
             pipeline.selectSphereOpaqueFillsPipeline(renderEncoder: renderEncoder, morph: morph)
             let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
-                run.isLinesClass == false && isOpaque(run, overviewFade: overviewFadeUniform)
+                run.isFillsClass && isOpaque(run, overviewFade: overviewFadeUniform)
             }
             forEachSource(renderEncoder: renderEncoder,
                           sources: uniqueSources,
@@ -143,7 +143,7 @@ enum GlobeVectorSurfaceDrawer {
             // alpha 0: skipped here, before a single buffer is bound (road
             // strokes below their start zoom are whole invisible layers).
             let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
-                run.isLinesClass == false
+                run.isFillsClass
                     && isOpaque(run, overviewFade: overviewFadeUniform) == false
                     && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
             }

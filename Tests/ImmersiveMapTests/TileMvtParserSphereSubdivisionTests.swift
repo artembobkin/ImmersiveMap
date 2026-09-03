@@ -26,7 +26,7 @@ final class TileMvtParserSphereSubdivisionTests: XCTestCase {
         let step = try XCTUnwrap(GroundGeometrySubdivider.step(forTileZoom: 0))
         let maximumEdge = Float(step) * Float(2).squareRoot() + 1
         let vertices = coarse.drawingPolygon.vertices
-        let indices = coarse.drawingPolygon.indices
+        let indices = Array(coarse.drawingPolygon.triangleIndices)
         for triangle in stride(from: 0, to: indices.count, by: 3) {
             for edge in 0..<3 {
                 let a = vertices[Int(indices[triangle + edge])].position

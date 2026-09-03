@@ -183,6 +183,15 @@ enum VisualReviewCatalogue {
         static let centralRussia = ImmersiveMapCameraPosition(latitudeDegrees: 55.7,
                                                               longitudeDegrees: 37.6,
                                                               zoom: 5)
+        /// Moscow region tilted almost to the horizon, looking north over
+        /// the lakes and the WorldCover fields toward Tver and Yaroslavl:
+        /// the far ground is the raster-derived landcover minified into
+        /// sub-pixel blobs, where every fill edge crawls.
+        static let moscowRegionTilted = ImmersiveMapCameraPosition(latitudeDegrees: 55.9,
+                                                                   longitudeDegrees: 37.6,
+                                                                   zoom: 8.4,
+                                                                   bearing: 0.0,
+                                                                   pitch: 1.25)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -549,6 +558,25 @@ enum VisualReviewCatalogue {
                                   widthPoints: 5,
                                   progress: 0.6)
             ])),
+
+        VisualReviewScenario(
+            id: "ground.fill.outlines.tilted",
+            title: "Fill edges under a tilted camera",
+            lookFor: """
+            The far half of the frame, where the landcover fields and lakes \
+            shrink to a few pixels. Every fill edge carries a one-pixel \
+            fringe of its own colour that softens the staircase: an edge \
+            should read as a soft line, not a chain of hard steps, and in \
+            the near half the fringe must be invisible against the fill. A \
+            lake's edge must not bleed over the land beside it by more than \
+            a pixel, a field must not gain a dark or light halo, and where \
+            water meets land the water's fringe wins (water is the higher \
+            layer). The far region should look calmer than it did without \
+            the outline, not busier: if the fringes read as extra texture, \
+            they are too strong.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowRegionTilted)),
 
         VisualReviewScenario(
             id: "video.globe.to.street",

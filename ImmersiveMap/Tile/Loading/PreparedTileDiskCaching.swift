@@ -600,7 +600,12 @@ final class PreparedTileDiskCaching {
     // (was twice): another halving of the split vertices per border, at a
     // chord sag that bends a thin line a fraction of a pixel without ever
     // opening a gap. A v83 entry carries the finer ribbon mesh.
-    static let preparedFormatVersion: UInt32 = 84
+    // 85: the ground index buffer gains a third class segment, the fill
+    // outlines: the ring edges of every plain fill as a line list over the
+    // fill's own vertices (`fillOutlinesIndexStart`), and the ground style
+    // runs carry a class flag for it. A v84 entry has no outline segment and
+    // its fills would draw with no edge antialiasing.
+    static let preparedFormatVersion: UInt32 = 85
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

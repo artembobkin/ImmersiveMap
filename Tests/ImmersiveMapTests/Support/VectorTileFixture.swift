@@ -86,6 +86,23 @@ enum VectorTileFixture {
     static func layerTile(layerName: String,
                           features: [Feature],
                           extent: UInt32 = 4096) -> Data {
+        MvtTileMessage(layers: [layerMessage(layerName: layerName, features: features, extent: extent)])
+            .serializedData()
+    }
+
+    /// A tile holding several hand-built layers, for cases where layers
+    /// interact through the style's paint order (a water polygon over the
+    /// landcover under it).
+    static func layersTile(_ layers: [(layerName: String, features: [Feature])],
+                           extent: UInt32 = 4096) -> Data {
+        MvtTileMessage(layers: layers.map {
+            layerMessage(layerName: $0.layerName, features: $0.features, extent: extent)
+        }).serializedData()
+    }
+
+    private static func layerMessage(layerName: String,
+                                     features: [Feature],
+                                     extent: UInt32) -> MvtLayerMessage {
         var layer = MvtLayerMessage()
         layer.version = 2
         layer.name = layerName
@@ -131,7 +148,7 @@ enum VectorTileFixture {
             }
             layer.features.append(encoded)
         }
-        return MvtTileMessage(layers: [layer]).serializedData()
+        return layer
     }
 
     /// A polyline or ring as MVT commands: one moveTo, the rest lineTo, and a

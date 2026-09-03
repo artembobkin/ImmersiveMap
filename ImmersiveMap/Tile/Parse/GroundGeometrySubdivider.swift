@@ -156,6 +156,17 @@ enum GroundGeometrySubdivider {
                 }
             }
         }
+        // The fill outline indexes the fill's own vertices: every ring
+        // vertex is a corner of some triangle above, so `emit` finds it
+        // deduplicated, and the pair keeps naming the same ring edge. The
+        // edge itself is not split on the grid: the outline draws only on
+        // the plane, where a straight edge is straight.
+        if polygon.outlineIndices.isEmpty == false {
+            output.outlineIndices.reserveCapacity(polygon.outlineIndices.count)
+            for index in polygon.outlineIndices {
+                output.outlineIndices.append(emit(point(at: index)))
+            }
+        }
         return output
     }
 

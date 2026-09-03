@@ -9,7 +9,7 @@ enum FlatMapSurfaceDrawer {
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
-                     drawableHeightPx: Float,
+                     drawableSizePx: SIMD2<Float>,
                      separateRoadRenderingMinimumZoom: Int,
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
@@ -18,6 +18,7 @@ enum FlatMapSurfaceDrawer {
                      tilePipeline: TilePipeline,
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
+                     groundOutlineState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      withBuildingImageAttachment: Bool = false,
                      opaqueFillsOnly: Bool = false,
@@ -104,6 +105,7 @@ enum FlatMapSurfaceDrawer {
 
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
                        bandOffset: Float,
+                       primitiveType: MTLPrimitiveType = .triangle,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             for source in uniqueSources {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
@@ -112,11 +114,12 @@ enum FlatMapSurfaceDrawer {
                                       loop: source.loop,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
-                                      drawableHeightPx: drawableHeightPx,
+                                      drawableHeightPx: drawableSizePx.y,
                                       overviewFade: overviewFadeUniform,
                                       bandOffset: bandOffset,
                                       cameraEye: cameraUniform.eye,
                                       markingCutoffWorldDistance: markingCutoffWorldDistance,
+                                      primitiveType: primitiveType,
                                       runFilter: runFilter)
             }
         }
@@ -128,12 +131,12 @@ enum FlatMapSurfaceDrawer {
         // follow, tested only. The band sits at the far plane, farther than
         // every real fragment, so the buildings' occlusion is untouched.
         let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
-            run.isLinesClass == false
+            run.isFillsClass
                 && run.isAlphaOpaque
                 && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
         }
         let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
-            run.isLinesClass == false && isOpaqueFillRun(run) == false
+            run.isFillsClass && isOpaqueFillRun(run) == false
         }
         renderEncoder.pushDebugGroup("ground.opaqueFills")
         renderEncoder.setDepthStencilState(groundOwnerState)
@@ -153,6 +156,32 @@ enum FlatMapSurfaceDrawer {
             renderEncoder.setCullMode(.none)
             renderEncoder.setFrontFacing(.clockwise)
             return
+        }
+        // The fill outlines of the layers that drew opaque just now: the
+        // fills' ring edges as one-pixel lines in the fill colour, alpha by
+        // distance to the edge, which is the edge antialiasing the triangle
+        // rasterizer does not give a fill. They sit at their own fill's rank
+        // depth under a lessEqual test against the band the opaque pass
+        // wrote, so an edge's fringe shows only over layers below its fill
+        // and never over an opaque layer above it; the translucent fills
+        // and the ribbons then paint over them in the usual order. A layer
+        // that is translucent this frame (mid-fade) gets no outline: its
+        // fill wrote no depth to test against, and the fringe would double
+        // blend along the edge.
+        if tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder,
+                                                      withBuildingImageAttachment: withBuildingImageAttachment) {
+            renderEncoder.pushDebugGroup("ground.fillOutlines")
+            renderEncoder.setDepthStencilState(groundOutlineState)
+            var fillOutlineUniform = TileFillOutlineUniform(viewportSizePx: drawableSizePx)
+            renderEncoder.setFragmentBytes(&fillOutlineUniform,
+                                           length: MemoryLayout<TileFillOutlineUniform>.stride,
+                                           index: 9)
+            drawLayer(\.ground, bandOffset: 0, primitiveType: .line, runFilter: { run in
+                run.isFillOutlineClass
+                    && run.isAlphaOpaque
+                    && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
+            })
+            renderEncoder.popDebugGroup()
         }
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
@@ -180,7 +209,7 @@ enum FlatMapSurfaceDrawer {
                                               loop: source.loop,
                                               flatRenderState: flatRenderState,
                                               pixelsPerPoint: pixelsPerPoint,
-                                              drawableHeightPx: drawableHeightPx,
+                                              drawableHeightPx: drawableSizePx.y,
                                               overviewFade: overviewFadeUniform,
                                               bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
                                               cameraEye: cameraUniform.eye,
@@ -210,7 +239,7 @@ enum FlatMapSurfaceDrawer {
                                           loop: source.loop,
                                           flatRenderState: flatRenderState,
                                           pixelsPerPoint: pixelsPerPoint,
-                                          drawableHeightPx: drawableHeightPx,
+                                          drawableHeightPx: drawableSizePx.y,
                                           overviewFade: overviewFadeUniform,
                                           bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
                                           cameraEye: cameraUniform.eye,
@@ -241,6 +270,7 @@ enum FlatMapSurfaceDrawer {
                                               cameraEye: SIMD3<Float>,
                                               markingCutoffWorldDistance: Float,
                                               skipsWholeLayerBeyondMarkingCutoff: Bool = false,
+                                              primitiveType: MTLPrimitiveType = .triangle,
                                               runFilter: ((GroundStyleRun) -> Bool)? = nil) {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
@@ -321,7 +351,7 @@ enum FlatMapSurfaceDrawer {
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
         for span in visibleSpans {
-            renderEncoder.drawIndexedPrimitives(type: .triangle,
+            renderEncoder.drawIndexedPrimitives(type: primitiveType,
                                                 indexCount: span.count,
                                                 indexType: buffers.indexType,
                                                 indexBuffer: indices.buffer,

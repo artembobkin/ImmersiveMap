@@ -54,7 +54,8 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             return FeatureStyle(
                 key: key,
                 color: color,
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                fillOutlineAntialiasing: true
             )
         case .line(let color, let width):
             return FeatureStyle(

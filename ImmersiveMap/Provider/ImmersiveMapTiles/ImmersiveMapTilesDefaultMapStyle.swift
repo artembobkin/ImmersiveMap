@@ -1799,11 +1799,15 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private func polygon(key: UInt8,
                          color: SIMD4<Float>,
                          streetColor: SIMD4<Float>? = nil) -> FeatureStyle {
+        // Every ground fill gets the fill-outline antialiasing: its ring
+        // edges draw once more as one-pixel lines with alpha by distance to
+        // the edge, so a staircase edge stops crawling under camera motion.
         FeatureStyle(
             key: key,
             color: color,
             streetColor: streetColor,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            fillOutlineAntialiasing: true
         )
     }
 

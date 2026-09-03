@@ -9,6 +9,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let tilePipeline: TilePipeline
     private let groundOwnerState: MTLDepthStencilState
     private let tileStencilTestState: MTLDepthStencilState
+    private let groundOutlineState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let separateRoadRenderingMinimumZoom: Int
     private let debugOverlayControls: DebugOverlayControlState
@@ -19,6 +20,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     init(tilePipeline: TilePipeline,
          groundOwnerState: MTLDepthStencilState,
          tileStencilTestState: MTLDepthStencilState,
+         groundOutlineState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
@@ -28,6 +30,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.tilePipeline = tilePipeline
         self.groundOwnerState = groundOwnerState
         self.tileStencilTestState = tileStencilTestState
+        self.groundOutlineState = groundOutlineState
         self.depthDisabledState = depthDisabledState
         self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
@@ -90,7 +93,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableHeightPx: Float(frameContext.drawSize.height),
+                                  drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
+                                                               Float(frameContext.drawSize.height)),
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
@@ -99,6 +103,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tilePipeline: tilePipeline,
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
+                                  groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment,
                                   markingCutoffWorldDistance: markingCutoff)
@@ -106,7 +111,8 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableHeightPx: Float(frameContext.drawSize.height),
+                                  drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
+                                                               Float(frameContext.drawSize.height)),
                                   separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
@@ -115,6 +121,7 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   tilePipeline: tilePipeline,
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
+                                  groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   withBuildingImageAttachment: withBuildingImageAttachment,
                                   // The far band under the fog needs only the painted

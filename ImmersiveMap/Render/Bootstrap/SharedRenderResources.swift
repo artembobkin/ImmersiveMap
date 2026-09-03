@@ -69,6 +69,13 @@ final class SharedRenderResources {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    /// The flat ground's fill-outline pass: the rank-band depth tested
+    /// lessEqual (an outline sits at its own fill's rank, so it passes over
+    /// that fill and over every lower opaque layer and fails under every
+    /// higher one, which composites each edge's fringe exactly where the
+    /// fill's own layer order puts it), never written, plus the non-owning
+    /// tile-priority test.
+    let groundOutlineState: MTLDepthStencilState
     /// The tile-ownership prepass: no depth interaction at all, only the
     /// owning stencil write, so the quads mark every pixel of their source's
     /// extent (buildings included) before anything draws.
@@ -150,6 +157,7 @@ final class SharedRenderResources {
         self.sphereOpaqueOwnerState = device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!
         self.groundOwnerState = device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!
         self.tileStencilTestState = device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!
+        self.groundOutlineState = device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!
         self.tileOwnershipWriteState = device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!
         self.extrudedStencilTestState = device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
@@ -481,6 +489,15 @@ final class SharedRenderResources {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        return descriptor
+    }
+
+    /// The flat fill outlines: lessEqual against the rank band the opaque
+    /// fills wrote (see `groundOutlineState`), no writes, the non-owning
+    /// tile-priority test.
+    private static func makeGroundOutlineDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeTileStencilTestDescriptor()
+        descriptor.depthCompareFunction = .lessEqual
         return descriptor
     }
 

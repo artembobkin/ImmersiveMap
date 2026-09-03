@@ -16,6 +16,14 @@ extension TileMvtParser {
         /// (end-feather distance for solid styles, arc length for
         /// point-dashed ones).
         var lineParameters: [Int16] = []
+        /// The polygon's ring edges as a line list (pairs of indices into
+        /// `vertices`), for the fill-outline antialiasing pass: the flat
+        /// drawer rasterizes them as one-pixel line primitives in the fill's
+        /// colour over the fill's own staircase edge (the `fill-antialias`
+        /// construction of Mapbox GL). Edges lying on the tile boundary are
+        /// left out, since the polygon continues in the neighbour. Empty for
+        /// line ribbons and for every polygon that is not a plain fill.
+        var outlineIndices: [UInt32] = []
     }
 }
 

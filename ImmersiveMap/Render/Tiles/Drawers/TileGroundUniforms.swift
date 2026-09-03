@@ -49,3 +49,11 @@ struct LineDashUniform {
 struct StreetPaletteUniform {
     var blend: Float
 }
+
+/// Mirror of `FillOutlineUniform` in Tile.metal (fragment buffer 9 of the
+/// flat fill-outline pipeline): the drawable size in pixels, which places
+/// the interpolated clip position of an outline edge in the fragment's
+/// pixel space.
+struct TileFillOutlineUniform {
+    var viewportSizePx: SIMD2<Float>
+}

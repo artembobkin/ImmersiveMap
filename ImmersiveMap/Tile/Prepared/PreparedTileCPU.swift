@@ -21,13 +21,20 @@ struct PreparedTileCPU: Sendable {
         /// in ascending style order (`unifyPolygonLayer(splitLinesClass:)`).
         /// Layers that are not class-split keep the whole range as fills.
         let fillsIndexCount: Int
+        /// The third class segment of the ground bucket: from here to the end
+        /// the indices are the fill outlines, a LINE list of index pairs over
+        /// the fill vertices in ascending style order, which the flat drawer
+        /// rasterizes as one-pixel lines for the fills' edge antialiasing.
+        /// Equal to `indices.count` when the layer carries none.
+        let fillOutlinesIndexStart: Int
 
         init(vertices: [TileVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
              overviewStyleMasks: [Float],
              lineStyles: [TileLineStyle]? = nil,
-             fillsIndexCount: Int? = nil) {
+             fillsIndexCount: Int? = nil,
+             fillOutlinesIndexStart: Int? = nil) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
@@ -35,7 +42,8 @@ struct PreparedTileCPU: Sendable {
             // nil defaults to plain polygons while keeping the array in
             // lockstep with `styles`: the vertex shader indexes it per style.
             self.lineStyles = lineStyles ?? Array(repeating: .polygon, count: styles.count)
-            self.fillsIndexCount = fillsIndexCount ?? indices.count
+            self.fillOutlinesIndexStart = fillOutlinesIndexStart ?? indices.count
+            self.fillsIndexCount = fillsIndexCount ?? self.fillOutlinesIndexStart
         }
     }
 
