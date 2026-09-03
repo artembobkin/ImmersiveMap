@@ -51,7 +51,8 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
         let settings = frameContext.services.settings
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
-                                                mapClearColor: settings.scene.mapClearColor)
+                                                mapClearColor: settings.scene.mapClearColor,
+                                                hazeEnabled: settings.scene.space.isTransparent == false)
         encoder.setDepthStencilState(depthDisabledState)
         GlobeVectorSurfaceDrawer.draw(renderEncoder: encoder,
                                       cameraUniform: frameContext.cameraUniform,

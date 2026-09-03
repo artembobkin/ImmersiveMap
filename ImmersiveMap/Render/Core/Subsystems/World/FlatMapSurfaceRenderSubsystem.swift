@@ -53,7 +53,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
-                                                mapClearColor: frameContext.services.settings.scene.mapClearColor)
+                                                mapClearColor: frameContext.services.settings.scene.mapClearColor,
+                                                hazeEnabled: frameContext.services.settings.scene.space.isTransparent == false)
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),
                                                                fallbackTexture: groundShadowMaskFallbackTexture)

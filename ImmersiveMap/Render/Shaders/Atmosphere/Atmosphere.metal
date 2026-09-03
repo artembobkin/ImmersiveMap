@@ -3,6 +3,7 @@
 
 #include <metal_stdlib>
 using namespace metal;
+#include "../Shared/RenderUniforms.h"
 
 // The atmosphere: the scattered light around the planet's limb, resolved per
 // pixel from the view ray and the sphere (under perspective the silhouette
@@ -102,6 +103,35 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
     half3 tint = mix(half3(atmosphere.color), half3(1.0h), whiten * kAtmosphereWhitenWeight);
     half coverage = brightness * half(atmosphere.intensity) * fade;
     return half4(tint * coverage, saturate(coverage));
+}
+
+// The sky of the flat presentation: one fullscreen triangle at the far
+// plane, drawn after the ground under a lessEqual depth test, so it paints
+// only where nothing else did (above the horizon, and any hole in the
+// coverage). Per pixel the view ray's angle to the ground plane's horizon
+// selects the horizon haze profile: above the line the sky deepens from
+// the whitened horizon tint to the halo blue, below it the pixel gets the
+// haze the ground would have worn there, so the coverage edge and the
+// horizon line meet in one colour. During the unfurl it blends in with the
+// transition, the way the ground fog does, so the surface switch happens
+// between identical skies.
+//
+// Layout mirrors FlatSkyUniform.swift.
+struct FlatSky {
+    float4x4 inverseViewProjection;
+    HorizonFog fog;
+};
+
+fragment half4 flatSkyFragmentShader(AtmosphereVertexOut in [[stage_in]],
+                                     constant FlatSky& sky [[buffer(0)]]) {
+    float4 farPoint = sky.inverseViewProjection * float4(in.ndc, 1.0, 1.0);
+    float3 direction = normalize(farPoint.xyz / farPoint.w - sky.fog.eye);
+    float elevation = asin(clamp(direction.z, -1.0, 1.0));
+    float3 color = elevation >= 0.0
+        ? horizonSkyColor(sky.fog, elevation)
+        : horizonHoleColor(sky.fog, -elevation);
+    half alpha = half(sky.fog.strength);
+    return half4(half3(color) * alpha, alpha);
 }
 
 // The luminous body of the planet, drawn right after the stars and BEFORE

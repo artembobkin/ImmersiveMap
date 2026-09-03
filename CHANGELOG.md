@@ -10,6 +10,20 @@ once the public API stabilizes.
 
 ### Added
 
+- The flat map's horizon wears the globe's air. The horizon fog gains the
+  atmosphere's three-part profile turned inward: a dense band hugging the
+  horizon, a wide faint glow down the plain and a whitening right at the
+  line, in the halo's blue, measured by each pixel's angle below the
+  horizon (`HorizonFogUniform`, 6, 20 and 2 degrees), so the far range of a
+  tilted view dissolves into haze well before it reaches the line instead of
+  meeting a beige wall half a degree from it. Above the line a new flat sky
+  pass (`flatSkyFragmentShader`, drawn after the ground under the far-plane
+  depth test) continues the same profile upward, the whitened horizon
+  deepening to the halo blue, and blends in with the transition during the
+  unfurl so the surface switch happens between identical skies. The seam
+  fog by distance stays underneath as the guarantee at the coverage edge.
+  Transparent space keeps the old clear-colour fog and paints no sky.
+
 - The footprint fade of the flat ground fills, the vector map's stand-in
   for a mipmap: the fill shader measures how much ground a pixel covers
   (the screen derivatives of the ground position along the longer axis, in

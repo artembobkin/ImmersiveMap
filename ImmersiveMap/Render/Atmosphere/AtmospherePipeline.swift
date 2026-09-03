@@ -17,6 +17,9 @@ final class AtmospherePipeline {
     let backdropVertexBuffer: MTLBuffer
     let backdropIndexBuffer: MTLBuffer
     let backdropIndexCount: Int
+    /// The flat sky (flatSkyFragmentShader): the atmosphere's fullscreen
+    /// triangle and premultiplied blend, a different fragment.
+    let flatSkyPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
@@ -42,6 +45,24 @@ final class AtmospherePipeline {
         descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
         descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+
+        // The flat sky: the same fullscreen triangle and premultiplied
+        // blend, a different fragment.
+        let flatSkyDescriptor = MTLRenderPipelineDescriptor()
+        flatSkyDescriptor.label = "FlatSkyPipeline"
+        flatSkyDescriptor.vertexFunction = descriptor.vertexFunction
+        flatSkyDescriptor.fragmentFunction = library.makeFunction(name: "flatSkyFragmentShader")
+        flatSkyDescriptor.rasterSampleCount = sampleCount
+        flatSkyDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        flatSkyDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        flatSkyDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        flatSkyDescriptor.colorAttachments[0].isBlendingEnabled = true
+        flatSkyDescriptor.colorAttachments[0].rgbBlendOperation = .add
+        flatSkyDescriptor.colorAttachments[0].alphaBlendOperation = .add
+        flatSkyDescriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+        flatSkyDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+        flatSkyDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        flatSkyDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
         let backdropDescriptor = MTLRenderPipelineDescriptor()
         backdropDescriptor.label = "GlobeBackdropPipeline"
@@ -85,6 +106,7 @@ final class AtmospherePipeline {
 
         do {
             pipelineState = try metalDevice.makeRenderPipelineState(descriptor: descriptor)
+            flatSkyPipelineState = try metalDevice.makeRenderPipelineState(descriptor: flatSkyDescriptor)
             backdropPipelineState = try metalDevice.makeRenderPipelineState(descriptor: backdropDescriptor)
             backdropFadePipelineState = try metalDevice.makeRenderPipelineState(descriptor: backdropFadeDescriptor)
         } catch {
@@ -147,6 +169,19 @@ final class AtmosphereRenderer {
         renderEncoder.setCullMode(.none)
         renderEncoder.setFragmentBytes(&uniformValue,
                                        length: MemoryLayout<AtmosphereUniform>.stride,
+                                       index: 0)
+        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+    }
+
+    /// The flat sky above the horizon (and in any coverage hole), after the
+    /// ground, under the sky's far-plane depth test.
+    func drawFlatSky(renderEncoder: MTLRenderCommandEncoder,
+                     uniform: FlatSkyUniform) {
+        var uniformValue = uniform
+        renderEncoder.setRenderPipelineState(pipeline.flatSkyPipelineState)
+        renderEncoder.setCullMode(.none)
+        renderEncoder.setFragmentBytes(&uniformValue,
+                                       length: MemoryLayout<FlatSkyUniform>.stride,
                                        index: 0)
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }

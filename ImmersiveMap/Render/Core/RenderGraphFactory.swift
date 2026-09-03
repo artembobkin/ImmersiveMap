@@ -79,7 +79,8 @@ enum RenderGraphFactory {
                                                           depthDisabledState: context.depthDisabledState)
         let atmosphereSubsystem = AtmosphereRenderSubsystem(atmosphereRenderer: context.atmosphereRenderer,
                                                             depthDisabledState: context.depthDisabledState,
-                                                            backdropDepthState: context.extrudedDepthState)
+                                                            backdropDepthState: context.extrudedDepthState,
+                                                            skyBackdropDepthState: context.skyBackdropDepthState)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,

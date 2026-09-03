@@ -93,7 +93,10 @@ struct RenderLayerPlanner {
     static func plan(availability: RenderPassAvailability) -> [RenderLayerPlanItem] {
         let worldLayers: [RenderLayer] = switch availability.renderSurfaceMode {
         case .flat:
-            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels]
+            // The sky after the ground and the buildings: it paints only
+            // where they left the far plane (above the horizon, coverage
+            // holes), under the sky's depth test.
+            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .atmosphere, .sceneModels]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the

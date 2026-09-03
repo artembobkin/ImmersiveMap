@@ -19,13 +19,18 @@ final class AtmosphereRenderSubsystem: RenderSubsystem {
     /// the opaque set at the very back of the band, so hidden surface
     /// removal erases it under every painted slot.
     private let backdropDepthState: MTLDepthStencilState
+    /// Far-plane lessEqual, no write: the flat sky paints only where the
+    /// ground and the buildings left the cleared depth.
+    private let skyBackdropDepthState: MTLDepthStencilState
 
     init(atmosphereRenderer: AtmosphereRenderer,
          depthDisabledState: MTLDepthStencilState,
-         backdropDepthState: MTLDepthStencilState) {
+         backdropDepthState: MTLDepthStencilState,
+         skyBackdropDepthState: MTLDepthStencilState) {
         self.atmosphereRenderer = atmosphereRenderer
         self.depthDisabledState = depthDisabledState
         self.backdropDepthState = backdropDepthState
+        self.skyBackdropDepthState = skyBackdropDepthState
     }
 
     func update(frameContext _: FrameContext) {}
@@ -37,20 +42,37 @@ final class AtmosphereRenderSubsystem: RenderSubsystem {
             encodeBackdrop(encoder: encoder, frameContext: frameContext)
             return
         }
-        guard layer == .atmosphere,
-              frameContext.renderSurfaceMode == .spherical,
-              // The atmosphere hugs the limb: with the planet filling the
-              // whole viewport there is neither halo nor rim on screen.
-              StarfieldRenderSubsystem.frameShowsSky(frameContext: frameContext) else {
-            return
+        guard layer == .atmosphere else { return }
+        if frameContext.renderSurfaceMode == .spherical,
+           // The atmosphere hugs the limb: with the planet filling the
+           // whole viewport there is neither halo nor rim on screen.
+           StarfieldRenderSubsystem.frameShowsSky(frameContext: frameContext) {
+            // Depth off explicitly: the rim glow paints over the ground, whose
+            // opaque layers wrote their rank depth at the far plane.
+            encoder.setDepthStencilState(depthDisabledState)
+            let uniform = AtmosphereUniform.make(globe: frameContext.globeRenderUniform,
+                                                 projectionView: frameContext.cameraMatrices.projectionView,
+                                                 cameraEye: frameContext.cameraEye)
+            atmosphereRenderer.draw(renderEncoder: encoder, uniform: uniform)
         }
-        // Depth off explicitly: the rim glow paints over the ground, whose
-        // opaque layers wrote their rank depth at the far plane.
+        encodeFlatSky(encoder: encoder, frameContext: frameContext)
+    }
+
+    /// The flat sky: the horizon haze's profile above the line. On the plane
+    /// always; during the unfurl blended in with the transition, like the
+    /// ground fog, so the surface switch happens between identical skies.
+    /// Never under transparent space (the layer is off there).
+    private func encodeFlatSky(encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
+        let settings = frameContext.services.settings
+        guard frameContext.transition > 0, settings.scene.space.isTransparent == false else { return }
+        let fog = HorizonFogUniform.make(transition: frameContext.transition,
+                                         cameraEye: frameContext.cameraEye,
+                                         mapClearColor: settings.scene.mapClearColor,
+                                         hazeEnabled: true)
+        let uniform = FlatSkyUniform.make(projectionView: frameContext.cameraMatrices.projectionView, fog: fog)
+        encoder.setDepthStencilState(skyBackdropDepthState)
+        atmosphereRenderer.drawFlatSky(renderEncoder: encoder, uniform: uniform)
         encoder.setDepthStencilState(depthDisabledState)
-        let uniform = AtmosphereUniform.make(globe: frameContext.globeRenderUniform,
-                                             projectionView: frameContext.cameraMatrices.projectionView,
-                                             cameraEye: frameContext.cameraEye)
-        atmosphereRenderer.draw(renderEncoder: encoder, uniform: uniform)
     }
 
     /// The luminous planet body, before the tiles. No sky gate: with the
