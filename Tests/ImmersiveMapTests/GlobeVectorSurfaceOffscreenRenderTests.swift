@@ -17,7 +17,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
     private static let longitude = 37.61
 
     /// Zoom 2.5 is spherical (the transition starts at 6) and past the tone
-    /// deepening (over by zoom 2); face-on the atmosphere glow is zero and
+    /// deepening (over by zoom 2); face-on the sphere is bare and
     /// the fog strength is the transition, zero: the tile colour comes out
     /// exactly as given.
     @MainActor

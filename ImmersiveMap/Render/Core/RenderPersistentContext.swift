@@ -32,7 +32,6 @@ final class RenderPersistentContext {
     let globeCapRenderer: GlobeCapRenderer
     /// The caps' rim colour, baked per view from its own placements.
     let starfieldRenderer: StarfieldRenderer
-    let atmosphereRenderer: AtmosphereRenderer
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
@@ -145,7 +144,6 @@ final class RenderPersistentContext {
         self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,
                                                    pipeline: shared.starfieldPipeline,
                                                    config: config.scene.starfield)
-        self.atmosphereRenderer = AtmosphereRenderer(pipeline: shared.atmospherePipeline)
 
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
         // The cap palette bakes style colors; grids and pipeline come from

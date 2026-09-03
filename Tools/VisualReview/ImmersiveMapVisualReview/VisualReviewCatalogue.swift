@@ -333,7 +333,7 @@ enum VisualReviewCatalogue {
             meets a finer one. No lattice of pale diamonds in the open ocean \
             around the equator (the layer under the water showing where its \
             chords dipped under the surface depth). The limb itself stays a \
-            clean circle under the atmosphere; nothing of the far side shows \
+            clean circle against space; nothing of the far side shows \
             through near the edge.
             """,
             settings: .default,

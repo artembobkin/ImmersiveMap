@@ -30,7 +30,7 @@ The globe is drawn from the same vector tiles as the plane. Every visible tile's
 
 ### The loading globe
 
-While a tile is still on its way, its slot shows the planet's luminous body: a glowing near-white sphere drawn between the stars and the tiles, part of the atmosphere's rendering. The map appears over it slot by slot as tiles arrive. The body costs nothing where the map has painted (the GPU discards it under every covered pixel) and fades out with the atmosphere's halo as the globe unfurls into the plane. With `transparentSpace()` the body is dropped along with the stars and the halo.
+While a tile is still on its way, its slot is left unpainted and the space behind the planet shows through the hole; the map appears slot by slot as tiles arrive.
 
 ## What is globe-only and what is flat-only
 

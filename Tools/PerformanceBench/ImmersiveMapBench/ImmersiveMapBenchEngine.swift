@@ -39,9 +39,9 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         /// drawn at all, which isolates the sky's share of a globe frame in
         /// an A/B against the default.
         case noSky = "immersivemap-nosky"
-        /// Kept for measurement continuity: since the engine dropped the
-        /// atmosphere and the earth scene, the planet alone is exactly
-        /// transparent space, the same frame as `noSky`.
+        /// Kept for measurement continuity: with no space décor but the
+        /// stars, the planet alone is exactly transparent space, the same
+        /// frame as `noSky`.
         case bare = "immersivemap-bare"
     }
 

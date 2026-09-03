@@ -4,7 +4,7 @@
 import simd
 
 /// Whether any sky is visible around the resting sphere: the space décor
-/// (the stars and the atmosphere) is skipped for the frame when the planet
+/// (the stars) is skipped for the frame when the planet
 /// fills the whole viewport, which is every region zoom. The sphere's
 /// screen projection is convex, so the frame shows sky if and only if at
 /// least one of its corners does; four ray-sphere tests decide the frame.

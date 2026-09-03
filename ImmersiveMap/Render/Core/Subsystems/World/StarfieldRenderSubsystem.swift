@@ -23,7 +23,7 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
 
     /// Whether the space décor is painted at all. Space itself is the world
     /// pass's clear color; this layer draws only the stars over it, and the
-    /// atmosphere layer follows the same flag.
+    /// starfield is the only space décor.
     static func isStarfieldEnabled(settings: ImmersiveMapSettings) -> Bool {
         settings.scene.space.isTransparent == false
     }
