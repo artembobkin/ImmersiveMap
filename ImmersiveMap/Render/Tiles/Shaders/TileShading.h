@@ -262,6 +262,48 @@ static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUnif
     return 1.0h;
 }
 
+/// The lines-class fragment resolves its whole style from the flat style
+/// index: the palette-blended colour with the zoom fade, times the analytic
+/// line coverage. The vertex stage exports only the index and the two truly
+/// per-vertex line fields (raw, undecoded), which cuts a ribbon vertex's
+/// interpolants to a third; every constant read here is uniform across the
+/// primitive, so the loads hit cache. The longitudinal parameter arrives
+/// raw because its decode scale is a style constant: scaling after
+/// interpolation is exact, and its screen derivative stays linear.
+static inline half4 tileLineFragmentColor(uint styleIndex,
+                                          float lineDistance,
+                                          float lineParameterRaw,
+                                          constant Style* styles,
+                                          constant float* lowZoomFadeMasks,
+                                          constant LineStyle* lineStyles,
+                                          constant StreetPaletteUniform& streetPalette,
+                                          constant OverviewFadeUniform& overviewFade,
+                                          constant LineDashUniform& lineDash) {
+    Style style = styles[styleIndex];
+    LineStyle lineStyle = lineStyles[styleIndex];
+    half4 color = half4(mix(style.color, style.streetColor, streetPalette.blend));
+    color.a *= tileStyleFade(half(lowZoomFadeMasks[styleIndex]), overviewFade);
+    // Same decode as tileVertexStyle: arc length in half tile units for a
+    // dashed style, the normalized end-feather distance otherwise.
+    float lineParameter = lineStyle.dashLengthPoints > 0.0
+        ? lineParameterRaw * 0.5
+        : lineParameterRaw / 32767.0;
+    half4 packedLineStyle = half4(lineStyle.edgeThreshold,
+                                  lineStyle.widthPoints,
+                                  lineStyle.dashLengthPoints,
+                                  lineStyle.dashGapPoints);
+    color.a *= tileLineCoverage(lineDistance,
+                                lineParameter,
+                                packedLineStyle,
+                                half(lineStyle.minimumWidthPoints),
+                                half(lineStyle.maximumWidthPoints),
+                                lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,
+                                overviewFade.pixelsPerPoint,
+                                overviewFade.roadSurfaceBlend,
+                                lineDash.unitsPerPoint);
+    return color;
+}
+
 /// The ground colour of a fragment before lighting: the style colour with
 /// its alpha scaled by the analytic line coverage. The zoom fade is already
 /// folded into the colour's alpha by the vertex stage (a function of the

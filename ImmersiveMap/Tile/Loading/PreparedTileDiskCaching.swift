@@ -592,7 +592,11 @@ final class PreparedTileDiskCaching {
     // of visible width instead of 32 (a native tile is at least 512 points,
     // so a point is at most 8 units); a v82 entry carries ribbons almost
     // three times as wide, whose extra fragments compute alpha 0.
-    static let preparedFormatVersion: UInt32 = 83
+    // 84: the ribbon split grid is four times as coarse as the fills
+    // (was twice): another halving of the split vertices per border, at a
+    // chord sag that bends a thin line a fraction of a pixel without ever
+    // opening a gap. A v83 entry carries the finer ribbon mesh.
+    static let preparedFormatVersion: UInt32 = 84
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

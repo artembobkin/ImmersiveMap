@@ -39,6 +39,9 @@ enum FlatMapSurfaceDrawer {
         var streetPaletteUniform = StreetPaletteUniform(
             blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
         )
+        renderEncoder.setFragmentBytes(&streetPaletteUniform,
+                                       length: MemoryLayout<StreetPaletteUniform>.stride,
+                                       index: 8)
         renderEncoder.setVertexBytes(&streetPaletteUniform,
                                      length: MemoryLayout<StreetPaletteUniform>.stride,
                                      index: 6)
@@ -238,6 +241,11 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
         renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
         renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
+        // The lines-class fragment resolves the style by index (the fills
+        // fragment never reads these slots).
+        renderEncoder.setFragmentBuffer(styles.buffer, offset: styles.offset, index: 5)
+        renderEncoder.setFragmentBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 6)
+        renderEncoder.setFragmentBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 7)
         // The tile-priority stencil reference: the ground pass replaces the
         // stencil with it, every pass tests greaterEqual against the finest
         // painter (TileSourceStencilPriority). No slot clip: a substitute

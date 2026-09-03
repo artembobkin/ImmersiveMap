@@ -38,15 +38,15 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertTrue(shared.contains("dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint"))
         XCTAssertTrue(shared.contains("float dashUnits = float(dashLengthPoints) * unitScale;"))
         XCTAssertTrue(shared.contains("float gapUnits = float(lineStyle.w) * unitScale;"))
-        // The flag travels vertex to fragment, on the plane and on the sphere
-        // (the sphere fragment hands it straight to the coverage call).
-        XCTAssertTrue(shared.contains("out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;"))
+        // The flag no longer travels vertex to fragment: the lines-class
+        // fragment resolves the style by index and derives the flag from
+        // the style buffer itself, on the plane and on the sphere alike
+        // (both fragments call tileLineFragmentColor).
+        XCTAssertTrue(shared.contains("lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,"))
         let flat = try shaderSource("Render/Tiles/Shaders/Tile.metal")
-        XCTAssertTrue(flat.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"))
-        XCTAssertTrue(flat.contains("style.lineDashInTileUnits = in.lineDashInTileUnits;"))
+        XCTAssertTrue(flat.contains("tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,"))
         let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
-        XCTAssertTrue(sphere.contains("out.lineDashInTileUnits = style.lineDashInTileUnits;"))
-        XCTAssertTrue(sphere.contains("in.lineDashInTileUnits,"))
+        XCTAssertTrue(sphere.contains("tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,"))
     }
 
     func testParserBakesTheFlagIntoTheGPUStyle() {

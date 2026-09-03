@@ -41,13 +41,14 @@ enum GroundGeometrySubdivider {
         }
     }
 
-    /// Line ribbons split on a grid twice as coarse as the fills: their
-    /// vertex cost on the sphere is dominated by the split (long borders,
-    /// extruded to quads, every attribute interpolated and exported), and a
-    /// thin line tolerates twice the chord sag that would show on a fill
-    /// edge shared between two contrasting areas.
+    /// Line ribbons split on a grid four times as coarse as the fills:
+    /// their vertex cost on the sphere is dominated by the split (long
+    /// borders, extruded to quads), and a thin line tolerates far more
+    /// chord sag than a fill edge shared between two contrasting areas:
+    /// the sag bends the whole ribbon a fraction of a pixel off its true
+    /// arc, it never opens a gap.
     static func ribbonStep(fillStep: Int) -> Int {
-        min(fillStep * 2, 4096)
+        min(fillStep * 4, 4096)
     }
 
     static func subdivideIfNeeded(_ polygonByStyle: inout [UInt8: [TileMvtParser.ParsedPolygon]],

@@ -80,6 +80,9 @@ enum GlobeVectorSurfaceDrawer {
         var overviewFadeValue = overviewFadeUniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&streetPaletteUniform, length: MemoryLayout<StreetPaletteUniform>.stride, index: 6)
+        // The ribbons class resolves its style in the fragment stage
+        // (tileLineFragmentColor), so the palette blend is bound there too.
+        renderEncoder.setFragmentBytes(&streetPaletteUniform, length: MemoryLayout<StreetPaletteUniform>.stride, index: 8)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
         var globeFrameValue = globeFrame
         renderEncoder.setVertexBytes(&globeFrameValue,
@@ -226,6 +229,11 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
             renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
             renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
+            // The ribbons fragment resolves the style by index (the fills
+            // fragment never reads these slots).
+            renderEncoder.setFragmentBuffer(styles.buffer, offset: styles.offset, index: 5)
+            renderEncoder.setFragmentBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 6)
+            renderEncoder.setFragmentBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 7)
             var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
             renderEncoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
 

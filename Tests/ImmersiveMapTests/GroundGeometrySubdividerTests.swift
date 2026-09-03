@@ -20,9 +20,9 @@ final class GroundGeometrySubdividerTests: XCTestCase {
                      "From z10 the surface has unfurled: nothing is drawn on the sphere")
     }
 
-    func testRibbonsSplitOnADoubleStepGrid() {
-        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 64), 128)
-        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 1024), 2048)
+    func testRibbonsSplitOnAQuadrupleStepGrid() {
+        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 64), 256)
+        XCTAssertEqual(GroundGeometrySubdivider.ribbonStep(fillStep: 1024), 4096)
 
         // One fill and one ribbon triangle of the same shape: after the
         // split the ribbon (line attributes present) must carry fewer
@@ -40,7 +40,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         XCTAssertLessThan(splitRibbon.vertices.count, splitFill.vertices.count,
                           "The ribbon grid is coarser, so it must produce fewer split vertices")
         let fillEdgeBound = Float(64) * Float(2).squareRoot() + 1
-        let ribbonEdgeBound = Float(128) * Float(2).squareRoot() + 1
+        let ribbonEdgeBound = Float(256) * Float(2).squareRoot() + 1
         assertEdges(of: splitFill, within: fillEdgeBound)
         assertEdges(of: splitRibbon, within: ribbonEdgeBound)
     }

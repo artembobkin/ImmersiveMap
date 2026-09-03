@@ -112,21 +112,42 @@ struct Shadow {
     float3 tint;
 };
 
-// Receiver-plane depth gradient dz/duv from screen-space derivatives
-// (Isidoro). Must run in uniform control flow, before any divergent early-out.
+// Receiver-plane depth gradient dz/duv, analytically: the receiver is
+// treated as the plane through the fragment with its world normal, and the
+// cascade projection is affine, so the gradient is an exact per-plane
+// constant recovered from two tangents. No screen derivatives are involved
+// (the old Isidoro solve took them), which is what frees `sampleShadowFactor`
+// to exit early per fragment and to project only the cascade it reads:
+// derivative-free code has no uniform-control-flow obligation. At silhouette
+// pixels the analytic plane is also exact where derivatives produced clamped
+// garbage across the depth discontinuity.
 // The clamp value is expressed for the u axis; the same world slope maps to a
 // v gradient scaled by the atlas texel aspect (texels are square in world),
 // so the v clamp scales by texelSizeUV.x / texelSizeUV.y.
-static inline float2 shadowReceiverGradient(constant ShadowCascade& cascade, float3 uvz) {
-    float2 duvdx = dfdx(uvz.xy);
-    float2 duvdy = dfdy(uvz.xy);
-    float dzdx = dfdx(uvz.z);
-    float dzdy = dfdy(uvz.z);
-    float det = duvdx.x * duvdy.y - duvdx.y * duvdy.x;
+static inline float2 shadowAnalyticGradient(constant ShadowCascade& cascade, float3 planeNormal) {
+    float3 axis = abs(planeNormal.z) < 0.9 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    float3 tangentA = normalize(cross(planeNormal, axis));
+    float3 tangentB = cross(planeNormal, tangentA);
+
+    // Linear part of world -> (u, v, z), row-extracted from the column-major
+    // matrix, applied to the two tangents.
+    float3 uRow = float3(cascade.worldToShadowTexture[0][0],
+                         cascade.worldToShadowTexture[1][0],
+                         cascade.worldToShadowTexture[2][0]);
+    float3 vRow = float3(cascade.worldToShadowTexture[0][1],
+                         cascade.worldToShadowTexture[1][1],
+                         cascade.worldToShadowTexture[2][1]);
+    float3 zRow = float3(cascade.worldToShadowTexture[0][2],
+                         cascade.worldToShadowTexture[1][2],
+                         cascade.worldToShadowTexture[2][2]);
+    float2 du = float2(dot(uRow, tangentA), dot(uRow, tangentB));
+    float2 dv = float2(dot(vRow, tangentA), dot(vRow, tangentB));
+    float2 dz = float2(dot(zRow, tangentA), dot(zRow, tangentB));
+    float det = du.x * dv.y - du.y * dv.x;
     float2 dzduv = float2(0.0);
     if (abs(det) > 1e-12) {
-        dzduv = float2(duvdy.y * dzdx - duvdx.y * dzdy,
-                       duvdx.x * dzdy - duvdy.x * dzdx) / det;
+        dzduv = float2(dv.y * dz.x - dv.x * dz.y,
+                       du.x * dz.y - du.y * dz.x) / det;
     }
     float aspect = cascade.texelSizeUV.x / max(cascade.texelSizeUV.y, 1e-9);
     float2 axisClamp = cascade.gradientClamp * float2(1.0, aspect);
@@ -222,18 +243,24 @@ static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
 // anything outside both is lit, so the horizon backdrop stays clean by
 // construction, and the eye-distance fade hides the far coverage edge.
 //
-// Must be called from uniform control flow (derivatives): callers multiply
-// the result into their color instead of branching around the call.
+// Derivative-free (the receiver-plane gradient is analytic), so callers may
+// branch around the call, and the function itself exits before projecting a
+// single cascade for the fragments that need no map: beyond the distance
+// fade, or geometrically self-shadowed (a face fully turned from the sun).
 static inline float sampleShadowFactor(constant Shadow& shadow,
                                        depth2d_array<float> shadowMap,
                                        float3 worldPos,
                                        float3 surfaceNormal) {
-    // Disabled shadows exit before any cascade math. The condition reads a
-    // constant-buffer value, so every fragment of the draw takes the same
-    // branch and control flow stays uniform for the derivatives below.
     if (shadow.strength <= 0.0) {
         return 1.0;
     }
+    // Distance fade first: everything past the fade end is fully lit and
+    // never touches a cascade.
+    float distanceToEye = length(worldPos - shadow.eye);
+    if (distanceToEye >= shadow.fadeEndDistance) {
+        return 1.0;
+    }
+    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
 
     float normalLength = length(surfaceNormal);
     float hasNormal = normalLength > 1e-5 ? 1.0 : 0.0;
@@ -254,61 +281,63 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         ? smoothstep(0.125, 0.25, dot(normal, shadow.lightDirection))
         : 1.0;
 
-    // All cascade projections and their derivatives are evaluated before any
-    // divergent selection (uniform control flow).
-    float3 uvzs[3];
-    float2 gradients[3];
-    for (int i = 0; i < 3; ++i) {
-        float3 position = worldPos + normal * shadow.cascades[i].normalOffsetWorld;
-        float4 projected = shadow.cascades[i].worldToShadowTexture * float4(position, 1.0);
-        uvzs[i] = projected.xyz / projected.w;
-        gradients[i] = shadowReceiverGradient(shadow.cascades[i], uvzs[i]);
-    }
-
-    float mapVisibility = 1.0;
-    if (geometricVisibility > 0.0) {
-        for (int i = 0; i < 3; ++i) {
-            if (shadowCascadeContains(shadow.cascades[i], uvzs[i])) {
-                float cascadeVisibility = shadowCascadeVisibility(shadow.cascades[i], shadowMap,
-                                                                  uint(i), uvzs[i], gradients[i]);
-                // Cross-fade to the next cascade near this window's edge.
-                // The cascade windows are anchored at the camera's look-at
-                // point, so panning drives content through them: with a hard
-                // containment switch the sharp-to-coarse texel boundary sweeps
-                // across facades and reads as the shadow edge crawling along
-                // the wall during fast movement. Blending over a few texels
-                // turns that traveling seam into a gradual, invisible change.
-                float2 uv = uvzs[i].xy;
-                float2 distanceToMin = uv - shadow.cascades[i].uvMinimum;
-                float2 distanceToMax = shadow.cascades[i].uvMaximum - uv;
-                float edgeDistance = min(min(distanceToMin.x, distanceToMin.y),
-                                         min(distanceToMax.x, distanceToMax.y));
-                float blendBand = 8.0 * max(shadow.cascades[i].texelSizeUV.x,
-                                            shadow.cascades[i].texelSizeUV.y);
-                if (i + 1 < 3 && edgeDistance < blendBand
-                    && shadowCascadeContains(shadow.cascades[i + 1], uvzs[i + 1])) {
-                    float nextVisibility = shadowCascadeVisibility(shadow.cascades[i + 1], shadowMap,
-                                                                   uint(i + 1), uvzs[i + 1], gradients[i + 1]);
-                    cascadeVisibility = mix(nextVisibility, cascadeVisibility,
-                                            saturate(edgeDistance / blendBand));
-                }
-                mapVisibility = cascadeVisibility;
-                break;
-            }
-        }
-    }
-
     // A geometrically self-shadowed wall is lit by the sky, so it darkens to
     // only a fraction of the shadow strength; occluded spots the shadow map
     // finds (cast shadows) keep the full strength. The two components blend
     // smoothly across the N·L transition band.
     const float selfShadowStrengthFraction = 0.35;
+    if (geometricVisibility <= 0.0) {
+        // Fully self-shadowed: the exact value the general formula below
+        // yields with no map term, without projecting a single cascade.
+        return 1.0 - selfShadowStrengthFraction * shadow.strength * fade;
+    }
+
+    // Receivers without a normal are the ground plane.
+    float3 gradientNormal = hasNormal > 0.0 ? normal : float3(0.0, 0.0, 1.0);
+    float mapVisibility = 1.0;
+    for (int i = 0; i < 3; ++i) {
+        float3 position = worldPos + normal * shadow.cascades[i].normalOffsetWorld;
+        float4 projected = shadow.cascades[i].worldToShadowTexture * float4(position, 1.0);
+        float3 uvz = projected.xyz / projected.w;
+        if (!shadowCascadeContains(shadow.cascades[i], uvz)) {
+            continue;
+        }
+        float2 gradient = shadowAnalyticGradient(shadow.cascades[i], gradientNormal);
+        float cascadeVisibility = shadowCascadeVisibility(shadow.cascades[i], shadowMap,
+                                                          uint(i), uvz, gradient);
+        // Cross-fade to the next cascade near this window's edge.
+        // The cascade windows are anchored at the camera's look-at
+        // point, so panning drives content through them: with a hard
+        // containment switch the sharp-to-coarse texel boundary sweeps
+        // across facades and reads as the shadow edge crawling along
+        // the wall during fast movement. Blending over a few texels
+        // turns that traveling seam into a gradual, invisible change.
+        float2 uv = uvz.xy;
+        float2 distanceToMin = uv - shadow.cascades[i].uvMinimum;
+        float2 distanceToMax = shadow.cascades[i].uvMaximum - uv;
+        float edgeDistance = min(min(distanceToMin.x, distanceToMin.y),
+                                 min(distanceToMax.x, distanceToMax.y));
+        float blendBand = 8.0 * max(shadow.cascades[i].texelSizeUV.x,
+                                    shadow.cascades[i].texelSizeUV.y);
+        if (i + 1 < 3 && edgeDistance < blendBand) {
+            float3 nextPosition = worldPos + normal * shadow.cascades[i + 1].normalOffsetWorld;
+            float4 nextProjected = shadow.cascades[i + 1].worldToShadowTexture * float4(nextPosition, 1.0);
+            float3 nextUvz = nextProjected.xyz / nextProjected.w;
+            if (shadowCascadeContains(shadow.cascades[i + 1], nextUvz)) {
+                float2 nextGradient = shadowAnalyticGradient(shadow.cascades[i + 1], gradientNormal);
+                float nextVisibility = shadowCascadeVisibility(shadow.cascades[i + 1], shadowMap,
+                                                               uint(i + 1), nextUvz, nextGradient);
+                cascadeVisibility = mix(nextVisibility, cascadeVisibility,
+                                        saturate(edgeDistance / blendBand));
+            }
+        }
+        mapVisibility = cascadeVisibility;
+        break;
+    }
+
     float selfShadowAmount = (1.0 - geometricVisibility) * selfShadowStrengthFraction;
     float castShadowAmount = geometricVisibility * (1.0 - mapVisibility);
     float shadowAmount = min(1.0, selfShadowAmount + castShadowAmount);
-
-    float distanceToEye = length(worldPos - shadow.eye);
-    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
     return 1.0 - shadowAmount * shadow.strength * fade;
 }
 

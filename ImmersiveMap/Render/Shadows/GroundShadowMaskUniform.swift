@@ -22,7 +22,7 @@ struct GroundShadowMaskUniform {
     /// gradient is one constant per cascade per frame. It replaces the
     /// screen-space derivatives the mask shader used to take, which frees
     /// its control flow to exit early above the horizon and beyond the
-    /// shadow fade. Clamped exactly like `shadowReceiverGradient`.
+    /// shadow fade. Clamped exactly like `shadowAnalyticGradient`.
     var planeGradientNear: SIMD2<Float>
     var planeGradientMiddle: SIMD2<Float>
     var planeGradientFar: SIMD2<Float>
@@ -37,9 +37,9 @@ struct GroundShadowMaskUniform {
     }
 
     /// dz/d(u,v) of the ground plane in one cascade's slice space: solve the
-    /// 2x2 world→uv Jacobian restricted to the plane (the same numbers the
-    /// shader's `shadowReceiverGradient` recovers from screen derivatives on
-    /// ground pixels, without the derivative noise at depth discontinuities).
+    /// 2x2 world→uv Jacobian restricted to the plane (the same solve as the
+    /// shader's `shadowAnalyticGradient`, evaluated once on the CPU because
+    /// the ground plane is the same for every mask pixel).
     static func groundPlaneGradient(cascade: ShadowCascadeUniform) -> SIMD2<Float> {
         let m = cascade.worldToShadowTexture
         // Column-major: m[column][row]. u/v/z as functions of world x/y on

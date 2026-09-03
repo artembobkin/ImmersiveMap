@@ -18,6 +18,10 @@ constant bool kGroundShadowMaskEnabled [[function_constant(0)]];
 /// exactly like the sphere's variants: no export, no interpolation, and a
 /// fragment that is the colour as is.
 constant bool kTileLineFields [[function_constant(1)]];
+/// The fills classes carry the resolved colour; the lines classes carry the
+/// flat style index and the fragment resolves the style itself
+/// (tileLineFragmentColor), cutting a line vertex's interpolants to a third.
+constant bool kTileFillFields = !kTileLineFields;
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 // Mask pixels per drawable pixel; mirrors
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
@@ -45,15 +49,14 @@ struct VertexOut {
     // painted (TileSourceStencilPriority), the same mechanism the sphere
     // uses.
     float3 worldPos;
-    half4 color;
+    half4 color [[function_constant(kTileFillFields)]];
+    // Lines classes: the style index rides flat and the fragment resolves
+    // colour, fade and line style itself; only the two genuinely
+    // per-vertex line fields interpolate (the longitudinal parameter raw,
+    // its decode scale being a style constant).
+    uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
-    float lineParameter [[function_constant(kTileLineFields)]];
-    half4 lineStyle [[function_constant(kTileLineFields)]];
-    half lineMinimumWidthPoints [[function_constant(kTileLineFields)]];
-    half lineMaximumWidthPoints [[function_constant(kTileLineFields)]];
-    // 1 when the dash pattern is already in tile units (world-locked paint),
-    // 0 when it is in points and scales by the draw's unitsPerPoint.
-    half lineDashInTileUnits [[function_constant(kTileLineFields)]];
+    float lineParameterRaw [[function_constant(kTileLineFields)]];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -61,28 +64,11 @@ struct VertexOut {
 struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
-    half4 color;
+    half4 color [[function_constant(kTileFillFields)]];
+    uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
-    float lineParameter [[function_constant(kTileLineFields)]];
-    half4 lineStyle [[function_constant(kTileLineFields)]];
-    half lineMinimumWidthPoints [[function_constant(kTileLineFields)]];
-    half lineMaximumWidthPoints [[function_constant(kTileLineFields)]];
-    half lineDashInTileUnits [[function_constant(kTileLineFields)]];
+    float lineParameterRaw [[function_constant(kTileLineFields)]];
 };
-
-static inline TileVertexStyle tileFragmentStyle(FragmentIn in) {
-    TileVertexStyle style;
-    style.color = in.color;
-    // The fade is already in the alpha; the member is dead here.
-    style.lowZoomFadeMask = 0.0h;
-    style.lineDistance = in.lineDistance;
-    style.lineParameter = in.lineParameter;
-    style.lineStyle = in.lineStyle;
-    style.lineMinimumWidthPoints = in.lineMinimumWidthPoints;
-    style.lineMaximumWidthPoints = in.lineMaximumWidthPoints;
-    style.lineDashInTileUnits = in.lineDashInTileUnits;
-    return style;
-}
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant Camera& camera [[buffer(1)]],
@@ -110,19 +96,18 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
     out.worldPos = worldPosition.xyz;
-    TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
-    out.color = style.color;
-    // The zoom fade folds into the alpha here: a function of the style and
-    // the frame only, so the fragment neither interpolates the mask nor
-    // walks the fade bands.
-    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     if (kTileLineFields) {
-        out.lineDistance = style.lineDistance;
-        out.lineParameter = style.lineParameter;
-        out.lineStyle = style.lineStyle;
-        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
-        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
-        out.lineDashInTileUnits = style.lineDashInTileUnits;
+        out.styleIndex = uint(vertexIn.styleIndex);
+        out.lineDistance = float(vertexIn.lineDistance) / 127.0;
+        out.lineParameterRaw = float(vertexIn.lineParameter);
+    } else {
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
+                                                lineStyles, streetPalette);
+        out.color = style.color;
+        // The zoom fade folds into the alpha here: a function of the style
+        // and the frame only, so the fills fragment neither interpolates
+        // the mask nor walks the fade bands.
+        out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     }
     return out;
 }
@@ -135,6 +120,10 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant HorizonFog& horizonFog [[buffer(2)]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
+                                  constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
+                                  constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
+                                  constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
+                                  constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileLineFields)]],
                                   depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     float shadowFactor;
@@ -152,9 +141,13 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
     }
     // The fills classes carry no line fields: their coverage is identically
     // 1 and the colour (fade already folded in the vertex stage) is final.
+    // The lines classes resolve colour, fade and coverage from the flat
+    // style index right here.
     half4 color;
     if (kTileLineFields) {
-        color = tileGroundColor(tileFragmentStyle(in), overviewFade, lineDash);
+        color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
+                                      styles, lowZoomFadeMasks, lineStyles, streetPalette,
+                                      overviewFade, lineDash);
     } else {
         color = in.color;
     }

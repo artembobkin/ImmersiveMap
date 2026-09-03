@@ -55,34 +55,36 @@ constant bool kTileSphereFog [[function_constant(0)]];
 /// be ignored. The classes are separate index segments baked by the parser
 /// (`fillsIndexCount`), so a class pass never reads the other's vertices.
 constant bool kTileSphereLineFields [[function_constant(1)]];
+/// The fills class carries the resolved colour; the ribbons class carries
+/// the flat style index instead and the fragment resolves the style itself
+/// (tileLineFragmentColor), which cuts a ribbon vertex's interpolants to a
+/// third.
+constant bool kTileSphereFillClass = !kTileSphereLineFields;
 
 struct SphereVertexOut {
     float4 position [[position]];
     // The morphed surface position the fog distances read; morph only.
     float3 worldPos [[function_constant(kTileSphereFog)]];
-    // The zoom fade is already folded into the alpha: it is a function of
-    // the style and the frame only, so the vertex stage applies it and the
-    // fragment neither interpolates the mask nor walks the fade bands.
-    half4 color;
+    // Fills class: the resolved colour with the zoom fade already folded
+    // into the alpha (a function of the style and the frame only).
+    half4 color [[function_constant(kTileSphereFillClass)]];
+    // Ribbons class: the style index rides flat and the fragment resolves
+    // colour, fade and line style itself; only the two genuinely
+    // per-vertex line fields interpolate (the longitudinal parameter raw,
+    // its decode scale being a style constant).
+    uint styleIndex [[flat, function_constant(kTileSphereLineFields)]];
     float lineDistance [[function_constant(kTileSphereLineFields)]];
-    float lineParameter [[function_constant(kTileSphereLineFields)]];
-    half4 lineStyle [[function_constant(kTileSphereLineFields)]];
-    half lineMinimumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineMaximumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineDashInTileUnits [[function_constant(kTileSphereLineFields)]];
+    float lineParameterRaw [[function_constant(kTileSphereLineFields)]];
 };
 
 // The fragment stage's view of SphereVertexOut, without the clip distances.
 struct SphereFragmentIn {
     float4 position [[position]];
     float3 worldPos [[function_constant(kTileSphereFog)]];
-    half4 color;
+    half4 color [[function_constant(kTileSphereFillClass)]];
+    uint styleIndex [[flat, function_constant(kTileSphereLineFields)]];
     float lineDistance [[function_constant(kTileSphereLineFields)]];
-    float lineParameter [[function_constant(kTileSphereLineFields)]];
-    half4 lineStyle [[function_constant(kTileSphereLineFields)]];
-    half lineMinimumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineMaximumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineDashInTileUnits [[function_constant(kTileSphereLineFields)]];
+    float lineParameterRaw [[function_constant(kTileSphereLineFields)]];
 };
 
 constant float kTileSphereExtent = 4096.0;
@@ -117,20 +119,25 @@ static inline float2 tileSphereWorldUv(float2 localPosition,
     return surfaceTile.uvOrigin + localUv * surfaceTile.uvScale;
 }
 
-/// Copies the resolved style into the vertex output; the line fields only
-/// when the pass carries them.
+/// Writes the class's outputs: the fills class resolves its colour here;
+/// the ribbons class exports the style index and the raw line fields, and
+/// its fragment resolves the style (tileLineFragmentColor).
 static inline void tileSphereWriteStyle(thread SphereVertexOut& out,
-                                        TileVertexStyle style,
+                                        VertexIn vertexIn,
+                                        constant Style* styles,
+                                        constant float* lowZoomFadeMasks,
+                                        constant LineStyle* lineStyles,
+                                        constant StreetPaletteUniform& streetPalette,
                                         constant OverviewFadeUniform& overviewFade) {
-    out.color = style.color;
-    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     if (kTileSphereLineFields) {
-        out.lineDistance = style.lineDistance;
-        out.lineParameter = style.lineParameter;
-        out.lineStyle = style.lineStyle;
-        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
-        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
-        out.lineDashInTileUnits = style.lineDashInTileUnits;
+        out.styleIndex = uint(vertexIn.styleIndex);
+        out.lineDistance = float(vertexIn.lineDistance) / 127.0;
+        out.lineParameterRaw = float(vertexIn.lineParameter);
+    } else {
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
+                                                lineStyles, streetPalette);
+        out.color = style.color;
+        out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     }
 }
 
@@ -159,8 +166,8 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
         layerNdcZ -= kTileSphereRibbonDepthBand;
     }
     out.position.z = layerNdcZ * out.position.w;
-    tileSphereWriteStyle(out, tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette),
-                         overviewFade);
+    tileSphereWriteStyle(out, vertexIn, styles, lowZoomFadeMasks, lineStyles,
+                         streetPalette, overviewFade);
     return out;
 }
 
@@ -175,13 +182,10 @@ struct SphereMorphVertexOut {
     // substitute wherever a finer tile painted.
     float clipDistance [[clip_distance]] [1];
     float3 worldPos [[function_constant(kTileSphereFog)]];
-    half4 color;
+    half4 color [[function_constant(kTileSphereFillClass)]];
+    uint styleIndex [[flat, function_constant(kTileSphereLineFields)]];
     float lineDistance [[function_constant(kTileSphereLineFields)]];
-    float lineParameter [[function_constant(kTileSphereLineFields)]];
-    half4 lineStyle [[function_constant(kTileSphereLineFields)]];
-    half lineMinimumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineMaximumWidthPoints [[function_constant(kTileSphereLineFields)]];
-    half lineDashInTileUnits [[function_constant(kTileSphereLineFields)]];
+    float lineParameterRaw [[function_constant(kTileSphereLineFields)]];
 };
 
 /// The unfurl: the sphere-to-plane unroll of GlobeUnroll.h. The surface
@@ -233,16 +237,15 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     if (kTileSphereFog) {
         out.worldPos = worldPosition;
     }
-    TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles, streetPalette);
-    out.color = style.color;
-    out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     if (kTileSphereLineFields) {
-        out.lineDistance = style.lineDistance;
-        out.lineParameter = style.lineParameter;
-        out.lineStyle = style.lineStyle;
-        out.lineMinimumWidthPoints = style.lineMinimumWidthPoints;
-        out.lineMaximumWidthPoints = style.lineMaximumWidthPoints;
-        out.lineDashInTileUnits = style.lineDashInTileUnits;
+        out.styleIndex = uint(vertexIn.styleIndex);
+        out.lineDistance = float(vertexIn.lineDistance) / 127.0;
+        out.lineParameterRaw = float(vertexIn.lineParameter);
+    } else {
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
+                                                lineStyles, streetPalette);
+        out.color = style.color;
+        out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     }
     return out;
 }
@@ -254,21 +257,21 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
 fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                         constant HorizonFog& horizonFog [[buffer(2)]],
-                                        constant LineDashUniform& lineDash [[buffer(4)]]) {
-    // The zoom fade arrived folded into the alpha from the vertex stage;
-    // the ribbons class multiplies in the analytic line coverage, the fills
-    // class is the colour as is.
-    half4 color = in.color;
+                                        constant LineDashUniform& lineDash [[buffer(4)]],
+                                        constant Style* styles [[buffer(5), function_constant(kTileSphereLineFields)]],
+                                        constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileSphereLineFields)]],
+                                        constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]],
+                                        constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileSphereLineFields)]]) {
+    // The fills class arrives with its final colour (fade folded in the
+    // vertex stage); the ribbons class resolves colour, fade and coverage
+    // from the flat style index right here.
+    half4 color;
     if (kTileSphereLineFields) {
-        color.a *= tileLineCoverage(in.lineDistance,
-                                    in.lineParameter,
-                                    in.lineStyle,
-                                    in.lineMinimumWidthPoints,
-                                    in.lineMaximumWidthPoints,
-                                    in.lineDashInTileUnits,
-                                    overviewFade.pixelsPerPoint,
-                                    overviewFade.roadSurfaceBlend,
-                                    lineDash.unitsPerPoint);
+        color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
+                                      styles, lowZoomFadeMasks, lineStyles, streetPalette,
+                                      overviewFade, lineDash);
+    } else {
+        color = in.color;
     }
     if (kTileSphereFog) {
         color.rgb = applyHorizonFog(color.rgb, horizonFog, in.worldPos);
