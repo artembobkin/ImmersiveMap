@@ -80,7 +80,8 @@ final class PreparedTileDiskCachingCoordinatorTests: XCTestCase {
                                   cityMaximumZoom: 12,
                                   smallSettlementMaximumZoom: 12,
                                   landmarkMinimumZoom: 13,
-                                  addTestBorders: false)
+                                  addTestBorders: false,
+                                      roofShapesEnabled: true)
     }
 
     private func makePreparedTile(tile: Tile) -> PreparedTileCPU {

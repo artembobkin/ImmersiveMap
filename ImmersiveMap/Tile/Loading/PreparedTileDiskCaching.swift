@@ -18,9 +18,13 @@ struct PreparedTileCacheIdentity {
     let smallSettlementMaximumZoom: UInt32
     let landmarkMinimumZoom: UInt32
     let addTestBorders: Bool
+    /// Shaped roofs are baked into the extruded meshes, so the flag is
+    /// identity: a tile prepared with flat lids must not answer a map that
+    /// wants shaped roofs, and vice versa.
+    let roofShapesEnabled: Bool
 
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)"
+        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-o\(roofShapesEnabled ? 1 : 0)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {

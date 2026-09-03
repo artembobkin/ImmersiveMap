@@ -10,7 +10,7 @@ class TileMvtParser {
     private static let minClippedRoadLabelFragmentLength: Float = 256.0
     static let complexOceanHoleSplitThreshold = 64
     let determineFeatureStyle               : DetermineFeatureStyle
-    private let config                      : ImmersiveMapSettings
+    let config                              : ImmersiveMapSettings
     private let labelTextResolver           : VectorTileLabelTextResolver
     private let labelLanguagePreferences    : VectorTileLabelLanguagePreferences
     private let glyphCoverage               : VectorTileLabelGlyphCoverage

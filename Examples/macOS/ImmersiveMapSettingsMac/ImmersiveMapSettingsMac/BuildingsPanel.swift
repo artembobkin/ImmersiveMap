@@ -68,6 +68,11 @@ struct BuildingsPanel: View {
                 Toggle("Shadows", isOn: $settings.scene.shadows.isEnabled)
                     .toggleStyle(.switch)
 
+                // Shaped roofs are baked into the prepared tiles, so this
+                // toggle re-parses them (a moment of loading is expected).
+                Toggle("Roof shapes", isOn: $settings.style.buildingRoofShapesEnabled)
+                    .toggleStyle(.switch)
+
                 ValueSlider("Blend alpha",
                             value: $settings.style.buildingExtrusionAlpha.asDouble,
                             range: 0...1,

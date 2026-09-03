@@ -443,6 +443,13 @@ extension TileMvtParser {
 
         let base = max(0, min(scaledMinHeight, scaledHeight))
         let top = max(scaledHeight, base)
+        // Shaped roofs off: every building takes the flat lid at its full
+        // height, and the roof attributes are never parsed. Part of the
+        // prepared-cache identity (PreparedTileCacheIdentity), so toggling
+        // re-parses instead of serving the other shape from disk.
+        guard config.style.buildingRoofShapesEnabled else {
+            return ExtrusionHeights(base: base, top: top, roof: nil)
+        }
         let roofParser = RoofAttributesParser()
         let roofInfo = roofParser.parse(attributes: attributes, numericParser: parseNumericValue)
         let scaledRoof = roofInfo.map {

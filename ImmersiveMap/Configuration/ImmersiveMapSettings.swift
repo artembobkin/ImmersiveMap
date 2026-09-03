@@ -764,6 +764,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var flatSeparateRoadRenderingMinimumZoom: Int
         public var buildingExtrusionAlpha: Float
         public var buildingExtrusionMode: BuildingExtrusionMode
+        /// Whether buildings raise shaped roofs (gabled, hipped, skillion,
+        /// domes and the rest of `roof:shape`) where the tiles describe one.
+        /// Off, every building gets a flat lid at its full height. Baked at
+        /// parse time: toggling re-parses the tiles, like any style change.
+        public var buildingRoofShapesEnabled: Bool
         public var fallbackFeatureColor: SIMD4<Float>
         public var baseColors: BaseColors
 
@@ -771,12 +776,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     flatSeparateRoadRenderingMinimumZoom: Int,
                     buildingExtrusionAlpha: Float,
                     buildingExtrusionMode: BuildingExtrusionMode = .solid,
+                    buildingRoofShapesEnabled: Bool = true,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {
             self.preparedTileStyleRevision = preparedTileStyleRevision
             self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
             self.buildingExtrusionAlpha = buildingExtrusionAlpha
             self.buildingExtrusionMode = buildingExtrusionMode
+            self.buildingRoofShapesEnabled = buildingRoofShapesEnabled
             self.fallbackFeatureColor = fallbackFeatureColor
             self.baseColors = baseColors
         }
@@ -1270,6 +1277,15 @@ public extension ImmersiveMapSettings {
     func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
+        return settings
+    }
+
+    /// Shaped building roofs (`roof:shape`) on or off; off gives every
+    /// building a flat lid. Applies by re-parsing the tiles, like any
+    /// style change.
+    func buildingRoofShapes(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.style.buildingRoofShapesEnabled = isEnabled
         return settings
     }
 

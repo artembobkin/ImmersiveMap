@@ -31,6 +31,17 @@ The mode is not just an appearance choice. **The composited translucent image ca
 
 Building color comes from the map style (`features.buildingFillColor`), see [map styling](styling.md).
 
+## Roof shapes
+
+Where the tiles describe a roof (`roof:shape`: gabled, hipped, skillion, pyramidal, domes and more), the engine raises the shaped roof surface and the walls rise to meet it. This is on by default and can be switched off:
+
+```swift
+ImmersiveMapView()
+    .buildingRoofShapes(isEnabled: false)
+```
+
+Off, every building takes a flat lid at its full height. The roofs are baked into the prepared tiles at parse time, so the toggle applies by re-parsing them, the same way any style change does; expect a brief reload rather than an instant switch. The setting is `StyleSettings.buildingRoofShapesEnabled`.
+
 ## The light
 
 ```swift
