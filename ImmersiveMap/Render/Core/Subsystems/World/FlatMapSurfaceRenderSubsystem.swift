@@ -52,8 +52,10 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let tilePlacementState = frameContext.sharedState.tilePlacementState
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
         let horizonFog = HorizonFogUniform.make(transition: frameContext.transition,
+                                                geometryTransition: frameContext.globeRenderUniform.transition,
                                                 cameraEye: frameContext.cameraUniform.eye,
                                                 mapClearColor: frameContext.services.settings.scene.mapClearColor,
+                                                globeRadius: frameContext.globeRenderUniform.radius,
                                                 hazeEnabled: frameContext.services.settings.scene.space.isTransparent == false)
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),

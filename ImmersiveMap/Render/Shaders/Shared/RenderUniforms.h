@@ -360,18 +360,20 @@ static inline half3 shadowColorMultiplier(constant Shadow& shadow, half factor) 
     return half3(shadowColorMultiplier(shadow, float(factor)));
 }
 
-// Haze at the horizon of the flat presentation; the layout mirrors
-// HorizonFogUniform.swift. Two parts. The seam fog: distances measured in
-// eye heights above the plane, so the band is geometrically glued to the
-// vanishing line, saturating just below it to the frame's clear colour,
-// which is what hides the coverage edge and the horizon-line seam of the
-// surface switch. The haze: the globe atmosphere's profile turned inward,
-// three exponentials of the pixel's angle below the horizon (a dense band
-// hugging it, a wide faint glow down the plain, a whitening right at the
-// line), in the halo's tint, so the far range dissolves into the same air
-// the limb wore on the sphere and the sky above continues the profile
-// upward (flatSkyFragmentShader). `hazeStrength` 0 keeps the seam fog alone
-// (transparent space, where no sky is painted).
+// Haze at the horizon; the layout mirrors HorizonFogUniform.swift. Two
+// parts. The seam fog: distances measured in eye heights above the plane,
+// so the band is geometrically glued to the vanishing line, saturating just
+// below it to the frame's clear colour, which is what hides the coverage
+// edge and the horizon-line seam of the surface switch. The haze: the globe
+// atmosphere's profile measured by ANGLE from the visible edge of the
+// surface, the limb of the sphere the surface currently lives on (the
+// unroll keeps it a sphere of radius R / (1 - t) tangent to the view
+// centre, GlobeUnroll.h), which at t = 1 is the plane's horizon: a dense
+// band hugging the edge, a faint glow away from it and a whitening right at
+// it, in the halo's tint, so the air follows the edge through the morph
+// and the far range of a tilted plane dissolves into it. The atmosphere
+// pass paints the same profile on the sky side of the edge. `hazeStrength`
+// 0 keeps the seam fog alone (transparent space, where no sky is painted).
 struct HorizonFog {
     float3 color;
     float3 eye;
@@ -380,75 +382,89 @@ struct HorizonFog {
     float endEyeHeights;
     float hazeStrength;
     float3 hazeColor;
+    // The haze profile widths, radians of angle from the edge, already
+    // morphed for the frame (HorizonFogUniform).
     float bandRadians;
     float glowRadians;
     float whitenRadians;
-    float skyBandRadians;
+    // Radius of the sphere the surface currently lives on, centred at
+    // (0, 0, -limbRadius); zero on the plane, whose edge is the horizon.
+    float limbRadius;
 };
 
 constant float kHorizonHazeBandWeight = 0.85;
 constant float kHorizonHazeGlowWeight = 0.22;
 constant float kHorizonHazeWhitenWeight = 0.5;
-// Below this angle under the horizon the haze is exactly zero (it fades
-// out from the cutoff start): a downward view stays byte-clean, as the
-// seam fog always kept it.
-constant float kHorizonHazeCutoffStartRadians = 20.0 * M_PI_F / 180.0;
-constant float kHorizonHazeCutoffEndRadians = 40.0 * M_PI_F / 180.0;
+// The ground haze is exactly zero past this many glow widths under the
+// edge (fading out from the first): the map under the camera stays
+// byte-clean, as the seam fog always kept it.
+constant float kHorizonHazeCutoffStartGlows = 1.2;
+constant float kHorizonHazeCutoffEndGlows = 2.5;
 
-/// The haze colour at an angle below the horizon (radians, >= 0): the halo
-/// tint, whitened toward the line.
-static inline float3 horizonHazeTint(constant HorizonFog& fog, float belowRadians) {
-    float whiten = exp(-belowRadians / fog.whitenRadians) * kHorizonHazeWhitenWeight;
+/// Signed angle of a unit view direction above the surface's visible edge:
+/// above the limb of the current sphere, or above the plane's horizon.
+static inline float horizonAngleAboveEdge(constant HorizonFog& fog, float3 direction) {
+    if (fog.limbRadius > 0.0) {
+        float3 toCenter = float3(0.0, 0.0, -fog.limbRadius) - fog.eye;
+        float distance = length(toCenter);
+        float limb = asin(clamp(fog.limbRadius / max(distance, 1e-6), 0.0, 1.0));
+        float ray = acos(clamp(dot(direction, toCenter / max(distance, 1e-6)), -1.0, 1.0));
+        return ray - limb;
+    }
+    return asin(clamp(direction.z, -1.0, 1.0));
+}
+
+/// The haze colour at an angle from the edge (radians, >= 0): the halo
+/// tint, whitened toward the edge.
+static inline float3 horizonHazeTint(constant HorizonFog& fog, float fromEdgeRadians) {
+    float whiten = exp(-fromEdgeRadians / fog.whitenRadians) * kHorizonHazeWhitenWeight;
     return mix(fog.hazeColor, float3(1.0), whiten);
 }
 
-/// How much haze covers the ground at an angle below the horizon.
-static inline float horizonHazeAmount(constant HorizonFog& fog, float belowRadians) {
-    float band = exp(-belowRadians / fog.bandRadians);
-    float glow = exp(-belowRadians / fog.glowRadians);
-    float cutoff = 1.0 - smoothstep(kHorizonHazeCutoffStartRadians, kHorizonHazeCutoffEndRadians, belowRadians);
-    return saturate(band * kHorizonHazeBandWeight + glow * kHorizonHazeGlowWeight) * cutoff * fog.hazeStrength;
+/// The profile: how much air a pixel this far from the edge looks through.
+static inline float horizonHazeProfile(constant HorizonFog& fog, float fromEdgeRadians) {
+    float band = exp(-fromEdgeRadians / fog.bandRadians);
+    float glow = exp(-fromEdgeRadians / fog.glowRadians);
+    return saturate(band * kHorizonHazeBandWeight + glow * kHorizonHazeGlowWeight);
 }
 
-/// What a pixel below the horizon shows where nothing was drawn (a hole in
-/// the coverage): the clear colour, hazed exactly as the ground there would
-/// be, so the hole matches its surroundings from the camera's feet to the
-/// line.
+/// How much haze covers the ground at an angle below the edge.
+static inline float horizonHazeAmount(constant HorizonFog& fog, float belowRadians) {
+    float cutoff = 1.0 - smoothstep(kHorizonHazeCutoffStartGlows * fog.glowRadians,
+                                    kHorizonHazeCutoffEndGlows * fog.glowRadians,
+                                    belowRadians);
+    return horizonHazeProfile(fog, belowRadians) * cutoff * fog.hazeStrength;
+}
+
+/// What a pixel below the edge shows where nothing was drawn (a hole in the
+/// coverage): the clear colour, hazed exactly as the ground there would be.
 static inline float3 horizonHoleColor(constant HorizonFog& fog, float belowRadians) {
     return mix(fog.color, horizonHazeTint(fog, belowRadians), horizonHazeAmount(fog, belowRadians));
 }
 
-/// The sky colour at an angle above the horizon (radians, >= 0): the
-/// horizon's whitened tint deepening to the halo blue upward, the profile
-/// the ground haze continues across the line.
-static inline float3 horizonSkyColor(constant HorizonFog& fog, float aboveRadians) {
-    float3 lineTint = horizonHazeTint(fog, 0.0);
-    return mix(lineTint, fog.hazeColor, 1.0 - exp(-aboveRadians / fog.skyBandRadians));
-}
-
-/// The fog's amount and target at a ground point: the seam fog by distance,
-/// the haze by angle, whichever covers more, in the haze tint when the haze
-/// is on and the clear colour otherwise.
-static inline float2 horizonFogAmountAndTintWeight(constant HorizonFog& fog,
-                                                   float3 worldPos,
-                                                   thread float3& target) {
+/// The fog's amount at a ground point and the colour it fogs to: the seam
+/// fog by distance and the haze by angle, whichever covers more, in the
+/// haze tint when the haze is on and the clear colour otherwise.
+static inline float horizonFogAmount(constant HorizonFog& fog,
+                                     float3 worldPos,
+                                     thread float3& target) {
     float eyeHeight = max(abs(fog.eye.z), 1e-4);
     float3 toPoint = worldPos - fog.eye;
     float distanceToEye = length(toPoint);
     float seamFog = smoothstep(fog.startEyeHeights * eyeHeight,
                                fog.endEyeHeights * eyeHeight,
-                               distanceToEye);
-    float below = atan2(eyeHeight, max(length(toPoint.xy), 1e-6));
+                               distanceToEye) * fog.strength;
+    float below = max(-horizonAngleAboveEdge(fog, toPoint / max(distanceToEye, 1e-6)), 0.0);
     float haze = horizonHazeAmount(fog, below);
     target = mix(fog.color, horizonHazeTint(fog, below), fog.hazeStrength);
-    return float2(max(seamFog, haze) * fog.strength, 0.0);
+    return max(seamFog, haze);
 }
 
 static inline float3 applyHorizonFog(float3 color,
                                      constant HorizonFog& fog,
                                      float3 worldPos) {
     float3 target;
-    float amount = horizonFogAmountAndTintWeight(fog, worldPos, target).x;
+    float amount = horizonFogAmount(fog, worldPos, target);
     return mix(color, target, amount);
 }
 
@@ -458,7 +474,7 @@ static inline half3 applyHorizonFog(half3 color,
                                     constant HorizonFog& fog,
                                     float3 worldPos) {
     float3 target;
-    half amount = half(horizonFogAmountAndTintWeight(fog, worldPos, target).x);
+    half amount = half(horizonFogAmount(fog, worldPos, target));
     return mix(color, half3(target), amount);
 }
 

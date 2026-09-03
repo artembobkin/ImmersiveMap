@@ -26,6 +26,9 @@ struct AtmosphereUniform {
     var transition: Float
     var intensity: Float
     var thickness: Float
+    /// The horizon haze the ground draws with: past the resting sphere the
+    /// halo is its sky side, measured by angle from the current edge.
+    var fog: HorizonFogUniform
 
     /// Sky blue; the very edge whitens toward the limb in the shader.
     static let haloColor = SIMD3<Float>(0.40, 0.66, 1.0)
@@ -34,7 +37,8 @@ struct AtmosphereUniform {
 
     static func make(globe: GlobeUniform,
                      projectionView: matrix_float4x4,
-                     cameraEye: SIMD3<Float>) -> AtmosphereUniform {
+                     cameraEye: SIMD3<Float>,
+                     fog: HorizonFogUniform) -> AtmosphereUniform {
         AtmosphereUniform(inverseViewProjection: simd_inverse(projectionView),
                           eye: cameraEye,
                           center: SIMD3<Float>(0, 0, -globe.radius),
@@ -42,6 +46,7 @@ struct AtmosphereUniform {
                           radius: globe.radius,
                           transition: globe.transition,
                           intensity: haloIntensity,
-                          thickness: haloThickness)
+                          thickness: haloThickness,
+                          fog: fog)
     }
 }

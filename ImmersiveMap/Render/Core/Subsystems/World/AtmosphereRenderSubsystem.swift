@@ -43,35 +43,32 @@ final class AtmosphereRenderSubsystem: RenderSubsystem {
             return
         }
         guard layer == .atmosphere else { return }
-        if frameContext.renderSurfaceMode == .spherical,
-           // The atmosphere hugs the limb: with the planet filling the
-           // whole viewport there is neither halo nor rim on screen.
-           StarfieldRenderSubsystem.frameShowsSky(frameContext: frameContext) {
-            // Depth off explicitly: the rim glow paints over the ground, whose
-            // opaque layers wrote their rank depth at the far plane.
-            encoder.setDepthStencilState(depthDisabledState)
-            let uniform = AtmosphereUniform.make(globe: frameContext.globeRenderUniform,
-                                                 projectionView: frameContext.cameraMatrices.projectionView,
-                                                 cameraEye: frameContext.cameraEye)
-            atmosphereRenderer.draw(renderEncoder: encoder, uniform: uniform)
-        }
-        encodeFlatSky(encoder: encoder, frameContext: frameContext)
-    }
-
-    /// The flat sky: the horizon haze's profile above the line. On the plane
-    /// always; during the unfurl blended in with the transition, like the
-    /// ground fog, so the surface switch happens between identical skies.
-    /// Never under transparent space (the layer is off there).
-    private func encodeFlatSky(encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         let settings = frameContext.services.settings
-        guard frameContext.transition > 0, settings.scene.space.isTransparent == false else { return }
-        let fog = HorizonFogUniform.make(transition: frameContext.transition,
+        let transition = frameContext.transition
+        if frameContext.renderSurfaceMode == .spherical,
+           transition <= 0,
+           // The resting halo hugs the limb: with the planet filling the
+           // whole viewport there is neither halo nor rim on screen.
+           StarfieldRenderSubsystem.frameShowsSky(frameContext: frameContext) == false {
+            return
+        }
+        let fog = HorizonFogUniform.make(transition: transition,
+                                         geometryTransition: frameContext.globeRenderUniform.transition,
                                          cameraEye: frameContext.cameraEye,
                                          mapClearColor: settings.scene.mapClearColor,
-                                         hazeEnabled: true)
-        let uniform = FlatSkyUniform.make(projectionView: frameContext.cameraMatrices.projectionView, fog: fog)
-        encoder.setDepthStencilState(skyBackdropDepthState)
-        atmosphereRenderer.drawFlatSky(renderEncoder: encoder, uniform: uniform)
+                                         globeRadius: frameContext.globeRenderUniform.radius,
+                                         hazeEnabled: settings.scene.space.isTransparent == false)
+        let uniform = AtmosphereUniform.make(globe: frameContext.globeRenderUniform,
+                                             projectionView: frameContext.cameraMatrices.projectionView,
+                                             cameraEye: frameContext.cameraEye,
+                                             fog: fog)
+        // On the resting sphere depth is off: the rim glow paints over the
+        // ground, whose opaque layers wrote their rank depth at the far
+        // plane. From the first step of the unroll the halo is the sky side
+        // of the edge haze (the ground haze takes the rim's place), painted
+        // only where the surface left the far plane.
+        encoder.setDepthStencilState(transition <= 0 ? depthDisabledState : skyBackdropDepthState)
+        atmosphereRenderer.draw(renderEncoder: encoder, uniform: uniform)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

@@ -26,6 +26,7 @@ struct Atmosphere {
     float transition;
     float intensity;
     float thickness;
+    HorizonFog fog;
 };
 
 struct AtmosphereVertexOut {
@@ -55,10 +56,13 @@ constant float kAtmosphereRimWidth = 0.025;
 constant half kAtmosphereBandWeight = 0.85h;
 constant half kAtmosphereGlowWeight = 0.22h;
 constant half kAtmosphereWhitenWeight = 0.5h;
-// The halo is gone by the time the sphere is a third unrolled, the same
-// window the polar caps fade in: past it the limb the halo is fitted to has
-// started moving.
-constant half kAtmosphereTransitionFadeEnd = 0.35h;
+// The resting halo, fitted to the sphere in radii of miss distance, hands
+// over during the first tenth of the unroll to the edge haze (HorizonFog):
+// the same profile measured by angle from the limb of the sphere the
+// surface currently lives on, which follows the edge through the morph and
+// is the plane's horizon at the end. Mirrored by
+// HorizonFogUniform.hazeRampEnd.
+constant float kAtmosphereHandoverEnd = 0.1;
 
 fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
                                         constant Atmosphere& atmosphere [[buffer(0)]]) {
@@ -93,45 +97,33 @@ fragment half4 atmosphereFragmentShader(AtmosphereVertexOut in [[stage_in]],
         brightness *= half(exp(signedMiss / (kAtmosphereRimWidth * thickness)));
     }
 
-    half fade = 1.0h - smoothstep(0.0h, kAtmosphereTransitionFadeEnd, half(atmosphere.transition));
-
     // Premultiplied output over what is behind: the color is the halo tint,
     // whitened toward the limb, weighted by the brightness; the alpha is the
     // brightness itself, so the halo covers the limb and thins to nothing
     // both into space and over the map, and stars right behind the air dim
     // under it.
     half3 tint = mix(half3(atmosphere.color), half3(1.0h), whiten * kAtmosphereWhitenWeight);
-    half coverage = brightness * half(atmosphere.intensity) * fade;
-    return half4(tint * coverage, saturate(coverage));
-}
+    half coverage = brightness * half(atmosphere.intensity);
+    half4 resting = half4(tint * coverage, saturate(coverage));
 
-// The sky of the flat presentation: one fullscreen triangle at the far
-// plane, drawn after the ground under a lessEqual depth test, so it paints
-// only where nothing else did (above the horizon, and any hole in the
-// coverage). Per pixel the view ray's angle to the ground plane's horizon
-// selects the horizon haze profile: above the line the sky deepens from
-// the whitened horizon tint to the halo blue, below it the pixel gets the
-// haze the ground would have worn there, so the coverage edge and the
-// horizon line meet in one colour. During the unfurl it blends in with the
-// transition, the way the ground fog does, so the surface switch happens
-// between identical skies.
-//
-// Layout mirrors FlatSkyUniform.swift.
-struct FlatSky {
-    float4x4 inverseViewProjection;
-    HorizonFog fog;
-};
-
-fragment half4 flatSkyFragmentShader(AtmosphereVertexOut in [[stage_in]],
-                                     constant FlatSky& sky [[buffer(0)]]) {
-    float4 farPoint = sky.inverseViewProjection * float4(in.ndc, 1.0, 1.0);
-    float3 direction = normalize(farPoint.xyz / farPoint.w - sky.fog.eye);
-    float elevation = asin(clamp(direction.z, -1.0, 1.0));
-    float3 color = elevation >= 0.0
-        ? horizonSkyColor(sky.fog, elevation)
-        : horizonHoleColor(sky.fog, -elevation);
-    half alpha = half(sky.fog.strength);
-    return half4(half3(color) * alpha, alpha);
+    // The edge haze: the sky side of the same profile by angle from the
+    // current edge. Under the sky's depth test past the resting sphere it
+    // reaches only pixels the surface left; a pixel below the edge there is
+    // a hole in the coverage and shows the hazed clear colour.
+    half handover = half(smoothstep(0.0, kAtmosphereHandoverEnd, atmosphere.transition));
+    if (handover <= 0.0h) {
+        return resting;
+    }
+    float above = horizonAngleAboveEdge(atmosphere.fog, direction);
+    half4 edge;
+    if (above >= 0.0) {
+        half edgeCoverage = half(horizonHazeProfile(atmosphere.fog, above) * atmosphere.fog.hazeStrength);
+        edge = half4(half3(horizonHazeTint(atmosphere.fog, above)) * edgeCoverage, edgeCoverage);
+    } else {
+        half strength = half(atmosphere.fog.strength);
+        edge = half4(half3(horizonHoleColor(atmosphere.fog, -above)) * strength, strength);
+    }
+    return mix(resting, edge, handover);
 }
 
 // The luminous body of the planet, drawn right after the stars and BEFORE

@@ -87,7 +87,8 @@ final class AtmosphereOffscreenRenderTests: XCTestCase {
 /// Atmosphere.metal: same offsets, same 128-byte stride.
 final class AtmosphereUniformLayoutTests: XCTestCase {
     func testLayoutMirrorsTheShaderStruct() {
-        XCTAssertEqual(MemoryLayout<AtmosphereUniform>.stride, 128)
+        XCTAssertEqual(MemoryLayout<AtmosphereUniform>.stride, 128 + 80)
+        XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.fog), 128)
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.inverseViewProjection), 0)
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.eye), 64)
         XCTAssertEqual(MemoryLayout<AtmosphereUniform>.offset(of: \.center), 80)

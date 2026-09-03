@@ -10,19 +10,23 @@ once the public API stabilizes.
 
 ### Added
 
-- The flat map's horizon wears the globe's air. The horizon fog gains the
-  atmosphere's three-part profile turned inward: a dense band hugging the
-  horizon, a wide faint glow down the plain and a whitening right at the
-  line, in the halo's blue, measured by each pixel's angle below the
-  horizon (`HorizonFogUniform`, 6, 20 and 2 degrees), so the far range of a
-  tilted view dissolves into haze well before it reaches the line instead of
-  meeting a beige wall half a degree from it. Above the line a new flat sky
-  pass (`flatSkyFragmentShader`, drawn after the ground under the far-plane
-  depth test) continues the same profile upward, the whitened horizon
-  deepening to the halo blue, and blends in with the transition during the
-  unfurl so the surface switch happens between identical skies. The seam
-  fog by distance stays underneath as the guarantee at the coverage edge.
-  Transparent space keeps the old clear-colour fog and paints no sky.
+- The atmosphere follows the surface's edge through the unfurl and onto
+  the plane. The unroll keeps the surface a sphere of radius R / (1 - t)
+  tangent to the view centre, so from the first step of the morph the halo
+  is measured by angle from that sphere's limb, which is the visible edge
+  of the surface and, at the end, the plane's horizon: the halo no longer
+  fades out a third of the way through the morph and leaves a bare edge,
+  it rides the edge down to the horizon. The same profile, a dense band
+  hugging the edge, a faint glow away from it and a whitening right at it
+  in the halo's blue, is the horizon fog's haze on the ground side
+  (`HorizonFogUniform`), its widths morphing from the resting halo's (its
+  radii converted to angle at the limb) to a narrow plane band (2, 10 and
+  0.7 degrees) that is a horizon effect and not a tint over the map; it is
+  exactly zero under the camera. The atmosphere layer now draws on the
+  plane too, painting the sky side of the edge where the ground left the
+  far plane. The seam fog by distance stays underneath as the guarantee at
+  the coverage edge; transparent space keeps the clear-colour fog and
+  paints no sky.
 
 - The footprint fade of the flat ground fills, the vector map's stand-in
   for a mipmap: the fill shader measures how much ground a pixel covers
