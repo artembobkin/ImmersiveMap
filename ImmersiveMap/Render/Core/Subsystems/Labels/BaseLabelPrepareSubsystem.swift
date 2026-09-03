@@ -56,26 +56,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     // (record, slot) pairs whose placement compute is encoded into the current
     // frame's command buffer; committed to stamps only after commit().
     private var pendingPlacementStamps: [(record: RoadLabelTileRecord, slot: Int)] = []
-
-    /// The last committed frame's placement compute outputs, reusable by the
-    /// immediately following frame: labels are slow entities (they fade over
-    /// seconds and anchor to the ground), so at the interaction frame rate a
-    /// screen position computed one frame ago is indistinguishable from a
-    /// fresh one, and every second frame simply skips both compute encoders.
-    /// Reuse requires the same content (see `placementFingerprint`); the
-    /// per-slot runtime meta (fades) always comes from the CURRENT frame's
-    /// static batches, so the CPU-write-versus-GPU-read slot discipline is
-    /// untouched, and the reused buffers are only ever rewritten by a later
-    /// frame's GPU compute, which Metal's hazard tracking orders.
-    private struct ReusablePlacementOutputs {
-        let frameIndex: UInt64
-        let fingerprint: Int
-        let basePointCount: Int
-        let baseScreenPositionsBuffer: MTLBuffer?
-        let roadPlacementBuffers: [ObjectIdentifier: MTLBuffer]
-    }
-    private var committedPlacementOutputs: ReusablePlacementOutputs?
-    private var pendingPlacementOutputs: ReusablePlacementOutputs?
     private var cachedBaseProjection: TilePointScreenProjectionResult = .empty
     private var cachedBaseProjectionFingerprint: Int?
     private var cachedBaseProjectionTopologyGeneration: UInt64 = 0
@@ -277,110 +257,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return (full: fullCount, reduced: reducedCount, minimal: minimalCount)
     }
 
-    /// The road records whose placement compute would run this frame: the
-    /// active (near-camera) records with content. One list feeds the run
-    /// path, the reuse check and the fingerprint, so they cannot disagree.
-    private func eligibleRoadRecords() -> [(index: Int, record: RoadLabelTileRecord)] {
-        guard let roadLabelCache, roadLabelCache.orderedTileRecords.isEmpty == false else {
-            return []
-        }
-        let activeRecordIndices = latestActiveRoadRecordIndices
-        var eligible: [(index: Int, record: RoadLabelTileRecord)] = []
-        for (index, record) in roadLabelCache.orderedTileRecords.enumerated() {
-            if let activeRecordIndices, activeRecordIndices.contains(index) == false {
-                continue
-            }
-            guard record.pathPointCount > 0, record.glyphCount > 0 else { continue }
-            eligible.append((index, record))
-        }
-        return eligible
-    }
-
-    /// What the placement compute depends on besides the camera: reuse is
-    /// allowed only while this is unchanged, so a content change (a label
-    /// arriving, a record replaced by a re-parse) always recomputes.
-    private func placementFingerprint(basePointCount: Int,
-                                      eligibleRecords: [(index: Int, record: RoadLabelTileRecord)]) -> Int {
-        var hasher = Hasher()
-        hasher.combine(basePointCount)
-        hasher.combine(cachedBaseProjectionTopologyGeneration)
-        for entry in eligibleRecords {
-            hasher.combine(entry.index)
-            hasher.combine(ObjectIdentifier(entry.record))
-            hasher.combine(entry.record.glyphCount)
-        }
-        return hasher.finalize()
-    }
-
-    /// Publishes the previous frame's compute outputs for this frame's draw
-    /// and skips both compute encoders. Only the immediately following frame
-    /// with identical content qualifies, so the compute runs on every other
-    /// rendered frame during motion and positions lag by at most one frame.
-    private func reusePlacementOutputsIfPossible(frameContext: FrameContext,
-                                                 fingerprint: Int,
-                                                 basePointCount: Int,
-                                                 eligibleRecords: [(index: Int, record: RoadLabelTileRecord)]) -> Bool {
-        guard let last = committedPlacementOutputs,
-              frameContext.frameIndex == last.frameIndex &+ 1,
-              last.fingerprint == fingerprint else {
-            return false
-        }
-        if basePointCount > 0 {
-            guard let baseScreenPositionsBuffer = last.baseScreenPositionsBuffer else { return false }
-            frameContext.sharedState.baseLabelState.screenPositionsBuffer = baseScreenPositionsBuffer
-        }
-        guard eligibleRecords.isEmpty == false else { return true }
-        // The reused placement pairs with the CURRENT frame's runtime meta
-        // (fades are CPU-written per slot every frame); only the GPU-written
-        // screen placements come from the previous frame.
-        let staticBatches = frameContext.sharedState.roadLabelState.drawLabels
-        var drawBatches: [DrawRoadLabels] = []
-        drawBatches.reserveCapacity(eligibleRecords.count)
-        for entry in eligibleRecords {
-            guard let placementBuffer = last.roadPlacementBuffers[ObjectIdentifier(entry.record)] else {
-                return false
-            }
-            guard entry.index < staticBatches.count else { continue }
-            let existingBatch = staticBatches[entry.index]
-            drawBatches.append(DrawRoadLabels(placementBuffer: placementBuffer,
-                                              glyphInputBuffer: entry.record.glyphInputsBuffer,
-                                              runtimeMetaBuffer: existingBatch.runtimeMetaBuffer,
-                                              localGlyphVertices: entry.record.localGlyphVertices,
-                                              glyphCount: entry.record.glyphCount,
-                                              labelStyle: entry.record.labelStyle))
-        }
-        frameContext.sharedState.roadLabelState.drawLabels = drawBatches
-        frameContext.sharedState.roadLabelState.placementBuffer = drawBatches.first?.placementBuffer
-        frameContext.sharedState.roadLabelState.glyphInputBuffer = drawBatches.first?.glyphInputBuffer
-        frameContext.sharedState.roadLabelState.runtimeMetaBuffer = drawBatches.first?.runtimeMetaBuffer
-        return true
-    }
-
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
-        // Stamps and outputs from a previous frame that never reached
-        // frameCommitted (the frame was dropped without commit) - the compute
-        // never ran, so neither must be committed.
+        // Stamps from the previous frame that never reached frameCommitted (the
+        // frame was dropped without commit) - the compute never ran, so they
+        // must not be committed.
         pendingPlacementStamps.removeAll(keepingCapacity: true)
-        pendingPlacementOutputs = nil
         guard let commandBuffer = frameContext.commandBuffer else {
             return
         }
-        let basePointCount = baseLabelCache.activeLabelSpanCount
-
-        // Every second frame reuses the previous frame's placement compute
-        // (see ReusablePlacementOutputs): the reused screen positions lag
-        // the camera by one frame, which at the interaction frame rate is
-        // below anything the eye can attribute to a label.
-        let eligibleRecords = eligibleRoadRecords()
-        let fingerprint = placementFingerprint(basePointCount: basePointCount,
-                                               eligibleRecords: eligibleRecords)
-        if reusePlacementOutputsIfPossible(frameContext: frameContext,
-                                           fingerprint: fingerprint,
-                                           basePointCount: basePointCount,
-                                           eligibleRecords: eligibleRecords) {
-            return
-        }
         let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
+        let basePointCount = baseLabelCache.activeLabelSpanCount
 
         // Road records are gathered up front: all point-to-screen dispatches of
         // the frame (base labels + road paths) go into one compute encoder, all
@@ -394,15 +280,24 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         var roadPathDispatches: [RoadPathDispatch] = []
         var placementDispatches: [RoadLabelPlacementCalculator.RecordDispatch] = []
         var drawBatches: [DrawRoadLabels] = []
-        var roadPlacementBuffers: [ObjectIdentifier: MTLBuffer] = [:]
-        let hasRoadRecords = (roadLabelCache?.orderedTileRecords.isEmpty ?? true) == false
+        var hasRoadRecords = false
 
-        if hasRoadRecords {
+        if let roadLabelCache, roadLabelCache.orderedTileRecords.isEmpty == false {
+            hasRoadRecords = true
             let staticBatches = frameContext.sharedState.roadLabelState.drawLabels
-            drawBatches.reserveCapacity(eligibleRecords.count)
+            let records = roadLabelCache.orderedTileRecords
+            let activeRecordIndices = latestActiveRoadRecordIndices
+            drawBatches.reserveCapacity(records.count)
 
-            for (index, record) in eligibleRecords {
-                guard let pathInputsBuffer = record.pathInputsBuffer,
+            for (index, record) in records.enumerated() {
+                if let activeRecordIndices,
+                   activeRecordIndices.contains(index) == false {
+                    continue
+                }
+
+                guard record.pathPointCount > 0,
+                      record.glyphCount > 0,
+                      let pathInputsBuffer = record.pathInputsBuffer,
                       let pathRangesBuffer = record.pathRangesBuffer,
                       let anchorsBuffer = record.anchorsBuffer,
                       let glyphInputsBuffer = record.glyphInputsBuffer,
@@ -436,7 +331,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 // be dropped after prepareGPU (no drawable), and the encoded
                 // compute would never execute.
                 pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
-                roadPlacementBuffers[ObjectIdentifier(record)] = placementBuffer
 
                 if index < staticBatches.count {
                     let existingBatch = staticBatches[index]
@@ -476,17 +370,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
             MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
         }
-        var baseScreenPositionsBuffer: MTLBuffer?
         if basePointCount > 0 {
-            baseScreenPositionsBuffer = baseScreenCompute.outputBuffer(slot: frameContext.frameSlotIndex,
-                                                                       count: basePointCount)
-            frameContext.sharedState.baseLabelState.screenPositionsBuffer = baseScreenPositionsBuffer
+            frameContext.sharedState.baseLabelState.screenPositionsBuffer = baseScreenCompute.outputBuffer(slot: frameContext.frameSlotIndex,
+                                                                                                           count: basePointCount)
         }
-        pendingPlacementOutputs = ReusablePlacementOutputs(frameIndex: frameContext.frameIndex,
-                                                           fingerprint: fingerprint,
-                                                           basePointCount: basePointCount,
-                                                           baseScreenPositionsBuffer: baseScreenPositionsBuffer,
-                                                           roadPlacementBuffers: roadPlacementBuffers)
 
         guard hasRoadRecords else {
             return
@@ -512,10 +399,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             pending.record.markPlacementEncoded(slot: pending.slot)
         }
         pendingPlacementStamps.removeAll(keepingCapacity: true)
-        if let pendingPlacementOutputs {
-            committedPlacementOutputs = pendingPlacementOutputs
-        }
-        pendingPlacementOutputs = nil
     }
 
     func handleMemoryWarning() {
@@ -536,8 +419,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         latestActiveRoadRecordIndices = nil
         roadPlacementDataPending = false
         pendingPlacementStamps.removeAll(keepingCapacity: false)
-        committedPlacementOutputs = nil
-        pendingPlacementOutputs = nil
         baseSourceEntriesVersionTracker.invalidate()
         roadSourceEntriesVersionTracker.invalidate()
         projectionVersionTracker.invalidate()
