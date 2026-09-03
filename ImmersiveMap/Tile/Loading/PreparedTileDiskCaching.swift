@@ -605,7 +605,11 @@ final class PreparedTileDiskCaching {
     // fill's own vertices (`fillOutlinesIndexStart`), and the ground style
     // runs carry a class flag for it. A v84 entry has no outline segment and
     // its fills would draw with no edge antialiasing.
-    static let preparedFormatVersion: UInt32 = 85
+    // 86: the ground style gains the footprint fade's far colour pair
+    // (`TilePolygonStyle.farColor`, `farStreetColor`; the style stride
+    // doubles), the target a fill converges on where a pixel covers more
+    // ground than its detail resolves. A v85 entry carries the old stride.
+    static let preparedFormatVersion: UInt32 = 86
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -10,6 +10,21 @@ once the public API stabilizes.
 
 ### Added
 
+- The footprint fade of the flat ground fills, the vector map's stand-in
+  for a mipmap: the fill shader measures how much ground a pixel covers
+  (the screen derivatives of the ground position along the longer axis, in
+  the source tile's units) and, where that footprint exceeds what the fill's
+  detail can resolve, blends the fill toward the style's far tone
+  (`GroundFootprintFade`, 24 to 96 tile units per pixel). The default style
+  sends every land class, WorldCover and OSM alike, to the vegetation base
+  (settlements keep a quarter of their distance) and leaves water and ice at
+  full contrast, so the far range of a tilted view becomes one calm plain
+  with its lakes and rivers instead of a field of flickering sub-pixel
+  blotches; the fill outline fades out over the same band, since a fill too
+  thin for a pixel would otherwise draw its outline as a hairline. Ground
+  styles carry the far colour pair, so prepared tiles are re-baked (prepared
+  format 86).
+
 - Fill-outline antialiasing on the flat map, the `fill-antialias`
   construction of Mapbox GL: every ground fill's ring edges are drawn once
   more as one-pixel line primitives in the fill's colour, alpha by the

@@ -64,6 +64,9 @@ struct VertexOut {
     // uses.
     float3 worldPos;
     half4 color [[function_constant(kTileFillFields)]];
+    // The footprint fade target with its strength in the alpha, palette
+    // blended like the colour (flat: one value per style).
+    half4 farColor [[flat, function_constant(kTileFillFields)]];
     // Lines classes: the style index rides flat and the fragment resolves
     // colour, fade and line style itself; only the two genuinely
     // per-vertex line fields interpolate (the longitudinal parameter raw,
@@ -85,6 +88,7 @@ struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
     half4 color [[function_constant(kTileFillFields)]];
+    half4 farColor [[flat, function_constant(kTileFillFields)]];
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
@@ -132,6 +136,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         // and the frame only, so the fills fragment neither interpolates
         // the mask nor walks the fade bands.
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
+        Style rawStyle = styles[vertexIn.styleIndex];
+        out.farColor = half4(mix(rawStyle.farColor, rawStyle.farStreetColor, streetPalette.blend));
     }
     return out;
 }
@@ -149,6 +155,7 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileLineFields)]],
                                   constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
+                                  constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
                                   depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     float shadowFactor;
@@ -175,6 +182,20 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                       overviewFade, lineDash);
     } else {
         color = in.color;
+        // The footprint fade: where this pixel covers more of the source
+        // tile than the fill's detail resolves (a tilted far range, a
+        // coarse tile minified), the colour converges on the style's far
+        // tone at the style's strength, so the blotches that flickered
+        // between samples become one plain. The derivatives are taken here,
+        // in uniform flow, before the outline branch.
+        float fade = tileFootprintFadeAmount(in.worldPos, footprintFade);
+        color.rgb = mix(color.rgb, in.farColor.rgb, half(fade) * in.farColor.a);
+        if (kTileFillOutline) {
+            // A fill too thin for a pixel would still draw its outline as a
+            // hairline the full width of the fill; past the fade the
+            // outline goes with the detail it was antialiasing.
+            color.a *= half(1.0 - fade);
+        }
     }
     if (kTileFillOutline) {
         // The projected edge point paired with this fragment, in pixels of

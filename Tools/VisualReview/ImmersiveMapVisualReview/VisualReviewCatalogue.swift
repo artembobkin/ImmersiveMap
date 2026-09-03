@@ -564,16 +564,19 @@ enum VisualReviewCatalogue {
             title: "Fill edges under a tilted camera",
             lookFor: """
             The far half of the frame, where the landcover fields and lakes \
-            shrink to a few pixels. Every fill edge carries a one-pixel \
-            fringe of its own colour that softens the staircase: an edge \
-            should read as a soft line, not a chain of hard steps, and in \
-            the near half the fringe must be invisible against the fill. A \
-            lake's edge must not bleed over the land beside it by more than \
-            a pixel, a field must not gain a dark or light halo, and where \
-            water meets land the water's fringe wins (water is the higher \
-            layer). The far region should look calmer than it did without \
-            the outline, not busier: if the fringes read as extra texture, \
-            they are too strong.
+            shrink to a few pixels. Two things act there. The footprint fade \
+            dissolves the fields, meadows and villages into one green plain \
+            as they lose their pixels, with the lakes and rivers staying \
+            blue and the towns a faint warm patch under their labels: the \
+            far range must read as calm ground, not as flickering blotches, \
+            and the transition from the detailed near half must be gradual \
+            with no visible band or tile seam. Every fill edge also carries \
+            a one-pixel fringe of its own colour that softens the staircase: \
+            an edge should read as a soft line, not a chain of hard steps, \
+            and in the near half the fringe must be invisible against the \
+            fill. A lake's edge must not bleed over the land beside it by \
+            more than a pixel, and no horizontal hairlines may appear where \
+            the fade has taken the fills.
             """,
             settings: .default,
             subject: .still(camera: Place.moscowRegionTilted)),

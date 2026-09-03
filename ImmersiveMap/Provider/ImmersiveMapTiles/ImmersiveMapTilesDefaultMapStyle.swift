@@ -147,7 +147,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // biomes converge on and finish the lerp to the street wood.
             return polygon(key: 11,
                            color: configuration.globalLandcover.forest,
-                           streetColor: configuration.layers.wood)
+                           streetColor: configuration.layers.wood,
+                           far: farVegetation)
         case "grass":
             // OSM tags countless small courtyards/verges as generic grass; at city
             // zooms suppress those (keep only real green-space subclasses) so they
@@ -157,15 +158,18 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             }
             return polygon(key: 12,
                            color: configuration.globalLandcover.grass,
-                           streetColor: configuration.layers.grass)
+                           streetColor: configuration.layers.grass,
+                           far: farVegetation)
         case "farmland":
             return polygon(key: 13,
                            color: configuration.globalLandcover.crop,
-                           streetColor: configuration.layers.farmland)
+                           streetColor: configuration.layers.farmland,
+                           far: farVegetation)
         case "wetland":
             return polygon(key: 14,
                            color: configuration.globalLandcover.wetland,
-                           streetColor: configuration.layers.wetland)
+                           streetColor: configuration.layers.wetland,
+                           far: farVegetation)
         case "ice":
             return polygon(key: 17,
                            color: configuration.globalLandcover.snow,
@@ -223,23 +227,27 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "land":
             return polygon(key: 2,
                            color: blend(colors.land, toward: vegetationBase, amount: amount),
-                           streetColor: layers.land)
+                           streetColor: layers.land,
+                           far: farVegetation)
         case "barren":
             return polygon(key: 3, color: colors.barren, streetColor: layers.sand)
         case "grass", "shrub", "moss":
-            return polygon(key: 4, color: colors.grass, streetColor: layers.grass)
+            return polygon(key: 4, color: colors.grass, streetColor: layers.grass, far: farVegetation)
         case "crop":
             return polygon(key: 5,
                            color: blend(colors.crop, toward: vegetationBase, amount: amount),
-                           streetColor: layers.farmland)
+                           streetColor: layers.farmland,
+                           far: farVegetation)
         case "forest":
             return polygon(key: 6,
                            color: blend(colors.forest, toward: vegetationBase, amount: amount * 0.75),
-                           streetColor: layers.wood)
+                           streetColor: layers.wood,
+                           far: farVegetation)
         case "wetland", "mangroves":
             return polygon(key: 7,
                            color: blend(colors.wetland, toward: vegetationBase, amount: amount),
-                           streetColor: layers.wetland)
+                           streetColor: layers.wetland,
+                           far: farVegetation)
         case "snow":
             return polygon(key: 8, color: colors.snow, streetColor: layers.ice)
         case "urban":
@@ -248,7 +256,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // OSM residential beige that replaces it from z10.
             return polygon(key: 10,
                            color: SIMD4<Float>(0.886, 0.871, 0.847, 1.0),
-                           streetColor: layers.residential)
+                           streetColor: layers.residential,
+                           far: farSettlement)
         default:
             // water: left to the background and water layers.
             return hiddenStyle
@@ -290,13 +299,13 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "residential", "suburb", "neighbourhood", "quarter", "allotments":
             // Beige residential/block fills go to the very bottom (key 9), below
             // greenery, otherwise they cover parks (landcover) inside residential polygons.
-            return polygon(key: 9, color: configuration.layers.residential)
+            return polygon(key: 9, color: configuration.layers.residential, far: farSettlement)
         case "industrial", "commercial", "retail", "railway", "quarry":
-            return polygon(key: 9, color: configuration.layers.industrial)
+            return polygon(key: 9, color: configuration.layers.industrial, far: farSettlement)
         case "cemetery", "grass", "park", "recreation_ground", "garden":
             // One green color for all urban greenery (matches landcover grass)
             // to avoid a two-tone seam where the layers meet.
-            return polygon(key: 15, color: configuration.layers.grass)
+            return polygon(key: 15, color: configuration.layers.grass, far: farVegetation)
         default:
             // Unknown landuse: blend into the land base instead of the red fallback.
             return hiddenStyle
@@ -1791,14 +1800,19 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let kind = "\(cls ?? "") \(subclass ?? "")"
         let greenKeywords = ["park", "парк", "garden", "сад", "reserve", "заповедник", "nature"]
         if greenKeywords.contains(where: { kind.contains($0) }) {
-            return polygon(key: 16, color: configuration.layers.grass)
+            return polygon(key: 16, color: configuration.layers.grass, far: farVegetation)
         }
         return hiddenStyle
     }
 
+    /// - Parameter far: the footprint fade target (globe and street
+    ///   palette) and its strength: where a pixel covers more ground than
+    ///   the fill's detail resolves, the colour converges on this tone. nil
+    ///   keeps the fill at full contrast at every distance (water, ice).
     private func polygon(key: UInt8,
                          color: SIMD4<Float>,
-                         streetColor: SIMD4<Float>? = nil) -> FeatureStyle {
+                         streetColor: SIMD4<Float>? = nil,
+                         far: FarTone? = nil) -> FeatureStyle {
         // Every ground fill gets the fill-outline antialiasing: its ring
         // edges draw once more as one-pixel lines with alpha by distance to
         // the edge, so a staircase edge stops crawling under camera motion.
@@ -1806,9 +1820,36 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: key,
             color: color,
             streetColor: streetColor,
+            farColor: far.map { SIMD4<Float>($0.color.x, $0.color.y, $0.color.z, $0.strength) },
+            farStreetColor: far.map { SIMD4<Float>($0.streetColor.x, $0.streetColor.y, $0.streetColor.z, $0.strength) },
             parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
             fillOutlineAntialiasing: true
         )
+    }
+
+    /// The tone a class of ground converges on at distance, one per palette.
+    private struct FarTone {
+        let color: SIMD4<Float>
+        let streetColor: SIMD4<Float>
+        let strength: Float
+    }
+
+    /// The vegetation base is where the land classes meet at distance: a
+    /// far pixel covering fields, meadows, woods and villages together is
+    /// mostly green, so every one of them fades to that green and the
+    /// blotches that were flickering between samples become one plain.
+    /// Settlements keep a quarter of their distance, so a city stays a faint
+    /// warm patch under its label instead of vanishing.
+    private var farVegetation: FarTone {
+        FarTone(color: configuration.globalLandcover.grass,
+                streetColor: configuration.layers.grass,
+                strength: 1.0)
+    }
+
+    private var farSettlement: FarTone {
+        FarTone(color: configuration.globalLandcover.grass,
+                streetColor: configuration.layers.grass,
+                strength: 0.75)
     }
 
     private func line(key: UInt8,

@@ -113,6 +113,11 @@ struct FeatureStyle {
     /// with the overview-to-street handover; nil bakes `color` twice. See
     /// `TilePolygonStyle.streetColor`.
     let streetColor: SIMD4<Float>?
+    /// The footprint fade target of a ground fill, the same globe/street
+    /// pair, with the fade strength in the alpha; nil never fades. See
+    /// `TilePolygonStyle.farColor`.
+    let farColor: SIMD4<Float>?
+    let farStreetColor: SIMD4<Float>?
     let lowZoomFadeMask: Float
     /// See `LineRenderPass.lineWidthPoints`; zero for world-locked lines and
     /// for all polygon geometry.
@@ -178,6 +183,8 @@ struct FeatureStyle {
         key: UInt8,
         color: SIMD4<Float>,
         streetColor: SIMD4<Float>? = nil,
+        farColor: SIMD4<Float>? = nil,
+        farStreetColor: SIMD4<Float>? = nil,
         lowZoomFadeMask: Float = 0.0,
         lineWidthPoints: Float = 0.0,
         dashLengthPoints: Float = 0.0,
@@ -207,6 +214,8 @@ struct FeatureStyle {
         self.key = key
         self.color = color
         self.streetColor = streetColor
+        self.farColor = farColor
+        self.farStreetColor = farStreetColor
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints

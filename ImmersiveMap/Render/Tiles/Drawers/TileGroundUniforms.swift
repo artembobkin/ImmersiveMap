@@ -57,3 +57,21 @@ struct StreetPaletteUniform {
 struct TileFillOutlineUniform {
     var viewportSizePx: SIMD2<Float>
 }
+
+/// Mirror of `FootprintFadeUniform` in TileShading.h (fragment buffer 10 of
+/// the flat fills pipelines): the source tile's units per world unit and the
+/// footprint band of `GroundFootprintFade`.
+struct TileFootprintFadeUniform {
+    var unitsPerWorld: Float
+    var startUnits: Float
+    var endUnits: Float
+    var padding: Float = 0
+
+    init(unitsPerWorld: Float,
+         startUnits: Float = GroundFootprintFade.startUnits,
+         endUnits: Float = GroundFootprintFade.endUnits) {
+        self.unitsPerWorld = unitsPerWorld
+        self.startUnits = startUnits
+        self.endUnits = endUnits
+    }
+}

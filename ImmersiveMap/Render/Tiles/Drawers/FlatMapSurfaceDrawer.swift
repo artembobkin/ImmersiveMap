@@ -341,6 +341,12 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&lineDashUniform,
                                        length: MemoryLayout<LineDashUniform>.stride,
                                        index: 4)
+        // The footprint fade measures the pixel's ground patch in the
+        // source tile's own units, so the scale rides with the draw.
+        var footprintFadeUniform = TileFootprintFadeUniform(unitsPerWorld: 4096.0 / originAndSize.z)
+        renderEncoder.setFragmentBytes(&footprintFadeUniform,
+                                       length: MemoryLayout<TileFootprintFadeUniform>.stride,
+                                       index: 10)
 
         var modelMatrix = Matrix.translationMatrix(
             x: originAndSize.x,

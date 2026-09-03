@@ -35,7 +35,33 @@ struct Style {
     /// the two with the per-frame street blend, so the ground palette hands
     /// over continuously in camera zoom instead of stepping per tile zoom.
     float4 streetColor;
+    /// The footprint fade target, the same pair; alpha is the fade strength
+    /// (0: the style never fades). Mirror of TilePolygonStyle.
+    float4 farColor;
+    float4 farStreetColor;
 };
+
+/// Per-draw footprint fade parameters (Tile.metal, fragment buffer 10):
+/// the source tile's units per world unit, and the footprint band in tile
+/// units per pixel over which a fill fades to its far colour. Mirror of
+/// TileFootprintFadeUniform.
+struct FootprintFadeUniform {
+    float unitsPerWorld;
+    float startUnits;
+    float endUnits;
+    float _padding;
+};
+
+/// How far a fill has faded to its far colour at a pixel: the pixel's
+/// ground footprint along its longer screen axis, in the source tile's
+/// units, against the fade band. Takes screen-space derivatives, so it must
+/// run in uniform control flow. Mirrored by GroundFootprintFade.amount.
+static inline float tileFootprintFadeAmount(float3 worldPos, constant FootprintFadeUniform& fade) {
+    float2 dx = dfdx(worldPos.xy);
+    float2 dy = dfdy(worldPos.xy);
+    float unitsPerPixel = max(length(dx), length(dy)) * fade.unitsPerWorld;
+    return smoothstep(fade.startUnits, fade.endUnits, unitsPerPixel);
+}
 
 /// Per-frame overview-to-street palette blend, from camera zoom.
 struct StreetPaletteUniform {

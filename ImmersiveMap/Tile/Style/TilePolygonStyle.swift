@@ -13,10 +13,24 @@ struct TilePolygonStyle {
     /// with the `Style` structs in Tile.metal and TileExtruded.metal and an
     /// arena span stride; changing it is a prepared-cache format change.
     let streetColor: SIMD4<Float>
+    /// The footprint fade's target, the same globe/street pair: where a
+    /// screen pixel covers more ground than the style's detail can resolve
+    /// (a tilted far range, a coarse tile minified), the fragment blends
+    /// the fill toward this colour, so neighbouring fills converge on one
+    /// tone instead of flickering between samples. The alpha is the fade
+    /// strength: 1 fades fully to the target, 0 (the default) never fades.
+    /// See `GroundFootprintFade`.
+    let farColor: SIMD4<Float>
+    let farStreetColor: SIMD4<Float>
 
-    init(color: SIMD4<Float>, streetColor: SIMD4<Float>? = nil) {
+    init(color: SIMD4<Float>,
+         streetColor: SIMD4<Float>? = nil,
+         farColor: SIMD4<Float>? = nil,
+         farStreetColor: SIMD4<Float>? = nil) {
         self.color = color
         self.streetColor = streetColor ?? color
+        self.farColor = farColor ?? SIMD4<Float>(0, 0, 0, 0)
+        self.farStreetColor = farStreetColor ?? self.farColor
     }
 }
 
