@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import MetalKit
+import simd
 
 class DetermineFeatureStyle {
     private let fallbackKey: UInt8 = 0
