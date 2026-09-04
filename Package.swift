@@ -15,8 +15,17 @@ let package = Package(
         )
     ],
     targets: [
+        // The ear-clipping triangulator, a port of mapbox/earcut. Its own
+        // module so the algorithm depends on nothing in the engine and the
+        // engine reaches it through one public entry point.
+        .target(
+            name: "Earcut",
+            path: "Earcut",
+            exclude: ["README.md"]
+        ),
         .target(
             name: "ImmersiveMap",
+            dependencies: ["Earcut"],
             path: "ImmersiveMap",
             exclude: [
                 "Avatars/README.md",
@@ -58,6 +67,11 @@ let package = Package(
                 .process("Render/Shaders/Shared/GeoMath.metal"),
                 .process("Render/Tiles/Shaders"),
             ]
+        ),
+        .testTarget(
+            name: "EarcutTests",
+            dependencies: ["Earcut"],
+            path: "Tests/EarcutTests"
         ),
         .testTarget(
             name: "ImmersiveMapTests",

@@ -20,6 +20,14 @@ once the public API stabilizes.
   a kerb), no carriageway surfaces. The zebra crossing read off the crossing
   footway's own attribute stays. The measured streetscape is opt-in (see
   Added), and prepared tiles are re-baked (prepared format 88).
+- The earcut triangulator is its own SwiftPM target, `Earcut`, that the
+  `ImmersiveMap` target depends on: the ported algorithm now sits behind one
+  public entry point (`Earcut.tessellate(data:holeIndices:dim:)`, with
+  `Earcut.deviation(data:holeIndices:dim:triangles:)` as the quality check)
+  instead of being a file inside the tile parser, and its tests run as the
+  separate `EarcutTests` target. The target is not a library product, so an
+  app's `import ImmersiveMap` and the `ImmersiveMap` product it links are
+  unchanged; the package just builds one more module.
 
 ### Removed
 

@@ -6,7 +6,7 @@ to include in an app's acknowledgements screen.
 
 ## earcut (Mapbox)
 
-`ImmersiveMap/Tile/Parse/Earcut.swift` is a Swift port of
+The `Earcut` target (`Earcut/Earcut.swift`) is a Swift port of
 [mapbox/earcut](https://github.com/mapbox/earcut), used under the ISC license:
 
 ```text
@@ -27,6 +27,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-ImmersiveMap has no package dependencies: the Mapbox Vector Tile decoder in
-`ImmersiveMap/Tile/Parse/Mvt/` is written against the published schema, so
-nothing else ships with it.
+ImmersiveMap has no package dependencies: the earcut port above is a target of
+this package rather than a package of its own, and the Mapbox Vector Tile
+decoder in `ImmersiveMap/Tile/Parse/Mvt/` is written against the published
+schema, so nothing else ships with it.

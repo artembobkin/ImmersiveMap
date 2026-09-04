@@ -1,13 +1,14 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
+import Earcut
 import XCTest
 
-/// Validates the internal earcut port. The canonical invariant, taken from the
-/// reference implementation's own test suite, is area deviation: the summed
-/// area of the produced triangles must match the polygon area (holes
-/// subtracted) almost exactly.
+/// Validates the earcut port through its public API, the way a client of the
+/// module sees it. The canonical invariant, taken from the reference
+/// implementation's own test suite, is area deviation: the summed area of the
+/// produced triangles must match the polygon area (holes subtracted) almost
+/// exactly.
 final class EarcutTessellationTests: XCTestCase {
     func testSquareProducesTwoTriangles() {
         let data: [Double] = [0, 0, 10, 0, 10, 10, 0, 10]
