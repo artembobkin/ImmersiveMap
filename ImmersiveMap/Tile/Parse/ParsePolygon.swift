@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Earcut
-import MetalKit
+import simd
 import Mvt
 
 class ParsePolygon {
