@@ -23,6 +23,33 @@ concave fills of a tile) and `RoofGeometryBuilder` (the sloped roof surfaces);
 the tests are `Tests/EarcutTests`, which import the module the way a client
 would, without `@testable`.
 
+## Files
+
+`Earcut.swift` is the public enum and nothing else: the two static entry
+points and the shoelace sum they share. Everything below it is
+`EarcutCore`, one triangulation of one polygon, split by the phase of the
+algorithm it belongs to:
+
+- `EarcutCore.swift`: the node struct, the pool the nodes live in, and `run`,
+  which is the whole algorithm read top to bottom.
+- `EarcutLinkedList.swift`: building a ring into the circular doubly linked
+  list, and pruning the vertices that carry no shape.
+- `EarcutEarClipping.swift`: the slicing loop, the ear test in both its plain
+  and its z-order hashed form, and the fallbacks a stuck polygon falls
+  through.
+- `EarcutHoles.swift`: bridging every hole into the outer ring, left to right.
+- `EarcutZOrder.swift`: the Morton curve and the merge sort over it, which is
+  what makes the ear test on a large polygon a local scan.
+- `EarcutGeometry.swift`: the predicates, from triangle area to whether a
+  diagonal stays inside the polygon.
+- `EarcutNodePool.swift`: allocating and relinking nodes, the only code that
+  writes the `prev`/`next` and `prevZ`/`nextZ` fields.
+
+The split is by file only: the functions keep the reference implementation's
+names and bodies, so a diff against earcut.js still reads function by
+function. Members are `private` where a single file uses them and internal
+where another file does; nothing here is public.
+
 ## Responsibilities
 
 - Triangulate one polygon with holes, deterministically, without allocating
