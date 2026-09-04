@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// The coordinate contract of `ParsePolygon`, stated directly instead of
 /// through its consumers: `ParsedGeometry.clipped` stays in TILE space

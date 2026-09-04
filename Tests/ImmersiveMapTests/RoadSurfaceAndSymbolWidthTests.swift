@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// Three contracts of the street-level road picture: a ribbon inside a
 /// carriageway surface is clipped away (the surface owns that ground), lane

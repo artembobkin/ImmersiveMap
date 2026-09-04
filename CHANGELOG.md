@@ -30,6 +30,19 @@ once the public API stabilizes.
   `package`, not `public`, so an app's `import ImmersiveMap` and the
   `ImmersiveMap` product it links are unchanged and nothing of the
   triangulator is API; the package just builds one more module.
+- The Mapbox Vector Tile decoder is its own SwiftPM target too, `Mvt`, in
+  `Mvt/` next to `Earcut/`: the wire decoder, the decoded model, the geometry
+  decoder, `MvtValue` and `MvtGeometryType`, and the tile-space geometry the
+  parser consumes in place. The feature attribute loop moved with it as
+  `MvtAttributeDecoder`, so the per-integer varint read specializes inside the
+  module instead of crossing its boundary; the parser's timings are unchanged.
+  The streetscape fold (`MvtRoadLayerFold`), which knows layer names, stays in
+  the engine. The decoder's tests run as the `MvtTests` target in `Mvt/Tests`,
+  and the test-side encoder with the synthetic fixture tiles is the regular
+  target `MvtTestSupport` in `Mvt/TestSupport`, shared by both test targets.
+  Every symbol is `package` access and neither target is a product, so the
+  `ImmersiveMap` product is unchanged. The device test project now sets its
+  bundle's package name and compiles the support sources itself.
 
 ### Removed
 

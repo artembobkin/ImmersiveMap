@@ -26,7 +26,17 @@ whose whole job is to be that host, and `ImmersiveMapDeviceTests`, the bundle
 injected into it.
 
 The test bundle takes its sources straight from `Tests/ImmersiveMapTests`
-through a synchronized folder reference, not a copied list of files. There is
+through a synchronized folder reference, not a copied list of files, and the
+test-side MVT encoder and fixture tiles from `Mvt/TestSupport` through a second
+one, since the bundle links only the `ImmersiveMap` product and cannot depend
+on a package target that is not a product. Those sources, and the `Mvt` module
+they and the tests import, are `package` access, so the bundle carries the
+package's identity in its `SWIFT_PACKAGE_NAME` build setting (`immersivemap`,
+the `-package-name` SwiftPM passes the compiler); without it neither the
+encoder nor a test naming `MvtValue` compiles here. The engine test files that
+`import MvtTestSupport` guard the line with `#if canImport(MvtTestSupport)`,
+because in this bundle those sources are its own and there is no such module.
+There is
 one suite, and a second list of test files that had to be updated by hand would
 be wrong within a week, silently: a device run would pass while quietly not
 running the case someone just wrote.

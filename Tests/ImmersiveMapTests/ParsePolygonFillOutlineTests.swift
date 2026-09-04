@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// The fill outline a tessellated polygon carries for its edge
 /// antialiasing: a line list of its ring edges over the fill's own vertex
 /// order, with the edges lying on the tile boundary left out.
 final class ParsePolygonFillOutlineTests: XCTestCase {
-    private func parsed(_ polygon: ImmersiveMap.Polygon) throws -> TileMvtParser.ParsedPolygon {
+    private func parsed(_ polygon: Mvt.Polygon) throws -> TileMvtParser.ParsedPolygon {
         try XCTUnwrap(ParsePolygon().parse(polygon: polygon, tileExtent: 4096))
     }
 

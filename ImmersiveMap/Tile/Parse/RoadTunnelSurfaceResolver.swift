@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 
 /// Decides which road surface polygons of a tile are the roof of a tunnel.
 ///

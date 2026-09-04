@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Mvt
 import simd
 
 /// Stitches the pieces of one street back into one polyline before

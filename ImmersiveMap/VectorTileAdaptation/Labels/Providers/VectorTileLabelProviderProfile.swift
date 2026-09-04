@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Mvt
+
 protocol VectorTileLabelProviderProfile {
     var providerID: String { get }
     var languagePreferences: VectorTileLabelLanguagePreferences { get }

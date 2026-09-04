@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 final class CustomVectorTileLabelProfileTests: XCTestCase {

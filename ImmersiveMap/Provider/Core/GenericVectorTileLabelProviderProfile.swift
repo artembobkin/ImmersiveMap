@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 
 struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
     let providerID: String

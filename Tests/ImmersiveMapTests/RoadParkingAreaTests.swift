@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// A surface parking lot (`subclass=parking_area`, a polygon in
 /// `transportation`) draws as service-tier asphalt with a kerb, exactly like

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// Pins the stitching rule of the road-network tile contract:
 /// pieces of one street (same name and drawing attributes) that meet at an

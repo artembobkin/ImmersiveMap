@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// Pins the one-number label-priority contract the tiles follow: `rank` is

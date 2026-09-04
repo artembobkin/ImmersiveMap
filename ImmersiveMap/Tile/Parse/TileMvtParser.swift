@@ -3,6 +3,7 @@
 
 import Foundation
 import MetalKit
+import Mvt
 
 
 class TileMvtParser {

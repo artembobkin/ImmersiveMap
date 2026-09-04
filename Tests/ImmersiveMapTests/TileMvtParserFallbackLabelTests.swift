@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
+#if canImport(MvtTestSupport)
+import MvtTestSupport
+#endif
 import XCTest
 
 final class TileMvtParserFallbackLabelTests: XCTestCase {

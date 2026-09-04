@@ -1,8 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
 import Foundation
+@testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// The streetscape as a second, optional tile source: off by default, with

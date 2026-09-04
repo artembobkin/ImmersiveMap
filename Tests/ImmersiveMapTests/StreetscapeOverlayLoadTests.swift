@@ -1,8 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
 import Foundation
+@testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// The streetscape over loopback: at street zoom a tile is two requests,

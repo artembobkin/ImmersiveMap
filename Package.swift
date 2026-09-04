@@ -24,9 +24,24 @@ let package = Package(
             path: "Earcut",
             exclude: ["README.md", "Tests"]
         ),
+        // The Mapbox Vector Tile decoder: the wire format, the decoded model
+        // and the tile-space geometry it produces. Its own module for the same
+        // reason, everything at `package` access. `TestSupport` is the
+        // test-side encoder and fixture tiles both test targets share; it is
+        // a regular target because test targets cannot share sources.
+        .target(
+            name: "Mvt",
+            path: "Mvt",
+            exclude: ["README.md", "Tests", "TestSupport"]
+        ),
+        .target(
+            name: "MvtTestSupport",
+            dependencies: ["Mvt"],
+            path: "Mvt/TestSupport"
+        ),
         .target(
             name: "ImmersiveMap",
-            dependencies: ["Earcut"],
+            dependencies: ["Earcut", "Mvt"],
             path: "ImmersiveMap",
             exclude: [
                 "Avatars/README.md",
@@ -75,8 +90,13 @@ let package = Package(
             path: "Earcut/Tests"
         ),
         .testTarget(
+            name: "MvtTests",
+            dependencies: ["Mvt", "MvtTestSupport"],
+            path: "Mvt/Tests"
+        ),
+        .testTarget(
             name: "ImmersiveMapTests",
-            dependencies: ["ImmersiveMap"],
+            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport"],
             path: "Tests/ImmersiveMapTests"
         )
     ],

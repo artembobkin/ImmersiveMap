@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 
 /// Folds the streetscape layer into the road layer of a decoded tile.
 ///

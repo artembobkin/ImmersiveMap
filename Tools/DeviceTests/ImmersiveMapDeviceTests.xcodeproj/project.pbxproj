@@ -33,6 +33,11 @@
 			path = ../../Tests/ImmersiveMapTests;
 			sourceTree = "<group>";
 		};
+		D40000000000000000000020 /* ../../Mvt/TestSupport */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ../../Mvt/TestSupport;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +64,7 @@
 			children = (
 				D40000000000000000000007 /* Host */,
 				D4000000000000000000001F /* ../../Tests/ImmersiveMapTests */,
+				D40000000000000000000020 /* ../../Mvt/TestSupport */,
 				D40000000000000000000006 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -115,6 +121,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				D4000000000000000000001F /* ../../Tests/ImmersiveMapTests */,
+				D40000000000000000000020 /* ../../Mvt/TestSupport */,
 			);
 			name = ImmersiveMapDeviceTests;
 			packageProductDependencies = (
@@ -310,6 +317,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_PACKAGE_NAME = immersivemap;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImmersiveMapDeviceTestHost.app/ImmersiveMapDeviceTestHost";
@@ -337,6 +345,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.artembobkin.ImmersiveMapDeviceTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_PACKAGE_NAME = immersivemap;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ImmersiveMapDeviceTestHost.app/ImmersiveMapDeviceTestHost";

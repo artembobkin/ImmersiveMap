@@ -3,7 +3,7 @@
 
 import Foundation
 
-enum MvtWireDecodeError: Error {
+package enum MvtWireDecodeError: Error {
     case truncatedVarint
     case malformedVarint
     case truncatedField
@@ -39,11 +39,11 @@ enum MvtWireDecodeError: Error {
 /// tags instead of failing the whole tile; and a `Value` message that sets
 /// more than one of its fields (which the specification forbids) keeps the
 /// last one in wire order.
-enum MvtTileDecoder {
+package enum MvtTileDecoder {
     private static let lengthDelimitedWireType: UInt64 = 2
     private static let maximumGroupNestingDepth = 32
 
-    static func decode(data: Data) throws -> MvtDecodedTile {
+    package static func decode(data: Data) throws -> MvtDecodedTile {
         let layers = try data.withUnsafeBytes { bytes in
             try decodeTile(bytes: bytes)
         }

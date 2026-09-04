@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 
 final class RoofAttributesParser {
     private let levelHeight: Float

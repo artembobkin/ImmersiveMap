@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// A language is looked up under both spellings a source can carry:

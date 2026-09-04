@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// A junction area (`subclass=junction_area`, a polygon in `transportation`)
 /// is the carriageway of a junction. Only the graph-reconstructed ones

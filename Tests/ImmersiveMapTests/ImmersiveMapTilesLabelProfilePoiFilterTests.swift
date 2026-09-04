@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// Hard filters of the OpenMapTiles profile's poi layer: street furniture and

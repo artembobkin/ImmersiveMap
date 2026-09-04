@@ -1,8 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
 import Foundation
+import Mvt
 
 /// The Mapbox Vector Tile messages as plain values a test fills in and
 /// serializes, so a fixture states a tile in terms of the schema (layers,
@@ -14,14 +14,14 @@ import Foundation
 /// field omitted. The decoder under test never sees this code, so an
 /// encode/decode round trip checks the two against the specification
 /// rather than against each other.
-struct MvtTileMessage: Equatable {
-    var layers: [MvtLayerMessage] = []
+package struct MvtTileMessage: Equatable {
+    package var layers: [MvtLayerMessage] = []
 
-    init(layers: [MvtLayerMessage] = []) {
+    package init(layers: [MvtLayerMessage] = []) {
         self.layers = layers
     }
 
-    func serializedData() -> Data {
+    package func serializedData() -> Data {
         var writer = MvtWireWriter()
         for layer in layers {
             writer.appendLengthDelimited(fieldNumber: 3, payload: layer.serializedData())
@@ -30,18 +30,18 @@ struct MvtTileMessage: Equatable {
     }
 }
 
-struct MvtLayerMessage: Equatable {
+package struct MvtLayerMessage: Equatable {
     /// The schema declares `version` required; a fixture that leaves the
     /// default gets the version the specification is written against.
-    var version: UInt32 = 2
-    var name: String = ""
-    var features: [MvtFeatureMessage] = []
-    var keys: [String] = []
-    var values: [MvtValue] = []
+    package var version: UInt32 = 2
+    package var name: String = ""
+    package var features: [MvtFeatureMessage] = []
+    package var keys: [String] = []
+    package var values: [MvtValue] = []
     /// Written only when set; the decoder's default is the schema's 4096.
-    var extent: UInt32?
+    package var extent: UInt32?
 
-    init(version: UInt32 = 2,
+    package init(version: UInt32 = 2,
          name: String = "",
          features: [MvtFeatureMessage] = [],
          keys: [String] = [],
@@ -55,7 +55,7 @@ struct MvtLayerMessage: Equatable {
         self.extent = extent
     }
 
-    func serializedData() -> Data {
+    package func serializedData() -> Data {
         var writer = MvtWireWriter()
         writer.appendLengthDelimited(fieldNumber: 1, payload: Data(name.utf8))
         for feature in features {
@@ -75,15 +75,15 @@ struct MvtLayerMessage: Equatable {
     }
 }
 
-struct MvtFeatureMessage: Equatable {
+package struct MvtFeatureMessage: Equatable {
     /// Written only when set, which is what `MvtDecodedFeature.hasID` reads.
-    var id: UInt64?
-    var tags: [UInt32] = []
+    package var id: UInt64?
+    package var tags: [UInt32] = []
     /// Written only when set; an unset type decodes as `.unknown`.
-    var type: MvtGeometryType?
-    var geometry: [UInt32] = []
+    package var type: MvtGeometryType?
+    package var geometry: [UInt32] = []
 
-    init(id: UInt64? = nil,
+    package init(id: UInt64? = nil,
          tags: [UInt32] = [],
          type: MvtGeometryType? = nil,
          geometry: [UInt32] = []) {
@@ -93,7 +93,7 @@ struct MvtFeatureMessage: Equatable {
         self.geometry = geometry
     }
 
-    func serializedData() -> Data {
+    package func serializedData() -> Data {
         var writer = MvtWireWriter()
         if let id {
             writer.appendVarint(fieldNumber: 1, value: id)
@@ -109,8 +109,8 @@ struct MvtFeatureMessage: Equatable {
 
 /// The `Tile.Value` message: one field per value kind, and no field at all
 /// for `.absent`.
-enum MvtValueMessage {
-    static func serializedData(_ value: MvtValue) -> Data {
+package enum MvtValueMessage {
+    package static func serializedData(_ value: MvtValue) -> Data {
         var writer = MvtWireWriter()
         switch value {
         case .string(let text):
@@ -140,10 +140,12 @@ enum MvtValueMessage {
 
 /// Protobuf wire primitives: varints, the two fixed widths, and
 /// length-delimited fields, each tagged with its field number and wire type.
-struct MvtWireWriter {
-    private(set) var data = Data()
+package struct MvtWireWriter {
+    package private(set) var data = Data()
 
-    mutating func appendVarint(_ value: UInt64) {
+    package init() {}
+
+    package mutating func appendVarint(_ value: UInt64) {
         var remaining = value
         while remaining >= 0x80 {
             data.append(UInt8((remaining & 0x7F) | 0x80))
@@ -152,26 +154,26 @@ struct MvtWireWriter {
         data.append(UInt8(remaining))
     }
 
-    mutating func appendTag(fieldNumber: UInt64, wireType: UInt64) {
+    package mutating func appendTag(fieldNumber: UInt64, wireType: UInt64) {
         appendVarint((fieldNumber << 3) | wireType)
     }
 
-    mutating func appendVarint(fieldNumber: UInt64, value: UInt64) {
+    package mutating func appendVarint(fieldNumber: UInt64, value: UInt64) {
         appendTag(fieldNumber: fieldNumber, wireType: 0)
         appendVarint(value)
     }
 
-    mutating func appendFixed32(fieldNumber: UInt64, value: UInt32) {
+    package mutating func appendFixed32(fieldNumber: UInt64, value: UInt32) {
         appendTag(fieldNumber: fieldNumber, wireType: 5)
         withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
     }
 
-    mutating func appendFixed64(fieldNumber: UInt64, value: UInt64) {
+    package mutating func appendFixed64(fieldNumber: UInt64, value: UInt64) {
         appendTag(fieldNumber: fieldNumber, wireType: 1)
         withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
     }
 
-    mutating func appendLengthDelimited(fieldNumber: UInt64, payload: Data) {
+    package mutating func appendLengthDelimited(fieldNumber: UInt64, payload: Data) {
         appendTag(fieldNumber: fieldNumber, wireType: 2)
         appendVarint(UInt64(payload.count))
         data.append(payload)
@@ -179,7 +181,7 @@ struct MvtWireWriter {
 
     /// One packed run holding every value; nothing at all for an empty list,
     /// which is how an encoder writes an empty repeated field.
-    mutating func appendPackedVarints(fieldNumber: UInt64, values: [UInt32]) {
+    package mutating func appendPackedVarints(fieldNumber: UInt64, values: [UInt32]) {
         guard values.isEmpty == false else { return }
         var payload = MvtWireWriter()
         for value in values {

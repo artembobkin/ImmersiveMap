@@ -3,6 +3,7 @@
 
 import Earcut
 import MetalKit
+import Mvt
 
 class ParsePolygon {
     private let clipper = Clipper()

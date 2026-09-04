@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 
 /// Label placement/ranking rules for the OpenMapTiles schema. Point-label layers
 /// are `place`, `water_name`, `poi`, `mountain_peak`, `aerodrome_label` and

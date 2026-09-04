@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// Paint the source measured on the ground ships as its own line features

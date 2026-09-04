@@ -1,7 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
+import Mvt
+import MvtTestSupport
 import XCTest
 
 /// The hand-written wire decoder is validated two ways: every tile a test
@@ -15,15 +16,15 @@ final class MvtTileDecoderTests: XCTestCase {
     // MARK: - Round trips
 
     func testRoundTripsDenseCityTile() throws {
-        try assertRoundTrips(TileMvtParserPerformanceTests.makeDenseCityTile())
+        try assertRoundTrips(MvtFixtureTileMessages.denseCity())
     }
 
     func testRoundTripsOceanOverviewTile() throws {
-        try assertRoundTrips(TileMvtParserPerformanceTests.makeOceanOverviewTile())
+        try assertRoundTrips(MvtFixtureTileMessages.oceanOverview())
     }
 
     func testRoundTripsRandomizedTiles() throws {
-        var generator = SplitMix64Generator(seed: 0xDEC0DE)
+        var generator = MvtSplitMix64Generator(seed: 0xDEC0DE)
 
         for round in 0..<100 {
             var tile = MvtTileMessage()
@@ -212,7 +213,7 @@ final class MvtTileDecoderTests: XCTestCase {
     }
 
     func testTruncatedInputThrows() throws {
-        let data = TileMvtParserPerformanceTests.makeDenseCityTile().serializedData()
+        let data = MvtFixtureTileMessages.denseCity().serializedData()
         let truncated = data.prefix(data.count / 2)
         XCTAssertThrowsError(try MvtTileDecoder.decode(data: Data(truncated)))
     }
@@ -228,35 +229,6 @@ final class MvtTileDecoderTests: XCTestCase {
         XCTAssertTrue(decoded.layers.isEmpty)
     }
 
-    func testDanglingTagIndexIsIgnored() throws {
-        // An odd number of tag integers leaves a dangling key index; attribute
-        // decoding drops it and keeps the complete pairs, and the layer
-        // survives.
-        var featureBody = MvtWireWriter()
-        featureBody.appendPackedVarints(fieldNumber: 2, values: [0, 0, 1])
-        featureBody.appendVarint(fieldNumber: 3, value: 1)
-
-        let data = wrapFeatureInTile(featureBody: featureBody.data,
-                                     keys: ["kept", "dangling"],
-                                     values: ["value"])
-        let decoded = try MvtTileDecoder.decode(data: data)
-        XCTAssertEqual(decoded.layers.count, 1)
-
-        let config = ImmersiveMapSettings.default
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-            labelProviderProfile: runtimeContext.labelProviderProfile,
-            config: config,
-            glyphCoverage: .legacyAtlasForTests
-        )
-        let attributes = parser.decodeAttributes(feature: decoded.layers[0].features[0],
-                                                 layer: decoded.layers[0],
-                                                 data: data)
-        XCTAssertEqual(attributes.count, 1)
-        XCTAssertEqual(attributes["kept"], .string("value"))
-    }
-
     func testInvalidGeometryTypeLeavesPreviousValue() throws {
         var featureBody = MvtWireWriter()
         featureBody.appendVarint(fieldNumber: 3, value: 2) // linestring
@@ -270,7 +242,7 @@ final class MvtTileDecoderTests: XCTestCase {
     // MARK: - Geometry reader equivalence
 
     func testRangeAndArrayGeometryReadersAgree() throws {
-        var generator = SplitMix64Generator(seed: 0x6E0)
+        var generator = MvtSplitMix64Generator(seed: 0x6E0)
 
         for _ in 0..<50 {
             var geometry: [UInt32] = []
@@ -414,7 +386,7 @@ final class MvtTileDecoderTests: XCTestCase {
         return tileBody.data
     }
 
-    private func randomValue(_ generator: inout SplitMix64Generator) -> MvtValue {
+    private func randomValue(_ generator: inout MvtSplitMix64Generator) -> MvtValue {
         switch generator.next() % 7 {
         case 0: return .string("value_\(generator.next() % 1000)")
         case 1: return .float(Float(generator.next() % 100_000) / 8.0)
@@ -428,7 +400,7 @@ final class MvtTileDecoderTests: XCTestCase {
 
     private func appendZigZagDelta(_ geometry: inout [UInt32],
                                    _ cursor: inout (x: Int32, y: Int32),
-                                   _ generator: inout SplitMix64Generator) {
+                                   _ generator: inout MvtSplitMix64Generator) {
         let dx = Int32(generator.next() % 512) - 256
         let dy = Int32(generator.next() % 512) - 256
         cursor.x &+= dx

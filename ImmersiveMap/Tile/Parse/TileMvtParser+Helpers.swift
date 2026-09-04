@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Mvt
 import simd
 
 extension TileMvtParser {
@@ -110,43 +111,18 @@ extension TileMvtParser {
     private static let labelKeySeed: UInt64 = 1469598103934665603
     private static let labelKeyPrime: UInt64 = 1099511628211
 
+    /// The tag pairs of a feature as a dictionary; the loop itself is
+    /// `MvtAttributeDecoder`, in the decoder's module next to its reader.
     func decodeAttributes(feature: MvtDecodedFeature,
                           layer: MvtDecodedLayer,
                           data: Data) -> [String: MvtValue] {
-        data.withUnsafeBytes { bytes in
-            decodeAttributes(feature: feature, layer: layer, bytes: bytes)
-        }
+        MvtAttributeDecoder.attributes(of: feature, in: layer, data: data)
     }
 
     func decodeAttributes(feature: MvtDecodedFeature,
                           layer: MvtDecodedLayer,
                           bytes: UnsafeRawBufferPointer) -> [String: MvtValue] {
-        var attributes: [String: MvtValue] = [:]
-        switch feature.tags {
-        case .empty:
-            break
-        case .range(let range):
-            guard range.lowerBound >= 0, range.upperBound <= bytes.count else { break }
-            var reader = MvtVarintUInt32Reader(bytes: bytes, range: range)
-            appendAttributes(reader: &reader, layer: layer, into: &attributes)
-        case .values(let values):
-            var reader = MvtArrayUInt32Reader(values: values)
-            appendAttributes(reader: &reader, layer: layer, into: &attributes)
-        }
-        return attributes
-    }
-
-    private func appendAttributes<Reader: MvtUInt32Reading>(reader: inout Reader,
-                                                            layer: MvtDecodedLayer,
-                                                            into attributes: inout [String: MvtValue]) {
-        while let keyIndex = reader.next() {
-            guard let valueIndex = reader.next() else { break }
-
-            guard Int(keyIndex) < layer.keys.count,
-                  Int(valueIndex) < layer.values.count else { continue }
-
-            attributes[layer.keys[Int(keyIndex)]] = layer.values[Int(valueIndex)]
-        }
+        MvtAttributeDecoder.attributes(of: feature, in: layer, bytes: bytes)
     }
 
     func parseBoolValue(_ value: MvtValue) -> Bool? {

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// Two parser-level contracts of the road network at street zoom: the
 /// automobile roads draw as their own tier above the pedestrian one, and paint

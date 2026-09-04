@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// Exercises `buildExtrudedMesh` with roof shapes end to end: the shaped roof
 /// must share the flat lid's triangle winding (one of them being back-culled

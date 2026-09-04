@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Mvt
 
 struct PoiSpriteResolver {
     func resolve(attributes: [String: MvtValue], layerName: String) -> PoiSpriteIcon? {

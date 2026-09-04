@@ -3,34 +3,44 @@
 
 import Foundation
 
-struct Point {
-    let x: Int32
-    let y: Int32
+package struct Point {
+    package let x: Int32
+    package let y: Int32
+
+    package init(x: Int32, y: Int32) {
+        self.x = x
+        self.y = y
+    }
 }
 
-struct Polygon {
-    let exteriorRing: [Point]
-    let interiorRings: [[Point]]
+package struct Polygon {
+    package let exteriorRing: [Point]
+    package let interiorRings: [[Point]]
+
+    package init(exteriorRing: [Point], interiorRings: [[Point]]) {
+        self.exteriorRing = exteriorRing
+        self.interiorRings = interiorRings
+    }
 }
 
-typealias MultiPolygon = [Polygon]
-typealias LineString = [Point]
-typealias MultiLineString = [LineString]
-typealias MultiPoint = [Point]
+package typealias MultiPolygon = [Polygon]
+package typealias LineString = [Point]
+package typealias MultiLineString = [LineString]
+package typealias MultiPoint = [Point]
 
 /// Decodes MVT geometry command streams (MoveTo/LineTo/ClosePath with zigzag
 /// deltas) straight from the packed bytes of the tile payload, without the
 /// intermediate `[UInt32]` array the generated protobuf model used to carry.
 /// A malformed command stream yields an empty result, matching the previous
 /// decoders: the feature drops, the tile survives.
-enum MvtGeometryDecoder {
-    static func decodePolygons(_ field: MvtPackedField, in data: Data) -> MultiPolygon {
+package enum MvtGeometryDecoder {
+    package static func decodePolygons(_ field: MvtPackedField, in data: Data) -> MultiPolygon {
         data.withUnsafeBytes { bytes in
             decodePolygons(field, in: bytes)
         }
     }
 
-    static func decodePolygons(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPolygon {
+    package static func decodePolygons(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPolygon {
         switch field {
         case .empty:
             return []
@@ -44,13 +54,13 @@ enum MvtGeometryDecoder {
         }
     }
 
-    static func decodeLines(_ field: MvtPackedField, in data: Data) -> MultiLineString {
+    package static func decodeLines(_ field: MvtPackedField, in data: Data) -> MultiLineString {
         data.withUnsafeBytes { bytes in
             decodeLines(field, in: bytes)
         }
     }
 
-    static func decodeLines(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiLineString {
+    package static func decodeLines(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiLineString {
         switch field {
         case .empty:
             return []
@@ -64,13 +74,13 @@ enum MvtGeometryDecoder {
         }
     }
 
-    static func decodePoints(_ field: MvtPackedField, in data: Data) -> MultiPoint {
+    package static func decodePoints(_ field: MvtPackedField, in data: Data) -> MultiPoint {
         data.withUnsafeBytes { bytes in
             decodePoints(field, in: bytes)
         }
     }
 
-    static func decodePoints(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPoint {
+    package static func decodePoints(_ field: MvtPackedField, in bytes: UnsafeRawBufferPointer) -> MultiPoint {
         switch field {
         case .empty:
             return []

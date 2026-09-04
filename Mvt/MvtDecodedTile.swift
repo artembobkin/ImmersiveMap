@@ -8,7 +8,7 @@ import Foundation
 /// common encoding for MVT `tags` and `geometry`). The `values` case covers
 /// unpacked elements and packed runs split across several chunks, which the
 /// wire format permits.
-enum MvtPackedField {
+package enum MvtPackedField {
     case empty
     /// Byte offsets into the tile payload, counted from the start of the
     /// buffer `Data.withUnsafeBytes` exposes.
@@ -17,7 +17,7 @@ enum MvtPackedField {
 
     /// Decodes the field into an array; tests and rare fallbacks only, the
     /// hot paths read the range in place.
-    func materializedValues(data: Data) -> [UInt32] {
+    package func materializedValues(data: Data) -> [UInt32] {
         switch self {
         case .empty:
             return []
@@ -38,27 +38,32 @@ enum MvtPackedField {
     }
 }
 
-struct MvtDecodedFeature {
-    var id: UInt64 = 0
-    var hasID: Bool = false
-    var type: MvtGeometryType = .unknown
-    var tags: MvtPackedField = .empty
-    var geometry: MvtPackedField = .empty
+package struct MvtDecodedFeature {
+    package var id: UInt64 = 0
+    package var hasID: Bool = false
+    package var type: MvtGeometryType = .unknown
+    package var tags: MvtPackedField = .empty
+    package var geometry: MvtPackedField = .empty
 }
 
-struct MvtDecodedLayer {
-    var name: String = ""
-    var extent: UInt32 = 4096
-    var keys: [String] = []
-    var values: [MvtValue] = []
-    var features: [MvtDecodedFeature] = []
+package struct MvtDecodedLayer {
+    package var name: String = ""
+    package var extent: UInt32 = 4096
+    package var keys: [String] = []
+    package var values: [MvtValue] = []
+    package var features: [MvtDecodedFeature] = []
 }
 
 /// The result of the hand-written wire decode: layers plus the payload the
 /// packed-field ranges point into.
-struct MvtDecodedTile {
-    let layers: [MvtDecodedLayer]
-    let sourceData: Data
+package struct MvtDecodedTile {
+    package let layers: [MvtDecodedLayer]
+    package let sourceData: Data
+
+    package init(layers: [MvtDecodedLayer], sourceData: Data) {
+        self.layers = layers
+        self.sourceData = sourceData
+    }
 }
 
 /// Reads protobuf varints as uint32 values straight from raw bytes.

@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Mvt
+
 struct VectorTileLabelTextResolver {
     private let glyphCoverage: VectorTileLabelGlyphCoverage
 

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
-import simd
+import Mvt
 import XCTest
+import simd
 
 /// A carriageway area (`subclass=carriageway_area`, a polygon in
 /// `transportation`) is the surface of a stretch of street computed from the

@@ -1,8 +1,12 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
 import Foundation
+@testable import ImmersiveMap
+import Mvt
+#if canImport(MvtTestSupport)
+import MvtTestSupport
+#endif
 
 /// Builds real Mapbox Vector Tile bytes in memory, so a test can push a tile
 /// through the actual parser instead of a hand-made intermediate structure.

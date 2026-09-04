@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Mvt
 import simd
 
 /// Default style for the OpenMapTiles-schema first-party provider, reading the
