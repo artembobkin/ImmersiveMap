@@ -36,8 +36,9 @@ once the public API stabilizes.
   parser consumes in place. The feature attribute loop moved with it as
   `MvtAttributeDecoder`, so the per-integer varint read specializes inside the
   module instead of crossing its boundary; the parser's timings are unchanged.
-  The streetscape fold (`MvtRoadLayerFold`), which knows layer names, stays in
-  the engine. The decoder's tests run as the `MvtTests` target in `Mvt/Tests`,
+  The layer merge behind the streetscape fold is the decoder's too,
+  `MvtDecodedTile.merging(layersNamed:intoFirstLayerNamed:)`, with the layer
+  names staying in the engine's `MvtRoadLayerFold`. The decoder's tests run as the `MvtTests` target in `Mvt/Tests`,
   and the test-side encoder with the synthetic fixture tiles is the regular
   target `MvtTestSupport` in `Mvt/TestSupport`, shared by both test targets.
   Every symbol is `package` access and neither target is a product, so the

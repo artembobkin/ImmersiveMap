@@ -18,14 +18,17 @@ an app that links the `ImmersiveMap` product cannot see it at all.
 - `MvtAttributeDecoder` turns a feature's tags into `[String: MvtValue]`
   through the layer's tables. It lives here rather than in the parser so the
   per-integer loop and the varint reader specialize inside one module.
+- `MvtDecodedTile.merging(layersNamed:intoFirstLayerNamed:)` appends one
+  layer's features to another, re-basing their tag indices onto the target's
+  tables. Which layers, is the caller's: the names come in as arguments.
 - `MvtValue` and `MvtGeometryType` are the schema's value and geometry kinds;
   `Point`, `Polygon` and the multi aliases are the tile-space geometry the
   decoder produces and the parser consumes in place.
 
 What the module does not know: layer names, the tile schema's meaning, any
-style. The engine's `MvtRoadLayerFold` (which merges the `streetscape` layer
-into the road layer) is schema knowledge and stays in
-`ImmersiveMap/Tile/Parse`.
+style. The engine's `MvtRoadLayerFold` in `ImmersiveMap/Tile/Parse` is the
+schema side of the merge: it names the `streetscape` layer and the road
+layers and hands them to the method above.
 
 ## Files
 
@@ -37,6 +40,7 @@ into the road layer) is schema knowledge and stays in
 - `MvtGeometryDecoder.swift`: the geometry types and the command-stream
   decoder (MoveTo/LineTo/ClosePath with zigzag deltas).
 - `MvtAttributeDecoder.swift`: the tag-pair loop.
+- `MvtLayerMerge.swift`: the layer merge.
 - `MvtValue.swift`: `MvtValue` and `MvtGeometryType`.
 - `TestSupport/`: the `MvtTestSupport` target, a regular target that is not a
   product: the test-side encoder (`MvtTileMessage`, `MvtLayerMessage`,

@@ -59,11 +59,6 @@ package struct MvtDecodedLayer {
 package struct MvtDecodedTile {
     package let layers: [MvtDecodedLayer]
     package let sourceData: Data
-
-    package init(layers: [MvtDecodedLayer], sourceData: Data) {
-        self.layers = layers
-        self.sourceData = sourceData
-    }
 }
 
 /// Reads protobuf varints as uint32 values straight from raw bytes.
