@@ -16,6 +16,9 @@
       <FileRef
          location = "group:ImmersiveMap">
       </FileRef>
+      <FileRef
+         location = "group:Earcut">
+      </FileRef>
    </Group>
    <Group
       location = "container:"
