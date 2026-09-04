@@ -76,10 +76,6 @@ final class BenchMetrics {
     private var lastCPUTime: Double = 0
     private var lastCPUWall: CFTimeInterval = 0
 
-    /// Called on every host tick while recording; the pan scenario drives the
-    /// camera from it.
-    var onTick: ((CFTimeInterval) -> Void)?
-
     init(targetFPS: Int) {
         self.targetFPS = targetFPS
     }
@@ -165,10 +161,8 @@ final class BenchMetrics {
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        if isRecording {
-            tickTimestamps.append(link.timestamp)
-        }
-        onTick?(link.timestamp)
+        guard isRecording else { return }
+        tickTimestamps.append(link.timestamp)
     }
 
     private func sample() {

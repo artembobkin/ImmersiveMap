@@ -129,19 +129,20 @@ final class BenchViewController: UIViewController {
         windows.append(contentsOf: tourWindows)
         windows.append(Self.combine(tourWindows, name: "tour"))
 
-        // Pan: the camera is set from every host tick.
+        // Pan: the camera is set on every tick of a strict timer at the
+        // display rate, never from the host display link (see BenchPanDriver).
         engine.jump(to: scenario.panStart)
         try? await Task.sleep(for: .seconds(2))
         let panStart = CACurrentMediaTime()
-        metrics.onTick = { [weak engine] now in
+        metrics.beginWindow()
+        let pan = BenchPanDriver(ratePerSecond: targetFPS) { [weak engine] now in
             let progress = (now - panStart) / scenario.panDuration
             guard progress <= 1 else { return }
             engine?.jump(to: scenario.panPose(progress))
         }
-        metrics.beginWindow()
         try? await Task.sleep(for: .seconds(scenario.panDuration))
         windows.append(metrics.endWindow(name: "pan"))
-        metrics.onTick = nil
+        pan.stop()
 
         // Idle: settle, then measure a still map.
         try? await Task.sleep(for: .seconds(scenario.idleSettle))
@@ -234,5 +235,38 @@ final class BenchViewController: UIViewController {
         return withUnsafePointer(to: &systemInfo.machine) {
             $0.withMemoryRebound(to: CChar.self, capacity: 256) { String(cString: $0) }
         }
+    }
+}
+
+/// Moves the pan camera at the display rate from a strict GCD timer on the
+/// main queue. The bench's own `CADisplayLink` is deliberately not used for
+/// this: a second display link in a process whose engine runs its own
+/// `CAMetalDisplayLink` coalesces with it and settles on every other vsync,
+/// so a pan driven from it moved the camera at 60 Hz for that engine and at
+/// 120 Hz for an engine without such a link, and the two pans were not the
+/// same session. A timer has no display-link scheduling to lose against, so
+/// both engines get a new pose once per refresh. Ticking starts on creation
+/// and ends with `stop()`.
+@MainActor
+private final class BenchPanDriver {
+    private let timer: DispatchSourceTimer
+
+    init(ratePerSecond: Int, tick: @escaping (CFTimeInterval) -> Void) {
+        let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        let interval = DispatchTimeInterval.nanoseconds(1_000_000_000 / max(ratePerSecond, 1))
+        timer.schedule(deadline: .now(), repeating: interval, leeway: .nanoseconds(0))
+        timer.setEventHandler {
+            tick(CACurrentMediaTime())
+        }
+        timer.resume()
+        self.timer = timer
+    }
+
+    func stop() {
+        timer.cancel()
+    }
+
+    deinit {
+        timer.cancel()
     }
 }
