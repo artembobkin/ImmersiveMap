@@ -1,25 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Workspace
    version = "1.0">
-   <Group
-      location = "container:"
-      name = "ImmersiveMap">
-      <FileRef
-         location = "group:Package.swift">
-      </FileRef>
-      <FileRef
-         location = "group:README.md">
-      </FileRef>
-      <FileRef
-         location = "group:LocalSecrets.plist">
-      </FileRef>
-      <FileRef
-         location = "group:ImmersiveMap">
-      </FileRef>
-      <FileRef
-         location = "group:Earcut">
-      </FileRef>
-   </Group>
+   <FileRef
+      location = "container:">
+   </FileRef>
    <Group
       location = "container:"
       name = "Examples">
