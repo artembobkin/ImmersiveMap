@@ -56,7 +56,12 @@ final class ImmersiveMapBenchEngine: BenchEngine {
     init(targetFPS: Int, coldCache: Bool, variant: Variant = .standard) {
         name = variant.rawValue
         version = ImmersiveMapBenchEngine.packageVersion()
-        let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: false,
+        // BENCH_CONTINUOUS=1 keeps the display link running for the whole
+        // run instead of the on-demand loop's pause after every one-shot
+        // frame, for A/B measurements of the pause/resume cost on a
+        // programmatic pan (a jump requests one frame and no activity).
+        let continuous = ProcessInfo.processInfo.environment["BENCH_CONTINUOUS"] == "1"
+        let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: continuous,
                                                                  interactionFramesPerSecond: targetFPS,
                                                                  labelFadeFramesPerSecond: 30)
         var map = ImmersiveMapView()
