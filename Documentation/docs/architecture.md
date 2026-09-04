@@ -56,7 +56,7 @@ TileRenderStore (working set of MetalTiles: the frame's demanded tiles plus the 
    ↓  miss
 ImmersiveMapNeedsTile (disk stage first: a prepared tile on disk answers final; misses download with bounded concurrency, dedup, retry/backoff)
    ↓
-TileMvtParser + MvtTileDecoder/MvtGeometryDecoder + clippers + internal Earcut port → PreparedTileCPU
+TileMvtParser + MvtTileDecoder/MvtGeometryDecoder + clippers + the Earcut target (internal earcut port) → PreparedTileCPU
    ↓
 MetalTileFactory → GPU TileBuffers
 ```

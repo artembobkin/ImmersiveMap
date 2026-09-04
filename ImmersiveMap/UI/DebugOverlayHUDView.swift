@@ -1129,12 +1129,8 @@ extension DebugOverlayHUDView {
     var areDebugControlsVisibleForTesting: Bool {
         [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
-         earthSceneLabel, earthSceneSwitch, surfaceModeButton]
+         surfaceModeButton]
             .allSatisfy { $0.isHidden == false }
-    }
-
-    var isEarthSceneSwitchOnForTesting: Bool {
-        earthSceneSwitch.isOn
     }
 
     var isRoadLabelTilesSwitchOnForTesting: Bool {

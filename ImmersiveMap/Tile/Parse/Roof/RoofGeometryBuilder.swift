@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Earcut
 import simd
 
 /// Roof surface geometry for one extruded footprint, plus what the walls need
