@@ -19,7 +19,13 @@ final class ImmersiveMapCameraCommandHandler {
     func handle(_ command: ImmersiveMapCameraCommand) {
         switch command {
         case .jump(let position):
-            applyCameraPosition(position)
+            // A jump is a camera set from outside. Applied once, it is a
+            // one-shot frame; applied once per frame by an app driving the
+            // camera itself, it must keep the display link running the way a
+            // gesture does, or every frame pauses and resumes the link.
+            if applyCameraPosition(position) {
+                cameraRuntime.noteExternalCameraDrive()
+            }
         case .fly(let position, let options, let completion):
             cameraAnimationRuntime.startCameraFlight(to: position,
                                                      options: options,
@@ -41,12 +47,16 @@ final class ImmersiveMapCameraCommandHandler {
         }
     }
 
-    func applyCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition?) {
+    /// Returns whether the position differed from the applied one and was
+    /// applied.
+    @discardableResult
+    func applyCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition?) -> Bool {
         guard cameraRuntime.needsCameraPositionUpdate(cameraPosition) else {
-            return
+            return false
         }
 
         cameraAnimationRuntime.cancelAnimations()
         cameraRuntime.applyCameraPosition(cameraPosition)
+        return true
     }
 }

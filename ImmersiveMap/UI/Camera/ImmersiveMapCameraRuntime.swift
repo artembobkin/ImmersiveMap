@@ -174,6 +174,12 @@ final class ImmersiveMapCameraRuntime {
         appliedCameraPosition != cameraPosition
     }
 
+    /// A camera position arrived from outside through the controller's
+    /// `jump`: keeps the render loop awake across a series of such sets.
+    func noteExternalCameraDrive() {
+        renderRuntime.noteExternalCameraDrive()
+    }
+
     func applyCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition?) {
         guard appliedCameraPosition != cameraPosition else {
             return

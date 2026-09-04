@@ -86,6 +86,11 @@ final class ImmersiveMapRenderRuntime {
                            active: isActive)
     }
 
+    /// See `ImmersiveMapRenderDriver.noteExternalCameraDrive`.
+    func noteExternalCameraDrive() {
+        driver.noteExternalCameraDrive()
+    }
+
     func applyRenderActivityState(_ state: RenderActivityState) {
         setLabelFadeRenderingActive(state.labelFadeRenderingActive)
         setLabelVisibilityCycleRenderingActive(state.labelVisibilityCycleRenderingActive)

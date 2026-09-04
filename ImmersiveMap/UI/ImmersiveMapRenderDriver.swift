@@ -93,6 +93,17 @@ final class ImmersiveMapRenderDriver: NSObject {
         }
     }
 
+    /// A camera position was set from outside (`ImmersiveMapCameraController.jump`).
+    /// Keeps the display link running for a grace period so a camera driven
+    /// once per frame never pauses and resumes it between two frames.
+    func noteExternalCameraDrive() {
+        performOnMain {
+            self.updatePacing {
+                self.pacing.noteExternalCameraDrive(at: CACurrentMediaTime())
+            }
+        }
+    }
+
     /// Parks/unparks the render loop for the view-reuse pool: while parked the
     /// display link is paused no matter what work is pending.
     func setParked(_ parked: Bool) {
@@ -126,6 +137,7 @@ final class ImmersiveMapRenderDriver: NSObject {
     #endif
 
     func beginFrame() -> Bool {
+        pacing.expireExternalCameraDrive(at: CACurrentMediaTime())
         guard pacing.needsFrameRendering else {
             applyDisplayLinkState()
             return false

@@ -242,6 +242,10 @@ once the public API stabilizes.
 
 - `ImmersiveMapSettings.TileSettings.CacheSettings.memoryCacheSizeInBytes` no longer does anything: the in-memory tile store has no byte budget. The property, the `memoryCacheSizeInBytes:` parameter of both `CacheSettings` initializers and of the `tileSettings(...)` overloads on `ImmersiveMapSettings` and `ImmersiveMapView` all still compile and still round-trip the value, but the value is ignored, and two settings that differ only in it now compare equal, so changing it no longer rebuilds the renderer. The property carries a deprecation warning naming `preparedDiskCacheSizeInBytes` and `.preparedTileDiskCacheSize(bytes:)` as the size worth setting.
 
+### Fixed
+
+- A camera driven once per frame through `ImmersiveMapCameraController.jump(to:)` (an app's own camera animation, a follow camera fed by a location stream) no longer drops frames. A jump requests one frame and held no rendering activity, so after each frame the on-demand loop paused its `CAMetalDisplayLink` and the next jump resumed it, and a resumed link skips vsyncs: measured on an iPhone 15 Pro Max, a pan driven at 120 jumps per second presented 104 frames per second on screen with about one frame in nine shown twice, at 2 ms of main-thread CPU per frame. A jump now keeps the loop awake at the interaction frame rate for a short grace (`RenderLoopPacing.externalCameraDriveGraceSeconds`, 100 ms) that every further jump extends, so a series of jumps keeps the link running the way a gesture does, and a lone jump lets it pause again after about a dozen frames.
+
 ## [0.7.1] - 2026-08-27
 
 ### Changed

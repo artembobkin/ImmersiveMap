@@ -14,6 +14,14 @@ final class RenderLoopPacing {
         case avatarAnimation = "avatar animation"
         case sceneModelAnimation = "scene model animation"
         case routeAnimation = "route animation"
+        /// A camera position set from outside through
+        /// `ImmersiveMapCameraController.jump`: an app driving the camera
+        /// once per frame (its own animation, a follow camera fed by a
+        /// location stream). Held for a short grace after every jump so a
+        /// series of jumps keeps the display link running the way a gesture
+        /// does, instead of pausing it after each one-shot frame and
+        /// resuming it on the next jump, which loses vsyncs.
+        case externalCameraDrive = "external camera drive"
 
         var usesInteractionFrameRate: Bool {
             switch self {
@@ -22,7 +30,8 @@ final class RenderLoopPacing {
                  .cameraAnimation,
                  .avatarAnimation,
                  .sceneModelAnimation,
-                 .routeAnimation:
+                 .routeAnimation,
+                 .externalCameraDrive:
                 return true
             case .labelFade:
                 return false
@@ -66,10 +75,17 @@ final class RenderLoopPacing {
         }
     }
 
+    /// How long the loop stays awake after a camera position set from
+    /// outside. Long enough that a driver at 30 Hz with jitter never lets the
+    /// link pause between two sets; short enough that a lone jump costs about
+    /// a dozen identical frames at 120 Hz before the link sleeps again.
+    static let externalCameraDriveGraceSeconds: CFTimeInterval = 0.1
+
     private var configuration: ImmersiveMapSettings.RenderLoopSettings
     private var powerConstraints: PowerConstraintState = .unconstrained
     private var requestedFrameReason: RenderInvalidationReason?
     private var activeRenderingActivities: Set<Activity> = []
+    private var externalCameraDriveDeadline: CFTimeInterval?
     // A view parked in the reuse pool has nothing to present into: rendering
     // is fully gated off regardless of pending requests or activities, which
     // pauses the display link. Requests and activities keep accumulating and
@@ -158,6 +174,24 @@ final class RenderLoopPacing {
 
     func consumeOneFrameRequest() {
         requestedFrameReason = nil
+    }
+
+    /// A camera position was set from outside at `now`: holds the
+    /// `.externalCameraDrive` activity until the grace after it has passed.
+    /// Every further set pushes the deadline.
+    func noteExternalCameraDrive(at now: CFTimeInterval) {
+        externalCameraDriveDeadline = now + Self.externalCameraDriveGraceSeconds
+        activeRenderingActivities.insert(.externalCameraDrive)
+    }
+
+    /// Called once per display-link tick: drops the external camera drive
+    /// activity once its grace has passed, so the link can pause again.
+    func expireExternalCameraDrive(at now: CFTimeInterval) {
+        guard let deadline = externalCameraDriveDeadline, now >= deadline else {
+            return
+        }
+        externalCameraDriveDeadline = nil
+        activeRenderingActivities.remove(.externalCameraDrive)
     }
 
     var renderingReasonDescription: String? {
