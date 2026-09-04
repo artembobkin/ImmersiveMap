@@ -62,7 +62,7 @@ Offline tooling (not part of the SwiftPM build):
 
 ## Architecture
 
-Package source root is `ImmersiveMap/` (~430 Swift files, 18 `.metal` shaders), with the triangulator beside it in `Earcut/` as its own target. Most top-level folders contain a `README.md` with hard "Responsibilities / Must Not Contain" boundary rules; read it before adding files to a folder, and `Docs/FolderStructure.md` states the layering rules the folders follow.
+Package source root is `ImmersiveMap/` (~430 Swift files, 18 `.metal` shaders), with the triangulator beside it in `Earcut/` as its own target. Most top-level folders contain a `README.md` with hard "Responsibilities / Must Not Contain" boundary rules; read it before adding files to a folder.
 
 ### Layering
 
