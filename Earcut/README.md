@@ -4,7 +4,9 @@
 [mapbox/earcut](https://github.com/mapbox/earcut) (ISC license, notice in
 `THIRD-PARTY-NOTICES.md` at the repository root). It is its own SwiftPM target
 so that the algorithm depends on nothing in the engine and the engine reaches
-it through one public entry point.
+it through one entry point. That entry point is `package` access, not
+`public`: every target of this package can call it, and an app that links the
+`ImmersiveMap` product cannot.
 
 ## API
 
@@ -28,7 +30,7 @@ excludes `Tests` from the `Earcut` target's sources and points the
 
 ## Files
 
-`Earcut.swift` is the public enum and nothing else: the two static entry
+`Earcut.swift` is the `package` enum and nothing else: the two static entry
 points and the shoelace sum they share. Everything below it is
 `EarcutCore`, one triangulation of one polygon, split by the phase of the
 algorithm it belongs to:
@@ -53,7 +55,7 @@ algorithm it belongs to:
 The split is by file only: the functions keep the reference implementation's
 names and bodies, so a diff against earcut.js still reads function by
 function. Members are `private` where a single file uses them and internal
-where another file does; nothing here is public.
+where another file does; nothing here is `package` or public.
 
 ## Responsibilities
 

@@ -22,13 +22,14 @@ once the public API stabilizes.
   Added), and prepared tiles are re-baked (prepared format 88).
 - The earcut triangulator is its own SwiftPM target, `Earcut`, that the
   `ImmersiveMap` target depends on: the ported algorithm now sits behind one
-  public entry point (`Earcut.tessellate(data:holeIndices:dim:)`, with
+  entry point at `package` access (`Earcut.tessellate(data:holeIndices:dim:)`, with
   `Earcut.deviation(data:holeIndices:dim:triangles:)` as the quality check)
   instead of being a file inside the tile parser, and its tests run as the
   separate `EarcutTests` target, which sits in `Earcut/Tests` next to the
-  code it covers. The target is not a library product, so an
-  app's `import ImmersiveMap` and the `ImmersiveMap` product it links are
-  unchanged; the package just builds one more module.
+  code it covers. The target is not a library product and its symbols are
+  `package`, not `public`, so an app's `import ImmersiveMap` and the
+  `ImmersiveMap` product it links are unchanged and nothing of the
+  triangulator is API; the package just builds one more module.
 
 ### Removed
 

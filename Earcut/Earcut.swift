@@ -4,8 +4,9 @@
 // Part of the mapbox/earcut port; the ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
-/// Ear-clipping polygon triangulation: the whole public surface of the
-/// `Earcut` module.
+/// Ear-clipping polygon triangulation: the whole surface of the `Earcut`
+/// module. Everything is `package` access: visible to every target of this
+/// package, invisible to an app that links the `ImmersiveMap` product.
 ///
 /// The input follows the reference implementation's flat layout so a caller
 /// can hand over the coordinates it already has without building a ring
@@ -38,7 +39,7 @@
 /// rings are handled the way the reference implementation handles them:
 /// the algorithm cures small local intersections and splits what remains,
 /// so the result is a best effort rather than a guaranteed cover.
-public enum Earcut {
+package enum Earcut {
     /// Triangulates a polygon given as a flat coordinate array, with optional
     /// holes.
     ///
@@ -52,7 +53,7 @@ public enum Earcut {
     ///     the rest are ignored. Must be at least 2.
     /// - Returns: Vertex indices into `data`, three per triangle. Empty when
     ///   the input has fewer than three vertices or no area.
-    public static func tessellate(data: [Double], holeIndices: [Int] = [], dim: Int = 2) -> [UInt32] {
+    package static func tessellate(data: [Double], holeIndices: [Int] = [], dim: Int = 2) -> [UInt32] {
         guard dim >= 2, data.count >= dim * 3 else { return [] }
         let core = EarcutCore(data: data, dim: dim)
         return core.run(holeIndices: holeIndices)
@@ -73,7 +74,7 @@ public enum Earcut {
     ///   - triangles: The indices it returned.
     /// - Returns: `abs(triangleArea - polygonArea) / polygonArea`, or 0 when
     ///   both areas are zero.
-    public static func deviation(data: [Double], holeIndices: [Int], dim: Int, triangles: [UInt32]) -> Double {
+    package static func deviation(data: [Double], holeIndices: [Int], dim: Int, triangles: [UInt32]) -> Double {
         let hasHoles = holeIndices.isEmpty == false
         let outerLen = hasHoles ? holeIndices[0] * dim : data.count
 

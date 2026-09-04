@@ -17,7 +17,8 @@ let package = Package(
     targets: [
         // The ear-clipping triangulator, a port of mapbox/earcut. Its own
         // module so the algorithm depends on nothing in the engine and the
-        // engine reaches it through one public entry point.
+        // engine reaches it through one entry point at `package` access,
+        // so nothing of it leaks to an app that links the product.
         .target(
             name: "Earcut",
             path: "Earcut",
