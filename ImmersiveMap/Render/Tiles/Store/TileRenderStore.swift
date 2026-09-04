@@ -47,7 +47,8 @@ final class TileRenderStore: @unchecked Sendable {
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),
             landmarkMinimumZoom: UInt32(max(0, config.labels.landmarks.minimumZoom)),
             addTestBorders: config.tiles.parsing.addTestBorders,
-            roofShapesEnabled: config.style.buildingRoofShapesEnabled
+            roofShapesEnabled: config.style.buildingRoofShapesEnabled,
+            streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
         )
         let determineFeatureStyle = DetermineFeatureStyle(mapStyle: mapStyle)
         let tileParser = TileMvtParser(determineFeatureStyle: determineFeatureStyle,

@@ -25,10 +25,22 @@ class TileMvtParser {
     let tileExtent = TileCoordinateSpace.tileExtentDouble
 
     /// The MVT layer that carries roads: `road` in the Mapbox schema, `transportation`
-    /// in OpenMapTiles. Only this layer flows through the seamless, casing-under-fill
-    /// separate-road rendering path.
+    /// in OpenMapTiles, and `streetscape`, the tile service's measured
+    /// carriageways and road paint, which arrive from a second archive and
+    /// are folded into the road layer before this is asked (see
+    /// `MvtRoadLayerFold`); the name is here for a tile that carries the
+    /// streetscape and no road layer. Only this layer flows through the
+    /// seamless, casing-under-fill separate-road rendering path.
     private static func isSeparateRoadLayer(_ layerName: String) -> Bool {
-        layerName == "road" || layerName == "transportation"
+        layerName == "road" || layerName == "transportation" || layerName == MvtRoadLayerFold.streetscapeLayerName
+    }
+
+    /// With the streetscape off, the parser bakes no road paint: see
+    /// `FeatureStyle.strippingRoadPaint()`. Decided here rather than in the
+    /// style so that every style, the built-in one and a custom one alike,
+    /// draws the same bare street map by default.
+    private var stripsRoadPaint: Bool {
+        config.tiles.streetscape.isEnabled == false
     }
 
     
@@ -55,7 +67,7 @@ class TileMvtParser {
         tile: Tile,
         mvtData: Data
     ) throws -> ParsedTile {
-        let decodedTile = try MvtTileDecoder.decode(data: mvtData)
+        let decodedTile = MvtRoadLayerFold.foldingStreetscapeLayers(try MvtTileDecoder.decode(data: mvtData))
         let readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
         let unificationResult = unificationStage(readingStageResult: readingStageResult)
 
@@ -1122,6 +1134,9 @@ class TileMvtParser {
                         properties: attributes,
                         tile: tile
                     )))
+                }
+                if stripsRoadPaint, Self.isSeparateRoadLayer(layerName) {
+                    featureStyles = featureStyles.map { $0.strippingRoadPaint() }
                 }
             }
 

@@ -482,22 +482,81 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// The streetscape: the measured carriageway surfaces and the paint
+        /// on them (lane lines, centre dividers, crossings, bus lanes), which
+        /// the tile service ships as a second, streetscape-only tile archive
+        /// at z15-16 rather than inside the map tiles. Off by default: the
+        /// map then draws roads as casing and fill by class with no paint on
+        /// them, and never requests the second archive. On, every tile at or
+        /// past `minimumTileZoom` is two requests, the map tile and the
+        /// streetscape tile, merged into one before parsing.
+        public struct StreetscapeSettings: Equatable, Sendable {
+            public var isEnabled: Bool
+            /// URL template of the streetscape archive, with `{x}`, `{y}` and
+            /// `{z}` placeholders. Nil derives it from the hosted service's
+            /// layout (`ImmersiveMapTilesService.streetscapeTileURLTemplate`)
+            /// when the map tiles come from the hosted service; a custom tile
+            /// source has to state where its streetscape lives. The requests
+            /// carry the same headers as the map tile requests.
+            public var tileURLTemplate: String?
+            /// The first tile zoom the streetscape archive covers; tiles
+            /// below it are one request, as when the streetscape is off.
+            public var minimumTileZoom: Int
+
+            public init(isEnabled: Bool = false,
+                        tileURLTemplate: String? = nil,
+                        minimumTileZoom: Int = ImmersiveMapTilesService.streetscapeMinimumTileZoom) {
+                self.isEnabled = isEnabled
+                self.tileURLTemplate = tileURLTemplate
+                self.minimumTileZoom = minimumTileZoom
+            }
+
+            /// The template the loader actually requests, or nil when the
+            /// streetscape is off or no template can be known: an explicit
+            /// template wins, and the hosted service's map source implies the
+            /// hosted streetscape archive (a key carried in the map template's
+            /// query travels along). Any other source derives nothing.
+            func resolvedTileURLTemplate(network: NetworkSettings) -> String? {
+                guard isEnabled else {
+                    return nil
+                }
+                if let tileURLTemplate, tileURLTemplate.isEmpty == false {
+                    return tileURLTemplate
+                }
+                let hostedPrefix = ImmersiveMapTilesService.tileBaseURL.absoluteString + "/"
+                if let template = network.tileURLTemplate {
+                    guard template.hasPrefix(hostedPrefix) else {
+                        return nil
+                    }
+                    let query = template.firstIndex(of: "?").map { String(template[$0...]) } ?? ""
+                    return ImmersiveMapTilesService.streetscapeTileURLTemplate + query
+                }
+                guard network.tileBaseURL == ImmersiveMapTilesService.tileBaseURL else {
+                    return nil
+                }
+                return ImmersiveMapTilesService.streetscapeTileURLTemplate
+            }
+        }
+
         public var coverage: CoverageSettings
         public var network: NetworkSettings
         public var cache: CacheSettings
         public var parsing: ParsingSettings
         public var offline: OfflineSettings
+        public var streetscape: StreetscapeSettings
 
         public init(coverage: CoverageSettings,
                     network: NetworkSettings,
                     cache: CacheSettings,
                     parsing: ParsingSettings,
-                    offline: OfflineSettings = OfflineSettings()) {
+                    offline: OfflineSettings = OfflineSettings(),
+                    streetscape: StreetscapeSettings = StreetscapeSettings()) {
             self.coverage = coverage
             self.network = network
             self.cache = cache
             self.parsing = parsing
             self.offline = offline
+            self.streetscape = streetscape
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -1138,6 +1197,22 @@ public extension ImmersiveMapSettings {
         var settings = self
         settings.tiles.network.tileURLTemplate = urlTemplate
         settings.tiles.network.tileRequestHeaders = headers
+        return settings
+    }
+
+    /// Turns the streetscape on or off. See
+    /// `ImmersiveMapView.streetscape(isEnabled:)`.
+    func streetscape(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.streetscape.isEnabled = isEnabled
+        return settings
+    }
+
+    /// Where a custom tile source keeps its streetscape archive. See
+    /// `ImmersiveMapView.streetscapeTileURLTemplate(_:)`.
+    func streetscapeTileURLTemplate(_ urlTemplate: String) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.streetscape.tileURLTemplate = urlTemplate
         return settings
     }
 

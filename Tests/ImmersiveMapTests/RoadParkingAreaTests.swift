@@ -13,7 +13,7 @@ import XCTest
 /// anyone's paint.
 final class RoadParkingAreaTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                              labelProviderProfile: runtimeContext.labelProviderProfile,

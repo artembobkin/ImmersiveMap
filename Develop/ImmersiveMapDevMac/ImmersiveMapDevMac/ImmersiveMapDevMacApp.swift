@@ -29,6 +29,10 @@ private struct MapScreen: View {
     var body: some View {
         ImmersiveMapView()
             .tileURLTemplate(devTileTemplate, headers: devTileHeaders())
+            // The streetscape archive under test rides along with the map
+            // tiles: two requests per street-zoom tile, merged before parsing.
+            .streetscapeTileURLTemplate(devStreetscapeTemplate)
+            .streetscape(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
@@ -68,6 +72,14 @@ private let devTileTemplate = ProcessInfo.processInfo
     .environment["IMMERSIVEMAP_DEV_TILE_TEMPLATE"]
     .flatMap { $0.isEmpty ? nil : $0 }
     ?? "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+
+/// The streetscape archive next to the tile source under test, the measured
+/// carriageways and road paint at z15-16. `IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE`
+/// repoints it the same way the tile template is repointed.
+private let devStreetscapeTemplate = ProcessInfo.processInfo
+    .environment["IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE"]
+    .flatMap { $0.isEmpty ? nil : $0 }
+    ?? "https://immersivemap.dev/tiles/streetscape/{z}/{x}/{y}.mvt"
 
 /// The test endpoint takes the same key as the hosted service, so there is one
 /// entry to keep: `IMMERSIVEMAP_API_KEY`.

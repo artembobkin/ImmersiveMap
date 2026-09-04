@@ -21,6 +21,8 @@ Prefer the header where the service allows it: a key in the URL becomes part of 
 
 The template and the request header *names* are part of the tile cache identity, header *values* are not: pointing the map at a different endpoint re-keys the disk caches on its own, while rotating a credential keeps them warm. A header whose value selects different tile content (rare) needs a style `configurationFingerprint` bump to invalidate them.
 
+A source that also ships a streetscape archive (the measured carriageways and road paint, one `streetscape` layer at street zoom, off by default) names it with `.streetscapeTileURLTemplate(_:)` next to the map template and turns it on with `.streetscape(isEnabled: true)`; see [the streetscape](streetscape.md).
+
 Without the modifier the map renders the hosted `ImmersiveMapTilesService` source. A source that does not ship the default z0-16 states its depth next to the template with `.tileMaximumZoomLevel(_:)` (the direct field is `tiles.coverage.maximumZoomLevel`): a source that stops at z14 needs `.tileMaximumZoomLevel(14)`, or the renderer keeps asking for tiles the endpoint cannot answer. Past the deepest level the camera keeps zooming and the deepest tiles are scaled up; offline region downloads clamp to the same level. For full control (a base URL with TileJSON discovery instead of a fixed template), the same fields live on `ImmersiveMapSettings.TileSettings.NetworkSettings`, see [tile cache](tile-cache.md).
 
 ## The style: how the bytes are drawn

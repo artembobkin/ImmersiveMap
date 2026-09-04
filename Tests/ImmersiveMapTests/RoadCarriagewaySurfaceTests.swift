@@ -16,7 +16,7 @@ import XCTest
 /// leaves the street under it alone.
 final class RoadCarriagewaySurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                              labelProviderProfile: runtimeContext.labelProviderProfile,
@@ -26,10 +26,23 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
 
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 
+    /// The tile as the service ships it: the roads in `transportation`, the
+    /// measured surfaces and paint in the `streetscape` layer of the second
+    /// archive, which the parser folds into the road layer.
     private func parse(_ features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
-        try makeParser().parse(tile: tile,
-                               mvtData: VectorTileFixture.layerTile(layerName: "transportation",
-                                                                    features: features))
+        let streetscape = features.filter { feature in
+            feature.properties["marking"] != nil
+                || feature.properties["subclass"] == "carriageway_area"
+                || feature.properties["subclass"] == "junction_area"
+        }
+        let roads = features.filter { feature in
+            streetscape.contains { $0.id == feature.id } == false
+        }
+        return try makeParser().parse(tile: tile,
+                                      mvtData: VectorTileFixture.layersTile([
+                                          (layerName: "transportation", features: roads),
+                                          (layerName: "streetscape", features: streetscape),
+                                      ]))
     }
 
     private func street(_ points: [(Int32, Int32)], id: UInt64 = 2,

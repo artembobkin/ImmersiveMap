@@ -71,6 +71,7 @@ Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://
 | [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md) | Available |
 | [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
 | [Map styling and colors](Documentation/docs/styling.md) | Available |
+| [The streetscape: measured carriageways and road paint, opt-in](Documentation/docs/streetscape.md) | Available |
 | [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) | Available |
 | [SwiftUI markers](Documentation/docs/markers.md) | Available |
 | [Avatars / live markers](Documentation/docs/avatars.md) | Available |

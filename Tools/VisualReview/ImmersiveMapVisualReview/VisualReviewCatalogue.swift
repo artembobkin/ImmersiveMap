@@ -432,19 +432,36 @@ enum VisualReviewCatalogue {
 
         VisualReviewScenario(
             id: "roads.carriageways.street",
-            title: "Street level, carriageways and lane markings",
+            title: "Street level, bare carriageways",
             lookFor: """
             Roads as surfaces, not strokes: a wide avenue is visibly wider \
             than the side street it crosses, in the proportion the real \
-            streets are, and each carriageway carries a dashed lane divider \
-            down its middle. The dashes stay a painted marking (constant \
-            weight, evenly spaced) rather than growing into a second road, \
-            junctions do not blob where markings meet, and the kerb is a thin \
-            even edge on both sides instead of a wide dark band. Service \
-            alleys and footways carry no markings.
+            streets are, and every carriageway is bare asphalt: no lane \
+            divider, no centre line, no edge line, nothing painted on the \
+            grey. This is the default map, the streetscape off. Junctions do \
+            not blob where roads meet, and the kerb is a thin even edge on \
+            both sides instead of a wide dark band. The only figures on the \
+            road are the zebra stripes of marked crossings.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattan)),
+
+        VisualReviewScenario(
+            id: "roads.streetscape.off",
+            title: "Tverskaya junction, the streetscape off",
+            lookFor: """
+            The same junction as the next shot, with the default settings: \
+            the streets are casing and fill by class, at their carriageway \
+            width, and the asphalt is bare. No lane separators, no centre \
+            line, no edge line, no letters A on the bus lane, no parking-bay \
+            combs in the lots (the lots are plain asphalt with a kerb), no \
+            single flush junction surface: the ribbons meet as ribbons. The \
+            zebra crossings ARE there, drawn once each. Nothing from the \
+            streetscape archive leaks through, and no request for it is \
+            made.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.tverskaya)),
 
         VisualReviewScenario(
             id: "roads.osm2streets.tverskaya",
@@ -462,7 +479,7 @@ enum VisualReviewCatalogue {
             streets draw exactly as before, and the boundary between the two \
             is not a visible seam.
             """,
-            settings: .default,
+            settings: .default.streetscape(isEnabled: true),
             subject: .still(camera: Place.tverskaya)),
 
         VisualReviewScenario(
@@ -480,7 +497,7 @@ enum VisualReviewCatalogue {
             asphalt as separate marks. Zooming in past 16 must not pop \
             anything into existence.
             """,
-            settings: .default,
+            settings: .default.streetscape(isEnabled: true),
             subject: .still(camera: Place.tverskayaOneLevelOut)),
 
         VisualReviewScenario(
@@ -498,7 +515,7 @@ enum VisualReviewCatalogue {
             No white dashes float over the ghost, and the ghost does not \
             continue as a lighter band across the avenue.
             """,
-            settings: .default,
+            settings: .default.streetscape(isEnabled: true),
             subject: .still(camera: Place.arbatTunnel)),
 
         VisualReviewScenario(
@@ -517,7 +534,7 @@ enum VisualReviewCatalogue {
             bus stops the kerb carries the yellow sawtooth of the stop \
             marking, anchored to the edge of the roadway.
             """,
-            settings: .default,
+            settings: .default.streetscape(isEnabled: true),
             subject: .still(camera: Place.okhotnyParking)),
 
         VisualReviewScenario(

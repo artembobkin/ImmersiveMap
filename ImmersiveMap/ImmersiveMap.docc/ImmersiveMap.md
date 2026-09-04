@@ -30,7 +30,7 @@ struct MapScreen: View {
 }
 ```
 
-Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:headers:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.sceneSettings(_:)`, `.shadows()`, `.buildingRoofShapes()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
+Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:headers:)`, `.streetscape(isEnabled:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.sceneSettings(_:)`, `.shadows()`, `.buildingRoofShapes()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
 
 ### Presentation
 
@@ -183,6 +183,7 @@ Feature guides, one example app per feature and the changelog live in the [repos
 - ``ImmersiveMapSettings/CameraSettings``
 - ``ImmersiveMapSettings/PresentationSettings``
 - ``ImmersiveMapSettings/TileSettings``
+- ``ImmersiveMapSettings/TileSettings/StreetscapeSettings``
 - ``ImmersiveMapSettings/LabelSettings``
 - ``ImmersiveMapSettings/LabelLanguage``
 - ``ImmersiveMapSettings/LabelFallbackPolicy``

@@ -13,6 +13,7 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // nil when offline regions are disabled.
     private let offlineTileStore: OfflineTileStore?
     private let offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode
+    private let streetscape: ImmersiveMapSettings.TileSettings.StreetscapeSettings
     private weak var tileRenderStore: TileRenderStore?
 
     convenience init(tileRenderStore: TileRenderStore,
@@ -28,18 +29,21 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
                       : nil,
                   tileDownloader: offlineMode == .offlineOnly ? nil : TileDownloader(config: config),
                   offlineTileStore: offlineMode == .disabled ? nil : OfflineTileStore(network: config.tiles.network),
-                  offlineMode: offlineMode)
+                  offlineMode: offlineMode,
+                  streetscape: config.tiles.streetscape)
     }
 
     init(tileRenderStore: TileRenderStore?,
          preparedTileDiskCaching: PreparedTileDiskCaching?,
          tileDownloader: TileDownloader?,
          offlineTileStore: OfflineTileStore?,
-         offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode) {
+         offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode,
+         streetscape: ImmersiveMapSettings.TileSettings.StreetscapeSettings = .init()) {
         self.preparedTileDiskCaching = preparedTileDiskCaching
         self.tileDownloader = tileDownloader
         self.offlineTileStore = offlineTileStore
         self.offlineMode = offlineMode
+        self.streetscape = streetscape
         self.tileRenderStore = tileRenderStore
     }
 
@@ -73,7 +77,16 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         guard let tileDownloader else {
             return .failure(.network)
         }
-        return await tileDownloader.downloadResult(tile: tile)
+        guard streetscape.isEnabled, tile.z >= streetscape.minimumTileZoom, tileDownloader.requestsStreetscape else {
+            return await tileDownloader.downloadResult(tile: tile)
+        }
+        // At street zoom a tile is two requests, the map tile and the
+        // streetscape tile, in flight together. `maxConcurrentFetches`
+        // counts tiles; the second request of each queues inside URLSession
+        // behind the same per-host connection cap.
+        async let mapResult = tileDownloader.downloadResult(tile: tile)
+        async let streetscapeResult = tileDownloader.downloadStreetscapeResult(tile: tile)
+        return TileStreetscapeMerge.merge(map: await mapResult, streetscape: await streetscapeResult)
     }
 
     func savePreparedOnDisk(tile: Tile,

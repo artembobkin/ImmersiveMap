@@ -92,6 +92,13 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.parsing != newValue.tiles.parsing {
             mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
+        // The streetscape is both a second transport (the downloader is
+        // built with or without the archive's template) and a parse-time
+        // decision (road paint is baked only with it on), so a change
+        // rebuilds the pipeline and everything it prepared.
+        if oldValue.tiles.streetscape != newValue.tiles.streetscape {
+            mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
+        }
         // The offline mode decides which transports the load pipeline is even
         // built with (offline-only maps never create a downloader), so it
         // applies by recreating the renderer; caches stay valid because the

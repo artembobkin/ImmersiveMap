@@ -22,9 +22,29 @@ struct PreparedTileCacheIdentity {
     /// identity: a tile prepared with flat lids must not answer a map that
     /// wants shaped roofs, and vice versa.
     let roofShapesEnabled: Bool
+    /// The streetscape archive the tile's road layer was merged with, or 0
+    /// with the streetscape off. Identity twice over: with it on the tile
+    /// carries a second source's features, and with it off the parser bakes
+    /// no road paint, so neither answer serves the other map. It is kept
+    /// apart from `tileSourceRevision`, which names the map tiles alone:
+    /// the offline region store is namespaced by that, and turning the
+    /// streetscape on must not orphan a downloaded region.
+    var streetscapeRevision: UInt64 = 0
 
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-o\(roofShapesEnabled ? 1 : 0)"
+        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-o\(roofShapesEnabled ? 1 : 0)-w\(String(streetscapeRevision, radix: 16))"
+    }
+
+    /// 0 with the streetscape off (or on with no template to request), else
+    /// the hash of what the loader would fetch and from which zoom.
+    static func streetscapeRevision(for tiles: ImmersiveMapSettings.TileSettings) -> UInt64 {
+        guard let template = tiles.streetscape.resolvedTileURLTemplate(network: tiles.network) else {
+            return 0
+        }
+        var hasher = StableFNV1aHasher()
+        hasher.combine(template)
+        hasher.combine(String(tiles.streetscape.minimumTileZoom))
+        return hasher.finalize()
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -609,7 +629,12 @@ final class PreparedTileDiskCaching {
     // (`TilePolygonStyle.farColor`, `farStreetColor`; the style stride
     // doubles), the target a fill converges on where a pixel covers more
     // ground than its detail resolves. A v85 entry carries the old stride.
-    static let preparedFormatVersion: UInt32 = 86
+    // 87: road paint (lane lines and centre dividers synthesized from the
+    // lane count, parking-bay combs, the shipped markings and carriageway
+    // surfaces) is baked only when the streetscape is on; the default map
+    // draws casing and fill by class with zebra crossings alone. A v86 entry
+    // carries paint the default map no longer draws.
+    static let preparedFormatVersion: UInt32 = 87
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

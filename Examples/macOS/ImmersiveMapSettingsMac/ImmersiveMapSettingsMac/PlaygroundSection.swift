@@ -9,6 +9,7 @@ import ImmersiveMap
 /// where it happens.
 enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
     case labels
+    case streetscape
     case buildings
     case sky
     case style
@@ -21,6 +22,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .labels: "Labels"
+        case .streetscape: "Streetscape"
         case .buildings: "Buildings and shadows"
         case .sky: "Sky"
         case .style: "Style"
@@ -33,6 +35,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
     var symbolName: String {
         switch self {
         case .labels: "textformat"
+        case .streetscape: "road.lanes"
         case .buildings: "building.2"
         case .sky: "sparkles"
         case .style: "paintpalette"
@@ -49,6 +52,14 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             `settings.labels`: which name field the tiles are read for, and which \
             labels reach the screen at which zoom. Every field here is baked into \
             prepared tiles, so a change re-prepares them.
+            """
+        case .streetscape:
+            """
+            `settings.tiles.streetscape`: the measured carriageway surfaces and \
+            the paint on them, a second tile archive the service serves next to \
+            the map tiles at street zoom. Off, roads are casing and fill with \
+            bare asphalt; on, every street-zoom tile is two requests, and the \
+            prepared tiles are re-baked either way.
             """
         case .buildings:
             """
@@ -98,6 +109,14 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
                                        zoom: 13.5,
                                        bearing: 0,
                                        pitch: 0.2)
+        case .streetscape:
+            // The Tverskaya junction in central Moscow, where the archive has
+            // every figure: surfaces, separators, a bus lane, parking bays.
+            ImmersiveMapCameraPosition(latitudeDegrees: 55.7570,
+                                       longitudeDegrees: 37.6110,
+                                       zoom: 16.6,
+                                       bearing: 0,
+                                       pitch: 0.3)
         case .buildings:
             ImmersiveMapCameraPosition(latitudeDegrees: 35.6595,
                                        longitudeDegrees: 139.7005,

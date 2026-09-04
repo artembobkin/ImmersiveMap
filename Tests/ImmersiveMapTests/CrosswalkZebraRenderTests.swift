@@ -151,7 +151,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     // MARK: - Helpers
 
     private func parse(features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                                    labelProviderProfile: runtimeContext.labelProviderProfile,
@@ -163,7 +163,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     }
 
     private func parse(crossing: String?) throws -> TileMvtParser.ParsedTile {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                                    labelProviderProfile: runtimeContext.labelProviderProfile,

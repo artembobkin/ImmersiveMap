@@ -487,6 +487,45 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Draws the streetscape: the measured carriageway surfaces and the paint
+    /// on them, lane lines, centre dividers, crossings and bus lanes, at
+    /// street zoom (z15-16).
+    ///
+    ///     ImmersiveMapView()
+    ///         .streetscape(isEnabled: true)
+    ///
+    /// Off by default. The default map draws roads the way a street map
+    /// does, casing and fill by class with no paint on the asphalt, and the
+    /// streetscape is a second, optional tile archive the hosted service
+    /// serves next to the map tiles. With it on, every tile at street zoom
+    /// is two requests, the map tile and the streetscape tile, laid over
+    /// each other; the streetscape requests carry the same headers as the
+    /// map tile requests, so a key set with `tileURLTemplate(_:headers:)`
+    /// covers both. A custom tile source that ships a streetscape archive
+    /// says where with `streetscapeTileURLTemplate(_:)`.
+    public func streetscape(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.streetscape(isEnabled: isEnabled)
+        return view
+    }
+
+    /// Where a custom tile source keeps its streetscape archive, as a URL
+    /// template with `{x}`, `{y}` and `{z}` placeholders:
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileURLTemplate("https://tiles.com/map/{z}/{x}/{y}.mvt")
+    ///         .streetscapeTileURLTemplate("https://tiles.com/streetscape/{z}/{x}/{y}.mvt")
+    ///         .streetscape(isEnabled: true)
+    ///
+    /// The hosted service needs none of this: `streetscape(isEnabled:)` alone
+    /// finds its archive. Setting the template does not turn the streetscape
+    /// on.
+    public func streetscapeTileURLTemplate(_ urlTemplate: String) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.streetscapeTileURLTemplate(urlTemplate)
+        return view
+    }
+
     public func mapStyle<S: ImmersiveMapMapStyle>(_ mapStyle: S) -> ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }

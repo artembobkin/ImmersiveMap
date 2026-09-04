@@ -123,6 +123,8 @@ private struct SettingsPlaygroundScreen: View {
         switch section {
         case .labels:
             LabelsPanel(settings: $settings)
+        case .streetscape:
+            StreetscapePanel(settings: $settings)
         case .buildings:
             BuildingsPanel(settings: $settings)
         case .sky:

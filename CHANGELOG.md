@@ -8,6 +8,16 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Changed
+
+- The default map draws no road paint. Roads are their casing and fill by
+  class, at the carriageway width the lane count gives, with nothing painted
+  on the asphalt: no lane lines or centre dividers synthesized from the lane
+  count, no parking-bay combs (a parking lot is a plain asphalt surface with
+  a kerb), no carriageway surfaces. The zebra crossing read off the crossing
+  footway's own attribute stays. The measured streetscape is opt-in (see
+  Added), and prepared tiles are re-baked (prepared format 87).
+
 ### Removed
 
 - The atmosphere halo around the globe's limb, the luminous planet body
@@ -17,6 +27,25 @@ once the public API stabilizes.
   clear colour at the horizon line with nothing blended in between.
 
 ### Added
+
+- The streetscape as an optional second tile source:
+  `ImmersiveMapView.streetscape(isEnabled:)` and
+  `streetscapeTileURLTemplate(_:)`, with `TileSettings.StreetscapeSettings`
+  behind them. The tile service keeps the measured carriageway surfaces and
+  road paint (the `streetscape` layer, z15-16) out of the map tiles and
+  serves them as a second archive at
+  `https://immersivemap.dev/tiles/streetscape/{z}/{x}/{y}.mvt`
+  (`ImmersiveMapTilesService.streetscapeTileURLTemplate`), handed out to
+  the keys that ask for it. With the streetscape on, every tile at street
+  zoom is two requests merged on the wire (two concatenated MVT messages are
+  one tile with both layer sets) and the `streetscape` layer is folded into
+  the road layer before parsing, so the surfaces clip the roads that enter
+  them and the shipped paint stops at a junction's edge. The streetscape
+  requests carry the map source's headers; a refused request (401 or 403)
+  fails the tile with a throttled warning, an absent tile (404) leaves the
+  map tile alone. A custom source names its own archive with the template
+  modifier. The flag and the template are prepared-cache identity, and the
+  offline region store stays namespaced by the map tiles alone.
 
 - The footprint fade of the flat ground fills, the vector map's stand-in
   for a mipmap: the fill shader measures how much ground a pixel covers

@@ -15,6 +15,15 @@ public enum ImmersiveMapTilesService {
     /// The deepest zoom the hosted planet build ships.
     public static let maximumTileZoomLevel = 16
 
+    /// The streetscape archive: the measured carriageway surfaces and road
+    /// paint, served next to the map tiles for the keys that ask for it and
+    /// requested only when `ImmersiveMapView.streetscape(isEnabled:)` is on.
+    public static let streetscapeTileURLTemplate = "https://immersivemap.dev/tiles/streetscape/{z}/{x}/{y}.mvt"
+
+    /// The first tile zoom the streetscape archive covers; it runs to
+    /// `maximumTileZoomLevel`.
+    public static let streetscapeMinimumTileZoom = 15
+
     /// Manual "invalidate every cached tile" lever: bump to force all clients to
     /// re-fetch and re-parse. Routine content updates at a stable URL do not need
     /// a bump - the prepared cache is keyed by the raw tile's ETag and raw tiles

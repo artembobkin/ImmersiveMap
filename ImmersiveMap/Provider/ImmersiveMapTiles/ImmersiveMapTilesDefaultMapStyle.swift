@@ -96,7 +96,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             return buildingStyle(tileZoom: z)
         case "aeroway":
             return line(key: 28, color: configuration.layers.aeroway, width: 4)
-        case "transportation":
+        case "transportation", "streetscape":
+            // The streetscape (the measured carriageways and road paint) is a
+            // second archive the parser folds into the road layer; a tile
+            // with the streetscape and no roads reaches here under its own
+            // name and is styled by the same rules.
             return transportationStyle(cls: cls, props: props, tile: data.tile)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)

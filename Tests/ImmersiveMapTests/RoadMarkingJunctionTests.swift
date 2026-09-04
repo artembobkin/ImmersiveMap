@@ -21,7 +21,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
     private static let junction = SIMD2<Float>(1500, 4096 - 2600)
 
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                              labelProviderProfile: runtimeContext.labelProviderProfile,
