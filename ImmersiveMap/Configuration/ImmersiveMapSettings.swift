@@ -751,23 +751,67 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// The globe's atmosphere: a halo of scattered light around the
+    /// planet's limb and a matching glow on the surface toward it. Globe
+    /// presentation only; through the globe-to-flat morph it fades into the
+    /// flat map's fog band (which is always on and takes its colour from
+    /// `SceneSettings.mapClearColor`), and the flat map has no atmosphere.
+    /// A thin glow at the limb that hides the tile mesh's edge stays even
+    /// with the atmosphere off.
+    public struct AtmosphereSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// The color of the scattered light, RGB in `0...1`. Sky blue by default;
+        /// the very edge of the halo whitens toward the limb on its own.
+        public var color: SIMD3<Float>
+        /// Brightness multiplier of the halo and of the surface glow. Expected
+        /// range: `0...2`; 1 is the designed look, 0 leaves the sphere bare
+        /// while keeping the layer on.
+        public var intensity: Float
+        /// Width multiplier of the halo, relative to the globe radius: 1 is
+        /// the designed look, 2 twice as wide, 0.5 a thin bright ring. The
+        /// halo scales with the globe on screen, so it looks the same at every
+        /// zoom of the globe presentation.
+        public var thickness: Float
+        /// How much the scene light (`SceneLightSettings.direction`, the sun
+        /// the buildings cast their shadows from) shapes the halo, `0...1`:
+        /// at 1 the halo is full where the limb faces the light and dims to
+        /// a residual glow opposite it; at 0 it is the same brightness all
+        /// the way around.
+        public var sunInfluence: Float
+
+        public init(isEnabled: Bool = true,
+                    color: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
+                    intensity: Float = 1.0,
+                    thickness: Float = 1.0,
+                    sunInfluence: Float = 0.6) {
+            self.isEnabled = isEnabled
+            self.color = color
+            self.intensity = intensity
+            self.thickness = thickness
+            self.sunInfluence = sunInfluence
+        }
+    }
+
     public struct SceneSettings: Equatable, Sendable {
         public var mapClearColor: SIMD4<Double>
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
         public var light: SceneLightSettings
         public var shadows: ShadowSettings
+        public var atmosphere: AtmosphereSettings
 
         public init(mapClearColor: SIMD4<Double>,
                     space: SpaceSettings,
                     starfield: StarfieldSettings,
                     light: SceneLightSettings = SceneLightSettings(),
-                    shadows: ShadowSettings = ShadowSettings()) {
+                    shadows: ShadowSettings = ShadowSettings(),
+                    atmosphere: AtmosphereSettings = AtmosphereSettings()) {
             self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
             self.light = light
             self.shadows = shadows
+            self.atmosphere = atmosphere
         }
     }
 
@@ -1347,6 +1391,20 @@ public extension ImmersiveMapSettings {
     func shadowSettings(_ shadows: ShadowSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows = shadows
+        return settings
+    }
+
+    func atmosphereSettings(_ atmosphere: AtmosphereSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.atmosphere = atmosphere
+        return settings
+    }
+
+    /// The globe's atmosphere: the halo around the planet and the glow on the
+    /// surface toward the limb.
+    func atmosphere(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.atmosphere.isEnabled = isEnabled
         return settings
     }
 

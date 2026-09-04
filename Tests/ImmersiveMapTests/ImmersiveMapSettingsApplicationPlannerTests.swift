@@ -30,6 +30,20 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertFalse(plan.requiresRendererRecreation)
     }
 
+    /// The atmosphere is a per-frame uniform: switching it, or recolouring
+    /// it, must not recreate the renderer.
+    func testAtmosphereSettingsChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        var newSettings = oldSettings.atmosphere(isEnabled: false)
+        newSettings.scene.atmosphere.color = SIMD3<Float>(1, 0.8, 0.6)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.scene])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
     func testPostProcessingFXAAChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default
         let newSettings = oldSettings.fxaa(isEnabled: true)

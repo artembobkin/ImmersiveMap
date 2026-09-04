@@ -204,6 +204,14 @@ enum VisualReviewCatalogue {
         static let globe = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                       longitudeDegrees: 10.0,
                                                       zoom: 1)
+        /// Central Europe a little past half way through the unroll, tilted
+        /// so the far edge of the surface is in frame: where the atmosphere
+        /// hands over to the fog band.
+        static let morphHandover = ImmersiveMapCameraPosition(latitudeDegrees: 48.0,
+                                                              longitudeDegrees: 10.0,
+                                                              zoom: 6.7,
+                                                              bearing: 0.3,
+                                                              pitch: 1.0)
         static let wholePlanet = ImmersiveMapCameraPosition(latitudeDegrees: 20.0,
                                                             longitudeDegrees: 10.0,
                                                             zoom: 0)
@@ -253,15 +261,48 @@ enum VisualReviewCatalogue {
             id: "globe.default",
             title: "Globe, default style",
             lookFor: """
-            The planet is round with no seam down the middle, the coastlines \
-            are clean and the limb is a hard, even edge against space (there \
-            is no atmosphere and no day/night shading any more). Stars behind \
-            it, no banding in the space gradient. Country borders are thin, \
+            The planet is round with no seam down the middle and the coastlines \
+            are clean. A soft sky-blue halo hugs the limb all the way round: a \
+            bright band right at the edge, whitening on the edge itself, a \
+            faint glow fading into space within a fraction of the planet's \
+            radius, and a narrow glow decaying inward over the surface. It \
+            must follow the true silhouette (no gap and no overlap anywhere \
+            on the circle) and be a little brighter on the side facing the \
+            scene light, upper left, than opposite it, without a visible \
+            seam between the two. No staircase on the limb. Stars behind it, \
+            no banding in the space gradient. Country borders are thin, \
             unobtrusive dashed lines that read as dashes, not chains of fat \
             dots, and no regional borders clutter the planet.
             """,
             settings: .default,
             subject: .still(camera: Place.globe)),
+
+        VisualReviewScenario(
+            id: "globe.atmosphere.off",
+            title: "Globe with the atmosphere off",
+            lookFor: """
+            The bare planet against space: no blue halo and no glow over the \
+            surface. The limb is still a smooth, even circle: a thin light \
+            feather a couple of pixels wide sits on the edge (it hides the \
+            staircase of the tile mesh) and must not read as a halo, a ring \
+            or a fringe of the wrong colour.
+            """,
+            settings: .default.atmosphere(isEnabled: false),
+            subject: .still(camera: Place.globe)),
+
+        VisualReviewScenario(
+            id: "globe.atmosphere.tilted",
+            title: "Atmosphere on a tilted, off-centre globe",
+            lookFor: """
+            The halo hugs the limb everywhere although the planet is tilted \
+            and off centre: the band stays the same width all the way round \
+            the visible edge, with no gap and no overlap where the silhouette \
+            is a conic rather than a circle. Nothing of the water or the land \
+            near the limb shows through the halo as an artifact, and the \
+            polar cap wears the same rim glow as the tiles beside it.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.globeLimb)),
 
         VisualReviewScenario(
             id: "globe.transparent.space",
@@ -301,6 +342,21 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.europe)),
+
+        VisualReviewScenario(
+            id: "transition.horizon.handover",
+            title: "The atmosphere handing over to the fog band",
+            lookFor: """
+            Tilted, past half way through the unroll: the far edge of the \
+            surface is in frame with the sky above it. The halo is fading \
+            and has turned from blue toward the map's off-white; the ground \
+            near the edge is hazed in that same colour and the edge itself \
+            is whitened, so no hard line and no staircase shows where the \
+            surface ends. The haze must sit on the edge (not float above it \
+            or leave a bare strip below it) and must be zero under the camera.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.morphHandover)),
 
         VisualReviewScenario(
             id: "lines.globe.borders",
@@ -598,6 +654,21 @@ enum VisualReviewCatalogue {
             fill. A lake's edge must not bleed over the land beside it by \
             more than a pixel, and no horizontal hairlines may appear where \
             the fade has taken the fills.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowRegionTilted)),
+
+        VisualReviewScenario(
+            id: "flat.horizon.fog",
+            title: "The flat horizon's fog band",
+            lookFor: """
+            The same tilt, judged at the horizon line. The far ground fogs \
+            into the map's off-white so that it meets the sky above the line \
+            in one colour with no seam, no hairline and no visible edge of \
+            the tile coverage; the fog thins over a few degrees under the \
+            line and is gone well before the middle of the frame, so the \
+            near map wears no haze at all. Nothing is painted above the \
+            line: the sky is the plain clear colour, no blue and no gradient.
             """,
             settings: .default,
             subject: .still(camera: Place.moscowRegionTilted)),

@@ -36,6 +36,11 @@ enum RenderLayer: String, CaseIterable {
     /// while the visible models stay in the world pass with MSAA and shadows.
     case sceneModelOcclusion
     case routes
+    /// The air around the surface's edge, last of the world layers on both
+    /// surfaces: the globe's atmosphere and limb feather, the flat map's fog
+    /// band, and their handover through the morph. Two depth-split
+    /// fullscreen draws, see `HorizonRenderSubsystem`.
+    case horizon
     case postProcessing
     case labels
     case avatars
@@ -82,13 +87,17 @@ struct RenderLayerPlanner {
     static func plan(availability: RenderPassAvailability) -> [RenderLayerPlanItem] {
         let worldLayers: [RenderLayer] = switch availability.renderSurfaceMode {
         case .flat:
-            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels]
+            // The horizon last: the fog band hazes everything painted near
+            // the horizon line, buildings and models included, and the
+            // labels, which come after, stay crisp.
+            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the
             // stars paint the whole frame and the tile geometry blends over
-            // them, opaque where its background quad lands.
-            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes]
+            // them, opaque where its background quad lands. The horizon last,
+            // over routes and models near the limb.
+            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes, .horizon]
         }
 
         return worldLayers.map { layer in

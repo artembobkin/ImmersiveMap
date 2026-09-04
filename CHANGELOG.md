@@ -47,14 +47,44 @@ once the public API stabilizes.
 
 ### Removed
 
-- The atmosphere halo around the globe's limb, the luminous planet body
-  under still-loading tiles, the horizon haze and the horizon fog are
-  gone: the stars are the only space décor, a slot whose tile has not
-  arrived shows the space behind the planet, and the flat ground meets the
-  clear colour at the horizon line with nothing blended in between.
+- The luminous planet body under still-loading tiles is gone: a slot whose
+  tile has not arrived shows the space behind the planet.
 
 ### Added
 
+- The globe's atmosphere is back, and the flat horizon has a fog band. One
+  `horizon` layer closes the world pass on both surfaces: a fullscreen
+  analytic draw split by the depth buffer into a sky side (pixels nothing
+  painted) and a ground side (painted pixels), each pixel shaded once,
+  skipped whenever the edge is farther below the frame than the haze
+  reaches (which at street pitch is every frame). On the globe it paints
+  the atmosphere, a halo of scattered light around the limb resolved per
+  pixel from the view ray and the sphere (a dense band hugging the edge, a
+  wide faint glow into space, a whitening at the limb, a narrow glow
+  decaying inward over the surface), its widths a fixed fraction of the
+  planet's radius as seen from the eye, and a limb feather a couple of
+  pixels wide that hides the staircase of the tile mesh's silhouette
+  whether the atmosphere is on or off. On the flat map it paints the fog
+  band alone: the ground blends into `SceneSettings.mapClearColor` by
+  angle below the horizon, saturated at the line, gone a few degrees
+  under it, over buildings and models too, and the sky above the line is
+  not painted (the flat map has no atmosphere). Through the morph the
+  edge follows the limb of the unrolling sphere, written in the surface's
+  curvature so the plane is the formula's limit and not a branch
+  (`HorizonEdgeMath`, mirrored by the shader); from half way the halo
+  fades out, the rim narrows into the fog band and every colour blends to
+  the fog colour, finished where the geometry is a finished plane, so the
+  surface switch happens between identical frames. Nothing changed in the
+  tile shaders and no prepared tile is re-baked. Public API, as it shipped
+  in 0.7.1: `ImmersiveMapSettings.AtmosphereSettings` (`isEnabled`,
+  `color`, `intensity`, `thickness`, `sunInfluence`, the last now driven by
+  `SceneLightSettings.direction`) on `SceneSettings.atmosphere`, with
+  `.atmosphereSettings(_:)` and `.atmosphere(isEnabled:)` on
+  `ImmersiveMapView` and `ImmersiveMapSettings`, on by default and applied
+  live. New page `Documentation/docs/atmosphere.md`, atmosphere rows in
+  the settings example's Sky panel, visual review scenarios
+  `globe.atmosphere.off`, `globe.atmosphere.tilted`, `flat.horizon.fog`
+  and `transition.horizon.handover`.
 - The streetscape as an optional second tile source:
   `ImmersiveMapView.streetscape(isEnabled:)` and
   `streetscapeTileURLTemplate(_:)`, with `TileSettings.StreetscapeSettings`

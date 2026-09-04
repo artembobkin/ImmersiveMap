@@ -51,6 +51,11 @@ final class SharedRenderResources {
     /// the sphere at the far plane, tested against the cleared depth without
     /// writing; the tile geometry blends over them.
     let skyBackdropDepthState: MTLDepthStencilState
+    /// The horizon layer's ground side: the far-plane fragment passes only
+    /// where something wrote a nearer depth (the ground's rank band, the
+    /// buildings, the models), never written, so the haze reaches painted
+    /// pixels alone and the sky side keeps the rest.
+    let horizonGroundDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -108,6 +113,8 @@ final class SharedRenderResources {
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
+    /// The air around the surface's edge, on both surfaces.
+    let horizonPipeline: HorizonPipeline
     let sceneModelPipeline: SceneModelPipeline
     let routePipeline: RoutePipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -150,6 +157,7 @@ final class SharedRenderResources {
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
+        self.horizonGroundDepthState = device.makeDepthStencilState(descriptor: Self.makeHorizonGroundDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
         self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
@@ -175,6 +183,7 @@ final class SharedRenderResources {
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
+        self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.routePipeline = compiled.routePipeline
         self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
@@ -201,6 +210,7 @@ final class SharedRenderResources {
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
+        let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
         let routePipeline: RoutePipeline
         let tilePointScreenPipelines: TilePointScreenPipelines
@@ -233,6 +243,7 @@ final class SharedRenderResources {
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
+        var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var routePipeline: RoutePipeline?
         var tilePointScreenPipelines: TilePointScreenPipelines?
@@ -287,6 +298,11 @@ final class SharedRenderResources {
                                                     pixelFormat: pixelFormat,
                                                     library: library,
                                                     sampleCount: sampleCount) },
+            { horizonPipeline = HorizonPipeline(metalDevice: device,
+                                                pixelFormat: pixelFormat,
+                                                library: library,
+                                                sampleCount: sampleCount,
+                                                supportsFramebufferFetch: supportsFramebufferFetch) },
             { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
@@ -310,6 +326,7 @@ final class SharedRenderResources {
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
+            horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             routePipeline: routePipeline!,
             tilePointScreenPipelines: tilePointScreenPipelines!,
@@ -428,6 +445,16 @@ final class SharedRenderResources {
     private static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = false
+        return descriptor
+    }
+
+    /// The horizon layer's ground side: a far-plane fragment (z = 1) passes
+    /// the greater test exactly where a nearer depth was written, which is
+    /// every painted pixel, and fails on the cleared depth of the sky.
+    private static func makeHorizonGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .greater
         descriptor.isDepthWriteEnabled = false
         return descriptor
     }

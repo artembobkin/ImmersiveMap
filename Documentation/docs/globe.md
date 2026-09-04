@@ -26,7 +26,7 @@ Both a `GlobeRenderState` and a `FlatRenderState` are produced on every frame re
 
 ## How the sphere is drawn
 
-The globe is drawn from the same vector tiles as the plane. Every visible tile's ground geometry is projected onto the sphere in the vertex shader, through the same surface morph the placeholder grid under it uses, lit by the same globe shading and clipped against the sphere itself (every vertex asks whether the planet stands between it and the camera: on the pure globe that is the horizon, and while the sphere unfurls it is what hides the far side morphing through the planet's interior); nothing is rasterized into an intermediate texture, so zooming re-bakes nothing and coastlines and borders are drawn at the screen's own density with analytic antialiasing plus the world pass's MSAA. Coarse tiles have their large triangles split by the parser so they follow the curvature instead of cutting through the sphere as chords. The polar caps beyond the Mercator edge take their colour from a thin strip baked from the last tile rows, so a pole painted white by the low-zoom land cover, or blue by open water at a closer zoom, continues what the tiles around it show.
+The globe is drawn from the same vector tiles as the plane. Every visible tile's ground geometry is projected onto the sphere in the vertex shader, through the same surface morph the placeholder grid under it uses, lit by the same globe shading and clipped against the sphere itself (every vertex asks whether the planet stands between it and the camera: on the pure globe that is the horizon, and while the sphere unfurls it is what hides the far side morphing through the planet's interior); nothing is rasterized into an intermediate texture, so zooming re-bakes nothing and coastlines and borders are drawn at the screen's own density with analytic antialiasing plus the world pass's MSAA. Coarse tiles have their large triangles split by the parser so they follow the curvature instead of cutting through the sphere as chords. The polar caps beyond the Mercator edge take their colour from a thin strip baked from the last tile rows, so a pole painted white by the low-zoom land cover, or blue by open water at a closer zoom, continues what the tiles around it show. The silhouette of that mesh is a polygon of chords, and a thin glow across the limb hides its staircase whether or not the [atmosphere](atmosphere.md) is on.
 
 ### The loading globe
 
@@ -37,6 +37,8 @@ While a tile is still on its way, its slot is left unpainted and the space behin
 | Feature | Where it draws |
 |---|---|
 | Starfield and the globe cap | Globe, fading out through the morph |
+| [The atmosphere](atmosphere.md) | Globe, fading into the fog band's colour at the end of the morph |
+| [The horizon fog band](atmosphere.md) | Flat, and the end of the morph |
 | [Routes](routes.md) | Globe and the whole morph, fading out over its last tenth |
 | [Extruded buildings](buildings-and-shadows.md) | Flat |
 | [Shadows](buildings-and-shadows.md) | Flat |

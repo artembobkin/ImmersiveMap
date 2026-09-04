@@ -69,6 +69,7 @@ Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://
 | [Your own MVT tile source](Documentation/docs/custom-tile-provider.md) | Available |
 | [Customizable attribution badge](ATTRIBUTION.md) | Available |
 | [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md) | Available |
+| [The globe's atmosphere and the flat horizon's fog band](Documentation/docs/atmosphere.md) | Available |
 | [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
 | [Map styling and colors](Documentation/docs/styling.md) | Available |
 | [The streetscape: measured carriageways and road paint, opt-in](Documentation/docs/streetscape.md) | Available |

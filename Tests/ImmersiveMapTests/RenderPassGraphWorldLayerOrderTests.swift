@@ -9,11 +9,11 @@ import XCTest
 /// planner's ground-first order, since the ground has to be shaded where a
 /// translucent building shows it through.
 final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
-    private let flatPlan: [RenderLayer] = [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels]
+    private let flatPlan: [RenderLayer] = [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon]
 
     func testSolidBuildingsDrawBeforeTheGround() {
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(flatPlan, buildingPath: .solid),
-                       [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels])
+                       [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels, .horizon])
     }
 
     /// The ownership prepass must precede the buildings in every flat
@@ -39,13 +39,13 @@ final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
     }
 
     func testGlobeLayersAreLeftAlone() {
-        let globePlan: [RenderLayer] = [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes]
+        let globePlan: [RenderLayer] = [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes, .horizon]
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(globePlan, buildingPath: nil), globePlan)
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(globePlan, buildingPath: .solid), globePlan)
     }
 
     func testAlreadyOrderedPlanIsUnchanged() {
-        let ordered: [RenderLayer] = [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels]
+        let ordered: [RenderLayer] = [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels, .horizon]
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(ordered, buildingPath: .solid), ordered)
     }
 }

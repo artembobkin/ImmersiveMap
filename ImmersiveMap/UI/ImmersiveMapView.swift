@@ -676,6 +676,25 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The globe's atmosphere: the halo of scattered light around the
+    /// planet's limb and the glow on the surface toward it. Globe
+    /// presentation only; it fades into the flat map's fog band through the
+    /// morph. On by default.
+    public func atmosphereSettings(_ atmosphere: ImmersiveMapSettings.AtmosphereSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.atmosphereSettings(atmosphere)
+        return view
+    }
+
+    /// Turns the globe's atmosphere on or off. Off leaves the planet bare
+    /// against space, apart from the thin glow at the limb that hides the
+    /// tile mesh's edge; the flat map's fog band is not affected.
+    public func atmosphere(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.atmosphere(isEnabled: isEnabled)
+        return view
+    }
+
     public func shadows(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.shadows(isEnabled: isEnabled)

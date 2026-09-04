@@ -32,11 +32,15 @@ final class RenderPersistentContext {
     let globeCapRenderer: GlobeCapRenderer
     /// The caps' rim colour, baked per view from its own placements.
     let starfieldRenderer: StarfieldRenderer
+    /// The horizon layer's drawer; its pipeline is shared.
+    let horizonRenderer: HorizonRenderer
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     /// See `SharedRenderResources.skyBackdropDepthState`.
     let skyBackdropDepthState: MTLDepthStencilState
+    /// See `SharedRenderResources.horizonGroundDepthState`.
+    let horizonGroundDepthState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
@@ -112,6 +116,7 @@ final class RenderPersistentContext {
         self.extrudedDepthState = shared.extrudedDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.skyBackdropDepthState = shared.skyBackdropDepthState
+        self.horizonGroundDepthState = shared.horizonGroundDepthState
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
@@ -144,6 +149,8 @@ final class RenderPersistentContext {
         self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,
                                                    pipeline: shared.starfieldPipeline,
                                                    config: config.scene.starfield)
+
+        self.horizonRenderer = HorizonRenderer(pipeline: shared.horizonPipeline)
 
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
         // The cap palette bakes style colors; grids and pipeline come from

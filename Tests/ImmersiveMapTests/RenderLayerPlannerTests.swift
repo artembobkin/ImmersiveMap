@@ -20,6 +20,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
+            .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
@@ -48,12 +49,13 @@ final class RenderLayerPlannerTests: XCTestCase {
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
+            .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels])
+        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -76,6 +78,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .routes,
+            .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
@@ -101,12 +104,13 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .routes,
+            .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes, .horizon])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -173,12 +177,35 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .routes,
+            .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
         XCTAssertEqual(skipReason(for: .starfield, in: plan), .transparentSpace)
+    }
+
+    /// The horizon layer is planned on both surfaces and always enabled:
+    /// the fog band and the limb feather are not optional, and whether the
+    /// atmosphere's sky side draws is the subsystem's per-frame decision,
+    /// not the planner's.
+    func testTheHorizonLayerClosesTheWorldOnBothSurfaces() {
+        for mode in [ViewMode.flat, .spherical] {
+            let plan = RenderLayerPlanner.plan(
+                availability: RenderPassAvailability(renderSurfaceMode: mode,
+                                                     labelsEnabled: true,
+                                                     avatarsEnabled: true,
+                                                     debugOverlayEnabled: true,
+                                                     sceneModelOcclusionEnabled: true,
+                                                     starfieldEnabled: false)
+            )
+            let worldLayers = plan.map(\.layer).filter(RenderPassGraph.isWorldLayer)
+            XCTAssertEqual(worldLayers.last, .horizon, "\(mode)")
+            XCTAssertEqual(plan.first { $0.layer == .horizon }?.enabled, true, "\(mode)")
+        }
+        XCTAssertTrue(RenderPassGraph.isWorldLayer(.horizon))
+        XCTAssertFalse(RenderPassGraph.isOverlayLayer(.horizon))
     }
 
 

@@ -262,9 +262,12 @@ final class RouteOffscreenRenderTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Flat lighting for the horizon tests: the terminator would sink a red
-    /// ribbon into the night side, and the Sun's glow reads as red pixels.
-    private static let flatlitSettings = ImmersiveMapSettings.default
+    /// No air for the horizon tests: the atmosphere's rim over the surface
+    /// saturates right at the limb, so a ribbon that clears the horizon by
+    /// a couple of pixels would dissolve into it and read as no ribbon at
+    /// all. The limb feather stays (it is not optional) and is thin enough
+    /// to leave the ribbon's red.
+    private static let flatlitSettings = ImmersiveMapSettings.default.atmosphere(isEnabled: false)
 
     @MainActor
     private func makeHarness(zoom: Double,
