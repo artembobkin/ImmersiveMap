@@ -634,7 +634,12 @@ final class PreparedTileDiskCaching {
     // surfaces) is baked only when the streetscape is on; the default map
     // draws casing and fill by class with zebra crossings alone. A v86 entry
     // carries paint the default map no longer draws.
-    static let preparedFormatVersion: UInt32 = 87
+    // 88: without the streetscape a road is a street map's stroke, its
+    // width the class's alone (`streetStrokeWidthUnits`) with a casing,
+    // instead of the carriageway width read off the lane count. A v87
+    // entry prepared without the streetscape carries the carriageway
+    // ribbons.
+    static let preparedFormatVersion: UInt32 = 88
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

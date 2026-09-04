@@ -1132,7 +1132,8 @@ class TileMvtParser {
                     featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
                         properties: attributes,
-                        tile: tile
+                        tile: tile,
+                        streetscapeEnabled: config.tiles.streetscape.isEnabled
                     )))
                 }
                 if stripsRoadPaint, Self.isSeparateRoadLayer(layerName) {

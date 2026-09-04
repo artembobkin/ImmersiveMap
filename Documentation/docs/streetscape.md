@@ -9,7 +9,7 @@ ImmersiveMapView()
 
 ## What the default map draws
 
-Without the streetscape, roads draw the way a street map draws them: a casing and a fill per class, at the carriageway width the tiles' lane count gives, with nothing painted on the asphalt. No lane lines, no centre dividers, no parking-bay combs; a parking lot is a plain asphalt surface with a kerb. The one figure on the road that stays is the zebra crossing, which the map tiles carry on the crossing footway itself and which belongs to a street map rather than to the measured streetscape.
+Without the streetscape, roads draw the way a street map draws them: a stroke per class, its width the class's alone (a motorway the widest, a service alley a sliver, growing with the camera at street zoom), with a casing and nothing painted on it. The tiles' lane count is not read: a road's real carriageway width is a streetscape fact, drawn only to carry the measured surfaces and paint. No lane lines, no centre dividers, no parking-bay combs; a parking lot is a plain asphalt surface with a kerb. The one figure on the road that stays is the zebra crossing, which the map tiles carry on the crossing footway itself and which belongs to a street map rather than to the measured streetscape.
 
 ## Where it comes from
 

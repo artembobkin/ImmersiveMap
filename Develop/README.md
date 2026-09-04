@@ -10,7 +10,7 @@ Projects:
 
 - `ImmersiveMapDevMac`: the plain map with the camera controls and the debug HUD,
   reading the test tile endpoint instead of the hosted one, with the disk caches
-  cleared on every launch, with the streetscape on. `IMMERSIVEMAP_DEV_TILE_TEMPLATE`
+  cleared on every launch, with the streetscape switch in the file. `IMMERSIVEMAP_DEV_TILE_TEMPLATE`
   and `IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE` in the scheme environment repoint
   the map tiles and the streetscape archive at another source without editing
   the file.

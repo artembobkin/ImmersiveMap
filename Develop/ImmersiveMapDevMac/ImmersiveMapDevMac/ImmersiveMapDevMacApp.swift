@@ -32,7 +32,7 @@ private struct MapScreen: View {
             // The streetscape archive under test rides along with the map
             // tiles: two requests per street-zoom tile, merged before parsing.
             .streetscapeTileURLTemplate(devStreetscapeTemplate)
-            .streetscape(isEnabled: true)
+            .streetscape(isEnabled: false)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)

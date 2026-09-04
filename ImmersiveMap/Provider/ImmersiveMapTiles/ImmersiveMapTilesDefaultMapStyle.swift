@@ -101,7 +101,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // second archive the parser folds into the road layer; a tile
             // with the streetscape and no roads reaches here under its own
             // name and is styled by the same rules.
-            return transportationStyle(cls: cls, props: props, tile: data.tile)
+            return transportationStyle(cls: cls, props: props, tile: data.tile,
+                                       streetscapeEnabled: data.streetscapeEnabled)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":
@@ -350,7 +351,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     private func transportationStyle(cls: String?,
                                      props: [String: MvtValue],
-                                     tile: Tile) -> FeatureStyle {
+                                     tile: Tile,
+                                     streetscapeEnabled: Bool = true) -> FeatureStyle {
         let tileZoom = tile.z
         let brunnel = props["brunnel"]?.stringValue?.lowercased()
         let isTunnel = brunnel == "tunnel"
@@ -468,8 +470,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // drawn six lanes wide, and the point floors below carry the class
         // through the zooms where that width is sub-pixel. Markings ride the
         // same fact, so they only appear where the surface can hold them.
+        //
+        // That is the streetscape's road, drawn to carry the measured
+        // surfaces and paint. Without the streetscape the road is a street
+        // map's stroke instead: a width the class alone decides, the same
+        // on every street of the class whatever the tiles say about lanes,
+        // a casing a point wide, nothing painted on it. See
+        // `streetStrokeWidthUnits`.
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
-        let widthMetres = roadWidthUnits(cls: effectiveClass, props: props, tile: tile)
+        let drawsStrokes = streetscapeEnabled == false
+        let widthMetres = drawsStrokes
+            ? Self.streetStrokeWidthUnits(cls: effectiveClass, tile: tile)
+            : roadWidthUnits(cls: effectiveClass, props: props, tile: tile)
+        let kerbUnitsPerSide = drawsStrokes
+            ? Self.streetStrokeCasingPointsPerSide * Self.streetStrokeUnitsPerPoint(tile: tile)
+            : Self.roadCasingMetresPerSide * unitsPerMetre
         // A centre divider separates two directions of travel. A one-way
         // carriageway (one half of a dual carriageway, a one-way street) has
         // none; where the tiles carry `oneway` it decides, and a tile that
@@ -499,6 +514,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // not classify says nothing either way and is left painted.
         let isUnpaved = props["surface"]?.stringValue == "unpaved"
         let marked = isConstruction == false
+            && drawsStrokes == false
             && tileZoom >= Self.roadMarkingsMinimumTileZoom
             && Self.roadClassCarriesMarkings(effectiveClass)
             && laneCountIsMapped
@@ -536,24 +552,24 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.2, maximumWidthPoints: 7.0, unitsPerMetre: unitsPerMetre,
+                             minimumWidthPoints: 2.2, maximumWidthPoints: 7.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
                              markings: markings, construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: widthMetres, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.0, maximumWidthPoints: 6.5, unitsPerMetre: unitsPerMetre,
+                             minimumWidthPoints: 2.0, maximumWidthPoints: 6.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
                              markings: markings, construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: widthMetres, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.6, maximumWidthPoints: 6.0, unitsPerMetre: unitsPerMetre, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.6, maximumWidthPoints: 6.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: widthMetres, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.2, maximumWidthPoints: 5.0, unitsPerMetre: unitsPerMetre, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.2, maximumWidthPoints: 5.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, width: widthMetres, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.0, maximumWidthPoints: 4.5, unitsPerMetre: unitsPerMetre, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.0, maximumWidthPoints: 4.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, width: widthMetres, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, maximumWidthPoints: 4.0, unitsPerMetre: unitsPerMetre, markings: markings)
+                             minimumWidthPoints: 0.9, maximumWidthPoints: 4.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings)
         case "service":
             // A service road is one lane wide and has nothing to divide, so
             // it carries no markings. A parking aisle sits one step below
@@ -562,7 +578,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // pass along it, a bus lane mapped as its own way among them.
             let isParkingAisle = props["service"]?.stringValue == "parking_aisle"
             return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: isParkingAisle ? 45 : 46, casing: tileZoom >= 14, tunnel: isTunnel,
-                             minimumWidthPoints: 0.7, maximumWidthPoints: 2.5, unitsPerMetre: unitsPerMetre)
+                             minimumWidthPoints: 0.7, maximumWidthPoints: 2.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a plain strip of
             // the ground color, no kerb and no dashes. Over land it is the
@@ -571,14 +587,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // route across the surface. A kerb on a ground-colored strip
             // turned every path into a grey band wider than its interior.
             return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
-                             minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre)
+                             minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
         case "ferry":
             return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
             return roadStyle(fillKey: 43, color: roads.minor, width: widthMetres, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre)
+                             minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         }
     }
 
@@ -1185,6 +1201,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                            minimumWidthPoints: Float = 0,
                            maximumWidthPoints: Float = 0,
                            unitsPerMetre: Double = 0,
+                           kerbUnitsPerSide: Double? = nil,
+                           strokes: Bool = false,
                            markings: RoadMarkings = .none,
                            overviewAccent: SIMD4<Float>? = nil,
                            construction: Bool = false) -> FeatureStyle {
@@ -1214,13 +1232,21 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // casing keeps its proportion by flooring half a point above the fill.
         let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0
 
+        // A stroke has no symbol ceiling: its world width IS the symbol,
+        // chosen per class to read at street zoom, and it grows with the
+        // camera past that the way a street map's roads do. The ceiling
+        // exists for the carriageway, whose true width is far wider than a
+        // readable symbol at region zooms.
+        let maximumWidthPoints: Float = strokes ? 0 : maximumWidthPoints
+
         var passes: [LineRenderPass] = []
-        if casing, tunnel == false, Self.drawsAutomobileKerb {
+        if casing, tunnel == false, Self.drawsAutomobileKerb || strokes {
             // The casing is a kerb: a fixed margin of ground on each side of
             // the carriageway, not a fraction of it. As a fraction it was a
             // few units on a symbolic width and metres wide on a true one,
-            // which turns every street into a dark-edged ribbon.
-            let casingWidth = width + 2 * Self.roadCasingMetresPerSide * unitsPerMetre
+            // which turns every street into a dark-edged ribbon. A stroke's
+            // casing is the same margin measured in points.
+            let casingWidth = width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
             passes.append(
                 LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                                color: roadCasingColor(from: fillColor),
@@ -1482,6 +1508,52 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                 props: [String: MvtValue],
                                 tile: Tile) -> Double {
         roadWidthMetres(cls: cls, props: props) * Self.tileUnitsPerMetre(tile: tile)
+    }
+
+    /// The street map's stroke, the road of a map without the streetscape:
+    /// a full width per class in layout points at street zoom, the ladder
+    /// every street map draws (a motorway the widest, a service alley a
+    /// sliver), and nothing read off the tiles' lane count. It is stated
+    /// as a nominal width at tile z16 and converted to this tile's units
+    /// world-locked, so the stroke is continuous across the tile levels
+    /// that serve it and doubles with each camera zoom past 16, the way a
+    /// street map's roads keep growing under a closing camera. Below street
+    /// zoom the class floors (`minimumWidthPoints`) hold the stroke
+    /// readable where the world width thins.
+    static func streetStrokeWidthPoints(cls: String?) -> Float {
+        switch cls {
+        case "motorway": return 14
+        case "trunk": return 13
+        case "primary": return 12
+        case "secondary": return 10
+        case "tertiary": return 9
+        case "minor": return 7
+        case "service": return 4
+        case "path", "track": return 2
+        default: return 6
+        }
+    }
+
+    /// The casing of a street map's stroke, per side, in points.
+    static let streetStrokeCasingPointsPerSide: Double = 1
+
+    /// Tile units per layout point of a z16 tile at camera zoom 16, the
+    /// nominal scale the stroke ladder is designed at (the same scale the
+    /// marking ribbons are provisioned at). It is a design constant rather
+    /// than a camera fact: the camera projects by field of view, so the
+    /// exact on-screen size varies a little with the viewport, which is
+    /// what a stroke width in points tolerates by nature.
+    static let streetStrokeUnitsPerPointAtStreetZoom: Double = 8
+
+    /// Tile units per nominal point in this tile: the z16 scale halved for
+    /// every level coarser, so a width stated in points at z16 is the same
+    /// ground width in every tile that serves it.
+    static func streetStrokeUnitsPerPoint(tile: Tile) -> Double {
+        streetStrokeUnitsPerPointAtStreetZoom * pow(2.0, Double(tile.z - 16))
+    }
+
+    static func streetStrokeWidthUnits(cls: String?, tile: Tile) -> Double {
+        Double(streetStrokeWidthPoints(cls: cls)) * streetStrokeUnitsPerPoint(tile: tile)
     }
 
     /// How much wider than the carriageway the casing draws, in metres per

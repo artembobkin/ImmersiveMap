@@ -432,16 +432,19 @@ enum VisualReviewCatalogue {
 
         VisualReviewScenario(
             id: "roads.carriageways.street",
-            title: "Street level, bare carriageways",
+            title: "Street level, a street map's strokes",
             lookFor: """
-            Roads as surfaces, not strokes: a wide avenue is visibly wider \
-            than the side street it crosses, in the proportion the real \
-            streets are, and every carriageway is bare asphalt: no lane \
-            divider, no centre line, no edge line, nothing painted on the \
-            grey. This is the default map, the streetscape off. Junctions do \
-            not blob where roads meet, and the kerb is a thin even edge on \
-            both sides instead of a wide dark band. The only figures on the \
-            road are the zebra stripes of marked crossings.
+            Roads as strokes, the way a street map draws them: this is the \
+            default map, the streetscape off. An avenue is wider than the \
+            side street it crosses by rank alone (motorway, primary, \
+            secondary, minor, service, in that order), not by its real \
+            width, so two primaries are the same width whatever their lane \
+            count, and every road is narrower than its real carriageway. \
+            Each stroke has a thin, even casing on both sides, and the \
+            asphalt is bare: no lane divider, no centre line, no edge line. \
+            Junctions are round joins where strokes meet, never a blob of \
+            merged surface. The only figures on the road are the zebra \
+            stripes of marked crossings.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattan)),
@@ -451,8 +454,9 @@ enum VisualReviewCatalogue {
             title: "Tverskaya junction, the streetscape off",
             lookFor: """
             The same junction as the next shot, with the default settings: \
-            the streets are casing and fill by class, at their carriageway \
-            width, and the asphalt is bare. No lane separators, no centre \
+            the streets are strokes with a casing, their width by class \
+            alone and narrower than the real carriageway, and the asphalt \
+            is bare. No lane separators, no centre \
             line, no edge line, no letters A on the bus lane, no parking-bay \
             combs in the lots (the lots are plain asphalt with a kerb), no \
             single flush junction surface: the ribbons meet as ribbons. The \

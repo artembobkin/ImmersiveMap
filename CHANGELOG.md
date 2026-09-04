@@ -10,13 +10,16 @@ once the public API stabilizes.
 
 ### Changed
 
-- The default map draws no road paint. Roads are their casing and fill by
-  class, at the carriageway width the lane count gives, with nothing painted
-  on the asphalt: no lane lines or centre dividers synthesized from the lane
+- The default map draws roads as a street map does: a stroke per class
+  whose width is the class's alone (`streetStrokeWidthPoints`, a nominal
+  ladder at street zoom, world-locked so it grows under a closing camera),
+  with a casing and nothing painted on the asphalt. The lane count is not
+  read for the width; the real carriageway width is drawn only with the
+  streetscape on, where the measured surfaces sit flush on it. No paint: no lane lines or centre dividers synthesized from the lane
   count, no parking-bay combs (a parking lot is a plain asphalt surface with
   a kerb), no carriageway surfaces. The zebra crossing read off the crossing
   footway's own attribute stays. The measured streetscape is opt-in (see
-  Added), and prepared tiles are re-baked (prepared format 87).
+  Added), and prepared tiles are re-baked (prepared format 88).
 
 ### Removed
 
