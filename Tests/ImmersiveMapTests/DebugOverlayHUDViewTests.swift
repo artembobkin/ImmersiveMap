@@ -45,8 +45,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateTilesTabSelectionForTesting()
@@ -81,8 +80,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateBaseLabelsTabSelectionForTesting()
@@ -99,8 +97,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: true),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: true))
         view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateBaseLabelsTabSelectionForTesting()
@@ -119,8 +116,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.simulateBaseLabelsTabSelectionForTesting()
         view.layoutIfNeeded()
         view.simulateRoadLabelTilesSwitchChangeForTesting(true)
@@ -137,8 +133,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateControlsTabSelectionForTesting()
@@ -157,8 +152,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.simulateControlsTabSelectionForTesting()
         view.layoutIfNeeded()
         view.simulateTileGridSwitchChangeForTesting(true)
@@ -175,8 +169,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: false,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.simulateControlsTabSelectionForTesting()
         view.layoutIfNeeded()
 
@@ -196,8 +189,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                                                          tileLayersEnabled: false,
                                                          wireframeEnabled: false,
                                                          tileGridEnabled: true,
-                                                         tileGridDensity: 2),
-                   earthSceneEnabled: true)
+                                                         tileGridDensity: 2))
 
         XCTAssertTrue(view.isTileGridSwitchOnForTesting)
         XCTAssertEqual(view.tileGridDensityForTesting, 2)
@@ -211,8 +203,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -259,8 +250,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
                                                          wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: true)
+                                                         roadLabelTilesEnabled: false))
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -328,8 +318,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -363,8 +352,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -405,8 +393,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.apply(snapshot: makeSnapshot(settings: settings))
 
         view.simulateTilesTabSelectionForTesting()
@@ -436,8 +423,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
 
         view.apply(snapshot: makeTileStatusSnapshot(settings: settings,
                                                     lines: ["network in:0 done:1 fail:0"]))
@@ -462,8 +448,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.apply(isDebugPanelEnabled: true,
                    controls: DebugOverlayControlSnapshot(axesEnabled: false,
                                                          tileLayersEnabled: true,
-                                                         wireframeEnabled: false),
-                   earthSceneEnabled: true)
+                                                         wireframeEnabled: false))
         view.apply(snapshot: DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: "z: 1.00", latLon: "lat: 0.000 lon: 0.000"),
             diagnosticsLines: [],
@@ -491,25 +476,6 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(view.debugPanelFrameForTesting.maxY, view.bounds.maxY)
         XCTAssertTrue(view.isTilesScrollEnabledForTesting)
         XCTAssertEqual(view.tilesStatusRowCountForTesting, 80)
-    }
-
-    func testEarthSceneControlReflectsSettingsAndInvokesCallback() {
-        let view = DebugOverlayHUDView()
-        var receivedValue: Bool?
-        view.onEarthSceneEnabledChanged = { isEnabled in
-            receivedValue = isEnabled
-        }
-
-        view.apply(isDebugPanelEnabled: true,
-                   controls: DebugOverlayControlSnapshot(axesEnabled: false,
-                                                         tileLayersEnabled: false,
-                                                         wireframeEnabled: false,
-                                                         roadLabelTilesEnabled: false),
-                   earthSceneEnabled: false)
-        view.simulateEarthSceneSwitchForTesting(true)
-
-        XCTAssertEqual(receivedValue, true)
-        XCTAssertTrue(view.isEarthSceneSwitchOnForTesting)
     }
 
     private func makeSnapshot(settings: ImmersiveMapSettings.DebugSettings) -> DebugOverlayHUDSnapshot {

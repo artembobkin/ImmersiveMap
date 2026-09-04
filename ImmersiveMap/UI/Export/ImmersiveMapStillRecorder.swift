@@ -29,7 +29,7 @@ import QuartzCore
 /// ```swift
 /// let recorder = ImmersiveMapStillRecorder()
 /// let image = try await recorder.capture(
-///     settings: .default.earthScene(isEnabled: true),
+///     settings: .default,
 ///     camera: ImmersiveMapCameraPosition(latitudeDegrees: 55.75,
 ///                                        longitudeDegrees: 37.61,
 ///                                        zoom: 14),
