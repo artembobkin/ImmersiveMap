@@ -25,7 +25,8 @@ once the public API stabilizes.
   public entry point (`Earcut.tessellate(data:holeIndices:dim:)`, with
   `Earcut.deviation(data:holeIndices:dim:triangles:)` as the quality check)
   instead of being a file inside the tile parser, and its tests run as the
-  separate `EarcutTests` target. The target is not a library product, so an
+  separate `EarcutTests` target, which sits in `Earcut/Tests` next to the
+  code it covers. The target is not a library product, so an
   app's `import ImmersiveMap` and the `ImmersiveMap` product it links are
   unchanged; the package just builds one more module.
 

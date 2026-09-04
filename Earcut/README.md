@@ -20,8 +20,11 @@ The module exposes one type, the `Earcut` enum, with two static functions:
 
 Callers `import Earcut`. Inside the package that is `ParsePolygon` (the
 concave fills of a tile) and `RoofGeometryBuilder` (the sloped roof surfaces);
-the tests are `Tests/EarcutTests`, which import the module the way a client
-would, without `@testable`.
+the tests are `Earcut/Tests`, which import the module the way a client
+would, without `@testable`. They live inside this folder, next to the code
+they cover, so the target is one thing to read and to move; `Package.swift`
+excludes `Tests` from the `Earcut` target's sources and points the
+`EarcutTests` test target at it.
 
 ## Files
 
@@ -44,6 +47,8 @@ algorithm it belongs to:
   diagonal stays inside the polygon.
 - `EarcutNodePool.swift`: allocating and relinking nodes, the only code that
   writes the `prev`/`next` and `prevZ`/`nextZ` fields.
+- `Tests/`: the `EarcutTests` target, kept here rather than under the
+  repository's `Tests/` so the whole triangulator is one folder.
 
 The split is by file only: the functions keep the reference implementation's
 names and bodies, so a diff against earcut.js still reads function by

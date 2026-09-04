@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "Earcut",
             path: "Earcut",
-            exclude: ["README.md"]
+            exclude: ["README.md", "Tests"]
         ),
         .target(
             name: "ImmersiveMap",
@@ -71,7 +71,7 @@ let package = Package(
         .testTarget(
             name: "EarcutTests",
             dependencies: ["Earcut"],
-            path: "Tests/EarcutTests"
+            path: "Earcut/Tests"
         ),
         .testTarget(
             name: "ImmersiveMapTests",
