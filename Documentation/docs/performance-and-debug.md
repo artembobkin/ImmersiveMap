@@ -89,7 +89,7 @@ The HUD is host-view chrome drawn above the map: camera coordinates and renderer
 
 On macOS the panel is a full-height rail flush against the left edge of the map, and its groups are stacked in one scrolling column: **Stats**, **Base labels**, **Shadows**, **Controls**, **Tiles**. Everything is visible at once and what does not fit is scrolled to, which is what debugging usually needs (watching the stats while a control is toggled, the tile list while the shadow settings move). The header's chevron collapses it to a title bar.
 
-The tile list is last on purpose: it is the one group whose height follows the data, and anything below it moved every time a tile arrived or left.
+The tile list reserves a fixed number of slots, so its height never changes and nothing under it moves when a tile arrives, leaves or is expanded; rows that do not fit are counted on a final `+N more` line. It is also last in the column, so an expanded tile spends slots on its children without disturbing anything.
 
 Because the macOS panel is pinned to the left edge and takes the height it can have, `leftPadding` and `topPadding` no longer position it there; they still place the UIKit panel, which keeps the tabbed layout. `sectionSpacing`, `coordinateScale` and `diagnosticsScale` apply on both.
 

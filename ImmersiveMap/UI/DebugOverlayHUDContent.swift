@@ -19,6 +19,13 @@ enum DebugOverlayHUDTextComposer {
         "tiles total: \(count)"
     }
 
+    /// The last line of a tile list that ran out of slots. The list reserves a
+    /// fixed height so nothing under it moves, so the rows it cannot show are
+    /// counted rather than dropped in silence.
+    static func tilesOverflowText(count: Int) -> String {
+        "+\(count) more"
+    }
+
     /// Titles of the tile grid density picker, in `DebugTileGridDensity.options` order.
     static let tileGridDensityTitles: [String] = DebugTileGridDensity.options.map { "\($0)x\($0)" }
 

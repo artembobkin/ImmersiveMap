@@ -429,13 +429,12 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
-        let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: contentWidth)
-        if tilesListHeight > 0 {
-            cursor = layoutFullWidthRow(tilesStatusListView, at: cursor, contentWidth: contentWidth, height: tilesListHeight)
-            tilesStatusListView.isHidden = false
-        } else {
-            tilesStatusListView.isHidden = true
-        }
+        // Always laid out, always the same height, empty or not: a reserved
+        // height that disappears when the map has no tiles is not reserved.
+        cursor = layoutFullWidthRow(tilesStatusListView,
+                                    at: cursor,
+                                    contentWidth: contentWidth,
+                                    height: tilesStatusListView.preferredHeight(forWidth: contentWidth))
 
         return cursor + Layout.contentInset
     }
@@ -896,6 +895,11 @@ private final class DebugOverlayTilesStatusListView: NSView {
         static let progressVerticalInset: CGFloat = 2
         static let primaryFontSize: CGFloat = 13.5
         static let childFontSize: CGFloat = 12
+        /// The list reserves this many tile rows and never grows or shrinks
+        /// with the data. Twelve covers an ordinary street-zoom working set;
+        /// what does not fit is counted on the last line instead of pushing
+        /// the panel around.
+        static let slotCount = 12
     }
 
     private typealias Row = DebugOverlayTilesStatusRow
@@ -939,13 +943,31 @@ private final class DebugOverlayTilesStatusListView: NSView {
         }
     }
 
+    /// Always the same: `slotCount` rows, empty or not. This is the whole
+    /// point of the fixed slots, so nothing laid out after the list moves when
+    /// a tile arrives, leaves, or is expanded.
     func preferredHeight(forWidth _: CGFloat) -> CGFloat {
+        DebugOverlayPanelLayout.fixedListHeight(slotCount: Layout.slotCount,
+                                                slotHeight: Layout.rowHeight,
+                                                spacing: Layout.rowSpacing)
+    }
+
+    /// The rows that fit in the reserved height, and how many were left over.
+    /// Expanding a tile spends slots on its children, so the tail of the list
+    /// is what gets dropped.
+    private func windowedRows() -> (rows: [Row], overflow: Int) {
         let rows = visibleRows()
-        guard rows.isEmpty == false else {
-            return 0
+        let available = preferredHeight(forWidth: bounds.width)
+        let count = DebugOverlayPanelLayout.visibleRowCount(rowHeights: rows.map(Self.height(of:)),
+                                                            spacing: Layout.rowSpacing,
+                                                            availableHeight: available)
+        guard count < rows.count else {
+            return (rows, 0)
         }
-        let rowsHeight = rows.reduce(CGFloat(0)) { $0 + Self.height(of: $1) }
-        return rowsHeight + CGFloat(max(0, rows.count - 1)) * Layout.rowSpacing
+        // Give the last slot back to the "+N more" line, so a dropped tile is
+        // stated rather than silently missing.
+        let shown = max(0, count - 1)
+        return (Array(rows.prefix(shown)), rows.count - shown)
     }
 
     override func draw(_ rect: CGRect) {
@@ -953,8 +975,9 @@ private final class DebugOverlayTilesStatusListView: NSView {
             return
         }
 
+        let window = windowedRows()
         var rowTop: CGFloat = 0
-        for row in visibleRows() {
+        for row in window.rows {
             draw(row: row,
                  rowRect: DebugOverlayPanelLayout.rowDrawRect(bounds: bounds,
                                                               dirtyRect: rect,
@@ -962,6 +985,14 @@ private final class DebugOverlayTilesStatusListView: NSView {
                                                               rowHeight: Self.height(of: row)),
                  context: context)
             rowTop += Self.height(of: row) + Layout.rowSpacing
+        }
+
+        if window.overflow > 0 {
+            drawChildText(DebugOverlayHUDTextComposer.tilesOverflowText(count: window.overflow),
+                          rowRect: DebugOverlayPanelLayout.rowDrawRect(bounds: bounds,
+                                                                       dirtyRect: rect,
+                                                                       rowTop: rowTop,
+                                                                       rowHeight: Layout.childRowHeight))
         }
     }
 
@@ -1044,9 +1075,11 @@ private final class DebugOverlayTilesStatusListView: NSView {
         text.draw(in: textRect, withAttributes: attributes)
     }
 
+    /// Only the drawn rows are clickable: below the last one is reserved
+    /// space, not a row whose tile happens to be off the end.
     private func row(atY y: CGFloat) -> Row? {
         var rowTop: CGFloat = 0
-        for row in visibleRows() {
+        for row in windowedRows().rows {
             let rowBottom = rowTop + Self.height(of: row)
             if y >= rowTop, y <= rowBottom {
                 return row
