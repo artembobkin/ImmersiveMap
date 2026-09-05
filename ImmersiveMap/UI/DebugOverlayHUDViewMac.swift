@@ -4,35 +4,94 @@
 #if os(macOS)
 
 import AppKit
+import simd
 
-/// AppKit port of the debug HUD. Geometry and texts match the UIKit version:
-/// the view is flipped, layout is manual, content is composed by `DebugOverlayHUDTextComposer`.
+/// AppKit port of the debug HUD: a full-height panel flush against the left
+/// edge of the map, whose groups are stacked vertically inside one scroll view.
+///
+/// It used to be a floating card with a tab picker, which meant three quarters
+/// of the panel was hidden at any moment and the panel's height was whatever
+/// the selected tab happened to need. Debugging a frame usually means watching
+/// two groups at once (the stats while a control is toggled, the tile list
+/// while the shadow settings move), so every group is laid out at once, the
+/// panel takes the full window height, and what does not fit is scrolled to.
+///
+/// Layout is manual and top-down (the container and the scrolled content are
+/// both flipped): one cursor walks the groups in order, which is why adding a
+/// group is a matter of appending to `layoutGroups` rather than of rebalancing
+/// a tree of frames.
 final class DebugOverlayHUDView: NSView {
-    private enum SelectedTab: Int {
-        case stats = 0
-        case tiles = 1
-        case baseLabels = 2
-        case controls = 3
-    }
-
     private enum Layout {
         static let coordinateFontScale: CGFloat = 0.56
         static let diagnosticsFontScale: CGFloat = 0.50
-        static let contentInset: CGFloat = 8.0
+        static let contentInset: CGFloat = 10.0
         static let headerHeight: CGFloat = 30.0
-        static let controlRowHeight: CGFloat = 30.0
+        static let groupHeaderHeight: CGFloat = 24.0
+        static let controlRowHeight: CGFloat = 28.0
         static let controlSpacing: CGFloat = 6.0
+        static let groupSpacing: CGFloat = 16.0
         static let traceStatusHeight: CGFloat = 24.0
-        static let cornerRadius: CGFloat = 8.0
+        static let cornerRadius: CGFloat = 10.0
         static let backgroundAlpha: CGFloat = 0.46
-        static let expandedMinimumWidth: CGFloat = 260.0
-        static let collapsedWidth: CGFloat = 136.0
-        static let maximumWidth: CGFloat = 720.0
+        /// The panel is a fixed-width rail, not a card that grows with its
+        /// text: a width that followed the longest diagnostics line moved the
+        /// map every time a number gained a digit.
+        static let panelWidth: CGFloat = 330.0
+        static let collapsedWidth: CGFloat = 150.0
+        /// Fraction of a control row given to its name; the control takes the
+        /// rest.
+        static let controlLabelFraction: CGFloat = 0.46
     }
 
     private let containerView = DebugOverlayFlippedView()
     private let titleLabel = NSTextField(labelWithString: "Debug")
     private let collapseButton = NSButton()
+    private let scrollView = NSScrollView()
+    private let contentView = DebugOverlayFlippedView()
+
+    private let statsGroupLabel = NSTextField(labelWithString: "Stats")
+    private let zoomLabel = NSTextField(wrappingLabelWithString: "")
+    private let latLonLabel = NSTextField(wrappingLabelWithString: "")
+    private let diagnosticsLabel = NSTextField(wrappingLabelWithString: "")
+
+    private let tilesGroupLabel = NSTextField(labelWithString: "Tiles")
+    private let tileTraceButton = NSButton()
+    private let tileTraceStatusLabel = NSTextField(labelWithString: "")
+    private let tilesStatusLabel = NSTextField(wrappingLabelWithString: "")
+    /// No scroll view of its own any more: the tile list is one group of the
+    /// scrolled column, and a scroll view inside a scroll view takes the wheel
+    /// away from whichever one the pointer is not over.
+    private let tilesStatusListView = DebugOverlayTilesStatusListView()
+
+    private let baseLabelsGroupLabel = NSTextField(labelWithString: "Base labels")
+    private let baseLabelTraceButton = NSButton()
+    private let baseLabelTraceStatusLabel = NSTextField(labelWithString: "")
+    private let roadLabelTilesLabel = NSTextField(labelWithString: "")
+    private let roadLabelTilesSwitch = NSSwitch()
+    private let baseLabelBoundsLabel = NSTextField(labelWithString: "")
+    private let baseLabelBoundsSwitch = NSSwitch()
+    private let roadLabelBoundsLabel = NSTextField(labelWithString: "")
+    private let roadLabelBoundsSwitch = NSSwitch()
+
+    private let shadowsGroupLabel = NSTextField(labelWithString: "Shadows")
+    private let shadowsEnabledLabel = NSTextField(labelWithString: "")
+    private let shadowsEnabledSwitch = NSSwitch()
+    private let shadowStrengthLabel = NSTextField(labelWithString: "")
+    private let shadowStrengthSlider = NSSlider()
+    private let shadowMapResolutionLabel = NSTextField(labelWithString: "")
+    private let shadowMapResolutionControl = NSSegmentedControl(
+        labels: DebugOverlayShadowSettingsPlanner.mapResolutionTitles,
+        trackingMode: .selectOne,
+        target: nil,
+        action: nil)
+    private let shadowCoverageLabel = NSTextField(labelWithString: "")
+    private let shadowCoverageSlider = NSSlider()
+    private let sunAzimuthLabel = NSTextField(labelWithString: "")
+    private let sunAzimuthSlider = NSSlider()
+    private let sunElevationLabel = NSTextField(labelWithString: "")
+    private let sunElevationSlider = NSSlider()
+
+    private let controlsGroupLabel = NSTextField(labelWithString: "Controls")
     private let axesLabel = NSTextField(labelWithString: "")
     private let axesSwitch = NSSwitch()
     private let tileLayersLabel = NSTextField(labelWithString: "")
@@ -46,30 +105,12 @@ final class DebugOverlayHUDView: NSView {
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
     private let surfaceModeButton = NSButton()
-    private let tabControl = NSSegmentedControl(labels: ["Stats", "Tiles", "Base labels", "Controls"],
-                                                trackingMode: .selectOne,
-                                                target: nil,
-                                                action: nil)
-    private let tileTraceButton = NSButton()
-    private let tileTraceStatusLabel = NSTextField(labelWithString: "")
-    private let baseLabelTraceButton = NSButton()
-    private let baseLabelTraceStatusLabel = NSTextField(labelWithString: "")
-    private let roadLabelTilesLabel = NSTextField(labelWithString: "")
-    private let roadLabelTilesSwitch = NSSwitch()
-    private let baseLabelBoundsLabel = NSTextField(labelWithString: "")
-    private let baseLabelBoundsSwitch = NSSwitch()
-    private let roadLabelBoundsLabel = NSTextField(labelWithString: "")
-    private let roadLabelBoundsSwitch = NSSwitch()
-    private let zoomLabel = NSTextField(wrappingLabelWithString: "")
-    private let latLonLabel = NSTextField(wrappingLabelWithString: "")
-    private let diagnosticsLabel = NSTextField(wrappingLabelWithString: "")
-    private let tilesStatusLabel = NSTextField(wrappingLabelWithString: "")
-    private let tilesScrollView = NSScrollView()
-    private let tilesStatusListView = DebugOverlayTilesStatusListView()
+
     private var snapshot: DebugOverlayHUDSnapshot?
     private var isPanelEnabled = false
     private var isCollapsed = false
-    private var selectedTab: SelectedTab = .stats
+    private var shadowSettings = ImmersiveMapSettings.ShadowSettings()
+    private var sunDirection = ImmersiveMapSettings.SceneLightSettings().direction
     /// The host view's top safe-area inset; on macOS with a regular window title bar this is 0.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
@@ -91,6 +132,8 @@ final class DebugOverlayHUDView: NSView {
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
+    var onShadowSettingsChanged: ((ImmersiveMapSettings.ShadowSettings) -> Void)?
+    var onSunDirectionChanged: ((SIMD3<Float>) -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -101,6 +144,10 @@ final class DebugOverlayHUDView: NSView {
         containerView.wantsLayer = true
         containerView.layer?.backgroundColor = NSColor.black.withAlphaComponent(Layout.backgroundAlpha).cgColor
         containerView.layer?.cornerRadius = Layout.cornerRadius
+        // Flush against the left edge: only the two corners that are actually
+        // inside the map are rounded, so the panel reads as a rail attached to
+        // the window rather than as a card that missed its margin.
+        containerView.layer?.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
         containerView.layer?.masksToBounds = true
         addSubview(containerView)
 
@@ -114,6 +161,12 @@ final class DebugOverlayHUDView: NSView {
         collapseButton.action = #selector(toggleCollapsed)
         containerView.addSubview(collapseButton)
 
+        configureScrollView(scrollView, documentView: contentView)
+        containerView.addSubview(scrollView)
+
+        [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel,
+         shadowsGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
+
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
         configureControlLabel(tileGridLabel, text: "Tile grid")
@@ -121,6 +174,13 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
+        configureControlLabel(shadowsEnabledLabel, text: "Enabled")
+        configureControlLabel(shadowStrengthLabel, text: "")
+        configureControlLabel(shadowMapResolutionLabel, text: "Map px")
+        configureControlLabel(shadowCoverageLabel, text: "")
+        configureControlLabel(sunAzimuthLabel, text: "")
+        configureControlLabel(sunElevationLabel, text: "")
+
         configureSwitch(axesSwitch, action: #selector(axesSwitchChanged))
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
@@ -128,60 +188,48 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
-        containerView.addSubview(axesLabel)
-        containerView.addSubview(axesSwitch)
-        containerView.addSubview(tileLayersLabel)
-        containerView.addSubview(tileLayersSwitch)
-        containerView.addSubview(tileGridLabel)
-        containerView.addSubview(tileGridSwitch)
+        configureSwitch(shadowsEnabledSwitch, action: #selector(shadowsEnabledSwitchChanged))
+
+        configureSlider(shadowStrengthSlider,
+                        range: DebugOverlayShadowSettingsPlanner.strengthRange,
+                        action: #selector(shadowStrengthSliderChanged))
+        configureSlider(shadowCoverageSlider,
+                        range: DebugOverlayShadowSettingsPlanner.coverageRange,
+                        action: #selector(shadowCoverageSliderChanged))
+        configureSlider(sunAzimuthSlider,
+                        range: DebugOverlayShadowSettingsPlanner.azimuthRange,
+                        action: #selector(sunAzimuthSliderChanged))
+        configureSlider(sunElevationSlider,
+                        range: DebugOverlayShadowSettingsPlanner.elevationRange,
+                        action: #selector(sunElevationSliderChanged))
+
         tileGridDensityControl.target = self
         tileGridDensityControl.action = #selector(tileGridDensityControlChanged)
         tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: DebugTileGridDensity.standard)
-        containerView.addSubview(tileGridDensityControl)
-        containerView.addSubview(wireframeLabel)
-        containerView.addSubview(wireframeSwitch)
-        containerView.addSubview(roadLabelTilesLabel)
-        containerView.addSubview(roadLabelTilesSwitch)
-        containerView.addSubview(baseLabelBoundsLabel)
-        containerView.addSubview(baseLabelBoundsSwitch)
-        containerView.addSubview(roadLabelBoundsLabel)
-        containerView.addSubview(roadLabelBoundsSwitch)
+        shadowMapResolutionControl.target = self
+        shadowMapResolutionControl.action = #selector(shadowMapResolutionControlChanged)
 
         configureActionButton(surfaceModeButton,
                               title: "Switch globe / flat",
                               symbolName: "arrow.triangle.2.circlepath",
                               action: #selector(surfaceModeButtonTapped))
-        containerView.addSubview(surfaceModeButton)
-
-        tabControl.target = self
-        tabControl.action = #selector(tabControlChanged)
-        tabControl.selectedSegment = SelectedTab.stats.rawValue
-        containerView.addSubview(tabControl)
-
         configureActionButton(tileTraceButton,
                               title: "",
                               symbolName: nil,
                               action: #selector(tileTraceButtonTapped))
-        containerView.addSubview(tileTraceButton)
         configureStatusLabel(tileTraceStatusLabel)
-        containerView.addSubview(tileTraceStatusLabel)
-
         configureActionButton(baseLabelTraceButton,
                               title: "",
                               symbolName: nil,
                               action: #selector(baseLabelTraceButtonTapped))
-        containerView.addSubview(baseLabelTraceButton)
         configureStatusLabel(baseLabelTraceStatusLabel)
-        containerView.addSubview(baseLabelTraceStatusLabel)
 
         [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel].forEach { label in
             label.textColor = .white
-            containerView.addSubview(label)
         }
 
-        configureScrollView(tilesScrollView,
-                            documentView: tilesStatusListView)
-        containerView.addSubview(tilesScrollView)
+        scrolledSubviews.forEach(contentView.addSubview)
+
         tilesStatusListView.onExpansionChanged = { [weak self] in
             self?.needsLayout = true
         }
@@ -189,11 +237,31 @@ final class DebugOverlayHUDView: NSView {
         updateCollapseButtonImage()
         updateTileTraceControl()
         updateBaseLabelTraceControl()
+        updateShadowControls()
         updateVisibility()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Everything that scrolls, in the order it is laid out.
+    private var scrolledSubviews: [NSView] {
+        [statsGroupLabel, zoomLabel, latLonLabel, diagnosticsLabel,
+         tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView,
+         baseLabelsGroupLabel, baseLabelTraceButton, baseLabelTraceStatusLabel,
+         roadLabelTilesLabel, roadLabelTilesSwitch,
+         baseLabelBoundsLabel, baseLabelBoundsSwitch,
+         roadLabelBoundsLabel, roadLabelBoundsSwitch,
+         shadowsGroupLabel, shadowsEnabledLabel, shadowsEnabledSwitch,
+         shadowStrengthLabel, shadowStrengthSlider,
+         shadowMapResolutionLabel, shadowMapResolutionControl,
+         shadowCoverageLabel, shadowCoverageSlider,
+         sunAzimuthLabel, sunAzimuthSlider,
+         sunElevationLabel, sunElevationSlider,
+         controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
+         tileGridLabel, tileGridSwitch, tileGridDensityControl,
+         wireframeLabel, wireframeSwitch, surfaceModeButton]
     }
 
     // MARK: - Public API (matches the UIKit version)
@@ -221,6 +289,21 @@ final class DebugOverlayHUDView: NSView {
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
         updateVisibility()
+        needsLayout = true
+    }
+
+    /// The shadow group reflects the live settings, so a change made anywhere
+    /// else (a modifier, another panel) shows up here rather than leaving the
+    /// sliders lying about what the renderer is doing.
+    func apply(shadowSettings: ImmersiveMapSettings.ShadowSettings,
+               sunDirection: SIMD3<Float>) {
+        guard self.shadowSettings != shadowSettings || self.sunDirection != sunDirection else {
+            return
+        }
+
+        self.shadowSettings = shadowSettings
+        self.sunDirection = sunDirection
+        updateShadowControls()
         needsLayout = true
     }
 
@@ -254,222 +337,162 @@ final class DebugOverlayHUDView: NSView {
 
     override func layout() {
         super.layout()
-        guard let snapshot else { return }
+        guard snapshot != nil else { return }
 
-        let scale = max(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
-        let left = CGFloat(snapshot.leftPadding) / scale
-        let top = CGFloat(snapshot.topPadding) / scale
-        let sectionSpacing = CGFloat(snapshot.sectionSpacing) / scale
-        let maxPanelWidth = min(Layout.maximumWidth, max(bounds.width - left - Layout.contentInset, Layout.collapsedWidth))
+        let panelTop = safeAreaTopInset
+        let panelWidth = min(Layout.panelWidth, max(bounds.width, Layout.collapsedWidth))
 
         if isCollapsed {
-            containerView.frame = containerFrameClampedToSafeArea(
-                CGRect(x: left - Layout.contentInset,
-                       y: top - Layout.headerHeight - Layout.contentInset,
-                       width: Layout.collapsedWidth,
-                       height: Layout.headerHeight))
+            containerView.frame = CGRect(x: 0,
+                                         y: panelTop,
+                                         width: Layout.collapsedWidth,
+                                         height: Layout.headerHeight)
             layoutHeader(width: Layout.collapsedWidth)
+            scrollView.isHidden = true
             return
         }
 
-        let maxContentWidth = max(maxPanelWidth - Layout.contentInset * 2, 1)
-        let constrainedSize = CGSize(width: maxContentWidth,
-                                     height: CGFloat.greatestFiniteMagnitude)
+        // Flush left, and as tall as the window allows.
+        let panelHeight = max(Layout.headerHeight, bounds.height - panelTop)
+        containerView.frame = CGRect(x: 0, y: panelTop, width: panelWidth, height: panelHeight)
+        layoutHeader(width: panelWidth)
 
-        let zoomSize = zoomLabel.sizeThatFits(constrainedSize)
-        let latLonSize = latLonLabel.sizeThatFits(constrainedSize)
-        let diagnosticsSize = diagnosticsLabel.sizeThatFits(constrainedSize)
-        let tilesStatusSize = tilesStatusLabel.sizeThatFits(constrainedSize)
-        let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: maxContentWidth)
-        let traceBlockHeight = selectedTab == .tiles || selectedTab == .baseLabels
-            ? Layout.controlRowHeight + Layout.controlSpacing + Layout.traceStatusHeight + sectionSpacing
-            : 0
-        let contentWidth = max(Layout.expandedMinimumWidth, maxContentWidth)
-        let controlsBodyHeight = Layout.controlRowHeight * 7 + Layout.controlSpacing * 6
-        let statsBodyHeight = zoomSize.height
-            + latLonSize.height
-            + sectionSpacing
-            + diagnosticsSize.height
-        let tilesBodyHeight = tilesStatusSize.height
-            + traceBlockHeight
-            + (tilesListHeight > 0 ? sectionSpacing + tilesListHeight : 0)
-        let baseLabelsBodyHeight = Layout.controlRowHeight * 3
-            + Layout.controlSpacing * 3
-            + traceBlockHeight
-        let panelY = top - zoomSize.height - Layout.contentInset
-        let chromeHeight = Layout.headerHeight
-            + Layout.contentInset
-            + Layout.controlRowHeight
-            + sectionSpacing
-            + Layout.contentInset
-        let tilesListSpacing = tilesListHeight > 0 ? sectionSpacing : 0
-        let visibleTilesBodyHeight = DebugOverlayPanelLayout.visibleBodyHeight(
-            preferredBodyHeight: tilesBodyHeight,
-            viewportHeight: bounds.height,
-            panelMinY: panelY,
-            chromeHeight: chromeHeight,
-            minimumBodyHeight: tilesStatusSize.height + tilesListSpacing + 48
-        )
-        let bodyHeight: CGFloat
-        switch selectedTab {
-        case .stats:
-            bodyHeight = statsBodyHeight
-        case .tiles:
-            bodyHeight = visibleTilesBodyHeight
-        case .baseLabels:
-            bodyHeight = baseLabelsBodyHeight
-        case .controls:
-            bodyHeight = controlsBodyHeight
-        }
-        let contentHeight = Layout.headerHeight
-            + Layout.contentInset
-            + Layout.controlRowHeight
-            + sectionSpacing
-            + bodyHeight
-            + Layout.contentInset
-        let containerSize = CGSize(width: contentWidth + Layout.contentInset * 2,
-                                   height: contentHeight)
+        let scrollTop = Layout.headerHeight
+        scrollView.isHidden = false
+        scrollView.frame = CGRect(x: 0,
+                                  y: scrollTop,
+                                  width: panelWidth,
+                                  height: max(0, panelHeight - scrollTop))
 
-        containerView.frame = containerFrameClampedToSafeArea(
-            CGRect(x: left - Layout.contentInset,
-                   y: panelY,
-                   width: containerSize.width,
-                   height: containerSize.height))
-        layoutHeader(width: containerSize.width)
-
-        let switchSize = axesSwitch.intrinsicContentSize
-        let labelWidth = contentWidth - switchSize.width - Layout.controlSpacing
-        let tabTop = Layout.headerHeight + Layout.contentInset
-        tabControl.frame = CGRect(x: Layout.contentInset,
-                                  y: tabTop,
-                                  width: contentWidth,
-                                  height: Layout.controlRowHeight)
-
-        let bodyTop = tabControl.frame.maxY + sectionSpacing
-        let controlsTop = bodyTop
-        axesLabel.frame = CGRect(x: Layout.contentInset,
-                                 y: controlsTop,
-                                 width: labelWidth,
-                                 height: Layout.controlRowHeight)
-        axesSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                  y: controlsTop + (Layout.controlRowHeight - switchSize.height) / 2,
-                                  width: switchSize.width,
-                                  height: switchSize.height)
-        tileLayersLabel.frame = CGRect(x: Layout.contentInset,
-                                       y: axesLabel.frame.maxY + Layout.controlSpacing,
-                                       width: labelWidth,
-                                       height: Layout.controlRowHeight)
-        tileLayersSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                        y: tileLayersLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                        width: switchSize.width,
-                                        height: switchSize.height)
-        tileGridLabel.frame = CGRect(x: Layout.contentInset,
-                                     y: tileLayersLabel.frame.maxY + Layout.controlSpacing,
-                                     width: labelWidth,
-                                     height: Layout.controlRowHeight)
-        tileGridSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                      y: tileGridLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                      width: switchSize.width,
-                                      height: switchSize.height)
-        tileGridDensityControl.frame = CGRect(x: Layout.contentInset,
-                                              y: tileGridLabel.frame.maxY + Layout.controlSpacing,
-                                              width: contentWidth,
-                                              height: Layout.controlRowHeight)
-        wireframeLabel.frame = CGRect(x: Layout.contentInset,
-                                      y: tileGridDensityControl.frame.maxY + Layout.controlSpacing,
-                                      width: labelWidth,
-                                      height: Layout.controlRowHeight)
-        wireframeSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                       y: wireframeLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                       width: switchSize.width,
-                                       height: switchSize.height)
-        surfaceModeButton.frame = CGRect(x: Layout.contentInset,
-                                         y: wireframeLabel.frame.maxY + Layout.controlSpacing,
-                                         width: contentWidth,
-                                         height: Layout.controlRowHeight)
-
-        let textTop = bodyTop
-        zoomLabel.frame = CGRect(x: Layout.contentInset,
-                                 y: textTop,
-                                 width: contentWidth,
-                                 height: zoomSize.height)
-        latLonLabel.frame = CGRect(x: Layout.contentInset,
-                                   y: zoomLabel.frame.maxY,
-                                   width: contentWidth,
-                                   height: latLonSize.height)
-        diagnosticsLabel.frame = CGRect(x: Layout.contentInset,
-                                        y: latLonLabel.frame.maxY + sectionSpacing,
-                                        width: contentWidth,
-                                        height: diagnosticsSize.height)
-        tileTraceButton.frame = CGRect(x: Layout.contentInset,
-                                       y: textTop,
-                                       width: contentWidth,
-                                       height: Layout.controlRowHeight)
-        tileTraceStatusLabel.frame = CGRect(x: Layout.contentInset,
-                                            y: tileTraceButton.frame.maxY + Layout.controlSpacing,
-                                            width: contentWidth,
-                                            height: Layout.traceStatusHeight)
-        roadLabelTilesLabel.frame = CGRect(x: Layout.contentInset,
-                                           y: textTop,
-                                           width: labelWidth,
-                                           height: Layout.controlRowHeight)
-        roadLabelTilesSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                            y: roadLabelTilesLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                            width: switchSize.width,
-                                            height: switchSize.height)
-        baseLabelBoundsLabel.frame = CGRect(x: Layout.contentInset,
-                                            y: roadLabelTilesLabel.frame.maxY + Layout.controlSpacing,
-                                            width: labelWidth,
-                                            height: Layout.controlRowHeight)
-        baseLabelBoundsSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                             y: baseLabelBoundsLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                             width: switchSize.width,
-                                             height: switchSize.height)
-        roadLabelBoundsLabel.frame = CGRect(x: Layout.contentInset,
-                                            y: baseLabelBoundsLabel.frame.maxY + Layout.controlSpacing,
-                                            width: labelWidth,
-                                            height: Layout.controlRowHeight)
-        roadLabelBoundsSwitch.frame = CGRect(x: containerSize.width - Layout.contentInset - switchSize.width,
-                                             y: roadLabelBoundsLabel.frame.minY + (Layout.controlRowHeight - switchSize.height) / 2,
-                                             width: switchSize.width,
-                                             height: switchSize.height)
-        baseLabelTraceButton.frame = CGRect(x: Layout.contentInset,
-                                            y: roadLabelBoundsLabel.frame.maxY + Layout.controlSpacing,
-                                            width: contentWidth,
-                                            height: Layout.controlRowHeight)
-        baseLabelTraceStatusLabel.frame = CGRect(x: Layout.contentInset,
-                                                 y: baseLabelTraceButton.frame.maxY + Layout.controlSpacing,
-                                                 width: contentWidth,
-                                                 height: Layout.traceStatusHeight)
-        let tilesStatusTop = selectedTab == .tiles
-            ? tileTraceStatusLabel.frame.maxY + sectionSpacing
-            : textTop
-        tilesStatusLabel.frame = CGRect(x: Layout.contentInset,
-                                        y: tilesStatusTop,
-                                        width: contentWidth,
-                                        height: tilesStatusSize.height)
-        let tilesScrollTop = tilesStatusLabel.frame.maxY + tilesListSpacing
-        let tilesScrollHeight = max(0, visibleTilesBodyHeight - traceBlockHeight - tilesStatusSize.height - tilesListSpacing)
-        tilesScrollView.frame = CGRect(x: Layout.contentInset,
-                                       y: tilesScrollTop,
-                                       width: contentWidth,
-                                       height: tilesScrollHeight)
-        tilesStatusListView.frame = CGRect(x: 0,
-                                           y: 0,
-                                           width: contentWidth,
-                                           height: tilesListHeight)
-        updateContentVisibility()
+        let contentWidth = max(1, panelWidth - Layout.contentInset * 2)
+        let contentHeight = layoutGroups(contentWidth: contentWidth)
+        contentView.frame = CGRect(x: 0,
+                                   y: 0,
+                                   width: scrollView.contentSize.width,
+                                   height: max(contentHeight, scrollView.contentSize.height))
     }
 
-    /// Pins the panel top to the safe area. Inner elements are positioned
-    /// relative to the container, so shifting the origin moves them wholesale.
-    private func containerFrameClampedToSafeArea(_ frame: CGRect) -> CGRect {
-        var clamped = frame
-        let minimumY = safeAreaTopInset + Layout.contentInset
-        if clamped.origin.y < minimumY {
-            clamped.origin.y = minimumY
+    /// Walks the groups top-down with one cursor and returns the total height.
+    /// Every group is laid out; nothing is hidden by a tab any more, so the
+    /// only thing that can shorten the column is a group with no content
+    /// (an empty tile list).
+    private func layoutGroups(contentWidth: CGFloat) -> CGFloat {
+        let sectionSpacing = CGFloat(snapshot?.sectionSpacing ?? 8) / backingScale
+        let constrainedSize = CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude)
+        var cursor = Layout.contentInset
+
+        // Stats
+        cursor = layoutGroupHeader(statsGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutTextRow(zoomLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        cursor = layoutTextRow(latLonLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        cursor += sectionSpacing
+        cursor = layoutTextRow(diagnosticsLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        cursor += Layout.groupSpacing
+
+        // Tiles
+        cursor = layoutGroupHeader(tilesGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
+        cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: contentWidth)
+        if tilesListHeight > 0 {
+            cursor = layoutFullWidthRow(tilesStatusListView, at: cursor, contentWidth: contentWidth, height: tilesListHeight)
+            tilesStatusListView.isHidden = false
+        } else {
+            tilesStatusListView.isHidden = true
         }
-        return clamped
+        cursor += Layout.groupSpacing
+
+        // Base labels
+        cursor = layoutGroupHeader(baseLabelsGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(roadLabelTilesLabel, roadLabelTilesSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(baseLabelBoundsLabel, baseLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(roadLabelBoundsLabel, roadLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(baseLabelTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(baseLabelTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
+        cursor += Layout.groupSpacing
+
+        // Shadows
+        cursor = layoutGroupHeader(shadowsGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(shadowsEnabledLabel, shadowsEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(sunAzimuthLabel, sunAzimuthSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(sunElevationLabel, sunElevationSlider, at: cursor, contentWidth: contentWidth)
+        cursor += Layout.groupSpacing
+
+        // Controls
+        cursor = layoutGroupHeader(controlsGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(axesLabel, axesSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(tileLayersLabel, tileLayersSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+
+        return cursor + Layout.contentInset
+    }
+
+    private func layoutGroupHeader(_ label: NSTextField, at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        label.frame = CGRect(x: Layout.contentInset,
+                             y: top,
+                             width: contentWidth,
+                             height: Layout.groupHeaderHeight)
+        return top + Layout.groupHeaderHeight + Layout.controlSpacing
+    }
+
+    private func layoutTextRow(_ label: NSTextField,
+                               at top: CGFloat,
+                               contentWidth: CGFloat,
+                               constrainedSize: CGSize) -> CGFloat {
+        let height = label.sizeThatFits(constrainedSize).height
+        label.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: height)
+        return top + height
+    }
+
+    private func layoutFullWidthRow(_ view: NSView,
+                                    at top: CGFloat,
+                                    contentWidth: CGFloat,
+                                    height: CGFloat) -> CGFloat {
+        view.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: height)
+        return top + height + Layout.controlSpacing
+    }
+
+    private func layoutSwitchRow(_ label: NSTextField,
+                                 _ control: NSSwitch,
+                                 at top: CGFloat,
+                                 contentWidth: CGFloat) -> CGFloat {
+        let switchSize = control.intrinsicContentSize
+        label.frame = CGRect(x: Layout.contentInset,
+                             y: top,
+                             width: max(0, contentWidth - switchSize.width - Layout.controlSpacing),
+                             height: Layout.controlRowHeight)
+        control.frame = CGRect(x: Layout.contentInset + contentWidth - switchSize.width,
+                               y: top + (Layout.controlRowHeight - switchSize.height) / 2,
+                               width: switchSize.width,
+                               height: switchSize.height)
+        return top + Layout.controlRowHeight + Layout.controlSpacing
+    }
+
+    /// A named row whose control (a slider, a segmented picker) takes the
+    /// right-hand side. The name carries the current value, so no third column
+    /// of numbers is needed and the row stays one line tall.
+    private func layoutControlRow(_ label: NSTextField,
+                                  _ control: NSView,
+                                  at top: CGFloat,
+                                  contentWidth: CGFloat) -> CGFloat {
+        let labelWidth = (contentWidth * Layout.controlLabelFraction).rounded()
+        let controlWidth = max(0, contentWidth - labelWidth - Layout.controlSpacing)
+        label.frame = CGRect(x: Layout.contentInset,
+                             y: top,
+                             width: labelWidth,
+                             height: Layout.controlRowHeight)
+        control.frame = CGRect(x: Layout.contentInset + labelWidth + Layout.controlSpacing,
+                               y: top,
+                               width: controlWidth,
+                               height: Layout.controlRowHeight)
+        return top + Layout.controlRowHeight + Layout.controlSpacing
     }
 
     private func layoutHeader(width: CGFloat) {
@@ -482,7 +505,10 @@ final class DebugOverlayHUDView: NSView {
                                       y: 0,
                                       width: buttonSide,
                                       height: buttonSide)
-        updateContentVisibility()
+    }
+
+    private var backingScale: CGFloat {
+        max(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
     }
 
     // MARK: - Content
@@ -497,7 +523,7 @@ final class DebugOverlayHUDView: NSView {
             return
         }
 
-        let scale = max(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0, 1.0)
+        let scale = backingScale
         let coordinateFontSize = max(1, CGFloat(snapshot.coordinateScale) * Layout.coordinateFontScale / scale)
         let diagnosticsFontSize = max(1, CGFloat(snapshot.diagnosticsScale) * Layout.diagnosticsFontScale / scale)
         let color = NSColor.white
@@ -525,19 +551,47 @@ final class DebugOverlayHUDView: NSView {
 
     private func updateVisibility() {
         isHidden = isPanelEnabled == false || snapshot == nil
+        scrollView.isHidden = isCollapsed
+    }
+
+    private func updateShadowControls() {
+        shadowsEnabledSwitch.state = shadowSettings.isEnabled ? .on : .off
+        shadowStrengthSlider.doubleValue = Double(shadowSettings.strength)
+        shadowStrengthLabel.stringValue = DebugOverlayShadowSettingsPlanner.strengthTitle(shadowSettings.strength)
+        shadowMapResolutionControl.selectedSegment =
+            DebugOverlayShadowSettingsPlanner.mapResolutionIndex(for: shadowSettings.mapResolution)
+        shadowCoverageSlider.doubleValue = Double(shadowSettings.coverageCameraDistances)
+        shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
+
+        let angles = DebugOverlaySunAngles.angles(direction: sunDirection)
+        sunAzimuthSlider.doubleValue = angles.azimuthDegrees
+        sunAzimuthLabel.stringValue = DebugOverlayShadowSettingsPlanner.azimuthTitle(angles.azimuthDegrees)
+        sunElevationSlider.doubleValue = angles.elevationDegrees
+        sunElevationLabel.stringValue = DebugOverlayShadowSettingsPlanner.elevationTitle(angles.elevationDegrees)
+
+        // Everything below the switch only means something with shadows on.
+        [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider,
+         sunAzimuthSlider, sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
     }
 
     // MARK: - Configuration
 
+    private func configureGroupLabel(_ label: NSTextField) {
+        label.textColor = NSColor.white.withAlphaComponent(0.62)
+        label.font = NSFont.systemFont(ofSize: 11, weight: .heavy)
+        label.stringValue = label.stringValue.uppercased()
+    }
+
     private func configureControlLabel(_ label: NSTextField, text: String) {
         label.stringValue = text
         label.textColor = .white
-        label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        label.lineBreakMode = .byTruncatingTail
     }
 
     private func configureStatusLabel(_ label: NSTextField) {
         label.textColor = .white
-        label.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        label.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
         label.lineBreakMode = .byTruncatingMiddle
         label.maximumNumberOfLines = 1
     }
@@ -546,6 +600,17 @@ final class DebugOverlayHUDView: NSView {
         switchControl.target = self
         switchControl.action = action
         switchControl.controlSize = .small
+    }
+
+    private func configureSlider(_ slider: NSSlider,
+                                 range: ClosedRange<Double>,
+                                 action: Selector) {
+        slider.minValue = range.lowerBound
+        slider.maxValue = range.upperBound
+        slider.isContinuous = true
+        slider.controlSize = .small
+        slider.target = self
+        slider.action = action
     }
 
     private func configureBorderlessButton(_ button: NSButton) {
@@ -596,7 +661,7 @@ final class DebugOverlayHUDView: NSView {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.scrollerStyle = .overlay
-        scrollView.verticalScrollElasticity = .none
+        scrollView.verticalScrollElasticity = .allowed
         scrollView.documentView = documentView
     }
 
@@ -628,40 +693,12 @@ final class DebugOverlayHUDView: NSView {
                                        accessibilityDescription: isCollapsed ? "Expand debug panel" : "Collapse debug panel")
     }
 
-    private func updateContentVisibility() {
-        let isContentHidden = isCollapsed
-        let isStatsVisible = selectedTab == .stats && isContentHidden == false
-        let isTilesVisible = selectedTab == .tiles && isContentHidden == false
-        let isBaseLabelsVisible = selectedTab == .baseLabels && isContentHidden == false
-        let isControlsVisible = selectedTab == .controls && isContentHidden == false
-        tabControl.isHidden = isContentHidden
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
-         tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
-         surfaceModeButton].forEach {
-            $0.isHidden = isControlsVisible == false
-        }
-        [zoomLabel, latLonLabel, diagnosticsLabel].forEach {
-            $0.isHidden = isStatsVisible == false
-        }
-        tilesStatusLabel.isHidden = isTilesVisible == false
-        tilesScrollView.isHidden = isTilesVisible == false || tilesStatusListView.rowCount == 0
-        tileTraceButton.isHidden = isTilesVisible == false
-        tileTraceStatusLabel.isHidden = isTilesVisible == false
-        baseLabelTraceButton.isHidden = isBaseLabelsVisible == false
-        baseLabelTraceStatusLabel.isHidden = isBaseLabelsVisible == false
-        roadLabelTilesLabel.isHidden = isBaseLabelsVisible == false
-        roadLabelTilesSwitch.isHidden = isBaseLabelsVisible == false
-        baseLabelBoundsLabel.isHidden = isBaseLabelsVisible == false
-        baseLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
-        roadLabelBoundsLabel.isHidden = isBaseLabelsVisible == false
-        roadLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
-    }
-
     // MARK: - Actions
 
     @objc private func toggleCollapsed() {
         isCollapsed.toggle()
         updateCollapseButtonImage()
+        scrollView.isHidden = isCollapsed
         needsLayout = true
     }
 
@@ -697,7 +734,6 @@ final class DebugOverlayHUDView: NSView {
         onRoadLabelBoundsEnabledChanged?(roadLabelBoundsSwitch.state == .on)
     }
 
-
     @objc private func surfaceModeButtonTapped() {
         onSurfaceModeSwitchRequested?()
     }
@@ -710,10 +746,57 @@ final class DebugOverlayHUDView: NSView {
         onBaseLabelTraceRecordingToggle?()
     }
 
-    @objc private func tabControlChanged() {
-        selectedTab = SelectedTab(rawValue: tabControl.selectedSegment) ?? .stats
-        updateContentVisibility()
+    @objc private func shadowsEnabledSwitchChanged() {
+        var settings = shadowSettings
+        settings.isEnabled = shadowsEnabledSwitch.state == .on
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowStrengthSliderChanged() {
+        var settings = shadowSettings
+        settings.strength = Float(shadowStrengthSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowMapResolutionControlChanged() {
+        var settings = shadowSettings
+        settings.mapResolution = DebugOverlayShadowSettingsPlanner.mapResolution(atIndex: shadowMapResolutionControl.selectedSegment)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowCoverageSliderChanged() {
+        var settings = shadowSettings
+        settings.coverageCameraDistances = Float(shadowCoverageSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func sunAzimuthSliderChanged() {
+        publishSunDirection(azimuthDegrees: sunAzimuthSlider.doubleValue,
+                            elevationDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).elevationDegrees)
+    }
+
+    @objc private func sunElevationSliderChanged() {
+        publishSunDirection(azimuthDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).azimuthDegrees,
+                            elevationDegrees: sunElevationSlider.doubleValue)
+    }
+
+    /// The panel owns the value while a slider is dragged: the labels update
+    /// immediately, and the settings round trip back through
+    /// `apply(shadowSettings:sunDirection:)` on the next frame, which is a
+    /// no-op when nothing else changed it.
+    private func publish(shadowSettings settings: ImmersiveMapSettings.ShadowSettings) {
+        shadowSettings = settings
+        updateShadowControls()
         needsLayout = true
+        onShadowSettingsChanged?(settings)
+    }
+
+    private func publishSunDirection(azimuthDegrees: Double, elevationDegrees: Double) {
+        let direction = DebugOverlaySunAngles.direction(azimuthDegrees: azimuthDegrees,
+                                                        elevationDegrees: elevationDegrees)
+        sunDirection = direction
+        updateShadowControls()
+        onSunDirectionChanged?(direction)
     }
 
     // MARK: - Text styling

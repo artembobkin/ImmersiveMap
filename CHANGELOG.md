@@ -10,6 +10,17 @@ once the public API stabilizes.
 
 ### Changed
 
+- The macOS debug panel is a full-height rail flush against the left edge of
+  the map instead of a floating card with a tab picker. Its groups (Stats,
+  Tiles, Base labels, Shadows, Controls) are stacked in one scrolling column,
+  so nothing is hidden behind a tab any more, and a new **Shadows** group edits
+  the live shadow settings: on/off, strength, map size, coverage, and the sun's
+  azimuth and elevation. `DebugSettings.leftPadding` and
+  `DebugSettings.topPadding` therefore no longer position the macOS panel (it
+  is pinned to the edge and takes the height it can have); both still place the
+  UIKit panel, which keeps the tabbed layout for now, and no public symbol
+  changed its name or signature.
+
 - Shadows are one map instead of three cascades, and the sampler is one
   hardware bilinear depth compare instead of a 3x3 tent. The window is fitted
   to a single pose-invariant disc of `coverageCameraDistances` camera

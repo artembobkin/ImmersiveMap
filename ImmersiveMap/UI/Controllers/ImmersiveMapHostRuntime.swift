@@ -34,6 +34,11 @@ final class ImmersiveMapHostRuntime {
                                                      settings: settings,
                                                      initialCameraPosition: initialCameraPosition)
         runtimeGraph.debugOverlayRuntime.apply(settings: settings)
+        // The debug panel edits live settings (the shadow group), and they
+        // take the same road as any other change.
+        runtimeGraph.debugOverlayRuntime.onSettingsChangeRequested = { [weak self] requested in
+            self?.applySettings(requested)
+        }
         mapView.applyBackgroundTransparency(settings.scene.space.isTransparent)
 
         createRenderer(settings: settings,

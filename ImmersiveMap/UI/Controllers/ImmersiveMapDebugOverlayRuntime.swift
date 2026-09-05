@@ -17,6 +17,17 @@ final class ImmersiveMapDebugOverlayRuntime {
     // on main.
     nonisolated(unsafe) private var hudSnapshotTimer: Timer?
     private var consumedHUDSnapshotVersion: UInt64 = 0
+    /// The settings the map is running with, so the panel can hand back a
+    /// whole value with one branch changed.
+    private var currentSettings: ImmersiveMapSettings?
+
+    /// Settings the debug panel asks for. The host runtime applies them the
+    /// way it applies any others, so a change here goes through the same
+    /// planner (and the same renderer-rebuild decision) as one made in SwiftUI.
+    /// A later `update(settings:)` from the view hierarchy overrides it, which
+    /// is correct: the app's own value is the source of truth, and the panel
+    /// only borrows it between updates.
+    var onSettingsChangeRequested: ((ImmersiveMapSettings) -> Void)?
 
     init(mapView: ImmersiveMapHostView,
          controls: DebugOverlayControlState,
@@ -87,6 +98,20 @@ final class ImmersiveMapDebugOverlayRuntime {
             hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        #if os(macOS)
+        // The shadow group is part of the reworked AppKit panel; the UIKit one
+        // still carries the tabbed layout and has no such group yet.
+        hudView.onShadowSettingsChanged = { [weak self] shadows in
+            guard let self, var settings = currentSettings else { return }
+            settings.scene.shadows = shadows
+            onSettingsChangeRequested?(settings)
+        }
+        hudView.onSunDirectionChanged = { [weak self] direction in
+            guard let self, var settings = currentSettings else { return }
+            settings.scene.light.direction = direction
+            onSettingsChangeRequested?(settings)
+        }
+        #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
         mapView.addSubview(hudView)
@@ -107,8 +132,13 @@ final class ImmersiveMapDebugOverlayRuntime {
     }
 
     func apply(settings: ImmersiveMapSettings) {
+        currentSettings = settings
         hudView.apply(isDebugPanelEnabled: settings.debug.enableDebugPanel,
                       controls: controls.snapshot())
+        #if os(macOS)
+        hudView.apply(shadowSettings: settings.scene.shadows,
+                      sunDirection: settings.scene.light.direction)
+        #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
         if settings.debug.enableDebugPanel {

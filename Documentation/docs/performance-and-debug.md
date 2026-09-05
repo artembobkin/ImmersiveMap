@@ -87,6 +87,12 @@ public struct DebugSettings: Equatable, Sendable {
 
 The HUD is host-view chrome drawn above the map: camera coordinates and renderer diagnostics. The remaining fields are layout (text scale, padding, spacing between sections) and color, so the panel can be moved out from under an app's own overlay.
 
+On macOS the panel is a full-height rail flush against the left edge of the map, and its groups are stacked in one scrolling column: **Stats**, **Tiles**, **Base labels**, **Shadows**, **Controls**. Everything is visible at once and what does not fit is scrolled to, which is what debugging usually needs (watching the stats while a control is toggled, the tile list while the shadow settings move). The header's chevron collapses it to a title bar.
+
+Because the macOS panel is pinned to the left edge and takes the height it can have, `leftPadding` and `topPadding` no longer position it there; they still place the UIKit panel, which keeps the tabbed layout. `sectionSpacing`, `coordinateScale` and `diagnosticsScale` apply on both.
+
+The **Shadows** group edits the live [shadow settings](buildings-and-shadows.md): on/off, strength, shadow map size, coverage, and the sun's azimuth and elevation. These are real settings, not debug overrides, so they take the same road as a change made through a modifier, and a later settings update from the view hierarchy overrides them: the app's own value stays the source of truth and the panel only borrows it in between.
+
 It is a development aid. It does not appear in a [tour video export](tour-video-export.md), same as the attribution badge, and it should not ship enabled.
 
 ### Overlays on the map
