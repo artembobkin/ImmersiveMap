@@ -17,6 +17,13 @@ enum DebugOverlayShadowSettingsPlanner {
     static let mapResolutionTitles = ["512", "1K", "2K", "4K"]
     static let strengthRange: ClosedRange<Double> = 0...1
     static let coverageRange: ClosedRange<Double> = 2...12
+    /// The resolver's own clamp, so the slider can reach everything the
+    /// setting accepts and nothing it does not: a slider that runs past the
+    /// clamp reports a value the renderer is not using.
+    static var normalOffsetRange: ClosedRange<Double> {
+        let range = ShadowFrameStateResolver.normalOffsetTexelsRange
+        return Double(range.lowerBound)...Double(range.upperBound)
+    }
     static let azimuthRange: ClosedRange<Double> = 0...360
     /// The resolver drops shadows below a light elevation of ~3 degrees
     /// (`minimumLightDirectionZ`), so the slider stops well above it: a slider
@@ -48,6 +55,10 @@ enum DebugOverlayShadowSettingsPlanner {
 
     static func coverageTitle(_ coverage: Float) -> String {
         String(format: "Coverage %.1fx", coverage)
+    }
+
+    static func normalOffsetTitle(_ texels: Float) -> String {
+        String(format: "Normal offset %.1ftx", texels)
     }
 
     static func azimuthTitle(_ degrees: Double) -> String {

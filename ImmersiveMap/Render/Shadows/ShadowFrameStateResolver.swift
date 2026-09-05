@@ -78,16 +78,18 @@ enum ShadowFrameStateResolver {
     /// Floor for the bias at near-vertical light (horizontal slope → 0),
     /// in texels of depth, against numeric self-comparison on flat roofs.
     static let receiverBiasFloorTexels: Float = 0.15
-    /// Receivers with normals shift their sample point along the normal by
-    /// this many window texels (see `ShadowCascadeUniform.normalOffsetWorld`).
-    /// It is uncapped: the window is sized to the camera distance, so the
-    /// offset is always the same fraction of it (and so a roughly constant
+    /// Range `ShadowSettings.normalOffsetTexels` is clamped to. Receivers with
+    /// normals shift their sample point along the normal by that many window
+    /// texels (see `ShadowCascadeUniform.normalOffsetWorld`).
+    ///
+    /// There is no meter cap: the window is sized to the camera distance, so
+    /// the offset is always the same fraction of it (and so a roughly constant
     /// size on screen) instead of growing without bound the way a fixed
     /// far-cascade window used to. The cost is exact and worth knowing: an
-    /// occluder closer to a wall than this offset stops shadowing it, which
-    /// at street zooms is under a meter and only reaches a few meters when
-    /// the camera is high enough that such gaps are a pixel or two wide.
-    static let normalOffsetTexels: Float = 2.5
+    /// occluder closer to a wall than the offset stops shadowing it, which at
+    /// street zooms is under a meter and only reaches a few meters when the
+    /// camera is high enough that such gaps are a pixel or two wide.
+    static let normalOffsetTexelsRange: ClosedRange<Float> = 0...8
     /// Grazing-wall cutoff of the geometric self-shadow test, in N·L; mirrors
     /// `kShadowGeometricCutoffStart` / `kShadowGeometricCutoffEnd` in
     /// RenderUniforms.h (pinned by `ShadowFrameStateResolverTests`). Below the
@@ -130,6 +132,7 @@ enum ShadowFrameStateResolver {
         let mapResolution: Int
         let farRadius: Float
         let spec: CascadeSpec
+        let normalOffsetTexels: Float
         let panShift: SIMD3<Double>
         let strength: Float
         let tint: SIMD3<Float>
@@ -183,6 +186,10 @@ enum ShadowFrameStateResolver {
                                      -flatRenderPan.y * halfMapSize,
                                      0)
 
+        let normalOffsetTexels = min(max(scene.shadows.normalOffsetTexels,
+                                         normalOffsetTexelsRange.lowerBound),
+                                     normalOffsetTexelsRange.upperBound)
+
         return FitInputs(lightDirection: lightDirection,
                          lightView: lightView,
                          cameraEye: cameraEye,
@@ -190,6 +197,7 @@ enum ShadowFrameStateResolver {
                          mapResolution: mapResolution,
                          farRadius: spec.radius,
                          spec: spec,
+                         normalOffsetTexels: normalOffsetTexels,
                          panShift: panShift,
                          strength: min(max(scene.shadows.strength, 0), 1),
                          tint: simd_clamp(scene.shadows.tint,
@@ -458,7 +466,7 @@ enum ShadowFrameStateResolver {
                                            depthBias: depthBias,
                                            uvMinimum: inset,
                                            uvMaximum: SIMD2<Float>(1, 1) - inset,
-                                           normalOffsetWorld: normalOffsetTexels * texelWorldSize,
+                                           normalOffsetWorld: inputs.normalOffsetTexels * texelWorldSize,
                                            texelSizeUV: texelUV)
 
         let uniform = ShadowUniform(cascade: cascade,

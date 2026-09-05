@@ -64,6 +64,7 @@ public struct ShadowSettings: Equatable, Sendable {
     public var strength: Float                 // 0.22
     public var mapResolution: Int              // 2048
     public var coverageCameraDistances: Float  // 3.0
+    public var normalOffsetTexels: Float       // 2.5
     public var tint: SIMD3<Float>              // (0.88, 0.92, 1.0)
 }
 ```
@@ -73,6 +74,7 @@ public struct ShadowSettings: Equatable, Sendable {
 | `strength` | How much a shadowed fragment darkens, `0...1`. |
 | `tint` | The cast of the shadowed light: an RGB multiplier applied on top of `strength` where a surface is fully in shadow, and in proportion where it is partly shadowed. White keeps the neutral darkening; the default cool tint gives shadows the bluish cast of light arriving only from the sky, so a shadowed street reads as daylight rather than as a grey stain. The ground, the buildings and the scene models all take the same tint. |
 | `mapResolution` | Side of the square shadow map in pixels, clamped to `256...4096` at render time. The main sharpness-versus-cost lever. |
+| `normalOffsetTexels` | How far a receiver's shadow lookup steps off its own surface along the normal, in shadow map texels, clamped to `0...8`. The only defence against shadow acne, and a two-sided trade: too little and grazing walls stripe, too much and a wall stops being shadowed by anything closer to it than the offset, which is what makes narrow alleys lose their shadows as the camera pulls back. Stated in texels rather than meters because the acne to cover is proportional to how coarse the map is, so the same value holds at every zoom and coverage. |
 | `coverageCameraDistances` | Coverage radius of the shadow map, measured in multiples of the camera distance. Beyond it shadows fade out. One map is stretched over the radius, so raising this coarsens every shadow in the frame in proportion, and `mapResolution` is what buys the density back. Values below 2 are clamped up. |
 
 The defaults are deliberately soft: at a strength of 0.22 with the cool tint a fully shadowed white surface comes out around `(0.69, 0.72, 0.78)`, a light blue-grey. Heavier shadows are one line away (`strength: 0.5, tint: SIMD3<Float>(repeating: 1)` is the neutral darkening earlier versions shipped).

@@ -129,9 +129,23 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
         XCTAssertGreaterThan(lowest.z, ShadowFrameStateResolver.minimumLightDirectionZ)
     }
 
+    /// The slider must reach every value the setting accepts and none it does
+    /// not, or it reports a number the renderer is not using.
+    func testTheNormalOffsetSliderMatchesTheResolverClamp() {
+        let range = ShadowFrameStateResolver.normalOffsetTexelsRange
+
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetRange.lowerBound,
+                       Double(range.lowerBound))
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetRange.upperBound,
+                       Double(range.upperBound))
+        XCTAssertTrue(DebugOverlayShadowSettingsPlanner.normalOffsetRange
+            .contains(Double(ImmersiveMapSettings.ShadowSettings().normalOffsetTexels)))
+    }
+
     func testTitlesCarryTheValue() {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(0.22), "Strength 0.22")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageTitle(3), "Coverage 3.0x")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetTitle(2.5), "Normal offset 2.5tx")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.azimuthTitle(213.7), "Sun azimuth 214°")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.elevationTitle(54.2), "Sun elevation 54°")
     }

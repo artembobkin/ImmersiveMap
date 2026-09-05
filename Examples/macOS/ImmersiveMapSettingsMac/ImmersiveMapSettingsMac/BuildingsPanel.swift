@@ -94,6 +94,10 @@ struct BuildingsPanel: View {
                             value: $settings.scene.shadows.coverageCameraDistances.asDouble,
                             range: 2...48,
                             format: "%.0f")
+                ValueSlider("Normal offset",
+                            value: $settings.scene.shadows.normalOffsetTexels.asDouble,
+                            range: 0...8,
+                            format: "%.1f")
                 ColorPicker("Tint", selection: shadowTint, supportsOpacity: false)
                     .frame(width: 100)
             }

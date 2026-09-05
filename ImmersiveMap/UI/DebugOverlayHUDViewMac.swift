@@ -95,6 +95,8 @@ final class DebugOverlayHUDView: NSView {
         action: nil)
     private let shadowCoverageLabel = NSTextField(labelWithString: "")
     private let shadowCoverageSlider = NSSlider()
+    private let shadowNormalOffsetLabel = NSTextField(labelWithString: "")
+    private let shadowNormalOffsetSlider = NSSlider()
     private let sunAzimuthLabel = NSTextField(labelWithString: "")
     private let sunAzimuthSlider = NSSlider()
     private let sunElevationLabel = NSTextField(labelWithString: "")
@@ -185,6 +187,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(shadowStrengthLabel, text: "")
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
         configureControlLabel(shadowCoverageLabel, text: "")
+        configureControlLabel(shadowNormalOffsetLabel, text: "")
         configureControlLabel(sunAzimuthLabel, text: "")
         configureControlLabel(sunElevationLabel, text: "")
 
@@ -203,6 +206,9 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(shadowCoverageSlider,
                         range: DebugOverlayShadowSettingsPlanner.coverageRange,
                         action: #selector(shadowCoverageSliderChanged))
+        configureSlider(shadowNormalOffsetSlider,
+                        range: DebugOverlayShadowSettingsPlanner.normalOffsetRange,
+                        action: #selector(shadowNormalOffsetSliderChanged))
         configureSlider(sunAzimuthSlider,
                         range: DebugOverlayShadowSettingsPlanner.azimuthRange,
                         action: #selector(sunAzimuthSliderChanged))
@@ -265,6 +271,7 @@ final class DebugOverlayHUDView: NSView {
          shadowStrengthLabel, shadowStrengthSlider,
          shadowMapResolutionLabel, shadowMapResolutionControl,
          shadowCoverageLabel, shadowCoverageSlider,
+         shadowNormalOffsetLabel, shadowNormalOffsetSlider,
          sunAzimuthLabel, sunAzimuthSlider,
          sunElevationLabel, sunElevationSlider,
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
@@ -419,6 +426,7 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunAzimuthLabel, sunAzimuthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunElevationLabel, sunElevationSlider, at: cursor, contentWidth: contentWidth)
         cursor += Layout.groupSpacing
@@ -579,6 +587,8 @@ final class DebugOverlayHUDView: NSView {
             DebugOverlayShadowSettingsPlanner.mapResolutionIndex(for: shadowSettings.mapResolution)
         shadowCoverageSlider.doubleValue = Double(shadowSettings.coverageCameraDistances)
         shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
+        shadowNormalOffsetSlider.doubleValue = Double(shadowSettings.normalOffsetTexels)
+        shadowNormalOffsetLabel.stringValue = DebugOverlayShadowSettingsPlanner.normalOffsetTitle(shadowSettings.normalOffsetTexels)
 
         let angles = DebugOverlaySunAngles.angles(direction: sunDirection)
         sunAzimuthSlider.doubleValue = angles.azimuthDegrees
@@ -588,7 +598,8 @@ final class DebugOverlayHUDView: NSView {
 
         // Everything below the switch only means something with shadows on.
         [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider,
-         sunAzimuthSlider, sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
+         shadowNormalOffsetSlider, sunAzimuthSlider,
+         sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
     }
 
     // MARK: - Configuration
@@ -799,6 +810,12 @@ final class DebugOverlayHUDView: NSView {
     @objc private func shadowCoverageSliderChanged() {
         var settings = shadowSettings
         settings.coverageCameraDistances = Float(shadowCoverageSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowNormalOffsetSliderChanged() {
+        var settings = shadowSettings
+        settings.normalOffsetTexels = Float(shadowNormalOffsetSlider.doubleValue)
         publish(shadowSettings: settings)
     }
 

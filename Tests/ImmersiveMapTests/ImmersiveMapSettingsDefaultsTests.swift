@@ -19,6 +19,7 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(shadows.strength, 0.22)
         XCTAssertEqual(shadows.mapResolution, 2048)
         XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
+        XCTAssertEqual(shadows.normalOffsetTexels, 2.5)
     }
 
     /// The default shadow is soft and cool: light enough that a shadowed street

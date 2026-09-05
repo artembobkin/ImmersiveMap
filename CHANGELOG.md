@@ -8,6 +8,16 @@ once the public API stabilizes.
 
 ## [Unreleased]
 
+### Added
+
+- `ShadowSettings.normalOffsetTexels` (default 2.5): how far a receiver's
+  shadow lookup steps off its own surface along the normal, in shadow map
+  texels, clamped to `0...8`. It was a constant in the resolver, and with the
+  receiver-plane gradient gone it is the only defence against shadow acne, so
+  it is worth aiming: too little and grazing walls stripe, too much and a wall
+  stops being shadowed by anything closer to it than the offset. Exposed on the
+  macOS debug panel's shadow group and in `ImmersiveMapSettingsMac`.
+
 ### Changed
 
 - The macOS debug panel is a full-height rail flush against the left edge of

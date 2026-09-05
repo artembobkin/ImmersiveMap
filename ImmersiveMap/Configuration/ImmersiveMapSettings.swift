@@ -731,6 +731,21 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// density back); values below 2 are clamped up, because the fade band
         /// would otherwise end inside the nearest visible ground.
         public var coverageCameraDistances: Float
+        /// How far a receiver's shadow lookup steps off its own surface, along
+        /// the surface normal, measured in shadow-map texels. Expected range:
+        /// `0...8`, clamped at render time.
+        ///
+        /// This is the only defence against shadow acne (the striped
+        /// self-shadowing on walls turned away from the sun), and it is a
+        /// two-sided trade. Too little and grazing walls stripe; too much and
+        /// the lookup steps out past real occluders, so a wall stops being
+        /// shadowed by anything closer to it than the offset, which is what
+        /// makes narrow alleys and light wells lose their shadows as the
+        /// camera pulls back. The offset is stated in texels rather than in
+        /// meters on purpose: the amount of acne to cover is proportional to
+        /// how coarse the map is, so a texel-relative offset stays correct at
+        /// every zoom and coverage.
+        public var normalOffsetTexels: Float
         /// The cast of the shadowed light, as an RGB multiplier applied on top
         /// of `strength` where a surface is fully in shadow: white keeps the
         /// neutral darkening, and the default cool tint gives shadows the
@@ -744,11 +759,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     strength: Float = 0.22,
                     mapResolution: Int = 2048,
                     coverageCameraDistances: Float = 3.0,
+                    normalOffsetTexels: Float = 2.5,
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled
             self.strength = strength
             self.mapResolution = mapResolution
             self.coverageCameraDistances = coverageCameraDistances
+            self.normalOffsetTexels = normalOffsetTexels
             self.tint = tint
         }
     }

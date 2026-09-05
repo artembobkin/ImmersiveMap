@@ -178,22 +178,23 @@ final class ShadowFrameStateResolverTests: XCTestCase {
                           "Bias must stay a tiny fraction of the depth window")
     }
 
-    /// The normal offset is exactly `normalOffsetTexels` window texels, with
-    /// no meter cap: the window is sized to the camera distance, so the offset
-    /// is a fixed fraction of it and cannot run away the way a fixed far
-    /// cascade's could. It is the only acne defense that scales with the
-    /// receiver's geometry now that there is no receiver-plane gradient, so
-    /// nothing may quietly clamp it.
+    /// The normal offset is exactly `ShadowSettings.normalOffsetTexels` window
+    /// texels, with no meter cap: the window is sized to the camera distance,
+    /// so the offset is a fixed fraction of it and cannot run away the way a
+    /// fixed far cascade's could. It is the only acne defense that scales with
+    /// the receiver's geometry now that there is no receiver-plane gradient,
+    /// so nothing may quietly clamp it inside the settable range.
     func testNormalOffsetIsExactlyTheTexelMultipleAtEveryZoom() throws {
         let expectedTexelUV = SIMD2<Float>(repeating: 1.0 / 2048.0)
         var scene = Self.makeScene()
         scene.shadows.mapResolution = 2048
+        let requestedTexels = scene.shadows.normalOffsetTexels
 
         for distance in [Float(0.05), 0.3, 0.8, 2.0] {
             let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: distance)
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
             let cascade = state.shadowUniform.cascade
-            let texelWorldSize = cascade.normalOffsetWorld / ShadowFrameStateResolver.normalOffsetTexels
+            let texelWorldSize = cascade.normalOffsetWorld / requestedTexels
 
             XCTAssertGreaterThan(cascade.normalOffsetWorld, 0, "distance \(distance)")
             XCTAssertEqual(cascade.texelSizeUV.x, expectedTexelUV.x, accuracy: 1e-9, "distance \(distance)")
@@ -209,6 +210,43 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             XCTAssertEqual(texelWorldSize * Float(state.mapResolution),
                            texelWorldSize * 2048, accuracy: 1e-6)
         }
+    }
+
+    /// The offset follows the setting, not a constant, which is what makes the
+    /// debug panel's slider mean anything.
+    func testNormalOffsetFollowsTheSetting() throws {
+        var scene = Self.makeScene()
+        scene.shadows.normalOffsetTexels = 1.0
+        let narrow = try XCTUnwrap(Self.resolve(scene: scene))
+
+        scene.shadows.normalOffsetTexels = 4.0
+        let wide = try XCTUnwrap(Self.resolve(scene: scene))
+
+        XCTAssertEqual(wide.shadowUniform.cascade.normalOffsetWorld
+                        / narrow.shadowUniform.cascade.normalOffsetWorld,
+                       4.0,
+                       accuracy: 1e-4)
+    }
+
+    /// Zero is a legal setting (no offset at all, for looking at raw acne),
+    /// and anything past the range is clamped rather than passed to the shader.
+    func testNormalOffsetIsClampedToTheSettableRange() throws {
+        var scene = Self.makeScene()
+        scene.shadows.normalOffsetTexels = 0
+        let none = try XCTUnwrap(Self.resolve(scene: scene))
+        XCTAssertEqual(none.shadowUniform.cascade.normalOffsetWorld, 0)
+
+        scene.shadows.normalOffsetTexels = 1_000
+        let clamped = try XCTUnwrap(Self.resolve(scene: scene))
+        scene.shadows.normalOffsetTexels = ShadowFrameStateResolver.normalOffsetTexelsRange.upperBound
+        let atMaximum = try XCTUnwrap(Self.resolve(scene: scene))
+        XCTAssertEqual(clamped.shadowUniform.cascade.normalOffsetWorld,
+                       atMaximum.shadowUniform.cascade.normalOffsetWorld)
+
+        scene.shadows.normalOffsetTexels = -5
+        let negative = try XCTUnwrap(Self.resolve(scene: scene))
+        XCTAssertEqual(negative.shadowUniform.cascade.normalOffsetWorld, 0,
+                       "A negative offset would step the sample point into the surface")
     }
 
     /// The geometric self-shadow band mirrors the shader constants, which is
