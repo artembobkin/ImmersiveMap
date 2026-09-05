@@ -3,44 +3,39 @@
 
 import simd
 
-/// One shadow cascade's sampling parameters; the layout mirrors `ShadowCascade`
-/// in RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
+/// The shadow window's sampling parameters; the layout mirrors
+/// `ShadowCascade` in RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 ///
-/// `worldToShadowTexture` maps flat world space straight to the cascade's
-/// slice of the shadow texture array: xy is the slice UV (v flipped for
-/// Metal's top-left origin), z the comparison depth; the slice index equals
-/// the cascade's position in `ShadowUniform.cascades`.
+/// `worldToShadowTexture` maps flat world space straight to the shadow map:
+/// xy is the texture UV (v flipped for Metal's top-left origin), z the
+/// comparison depth.
 struct ShadowCascadeUniform {
     var worldToShadowTexture: matrix_float4x4
-    /// Reserved (kept for layout stability); the tent PCF footprint is a
-    /// fixed 3x3 texels.
+    /// Reserved (kept for layout stability); the filter footprint is one
+    /// hardware bilinear compare.
     var kernelRadiusUV: SIMD2<Float>
     /// Receiver-side comparison bias in normalized shadow depth.
     var depthBias: Float
-    /// Cap for the receiver-plane depth gradient (normalized depth per UV);
-    /// bounds garbage screen-space derivatives on silhouette quads.
-    var gradientClamp: Float
-    /// Valid slice-UV rectangle of this cascade, inset by the kernel reach so
-    /// taps never leave the fitted window.
+    var _padding1: Float = 0
+    /// Valid UV rectangle, inset so the bilinear tap never leaves the fitted
+    /// window.
     var uvMinimum: SIMD2<Float>
     var uvMaximum: SIMD2<Float>
     /// World-space distance receivers with normals shift their sample point
-    /// along the surface normal (~1.5 texels of this cascade, capped in
-    /// meters so the far cascade cannot shift receivers past real occluders):
-    /// the receiver leaves its own surface towards the light, so
-    /// self-comparison cannot stripe even where the wall's map footprint is
-    /// sub-texel, while occluders farther than the cap still shadow it.
+    /// along the surface normal: the receiver leaves its own surface towards
+    /// the light, so self-comparison cannot stripe even where the wall's map
+    /// footprint is sub-texel, while occluders farther away than the offset
+    /// still shadow it. Always `normalOffsetTexels` texels of this window,
+    /// which is itself sized to the camera distance, so the offset is a fixed
+    /// fraction of that distance and a roughly constant size on screen.
     var normalOffsetWorld: Float
     var _padding0: Float = 0
-    /// One texel of this cascade in slice UV: feeds the per-tap
-    /// slope-proportional bias that covers the bilinear compare footprint on
-    /// steep receivers.
+    /// One texel of the window in UV.
     var texelSizeUV: SIMD2<Float>
 
     static let disabled = ShadowCascadeUniform(worldToShadowTexture: matrix_identity_float4x4,
                                                kernelRadiusUV: .zero,
                                                depthBias: 0,
-                                               gradientClamp: 0,
                                                uvMinimum: SIMD2<Float>(1, 1),
                                                uvMaximum: SIMD2<Float>(-1, -1),
                                                normalOffsetWorld: 0,
@@ -50,19 +45,10 @@ struct ShadowCascadeUniform {
 /// Per-frame shadow sampling parameters; the layout mirrors `Shadow` in
 /// RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 struct ShadowUniform {
-    /// Near cascade: a tight pose-invariant disc around the look-at point for
-    /// crisp contact shadows (~sub-meter texels at street zooms).
-    var cascadeNear: ShadowCascadeUniform
-    /// Middle cascade: where most visible shadows land at a tilted camera, so
-    /// meter-scale texels keep diagonal edges straight.
-    var cascadeMiddle: ShadowCascadeUniform
-    /// Far cascade: the full coverage disc for distant shadows, where a coarse
-    /// texel is small on screen and the eye-distance fade takes over.
-    var cascadeFar: ShadowCascadeUniform
-
-    var cascades: [ShadowCascadeUniform] {
-        [cascadeNear, cascadeMiddle, cascadeFar]
-    }
+    /// The single shadow window: a pose-invariant disc around the look-at
+    /// point, sized by `ShadowSettings.coverageCameraDistances`. Receivers
+    /// outside it are lit, and the eye-distance fade hides that edge.
+    var cascade: ShadowCascadeUniform
     /// Camera eye in world space, for the distance fade.
     var eye: SIMD3<Float>
     /// Shadow darkening amount in [0, 1]; 0 disables sampling entirely.
@@ -80,9 +66,7 @@ struct ShadowUniform {
 
     /// Bound when the shadow pass is skipped: the strength guard in
     /// `sampleShadowFactor` returns 1.0 before touching the texture.
-    static let disabled = ShadowUniform(cascadeNear: .disabled,
-                                        cascadeMiddle: .disabled,
-                                        cascadeFar: .disabled,
+    static let disabled = ShadowUniform(cascade: .disabled,
                                         eye: .zero,
                                         strength: 0,
                                         fadeStartDistance: 0,

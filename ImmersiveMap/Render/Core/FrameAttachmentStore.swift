@@ -276,11 +276,10 @@ final class FrameAttachmentStore {
         }
 
         let descriptor = MTLTextureDescriptor()
-        descriptor.textureType = .type2DArray
+        descriptor.textureType = .type2D
         descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
         descriptor.width = resolution
         descriptor.height = resolution
-        descriptor.arrayLength = ShadowCascadeAtlas.cascadeCount
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
         let newTexture = metalDevice.makeTexture(descriptor: descriptor)

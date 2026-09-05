@@ -12,9 +12,9 @@ import SwiftUI
 /// system installs and launches. This app is that application, and does nothing
 /// else.
 ///
-/// It exists because the simulator cannot answer every question. Layered
-/// rendering, which the cascade shadow maps rasterize through, is missing
-/// there, so the shadow path a device runs is not the path the simulator runs.
+/// It exists because the simulator cannot answer every question: it is a
+/// software renderer with its own gaps, and a device is the only place the
+/// real GPU's timing, memory and driver behaviour can be measured.
 @main
 struct ImmersiveMapDeviceTestHostApp: App {
     var body: some Scene {

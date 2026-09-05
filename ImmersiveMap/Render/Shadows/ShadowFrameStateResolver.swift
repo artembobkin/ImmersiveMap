@@ -3,18 +3,19 @@
 
 import simd
 
-/// Fits the directional light's two cascade cameras and produces the per-frame
+/// Fits the directional light's camera and produces the per-frame
 /// `ShadowFrameState`. Pure input → output; runs once per frame in
 /// `RenderFrameEngine.collectInput`.
 ///
-/// Both cascades are fitted to **pose-invariant discs** centered at the flat
-/// world origin, the camera's look-at point (`RenderCameraPoseResolver` orbits
-/// the origin). Disc radii are multiples of the camera distance `|eye|`, which
-/// does not depend on pitch or bearing, so tilting or rotating the camera
-/// changes nothing about the shadow windows: texel world size, and therefore
-/// edge sharpness, stays constant. The price is fitting a full disc instead
-/// of the camera frustum's footprint; the near cascade keeps density where it
-/// matters, the far cascade covers the rest coarsely.
+/// There is one shadow window, fitted to a **pose-invariant disc** centered at
+/// the flat world origin, the camera's look-at point
+/// (`RenderCameraPoseResolver` orbits the origin). Its radius is a multiple of
+/// the camera distance `|eye|`, which does not depend on pitch or bearing, so
+/// tilting or rotating the camera changes nothing about the window: texel
+/// world size, and therefore edge sharpness, stays constant. The price is
+/// fitting a full disc instead of the camera frustum's footprint, and the
+/// reach the single window can cover at a usable density: shadows end at
+/// `coverageCameraDistances` and the eye-distance fade hides that edge.
 ///
 /// Casters outside a disc are captured by extending the **near** plane towards
 /// the light by `maxCasterHeight / L.z`: any caster occluding a receiver `r`
@@ -30,7 +31,7 @@ import simd
 /// snap mixes a camera-local center with a world-sized pan offset, so it is
 /// computed in Double: at high zoom the offset reaches ~10^6 units where
 /// Float ULP already exceeds a texel.
-/// One cascade's fitted window, expressed in pan-anchored light-space
+/// The fitted window, expressed in pan-anchored light-space
 /// coordinates: the pieces that stay glued to the map content while
 /// `flatRenderState.pan` re-centers the world around the camera every frame.
 /// A fit can therefore outlive the frame it was computed on: materializing
@@ -55,7 +56,7 @@ struct ShadowCascadeAnchoredFit {
 struct ShadowAnchoredFit {
     let lightDirection: SIMD3<Float>
     let mapResolution: Int
-    let cascades: [ShadowCascadeAnchoredFit]
+    let window: ShadowCascadeAnchoredFit
 }
 
 enum ShadowFrameStateResolver {
@@ -63,53 +64,59 @@ enum ShadowFrameStateResolver {
     /// dropped: near-horizontal light produces quasi-infinite shadows the
     /// cascade maps cannot represent.
     static let minimumLightDirectionZ: Float = 0.05
-    /// Cascade disc radii in camera distances. Near is the crisp contact
-    /// zone; middle covers where most visible shadows land at a tilted
-    /// camera (far-cascade texels there would visibly wobble diagonal
-    /// edges); far is the coverage/fade zone.
-    static let nearCascadeRadiusCameraDistances: Float = 1.0
-    static let middleCascadeRadiusCameraDistances: Float = 3.0
-    /// Caster-height caps per cascade. The tighter caps on the closer
-    /// cascades keep their windows (and texels) small: receivers above a cap
-    /// simply fall through to the next cascade in the sampling chain, and
-    /// taller casters are pancaked onto the near plane by the depth clamp.
-    static let nearCascadeMaxCasterHeightMeters = 300.0
-    static let middleCascadeMaxCasterHeightMeters = 500.0
-    static let farCascadeMaxCasterHeightMeters = 1000.0
-    /// Constant receiver bias measured in shadow-map texels of depth slope.
-    /// The receiver-plane bias in `sampleShadowFactor` predicts each tap's own
-    /// plane depth, so the constant part only needs to cover storage
-    /// quantization and derivative error; keeping it small keeps shadows
-    /// attached to building bases (any bias shrinks contact by ~its world size).
-    static let receiverBiasTexels: Float = 0.5
+    /// Caster-height cap: receivers above it fall outside the fitted depth
+    /// window, and taller casters are pancaked onto the near plane by the
+    /// depth clamp.
+    static let maxCasterHeightMeters = 1000.0
+    /// Constant receiver bias, in shadow-map texels of depth slope. It is the
+    /// only depth-side defense left: there is no receiver-plane gradient, so
+    /// this has to cover the receiver's own depth variation across the
+    /// bilinear tap's footprint. Keeping it as small as the look allows keeps
+    /// shadows attached to building bases (any bias shrinks contact by ~its
+    /// world size), and the normal offset carries what it cannot.
+    static let receiverBiasTexels: Float = 1.0
     /// Floor for the bias at near-vertical light (horizontal slope → 0),
     /// in texels of depth, against numeric self-comparison on flat roofs.
     static let receiverBiasFloorTexels: Float = 0.15
-    /// Cap (in surface-slope units, depth per world unit of light-space XY)
-    /// for the receiver-plane gradient. It must admit the steepest *lit* wall:
-    /// the geometric self-shadow threshold (N·L = 0.15) lets through walls
-    /// with depth slope up to cot(asin(0.15)) ≈ 6.6, an under-clamped
-    /// gradient mispredicts their plane and stripes them with acne. 8 covers
-    /// that with margin while still bounding garbage silhouette derivatives.
-    static let gradientClampMaxSlope: Float = 8.0
     /// Receivers with normals shift their sample point along the normal by
-    /// this many cascade texels (see ShadowCascadeUniform.normalOffsetWorld)…
-    static let normalOffsetTexels: Float = 1.5
-    /// …capped in ground meters: 1.5 far-cascade texels can reach 10+ meters,
-    /// which would push wall receivers past real neighboring occluders and
-    /// delete their received shadows. Acne beyond the cap is handled by the
-    /// slope-proportional per-tap bias instead.
-    static let normalOffsetMetersCap = 2.5
-    // (The PCF filter is a fixed 3x3 Castaño tent in the shader, an
-    // orientation-independent ~2-texel edge; no per-cascade kernel radius.)
-    /// Sampling-rectangle inset per cascade, in texels: keeps kernel taps
-    /// inside the fitted window of the cascade's array slice.
+    /// this many window texels (see `ShadowCascadeUniform.normalOffsetWorld`).
+    /// It is uncapped: the window is sized to the camera distance, so the
+    /// offset is always the same fraction of it (and so a roughly constant
+    /// size on screen) instead of growing without bound the way a fixed
+    /// far-cascade window used to. The cost is exact and worth knowing: an
+    /// occluder closer to a wall than this offset stops shadowing it, which
+    /// at street zooms is under a meter and only reaches a few meters when
+    /// the camera is high enough that such gaps are a pixel or two wide.
+    static let normalOffsetTexels: Float = 2.5
+    /// Grazing-wall cutoff of the geometric self-shadow test, in N·L; mirrors
+    /// `kShadowGeometricCutoffStart` / `kShadowGeometricCutoffEnd` in
+    /// RenderUniforms.h (pinned by `ShadowFrameStateResolverTests`). Below the
+    /// start a face is declared self-shadowed instead of sampled: its depth
+    /// varies by more than a texel across the receiver, which neither the
+    /// constant bias nor the normal offset can cover once the receiver-plane
+    /// gradient is gone.
+    static let geometricCutoffStart: Float = 0.18
+    static let geometricCutoffEnd: Float = 0.35
+    /// Sampling-rectangle inset in texels: keeps the bilinear tap inside the
+    /// fitted window.
     static let uvInsetTexels: Float = 4.0
     static let mapResolutionRange: ClosedRange<Int> = 256...4096
 
     struct CascadeSpec {
         let radius: Float
         let maxCasterHeight: Float
+    }
+
+    /// The window this frame asks for: one disc, sized by
+    /// `coverageCameraDistances`, with the caster-height cap in world units.
+    static func windowSpec(cameraDistance: Float,
+                           unitsPerMeter: Double,
+                           coverageCameraDistances: Float) -> CascadeSpec {
+        // Floor 2: at coverage 1 the fade band [0.75R, R] would end exactly at
+        // the camera distance, and since no visible ground is ever closer than
+        // that, every shadow would fade to nothing while the pass still runs.
+        CascadeSpec(radius: max(coverageCameraDistances, 2.0) * cameraDistance,
+                    maxCasterHeight: Float(maxCasterHeightMeters * unitsPerMeter))
     }
 
     /// Everything the fit and the materialization derive from the frame:
@@ -122,7 +129,7 @@ enum ShadowFrameStateResolver {
         let unitsPerMeter: Double
         let mapResolution: Int
         let farRadius: Float
-        let specs: [CascadeSpec]
+        let spec: CascadeSpec
         let panShift: SIMD3<Double>
         let strength: Float
         let tint: SIMD3<Float>
@@ -167,20 +174,9 @@ enum ShadowFrameStateResolver {
             : SIMD3<Float>(0, 0, 1)
         let lightView = Matrix.lookAt(eye: lightDirection, center: .zero, up: up)
 
-        // Floor 2: at coverage 1 the fade band [0.75R, R] would end exactly at
-        // the camera distance, and no visible ground is ever closer than that,
-        // every shadow would fade to nothing while the pass still runs.
-        let farRadius = max(scene.shadows.coverageCameraDistances, 2.0) * cameraDistance
-        let nearRadius = min(nearCascadeRadiusCameraDistances * cameraDistance, farRadius)
-        let middleRadius = min(middleCascadeRadiusCameraDistances * cameraDistance, farRadius)
-        let specs = [
-            CascadeSpec(radius: nearRadius,
-                        maxCasterHeight: Float(nearCascadeMaxCasterHeightMeters * unitsPerMeter)),
-            CascadeSpec(radius: middleRadius,
-                        maxCasterHeight: Float(middleCascadeMaxCasterHeightMeters * unitsPerMeter)),
-            CascadeSpec(radius: farRadius,
-                        maxCasterHeight: Float(farCascadeMaxCasterHeightMeters * unitsPerMeter))
-        ]
+        let spec = windowSpec(cameraDistance: cameraDistance,
+                              unitsPerMeter: unitsPerMeter,
+                              coverageCameraDistances: scene.shadows.coverageCameraDistances)
 
         let halfMapSize = renderMapSize * 0.5
         let panShift = SIMD3<Double>(flatRenderPan.x * halfMapSize,
@@ -192,8 +188,8 @@ enum ShadowFrameStateResolver {
                          cameraEye: cameraEye,
                          unitsPerMeter: unitsPerMeter,
                          mapResolution: mapResolution,
-                         farRadius: farRadius,
-                         specs: specs,
+                         farRadius: spec.radius,
+                         spec: spec,
                          panShift: panShift,
                          strength: min(max(scene.shadows.strength, 0), 1),
                          tint: simd_clamp(scene.shadows.tint,
@@ -299,204 +295,180 @@ enum ShadowFrameStateResolver {
                 simd_dot(lightRowDepth, panShift))
     }
 
-    /// Fits every cascade and returns the pan-anchored windows.
+    /// Fits the window and returns it in pan-anchored form.
     /// `radiusMargin` inflates the receiver discs before fitting: the slack
     /// is what lets `ShadowMapReuseController` keep a rendered map alive
     /// while the camera travels inside it. `resolve` (and its tests) fit
     /// with margin 1.0, which reproduces the historical frame-exact fit.
     static func resolveAnchoredFit(inputs: FitInputs, radiusMargin: Float) -> ShadowAnchoredFit? {
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
-        var cascades: [ShadowCascadeAnchoredFit] = []
-        for spec in inputs.specs {
-            let fitSpec = CascadeSpec(radius: spec.radius * radiusMargin,
-                                      maxCasterHeight: spec.maxCasterHeight)
-            guard let extremes = cascadeExtremes(spec: fitSpec,
-                                                 lightView: inputs.lightView,
-                                                 lightDirection: inputs.lightDirection) else {
-                return nil
-            }
-
-            // Square quantized window: the raw extent varies smoothly with the
-            // zoom fraction, and letting the texel size follow it makes shadow
-            // edges crawl. Quantizing in √2 steps keeps the grid constant between
-            // rare re-anchor steps while capping the density overshoot at 1.41×
-            // (a plain pow2 wastes up to 2×), and integer-zoom re-normalization
-            // scales it exactly ×2 (two √2 steps), so grid lines stay glued to the
-            // map content.
-            // Margin: 2 × 4-texel uv inset + 1 texel for the half-texel center
-            // snap on each axis, so the disc rim always stays inside the inset
-            // sampling rectangle even when quantization lands exactly on the
-            // needed size.
-            let neededExtent = max(extremes.maxX - extremes.minX,
-                                   extremes.maxY - extremes.minY) * (1.0 + 10.0 / Float(inputs.mapResolution))
-            guard neededExtent > 0, neededExtent.isFinite else { return nil }
-            let extent = pow(2.0, ceil(log2(neededExtent) * 2.0) / 2.0)
-            let texelWorldSize = extent / Float(inputs.mapResolution)
-
-            // Snap the window center to whole texels in pan-anchored space (see
-            // the type comment): content world positions are `anchored + panShift`,
-            // so the snapped quantity is `center - R·panShift`, evaluated in Double.
-            let texelWorldDouble = Double(texelWorldSize)
-            func snapToTexelGrid(center: Float, panShiftLight: Double) -> Double {
-                let anchored = Double(center) - panShiftLight
-                return (anchored / texelWorldDouble).rounded() * texelWorldDouble
-            }
-            let anchoredCenterX = snapToTexelGrid(center: (extremes.minX + extremes.maxX) * 0.5,
-                                                  panShiftLight: pan.x)
-            let anchoredCenterY = snapToTexelGrid(center: (extremes.minY + extremes.maxY) * 0.5,
-                                                  panShiftLight: pan.y)
-
-            let near = extremes.minDepth - spec.maxCasterHeight / inputs.lightDirection.z
-            // Scale-proportional slack (the old absolute 0.01 vanished next to
-            // world sizes that grow 2^zoom).
-            let far = extremes.maxDepth + max(0.01, 2.0 * texelWorldSize)
-            cascades.append(ShadowCascadeAnchoredFit(anchoredCenterX: anchoredCenterX,
-                                                     anchoredCenterY: anchoredCenterY,
-                                                     extent: extent,
-                                                     anchoredNearDepth: Double(near) - pan.depth,
-                                                     anchoredFarDepth: Double(far) - pan.depth))
+        let spec = inputs.spec
+        let fitSpec = CascadeSpec(radius: spec.radius * radiusMargin,
+                                  maxCasterHeight: spec.maxCasterHeight)
+        guard let extremes = cascadeExtremes(spec: fitSpec,
+                                             lightView: inputs.lightView,
+                                             lightDirection: inputs.lightDirection) else {
+            return nil
         }
+
+        // Square quantized window: the raw extent varies smoothly with the
+        // zoom fraction, and letting the texel size follow it makes shadow
+        // edges crawl. Quantizing in √2 steps keeps the grid constant between
+        // rare re-anchor steps while capping the density overshoot at 1.41×
+        // (a plain pow2 wastes up to 2×), and integer-zoom re-normalization
+        // scales it exactly ×2 (two √2 steps), so grid lines stay glued to the
+        // map content.
+        // Margin: 2 × 4-texel uv inset + 1 texel for the half-texel center
+        // snap on each axis, so the disc rim always stays inside the inset
+        // sampling rectangle even when quantization lands exactly on the
+        // needed size.
+        let neededExtent = max(extremes.maxX - extremes.minX,
+                               extremes.maxY - extremes.minY) * (1.0 + 10.0 / Float(inputs.mapResolution))
+        guard neededExtent > 0, neededExtent.isFinite else { return nil }
+        let extent = pow(2.0, ceil(log2(neededExtent) * 2.0) / 2.0)
+        let texelWorldSize = extent / Float(inputs.mapResolution)
+
+        // Snap the window center to whole texels in pan-anchored space (see
+        // the type comment): content world positions are `anchored + panShift`,
+        // so the snapped quantity is `center - R·panShift`, evaluated in Double.
+        let texelWorldDouble = Double(texelWorldSize)
+        func snapToTexelGrid(center: Float, panShiftLight: Double) -> Double {
+            let anchored = Double(center) - panShiftLight
+            return (anchored / texelWorldDouble).rounded() * texelWorldDouble
+        }
+        let anchoredCenterX = snapToTexelGrid(center: (extremes.minX + extremes.maxX) * 0.5,
+                                              panShiftLight: pan.x)
+        let anchoredCenterY = snapToTexelGrid(center: (extremes.minY + extremes.maxY) * 0.5,
+                                              panShiftLight: pan.y)
+
+        let near = extremes.minDepth - spec.maxCasterHeight / inputs.lightDirection.z
+        // Scale-proportional slack (the old absolute 0.01 vanished next to
+        // world sizes that grow 2^zoom).
+        let far = extremes.maxDepth + max(0.01, 2.0 * texelWorldSize)
+        let window = ShadowCascadeAnchoredFit(anchoredCenterX: anchoredCenterX,
+                                              anchoredCenterY: anchoredCenterY,
+                                              extent: extent,
+                                              anchoredNearDepth: Double(near) - pan.depth,
+                                              anchoredFarDepth: Double(far) - pan.depth)
         return ShadowAnchoredFit(lightDirection: inputs.lightDirection,
                                  mapResolution: inputs.mapResolution,
-                                 cascades: cascades)
+                                 window: window)
     }
 
     /// Whether a cached fit still serves the current frame: same light and
-    /// resolution, every cascade's receiver volume inside the fitted window
-    /// (with the uv-inset margin the taps need), and no cascade coarser than
-    /// a fresh fit would be by more than the quantization step (else the
-    /// shadows would stay visibly softer than a refit while zooming in).
+    /// resolution, the receiver volume inside the fitted window (with the
+    /// uv-inset margin the tap needs), and the window no coarser than a fresh
+    /// fit would be by more than the quantization step (else the shadows would
+    /// stay visibly softer than a refit while zooming in).
     static func fitCovers(fit: ShadowAnchoredFit, inputs: FitInputs, radiusMargin: Float) -> Bool {
         guard fit.lightDirection == inputs.lightDirection,
-              fit.mapResolution == inputs.mapResolution,
-              fit.cascades.count == inputs.specs.count else {
+              fit.mapResolution == inputs.mapResolution else {
             return false
         }
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
         let resolution = Float(fit.mapResolution)
-        for (index, spec) in inputs.specs.enumerated() {
-            guard let extremes = cascadeExtremes(spec: spec,
-                                                 lightView: inputs.lightView,
-                                                 lightDirection: inputs.lightDirection) else {
-                return false
-            }
-            let cascade = fit.cascades[index]
-            let texelWorldSize = cascade.extent / resolution
-            let usableHalfExtent = cascade.extent * 0.5 - (uvInsetTexels + 1.0) * texelWorldSize
-            let centerX = Float(cascade.anchoredCenterX + pan.x)
-            let centerY = Float(cascade.anchoredCenterY + pan.y)
-            guard extremes.minX >= centerX - usableHalfExtent,
-                  extremes.maxX <= centerX + usableHalfExtent,
-                  extremes.minY >= centerY - usableHalfExtent,
-                  extremes.maxY <= centerY + usableHalfExtent else {
-                return false
-            }
-            let near = Float(cascade.anchoredNearDepth + pan.depth)
-            let far = Float(cascade.anchoredFarDepth + pan.depth)
-            let requiredNear = extremes.minDepth - spec.maxCasterHeight / inputs.lightDirection.z
-            guard requiredNear >= near, extremes.maxDepth <= far else {
-                return false
-            }
-            // Sharpness: a fresh fit would quantize a window for the margined
-            // disc; if the cached window is more than one √2 quantum above
-            // that, the refit would be visibly sharper, so take it.
-            let neededExtent = max(extremes.maxX - extremes.minX,
-                                   extremes.maxY - extremes.minY)
-                * radiusMargin * (1.0 + 10.0 / resolution)
-            guard cascade.extent <= neededExtent * sqrt(2.0) * 1.001 else {
-                return false
-            }
+        let spec = inputs.spec
+        guard let extremes = cascadeExtremes(spec: spec,
+                                             lightView: inputs.lightView,
+                                             lightDirection: inputs.lightDirection) else {
+            return false
         }
-        return true
+        let window = fit.window
+        let texelWorldSize = window.extent / resolution
+        let usableHalfExtent = window.extent * 0.5 - (uvInsetTexels + 1.0) * texelWorldSize
+        let centerX = Float(window.anchoredCenterX + pan.x)
+        let centerY = Float(window.anchoredCenterY + pan.y)
+        guard extremes.minX >= centerX - usableHalfExtent,
+              extremes.maxX <= centerX + usableHalfExtent,
+              extremes.minY >= centerY - usableHalfExtent,
+              extremes.maxY <= centerY + usableHalfExtent else {
+            return false
+        }
+        let near = Float(window.anchoredNearDepth + pan.depth)
+        let far = Float(window.anchoredFarDepth + pan.depth)
+        let requiredNear = extremes.minDepth - spec.maxCasterHeight / inputs.lightDirection.z
+        guard requiredNear >= near, extremes.maxDepth <= far else {
+            return false
+        }
+        // Sharpness: a fresh fit would quantize a window for the margined
+        // disc; if the cached window is more than one √2 quantum above
+        // that, the refit would be visibly sharper, so take it.
+        let neededExtent = max(extremes.maxX - extremes.minX,
+                               extremes.maxY - extremes.minY)
+            * radiusMargin * (1.0 + 10.0 / resolution)
+        return window.extent <= neededExtent * sqrt(2.0) * 1.001
     }
 
-    /// Rebuilds the frame's world-space matrices and sampling uniform from a
+    /// Rebuilds the frame's world-space matrix and sampling uniform from a
     /// pan-anchored fit: the window follows the pan by whole construction
     /// (its center was snapped in pan-anchored space), so a shadow map
     /// rendered under one pan reads back correctly under any later pan for
     /// which `fitCovers` still holds.
     static func materialize(fit: ShadowAnchoredFit, inputs: FitInputs) -> ShadowFrameState? {
         guard fit.lightDirection == inputs.lightDirection,
-              fit.mapResolution == inputs.mapResolution,
-              fit.cascades.count == inputs.specs.count else {
+              fit.mapResolution == inputs.mapResolution else {
             return nil
         }
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
         let resolution = Float(fit.mapResolution)
 
-        var lightProjectionViews: [matrix_float4x4] = []
-        var cascadeUniforms: [ShadowCascadeUniform] = []
-        for cascade in fit.cascades {
-            let extent = cascade.extent
-            let texelWorldSize = extent / resolution
-            let centerX = Float(cascade.anchoredCenterX + pan.x)
-            let centerY = Float(cascade.anchoredCenterY + pan.y)
-            let halfExtent = extent * 0.5
-            let near = Float(cascade.anchoredNearDepth + pan.depth)
-            let far = Float(cascade.anchoredFarDepth + pan.depth)
+        let window = fit.window
+        let extent = window.extent
+        let texelWorldSize = extent / resolution
+        let centerX = Float(window.anchoredCenterX + pan.x)
+        let centerY = Float(window.anchoredCenterY + pan.y)
+        let halfExtent = extent * 0.5
+        let near = Float(window.anchoredNearDepth + pan.depth)
+        let far = Float(window.anchoredFarDepth + pan.depth)
 
-            let lightProjection = Matrix.metalOrthographicMatrix(left: centerX - halfExtent,
-                                                                 right: centerX + halfExtent,
-                                                                 bottom: centerY - halfExtent,
-                                                                 top: centerY + halfExtent,
-                                                                 near: near,
-                                                                 far: far)
-            let lightProjectionView = lightProjection * inputs.lightView
+        let lightProjection = Matrix.metalOrthographicMatrix(left: centerX - halfExtent,
+                                                             right: centerX + halfExtent,
+                                                             bottom: centerY - halfExtent,
+                                                             top: centerY + halfExtent,
+                                                             near: near,
+                                                             far: far)
+        let lightProjectionView = lightProjection * inputs.lightView
 
-            // NDC → the cascade's full array slice: u = 0.5x + 0.5,
-            // v = -0.5y + 0.5 (Metal texture origin is top-left); z passes
-            // through as the comparison depth. The slice itself is selected by
-            // the cascade index at sampling time, not encoded in the UV.
-            let uvBias = matrix_float4x4(
-                SIMD4<Float>(0.5, 0.0, 0.0, 0.0),
-                SIMD4<Float>(0.0, -0.5, 0.0, 0.0),
-                SIMD4<Float>(0.0, 0.0, 1.0, 0.0),
-                SIMD4<Float>(0.5, 0.5, 0.0, 1.0)
-            )
+        // NDC → the shadow map: u = 0.5x + 0.5, v = -0.5y + 0.5 (Metal
+        // texture origin is top-left); z passes through as the comparison
+        // depth.
+        let uvBias = matrix_float4x4(
+            SIMD4<Float>(0.5, 0.0, 0.0, 0.0),
+            SIMD4<Float>(0.0, -0.5, 0.0, 0.0),
+            SIMD4<Float>(0.0, 0.0, 1.0, 0.0),
+            SIMD4<Float>(0.5, 0.5, 0.0, 1.0)
+        )
 
-            // Receiver bias, normalized by the depth window. Scaled by the wall
-            // slope at head-on light (1/horizontalSlope): oblique walls are
-            // covered by the receiver-plane gradient and the normal offset, so the
-            // constant part stays small enough not to detach ground contact.
-            let depthWindow = max(far - near, 1e-6)
-            let horizontalSlope = simd_length(SIMD2<Float>(inputs.lightDirection.x,
-                                                           inputs.lightDirection.y)) / inputs.lightDirection.z
-            let steepestSlope = max(horizontalSlope, 1.0 / max(horizontalSlope, 1e-3))
-            let depthBias = (receiverBiasTexels * min(steepestSlope, 2.0) + receiverBiasFloorTexels)
-                * texelWorldSize / depthWindow
-            // Anything above the cap is a derivative artifact. Units: normalized
-            // depth per slice U: the window extent maps to the full U axis, so
-            // one full U spans `extent` world units.
-            let gradientClamp = gradientClampMaxSlope * extent / depthWindow
+        // Receiver bias, normalized by the depth window and scaled by the
+        // steeper of the two slopes the light makes with the ground, so a low
+        // sun (long depth run across a texel) biases more than a high one.
+        // With no receiver-plane gradient this is the whole depth-side
+        // defense; the normal offset carries the rest.
+        let depthWindow = max(far - near, 1e-6)
+        let horizontalSlope = simd_length(SIMD2<Float>(inputs.lightDirection.x,
+                                                       inputs.lightDirection.y)) / inputs.lightDirection.z
+        let steepestSlope = max(horizontalSlope, 1.0 / max(horizontalSlope, 1e-3))
+        let depthBias = (receiverBiasTexels * min(steepestSlope, 2.0) + receiverBiasFloorTexels)
+            * texelWorldSize / depthWindow
 
-            let texelUV = SIMD2<Float>(repeating: 1.0 / resolution)
-            let inset = uvInsetTexels * texelUV
-            let uvMinimum = inset
-            let uvMaximum = SIMD2<Float>(1, 1) - inset
-            let normalOffsetWorld = min(normalOffsetTexels * texelWorldSize,
-                                        Float(normalOffsetMetersCap * inputs.unitsPerMeter))
-            let uniform = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
-                                               kernelRadiusUV: .zero,
-                                               depthBias: depthBias,
-                                               gradientClamp: gradientClamp,
-                                               uvMinimum: uvMinimum,
-                                               uvMaximum: uvMaximum,
-                                               normalOffsetWorld: normalOffsetWorld,
-                                               texelSizeUV: texelUV)
-            lightProjectionViews.append(lightProjectionView)
-            cascadeUniforms.append(uniform)
-        }
+        let texelUV = SIMD2<Float>(repeating: 1.0 / resolution)
+        let inset = uvInsetTexels * texelUV
+        let cascade = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
+                                           kernelRadiusUV: .zero,
+                                           depthBias: depthBias,
+                                           uvMinimum: inset,
+                                           uvMaximum: SIMD2<Float>(1, 1) - inset,
+                                           normalOffsetWorld: normalOffsetTexels * texelWorldSize,
+                                           texelSizeUV: texelUV)
 
-        let uniform = ShadowUniform(cascadeNear: cascadeUniforms[0],
-                                    cascadeMiddle: cascadeUniforms[1],
-                                    cascadeFar: cascadeUniforms[2],
+        let uniform = ShadowUniform(cascade: cascade,
                                     eye: inputs.cameraEye,
                                     strength: inputs.strength,
                                     fadeStartDistance: inputs.farRadius * 0.75,
                                     fadeEndDistance: inputs.farRadius,
                                     lightDirection: inputs.lightDirection,
                                     tint: inputs.tint)
-        return ShadowFrameState(lightProjectionViews: lightProjectionViews,
+        return ShadowFrameState(lightProjectionView: lightProjectionView,
                                 shadowUniform: uniform,
                                 mapResolution: fit.mapResolution)
     }

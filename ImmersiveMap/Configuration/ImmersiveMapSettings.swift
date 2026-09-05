@@ -722,12 +722,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var strength: Float
         /// Square shadow map side in pixels. Clamped to `256...4096` at render time.
         public var mapResolution: Int
-        /// Far-cascade coverage radius measured in multiples of the camera
-        /// distance, a quantity independent of pitch and bearing, so tilting
-        /// or rotating the camera never changes shadow coverage or sharpness.
-        /// Beyond the radius shadows fade out. The far cascade is stretched
-        /// over it, so its texel density scales inversely; the near (crisp)
-        /// cascade always covers 2 camera distances.
+        /// Coverage radius of the shadow map, measured in multiples of the
+        /// camera distance, a quantity independent of pitch and bearing, so
+        /// tilting or rotating the camera never changes shadow coverage or
+        /// sharpness. Beyond the radius shadows fade out. There is one map
+        /// stretched over the radius, so raising this coarsens every shadow in
+        /// the frame in proportion (and `mapResolution` is what buys the
+        /// density back); values below 2 are clamped up, because the fade band
+        /// would otherwise end inside the nearest visible ground.
         public var coverageCameraDistances: Float
         /// The cast of the shadowed light, as an RGB multiplier applied on top
         /// of `strength` where a surface is fully in shadow: white keeps the
@@ -740,8 +742,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(isEnabled: Bool = true,
                     strength: Float = 0.22,
-                    mapResolution: Int = 1024,
-                    coverageCameraDistances: Float = 16.0,
+                    mapResolution: Int = 2048,
+                    coverageCameraDistances: Float = 3.0,
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled
             self.strength = strength

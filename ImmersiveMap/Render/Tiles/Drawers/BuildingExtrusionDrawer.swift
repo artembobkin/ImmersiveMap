@@ -61,10 +61,8 @@ enum BuildingExtrusionDrawer {
     }
 
     /// Same geometry replayed depth-only from the light's orthographic
-    /// cameras, all cascades in one pass: every draw carries
-    /// `instanceCount = cascadeCount` and the vertex stage routes each
-    /// instance to its cascade's array slice, so the geometry is encoded
-    /// once instead of once per cascade. Cull `.none`: winding juggling is
+    /// camera, one draw per geometry (one window, so nothing to instance
+    /// over). Cull `.none`: winding juggling is
     /// pointless in a depth-only pass, and drawing both faces partially
     /// covers the wall quads missing on tile boundaries. No encoder depth
     /// bias: the receiver-side bias is computed per frame from the actual
@@ -72,7 +70,7 @@ enum BuildingExtrusionDrawer {
     /// attached to building bases. Depth clamp (pancaking) keeps casters
     /// taller than the fitted near plane instead of clipping them away.
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
-                                  lightProjectionViews: [matrix_float4x4],
+                                  lightProjectionView: matrix_float4x4,
                                   placeTilesContext: PlaceTilesContext,
                                   flatRenderState: FlatRenderState,
                                   extrudedTilePipeline: ExtrudedTilePipeline,
@@ -81,12 +79,12 @@ enum BuildingExtrusionDrawer {
         extrudedTilePipeline.selectShadowPipeline(renderEncoder: renderEncoder)
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setDepthClipMode(.clamp)
-        var castersValue = ShadowCasterUniform(lightProjectionViews: lightProjectionViews)
+        var castersValue = ShadowCasterUniform(lightProjectionView: lightProjectionView)
         renderEncoder.setVertexBytes(&castersValue, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
         drawClippedCasterGeometry(renderEncoder: renderEncoder,
                                   placeTilesContext: placeTilesContext,
                                   flatRenderState: flatRenderState,
-                                  instanceCount: ShadowCascadeAtlas.cascadeCount)
+                                  instanceCount: 1)
         renderEncoder.setDepthClipMode(.clip)
     }
 

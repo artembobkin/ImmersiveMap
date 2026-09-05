@@ -62,10 +62,8 @@ final class ShadowMapReuseControllerTests: XCTestCase {
         let second = try XCTUnwrap(resolve(controller))
         XCTAssertFalse(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture),
                        "Nothing changed: the rendered map must be reused")
-        for index in 0..<3 {
-            XCTAssertEqual(first.lightProjectionViews[index], second.lightProjectionViews[index],
-                           "A static camera materializes identical cascade matrices")
-        }
+        XCTAssertEqual(first.lightProjectionView, second.lightProjectionView,
+                       "A static camera materializes an identical light matrix")
     }
 
     func testSmallPanReusesAndKeepsContentGlued() throws {
@@ -87,17 +85,15 @@ final class ShadowMapReuseControllerTests: XCTestCase {
         let halfMapSize = Self.renderMapSize * 0.5
         let contentShift = SIMD2<Double>((pan2.x - Self.basePan.x) * halfMapSize,
                                          -(pan2.y - Self.basePan.y) * halfMapSize)
-        let cascades1 = state1.shadowUniform.cascades
-        let cascades2 = state2.shadowUniform.cascades
         let probe = SIMD3<Float>(0.05, -0.1, 0)
         let shifted = SIMD3<Float>(probe.x + Float(contentShift.x),
                                    probe.y + Float(contentShift.y),
                                    probe.z)
-        for index in 0..<3 {
-            let uv1 = projectUV(cascades1[index].worldToShadowTexture, probe)
-            let uv2 = projectUV(cascades2[index].worldToShadowTexture, shifted)
-            XCTAssertEqual(uv1.x, uv2.x, accuracy: 1e-5, "cascade \(index)")
-            XCTAssertEqual(uv1.y, uv2.y, accuracy: 1e-5, "cascade \(index)")
+        do {
+            let uv1 = projectUV(state1.shadowUniform.cascade.worldToShadowTexture, probe)
+            let uv2 = projectUV(state2.shadowUniform.cascade.worldToShadowTexture, shifted)
+            XCTAssertEqual(uv1.x, uv2.x, accuracy: 1e-5)
+            XCTAssertEqual(uv1.y, uv2.y, accuracy: 1e-5)
         }
     }
 

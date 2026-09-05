@@ -126,15 +126,14 @@ enum SceneModelDrawer {
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
-    /// Depth-only replay of the meshes from the light's orthographic cameras,
-    /// all cascades in one pass: every submesh draws with
-    /// `instanceCount = cascadeCount` and the vertex stage routes each
-    /// instance to its cascade's array slice. No materials, no textures,
+    /// Depth-only replay of the meshes from the light's orthographic camera,
+    /// one draw per submesh (one window, so nothing to instance over).
+    /// No materials, no textures,
     /// cull `.none` (winding does not matter without color output). No encoder
     /// depth bias, the receiver-side bias computed by ShadowFrameStateResolver
     /// covers both caster kinds.
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
-                                  lightProjectionViews: [matrix_float4x4],
+                                  lightProjectionView: matrix_float4x4,
                                   items: [SceneModelDrawItem],
                                   pipeline: SceneModelPipeline,
                                   extrudedDepthState: MTLDepthStencilState) {
@@ -145,7 +144,7 @@ enum SceneModelDrawer {
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setDepthClipMode(.clamp)
 
-        var castersValue = ShadowCasterUniform(lightProjectionViews: lightProjectionViews)
+        var castersValue = ShadowCasterUniform(lightProjectionView: lightProjectionView)
         renderEncoder.setVertexBytes(&castersValue, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
 
         for item in items {
@@ -161,8 +160,7 @@ enum SceneModelDrawer {
                                                         indexCount: submesh.indexCount,
                                                         indexType: submesh.indexType,
                                                         indexBuffer: submesh.indexBuffer.buffer,
-                                                        indexBufferOffset: submesh.indexBuffer.offset,
-                                                        instanceCount: ShadowCascadeAtlas.cascadeCount)
+                                                        indexBufferOffset: submesh.indexBuffer.offset)
                 }
             }
         }

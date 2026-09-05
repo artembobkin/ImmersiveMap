@@ -440,8 +440,11 @@ enum VisualReviewCatalogue {
             wall and shaded wall read as four tones of one warm grey, and the \
             walls darken toward the street. Shadows are soft and cool (a light \
             blue-grey, never a black or neutral grey stain), fall away from \
-            the sun, land on the ground and on lower roofs, and have no \
-            visible cascade seam across the frame.
+            the sun, and land on the ground and on lower roofs. There is one \
+            shadow map now, so look instead for what replaced the cascades: \
+            acne (a striped shimmer on walls turned away from the sun), \
+            shadows detaching from the base of a tower, and shadows missing \
+            in gaps narrower than a couple of meters.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattan)),
@@ -708,8 +711,10 @@ enum VisualReviewCatalogue {
             title: "Orbit around the Manhattan skyline",
             lookFor: """
             Shadows swing with the bearing and stay attached to their towers. \
-            Watch for shadow cascades snapping, buildings shimmering along their \
-            edges, and labels detaching from their anchors while the camera moves.
+            Watch for the shadow map's grid crawling under the camera, walls \
+            striping as they turn away from the sun, shadows fading out too \
+            close to the camera at the coverage edge, buildings shimmering \
+            along their edges, and labels detaching from their anchors.
             """,
             settings: .default,
             subject: .video(

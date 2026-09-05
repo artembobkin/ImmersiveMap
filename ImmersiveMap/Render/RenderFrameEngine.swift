@@ -55,10 +55,6 @@ final class RenderFrameEngine {
     private let shadowMapReuse = ShadowMapReuseController()
     private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
-    /// Cascade shadow maps need layered rendering; where it is missing the
-    /// frame is drawn without shadows (see `ShadowCascadeAtlas`).
-    private let supportsShadowCascades: Bool
-
     /// GPU duration of the most recently completed frame, written on the Metal
     /// completion thread and read on the main thread when the next frame's
     /// diagnostics are built.
@@ -115,13 +111,6 @@ final class RenderFrameEngine {
                                                                   attachments.currentGroundShadowMaskTexture
                                                               })
 
-        let supportsShadowCascades = ShadowCascadeAtlas.supportsLayeredRendering(
-            device: persistentContext.metalContext.device
-        )
-        if supportsShadowCascades == false {
-            ShadowCascadeAtlas.warnAboutMissingLayeredRenderingOnce()
-        }
-        self.supportsShadowCascades = supportsShadowCascades
         self.settings = settings
         self.debugOverlayControls = debugOverlayControls
         self.clock = clock
@@ -337,19 +326,15 @@ final class RenderFrameEngine {
                                                         sceneSettings: settings.scene,
                                                         diagnostics: diagnostics)
         // Resolved once here, so the pass injection and every receiver bind
-        // site take the same answer from `ShadowPassGateResolver`: a device
-        // without layered rendering renders the frame without shadows rather
-        // than failing validation when the cascade pass is encoded.
-        let shadowFrameState = supportsShadowCascades
-            ? shadowMapReuse.resolveFrameState(
-                renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
-                cameraEye: cameraFrameState.cameraEye,
-                centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
-                flatRenderPan: resolvedPresentation.flatRenderState.pan,
-                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
-                scene: settings.scene
-            )
-            : nil
+        // site take the same answer from `ShadowPassGateResolver`.
+        let shadowFrameState = shadowMapReuse.resolveFrameState(
+            renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
+            cameraEye: cameraFrameState.cameraEye,
+            centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+            flatRenderPan: resolvedPresentation.flatRenderState.pan,
+            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
+            scene: settings.scene
+        )
 
         return FrameContext(frameIndex: frameTick.index,
                             frameSlotIndex: frameSlotIndex,

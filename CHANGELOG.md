@@ -10,6 +10,24 @@ once the public API stabilizes.
 
 ### Changed
 
+- Shadows are one map instead of three cascades, and the sampler is one
+  hardware bilinear depth compare instead of a 3x3 tent. The window is fitted
+  to a single pose-invariant disc of `coverageCameraDistances` camera
+  distances, so there is no cascade to select, no cross-fade band between
+  windows, and no receiver-plane gradient solved per fragment: acne is
+  prevented by moving the sample point off the receiver along its normal, and
+  walls too oblique for that are declared self-shadowed by their own `N·L`.
+  The caster pass draws each geometry once rather than instanced across three
+  slices, and the map is a plain 2D depth texture, which takes the shadow path
+  off layered rendering entirely, so shadows now render on the iOS Simulator
+  instead of being dropped there.
+  Two defaults change with it: `ShadowSettings.mapResolution` is 2048 (was
+  1024) and `ShadowSettings.coverageCameraDistances` is 3.0 (was 16.0). One
+  map is stretched over the coverage radius, so the shorter reach is what pays
+  for the density; shadows past three camera distances no longer draw, and the
+  distance fade still ends before the window edge. Both remain settable, and
+  no public symbol changed its name or signature.
+
 - The default map draws roads as a street map does: a stroke per class
   whose width is the class's alone (`streetStrokeWidthPoints`, a nominal
   ladder at street zoom, world-locked so it grows under a closing camera),

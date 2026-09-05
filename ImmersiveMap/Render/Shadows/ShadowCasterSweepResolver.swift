@@ -15,12 +15,13 @@ import simd
 /// lies on the sun ray `r + t·L`, so the caster area is the receiver area
 /// swept by `t_max · L.xy` with `t_max = casterHeight / L.z`.
 enum ShadowCasterSweepResolver {
-    /// Cap on the caster height the sweep accounts for, in meters. Matches the
-    /// middle-cascade caster cap: it covers real towers just outside the
-    /// viewport at street zooms, while keeping the sweep to roughly one tile.
-    /// A rare taller caster can still pop at the frustum edge; widening for it
-    /// would tax every frame for a case the far cascade's fade already softens.
-    static let maxCasterHeightMeters = ShadowFrameStateResolver.middleCascadeMaxCasterHeightMeters
+    /// Cap on the caster height the sweep accounts for, in meters. Deliberately
+    /// below the window's own caster cap: it covers real towers just outside
+    /// the viewport at street zooms, while keeping the sweep to roughly one
+    /// tile. A rare taller caster can still pop at the frustum edge; widening
+    /// for it would tax every frame for a case the distance fade already
+    /// softens.
+    static let maxCasterHeightMeters = 500.0
 
     /// World-space offset (render units) to sweep the coverage polygon by, or
     /// nil when the shadow pass cannot run (globe, shadows disabled, sun too

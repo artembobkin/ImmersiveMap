@@ -65,9 +65,6 @@ final class RenderPassGraph {
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .store
             descriptor.depthAttachment.clearDepth = 1.0
-            // Layered rendering: the caster vertex stages route each instance
-            // to its cascade's slice via [[render_target_array_index]].
-            descriptor.renderTargetArrayLength = ShadowCascadeAtlas.cascadeCount
             return descriptor
         }
     }

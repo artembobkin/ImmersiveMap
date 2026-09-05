@@ -45,8 +45,7 @@ final class GroundShadowMaskRenderSubsystem: RenderSubsystem {
         let maskSize = GroundShadowMaskPipeline.maskSize(for: frameContext.drawSize)
         var maskUniform = GroundShadowMaskUniform(
             projectionView: frameContext.cameraMatrices.projectionView,
-            viewportSize: SIMD2<Float>(Float(maskSize.width), Float(maskSize.height)),
-            shadow: shadowState.shadowUniform
+            viewportSize: SIMD2<Float>(Float(maskSize.width), Float(maskSize.height))
         )
         var shadowUniform = shadowState.shadowUniform
         encoder.setFragmentBytes(&maskUniform, length: MemoryLayout<GroundShadowMaskUniform>.stride, index: 0)

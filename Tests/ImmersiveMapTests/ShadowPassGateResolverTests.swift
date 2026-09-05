@@ -6,8 +6,7 @@ import simd
 import XCTest
 
 final class ShadowPassGateResolverTests: XCTestCase {
-    private static let state = ShadowFrameState(lightProjectionViews: [matrix_identity_float4x4,
-                                                                       matrix_identity_float4x4],
+    private static let state = ShadowFrameState(lightProjectionView: matrix_identity_float4x4,
                                                 shadowUniform: .disabled,
                                                 mapResolution: 2048)
 

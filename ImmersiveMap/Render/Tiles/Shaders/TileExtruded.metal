@@ -145,7 +145,7 @@ static inline half extrudedDepthCueShade(half3 worldNormal,
 static inline half4 shadeExtrudedFragment(FragmentIn in,
                                           constant Shadow& shadow,
                                           constant float& metersToWorldZ,
-                                          depth2d_array<float> shadowMap) {
+                                          depth2d<float> shadowMap) {
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap,
                                                 in.worldPosition, float3(in.worldNormal)));
 
@@ -168,7 +168,7 @@ static inline half4 shadeExtrudedFragment(FragmentIn in,
 fragment half4 tileExtrudedFragmentShader(FragmentIn in [[stage_in]],
                                           constant Shadow& shadow [[buffer(5)]],
                                           constant float& metersToWorldZ [[buffer(6)]],
-                                          depth2d_array<float> shadowMap [[texture(0)]]) {
+                                          depth2d<float> shadowMap [[texture(0)]]) {
     return shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
 }
 
@@ -183,33 +183,29 @@ struct ExtrudedIntoImageFragmentOut {
 fragment ExtrudedIntoImageFragmentOut tileExtrudedIntoImageFragmentShader(FragmentIn in [[stage_in]],
                                                                           constant Shadow& shadow [[buffer(5)]],
                                                                           constant float& metersToWorldZ [[buffer(6)]],
-                                                                          depth2d_array<float> shadowMap [[texture(0)]]) {
+                                                                          depth2d<float> shadowMap [[texture(0)]]) {
     ExtrudedIntoImageFragmentOut out;
     out.image = shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
     return out;
 }
 
-// Depth-only path of the shadow map pass. All cascades render in one pass:
-// the geometry draws with instanceCount = cascade count, each instance
-// projects through its cascade's light matrix and lands in the matching
-// slice of the shadow texture array via [[render_target_array_index]].
+// Depth-only path of the shadow map pass: one window, so one draw per
+// geometry into a plain 2D depth attachment (no instancing, no array slice
+// routing).
 struct ExtrudedShadowVertexOut {
     float4 position [[position]];
     float clipDistance [[clip_distance]] [4];
-    uint layer [[render_target_array_index]];
 };
 
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
-                                                              uint instanceID [[instance_id]],
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
                                                               constant float4x4& modelMatrix [[buffer(3)]],
                                           constant float4& localClipBounds [[buffer(4)]]) {
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     ExtrudedShadowVertexOut out;
-    out.position = casters.lightProjectionViews[instanceID] * worldPosition;
+    out.position = casters.lightProjectionView * worldPosition;
     writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
-    out.layer = instanceID;
     return out;
 }
 

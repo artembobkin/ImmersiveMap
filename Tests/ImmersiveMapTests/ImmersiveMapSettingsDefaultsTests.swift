@@ -17,8 +17,8 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         let shadows = ImmersiveMapSettings.default.scene.shadows
         XCTAssertTrue(shadows.isEnabled)
         XCTAssertEqual(shadows.strength, 0.22)
-        XCTAssertEqual(shadows.mapResolution, 1024)
-        XCTAssertEqual(shadows.coverageCameraDistances, 16.0)
+        XCTAssertEqual(shadows.mapResolution, 2048)
+        XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
     }
 
     /// The default shadow is soft and cool: light enough that a shadowed street

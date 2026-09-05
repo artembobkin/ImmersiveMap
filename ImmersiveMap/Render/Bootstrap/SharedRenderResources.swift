@@ -361,11 +361,10 @@ final class SharedRenderResources {
 
     private static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
         let descriptor = MTLTextureDescriptor()
-        descriptor.textureType = .type2DArray
+        descriptor.textureType = .type2D
         descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
         descriptor.width = 1
         descriptor.height = 1
-        descriptor.arrayLength = ShadowCascadeAtlas.cascadeCount
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
         let texture = device.makeTexture(descriptor: descriptor)!
@@ -376,47 +375,22 @@ final class SharedRenderResources {
         guard let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else {
             return texture
         }
-        let clearPasses = makeShadowFallbackClearDescriptors(
-            texture: texture,
-            supportsLayeredRendering: ShadowCascadeAtlas.supportsLayeredRendering(device: device)
-        )
-        for passDescriptor in clearPasses {
-            commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)?.endEncoding()
-        }
+        let passDescriptor = makeShadowFallbackClearDescriptor(texture: texture)
+        commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)?.endEncoding()
         commandBuffer.commit()
         return texture
     }
 
-    /// The no-draw passes that leave every cascade slice of the fallback
-    /// texture cleared to the far plane.
-    ///
-    /// With layered rendering that is one pass writing all slices. Without it
-    /// each slice is cleared by its own pass: a descriptor asking for more
-    /// than one slice does not fail softly there, it fails Metal validation
-    /// and takes the process down, which is what used to happen at launch on
-    /// the iOS Simulator. Every receiver samples this texture while shadows
-    /// are off, so it has to arrive cleared either way.
-    static func makeShadowFallbackClearDescriptors(texture: MTLTexture,
-                                                   supportsLayeredRendering: Bool) -> [MTLRenderPassDescriptor] {
-        func makeDescriptor() -> MTLRenderPassDescriptor {
-            let passDescriptor = MTLRenderPassDescriptor()
-            passDescriptor.depthAttachment.texture = texture
-            passDescriptor.depthAttachment.loadAction = .clear
-            passDescriptor.depthAttachment.storeAction = .store
-            passDescriptor.depthAttachment.clearDepth = 1.0
-            return passDescriptor
-        }
-
-        guard supportsLayeredRendering else {
-            return (0..<ShadowCascadeAtlas.cascadeCount).map { slice in
-                let passDescriptor = makeDescriptor()
-                passDescriptor.depthAttachment.slice = slice
-                return passDescriptor
-            }
-        }
-        let passDescriptor = makeDescriptor()
-        passDescriptor.renderTargetArrayLength = ShadowCascadeAtlas.cascadeCount
-        return [passDescriptor]
+    /// The no-draw pass that leaves the fallback texture cleared to the far
+    /// plane. Every receiver samples this texture while shadows are off, so it
+    /// has to arrive cleared.
+    static func makeShadowFallbackClearDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
+        let passDescriptor = MTLRenderPassDescriptor()
+        passDescriptor.depthAttachment.texture = texture
+        passDescriptor.depthAttachment.loadAction = .clear
+        passDescriptor.depthAttachment.storeAction = .store
+        passDescriptor.depthAttachment.clearDepth = 1.0
+        return passDescriptor
     }
 
     // MARK: - Depth descriptors

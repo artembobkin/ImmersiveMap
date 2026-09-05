@@ -85,11 +85,9 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                                                resolvedPresentation: frameContext.resolvedPresentation)
         let frustum = Frustum(pv: frameContext.cameraMatrices.projectionView)
         // The shadow pass culls with the LIGHT frustum and without the horizon
-        // gate: a model outside the camera view still casts into it. The far
-        // cascade's volume is a superset of the near one, so one cull suffices
-        // (the near viewport's scissor drops the excess).
-        let shadowFrustum = frameContext.shadowFrameState.flatMap { state in
-            state.lightProjectionViews.last.map { Frustum(pv: $0) }
+        // gate: a model outside the camera view still casts into it.
+        let shadowFrustum = frameContext.shadowFrameState.map { state in
+            Frustum(pv: state.lightProjectionView)
         }
         var items: [SceneModelDrawItem] = []
         var shadowItems: [SceneModelDrawItem] = []
@@ -179,7 +177,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             guard let shadowState = frameContext.shadowFrameState,
                   shadowCasterItems.isEmpty == false else { return }
             SceneModelDrawer.drawShadowCasters(renderEncoder: encoder,
-                                               lightProjectionViews: shadowState.lightProjectionViews,
+                                               lightProjectionView: shadowState.lightProjectionView,
                                                items: shadowCasterItems,
                                                pipeline: pipeline,
                                                extrudedDepthState: extrudedDepthState)

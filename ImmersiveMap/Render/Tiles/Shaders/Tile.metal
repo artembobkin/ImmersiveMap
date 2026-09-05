@@ -155,7 +155,7 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileLineFields)]],
                                   constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
                                   constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
-                                  depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                  depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     float shadowFactor;
     if (kGroundShadowMaskEnabled) {

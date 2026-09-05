@@ -62,8 +62,8 @@ The globe has no analytic sun of its own: this light exists only for the flat pr
 public struct ShadowSettings: Equatable, Sendable {
     public var isEnabled: Bool                 // true
     public var strength: Float                 // 0.22
-    public var mapResolution: Int              // 1024
-    public var coverageCameraDistances: Float  // 16.0
+    public var mapResolution: Int              // 2048
+    public var coverageCameraDistances: Float  // 3.0
     public var tint: SIMD3<Float>              // (0.88, 0.92, 1.0)
 }
 ```
@@ -73,13 +73,15 @@ public struct ShadowSettings: Equatable, Sendable {
 | `strength` | How much a shadowed fragment darkens, `0...1`. |
 | `tint` | The cast of the shadowed light: an RGB multiplier applied on top of `strength` where a surface is fully in shadow, and in proportion where it is partly shadowed. White keeps the neutral darkening; the default cool tint gives shadows the bluish cast of light arriving only from the sky, so a shadowed street reads as daylight rather than as a grey stain. The ground, the buildings and the scene models all take the same tint. |
 | `mapResolution` | Side of the square shadow map in pixels, clamped to `256...4096` at render time. The main sharpness-versus-cost lever. |
-| `coverageCameraDistances` | Far-cascade coverage radius, measured in multiples of the camera distance. Beyond it shadows fade out. |
+| `coverageCameraDistances` | Coverage radius of the shadow map, measured in multiples of the camera distance. Beyond it shadows fade out. One map is stretched over the radius, so raising this coarsens every shadow in the frame in proportion, and `mapResolution` is what buys the density back. Values below 2 are clamped up. |
 
 The defaults are deliberately soft: at a strength of 0.22 with the cool tint a fully shadowed white surface comes out around `(0.69, 0.72, 0.78)`, a light blue-grey. Heavier shadows are one line away (`strength: 0.5, tint: SIMD3<Float>(repeating: 1)` is the neutral darkening earlier versions shipped).
 
-Shadows use three cascades, one per slice of a `depth16Unorm` texture array, fitted per frame from the camera as discs around the point the camera looks at. The near cascade covers one camera distance and stays crisp, the middle one three, and the far cascade is stretched over `coverageCameraDistances`, so its texel density scales inversely with the radius you ask for. Raising coverage buys reach and pays in softness at the far end.
+Shadows use one `depth16Unorm` map, fitted per frame as a disc around the point the camera looks at with a radius of `coverageCameraDistances`. Receivers outside it are lit, and the distance fade is placed to reach zero before the edge, so the boundary is never visible as a line. Sampling is one hardware bilinear depth compare per receiver fragment; acne is prevented by moving the sample point off the surface along its normal rather than by a receiver-plane gradient, and walls too oblique for that are declared self-shadowed by their own `N·L` instead of being sampled at all.
 
-The ground reads its shadow from a screen-sized mask that a small pass computes once per frame right after the shadow map (the shadow factor of the ground plane under every pixel), so the many blended layers the ground is drawn in share one cascade lookup per pixel; buildings and scene models sample the cascades per fragment, since their surfaces are not the plane. Solid buildings draw before the ground and the ground depth-tests against them, so nothing under a building is shaded.
+Reach and sharpness therefore trade directly: the same map covers whatever radius you ask for. The defaults, 2048 pixels over three camera distances, put a shadow texel under a meter of ground at street zooms.
+
+The ground reads its shadow from a screen-sized mask that a small pass computes once per frame right after the shadow map (the shadow factor of the ground plane under every pixel), so the many blended layers the ground is drawn in share one lookup per pixel; buildings and scene models sample the map per fragment, since their surfaces are not the plane. Solid buildings draw before the ground and the ground depth-tests against them, so nothing under a building is shaded.
 
 Coverage is expressed in camera **distance**, not in a screen or world rectangle, precisely because distance is independent of pitch and bearing: tilting or rotating the camera never changes how far shadows reach or how sharp they are.
 

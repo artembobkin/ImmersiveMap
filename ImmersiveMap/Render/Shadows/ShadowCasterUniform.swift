@@ -3,24 +3,10 @@
 
 import simd
 
-/// Light matrices of the caster pass, one per cascade; the layout mirrors
+/// Light matrix of the caster pass; the layout mirrors
 /// `ShadowCasterMatrices` in RenderUniforms.h (pinned by
-/// `ShadowUniformLayoutTests`). The caster vertex stages index the array by
-/// `[[instance_id]]` and route each instance to the matching slice of the
-/// shadow texture array, so all cascades render in one pass with one draw per
-/// geometry.
+/// `ShadowUniformLayoutTests`). One shadow window means one matrix, so a
+/// caster geometry renders with one draw and no instancing.
 struct ShadowCasterUniform {
-    var near: matrix_float4x4
-    var middle: matrix_float4x4
-    var far: matrix_float4x4
-
-    /// `lightProjectionViews` is `[near, middle, far]`, the order
-    /// `ShadowFrameStateResolver` produces and `Shadow.cascades` samples.
-    init(lightProjectionViews: [matrix_float4x4]) {
-        precondition(lightProjectionViews.count == ShadowCascadeAtlas.cascadeCount,
-                     "Expected one light matrix per cascade")
-        near = lightProjectionViews[0]
-        middle = lightProjectionViews[1]
-        far = lightProjectionViews[2]
-    }
+    var lightProjectionView: matrix_float4x4
 }
