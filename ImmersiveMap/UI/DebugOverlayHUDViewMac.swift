@@ -44,6 +44,12 @@ final class DebugOverlayHUDView: NSView {
         /// Fraction of a control row given to its name; the control takes the
         /// rest.
         static let controlLabelFraction: CGFloat = 0.46
+        /// Kept clear on the right for the vertical scroller. An overlay
+        /// scroller floats over the content and a legacy one takes width out
+        /// of it, and which of the two AppKit uses is a system setting and the
+        /// kind of pointing device, not something the panel decides. Reserving
+        /// the strip is what keeps a switch from ending up under either.
+        static let scrollerGutter: CGFloat = 18.0
     }
 
     private let containerView = DebugOverlayFlippedView()
@@ -367,11 +373,17 @@ final class DebugOverlayHUDView: NSView {
                                   width: panelWidth,
                                   height: max(0, panelHeight - scrollTop))
 
-        let contentWidth = max(1, panelWidth - Layout.contentInset * 2)
+        // The scrolled width is the scroll view's, not the panel's: a legacy
+        // scroller takes its width out of the content, and laying out to the
+        // panel width instead pushed every switch out past the right edge.
+        let scrolledWidth = scrollView.contentSize.width
+        let contentWidth = DebugOverlayPanelLayout.scrolledContentWidth(scrollWidth: scrolledWidth,
+                                                                        leadingInset: Layout.contentInset,
+                                                                        scrollerGutter: Layout.scrollerGutter)
         let contentHeight = layoutGroups(contentWidth: contentWidth)
         contentView.frame = CGRect(x: 0,
                                    y: 0,
-                                   width: scrollView.contentSize.width,
+                                   width: scrolledWidth,
                                    height: max(contentHeight, scrollView.contentSize.height))
     }
 

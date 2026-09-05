@@ -108,4 +108,42 @@ final class DebugOverlayPanelLayoutTests: XCTestCase {
     func testOverflowTextCountsWhatIsNotShown() {
         XCTAssertEqual(DebugOverlayHUDTextComposer.tilesOverflowText(count: 6), "+6 more")
     }
+
+    // MARK: - Room for the scroller
+
+    /// The bug this pins: rows were laid out to the panel's width, so with a
+    /// legacy scroller (a system setting, not the panel's choice) every
+    /// right-aligned switch ran out past the right edge and under the scroller.
+    func testARightAlignedControlClearsTheScroller() {
+        let panelWidth: CGFloat = 600
+        let inset: CGFloat = 10
+        let gutter: CGFloat = 18
+
+        for scrollerWidth in [CGFloat(0), 15, 16] {
+            let scrollWidth = panelWidth - scrollerWidth
+            let trailing = DebugOverlayPanelLayout.rowTrailingEdge(scrollWidth: scrollWidth,
+                                                                   leadingInset: inset,
+                                                                   scrollerGutter: gutter)
+
+            XCTAssertLessThanOrEqual(trailing, scrollWidth - gutter + 0.001,
+                                     "A control ending at \(trailing) sits under a \(scrollerWidth)pt scroller")
+            XCTAssertLessThanOrEqual(trailing, panelWidth,
+                                     "And it must never leave the panel at all")
+        }
+    }
+
+    func testTheContentWidthNeverGoesNegative() {
+        XCTAssertEqual(DebugOverlayPanelLayout.scrolledContentWidth(scrollWidth: 4,
+                                                                    leadingInset: 10,
+                                                                    scrollerGutter: 18),
+                       1,
+                       "A panel narrower than its own insets still lays out, at a floor of one point")
+    }
+
+    func testTheContentWidthIsTheSpaceBetweenTheInsetAndTheGutter() {
+        XCTAssertEqual(DebugOverlayPanelLayout.scrolledContentWidth(scrollWidth: 600,
+                                                                    leadingInset: 10,
+                                                                    scrollerGutter: 18),
+                       572)
+    }
 }
