@@ -57,9 +57,10 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         name = variant.rawValue
         version = ImmersiveMapBenchEngine.packageVersion()
         // BENCH_CONTINUOUS=1 keeps the display link running for the whole
-        // run instead of the on-demand loop's pause after every one-shot
-        // frame, for A/B measurements of the pause/resume cost on a
-        // programmatic pan (a jump requests one frame and no activity).
+        // run, the control for the on-demand loop's behaviour on a
+        // programmatic pan: the engine keeps the link awake for 100 ms after
+        // every jump that changes the position, and this run shows what the
+        // pan looks like with no pause at all.
         let continuous = ProcessInfo.processInfo.environment["BENCH_CONTINUOUS"] == "1"
         let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: continuous,
                                                                  interactionFramesPerSecond: targetFPS,

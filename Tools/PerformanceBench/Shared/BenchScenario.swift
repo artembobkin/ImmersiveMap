@@ -33,8 +33,8 @@ struct BenchScenarioScript: Sendable {
     /// style load, first tiles, atlas uploads.
     let warmUp: TimeInterval
     let tour: [BenchShot]
-    /// Programmatic pan: the camera is set once per display refresh from a
-    /// strict timer at the display rate, the way a drag gesture drives it.
+    /// Programmatic pan: the camera is set from a strict timer at the
+    /// display rate, the cadence a drag gesture delivers.
     let panDuration: TimeInterval
     let panStart: BenchPose
     let panPose: @Sendable (Double) -> BenchPose

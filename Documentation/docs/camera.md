@@ -56,7 +56,7 @@ public func currentCameraSnapshot() -> ImmersiveMapCameraSnapshot?
 
 `jump` is instant. `fly` animates, and its `completion` fires exactly once: `true` on arrival, `false` when the flight was superseded by another camera command, cancelled, or taken over by a user gesture.
 
-`jump` is also safe to call once per frame, for an app that drives the camera itself (its own animation curve, a follow camera fed by a location stream): a jump keeps the render loop awake at the interaction frame rate for a short grace that every further jump extends, so a series of jumps runs the display link continuously the way a gesture does, and a lone jump lets it sleep again after about a dozen frames.
+`jump` is also safe to call once per frame, for an app that drives the camera itself along its own animation curve: a jump that changes the position keeps the render loop awake at the interaction frame rate (see [Performance and debugging](performance-and-debug.md)) for 100 ms, and every further jump restarts the 100 ms, so a series of jumps runs the display link continuously the way a gesture does, and a lone jump lets it sleep again 100 ms later. A source slower than that, such as a location fix once a second, gets one frame per jump and the loop sleeps in between, which is the cheap case.
 
 ```swift
 public struct CameraFlightOptions: Sendable, Equatable {

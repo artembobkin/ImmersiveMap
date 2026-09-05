@@ -6,7 +6,7 @@ Three unrelated things that share one property: they cost nothing to leave alone
 
 The map does not run a display link at 60 Hz waiting for something to happen. The link is normally **paused**, and it resumes for two reasons:
 
-- an **activity** is registered (a gesture in progress, a camera flight, label fades, avatar or model animations) and runs until it ends;
+- an **activity** is registered (a gesture in progress, a camera flight, label fades, avatar or model animations, and the 100 ms after a `jump(to:)` that changed the position, so a camera driven once per frame from outside runs like a gesture) and runs until it ends;
 - a one-shot invalidation asks for a single frame (a tile arrived, a marker set changed, a setting changed).
 
 An idle map with idle markers, idle avatars and idle routes costs nothing. Every controller in the public API requests frames for you, so ordinary use needs no thought here. It matters when you reach past the API: state that should redraw but never asks for a frame simply will not appear until something else invalidates.

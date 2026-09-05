@@ -14,6 +14,7 @@ import UIKit
 /// - `BENCH_CACHE`: `warm` (default) or `cold` (disk caches cleared before the map is made)
 /// - `BENCH_FPS`: display rate to request, default 120
 /// - `BENCH_EXIT`: `1` (default) to quit when the run is written
+/// - `BENCH_CONTINUOUS`, `BENCH_ROOFS`: ImmersiveMapBench only, see its engine
 struct BenchRootScene: Scene {
     let catalog: BenchEngineCatalog
 

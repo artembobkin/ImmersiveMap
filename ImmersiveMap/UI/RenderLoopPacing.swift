@@ -17,8 +17,8 @@ final class RenderLoopPacing {
         /// A camera position set from outside through
         /// `ImmersiveMapCameraController.jump`: an app driving the camera
         /// once per frame (its own animation, a follow camera fed by a
-        /// location stream). Held for a short grace after every jump so a
-        /// series of jumps keeps the display link running the way a gesture
+        /// location stream). Held for a short grace period after every jump
+        /// so a series of jumps keeps the display link running the way a gesture
         /// does, instead of pausing it after each one-shot frame and
         /// resuming it on the next jump, which loses vsyncs.
         case externalCameraDrive = "external camera drive"
@@ -177,15 +177,15 @@ final class RenderLoopPacing {
     }
 
     /// A camera position was set from outside at `now`: holds the
-    /// `.externalCameraDrive` activity until the grace after it has passed.
-    /// Every further set pushes the deadline.
+    /// `.externalCameraDrive` activity for the grace period from `now`.
+    /// Every further set restarts the period.
     func noteExternalCameraDrive(at now: CFTimeInterval) {
         externalCameraDriveDeadline = now + Self.externalCameraDriveGraceSeconds
         activeRenderingActivities.insert(.externalCameraDrive)
     }
 
     /// Called once per display-link tick: drops the external camera drive
-    /// activity once its grace has passed, so the link can pause again.
+    /// activity once its grace period has passed, so the link can pause again.
     func expireExternalCameraDrive(at now: CFTimeInterval) {
         guard let deadline = externalCameraDriveDeadline, now >= deadline else {
             return

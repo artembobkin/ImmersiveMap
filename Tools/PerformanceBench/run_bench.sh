@@ -45,12 +45,21 @@ for combo in "$@"; do
     *) echo "unknown engine $engine"; exit 1 ;;
   esac
   index=$((index + 1))
+  # BENCH_FPS, BENCH_EXIT, BENCH_CONTINUOUS and BENCH_ROOFS ride along from
+  # this shell's environment when they are set.
+  extra=""
+  for var in BENCH_FPS BENCH_EXIT BENCH_CONTINUOUS BENCH_ROOFS; do
+    eval "value=\${$var:-}"
+    if [ -n "$value" ]; then
+      extra="$extra,\"$var\":\"$value\""
+    fi
+  done
   stamp="$(date +%H%M%S)"
   name="run-$index-$engine-$cache-$scenario-$stamp"
   log="$OUT/$name.log"
   echo "== run $index: $engine / $cache / $scenario -> $log"
   xcrun devicectl device process launch --device "$DEVICE" --console --terminate-existing \
-    --environment-variables "{\"BENCH_ENGINE\":\"$engine\",\"BENCH_CACHE\":\"$cache\",\"BENCH_SCENARIO\":\"$scenario\"}" \
+    --environment-variables "{\"BENCH_ENGINE\":\"$engine\",\"BENCH_CACHE\":\"$cache\",\"BENCH_SCENARIO\":\"$scenario\"$extra}" \
     "$BUNDLE_ID" > "$log" 2>&1 || echo "   launch returned $? (see log)"
   awk '/BENCH_RESULT_BEGIN/{flag=1; next} /BENCH_RESULT_END/{flag=0} flag' "$log" \
     > "$OUT/$name.json"
