@@ -39,7 +39,7 @@ final class DebugOverlayHUDView: NSView {
         /// map every time a number gained a digit. Wide enough that a
         /// diagnostics line does not wrap and a slider has travel worth
         /// aiming with.
-        static let panelWidth: CGFloat = 470.0
+        static let panelWidth: CGFloat = 600.0
         static let collapsedWidth: CGFloat = 170.0
         /// Fraction of a control row given to its name; the control takes the
         /// rest.
