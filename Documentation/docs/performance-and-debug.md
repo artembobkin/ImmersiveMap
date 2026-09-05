@@ -91,7 +91,7 @@ On macOS the panel is a full-height rail flush against the left edge of the map,
 
 Because the macOS panel is pinned to the left edge and takes the height it can have, `leftPadding` and `topPadding` no longer position it there; they still place the UIKit panel, which keeps the tabbed layout. `sectionSpacing`, `coordinateScale` and `diagnosticsScale` apply on both.
 
-The **Shadows** group edits the live [shadow settings](buildings-and-shadows.md): on/off, strength, shadow map size, coverage, and the sun's azimuth and elevation. These are real settings, not debug overrides, so they take the same road as a change made through a modifier, and a later settings update from the view hierarchy overrides them: the app's own value stays the source of truth and the panel only borrows it in between.
+The **Shadows** group edits the live [shadow settings](buildings-and-shadows.md): on/off, strength, shadow map size, coverage, and the sun's azimuth and elevation. They are applied the way any settings change is, so no renderer is rebuilt for a drag, and what the panel is dragged to holds: it rides on top of the settings the app supplies, because SwiftUI re-sends its own value on every update of the view hierarchy and would otherwise revert a slider as soon as anything else on screen changed. The panel wins only while it is on; turning it off drops what was dragged and the app's own values come straight back.
 
 It is a development aid. It does not appear in a [tour video export](tour-video-export.md), same as the attribution badge, and it should not ship enabled.
 

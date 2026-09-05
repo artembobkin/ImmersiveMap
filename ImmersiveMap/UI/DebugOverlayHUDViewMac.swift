@@ -31,13 +31,14 @@ final class DebugOverlayHUDView: NSView {
         static let controlSpacing: CGFloat = 6.0
         static let groupSpacing: CGFloat = 16.0
         static let traceStatusHeight: CGFloat = 24.0
-        static let cornerRadius: CGFloat = 10.0
         static let backgroundAlpha: CGFloat = 0.46
         /// The panel is a fixed-width rail, not a card that grows with its
         /// text: a width that followed the longest diagnostics line moved the
-        /// map every time a number gained a digit.
-        static let panelWidth: CGFloat = 330.0
-        static let collapsedWidth: CGFloat = 150.0
+        /// map every time a number gained a digit. Wide enough that a
+        /// diagnostics line does not wrap and a slider has travel worth
+        /// aiming with.
+        static let panelWidth: CGFloat = 420.0
+        static let collapsedWidth: CGFloat = 170.0
         /// Fraction of a control row given to its name; the control takes the
         /// rest.
         static let controlLabelFraction: CGFloat = 0.46
@@ -143,11 +144,9 @@ final class DebugOverlayHUDView: NSView {
 
         containerView.wantsLayer = true
         containerView.layer?.backgroundColor = NSColor.black.withAlphaComponent(Layout.backgroundAlpha).cgColor
-        containerView.layer?.cornerRadius = Layout.cornerRadius
-        // Flush against the left edge: only the two corners that are actually
-        // inside the map are rounded, so the panel reads as a rail attached to
-        // the window rather than as a card that missed its margin.
-        containerView.layer?.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        // Square corners: the panel is a rail attached to the window edge, and
+        // a rounded corner there reads as a card that missed its margin.
+        // masksToBounds stays, it is what keeps the scrolled column inside.
         containerView.layer?.masksToBounds = true
         addSubview(containerView)
 
@@ -203,6 +202,8 @@ final class DebugOverlayHUDView: NSView {
                         range: DebugOverlayShadowSettingsPlanner.elevationRange,
                         action: #selector(sunElevationSliderChanged))
 
+        refuseFocus(tileGridDensityControl)
+        refuseFocus(shadowMapResolutionControl)
         tileGridDensityControl.target = self
         tileGridDensityControl.action = #selector(tileGridDensityControlChanged)
         tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: DebugTileGridDensity.standard)
@@ -600,6 +601,18 @@ final class DebugOverlayHUDView: NSView {
         switchControl.target = self
         switchControl.action = action
         switchControl.controlSize = .small
+        refuseFocus(switchControl)
+    }
+
+    /// Keeps a control out of the responder chain.
+    ///
+    /// AppKit reveals whatever just became first responder by scrolling its
+    /// enclosing scroll view, so clicking a switch halfway down the column
+    /// scrolled the panel under the pointer. Nothing here is driven by the
+    /// keyboard, and the map must keep key focus anyway, so no control in the
+    /// panel accepts it.
+    private func refuseFocus(_ control: NSControl) {
+        control.refusesFirstResponder = true
     }
 
     private func configureSlider(_ slider: NSSlider,
@@ -611,9 +624,11 @@ final class DebugOverlayHUDView: NSView {
         slider.controlSize = .small
         slider.target = self
         slider.action = action
+        refuseFocus(slider)
     }
 
     private func configureBorderlessButton(_ button: NSButton) {
+        refuseFocus(button)
         button.isBordered = false
         button.bezelStyle = .regularSquare
         button.imagePosition = .imageOnly
@@ -624,6 +639,7 @@ final class DebugOverlayHUDView: NSView {
                                        title: String,
                                        symbolName: String?,
                                        action: Selector) {
+        refuseFocus(button)
         button.isBordered = false
         button.wantsLayer = true
         button.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor

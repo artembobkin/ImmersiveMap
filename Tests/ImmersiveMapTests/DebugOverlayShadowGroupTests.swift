@@ -136,3 +136,77 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.elevationTitle(54.2), "Sun elevation 54°")
     }
 }
+
+/// The panel's live edits have to survive SwiftUI handing the map its own
+/// settings value again, which is what `updateNSView` does on every
+/// re-evaluation of the hierarchy.
+final class DebugOverlaySettingsOverrideTests: XCTestCase {
+    private func settingsWithDebugPanel(_ isEnabled: Bool) -> ImmersiveMapSettings {
+        var settings = ImmersiveMapSettings.default
+        settings.debug.enableDebugPanel = isEnabled
+        return settings
+    }
+
+    func testAnEmptyOverrideChangesNothing() {
+        let settings = settingsWithDebugPanel(true)
+
+        XCTAssertEqual(DebugOverlaySettingsOverride().applied(to: settings), settings)
+    }
+
+    func testTheOverrideSurvivesTheAppResendingItsOwnSettings() {
+        var override = DebugOverlaySettingsOverride()
+        var dragged = ImmersiveMapSettings.ShadowSettings()
+        dragged.strength = 0.71
+        dragged.coverageCameraDistances = 8
+        override.shadows = dragged
+        override.sunDirection = DebugOverlaySunAngles.direction(azimuthDegrees: 30, elevationDegrees: 20)
+
+        // The app's own value, which SwiftUI re-sends unchanged.
+        let resent = settingsWithDebugPanel(true)
+        let applied = override.applied(to: resent)
+
+        XCTAssertEqual(applied.scene.shadows.strength, 0.71)
+        XCTAssertEqual(applied.scene.shadows.coverageCameraDistances, 8)
+        XCTAssertEqual(DebugOverlaySunAngles.angles(direction: applied.scene.light.direction).azimuthDegrees,
+                       30,
+                       accuracy: 1e-3)
+        // Nothing outside the two branches the panel edits may move.
+        XCTAssertEqual(applied.tiles, resent.tiles)
+        XCTAssertEqual(applied.camera, resent.camera)
+        XCTAssertEqual(applied.scene.atmosphere, resent.scene.atmosphere)
+    }
+
+    func testOneBranchOverriddenLeavesTheOtherAlone() {
+        var override = DebugOverlaySettingsOverride()
+        override.sunDirection = DebugOverlaySunAngles.direction(azimuthDegrees: 90, elevationDegrees: 45)
+        let settings = settingsWithDebugPanel(true)
+
+        let applied = override.applied(to: settings)
+
+        XCTAssertEqual(applied.scene.shadows, settings.scene.shadows)
+        XCTAssertNotEqual(applied.scene.light.direction, settings.scene.light.direction)
+    }
+
+    /// With the panel off the app is back in charge, whatever was dragged
+    /// while it was open.
+    func testTheOverrideDoesNotApplyWithTheDebugPanelOff() {
+        var override = DebugOverlaySettingsOverride()
+        override.shadows = ImmersiveMapSettings.ShadowSettings(isEnabled: false)
+        let settings = settingsWithDebugPanel(false)
+
+        XCTAssertEqual(override.applied(to: settings), settings)
+    }
+
+    func testClearingDropsEverything() {
+        var override = DebugOverlaySettingsOverride()
+        override.shadows = ImmersiveMapSettings.ShadowSettings()
+        override.sunDirection = SIMD3<Float>(0, 0, 1)
+        XCTAssertFalse(override.isEmpty)
+
+        override.clear()
+
+        XCTAssertTrue(override.isEmpty)
+        let settings = settingsWithDebugPanel(true)
+        XCTAssertEqual(override.applied(to: settings), settings)
+    }
+}

@@ -20,6 +20,8 @@ final class ImmersiveMapDebugOverlayRuntime {
     /// The settings the map is running with, so the panel can hand back a
     /// whole value with one branch changed.
     private var currentSettings: ImmersiveMapSettings?
+    /// What the panel has been dragged to; see `DebugOverlaySettingsOverride`.
+    private var settingsOverride = DebugOverlaySettingsOverride()
 
     /// Settings the debug panel asks for. The host runtime applies them the
     /// way it applies any others, so a change here goes through the same
@@ -103,11 +105,13 @@ final class ImmersiveMapDebugOverlayRuntime {
         // still carries the tabbed layout and has no such group yet.
         hudView.onShadowSettingsChanged = { [weak self] shadows in
             guard let self, var settings = currentSettings else { return }
+            settingsOverride.shadows = shadows
             settings.scene.shadows = shadows
             onSettingsChangeRequested?(settings)
         }
         hudView.onSunDirectionChanged = { [weak self] direction in
             guard let self, var settings = currentSettings else { return }
+            settingsOverride.sunDirection = direction
             settings.scene.light.direction = direction
             onSettingsChangeRequested?(settings)
         }
@@ -119,6 +123,17 @@ final class ImmersiveMapDebugOverlayRuntime {
 
     deinit {
         hudSnapshotTimer?.invalidate()
+    }
+
+    /// The settings the map should actually run with: the ones it was given,
+    /// with whatever the debug panel has been dragged to on top. Turning the
+    /// panel off drops the overrides, so the app's own values come straight
+    /// back.
+    func applyingOverrides(to settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
+        if settings.debug.enableDebugPanel == false {
+            settingsOverride.clear()
+        }
+        return settingsOverride.applied(to: settings)
     }
 
     func layout(in bounds: CGRect, safeAreaTopInset: CGFloat) {

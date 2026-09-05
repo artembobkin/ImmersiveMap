@@ -19,7 +19,10 @@ once the public API stabilizes.
   `DebugSettings.topPadding` therefore no longer position the macOS panel (it
   is pinned to the edge and takes the height it can have); both still place the
   UIKit panel, which keeps the tabbed layout for now, and no public symbol
-  changed its name or signature.
+  changed its name or signature. What the shadow group is dragged to holds on
+  top of the settings the app supplies for as long as the panel is on, since
+  SwiftUI re-sends its own value on every update of the view hierarchy and
+  would otherwise revert a slider as soon as anything else on screen changed.
 
 - Shadows are one map instead of three cascades, and the sampler is one
   hardware bilinear depth compare instead of a 3x3 tent. The window is fitted

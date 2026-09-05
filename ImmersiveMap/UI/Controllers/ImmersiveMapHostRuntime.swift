@@ -151,6 +151,10 @@ final class ImmersiveMapHostRuntime {
     /// to update the existing renderer in place or recreate it for changes
     /// that affect caches, prepared data, or GPU resources.
     func applySettings(_ settings: ImmersiveMapSettings) {
+        // The debug panel's live edits ride on top: SwiftUI re-sends the app's
+        // own value on every update of the hierarchy, which would otherwise
+        // revert a slider as soon as anything else on screen changed.
+        let settings = runtimeGraph.debugOverlayRuntime.applyingOverrides(to: settings)
         let currentSettings = runtimeGraph.cameraRuntime.currentSettings
         guard currentSettings != settings else {
             return
