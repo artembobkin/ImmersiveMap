@@ -19,13 +19,18 @@ final class ImmersiveMapCameraCommandHandler {
     func handle(_ command: ImmersiveMapCameraCommand) {
         switch command {
         case .jump(let position):
-            // A jump is a camera set from outside. Applied once, it is a
-            // one-shot frame; applied once per frame by an app driving the
-            // camera itself, it must keep the display link running the way a
-            // gesture does, or every frame pauses and resumes the link.
-            if applyCameraPosition(position) {
-                cameraRuntime.noteExternalCameraDrive()
-            }
+            // The controller's jump goes where it says, every time: also
+            // back to the position of the previous jump after a gesture
+            // moved the camera away. The dedup against the last declared
+            // position (`applyCameraPosition`) belongs to the SwiftUI
+            // modifier path alone, which re-declares the same position on
+            // every update and must not snap the camera back after a
+            // gesture. Applied once per frame by an app driving the camera
+            // itself, the jump keeps the display link running the way a
+            // gesture does, or every frame would pause and resume the link.
+            cameraAnimationRuntime.cancelAnimations()
+            cameraRuntime.setCameraPosition(position)
+            cameraRuntime.noteExternalCameraDrive()
         case .fly(let position, let options, let completion):
             cameraAnimationRuntime.startCameraFlight(to: position,
                                                      options: options,
@@ -47,16 +52,15 @@ final class ImmersiveMapCameraCommandHandler {
         }
     }
 
-    /// Returns whether the position differed from the applied one and was
-    /// applied.
-    @discardableResult
-    func applyCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition?) -> Bool {
+    /// The SwiftUI-declared position: applied only when it differs from the
+    /// last declared one, since SwiftUI re-declares it on every update and a
+    /// repeat must not move a camera the user has since dragged elsewhere.
+    func applyCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition?) {
         guard cameraRuntime.needsCameraPositionUpdate(cameraPosition) else {
-            return false
+            return
         }
 
         cameraAnimationRuntime.cancelAnimations()
         cameraRuntime.applyCameraPosition(cameraPosition)
-        return true
     }
 }
