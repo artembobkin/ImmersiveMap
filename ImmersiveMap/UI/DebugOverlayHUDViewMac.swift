@@ -15,6 +15,8 @@ import simd
 /// two groups at once (the stats while a control is toggled, the tile list
 /// while the shadow settings move), so every group is laid out at once, the
 /// panel takes the full window height, and what does not fit is scrolled to.
+/// The one group whose height follows the data, the tile list, is last, so a
+/// tile arriving cannot shove a control the pointer is aimed at.
 ///
 /// Layout is manual and top-down (the container and the scrolled content are
 /// both flipped): one cursor walks the groups in order, which is why adding a
@@ -37,7 +39,7 @@ final class DebugOverlayHUDView: NSView {
         /// map every time a number gained a digit. Wide enough that a
         /// diagnostics line does not wrap and a slider has travel worth
         /// aiming with.
-        static let panelWidth: CGFloat = 420.0
+        static let panelWidth: CGFloat = 470.0
         static let collapsedWidth: CGFloat = 170.0
         /// Fraction of a control row given to its name; the control takes the
         /// rest.
@@ -249,7 +251,6 @@ final class DebugOverlayHUDView: NSView {
     /// Everything that scrolls, in the order it is laid out.
     private var scrolledSubviews: [NSView] {
         [statsGroupLabel, zoomLabel, latLonLabel, diagnosticsLabel,
-         tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView,
          baseLabelsGroupLabel, baseLabelTraceButton, baseLabelTraceStatusLabel,
          roadLabelTilesLabel, roadLabelTilesSwitch,
          baseLabelBoundsLabel, baseLabelBoundsSwitch,
@@ -262,7 +263,8 @@ final class DebugOverlayHUDView: NSView {
          sunElevationLabel, sunElevationSlider,
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
-         wireframeLabel, wireframeSwitch, surfaceModeButton]
+         wireframeLabel, wireframeSwitch, surfaceModeButton,
+         tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
 
     // MARK: - Public API (matches the UIKit version)
@@ -390,20 +392,6 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutTextRow(diagnosticsLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         cursor += Layout.groupSpacing
 
-        // Tiles
-        cursor = layoutGroupHeader(tilesGroupLabel, at: cursor, contentWidth: contentWidth)
-        cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
-        cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
-        let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: contentWidth)
-        if tilesListHeight > 0 {
-            cursor = layoutFullWidthRow(tilesStatusListView, at: cursor, contentWidth: contentWidth, height: tilesListHeight)
-            tilesStatusListView.isHidden = false
-        } else {
-            tilesStatusListView.isHidden = true
-        }
-        cursor += Layout.groupSpacing
-
         // Base labels
         cursor = layoutGroupHeader(baseLabelsGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(roadLabelTilesLabel, roadLabelTilesSwitch, at: cursor, contentWidth: contentWidth)
@@ -431,6 +419,23 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor += Layout.groupSpacing
+
+        // Tiles last, and deliberately so: the list is the only thing in the
+        // panel whose height follows the data (seventeen tiles while a zoom
+        // settles, three once it has), and anything under it was shoved up and
+        // down every time a tile arrived. Nothing is under it now.
+        cursor = layoutGroupHeader(tilesGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
+        cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: contentWidth)
+        if tilesListHeight > 0 {
+            cursor = layoutFullWidthRow(tilesStatusListView, at: cursor, contentWidth: contentWidth, height: tilesListHeight)
+            tilesStatusListView.isHidden = false
+        } else {
+            tilesStatusListView.isHidden = true
+        }
 
         return cursor + Layout.contentInset
     }

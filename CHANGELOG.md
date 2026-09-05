@@ -12,8 +12,10 @@ once the public API stabilizes.
 
 - The macOS debug panel is a full-height rail flush against the left edge of
   the map instead of a floating card with a tab picker. Its groups (Stats,
-  Tiles, Base labels, Shadows, Controls) are stacked in one scrolling column,
-  so nothing is hidden behind a tab any more, and a new **Shadows** group edits
+  Base labels, Shadows, Controls, Tiles) are stacked in one scrolling column,
+  so nothing is hidden behind a tab any more; the tile list is last because it
+  is the one group whose height follows the data, and anything below it moved
+  every time a tile arrived. A new **Shadows** group edits
   the live shadow settings: on/off, strength, map size, coverage, and the sun's
   azimuth and elevation. `DebugSettings.leftPadding` and
   `DebugSettings.topPadding` therefore no longer position the macOS panel (it
