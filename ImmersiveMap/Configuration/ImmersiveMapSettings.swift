@@ -92,9 +92,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public var maximumPitch: Float
         /// The lowest pitch the camera can reach, in radians from straight down.
-        /// Zero (the default) allows the top-down view. On the globe the pitch
-        /// ceiling eases toward zero as the camera zooms out; a floor above that
-        /// ceiling yields to it, so a zoomed-out globe still levels off.
+        /// Zero (the default) allows the top-down view. A floor above the
+        /// ceiling yields to it.
         public var minimumPitch: Float
         /// The lowest zoom the camera can reach. Gestures, zoom commands and
         /// camera flights are all clamped to it, so raising it keeps the map from
@@ -110,7 +109,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var maximumAbsoluteBearing: Float?
         public var globeMinimumAbsoluteBearing: Float
         public var globeBearingUnlockZoom: Double
-        public var globePitchUnlockZoom: Double
         public var highZoomPitchExtension: Float
         public var highZoomPitchExtensionStartZoom: Double
         public var highZoomPitchExtensionEndZoom: Double
@@ -157,7 +155,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     maximumAbsoluteBearing: Float? = nil,
                     globeMinimumAbsoluteBearing: Float,
                     globeBearingUnlockZoom: Double,
-                    globePitchUnlockZoom: Double = 3.0,
                     highZoomPitchExtension: Float = 0,
                     highZoomPitchExtensionStartZoom: Double = 15.0,
                     highZoomPitchExtensionEndZoom: Double = 16.0,
@@ -194,7 +191,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.maximumAbsoluteBearing = maximumAbsoluteBearing
             self.globeMinimumAbsoluteBearing = globeMinimumAbsoluteBearing
             self.globeBearingUnlockZoom = globeBearingUnlockZoom
-            self.globePitchUnlockZoom = globePitchUnlockZoom
             self.highZoomPitchExtension = highZoomPitchExtension
             self.highZoomPitchExtensionStartZoom = highZoomPitchExtensionStartZoom
             self.highZoomPitchExtensionEndZoom = highZoomPitchExtensionEndZoom
@@ -630,6 +626,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// Whether the map has labels at all: place names, points of
+        /// interest, house numbers and road names alike. Off, the parser
+        /// bakes no text into the prepared tiles (no name resolution, no
+        /// shaping, no glyph runs on the GPU), and with nothing to place
+        /// the label layer and the per-frame placement and collision work
+        /// behind it are skipped. Baked at parse time: toggling re-parses
+        /// the tiles, like any other label setting. On by default.
+        public var isEnabled: Bool
         public var language: LabelLanguage
         public var fallbackPolicy: LabelFallbackPolicy
         public var houseNumbers: HouseNumberSettings
@@ -638,13 +642,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var base: BaseSettings
         public var road: RoadSettings
 
-        public init(language: LabelLanguage,
+        public init(isEnabled: Bool = true,
+                    language: LabelLanguage,
                     fallbackPolicy: LabelFallbackPolicy = .international,
                     houseNumbers: HouseNumberSettings,
                     settlementVisibility: SettlementVisibilitySettings = SettlementVisibilitySettings(),
                     landmarks: LandmarkSettings = LandmarkSettings(),
                     base: BaseSettings,
                     road: RoadSettings) {
+            self.isEnabled = isEnabled
             self.language = language
             self.fallbackPolicy = fallbackPolicy
             self.houseNumbers = houseNumbers
@@ -727,10 +733,38 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// tilting or rotating the camera never changes shadow coverage or
         /// sharpness. Beyond the radius shadows fade out. There is one map
         /// stretched over the radius, so raising this coarsens every shadow in
-        /// the frame in proportion (and `mapResolution` is what buys the
-        /// density back); values below 2 are clamped up, because the fade band
-        /// would otherwise end inside the nearest visible ground.
+        /// the frame in proportion, and `mapResolution` is what buys the
+        /// density back. Clamped to `0.25...48`. Shadows fade out over the
+        /// outer quarter of the radius, so the window's edge is never visible
+        /// as a circle at any coverage. Values well under 1 are a debugging
+        /// aid: they wind the window down onto the point the camera looks at,
+        /// which is how the shadow map's texel grid is looked at up close.
         public var coverageCameraDistances: Float
+        /// Tallest building the shadow window is fitted for, in meters.
+        /// Expected range: `10...500`, clamped at render time.
+        ///
+        /// The window has to reach beyond its own disc by
+        /// `height * |L.xy| / L.z`, which is how far a caster of that height
+        /// throws its shadow into the disc: under a midday sun about 0.72 of
+        /// the height. That margin is added to the window whether or not a
+        /// building that tall is anywhere in sight, and it is spent on texels.
+        /// At a street camera with a 1000 m limit it was three quarters of the
+        /// window, which is why coverage seemed to do nothing to the sharpness
+        /// of a shadow's edge: it was moving the other quarter.
+        ///
+        /// Set it to the tallest building actually around, and the texels go
+        /// to the shadows on screen. Set it too low and a building above it
+        /// stops casting into the window at all.
+        ///
+        /// The default is the range's floor. It is chosen for the sharpness of
+        /// the shadows in a street view, where the margin is pure cost: the
+        /// window is fitted to the visible ground anyway, and a taller limit
+        /// only widens the rim that a caster standing at the window's edge
+        /// would need. What it costs is exactly that rim: a tall building at
+        /// the edge of the visible ground loses the part of its shadow thrown
+        /// from above 10 m. Scenes staged around towers (a skyline flyover)
+        /// want it raised to the height of the buildings in frame.
+        public var maxCasterHeightMeters: Float
         /// How far a receiver's shadow lookup steps off its own surface, along
         /// the surface normal, measured in shadow-map texels. Expected range:
         /// `0...8`, clamped at render time.
@@ -746,6 +780,29 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// how coarse the map is, so a texel-relative offset stays correct at
         /// every zoom and coverage.
         public var normalOffsetTexels: Float
+        /// How soft the edge of a shadow is: the factor the sampling kernel's
+        /// four taps are pushed out by. Expected range: `1...2.5`, clamped at
+        /// render time. `1` is the plain 3x3 tent, and every step up widens
+        /// the ramp in proportion.
+        ///
+        /// The default sits a step above the plain tent, which is where a
+        /// shadow's edge stops reading as a hard cut without the contact under
+        /// a building going soft.
+        ///
+        /// It costs nothing: the kernel is the same four hardware compares at
+        /// any softness. And it cannot move a shadow, because the kernel stays
+        /// symmetric about the point being shaded, which puts the half-lit
+        /// contour on the true edge whatever the width; only the ramp around
+        /// it gets longer.
+        ///
+        /// What it is not is a way to sharpen a stepped edge. The steps in a
+        /// shadow's outline are one texel of the shadow map, and a wider
+        /// kernel rounds their corners rather than removing them; the texel is
+        /// what `mapResolution`, `coverageCameraDistances` and
+        /// `maxCasterHeightMeters` decide between them. Raising softness far
+        /// also softens the contact where a building meets the ground, which
+        /// is what makes it read as standing on it.
+        public var softness: Float
         /// The cast of the shadowed light, as an RGB multiplier applied on top
         /// of `strength` where a surface is fully in shadow: white keeps the
         /// neutral darkening, and the default cool tint gives shadows the
@@ -759,13 +816,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     strength: Float = 0.22,
                     mapResolution: Int = 2048,
                     coverageCameraDistances: Float = 3.0,
+                    maxCasterHeightMeters: Float = 10,
                     normalOffsetTexels: Float = 2.5,
+                    softness: Float = 1.5,
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled
             self.strength = strength
             self.mapResolution = mapResolution
             self.coverageCameraDistances = coverageCameraDistances
+            self.maxCasterHeightMeters = maxCasterHeightMeters
             self.normalOffsetTexels = normalOffsetTexels
+            self.softness = softness
             self.tint = tint
         }
     }
@@ -787,7 +848,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// while keeping the layer on.
         public var intensity: Float
         /// Width multiplier of the halo, relative to the globe radius: 1 is
-        /// the designed look, 2 twice as wide, 0.5 a thin bright ring. The
+        /// the full shell, 0.38 (the default) a thin bright ring hugging the
+        /// limb, 2 twice the full shell. The
         /// halo scales with the globe on screen, so it looks the same at every
         /// zoom of the globe presentation.
         public var thickness: Float
@@ -801,13 +863,51 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isEnabled: Bool = true,
                     color: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
                     intensity: Float = 1.0,
-                    thickness: Float = 1.0,
-                    sunInfluence: Float = 0.6) {
+                    thickness: Float = 0.38,
+                    sunInfluence: Float = 0.44) {
             self.isEnabled = isEnabled
             self.color = color
             self.intensity = intensity
             self.thickness = thickness
             self.sunInfluence = sunInfluence
+        }
+    }
+
+    /// The sky and the haze of the flat presentation: above the horizon
+    /// line the sky, a short pale glow at the line that gives way to the
+    /// sky colour within a few degrees, and below it a narrow band of the
+    /// far ground veiled toward the same colour by distance from the
+    /// camera. On by default. Off, nothing is
+    /// painted above the line (the sky is the map's clear colour) and the
+    /// ground keeps a thin band into that colour at the line, so the far
+    /// range still meets the sky with no seam. The globe has its own
+    /// treatment, `AtmosphereSettings`; through the globe-to-flat morph the
+    /// atmosphere hands over to this.
+    public struct FogSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// The sky's colour away from the horizon, RGB in `0...1`.
+        public var skyColor: SIMD3<Float>
+        /// The colour at the horizon: the glow the sky brightens into over
+        /// its last degrees coming down, and what the haze veils the far
+        /// ground toward, so the two meet at the line in one colour. White
+        /// by default, the way a hazy day's sky whitens toward the ground.
+        public var horizonColor: SIMD3<Float>
+        /// Where the haze lies, in camera distances (1 is the distance from
+        /// the camera to the point it looks at): the ground nearer than the
+        /// lower bound stays byte-clean, the ground farther than the upper
+        /// bound is fully veiled, and the haze thickens smoothly in between.
+        /// Stated in camera distances rather than metres so the same
+        /// fraction of the visible ground is hazy at every zoom.
+        public var hazeRange: ClosedRange<Float>
+
+        public init(isEnabled: Bool = true,
+                    skyColor: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
+                    horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98),
+                    hazeRange: ClosedRange<Float> = 6...40) {
+            self.isEnabled = isEnabled
+            self.skyColor = skyColor
+            self.horizonColor = horizonColor
+            self.hazeRange = hazeRange
         }
     }
 
@@ -818,43 +918,26 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var light: SceneLightSettings
         public var shadows: ShadowSettings
         public var atmosphere: AtmosphereSettings
+        public var fog: FogSettings
 
         public init(mapClearColor: SIMD4<Double>,
                     space: SpaceSettings,
                     starfield: StarfieldSettings,
                     light: SceneLightSettings = SceneLightSettings(),
                     shadows: ShadowSettings = ShadowSettings(),
-                    atmosphere: AtmosphereSettings = AtmosphereSettings()) {
+                    atmosphere: AtmosphereSettings = AtmosphereSettings(),
+                    fog: FogSettings = FogSettings()) {
             self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
             self.light = light
             self.shadows = shadows
             self.atmosphere = atmosphere
+            self.fog = fog
         }
     }
 
     public struct StyleSettings: Equatable, Sendable {
-        /// How flat-mode extruded buildings are composited over the map.
-        public enum BuildingExtrusionMode: Equatable, Sendable {
-            /// Buildings are blended over the map using `buildingExtrusionAlpha`,
-            /// so streets stay visible through the massing. A roof then also
-            /// shows the ground under it, which its own building shadows, so
-            /// with shadows on every roof reads darker than its color.
-            case translucent
-            /// The default. Buildings are fully opaque; `buildingExtrusionAlpha`
-            /// and the style color alpha are ignored.
-            case solid
-            /// Translucent below `startZoom`, fully opaque above `endZoom`;
-            /// in between the blend alpha is interpolated from
-            /// `buildingExtrusionAlpha` up to 1 as the camera zooms in.
-            case solidAtHighZoom(startZoom: Double, endZoom: Double)
-
-            /// `solidAtHighZoom` with the default 17...18 zoom transition range.
-            public static let solidAtHighZoom = BuildingExtrusionMode.solidAtHighZoom(startZoom: 17.0,
-                                                                                      endZoom: 18.0)
-        }
-
         public struct BaseColors: Equatable, Sendable {
             public var tileBackground: SIMD4<Float>
             public var globeBackground: SIMD4<Double>
@@ -884,8 +967,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public var preparedTileStyleRevision: UInt32
         public var flatSeparateRoadRenderingMinimumZoom: Int
-        public var buildingExtrusionAlpha: Float
-        public var buildingExtrusionMode: BuildingExtrusionMode
+        /// Whether buildings rise out of their footprints on the flat map.
+        /// On (the default), every building the tiles give a height is
+        /// extruded, solid and depth-correct. Off, no building is extruded:
+        /// the footprints stay as
+        /// flat fills in the building color, the way they draw on the globe,
+        /// and with nothing left to cast, the shadow pass skips itself.
+        /// Baked at parse time: toggling re-parses the tiles, like any
+        /// style change.
+        public var buildingExtrusionEnabled: Bool
         /// Whether buildings raise shaped roofs (gabled, hipped, skillion,
         /// domes and the rest of `roof:shape`) where the tiles describe one.
         /// Off (the default), every building gets a flat lid at its full
@@ -897,15 +987,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(preparedTileStyleRevision: UInt32,
                     flatSeparateRoadRenderingMinimumZoom: Int,
-                    buildingExtrusionAlpha: Float,
-                    buildingExtrusionMode: BuildingExtrusionMode = .solid,
+                    buildingExtrusionEnabled: Bool = true,
                     buildingRoofShapesEnabled: Bool = false,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {
             self.preparedTileStyleRevision = preparedTileStyleRevision
             self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
-            self.buildingExtrusionAlpha = buildingExtrusionAlpha
-            self.buildingExtrusionMode = buildingExtrusionMode
+            self.buildingExtrusionEnabled = buildingExtrusionEnabled
             self.buildingRoofShapesEnabled = buildingRoofShapesEnabled
             self.fallbackFeatureColor = fallbackFeatureColor
             self.baseColors = baseColors
@@ -1118,7 +1206,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                focusedMarkerZoom: 15.25,
                                globeMinimumAbsoluteBearing: Float.pi / 12.0,
                                globeBearingUnlockZoom: 6.0,
-                               globePitchUnlockZoom: 3.0,
                                highZoomPitchExtension: 0,
                                highZoomPitchExtensionStartZoom: 15.0,
                                highZoomPitchExtensionEndZoom: 16.0,
@@ -1183,13 +1270,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           radiusScale: 10.5)),
         style: StyleSettings(preparedTileStyleRevision: 86,
                              flatSeparateRoadRenderingMinimumZoom: 8,
-                             buildingExtrusionAlpha: 0.6,
-                             // Solid: a translucent roof composites over the
-                             // ground under it, which its own building shadows,
-                             // so every roof came out a muddy grey; opaque
-                             // massing keeps roofs light and walls shaded, the
-                             // way a lit city reads.
-                             buildingExtrusionMode: .solid,
                              fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
                              // Tile background and water mirror the built-in
                              // style's land and water: the background is what a
@@ -1387,6 +1467,14 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// Labels on or off: place names, points of interest, house numbers
+    /// and road names. Applies live, the prepared tiles keep their text.
+    func labels(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.labels.isEnabled = isEnabled
+        return settings
+    }
+
     func sceneSettings(_ scene: SceneSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.scene = scene
@@ -1427,6 +1515,20 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    func fogSettings(_ fog: FogSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.fog = fog
+        return settings
+    }
+
+    /// The flat map's sky and haze on or off; off leaves the sky the clear
+    /// colour and only a thin seam-hiding band at the horizon line.
+    func fog(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.fog.isEnabled = isEnabled
+        return settings
+    }
+
     func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
@@ -1448,9 +1550,12 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func buildingExtrusionMode(_ mode: StyleSettings.BuildingExtrusionMode) -> ImmersiveMapSettings {
+    /// Extruded buildings on or off; off leaves every building as its flat
+    /// footprint fill. Applies by re-parsing the tiles, like any style
+    /// change.
+    func buildingExtrusion(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
-        settings.style.buildingExtrusionMode = mode
+        settings.style.buildingExtrusionEnabled = isEnabled
         return settings
     }
 

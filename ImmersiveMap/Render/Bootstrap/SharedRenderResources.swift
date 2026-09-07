@@ -37,12 +37,6 @@ final class SharedRenderResources {
     /// The one color format the engine renders in; `RendererSetup` stamps it
     /// onto every view's layer.
     let colorPixelFormat: MTLPixelFormat = .bgra8Unorm
-    /// Apple GPUs read the current framebuffer value in the fragment stage
-    /// ([[color(n)]]), which lets the composited building path run inside the
-    /// world pass through a memoryless attachment. Intel Macs and the
-    /// simulator keep the two-pass path.
-    let supportsFramebufferFetch: Bool
-
     // MARK: - Depth states and fallback textures
 
     let extrudedDepthState: MTLDepthStencilState
@@ -52,10 +46,14 @@ final class SharedRenderResources {
     /// writing; the tile geometry blends over them.
     let skyBackdropDepthState: MTLDepthStencilState
     /// The horizon layer's ground side: the far-plane fragment passes only
-    /// where something wrote a nearer depth (the ground's rank band, the
-    /// buildings, the models), never written, so the haze reaches painted
-    /// pixels alone and the sky side keeps the rest.
+    /// where something wrote a nearer depth (the ground's rank band), never
+    /// written, and not where a building or a model raised the surface mask
+    /// bit, so the haze reaches the painted ground alone and the sky side
+    /// keeps the rest.
     let horizonGroundDepthState: MTLDepthStencilState
+    /// The world-pass scene models: scene depth plus the surface mask write
+    /// (see `TileSourceStencilPriority.surfaceMaskBit`).
+    let sceneModelSurfaceMaskState: MTLDepthStencilState
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -63,10 +61,6 @@ final class SharedRenderResources {
     /// is blended and lies on the same plane. Under a solid building the
     /// ground fails the test before its fragment is shaded.
     let groundDepthState: MTLDepthStencilState
-    /// For the framebuffer-fetch composite: every fragment passes and writes
-    /// the far plane back, restoring the pre-building depth mid-pass so the
-    /// scene models keep ignoring composited building depth.
-    let compositeDepthResetState: MTLDepthStencilState
     /// The tile-priority stencil states (TileSourceStencilPriority): the
     /// sphere's opaque owner (rank depth written), the flat ground's owner
     /// (building depth tested, not written), and the shared non-owning test
@@ -116,7 +110,6 @@ final class SharedRenderResources {
     /// The air around the surface's edge, on both surfaces.
     let horizonPipeline: HorizonPipeline
     let sceneModelPipeline: SceneModelPipeline
-    let routePipeline: RoutePipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
 
@@ -148,33 +141,26 @@ final class SharedRenderResources {
         self.device = device
         self.library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
         self.renderSampleCount = RendererSetup.preferredRenderSampleCount(metalDevice: device)
-        #if targetEnvironment(simulator)
-        self.supportsFramebufferFetch = false
-        #else
-        self.supportsFramebufferFetch = device.supportsFamily(.apple1)
-        #endif
-
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
         self.horizonGroundDepthState = device.makeDepthStencilState(descriptor: Self.makeHorizonGroundDepthDescriptor())!
         self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
         self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
-        self.compositeDepthResetState = device.makeDepthStencilState(descriptor: Self.makeCompositeDepthResetDescriptor())!
         self.sphereOpaqueOwnerState = device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!
         self.groundOwnerState = device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!
         self.tileStencilTestState = device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!
         self.groundOutlineState = device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!
         self.tileOwnershipWriteState = device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!
         self.extrudedStencilTestState = device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!
+        self.sceneModelSurfaceMaskState = device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!
         self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
         self.groundShadowMaskFallbackTexture = Self.makeGroundShadowMaskFallbackTexture(device: device)
 
         let compiled = Self.makeConcurrentlyCompiledResources(device: device,
                                                               library: library,
                                                               pixelFormat: colorPixelFormat,
-                                                              sampleCount: renderSampleCount,
-                                                              supportsFramebufferFetch: supportsFramebufferFetch)
+                                                              sampleCount: renderSampleCount)
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
@@ -185,7 +171,6 @@ final class SharedRenderResources {
         self.starfieldPipeline = compiled.starfieldPipeline
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
-        self.routePipeline = compiled.routePipeline
         self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = compiled.roadLabelPlacementPipeline
         self.globeCap = compiled.globeCap
@@ -212,7 +197,6 @@ final class SharedRenderResources {
         let starfieldPipeline: StarfieldPipeline
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
-        let routePipeline: RoutePipeline
         let tilePointScreenPipelines: TilePointScreenPipelines
         let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
         let globeCap: GlobeCapRenderer.SharedResources
@@ -232,8 +216,7 @@ final class SharedRenderResources {
         device: MTLDevice,
         library: MTLLibrary,
         pixelFormat: MTLPixelFormat,
-        sampleCount: Int,
-        supportsFramebufferFetch: Bool
+        sampleCount: Int
     ) -> ConcurrentlyCompiledResources {
         var polygonPipeline: PolygonsPipeline?
         var tilePipeline: TilePipeline?
@@ -245,7 +228,6 @@ final class SharedRenderResources {
         var starfieldPipeline: StarfieldPipeline?
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
-        var routePipeline: RoutePipeline?
         var tilePointScreenPipelines: TilePointScreenPipelines?
         var roadLabelPlacementPipeline: RoadLabelPlacementPipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
@@ -269,8 +251,7 @@ final class SharedRenderResources {
             { extrudedTilePipeline = ExtrudedTilePipeline(metalDevice: device,
                                                           pixelFormat: pixelFormat,
                                                           library: library,
-                                                          sampleCount: sampleCount,
-                                                          supportsFramebufferFetch: supportsFramebufferFetch) },
+                                                          sampleCount: sampleCount) },
             { polygonPipeline = PolygonsPipeline(metalDevice: device,
                                                  pixelFormat: pixelFormat,
                                                  library: library) },
@@ -278,14 +259,12 @@ final class SharedRenderResources {
                                           pixelFormat: pixelFormat,
                                           library: library,
                                           sampleCount: sampleCount,
-                                          supportsFramebufferFetch: supportsFramebufferFetch,
                                           readsGroundShadowMask: true) },
             { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
             { tileOwnershipPipeline = TileOwnershipPipeline(metalDevice: device,
                                                             pixelFormat: pixelFormat,
                                                             library: library,
-                                                            sampleCount: sampleCount,
-                                                            supportsFramebufferFetch: supportsFramebufferFetch) },
+                                                            sampleCount: sampleCount) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -301,17 +280,11 @@ final class SharedRenderResources {
             { horizonPipeline = HorizonPipeline(metalDevice: device,
                                                 pixelFormat: pixelFormat,
                                                 library: library,
-                                                sampleCount: sampleCount,
-                                                supportsFramebufferFetch: supportsFramebufferFetch) },
+                                                sampleCount: sampleCount) },
             { sceneModelPipeline = SceneModelPipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
-                                                      sampleCount: sampleCount,
-                                                      supportsFramebufferFetch: supportsFramebufferFetch) },
-            { routePipeline = RoutePipeline(metalDevice: device,
-                                            pixelFormat: pixelFormat,
-                                            library: library,
-                                            sampleCount: sampleCount) },
+                                                      sampleCount: sampleCount) },
             { tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library) },
             { roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library) }
         ]
@@ -328,7 +301,6 @@ final class SharedRenderResources {
             starfieldPipeline: starfieldPipeline!,
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
-            routePipeline: routePipeline!,
             tilePointScreenPipelines: tilePointScreenPipelines!,
             roadLabelPlacementPipeline: roadLabelPlacementPipeline!,
             globeCap: globeCap!,
@@ -395,13 +367,6 @@ final class SharedRenderResources {
 
     // MARK: - Depth descriptors
 
-    private static func makeCompositeDepthResetDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = MTLDepthStencilDescriptor()
-        descriptor.depthCompareFunction = .always
-        descriptor.isDepthWriteEnabled = true
-        return descriptor
-    }
-
     private static func makeSceneDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
@@ -430,6 +395,18 @@ final class SharedRenderResources {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .greater
         descriptor.isDepthWriteEnabled = false
+        // And not where a standing surface raised the mask bit: the haze is
+        // the ground's, and a wall crossing the horizon row keeps its own
+        // colour. Reference 0 through a mask of the bit alone.
+        let stencil = MTLStencilDescriptor()
+        stencil.stencilCompareFunction = .equal
+        stencil.stencilFailureOperation = .keep
+        stencil.depthFailureOperation = .keep
+        stencil.depthStencilPassOperation = .keep
+        stencil.readMask = TileSourceStencilPriority.surfaceMaskBit
+        stencil.writeMask = 0
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
         return descriptor
     }
 
@@ -450,6 +427,24 @@ final class SharedRenderResources {
         stencil.stencilFailureOperation = .keep
         stencil.depthFailureOperation = .keep
         stencil.depthStencilPassOperation = writes ? .replace : .keep
+        // The priority bits only: the surface mask bit above them belongs to
+        // the buildings and the models, and no tile pass reads or clears it.
+        stencil.readMask = TileSourceStencilPriority.priorityMask
+        stencil.writeMask = TileSourceStencilPriority.priorityMask
+        return stencil
+    }
+
+    /// The surface mask (TileSourceStencilPriority.surfaceMaskBit): a
+    /// standing surface raises the bit wherever it passes both tests, and
+    /// nothing else in the stencil changes.
+    private static func makeSurfaceMaskWrite(compare: MTLCompareFunction) -> MTLStencilDescriptor {
+        let stencil = MTLStencilDescriptor()
+        stencil.stencilCompareFunction = compare
+        stencil.stencilFailureOperation = .keep
+        stencil.depthFailureOperation = .keep
+        stencil.depthStencilPassOperation = .replace
+        stencil.readMask = TileSourceStencilPriority.priorityMask
+        stencil.writeMask = TileSourceStencilPriority.surfaceMaskBit
         return stencil
     }
 
@@ -503,11 +498,22 @@ final class SharedRenderResources {
     }
 
     /// The world-pass buildings: scene depth for their own occlusion, plus
-    /// the non-owning tile-priority test against the ownership prepass.
+    /// the non-owning tile-priority test against the ownership prepass,
+    /// and the surface mask bit raised where a building lands (the
+    /// reference carries it above the priority).
     private static func makeExtrudedStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .greaterEqual)
+        descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .greaterEqual)
+        return descriptor
+    }
+
+    /// The world-pass scene models: scene depth, no priority test (a model
+    /// belongs to no tile), and the surface mask bit raised where it lands.
+    private static func makeSceneModelSurfaceMaskDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeSceneDepthDescriptor()
+        descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
+        descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
         return descriptor
     }
 

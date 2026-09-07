@@ -99,12 +99,6 @@ struct SceneModelFrameState {
     var pathAnimationResults: [SceneModelPathAnimationResult]
 }
 
-struct RouteFrameState {
-    static let empty = RouteFrameState(hasActiveAnimations: false)
-
-    var hasActiveAnimations: Bool
-}
-
 struct MarkerFrameState {
     static let empty = MarkerFrameState(snapshot: nil)
 
@@ -122,6 +116,5 @@ final class FrameContextSharedState {
     var roadLabelState: RoadLabelState = .empty
     var avatarState: AvatarState = .empty
     var sceneModelState: SceneModelFrameState = .empty
-    var routeState: RouteFrameState = .empty
     var markerState: MarkerFrameState = .empty
 }

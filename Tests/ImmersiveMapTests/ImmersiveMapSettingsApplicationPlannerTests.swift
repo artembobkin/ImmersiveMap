@@ -80,6 +80,20 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertFalse(plan.requiresRendererRecreation)
     }
 
+    /// With labels off the parser bakes no text, so the switch is a
+    /// prepared-data change like every other label field: caches go,
+    /// tiles re-prepare, the renderer is rebuilt.
+    func testLabelsEnabledChangeRebuildsPreparedData() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.labels(isEnabled: false)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.labels])
+        XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
+        XCTAssertTrue(plan.requiresRendererRecreation)
+    }
+
     func testLabelFallbackPolicyChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
         var newSettings = oldSettings
@@ -89,52 +103,6 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
 
         XCTAssertEqual(plan.changedDomains, [.labels])
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
-        XCTAssertTrue(plan.requiresRendererRecreation)
-    }
-
-    func testBuildingExtrusionModeChangeIsLiveApplied() {
-        let oldSettings = ImmersiveMapSettings.default
-        let newSettings = oldSettings.buildingExtrusionMode(.translucent)
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.style])
-        XCTAssertEqual(plan.actions, [.liveApply])
-        XCTAssertFalse(plan.requiresRendererRecreation)
-    }
-
-    func testBuildingExtrusionZoomTransitionRangeChangeIsLiveApplied() {
-        let oldSettings = ImmersiveMapSettings.default.buildingExtrusionMode(.solidAtHighZoom)
-        let newSettings = oldSettings.buildingExtrusionMode(.solidAtHighZoom(startZoom: 16.0, endZoom: 17.5))
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.style])
-        XCTAssertEqual(plan.actions, [.liveApply])
-        XCTAssertFalse(plan.requiresRendererRecreation)
-    }
-
-    func testBuildingExtrusionAlphaChangeIsLiveApplied() {
-        let oldSettings = ImmersiveMapSettings.default
-        var newSettings = oldSettings
-        newSettings.style.buildingExtrusionAlpha = 0.85
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.style])
-        XCTAssertEqual(plan.actions, [.liveApply])
-        XCTAssertFalse(plan.requiresRendererRecreation)
-    }
-
-    func testBuildingExtrusionModeChangeCombinedWithBaseColorsChangeRecreatesRenderer() {
-        let oldSettings = ImmersiveMapSettings.default
-        var newSettings = oldSettings.buildingExtrusionMode(.translucent)
-        newSettings.style.baseColors.water = SIMD4<Float>(0.1, 0.2, 0.8, 1.0)
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.style])
-        XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 

@@ -7,11 +7,10 @@ import ImmersiveMap
 /// Every limit on where the camera may go, live. The same fields are what the
 /// `.zoomRange`, `.pitchRange` and `.bearingLimit` view modifiers write.
 ///
-/// Two of these interact with the globe: the tilt ceiling and the bearing cap
-/// are the *widest* the camera gets, and the globe still eases both in with
-/// zoom (`globePitchUnlockZoom`, `globeBearingUnlockZoom`). A tilt floor above
-/// the globe's own zoomed-out ceiling yields to it, which is visible here:
-/// raise the floor, zoom out, and watch the camera level off anyway.
+/// One of these interacts with the globe: the bearing cap is the *widest*
+/// the camera gets, and the globe still eases it in with zoom
+/// (`globeBearingUnlockZoom`). The tilt ceiling is the same on both
+/// surfaces at every zoom.
 struct CameraPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
@@ -64,12 +63,6 @@ struct CameraPanel: View {
 
                 ValueSlider("Bearing unlock z",
                             value: $settings.camera.globeBearingUnlockZoom,
-                            range: 0...10,
-                            step: 0.5,
-                            format: "%.1f",
-                            width: 120)
-                ValueSlider("Tilt unlock z",
-                            value: $settings.camera.globePitchUnlockZoom,
                             range: 0...10,
                             step: 0.5,
                             format: "%.1f",

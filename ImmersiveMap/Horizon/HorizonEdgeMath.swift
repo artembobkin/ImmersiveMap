@@ -48,24 +48,44 @@ enum HorizonEdgeMath {
         asin(simd_clamp(simd_dot(direction, edge.up), -1, 1)) + edge.depression
     }
 
-    /// The four viewport corner rays, from the far-plane corners back to the
-    /// eye. A degenerate projection yields the vertical instead of a division
-    /// by zero.
+    /// The view ray through a point of the viewport, from its far-plane
+    /// point back to the eye. A degenerate projection yields the vertical
+    /// instead of a division by zero.
+    static func viewDirection(ndc: SIMD2<Float>,
+                              inverseProjectionView: matrix_float4x4,
+                              eye: SIMD3<Float>) -> SIMD3<Float> {
+        let farClip = inverseProjectionView * SIMD4<Float>(ndc.x, ndc.y, 1, 1)
+        guard abs(farClip.w) > 1e-9 else {
+            return SIMD3<Float>(0, 0, 1)
+        }
+        let farPoint = SIMD3<Float>(farClip.x, farClip.y, farClip.z) / farClip.w
+        return simd_normalize(farPoint - eye)
+    }
+
+    /// The four viewport corner rays.
     static func cornerDirections(inverseProjectionView: matrix_float4x4,
                                  eye: SIMD3<Float>) -> [SIMD3<Float>] {
         var directions: [SIMD3<Float>] = []
         for cornerX in [Float(-1), 1] {
             for cornerY in [Float(-1), 1] {
-                let farClip = inverseProjectionView * SIMD4<Float>(cornerX, cornerY, 1, 1)
-                guard abs(farClip.w) > 1e-9 else {
-                    directions.append(SIMD3<Float>(0, 0, 1))
-                    continue
-                }
-                let farPoint = SIMD3<Float>(farClip.x, farClip.y, farClip.z) / farClip.w
-                directions.append(simd_normalize(farPoint - eye))
+                directions.append(viewDirection(ndc: SIMD2<Float>(cornerX, cornerY),
+                                                inverseProjectionView: inverseProjectionView,
+                                                eye: eye))
             }
         }
         return directions
+    }
+
+    /// How far below the edge the ground lies at a given multiple of the
+    /// camera distance, on the plane. The camera looks at the ground along
+    /// the centre ray, `cosPitch` under the local horizontal, so its height
+    /// over the plane is `cosPitch` camera distances and the ground at `k`
+    /// camera distances of slant range sits `asin(cosPitch / k)` below the
+    /// line; nearer than the eye's height it is the nadir. This is what lets
+    /// a haze stated in camera distances stay a plain angle profile in the
+    /// shader.
+    static func depression(atCameraDistances k: Float, cosPitch: Float) -> Float {
+        asin(min(max(cosPitch, 0) / max(k, 1e-6), 1))
     }
 
     /// True when some pixel of the frame looks within `reachBelow` radians of

@@ -6,7 +6,7 @@ import simd
 
 /// Great-circle math: interpolation between coordinates, central angle and
 /// forward azimuth. It lives in `Geo` because both the scene model animation
-/// (`SceneModels`) and route tessellation (`Routes`) need it, and domain
+/// (`SceneModels`) needs it, and domain
 /// folders must not depend on each other.
 ///
 /// Everything is computed in `Double`. The path sampler measures segments a few

@@ -18,7 +18,7 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
     ///
     /// It is not a size multiplier: `width` and `height` are already the pixel
     /// dimensions. It tells the renderer how big a point is, which is what
-    /// style values expressed in points (label sizes, route widths, marker
+    /// style values expressed in points (label sizes, marker
     /// halos) are measured against. Capturing at 1 renders a 1024 pixel image
     /// with labels sized for a 1024 point canvas; capturing at 2 renders the
     /// same image with labels sized for a 512 point canvas, which is what a

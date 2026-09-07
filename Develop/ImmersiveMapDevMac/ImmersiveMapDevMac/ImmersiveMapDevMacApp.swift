@@ -43,12 +43,14 @@ private struct MapScreen: View {
             .tileSettings(clearDiskCachesOnLaunch: true)
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map. A development aid, off by default.
+            .labels(isEnabled: false)
+            .buildingExtrusion(isEnabled: true)
             .debugPanel()
             .ignoresSafeArea()
     }
 
     /// Moscow at street level, which is inside the coverage the test tileset is
-    /// currently built for. Outside that box the server answers with no tile and
+    /// currently built for. Outside that box the server answers with no tile ч]and
     /// the map is empty by construction, not by a fault in the engine, so a
     /// start position over an uncovered city reads as a bug that is not there.
     private static let start = ImmersiveMapCameraPosition(

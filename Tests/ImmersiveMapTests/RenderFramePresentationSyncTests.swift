@@ -28,10 +28,6 @@ final class RenderFramePresentationSyncTests: XCTestCase {
         var currentSceneModelsController: ImmersiveMapSceneModelsController? { nil }
     }
 
-    private final class StubRouteSource: RouteRenderSource {
-        var currentRoutesController: ImmersiveMapRoutesController? { nil }
-    }
-
     @MainActor
     func testPresentsWithTransactionFollowsMarkerPresence() throws {
         guard let probeDevice = MTLCreateSystemDefaultDevice() else {
@@ -50,7 +46,6 @@ final class RenderFramePresentationSyncTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: markerSource,
                                        sceneModelSource: StubSceneModelSource(),
-                                       routeSource: StubRouteSource(),
                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                        settings: settings,
                                        renderCamera: FrameCameraStateResolver(settings: settings),

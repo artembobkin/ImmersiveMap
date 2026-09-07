@@ -13,7 +13,6 @@ final class ImmersiveMapRuntimeGraph {
     let avatarRuntime: ImmersiveMapAvatarRuntime
     let markerRuntime: ImmersiveMapMarkerRuntime
     let sceneModelRuntime: ImmersiveMapSceneModelRuntime
-    let routeRuntime: ImmersiveMapRouteRuntime
     let controlsRuntime: ImmersiveMapControlsRuntime
     let cameraRuntime: ImmersiveMapCameraRuntime
     let interactionRuntime: ImmersiveMapInteractionRuntime
@@ -34,7 +33,6 @@ final class ImmersiveMapRuntimeGraph {
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let avatarRuntime = ImmersiveMapAvatarRuntime()
         let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
-        let routeRuntime = ImmersiveMapRouteRuntime()
         let markerRuntime = ImmersiveMapMarkerRuntime(viewportRuntime: viewportRuntime,
                                                       renderRuntime: renderRuntime)
         markerRuntime.attach(hostView: mapView)
@@ -81,7 +79,6 @@ final class ImmersiveMapRuntimeGraph {
                                                           avatarRuntime: avatarRuntime,
                                                           markerRuntime: markerRuntime,
                                                           sceneModelRuntime: sceneModelRuntime,
-                                                          routeRuntime: routeRuntime,
                                                           renderRuntime: renderRuntime,
                                                           selectionHandler: selectionHandler,
                                                           debugOverlayControls: debugOverlayControls,
@@ -99,7 +96,6 @@ final class ImmersiveMapRuntimeGraph {
         self.avatarRuntime = avatarRuntime
         self.markerRuntime = markerRuntime
         self.sceneModelRuntime = sceneModelRuntime
-        self.routeRuntime = routeRuntime
         self.controlsRuntime = controlsRuntime
         self.cameraRuntime = cameraRuntime
         self.interactionRuntime = interactionRuntime

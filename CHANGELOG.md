@@ -10,6 +10,100 @@ once the public API stabilizes.
 
 ### Added
 
+- `.labels(isEnabled:)` on `ImmersiveMapView`, backed by
+  `LabelSettings.isEnabled`: the master switch for map labels (place names,
+  points of interest, house numbers and road names). Off skips the label
+  layer and the per-frame placement and collision work behind it. Unlike the
+  other label settings it applies live: the text stays baked into the
+  prepared tiles, so the switch costs the next frame and no reload. The
+  **Labels** section of `ImmersiveMapSettingsMac` carries the toggle.
+
+- `ShadowSettings.softness`: how soft the edge of a shadow is, as the factor
+  the sampling kernel's four taps are pushed out by (`1...2.5`, default `1.5`;
+  `1` is the plain 3x3 tent). It is free, since the kernel is the same four hardware
+  compares at any softness, and it cannot move a shadow: the kernel stays
+  symmetric about the point being shaded, which puts the half-lit contour on
+  the true edge whatever the width, so only the ramp around it lengthens. It
+  is not a way to sharpen a stepped edge, though: the steps in a shadow's
+  outline are one texel of the shadow map, and a wider kernel rounds their
+  corners rather than removing them. The macOS debug panel and
+  `ImmersiveMapSettingsMac` both carry a slider for it.
+
+### Changed
+
+- `ShadowSettings.maxCasterHeightMeters` now defaults to `10`, the floor of
+  its range, rather than to `50`. The window is fitted to the visible ground,
+  so the caster-height limit only widens the rim that a caster standing at the
+  window's edge would need, and at a street camera that rim is spent texels.
+  What it costs is exactly that rim: a tall building at the edge of the visible
+  ground loses the part of its shadow thrown from above 10 m, so a scene
+  staged around towers (a skyline flyover) should raise the limit to the height
+  of the buildings in frame.
+
+- Every receiver reads the shadow map through one 3x3 tent kernel (four
+  hardware bilinear compares with computed weights): the ground through its
+  mask, buildings, and scene models alike. A single compare is exact along the
+  shadow map's own axes and staircases at every other angle, so shadow edges
+  were clean on the buildings that happened to stand along the sun and jagged
+  on the rest, and which was which changed as the sun turned. The tent's ramp
+  is the same width in every orientation. It costs three more taps per shadowed
+  fragment, which the sampler can now afford: dropping the cascade search and
+  the receiver-plane gradient took the building fragment shader from 106
+  allocated registers to 36, so the extra taps fit in the headroom instead of
+  costing occupancy on top of their own arithmetic.
+
+### Changed
+
+- The shadow window is fitted to the ground the camera can see (the view
+  frustum's rays intersected with the ground plane, clamped to
+  `coverageCameraDistances` from the camera) instead of to a disc around the
+  point the camera looks at. A disc has to reach as far as the farthest visible
+  ground and then covers as much ground behind the camera, which at a tilted
+  camera was half the window's side spent on ground nobody is looking at: at a
+  35 m camera tilted 55 degrees the shadow texel goes from 12 cm to 6 cm.
+  `coverageCameraDistances` also becomes an upper bound rather than a size,
+  so asking for more reach than the camera can see now costs nothing. The
+  trade, and it is a real one: the window follows the view, so turning the
+  camera refits it and the texel grid is no longer independent of where you
+  look, which is the property the disc was chosen for.
+- Shadows fade out radially from the camera, matching the circle the visible
+  ground is clamped to, instead of from the shadow window's centre. The window is a pose-invariant disc around the
+  point the camera looks at, and measuring the fade from the eye described a
+  different shape: it made where shadows end depend on pitch, which is the very
+  thing the disc fit existed to prevent. The band is the outer quarter of the
+  reach at every coverage, so the edge of the covered ground is never visible
+  as a circle.
+- `ShadowSettings.maxCasterHeightMeters` (default 50, clamped to `10...500`):
+  the tallest building the shadow window is fitted for. It was a constant
+  1000 m. The window has to reach beyond its own disc by about 0.72 of that
+  height, which is how far such a caster throws its shadow into the disc, and
+  at a street camera the margin for a kilometre-tall building was three
+  quarters of the whole window: `coverageCameraDistances` was moving the
+  remaining quarter, which is why winding it down changed where shadows faded
+  and never changed how sharp their edges were. At 50 m the same street camera
+  goes from a 48 cm shadow texel to 12 cm. A building taller than the limit
+  stops casting into the window, so cities with real towers want it raised;
+  it is on the macOS debug panel's shadow group and in
+  `ImmersiveMapSettingsMac`.
+- The caster-height limit is additionally capped by the window's radius
+  instead of being spent in full on a small window. The window has
+  to be wider than its disc by `casterHeight * |L.xy| / L.z`, about 0.72 of the
+  height under a midday sun, so a flat cap added ~720 m to every window however
+  small the disc was. At a street camera that addition was ten times the disc
+  itself, which meant `coverageCameraDistances` moved the fade and left the
+  shadow map's texel size alone. It now changes the texel at every zoom: at a
+  35 m camera, winding coverage from 3 to 0.25 takes the texel from 48 cm to
+  4 cm, where before it stopped at 34 cm. The shipping coverages keep the full
+  1000 m ceiling, so no tower loses its shadow by default.
+- `ShadowSettings.coverageCameraDistances` is clamped to `0.25...48` instead of
+  being floored at 2, and the macOS debug panel's slider reaches it. The floor
+  existed only because the old eye-measured fade collapsed in front of the
+  visible ground below one camera distance and deleted every shadow in the
+  frame; with the fade tied to the window that cannot happen, and winding the
+  window right down is how the shadow map's texel grid is looked at up close.
+
+### Added
+
 - `ShadowSettings.normalOffsetTexels` (default 2.5): how far a receiver's
   shadow lookup steps off its own surface along the normal, in shadow map
   texels, clamped to `0...8`. It was a constant in the resolver, and with the
@@ -37,8 +131,7 @@ once the public API stabilizes.
   SwiftUI re-sends its own value on every update of the view hierarchy and
   would otherwise revert a slider as soon as anything else on screen changed.
 
-- Shadows are one map instead of three cascades, and the sampler is one
-  hardware bilinear depth compare instead of a 3x3 tent. The window is fitted
+- Shadows are one map instead of three cascades. The window is fitted
   to a single pose-invariant disc of `coverageCameraDistances` camera
   distances, so there is no cascade to select, no cross-fade band between
   windows, and no receiver-plane gradient solved per fragment: acne is

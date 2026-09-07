@@ -281,6 +281,8 @@ final class StreetscapeTests: XCTestCase {
                                       landmarkMinimumZoom: 15,
                                       addTestBorders: false,
                                       roofShapesEnabled: true,
+                                      buildingExtrusionEnabled: true,
+                                      labelsEnabled: true,
                                       streetscapeRevision: streetscapeRevision).namespaceComponent
         }
         XCTAssertNotEqual(namespace(streetscapeRevision: 0), namespace(streetscapeRevision: 7),

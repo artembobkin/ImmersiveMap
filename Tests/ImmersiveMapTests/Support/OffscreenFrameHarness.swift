@@ -12,7 +12,7 @@ import XCTest
 /// Everything below the engine is the real thing (shaders, subsystem graph,
 /// passes, tile store); only the four render sources are stand-ins, and they
 /// are stand-ins that own real controllers, so a test adds content by talking
-/// to `routes`, `sceneModels` or `avatars` exactly as an app would.
+/// to `sceneModels` or `avatars` exactly as an app would.
 ///
 /// Time comes from `RenderFrameScriptedClock` rather than the wall clock: a
 /// frame rendered at a named instant is reproducible, which is what lets these
@@ -59,11 +59,6 @@ final class OffscreenFrameHarness {
         var currentSceneModelsController: ImmersiveMapSceneModelsController? { controller }
     }
 
-    private final class HarnessRouteSource: RouteRenderSource {
-        let controller = ImmersiveMapRoutesController()
-        var currentRoutesController: ImmersiveMapRoutesController? { controller }
-    }
-
     // MARK: - Contents
 
     let engine: RenderFrameEngine
@@ -78,11 +73,9 @@ final class OffscreenFrameHarness {
     private let avatarSource: HarnessAvatarSource
     private let markerSource: HarnessMarkerSource
     private let sceneModelSource: HarnessSceneModelSource
-    private let routeSource: HarnessRouteSource
 
     var avatars: ImmersiveMapAvatarsController { avatarSource.controller }
     var sceneModels: ImmersiveMapSceneModelsController { sceneModelSource.controller }
-    var routes: ImmersiveMapRoutesController { routeSource.controller }
 
     /// SwiftUI markers projected into the frame. Empty unless a test sets it.
     var markerInput: MarkerProjectionInput {
@@ -150,18 +143,15 @@ final class OffscreenFrameHarness {
         let avatarSource = HarnessAvatarSource()
         let markerSource = HarnessMarkerSource()
         let sceneModelSource = HarnessSceneModelSource()
-        let routeSource = HarnessRouteSource()
         self.avatarSource = avatarSource
         self.markerSource = markerSource
         self.sceneModelSource = sceneModelSource
-        self.routeSource = routeSource
 
         let layer = CAMetalLayer()
         self.engine = RenderFrameEngine(layer: layer,
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: sceneModelSource,
-                                        routeSource: routeSource,
                                         providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                         settings: settings,
                                         renderCamera: camera,

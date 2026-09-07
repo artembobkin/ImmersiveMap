@@ -16,14 +16,34 @@ enum DebugOverlayShadowSettingsPlanner {
     static let mapResolutions = [512, 1024, 2048, 4096]
     static let mapResolutionTitles = ["512", "1K", "2K", "4K"]
     static let strengthRange: ClosedRange<Double> = 0...1
-    static let coverageRange: ClosedRange<Double> = 2...12
+    /// Down to the resolver's floor, which is far below anything worth
+    /// shipping: winding the window right down is how the texel grid itself is
+    /// looked at. Under a coverage of 1 the window's edge shows as a circle,
+    /// which is expected there rather than a defect (see
+    /// `ShadowFrameStateResolver.fadeDistances`).
+    static var coverageRange: ClosedRange<Double> {
+        Double(ShadowFrameStateResolver.coverageRange.lowerBound)...12
+    }
     /// The resolver's own clamp, so the slider can reach everything the
     /// setting accepts and nothing it does not: a slider that runs past the
     /// clamp reports a value the renderer is not using.
+    /// The resolver's own clamp on the caster-height limit.
+    static var casterHeightRange: ClosedRange<Double> {
+        let range = ShadowFrameStateResolver.maxCasterHeightRange
+        return Double(range.lowerBound)...Double(range.upperBound)
+    }
+
     static var normalOffsetRange: ClosedRange<Double> {
         let range = ShadowFrameStateResolver.normalOffsetTexelsRange
         return Double(range.lowerBound)...Double(range.upperBound)
     }
+
+    /// The resolver's own clamp on the tent's tap spread.
+    static var softnessRange: ClosedRange<Double> {
+        let range = ShadowFrameStateResolver.softnessRange
+        return Double(range.lowerBound)...Double(range.upperBound)
+    }
+
     static let azimuthRange: ClosedRange<Double> = 0...360
     /// The resolver drops shadows below a light elevation of ~3 degrees
     /// (`minimumLightDirectionZ`), so the slider stops well above it: a slider
@@ -57,8 +77,16 @@ enum DebugOverlayShadowSettingsPlanner {
         String(format: "Coverage %.1fx", coverage)
     }
 
+    static func casterHeightTitle(_ meters: Float) -> String {
+        String(format: "Caster height %.0f m", meters)
+    }
+
     static func normalOffsetTitle(_ texels: Float) -> String {
         String(format: "Normal offset %.1ftx", texels)
+    }
+
+    static func softnessTitle(_ softness: Float) -> String {
+        String(format: "Softness %.2fx", softness)
     }
 
     static func azimuthTitle(_ degrees: Double) -> String {

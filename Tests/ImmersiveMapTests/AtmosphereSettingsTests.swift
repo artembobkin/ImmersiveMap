@@ -13,8 +13,8 @@ final class AtmosphereSettingsTests: XCTestCase {
         XCTAssertTrue(atmosphere.isEnabled)
         XCTAssertEqual(atmosphere.color, SIMD3<Float>(0.40, 0.66, 1.0))
         XCTAssertEqual(atmosphere.intensity, 1.0)
-        XCTAssertEqual(atmosphere.thickness, 1.0)
-        XCTAssertEqual(atmosphere.sunInfluence, 0.6)
+        XCTAssertEqual(atmosphere.thickness, 0.38)
+        XCTAssertEqual(atmosphere.sunInfluence, 0.44)
         XCTAssertEqual(ImmersiveMapSettings.default.scene.atmosphere, atmosphere)
     }
 

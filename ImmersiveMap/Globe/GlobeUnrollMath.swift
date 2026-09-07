@@ -4,8 +4,8 @@
 import simd
 
 /// The sphere-to-plane unroll: the CPU mirror of `globeUnrollWorldPosition`
-/// in GlobeUnroll.h, term for term, so markers, labels, routes and scene
-/// models sit exactly on the morphing surface. Change only in sync with the
+/// in GlobeUnroll.h, term for term, so markers, labels and scene models
+/// sit exactly on the morphing surface. Change only in sync with the
 /// shader.
 ///
 /// The morph never mixes positions through the planet's interior. The

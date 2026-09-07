@@ -104,7 +104,6 @@ final class ImmersiveMapHostRuntime {
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
-                routesController: ImmersiveMapRoutesController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -115,7 +114,6 @@ final class ImmersiveMapHostRuntime {
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         sceneModelsController: sceneModelsController,
-                        routesController: routesController,
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction,
@@ -137,7 +135,6 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
         syncControllers(avatarsController: nil,
                         sceneModelsController: nil,
-                        routesController: nil,
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil,
@@ -186,7 +183,6 @@ final class ImmersiveMapHostRuntime {
 
     func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
                          sceneModelsController newSceneModelsController: ImmersiveMapSceneModelsController? = nil,
-                         routesController newRoutesController: ImmersiveMapRoutesController? = nil,
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
                          avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -195,11 +191,9 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.selectionHandler.setSceneModelTapAction(newSceneModelTapAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
-        let shouldUpdateRoutesController = runtimeGraph.routeRuntime.isAttachedController(newRoutesController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
         guard shouldUpdateAvatarsController
             || shouldUpdateSceneModelsController
-            || shouldUpdateRoutesController
             || shouldUpdateCameraController else {
             runtimeGraph.selectionHandler.syncController(newSelectionController)
             return
@@ -214,10 +208,6 @@ final class ImmersiveMapHostRuntime {
             runtimeGraph.sceneModelRuntime.attachController(newSceneModelsController,
                                                             selectionHandler: runtimeGraph.selectionHandler,
                                                             renderRuntime: runtimeGraph.renderRuntime)
-        }
-        if shouldUpdateRoutesController {
-            runtimeGraph.routeRuntime.attachController(newRoutesController,
-                                                       renderRuntime: runtimeGraph.renderRuntime)
         }
         if shouldUpdateCameraController {
             runtimeGraph.cameraRuntime.attachController(newCameraController,
@@ -263,7 +253,6 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.renderRuntime.attachRenderer(renderer)
         runtimeGraph.avatarRuntime.markSnapshotDirty()
         runtimeGraph.sceneModelRuntime.markSnapshotDirty()
-        runtimeGraph.routeRuntime.markSnapshotDirty()
         requestFrame()
     }
 
@@ -289,7 +278,6 @@ final class ImmersiveMapHostRuntime {
             detachedGraph.avatarRuntime.detachController()
             detachedGraph.sceneModelRuntime.cancelAllPathAnimations()
             detachedGraph.sceneModelRuntime.detachController()
-            detachedGraph.routeRuntime.detachController()
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()

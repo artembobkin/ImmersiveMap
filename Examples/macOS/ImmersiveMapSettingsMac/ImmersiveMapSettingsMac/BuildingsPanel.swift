@@ -9,11 +9,12 @@ import ImmersiveMap
 /// presentation only, which is why this section opens at street level where the
 /// map is already a plane.
 ///
-/// `buildingExtrusionMode` decides how buildings are composited over the map.
-/// The default `.solid` draws them opaque and depth-correct; `.translucent`
-/// renders them into an offscreen image and blends it, which is why translucent
-/// buildings carry no depth and never occlude scene models; `.solidAtHighZoom`
-/// interpolates between the two as the camera comes down.
+/// `buildingExtrusionEnabled` is the master switch: off, no building rises
+/// and every footprint stays a flat fill, which is what the globe shows too.
+/// It is baked into the prepared tiles, so the toggle re-parses them.
+///
+/// Buildings always draw solid and depth-correct; the translucent
+/// compositing path was removed.
 ///
 /// Shadows have a strength and a tint: the tint is the cast of the light a
 /// shadowed surface still gets (the sky), applied on top of the strength, and
@@ -22,48 +23,13 @@ import ImmersiveMap
 struct BuildingsPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
-    private enum ExtrusionChoice: String, CaseIterable, Identifiable {
-        case translucent
-        case solid
-        case solidAtHighZoom
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .translucent: "Translucent"
-            case .solid: "Solid"
-            case .solidAtHighZoom: "Solid at high zoom"
-            }
-        }
-
-        var mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode {
-            switch self {
-            case .translucent: .translucent
-            case .solid: .solid
-            case .solidAtHighZoom: .solidAtHighZoom(startZoom: 16.5, endZoom: 17)
-            }
-        }
-
-        init(mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode) {
-            switch mode {
-            case .translucent: self = .translucent
-            case .solid: self = .solid
-            case .solidAtHighZoom: self = .solidAtHighZoom
-            }
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PanelRow {
-                Picker("Extrusion", selection: extrusionChoice) {
-                    ForEach(ExtrusionChoice.allCases) { choice in
-                        Text(choice.title).tag(choice)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 400)
+                // Extrusions are baked into the prepared tiles, so this
+                // toggle re-parses them (a moment of loading is expected).
+                Toggle("3D buildings", isOn: $settings.style.buildingExtrusionEnabled)
+                    .toggleStyle(.switch)
 
                 Toggle("Shadows", isOn: $settings.scene.shadows.isEnabled)
                     .toggleStyle(.switch)
@@ -72,12 +38,6 @@ struct BuildingsPanel: View {
                 // toggle re-parses them (a moment of loading is expected).
                 Toggle("Roof shapes", isOn: $settings.style.buildingRoofShapesEnabled)
                     .toggleStyle(.switch)
-
-                ValueSlider("Blend alpha",
-                            value: $settings.style.buildingExtrusionAlpha.asDouble,
-                            range: 0...1,
-                            width: 120)
-                    .disabled(ExtrusionChoice(mode: settings.style.buildingExtrusionMode) == .solid)
             }
 
             PanelRow {
@@ -94,20 +54,23 @@ struct BuildingsPanel: View {
                             value: $settings.scene.shadows.coverageCameraDistances.asDouble,
                             range: 2...48,
                             format: "%.0f")
+                ValueSlider("Caster height",
+                            value: $settings.scene.shadows.maxCasterHeightMeters.asDouble,
+                            range: 10...500,
+                            format: "%.0f")
                 ValueSlider("Normal offset",
                             value: $settings.scene.shadows.normalOffsetTexels.asDouble,
                             range: 0...8,
                             format: "%.1f")
+                ValueSlider("Softness",
+                            value: $settings.scene.shadows.softness.asDouble,
+                            range: 1...2.5,
+                            format: "%.2f")
                 ColorPicker("Tint", selection: shadowTint, supportsOpacity: false)
                     .frame(width: 100)
             }
             .disabled(settings.scene.shadows.isEnabled == false)
         }
-    }
-
-    private var extrusionChoice: Binding<ExtrusionChoice> {
-        Binding(get: { ExtrusionChoice(mode: settings.style.buildingExtrusionMode) },
-                set: { settings.style.buildingExtrusionMode = $0.mode })
     }
 
     /// The shadow tint as a SwiftUI color and back, in the sRGB space the

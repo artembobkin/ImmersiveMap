@@ -13,7 +13,6 @@ final class RenderLoopPacing {
         case cameraAnimation = "camera animation"
         case avatarAnimation = "avatar animation"
         case sceneModelAnimation = "scene model animation"
-        case routeAnimation = "route animation"
         /// A camera position set from outside through
         /// `ImmersiveMapCameraController.jump`: an app driving the camera
         /// once per frame (its own animation, a follow camera fed by a
@@ -30,7 +29,6 @@ final class RenderLoopPacing {
                  .cameraAnimation,
                  .avatarAnimation,
                  .sceneModelAnimation,
-                 .routeAnimation,
                  .externalCameraDrive:
                 return true
             case .labelFade:

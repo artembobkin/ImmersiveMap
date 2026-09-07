@@ -5,9 +5,8 @@ import Metal
 import simd
 
 enum BuildingExtrusionDrawer {
-    /// Opaque building geometry with depth test and depth write:
-    /// solid mode draws it straight into the world pass, translucent into the
-    /// offscreen building image. Each unique source draws once at full
+    /// Opaque building geometry with depth test and depth write, straight
+    /// into the world pass. Each unique source draws once at full
     /// extent; the tile-priority stencil test against the ownership prepass
     /// keeps a substitute's buildings out of every pixel a finer tile owns
     /// (the old per-placement slot clip, which also multiplied a parent's
@@ -19,8 +18,7 @@ enum BuildingExtrusionDrawer {
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedStencilTestState: MTLDepthStencilState,
-                              depthDisabledState: MTLDepthStencilState,
-                              intoImageAttachment: Bool = false) {
+                              depthDisabledState: MTLDepthStencilState) {
         var cameraUniformValue = cameraUniform
         // The walls and roofs are wound clockwise on purpose (the exterior
         // ring is forced clockwise in TileMvtParser+Helpers and the roofs
@@ -30,11 +28,7 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setFrontFacing(.clockwise)
         renderEncoder.setCullMode(.back)
 
-        if intoImageAttachment {
-            extrudedTilePipeline.selectIntoImagePipeline(renderEncoder: renderEncoder)
-        } else {
-            extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
-        }
+        extrudedTilePipeline.selectPipeline(renderEncoder: renderEncoder)
         renderEncoder.setDepthStencilState(extrudedStencilTestState)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
@@ -88,42 +82,6 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setDepthClipMode(.clip)
     }
 
-    /// Framebuffer-fetch composite: one fullscreen triangle that reads the
-    /// in-pass building attachment per sample, blends it over the map with
-    /// the shared alpha, and writes the far plane back into depth (see the
-    /// shader for the exact semantics contract).
-    static func drawCompositeFetch(renderEncoder: MTLRenderCommandEncoder,
-                                   alpha: Float,
-                                   extrudedTilePipeline: ExtrudedTilePipeline,
-                                   compositeDepthResetState: MTLDepthStencilState,
-                                   depthDisabledState: MTLDepthStencilState) {
-        renderEncoder.setCullMode(.none)
-        extrudedTilePipeline.selectCompositeFetchPipeline(renderEncoder: renderEncoder)
-        renderEncoder.setDepthStencilState(compositeDepthResetState)
-        var alphaValue = alpha
-        renderEncoder.setFragmentBytes(&alphaValue, length: MemoryLayout<Float>.stride, index: 0)
-        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        renderEncoder.setDepthStencilState(depthDisabledState)
-    }
-
-    /// Composites the building image over the world pass with a shared alpha:
-    /// the premultiplied blend tints each map pixel exactly once, and the
-    /// building silhouette coverage (smoothed by MSAA resolve) arrives in the
-    /// image alpha.
-    static func drawComposite(renderEncoder: MTLRenderCommandEncoder,
-                              buildingImageTexture: MTLTexture,
-                              alpha: Float,
-                              extrudedTilePipeline: ExtrudedTilePipeline,
-                              depthDisabledState: MTLDepthStencilState) {
-        renderEncoder.setCullMode(.none)
-        extrudedTilePipeline.selectCompositePipeline(renderEncoder: renderEncoder)
-        renderEncoder.setDepthStencilState(depthDisabledState)
-        renderEncoder.setFragmentTexture(buildingImageTexture, index: 0)
-        var alphaValue = alpha
-        renderEncoder.setFragmentBytes(&alphaValue, length: MemoryLayout<Float>.stride, index: 0)
-        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-    }
-
     /// World-pass building draws: each unique (source, loop) once, at full
     /// extent, with the source's tile-priority stencil reference. Whole
     /// buildings are drawn or rejected per pixel, so back-face culling stays
@@ -158,7 +116,10 @@ enum BuildingExtrusionDrawer {
 
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
-            renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
+            // The priority to test against the prepass marks, and above it
+            // the surface mask bit the state writes where the building lands.
+            renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z)
+                                                   | TileSourceStencilPriority.surfaceMaskBit)
 
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,

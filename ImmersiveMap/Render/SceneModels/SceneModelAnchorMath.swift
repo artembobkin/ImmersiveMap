@@ -19,7 +19,7 @@ struct SceneModelAnchor {
 /// Composes the model matrix on top of the surface frame resolved by
 /// `GeoSurfaceFrameMath`: the morph is evaluated ONCE per anchor, so a model
 /// sits exactly on the morph geometry while staying rigid (no per-vertex
-/// shear), and it shares that evaluation with route tessellation.
+/// shear).
 enum SceneModelAnchorMath {
     static func resolveAnchor(presented: PresentedSceneModel,
                               bounds: SceneModelMesh.Bounds,

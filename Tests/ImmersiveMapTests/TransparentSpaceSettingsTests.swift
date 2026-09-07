@@ -41,16 +41,17 @@ final class TransparentSpaceSettingsTests: XCTestCase {
         XCTAssertEqual(clearColor.alpha, 1.0, accuracy: 1e-9)
     }
 
-    /// The flat map covers the viewport, so the transition has to arrive at the
-    /// opaque map color; halfway there the value stays premultiplied, otherwise
-    /// the compositor tints the app background with the un-multiplied color.
-    func testTransparentSpaceReachesTheOpaqueMapColorThroughTheTransition() {
+    /// The flat map covers the viewport, so the surface switch arrives at the
+    /// opaque map color; until then space stays fully transparent, the
+    /// unroll included, so the app's own background shows behind the
+    /// morphing world with nothing tinting it.
+    func testTransparentSpaceReachesTheOpaqueMapColorAtTheSurfaceSwitch() {
         var settings = ImmersiveMapSettings.default.transparentSpace()
         settings.scene.mapClearColor = SIMD4<Double>(1.0, 1.0, 1.0, 1.0)
 
         let mid = RenderFrameClearColor.make(transition: 0.5, settings: settings)
-        XCTAssertEqual(mid.red, 0.5, accuracy: 1e-9)
-        XCTAssertEqual(mid.alpha, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(mid.red, 0.0, accuracy: 1e-9)
+        XCTAssertEqual(mid.alpha, 0.0, accuracy: 1e-9)
 
         let flat = RenderFrameClearColor.make(transition: 1.0, settings: settings)
         XCTAssertEqual(flat.red, 1.0, accuracy: 1e-9)

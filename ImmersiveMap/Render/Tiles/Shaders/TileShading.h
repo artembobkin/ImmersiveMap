@@ -249,7 +249,7 @@ static inline half tileLineCoverage(float lineDistance,
         float period = dashUnits + gapUnits;
         if (unitsPerPixel > 1e-5 && dashUnits > 0.0 && gapUnits > 0.0) {
             // Signed distance to the nearest dash boundary, wrapped around
-            // the period (the route renderer's construction), so both edges
+            // the period, so both edges
             // of every dash carry the full antialiasing band.
             float phase = fmod(lineParameter, period);
             if (phase < 0.0) {

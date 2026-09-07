@@ -33,7 +33,10 @@ final class DebugOverlayHUDView: NSView {
         static let controlSpacing: CGFloat = 6.0
         static let groupSpacing: CGFloat = 16.0
         static let traceStatusHeight: CGFloat = 24.0
-        static let backgroundAlpha: CGFloat = 0.46
+        /// Nearly opaque: the panel is read while the map moves under it, and
+        /// a translucent one turned every label and building edge behind it
+        /// into noise across the text.
+        static let backgroundAlpha: CGFloat = 0.9
         /// The panel is a fixed-width rail, not a card that grows with its
         /// text: a width that followed the longest diagnostics line moved the
         /// map every time a number gained a digit. Wide enough that a
@@ -97,10 +100,38 @@ final class DebugOverlayHUDView: NSView {
     private let shadowCoverageSlider = NSSlider()
     private let shadowNormalOffsetLabel = NSTextField(labelWithString: "")
     private let shadowNormalOffsetSlider = NSSlider()
+    private let shadowCasterHeightLabel = NSTextField(labelWithString: "")
+    private let shadowCasterHeightSlider = NSSlider()
+    private let shadowSoftnessLabel = NSTextField(labelWithString: "")
+    private let shadowSoftnessSlider = NSSlider()
     private let sunAzimuthLabel = NSTextField(labelWithString: "")
     private let sunAzimuthSlider = NSSlider()
     private let sunElevationLabel = NSTextField(labelWithString: "")
     private let sunElevationSlider = NSSlider()
+
+    private let fogGroupLabel = NSTextField(labelWithString: "Horizon")
+    private let fogEnabledLabel = NSTextField(labelWithString: "")
+    private let fogEnabledSwitch = NSSwitch()
+    private let fogHazeStartLabel = NSTextField(labelWithString: "")
+    private let fogHazeStartSlider = NSSlider()
+    private let fogHazeEndLabel = NSTextField(labelWithString: "")
+    private let fogHazeEndSlider = NSSlider()
+    private let fogSkyColorLabel = NSTextField(labelWithString: "")
+    private let fogSkyColorWell = NSColorWell(style: .minimal)
+    private let fogHorizonColorLabel = NSTextField(labelWithString: "")
+    private let fogHorizonColorWell = NSColorWell(style: .minimal)
+
+    private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
+    private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
+    private let atmosphereEnabledSwitch = NSSwitch()
+    private let atmosphereColorLabel = NSTextField(labelWithString: "")
+    private let atmosphereColorWell = NSColorWell(style: .minimal)
+    private let atmosphereIntensityLabel = NSTextField(labelWithString: "")
+    private let atmosphereIntensitySlider = NSSlider()
+    private let atmosphereThicknessLabel = NSTextField(labelWithString: "")
+    private let atmosphereThicknessSlider = NSSlider()
+    private let atmosphereSunInfluenceLabel = NSTextField(labelWithString: "")
+    private let atmosphereSunInfluenceSlider = NSSlider()
 
     private let controlsGroupLabel = NSTextField(labelWithString: "Controls")
     private let axesLabel = NSTextField(labelWithString: "")
@@ -122,6 +153,8 @@ final class DebugOverlayHUDView: NSView {
     private var isCollapsed = false
     private var shadowSettings = ImmersiveMapSettings.ShadowSettings()
     private var sunDirection = ImmersiveMapSettings.SceneLightSettings().direction
+    private var fogSettings = ImmersiveMapSettings.FogSettings()
+    private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
     /// The host view's top safe-area inset; on macOS with a regular window title bar this is 0.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
@@ -145,6 +178,8 @@ final class DebugOverlayHUDView: NSView {
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
     var onShadowSettingsChanged: ((ImmersiveMapSettings.ShadowSettings) -> Void)?
     var onSunDirectionChanged: ((SIMD3<Float>) -> Void)?
+    var onFogSettingsChanged: ((ImmersiveMapSettings.FogSettings) -> Void)?
+    var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -174,7 +209,7 @@ final class DebugOverlayHUDView: NSView {
         containerView.addSubview(scrollView)
 
         [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel,
-         shadowsGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
+         shadowsGroupLabel, fogGroupLabel, atmosphereGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
@@ -188,8 +223,20 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
         configureControlLabel(shadowCoverageLabel, text: "")
         configureControlLabel(shadowNormalOffsetLabel, text: "")
+        configureControlLabel(shadowCasterHeightLabel, text: "")
+        configureControlLabel(shadowSoftnessLabel, text: "")
         configureControlLabel(sunAzimuthLabel, text: "")
         configureControlLabel(sunElevationLabel, text: "")
+        configureControlLabel(fogEnabledLabel, text: "Enabled")
+        configureControlLabel(fogHazeStartLabel, text: "")
+        configureControlLabel(fogHazeEndLabel, text: "")
+        configureControlLabel(fogSkyColorLabel, text: "Sky colour")
+        configureControlLabel(fogHorizonColorLabel, text: "Horizon colour")
+        configureControlLabel(atmosphereEnabledLabel, text: "Enabled")
+        configureControlLabel(atmosphereColorLabel, text: "Colour")
+        configureControlLabel(atmosphereIntensityLabel, text: "")
+        configureControlLabel(atmosphereThicknessLabel, text: "")
+        configureControlLabel(atmosphereSunInfluenceLabel, text: "")
 
         configureSwitch(axesSwitch, action: #selector(axesSwitchChanged))
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
@@ -199,6 +246,8 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
         configureSwitch(shadowsEnabledSwitch, action: #selector(shadowsEnabledSwitchChanged))
+        configureSwitch(fogEnabledSwitch, action: #selector(fogEnabledSwitchChanged))
+        configureSwitch(atmosphereEnabledSwitch, action: #selector(atmosphereEnabledSwitchChanged))
 
         configureSlider(shadowStrengthSlider,
                         range: DebugOverlayShadowSettingsPlanner.strengthRange,
@@ -209,12 +258,36 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(shadowNormalOffsetSlider,
                         range: DebugOverlayShadowSettingsPlanner.normalOffsetRange,
                         action: #selector(shadowNormalOffsetSliderChanged))
+        configureSlider(shadowCasterHeightSlider,
+                        range: DebugOverlayShadowSettingsPlanner.casterHeightRange,
+                        action: #selector(shadowCasterHeightSliderChanged))
+        configureSlider(shadowSoftnessSlider,
+                        range: DebugOverlayShadowSettingsPlanner.softnessRange,
+                        action: #selector(shadowSoftnessSliderChanged))
         configureSlider(sunAzimuthSlider,
                         range: DebugOverlayShadowSettingsPlanner.azimuthRange,
                         action: #selector(sunAzimuthSliderChanged))
         configureSlider(sunElevationSlider,
                         range: DebugOverlayShadowSettingsPlanner.elevationRange,
                         action: #selector(sunElevationSliderChanged))
+        configureSlider(fogHazeStartSlider,
+                        range: DebugOverlayFogSettingsPlanner.hazeStartRange,
+                        action: #selector(fogHazeStartSliderChanged))
+        configureSlider(fogHazeEndSlider,
+                        range: DebugOverlayFogSettingsPlanner.hazeEndRange,
+                        action: #selector(fogHazeEndSliderChanged))
+        configureColorWell(fogSkyColorWell, action: #selector(fogSkyColorWellChanged))
+        configureColorWell(fogHorizonColorWell, action: #selector(fogHorizonColorWellChanged))
+        configureSlider(atmosphereIntensitySlider,
+                        range: DebugOverlayAtmosphereSettingsPlanner.intensityRange,
+                        action: #selector(atmosphereIntensitySliderChanged))
+        configureSlider(atmosphereThicknessSlider,
+                        range: DebugOverlayAtmosphereSettingsPlanner.thicknessRange,
+                        action: #selector(atmosphereThicknessSliderChanged))
+        configureSlider(atmosphereSunInfluenceSlider,
+                        range: DebugOverlayAtmosphereSettingsPlanner.sunInfluenceRange,
+                        action: #selector(atmosphereSunInfluenceSliderChanged))
+        configureColorWell(atmosphereColorWell, action: #selector(atmosphereColorWellChanged))
 
         refuseFocus(tileGridDensityControl)
         refuseFocus(shadowMapResolutionControl)
@@ -253,6 +326,8 @@ final class DebugOverlayHUDView: NSView {
         updateTileTraceControl()
         updateBaseLabelTraceControl()
         updateShadowControls()
+        updateFogControls()
+        updateAtmosphereControls()
         updateVisibility()
     }
 
@@ -272,8 +347,20 @@ final class DebugOverlayHUDView: NSView {
          shadowMapResolutionLabel, shadowMapResolutionControl,
          shadowCoverageLabel, shadowCoverageSlider,
          shadowNormalOffsetLabel, shadowNormalOffsetSlider,
+         shadowCasterHeightLabel, shadowCasterHeightSlider,
+         shadowSoftnessLabel, shadowSoftnessSlider,
          sunAzimuthLabel, sunAzimuthSlider,
          sunElevationLabel, sunElevationSlider,
+         fogGroupLabel, fogEnabledLabel, fogEnabledSwitch,
+         fogHazeStartLabel, fogHazeStartSlider,
+         fogHazeEndLabel, fogHazeEndSlider,
+         fogSkyColorLabel, fogSkyColorWell,
+         fogHorizonColorLabel, fogHorizonColorWell,
+         atmosphereGroupLabel, atmosphereEnabledLabel, atmosphereEnabledSwitch,
+         atmosphereColorLabel, atmosphereColorWell,
+         atmosphereIntensityLabel, atmosphereIntensitySlider,
+         atmosphereThicknessLabel, atmosphereThicknessSlider,
+         atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider,
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch, surfaceModeButton,
@@ -320,6 +407,28 @@ final class DebugOverlayHUDView: NSView {
         self.shadowSettings = shadowSettings
         self.sunDirection = sunDirection
         updateShadowControls()
+        needsLayout = true
+    }
+
+    /// The horizon group reflects the live settings, like the shadow group.
+    func apply(fogSettings: ImmersiveMapSettings.FogSettings) {
+        guard self.fogSettings != fogSettings else {
+            return
+        }
+
+        self.fogSettings = fogSettings
+        updateFogControls()
+        needsLayout = true
+    }
+
+    /// The atmosphere group reflects the live settings, like the others.
+    func apply(atmosphereSettings: ImmersiveMapSettings.AtmosphereSettings) {
+        guard self.atmosphereSettings != atmosphereSettings else {
+            return
+        }
+
+        self.atmosphereSettings = atmosphereSettings
+        updateAtmosphereControls()
         needsLayout = true
     }
 
@@ -427,8 +536,28 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowCasterHeightLabel, shadowCasterHeightSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowSoftnessLabel, shadowSoftnessSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunAzimuthLabel, sunAzimuthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunElevationLabel, sunElevationSlider, at: cursor, contentWidth: contentWidth)
+        cursor += Layout.groupSpacing
+
+        // Horizon
+        cursor = layoutGroupHeader(fogGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(fogEnabledLabel, fogEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(fogHazeStartLabel, fogHazeStartSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(fogHazeEndLabel, fogHazeEndSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(fogSkyColorLabel, fogSkyColorWell, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(fogHorizonColorLabel, fogHorizonColorWell, at: cursor, contentWidth: contentWidth)
+        cursor += Layout.groupSpacing
+
+        // Atmosphere
+        cursor = layoutGroupHeader(atmosphereGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(atmosphereEnabledLabel, atmosphereEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereColorLabel, atmosphereColorWell, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereIntensityLabel, atmosphereIntensitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereThicknessLabel, atmosphereThicknessSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider, at: cursor, contentWidth: contentWidth)
         cursor += Layout.groupSpacing
 
         // Controls
@@ -589,6 +718,10 @@ final class DebugOverlayHUDView: NSView {
         shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
         shadowNormalOffsetSlider.doubleValue = Double(shadowSettings.normalOffsetTexels)
         shadowNormalOffsetLabel.stringValue = DebugOverlayShadowSettingsPlanner.normalOffsetTitle(shadowSettings.normalOffsetTexels)
+        shadowCasterHeightSlider.doubleValue = Double(shadowSettings.maxCasterHeightMeters)
+        shadowCasterHeightLabel.stringValue = DebugOverlayShadowSettingsPlanner.casterHeightTitle(shadowSettings.maxCasterHeightMeters)
+        shadowSoftnessSlider.doubleValue = Double(shadowSettings.softness)
+        shadowSoftnessLabel.stringValue = DebugOverlayShadowSettingsPlanner.softnessTitle(shadowSettings.softness)
 
         let angles = DebugOverlaySunAngles.angles(direction: sunDirection)
         sunAzimuthSlider.doubleValue = angles.azimuthDegrees
@@ -598,11 +731,58 @@ final class DebugOverlayHUDView: NSView {
 
         // Everything below the switch only means something with shadows on.
         [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider,
-         shadowNormalOffsetSlider, sunAzimuthSlider,
+         shadowNormalOffsetSlider, shadowCasterHeightSlider, shadowSoftnessSlider,
+         sunAzimuthSlider,
          sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
     }
 
     // MARK: - Configuration
+
+    private func updateFogControls() {
+        fogEnabledSwitch.state = fogSettings.isEnabled ? .on : .off
+        fogHazeStartSlider.doubleValue = Double(fogSettings.hazeRange.lowerBound)
+        fogHazeStartLabel.stringValue = DebugOverlayFogSettingsPlanner.hazeStartTitle(fogSettings.hazeRange.lowerBound)
+        fogHazeEndSlider.doubleValue = Double(fogSettings.hazeRange.upperBound)
+        fogHazeEndLabel.stringValue = DebugOverlayFogSettingsPlanner.hazeEndTitle(fogSettings.hazeRange.upperBound)
+        fogSkyColorWell.color = Self.color(fogSettings.skyColor)
+        fogHorizonColorWell.color = Self.color(fogSettings.horizonColor)
+
+        // Everything below the switch only means something with the fog on.
+        [fogHazeStartSlider, fogHazeEndSlider, fogSkyColorWell, fogHorizonColorWell]
+            .forEach { $0.isEnabled = fogSettings.isEnabled }
+    }
+
+    private func updateAtmosphereControls() {
+        atmosphereEnabledSwitch.state = atmosphereSettings.isEnabled ? .on : .off
+        atmosphereColorWell.color = Self.color(atmosphereSettings.color)
+        atmosphereIntensitySlider.doubleValue = Double(atmosphereSettings.intensity)
+        atmosphereIntensityLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.intensityTitle(atmosphereSettings.intensity)
+        atmosphereThicknessSlider.doubleValue = Double(atmosphereSettings.thickness)
+        atmosphereThicknessLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(atmosphereSettings.thickness)
+        atmosphereSunInfluenceSlider.doubleValue = Double(atmosphereSettings.sunInfluence)
+        atmosphereSunInfluenceLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.sunInfluenceTitle(atmosphereSettings.sunInfluence)
+
+        // Off keeps only the limb feather; the rest means nothing then.
+        [atmosphereColorWell, atmosphereIntensitySlider, atmosphereThicknessSlider, atmosphereSunInfluenceSlider]
+            .forEach { $0.isEnabled = atmosphereSettings.isEnabled }
+    }
+
+    /// The settings state their colours in sRGB; the well shows and hands
+    /// back the same.
+    private static func color(_ rgb: SIMD3<Float>) -> NSColor {
+        NSColor(srgbRed: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: 1)
+    }
+
+    private static func rgb(_ color: NSColor) -> SIMD3<Float>? {
+        guard let srgb = color.usingColorSpace(.sRGB) else { return nil }
+        return SIMD3<Float>(Float(srgb.redComponent), Float(srgb.greenComponent), Float(srgb.blueComponent))
+    }
+
+    private func configureColorWell(_ well: NSColorWell, action: Selector) {
+        well.target = self
+        well.action = action
+        refuseFocus(well)
+    }
 
     private func configureGroupLabel(_ label: NSTextField) {
         label.textColor = NSColor.white.withAlphaComponent(0.62)
@@ -819,6 +999,18 @@ final class DebugOverlayHUDView: NSView {
         publish(shadowSettings: settings)
     }
 
+    @objc private func shadowCasterHeightSliderChanged() {
+        var settings = shadowSettings
+        settings.maxCasterHeightMeters = Float(shadowCasterHeightSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowSoftnessSliderChanged() {
+        var settings = shadowSettings
+        settings.softness = Float(shadowSoftnessSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
     @objc private func sunAzimuthSliderChanged() {
         publishSunDirection(azimuthDegrees: sunAzimuthSlider.doubleValue,
                             elevationDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).elevationDegrees)
@@ -827,6 +1019,85 @@ final class DebugOverlayHUDView: NSView {
     @objc private func sunElevationSliderChanged() {
         publishSunDirection(azimuthDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).azimuthDegrees,
                             elevationDegrees: sunElevationSlider.doubleValue)
+    }
+
+    @objc private func fogEnabledSwitchChanged() {
+        var settings = fogSettings
+        settings.isEnabled = fogEnabledSwitch.state == .on
+        publish(fogSettings: settings)
+    }
+
+    @objc private func fogHazeStartSliderChanged() {
+        var settings = fogSettings
+        settings.hazeRange = DebugOverlayFogSettingsPlanner.hazeRange(settings.hazeRange,
+                                                                      start: Float(fogHazeStartSlider.doubleValue))
+        publish(fogSettings: settings)
+    }
+
+    @objc private func fogHazeEndSliderChanged() {
+        var settings = fogSettings
+        settings.hazeRange = DebugOverlayFogSettingsPlanner.hazeRange(settings.hazeRange,
+                                                                      end: Float(fogHazeEndSlider.doubleValue))
+        publish(fogSettings: settings)
+    }
+
+    @objc private func fogSkyColorWellChanged() {
+        guard let rgb = Self.rgb(fogSkyColorWell.color) else { return }
+        var settings = fogSettings
+        settings.skyColor = rgb
+        publish(fogSettings: settings)
+    }
+
+    @objc private func fogHorizonColorWellChanged() {
+        guard let rgb = Self.rgb(fogHorizonColorWell.color) else { return }
+        var settings = fogSettings
+        settings.horizonColor = rgb
+        publish(fogSettings: settings)
+    }
+
+    private func publish(fogSettings settings: ImmersiveMapSettings.FogSettings) {
+        fogSettings = settings
+        updateFogControls()
+        needsLayout = true
+        onFogSettingsChanged?(settings)
+    }
+
+    @objc private func atmosphereEnabledSwitchChanged() {
+        var settings = atmosphereSettings
+        settings.isEnabled = atmosphereEnabledSwitch.state == .on
+        publish(atmosphereSettings: settings)
+    }
+
+    @objc private func atmosphereColorWellChanged() {
+        guard let rgb = Self.rgb(atmosphereColorWell.color) else { return }
+        var settings = atmosphereSettings
+        settings.color = rgb
+        publish(atmosphereSettings: settings)
+    }
+
+    @objc private func atmosphereIntensitySliderChanged() {
+        var settings = atmosphereSettings
+        settings.intensity = Float(atmosphereIntensitySlider.doubleValue)
+        publish(atmosphereSettings: settings)
+    }
+
+    @objc private func atmosphereThicknessSliderChanged() {
+        var settings = atmosphereSettings
+        settings.thickness = Float(atmosphereThicknessSlider.doubleValue)
+        publish(atmosphereSettings: settings)
+    }
+
+    @objc private func atmosphereSunInfluenceSliderChanged() {
+        var settings = atmosphereSettings
+        settings.sunInfluence = Float(atmosphereSunInfluenceSlider.doubleValue)
+        publish(atmosphereSettings: settings)
+    }
+
+    private func publish(atmosphereSettings settings: ImmersiveMapSettings.AtmosphereSettings) {
+        atmosphereSettings = settings
+        updateAtmosphereControls()
+        needsLayout = true
+        onAtmosphereSettingsChanged?(settings)
     }
 
     /// The panel owns the value while a slider is dragged: the labels update

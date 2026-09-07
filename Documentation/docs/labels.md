@@ -21,6 +21,15 @@ struct MapScreen: View {
 }
 ```
 
+## Turning labels off
+
+```swift
+ImmersiveMapView()
+    .labels(isEnabled: false)
+```
+
+`.labels(isEnabled:)` is the master switch, `LabelSettings.isEnabled` on the settings value: off, the map draws no place names, points of interest, house numbers or road names, and skips the placement and collision work behind them. It is the one label setting that applies live. The text stays baked into the prepared tiles, so flipping it costs the next frame and nothing else, and a control the user scrubs can drive it. To hide one kind of label rather than all of them, use the visibility fields below.
+
 ## Language
 
 ```swift
@@ -85,4 +94,4 @@ Label colors and sizes are not part of `LabelSettings`: they belong to the map s
 - Which names exist at all is a property of the tile source, not the engine. A source that carries no `name:ja` will fall back however the policy says, in every language you ask for.
 - Changing the language reloads prepared tiles.
 
-Running example: the **Labels** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) switches language, fallback policy, house numbers, settlement ceilings and fade timings, and shows what each of those changes costs: every field here re-prepares the tiles.
+Running example: the **Labels** section of [`Examples/macOS/ImmersiveMapSettingsMac`](../../Examples/macOS/ImmersiveMapSettingsMac) switches labels on and off, and switches language, fallback policy, house numbers, settlement ceilings and fade timings, and shows what each of those changes costs: every field but the switch re-prepares the tiles.

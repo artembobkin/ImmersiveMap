@@ -34,14 +34,6 @@ final class ImmersiveMapVideoExportRuntime {
         }
     }
 
-    /// Routes are excluded from video export in v1, together with the scene
-    /// models they are usually paired with.
-    private final class VideoExportRouteSource: RouteRenderSource {
-        var currentRoutesController: ImmersiveMapRoutesController? {
-            nil
-        }
-    }
-
     /// SwiftUI marker views are platform overlays above the Metal layer and
     /// never draw in Metal. The engine still projects their coordinates every
     /// frame from this input, and the export compositor draws the rasterized
@@ -123,7 +115,6 @@ final class ImmersiveMapVideoExportRuntime {
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: VideoExportSceneModelSource(),
-                                        routeSource: VideoExportRouteSource(),
                                         providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                         settings: settings,
                                         debugOverlayControls: DebugOverlayControlState(),

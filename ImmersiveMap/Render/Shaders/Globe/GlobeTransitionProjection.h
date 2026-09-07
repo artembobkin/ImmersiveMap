@@ -38,7 +38,7 @@ static inline float globeTransitionPanMercatorY(float panLatitude) {
 /// nearest the reference's: the seam of the wrap sits opposite the pan, and
 /// a triangle whose vertices fold to opposite sides of it spans the whole
 /// map. Vertices of one tile therefore unwrap around the tile's own centre
-/// (the CPU does the same along a route, GeoSurfaceFrameMath.unwrapped);
+/// (the CPU does the same along a path, GeoSurfaceFrameMath.unwrapped);
 /// a point with no neighbours passes itself as the reference and gets the
 /// plain wrap.
 static inline float globeTransitionFlatWorldX(float normalizedWorldX,

@@ -7,9 +7,6 @@ import simd
 /// in Horizon.metal (pinned by `HorizonUniformLayoutTests`). The values are
 /// resolved by `HorizonFrameResolver`; this is only their GPU shape.
 struct HorizonUniform {
-    /// Inverse of the frame's view-projection: turns a far-plane clip point
-    /// back into world space, which with the eye gives the view ray.
-    var inverseViewProjection: matrix_float4x4
     /// The eye's local vertical.
     var up: SIMD3<Float>
     /// The edge's depression below the local horizontal, radians.
@@ -30,12 +27,19 @@ struct HorizonUniform {
     var groundGain: Float
     var cutoffStartRadians: Float
     var cutoffEndRadians: Float
+    var skyColor: SIMD3<Float>
+    var skyOpacity: Float
+    var skyGradientRadians: Float
+    /// The frame's view-projection: the band's vertices are directions the
+    /// shader places in the world and projects.
+    var viewProjection: matrix_float4x4
+    /// The band's top station, radians above the edge.
+    var bandTopRadians: Float
 
     static func make(haze: HorizonHaze,
                      projectionView: matrix_float4x4,
                      cameraEye: SIMD3<Float>) -> HorizonUniform {
-        HorizonUniform(inverseViewProjection: simd_inverse(projectionView),
-                       up: haze.edge.up,
+        HorizonUniform(up: haze.edge.up,
                        depression: haze.edge.depression,
                        center: haze.center,
                        sunInfluence: haze.sunInfluence,
@@ -52,6 +56,11 @@ struct HorizonUniform {
                        groundBandRadians: haze.groundBandRadians,
                        groundGain: haze.groundGain,
                        cutoffStartRadians: haze.cutoffStartRadians,
-                       cutoffEndRadians: haze.cutoffEndRadians)
+                       cutoffEndRadians: haze.cutoffEndRadians,
+                       skyColor: haze.skyColor,
+                       skyOpacity: haze.skyOpacity,
+                       skyGradientRadians: haze.skyGradientRadians,
+                       viewProjection: projectionView,
+                       bandTopRadians: haze.bandTopRadians)
     }
 }

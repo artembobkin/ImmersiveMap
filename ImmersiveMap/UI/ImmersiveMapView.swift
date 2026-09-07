@@ -13,7 +13,6 @@ public struct ImmersiveMapView: View {
     private var cameraPosition: ImmersiveMapCameraPosition?
     private var avatarsController: ImmersiveMapAvatarsController?
     private var sceneModelsController: ImmersiveMapSceneModelsController?
-    private var routesController: ImmersiveMapRoutesController?
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
     private var selectionController: ImmersiveMapSelectionController?
@@ -42,7 +41,6 @@ public struct ImmersiveMapView: View {
         ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
-                                        routesController: routesController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -65,7 +63,6 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
-    let routesController: ImmersiveMapRoutesController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -82,7 +79,6 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
             adopted.prepareForAdoption(settings: settings,
                                        avatarsController: avatarsController,
                                        sceneModelsController: sceneModelsController,
-                                       routesController: routesController,
                                        cameraPosition: cameraPosition,
                                        cameraController: cameraController,
                                        selectionController: selectionController,
@@ -95,7 +91,6 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
-                                        routesController: routesController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -109,7 +104,6 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
         uiView.update(settings: settings,
                       avatarsController: avatarsController,
                       sceneModelsController: sceneModelsController,
-                      routesController: routesController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -128,7 +122,6 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
-    let routesController: ImmersiveMapRoutesController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -145,7 +138,6 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
             adopted.prepareForAdoption(settings: settings,
                                        avatarsController: avatarsController,
                                        sceneModelsController: sceneModelsController,
-                                       routesController: routesController,
                                        cameraPosition: cameraPosition,
                                        cameraController: cameraController,
                                        selectionController: selectionController,
@@ -158,7 +150,6 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
-                                        routesController: routesController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -172,7 +163,6 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
         nsView.update(settings: settings,
                       avatarsController: avatarsController,
                       sceneModelsController: sceneModelsController,
-                      routesController: routesController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -203,18 +193,6 @@ public extension ImmersiveMapView {
     func sceneModels(_ controller: ImmersiveMapSceneModelsController?) -> ImmersiveMapView {
         var view = self
         view.sceneModelsController = controller
-        return view
-    }
-
-    /// Attaches routes: great-circle ribbons drawn over the globe, lifted by
-    /// the path's altitude profile. Routes render inside the map world pass
-    /// with depth testing, so an arc passes behind the planet, and their width
-    /// stays constant on screen. Globe presentation only in this version: a
-    /// route fades out as the globe unfurls into the flat map.
-    /// See ``ImmersiveMapRoutesController``.
-    func routes(_ controller: ImmersiveMapRoutesController?) -> ImmersiveMapView {
-        var view = self
-        view.routesController = controller
         return view
     }
 
@@ -281,10 +259,8 @@ public extension ImmersiveMapView {
     }
 
     /// Restricts the tilt angles the camera can reach, in radians from straight
-    /// down. Gestures, camera commands and flights are all clamped to the range.
-    /// On the globe the tilt ceiling still eases in with zoom
-    /// (`CameraSettings.globePitchUnlockZoom`), and a minimum above that easing
-    /// ceiling yields to it, so a zoomed-out globe still levels off.
+    /// down. Gestures, camera commands and flights are all clamped to the range
+    /// on both surfaces alike; a minimum above the maximum yields to it.
     ///
     ///     ImmersiveMapView()
     ///         .pitchRange(minimum: 0.3, maximum: 1.1)
@@ -641,6 +617,17 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Turns map labels on or off: place names, points of interest, house
+    /// numbers and road names alike. Off skips the label layer and the
+    /// placement and collision work behind it. It applies live and never
+    /// re-prepares a tile, so a control the user scrubs can drive it,
+    /// unlike the other label settings. On by default.
+    public func labels(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.labels(isEnabled: isEnabled)
+        return view
+    }
+
     public func sceneSettings(_ scene: ImmersiveMapSettings.SceneSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.sceneSettings(scene)
@@ -695,6 +682,24 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The sky and the haze of the flat presentation: a sky gradient above
+    /// the horizon line and the far ground veiled toward the horizon colour
+    /// by distance from the camera. Applies live.
+    public func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.fogSettings(fog)
+        return view
+    }
+
+    /// The flat map's sky and haze on or off. On by default; off leaves
+    /// the sky the map's clear colour and keeps only a thin band at the
+    /// horizon line that hides the seam between the far ground and the sky.
+    public func fog(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.fog(isEnabled: isEnabled)
+        return view
+    }
+
     public func shadows(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.shadows(isEnabled: isEnabled)
@@ -709,13 +714,15 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Display mode for extruded 3D buildings in the flat presentation:
-    /// `.translucent` - semi-transparent (default), `.solid` - opaque,
-    /// `.solidAtHighZoom` - smooth transition from semi-transparent to opaque
-    /// over a zoom range (default 17...18).
-    public func buildingExtrusionMode(_ mode: ImmersiveMapSettings.StyleSettings.BuildingExtrusionMode) -> ImmersiveMapView {
+    /// Whether buildings rise out of their footprints on the flat map. On by
+    /// default. Off, no building is extruded: every footprint stays a flat
+    /// fill in the building color, the way buildings draw on the globe, the
+    /// extrusion mode has nothing to composite, and with nothing to cast the
+    /// shadow pass skips itself. The extrusions are baked into the prepared
+    /// tiles, so toggling re-parses them, like any other style change.
+    public func buildingExtrusion(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.buildingExtrusionMode(mode)
+        view.settings = view.settings.buildingExtrusion(isEnabled: isEnabled)
         return view
     }
 

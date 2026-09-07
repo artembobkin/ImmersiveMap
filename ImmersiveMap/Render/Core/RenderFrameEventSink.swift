@@ -13,7 +13,6 @@ struct RenderActivityState {
     let labelVisibilityCycleRenderingActive: Bool
     let avatarAnimationRenderingActive: Bool
     let sceneModelAnimationRenderingActive: Bool
-    let routeAnimationRenderingActive: Bool
 }
 
 /// Events arrive both from the main thread and from background tasks (tile

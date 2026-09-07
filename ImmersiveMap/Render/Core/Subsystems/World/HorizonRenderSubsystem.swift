@@ -4,16 +4,18 @@
 import Metal
 
 /// The air around the surface's edge, drawn last in the world pass on both
-/// surfaces: the globe's atmosphere and limb feather, the flat map's fog
-/// band, and their handover through the morph (`HorizonFrameResolver`).
+/// surfaces: the globe's atmosphere and limb feather, the flat map's sky
+/// and haze, with the morph between them bare (`HorizonFrameResolver`).
 ///
-/// One pipeline, up to two draws split by the depth buffer. The sky draw
+/// One geometry (the band), up to two draws split by the depth buffer. The sky draw
 /// runs under the far-plane lessEqual state and shades only pixels nothing
 /// painted; the ground draw under the far-plane greater state and shades
-/// only painted pixels, clamping its angle to the edge. Each pixel is shaded
-/// once. Both are skipped when the edge is farther below the frame than the
+/// only painted pixels that no building or model stands on (the surface
+/// mask bit, `TileSourceStencilPriority.surfaceMaskBit`), clamping its angle
+/// to the edge. Each pixel is shaded once. Both are skipped when the edge is farther below the frame than the
 /// haze reaches, which at street pitch is every frame; transparent space
-/// skips the sky draw, since nothing may be painted around the globe.
+/// skips the globe's sky draw, since nothing may be painted around the
+/// planet, while the plane's sky still paints over its own clear colour.
 final class HorizonRenderSubsystem: RenderSubsystem {
     let name: String = "Horizon"
 
@@ -21,18 +23,15 @@ final class HorizonRenderSubsystem: RenderSubsystem {
     private let skyDepthState: MTLDepthStencilState
     private let groundDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
-    private let supportsFramebufferFetch: Bool
 
     init(horizonRenderer: HorizonRenderer,
          skyDepthState: MTLDepthStencilState,
          groundDepthState: MTLDepthStencilState,
-         depthDisabledState: MTLDepthStencilState,
-         supportsFramebufferFetch: Bool) {
+         depthDisabledState: MTLDepthStencilState) {
         self.horizonRenderer = horizonRenderer
         self.skyDepthState = skyDepthState
         self.groundDepthState = groundDepthState
         self.depthDisabledState = depthDisabledState
-        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext _: FrameContext) {}
@@ -59,28 +58,20 @@ final class HorizonRenderSubsystem: RenderSubsystem {
         let uniform = HorizonUniform.make(haze: haze,
                                           projectionView: frameContext.cameraMatrices.projectionView,
                                           cameraEye: frameContext.cameraEye)
-        // The framebuffer-fetch world pass carries a second building
-        // attachment; every pipeline in it must declare that attachment to
-        // stay pass-compatible (same decision as RenderPassGraph.plan).
-        let withBuildingImageAttachment = BuildingExtrusionPathResolver.usesInPassBuildingImage(
-            style: frameContext.services.settings.style,
-            zoom: frameContext.zoom,
-            renderSurfaceMode: frameContext.renderSurfaceMode,
-            supportsFramebufferFetch: supportsFramebufferFetch
-        )
         if haze.drawsGround {
             encoder.setDepthStencilState(groundDepthState)
+            // The ground state tests the surface mask bit against zero: the
+            // haze lands on the ground, never on a building or a model.
+            encoder.setStencilReferenceValue(0)
             horizonRenderer.draw(renderEncoder: encoder,
                                  uniform: uniform,
-                                 groundSide: true,
-                                 withBuildingImageAttachment: withBuildingImageAttachment)
+                                 groundSide: true)
         }
         if haze.drawsSky {
             encoder.setDepthStencilState(skyDepthState)
             horizonRenderer.draw(renderEncoder: encoder,
                                  uniform: uniform,
-                                 groundSide: false,
-                                 withBuildingImageAttachment: withBuildingImageAttachment)
+                                 groundSide: false)
         }
         // Back to the encoder's neutral state, so no later layer inherits
         // the horizon's depth tests by accident.

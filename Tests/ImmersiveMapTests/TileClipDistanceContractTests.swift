@@ -69,10 +69,26 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(mask.range(of: "sampleShadowFactor("),
                      "The mask uses the specialized ground-plane path, not the generic receiver sampling")
         XCTAssertNil(mask.range(of: "dfdx"), "No screen derivatives: control flow may diverge")
-        XCTAssertTrue(mask.contains("if (distanceToEye >= shadow.fadeEndDistance) {"),
+        XCTAssertTrue(mask.contains("if (distanceToCenter >= shadow.fadeEndDistance) {"),
                       "Pixels beyond the shadow fade exit before sampling")
+        XCTAssertTrue(mask.contains("length(worldPosition.xy - shadow.fadeCenter)"),
+                      "The fade is radial from the window's centre, not from the eye")
         XCTAssertTrue(mask.contains("shadowWindowVisibility(shadow.cascade, shadowMap, uvz)"),
-                      "The mask reads the shared one-tap sampler, the same one every receiver reads")
+                      "The mask reads the shared sampler, the same one every receiver reads")
+        // One kernel for the whole frame. A tent on the ground next to a
+        // single tap on a wall reads as two different shadow systems in one
+        // picture, which is worse than either on its own.
+        let uniforms = try shaderSource("Render/Shaders/Shared/RenderUniforms.h")
+        XCTAssertEqual(uniforms.components(separatedBy: "sample_compare(").count - 1, 4,
+                       "The tent is four taps, and it is the only place that samples the shadow map")
+        XCTAssertNil(mask.range(of: "sample_compare("),
+                     "The mask must not grow a kernel of its own")
+        let extruded = try shaderSource("Render/Tiles/Shaders/TileExtruded.metal")
+        XCTAssertNil(extruded.range(of: "sample_compare("),
+                     "Buildings must not grow a kernel of their own")
+        let sceneModel = try shaderSource("Render/SceneModels/Shaders/SceneModel.metal")
+        XCTAssertNil(sceneModel.range(of: "sample_compare("),
+                     "Scene models must not grow a kernel of their own")
         XCTAssertNil(mask.range(of: "for ("),
                      "One window: nothing to loop over, and no cascade cross-fade")
     }

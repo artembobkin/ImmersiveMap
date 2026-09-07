@@ -228,10 +228,9 @@ final class VisualReviewModel {
             item.state = .rendering
             do {
                 switch item.scenario.subject {
-                case let .still(camera, routes):
+                case let .still(camera):
                     item.artifact = try await renderer.renderStill(item.scenario,
                                                                    camera: camera,
-                                                                   routes: routes,
                                                                    into: directory)
                 case let .video(establish, shots):
                     videoScenarioOnScreen = item.scenario

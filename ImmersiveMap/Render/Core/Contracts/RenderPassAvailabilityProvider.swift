@@ -16,6 +16,11 @@ struct RenderPassAvailabilityBuilder {
     /// Unlike the content-driven flags above, the starfield is on by default and
     /// is turned off by settings, so it starts enabled instead of accumulating.
     var starfieldEnabled: Bool = true
+    /// Settings-driven like the starfield: on until the style switches
+    /// extruded buildings off.
+    var buildingExtrusionEnabled: Bool = true
+    /// Content-driven: on once a frame has scene models to draw.
+    var sceneModelsEnabled: Bool = false
 
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
@@ -23,6 +28,8 @@ struct RenderPassAvailabilityBuilder {
                                avatarsEnabled: avatarsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
                                sceneModelOcclusionEnabled: sceneModelOcclusionEnabled,
-                               starfieldEnabled: starfieldEnabled)
+                               starfieldEnabled: starfieldEnabled,
+                               buildingExtrusionEnabled: buildingExtrusionEnabled,
+                               sceneModelsEnabled: sceneModelsEnabled)
     }
 }

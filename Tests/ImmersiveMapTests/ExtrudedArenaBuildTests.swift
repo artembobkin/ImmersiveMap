@@ -37,7 +37,9 @@ final class ExtrudedArenaBuildTests: XCTestCase {
                                                  smallSettlementMaximumZoom: 12,
                                                  landmarkMinimumZoom: 15,
                                                  addTestBorders: false,
-                                      roofShapesEnabled: true)
+                                      roofShapesEnabled: true,
+                                      buildingExtrusionEnabled: true,
+                                      labelsEnabled: true)
         let encoded = try PreparedTileDiskCodec.encode(preparedTile: prepared,
                                                        cacheIdentity: identity,
                                                        sourceETag: "etag",

@@ -118,6 +118,16 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
         XCTAssertTrue(DebugOverlayShadowSettingsPlanner.coverageRange.contains(defaultCoverage))
     }
 
+    /// The slider reaches the resolver's floor, which is what makes winding
+    /// the window right down possible from the panel.
+    func testCoverageSliderReachesTheResolverFloor() {
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageRange.lowerBound,
+                       Double(ShadowFrameStateResolver.coverageRange.lowerBound))
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageRange.lowerBound, 0.25)
+        XCTAssertLessThanOrEqual(DebugOverlayShadowSettingsPlanner.coverageRange.upperBound,
+                                 Double(ShadowFrameStateResolver.coverageRange.upperBound))
+    }
+
     /// The elevation slider must not reach the angle at which the resolver
     /// drops shadows: a slider whose end silently turns the feature off reads
     /// as a bug rather than as a setting.
@@ -142,10 +152,34 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
             .contains(Double(ImmersiveMapSettings.ShadowSettings().normalOffsetTexels)))
     }
 
+    func testTheCasterHeightSliderMatchesTheResolverClamp() {
+        let range = ShadowFrameStateResolver.maxCasterHeightRange
+
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.casterHeightRange.lowerBound,
+                       Double(range.lowerBound))
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.casterHeightRange.upperBound,
+                       Double(range.upperBound))
+        XCTAssertTrue(DebugOverlayShadowSettingsPlanner.casterHeightRange
+            .contains(Double(ImmersiveMapSettings.ShadowSettings().maxCasterHeightMeters)))
+    }
+
+    func testTheSoftnessSliderMatchesTheResolverClamp() {
+        let range = ShadowFrameStateResolver.softnessRange
+
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.softnessRange.lowerBound,
+                       Double(range.lowerBound))
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.softnessRange.upperBound,
+                       Double(range.upperBound))
+        XCTAssertTrue(DebugOverlayShadowSettingsPlanner.softnessRange
+            .contains(Double(ImmersiveMapSettings.ShadowSettings().softness)))
+    }
+
     func testTitlesCarryTheValue() {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(0.22), "Strength 0.22")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageTitle(3), "Coverage 3.0x")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetTitle(2.5), "Normal offset 2.5tx")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.casterHeightTitle(50), "Caster height 50 m")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.softnessTitle(1.75), "Softness 1.75x")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.azimuthTitle(213.7), "Sun azimuth 214°")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.elevationTitle(54.2), "Sun elevation 54°")
     }
@@ -184,10 +218,47 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
         XCTAssertEqual(DebugOverlaySunAngles.angles(direction: applied.scene.light.direction).azimuthDegrees,
                        30,
                        accuracy: 1e-3)
-        // Nothing outside the two branches the panel edits may move.
+        // Nothing outside the branches the panel edits may move.
         XCTAssertEqual(applied.tiles, resent.tiles)
         XCTAssertEqual(applied.camera, resent.camera)
         XCTAssertEqual(applied.scene.atmosphere, resent.scene.atmosphere)
+        XCTAssertEqual(applied.scene.fog, resent.scene.fog)
+    }
+
+    func testTheAtmosphereOverrideRidesOnTopLikeTheOthers() {
+        var override = DebugOverlaySettingsOverride()
+        var dragged = ImmersiveMapSettings.AtmosphereSettings()
+        dragged.intensity = 1.6
+        dragged.thickness = 0.5
+        override.atmosphere = dragged
+        let resent = settingsWithDebugPanel(true)
+
+        let applied = override.applied(to: resent)
+
+        XCTAssertEqual(applied.scene.atmosphere, dragged)
+        XCTAssertEqual(applied.scene.fog, resent.scene.fog)
+        XCTAssertEqual(applied.scene.shadows, resent.scene.shadows)
+        XCTAssertFalse(override.isEmpty)
+        override.clear()
+        XCTAssertNil(override.atmosphere)
+    }
+
+    func testTheFogOverrideRidesOnTopLikeTheShadows() {
+        var override = DebugOverlaySettingsOverride()
+        var dragged = ImmersiveMapSettings.FogSettings()
+        dragged.hazeRange = 3...9
+        dragged.skyColor = SIMD3<Float>(0.1, 0.2, 0.9)
+        override.fog = dragged
+        let resent = settingsWithDebugPanel(true)
+
+        let applied = override.applied(to: resent)
+
+        XCTAssertEqual(applied.scene.fog, dragged)
+        XCTAssertEqual(applied.scene.shadows, resent.scene.shadows)
+        XCTAssertEqual(applied.scene.light, resent.scene.light)
+        XCTAssertFalse(override.isEmpty)
+        override.clear()
+        XCTAssertNil(override.fog)
     }
 
     func testOneBranchOverriddenLeavesTheOtherAlone() {
@@ -222,5 +293,56 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
         XCTAssertTrue(override.isEmpty)
         let settings = settingsWithDebugPanel(true)
         XCTAssertEqual(override.applied(to: settings), settings)
+    }
+}
+
+/// The arithmetic behind the debug panel's horizon group: two sliders over
+/// one range that must stay well formed, and titles that carry the value.
+final class DebugOverlayFogGroupTests: XCTestCase {
+    func testTheSlidersCoverTheShippingDefault() {
+        let range = ImmersiveMapSettings.FogSettings().hazeRange
+        XCTAssertTrue(DebugOverlayFogSettingsPlanner.hazeStartRange.contains(Double(range.lowerBound)))
+        XCTAssertTrue(DebugOverlayFogSettingsPlanner.hazeEndRange.contains(Double(range.upperBound)))
+    }
+
+    func testTheStartSliderReachesTheResolverFloor() {
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeStartRange.lowerBound,
+                       Double(HorizonFrameResolver.minimumHazeStart))
+    }
+
+    func testMovingOneEndKeepsTheOtherOnItsSide() {
+        let gap = DebugOverlayFogSettingsPlanner.minimumHazeGap
+        let range: ClosedRange<Float> = 6...40
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 10), 10...40)
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 50), 50...(50 + gap),
+                       "The far end gives way to a near end dragged past it")
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, end: 20), 6...20)
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, end: 2), (2 - gap)...2,
+                       "The near end gives way to a far end dragged under it")
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 0).lowerBound,
+                       HorizonFrameResolver.minimumHazeStart,
+                       "The near end never goes under the resolver's floor")
+    }
+
+    func testTitlesCarryTheValue() {
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeStartTitle(6), "Haze from 6.0x")
+        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeEndTitle(40), "Haze to 40.0x")
+    }
+}
+
+/// The arithmetic behind the debug panel's atmosphere group: ranges that
+/// cover the shipping defaults, and titles that carry the value.
+final class DebugOverlayAtmosphereGroupTests: XCTestCase {
+    func testTheSlidersCoverTheShippingDefault() {
+        let atmosphere = ImmersiveMapSettings.AtmosphereSettings()
+        XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.intensityRange.contains(Double(atmosphere.intensity)))
+        XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.thicknessRange.contains(Double(atmosphere.thickness)))
+        XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.sunInfluenceRange.contains(Double(atmosphere.sunInfluence)))
+    }
+
+    func testTitlesCarryTheValue() {
+        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.intensityTitle(1), "Intensity 1.00")
+        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(2), "Thickness 2.00x")
+        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.sunInfluenceTitle(0.6), "Sun influence 0.60")
     }
 }

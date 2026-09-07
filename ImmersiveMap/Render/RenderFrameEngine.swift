@@ -72,7 +72,6 @@ final class RenderFrameEngine {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
-         routeSource: RouteRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          settings: ImmersiveMapSettings = .default,
          debugOverlayControls: DebugOverlayControlState = DebugOverlayControlState(),
@@ -86,7 +85,6 @@ final class RenderFrameEngine {
                                                         avatarSource: avatarSource,
                                                         markerSource: markerSource,
                                                         sceneModelSource: sceneModelSource,
-                                                        routeSource: routeSource,
                                                         providerRuntime: providerRuntime,
                                                         config: settings,
                                                         eventSink: eventSink,
@@ -100,9 +98,6 @@ final class RenderFrameEngine {
                                                               debugOverlayControls: debugOverlayControls,
                                                               postProcessingInputTextureProvider: { [attachments] in
                                                                   attachments.currentPostProcessingInputTexture
-                                                              },
-                                                              buildingImageTextureProvider: { [attachments] in
-                                                                  attachments.currentBuildingImageTexture
                                                               },
                                                               shadowMapTextureProvider: { [attachments] in
                                                                   attachments.currentShadowMapTexture
@@ -273,12 +268,10 @@ final class RenderFrameEngine {
         let hasActiveLabelVisibilityCycle = frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
         let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
-        let hasActiveRouteAnimations = frameContext.sharedState.routeState.hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations,
-                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
-                                                         routeAnimationRenderingActive: hasActiveRouteAnimations))
+                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
         let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
@@ -329,6 +322,7 @@ final class RenderFrameEngine {
         // site take the same answer from `ShadowPassGateResolver`.
         let shadowFrameState = shadowMapReuse.resolveFrameState(
             renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
+            projectionView: cameraFrameState.cameraMatrices.projectionView,
             cameraEye: cameraFrameState.cameraEye,
             centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
             flatRenderPan: resolvedPresentation.flatRenderState.pan,
@@ -362,7 +356,6 @@ final class RenderFrameEngine {
         resourceRegistry.setPipeline(persistentContext.polygonPipeline.pipelineState, named: .polygonPipeline)
         resourceRegistry.setPipeline(persistentContext.tilePipeline.pipelineState, named: .tilePipeline)
         resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.pipelineState, named: .extrudedTilePipeline)
-        resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.compositePipelineState, named: .extrudedTileCompositePipeline)
         resourceRegistry.setTexture(persistentContext.textRenderer.texture, named: .labelGlyphAtlas)
         resourceRegistry.setTexture(persistentContext.poiSpriteAtlas.texture, named: .poiSpriteAtlas)
     }

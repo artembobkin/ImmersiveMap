@@ -1226,7 +1226,12 @@ class TileMvtParser {
                     // from render_height and hides 3D via hide_3d). Extrude when the
                     // flag is true OR absent, and suppress only when explicitly false
                     // or hide_3d is set - preserving Mapbox behaviour, enabling OMT.
-                    let shouldExtrude = style.usesExtrusion
+                    // With extrusion switched off in the settings nothing is
+                    // extruded at all and the footprint stays a flat ground
+                    // fill; the flag is prepared-cache identity, so toggling
+                    // re-parses instead of serving the other shape from disk.
+                    let shouldExtrude = config.style.buildingExtrusionEnabled
+                        && style.usesExtrusion
                         && (extrudeFlag != false)
                         && !isTruthy(attributes["hide_3d"])
                         && !isUnderground
@@ -1311,9 +1316,14 @@ class TileMvtParser {
                         continue
                     }
 
-                    let labelText = labelTextResolver.resolveText(properties: attributes,
-                                                                  preferences: labelLanguagePreferences,
-                                                                  additionalKeys: labelProviderProfile.labelTextKeys)
+                    // Labels off: no road name is resolved or baked. The
+                    // switch is prepared-cache identity, so a tile prepared
+                    // without labels never answers a map that wants them.
+                    let labelText = config.labels.isEnabled
+                        ? labelTextResolver.resolveText(properties: attributes,
+                                                        preferences: labelLanguagePreferences,
+                                                        additionalKeys: labelProviderProfile.labelTextKeys)
+                        : nil
                     let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
                     let roadLabelStyle = style.roadLabelTextStyle
                     let roadClassPriority = style.roadClassPriority
@@ -1698,7 +1708,10 @@ class TileMvtParser {
                     }
                     }
                 } else if feature.type == .point {
-                    guard let labelTextStyle = style.labelTextStyle else { continue }
+                    // Point features exist only to be labelled: with labels
+                    // off the layer is skipped whole, decision engine included.
+                    guard config.labels.isEnabled,
+                          let labelTextStyle = style.labelTextStyle else { continue }
                     let points = normalize(MvtGeometryDecoder.decodePoints(feature.geometry, in: mvtData),
                                            layer: layer)
                     let featureID = feature.hasID ? feature.id : nil
@@ -1763,7 +1776,9 @@ class TileMvtParser {
 
         }
 
-        appendFallbackLowZoomWaterLabels(into: &textLabels, tile: tile)
+        if config.labels.isEnabled {
+            appendFallbackLowZoomWaterLabels(into: &textLabels, tile: tile)
+        }
         
         addBackground(polygonByStyle: &polygonByStyle, styles: &styles, tile: tile)
         if config.tiles.parsing.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }

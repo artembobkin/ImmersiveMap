@@ -16,4 +16,17 @@ enum TileSourceStencilPriority {
     static func reference(sourceZoom: Int) -> UInt32 {
         UInt32(min(max(sourceZoom, 0), 16) + 1)
     }
+
+    /// The bits the priority lives in: every tile pass reads and writes the
+    /// stencil through this mask, so the flag above stays out of its way.
+    static let priorityMask: UInt32 = 0x7F
+
+    /// The flat map's standing surfaces (buildings, scene models) raise this
+    /// bit as they draw, on top of whatever priority mark is under them,
+    /// and the horizon's ground-side draw fails where it is set: the haze
+    /// is decided from the view ray as if every painted pixel were the
+    /// ground, and a wall crossing the horizon row would otherwise take the
+    /// far ground's haze at that row. A building keeps its own colour and
+    /// the ground beside it is veiled.
+    static let surfaceMaskBit: UInt32 = 0x80
 }

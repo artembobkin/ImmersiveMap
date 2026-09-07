@@ -8,7 +8,6 @@ enum RenderGraphFactory {
                                  settings: ImmersiveMapSettings,
                                  debugOverlayControls: DebugOverlayControlState,
                                  postProcessingInputTextureProvider: @escaping () -> MTLTexture?,
-                                 buildingImageTextureProvider: @escaping () -> MTLTexture?,
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
@@ -39,15 +38,10 @@ enum RenderGraphFactory {
                                                             meshStore: context.sceneModelMeshStore,
                                                             pipeline: context.sceneModelPipeline,
                                                             extrudedDepthState: context.extrudedDepthState,
+                                                            surfaceMaskState: context.sceneModelSurfaceMaskState,
                                                             depthDisabledState: context.depthDisabledState,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
-                                                            shadowFallbackTexture: context.shadowFallbackTexture,
-                                                            supportsFramebufferFetch: context.supportsFramebufferFetch)
-        let routeSubsystem = RouteRenderSubsystem(routeSource: context.routeSource,
-                                                  pipeline: context.routePipeline,
-                                                  routeDepthState: context.globeCapDepthState,
-                                                  depthDisabledState: context.depthDisabledState,
-                                                  metalDevice: context.metalContext.device)
+                                                            shadowFallbackTexture: context.shadowFallbackTexture)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,
                                                                     tileStencilTestState: context.tileStencilTestState,
@@ -56,32 +50,26 @@ enum RenderGraphFactory {
                                                                     separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
-                                                                    groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
-                                                                    supportsFramebufferFetch: context.supportsFramebufferFetch)
+                                                                    groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture)
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
         let tileOwnershipSubsystem = TileOwnershipRenderSubsystem(pipeline: context.tileOwnershipPipeline,
                                                                   tileOwnershipWriteState: context.tileOwnershipWriteState,
-                                                                  depthDisabledState: context.depthDisabledState,
-                                                                  supportsFramebufferFetch: context.supportsFramebufferFetch)
-        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(buildingImageTextureProvider: buildingImageTextureProvider,
-                                                                          extrudedTilePipeline: context.extrudedTilePipeline,
+                                                                  depthDisabledState: context.depthDisabledState)
+        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
                                                                           extrudedStencilTestState: context.extrudedStencilTestState,
                                                                           depthDisabledState: context.depthDisabledState,
-                                                                          compositeDepthResetState: context.compositeDepthResetState,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                          shadowFallbackTexture: context.shadowFallbackTexture,
-                                                                          supportsFramebufferFetch: context.supportsFramebufferFetch)
+                                                                          shadowFallbackTexture: context.shadowFallbackTexture)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
                                                           depthDisabledState: context.depthDisabledState)
         let horizonSubsystem = HorizonRenderSubsystem(horizonRenderer: context.horizonRenderer,
                                                       skyDepthState: context.skyBackdropDepthState,
                                                       groundDepthState: context.horizonGroundDepthState,
-                                                      depthDisabledState: context.depthDisabledState,
-                                                      supportsFramebufferFetch: context.supportsFramebufferFetch)
+                                                      depthDisabledState: context.depthDisabledState)
         let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
         let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
@@ -106,7 +94,6 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             sceneModelSubsystem,
-            routeSubsystem,
             groundShadowMaskSubsystem,
             tileOwnershipSubsystem,
             flatMapSurfaceSubsystem,
@@ -119,6 +106,7 @@ enum RenderGraphFactory {
             debugSubsystem
         ]
         let availabilityProviders: [any RenderPassAvailabilityProvider] = [
+            buildingExtrusionSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,

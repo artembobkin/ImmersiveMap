@@ -85,7 +85,6 @@ enum BerlinNightTheme {
         // Depth-correct buildings, stated even though solid is the default:
         // the last third of the descent is spent among them, and the theme
         // must not depend on the engine default staying put.
-        style.buildingExtrusionMode = .solid
         return style
     }
 

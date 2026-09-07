@@ -6,7 +6,7 @@ import Metal
 /// Draws the globe's tiles as geometry on the sphere: the ground layer of
 /// every placement, projected per vertex through the surface morph and lit
 /// like the placeholder grid the `globeSurface` layer painted just before.
-/// The grid wrote the surface depth, which routes, scene models and label
+/// The grid wrote the surface depth, which scene models and label
 /// occlusion keep testing against; this geometry neither tests nor writes
 /// depth. Its extent is decided by the clip distances (the placeIn slot and
 /// the sphere as an occluder, `GlobeOcclusion.h`: whatever the planet hides

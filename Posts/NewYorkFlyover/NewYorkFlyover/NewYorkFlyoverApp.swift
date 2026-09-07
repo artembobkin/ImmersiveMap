@@ -76,7 +76,6 @@ private struct FlyoverScreen: View {
                 // Depth-correct buildings, stated even though solid is the
                 // default: the skyline is the hero of this post, and the
                 // scene must not depend on the engine default staying put.
-                .buildingExtrusionMode(.solid)
                 // A cleaner cinematic frame: no house numbers and no POI
                 // badges at the storyboard's street zooms.
                 .labelSettings(cinematicLabelSettings)

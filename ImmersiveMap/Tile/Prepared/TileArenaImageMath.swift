@@ -66,7 +66,6 @@ enum TileArenaImageMath {
     /// (the tile style and overview-mask pointers) require 256-byte
     /// setVertexBuffer offsets on Mac-family GPUs, and one alignment rule
     /// for every span keeps the plan and the write pass trivially symmetric.
-    /// (Same rule as the per-route buffer offsets in RouteRenderSubsystem.)
     static let spanAlignment = 256
 
     /// Upper bound of a plausible arena. Real dense-city tiles stay in the

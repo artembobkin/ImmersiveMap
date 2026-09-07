@@ -5,22 +5,24 @@ import Metal
 import simd
 
 /// Keeps the rendered shadow map alive across frames. The sun is static and
-/// the buildings do not move, so a rendered cascade atlas only goes stale
-/// when the camera leaves the fitted windows, the light or resolution
-/// changes, a new caster tile arrives, or scene models (which animate) cast.
+/// the buildings do not move, so a rendered map only goes stale when the
+/// camera leaves the fitted window, the light or resolution changes, a new
+/// caster tile arrives, or scene models (which animate) cast.
 /// Everything else is the common case: the receivers keep sampling the map
 /// rendered some frames ago, through matrices re-materialized for the
 /// current pan, and the whole caster pass simply does not run.
 ///
-/// The fit is computed with an inflated receiver disc (`radiusMargin`), so
-/// the camera can travel inside the rendered windows for a while before a
-/// refit; the fitted centers snap to whole texels in pan-anchored space, so
-/// a refit moves the windows by whole texels and shadow edges do not crawl.
+/// The fit is computed with an inflated receiver footprint (`radiusMargin`),
+/// so the camera can travel and turn inside the rendered window for a while
+/// before a refit; the fitted centre snaps to whole texels in pan-anchored
+/// space, so a refit moves the window by whole texels and shadow edges do not
+/// crawl. The window follows the view now, so turning the camera spends that
+/// slack faster than panning does: a refit is a re-render of the caster pass.
 final class ShadowMapReuseController {
-    /// Disc inflation of the fit. The slack is travel budget: ~10% of the
-    /// near-disc radius before the fastest-moving window needs a refit. The
-    /// price is up to 10% coarser texels than a frame-exact fit, on top of
-    /// the √2 quantization the fit always had.
+    /// Footprint inflation of the fit, about the camera. The slack is travel
+    /// budget: ~10% before the window needs a refit. The price is up to 10%
+    /// coarser texels than a frame-exact fit, on top of the √2 quantization
+    /// the fit always had.
     static let radiusMargin: Float = 1.1
 
     /// One caster's identity in the rendered map: the parsed tile object
@@ -41,12 +43,14 @@ final class ShadowMapReuseController {
     /// current pan when it still covers the frame, a fresh (margined) fit
     /// otherwise. Same inputs contract as `ShadowFrameStateResolver.resolve`.
     func resolveFrameState(renderSurfaceMode: ViewMode,
+                           projectionView: matrix_float4x4,
                            cameraEye: SIMD3<Float>,
                            centerWorldMercator: SIMD2<Double>,
                            flatRenderPan: SIMD2<Double>,
                            renderMapSize: Double,
                            scene: ImmersiveMapSettings.SceneSettings) -> ShadowFrameState? {
         guard let inputs = ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: renderSurfaceMode,
+                                                                  projectionView: projectionView,
                                                                   cameraEye: cameraEye,
                                                                   centerWorldMercator: centerWorldMercator,
                                                                   flatRenderPan: flatRenderPan,

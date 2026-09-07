@@ -28,14 +28,12 @@ enum UnfurlPresentation {
     }
 
     /// The globe is normally free to rotate under the camera below the bearing
-    /// unlock zoom, and the pitch is clamped towards zero as the camera pulls
-    /// away. Both limits are lifted here: the storyboard holds one bearing and
-    /// one pitch across the whole range so the only thing that changes on
+    /// unlock zoom. That limit is lifted here: the storyboard holds one bearing
+    /// and one pitch across the whole range so the only thing that changes on
     /// screen is the shape of the world.
     static var camera: ImmersiveMapSettings.CameraSettings {
         var camera = ImmersiveMapSettings.default.camera
         camera.globeBearingUnlockZoom = 0
-        camera.globePitchUnlockZoom = 0
         return camera
     }
 }

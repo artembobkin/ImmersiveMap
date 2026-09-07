@@ -27,10 +27,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertTrue(plan.allSatisfy(\.enabled))
-        XCTAssertFalse(plan.map(\.layer).contains(.buildingImage))
-        // Routes are a globe-only feature in this version, and the plan is
-        // where that invariant is enforced.
-        XCTAssertFalse(plan.map(\.layer).contains(.routes))
         XCTAssertFalse(plan.map(\.layer).contains(.globeVectorSurface))
     }
 
@@ -77,7 +73,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeVectorSurface,
             .globeCap,
             .sceneModels,
-            .routes,
             .horizon,
             .sceneModelOcclusion,
             .labels,
@@ -85,7 +80,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertTrue(plan.allSatisfy(\.enabled))
-        XCTAssertFalse(plan.map(\.layer).contains(.buildingImage))
     }
 
     func testGlobeModeKeepsOverlayPlanItemsDisabledWhenUnavailable() {
@@ -103,14 +97,13 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeVectorSurface,
             .globeCap,
             .sceneModels,
-            .routes,
             .horizon,
             .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .horizon])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -176,7 +169,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeVectorSurface,
             .globeCap,
             .sceneModels,
-            .routes,
             .horizon,
             .sceneModelOcclusion,
             .labels,
@@ -209,6 +201,43 @@ final class RenderLayerPlannerTests: XCTestCase {
     }
 
 
+    /// Extrusion off: the tiles carry no building geometry, so the building
+    /// layer is left out, and with it the ownership prepass, which exists
+    /// only so the buildings can test a complete ownership map (the ground
+    /// writes its own marks as it draws).
+    func testExtrusionOffLeavesOutTheBuildingsAndTheOwnershipPrepass() {
+        let plan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .flat,
+                                                 labelsEnabled: true,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 sceneModelOcclusionEnabled: false,
+                                                 starfieldEnabled: true,
+                                                 buildingExtrusionEnabled: false)
+        )
+
+        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .sceneModels, .horizon, .labels])
+        XCTAssertEqual(skipReason(for: .tileOwnership, in: plan), .buildingExtrusionDisabled)
+        XCTAssertEqual(skipReason(for: .buildingExtrusion, in: plan), .buildingExtrusionDisabled)
+    }
+
+    /// No scene models on screen: the model layer is left out of the world
+    /// pass on both surfaces instead of encoding an empty group.
+    func testNoSceneModelsLeavesOutTheModelLayer() {
+        for mode in [ViewMode.flat, .spherical] {
+            let plan = RenderLayerPlanner.plan(
+                availability: RenderPassAvailability(renderSurfaceMode: mode,
+                                                     labelsEnabled: true,
+                                                     avatarsEnabled: false,
+                                                     debugOverlayEnabled: false,
+                                                     sceneModelOcclusionEnabled: false,
+                                                     starfieldEnabled: true,
+                                                     sceneModelsEnabled: false)
+            )
+            XCTAssertFalse(enabledLayers(in: plan).contains(.sceneModels), "\(mode)")
+            XCTAssertEqual(skipReason(for: .sceneModels, in: plan), .noSceneModelContent, "\(mode)")
+        }
+    }
 
     private func enabledLayers(in plan: [RenderLayerPlanItem]) -> [RenderLayer] {
         plan.filter(\.enabled).map(\.layer)

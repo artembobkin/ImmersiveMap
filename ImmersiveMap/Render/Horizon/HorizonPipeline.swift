@@ -3,37 +3,45 @@
 
 import Metal
 
-/// The fullscreen pass that paints the air around the surface's edge: the
-/// globe's atmosphere and limb feather, the flat map's fog band. One
-/// fragment function behind a side constant, two depth tests around it (see
-/// `HorizonRenderSubsystem`), and, like every pipeline of the world pass, a
-/// twin that declares the framebuffer-fetch building image attachment.
+/// The pass that paints the air around the surface's edge: the globe's
+/// atmosphere and limb feather, the flat map's fog. One shading function
+/// behind a side constant, two depth tests around it (see
+/// `HorizonRenderSubsystem`), one geometry: the band (`HorizonBandMesh`).
 final class HorizonPipeline {
     let skyPipelineState: MTLRenderPipelineState
     let groundPipelineState: MTLRenderPipelineState
-    let skyWithBuildingImagePipelineState: MTLRenderPipelineState?
-    let groundWithBuildingImagePipelineState: MTLRenderPipelineState?
+    let bandMesh: HorizonBandMesh
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
-         sampleCount: Int = 1,
-         supportsFramebufferFetch: Bool = false) {
-        func makeFragment(groundSide: Bool) -> MTLFunction {
+         sampleCount: Int = 1) {
+        func makeFragment(name: String, groundSide: Bool) -> MTLFunction {
             let constants = MTLFunctionConstantValues()
             var value = groundSide
             constants.setConstantValue(&value, type: .bool, index: 0)
             do {
-                return try library.makeFunction(name: "horizonFragmentShader", constantValues: constants)
+                return try library.makeFunction(name: name, constantValues: constants)
             } catch {
                 fatalError("Failed to specialize the horizon fragment shader: \(error)")
             }
         }
-        func makeState(groundSide: Bool, withBuildingImage: Bool) -> MTLRenderPipelineState {
+        // Mirrors HorizonBandMesh.Vertex: two floats.
+        let bandVertexDescriptor = MTLVertexDescriptor()
+        bandVertexDescriptor.attributes[0].format = .float
+        bandVertexDescriptor.attributes[0].offset = 0
+        bandVertexDescriptor.attributes[0].bufferIndex = 0
+        bandVertexDescriptor.attributes[1].format = .float
+        bandVertexDescriptor.attributes[1].offset = MemoryLayout<Float>.stride
+        bandVertexDescriptor.attributes[1].bufferIndex = 0
+        bandVertexDescriptor.layouts[0].stride = MemoryLayout<HorizonBandMesh.Vertex>.stride
+        bandVertexDescriptor.layouts[0].stepFunction = .perVertex
+        func makeState(groundSide: Bool) -> MTLRenderPipelineState {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.label = groundSide ? "HorizonGroundPipeline" : "HorizonSkyPipeline"
-            descriptor.vertexFunction = library.makeFunction(name: "horizonVertexShader")
-            descriptor.fragmentFunction = makeFragment(groundSide: groundSide)
+            descriptor.vertexFunction = library.makeFunction(name: "horizonBandVertexShader")
+            descriptor.fragmentFunction = makeFragment(name: "horizonBandFragmentShader", groundSide: groundSide)
+            descriptor.vertexDescriptor = bandVertexDescriptor
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
             descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
@@ -50,44 +58,29 @@ final class HorizonPipeline {
             descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
             descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
             descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-            if withBuildingImage {
-                descriptor.colorAttachments[1].pixelFormat = pixelFormat
-                descriptor.colorAttachments[1].writeMask = []
-            }
             do {
                 return try metalDevice.makeRenderPipelineState(descriptor: descriptor)
             } catch {
                 fatalError("Failed to create the horizon pipeline: \(error)")
             }
         }
-        skyPipelineState = makeState(groundSide: false, withBuildingImage: false)
-        groundPipelineState = makeState(groundSide: true, withBuildingImage: false)
-        if supportsFramebufferFetch {
-            skyWithBuildingImagePipelineState = makeState(groundSide: false, withBuildingImage: true)
-            groundWithBuildingImagePipelineState = makeState(groundSide: true, withBuildingImage: true)
-        } else {
-            skyWithBuildingImagePipelineState = nil
-            groundWithBuildingImagePipelineState = nil
+        skyPipelineState = makeState(groundSide: false)
+        groundPipelineState = makeState(groundSide: true)
+        guard let bandMesh = HorizonBandMesh(metalDevice: metalDevice) else {
+            fatalError("Failed to allocate the horizon band mesh")
         }
+        self.bandMesh = bandMesh
     }
 
-    func pipelineState(groundSide: Bool, withBuildingImageAttachment: Bool) -> MTLRenderPipelineState {
-        if withBuildingImageAttachment {
-            if groundSide, let groundWithBuildingImagePipelineState {
-                return groundWithBuildingImagePipelineState
-            }
-            if groundSide == false, let skyWithBuildingImagePipelineState {
-                return skyWithBuildingImagePipelineState
-            }
-        }
-        return groundSide ? groundPipelineState : skyPipelineState
+    func pipelineState(groundSide: Bool) -> MTLRenderPipelineState {
+        groundSide ? groundPipelineState : skyPipelineState
     }
 }
 
-/// Draws one side of the horizon layer: a fullscreen triangle at the far
-/// plane whose fragment stage resolves, per pixel, the view ray's angle
-/// above or below the edge and paints the haze there. Stateless beyond the
-/// pipeline; every frame's parameters arrive as one uniform.
+/// Draws one side of the horizon layer: the band at the far plane, whose
+/// vertices are directions and whose fragments resolve the angle above or
+/// below the edge from them. Stateless beyond the pipeline; every frame's
+/// parameters arrive as one uniform.
 final class HorizonRenderer {
     private let pipeline: HorizonPipeline
 
@@ -97,15 +90,22 @@ final class HorizonRenderer {
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
               uniform: HorizonUniform,
-              groundSide: Bool,
-              withBuildingImageAttachment: Bool) {
+              groundSide: Bool) {
         var uniformValue = uniform
-        renderEncoder.setRenderPipelineState(pipeline.pipelineState(groundSide: groundSide,
-                                                                    withBuildingImageAttachment: withBuildingImageAttachment))
+        renderEncoder.setRenderPipelineState(pipeline.pipelineState(groundSide: groundSide))
         renderEncoder.setCullMode(.none)
         renderEncoder.setFragmentBytes(&uniformValue,
                                        length: MemoryLayout<HorizonUniform>.stride,
                                        index: 0)
-        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        let mesh = pipeline.bandMesh
+        renderEncoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
+        renderEncoder.setVertexBytes(&uniformValue,
+                                     length: MemoryLayout<HorizonUniform>.stride,
+                                     index: 1)
+        renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                            indexCount: mesh.indexCount,
+                                            indexType: .uint16,
+                                            indexBuffer: mesh.indexBuffer,
+                                            indexBufferOffset: 0)
     }
 }

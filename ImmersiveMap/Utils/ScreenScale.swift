@@ -22,7 +22,7 @@ import simd
 /// texture atlas texel math, MSAA and FXAA sampling, and the signed-distance
 /// range derived from screen-space derivatives in the text shader.
 ///
-/// Labels, POI icons, collision grids and route widths are converted. Avatar
+/// Labels, POI icons and collision grids are converted. Avatar
 /// markers and their badges are not yet: their on-screen size is currently the
 /// same number as the resolution of the atlas cell they sample
 /// (`AvatarsRenderer.markerSizePx`), so giving them a unit means decoupling

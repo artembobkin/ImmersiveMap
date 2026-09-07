@@ -204,7 +204,6 @@ final class VisualReviewRenderer {
     /// Renders one still and writes it as a PNG into `directory`.
     func renderStill(_ scenario: VisualReviewScenario,
                      camera: ImmersiveMapCameraPosition,
-                     routes: [ImmersiveMapRoute],
                      into directory: URL) async throws -> VisualReviewArtifact {
         let configuration = ImmersiveMapStillConfiguration(
             width: scenario.output.width,
@@ -217,7 +216,6 @@ final class VisualReviewRenderer {
 
         let image = try await stillRecorder.capture(settings: scenario.settings,
                                                     camera: camera,
-                                                    routes: routes,
                                                     configuration: configuration)
         let url = directory.appending(path: "\(scenario.id).png")
         try write(image, to: url)

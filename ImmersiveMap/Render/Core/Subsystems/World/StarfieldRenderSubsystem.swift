@@ -36,7 +36,9 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     /// At region zooms the planet fills the whole viewport: no sky pixel
     /// exists, and the stars (drawn first, painted over by the opaque
     /// ground) would be pure waste. Valid on the resting sphere only;
-    /// mid-morph the décor draws and fades with the transition as before.
+    /// mid-morph the décor draws at full strength: space stays the clear
+    /// colour until the surface switch, and the flat map's sky fades in over
+    /// the stars at the end of the unroll.
     static func frameShowsSky(frameContext: FrameContext) -> Bool {
         let globe = frameContext.globeRenderUniform
         guard globe.transition <= 0 else { return true }

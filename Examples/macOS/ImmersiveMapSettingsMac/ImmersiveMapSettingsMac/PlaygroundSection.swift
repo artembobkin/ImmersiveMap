@@ -63,7 +63,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             """
         case .buildings:
             """
-            `settings.style.buildingExtrusionMode` and `settings.scene` \
+            `settings.style.buildingExtrusionEnabled` and `settings.scene` \
             (light, shadows). Flat presentation only, and all of it is per-frame \
             uniforms, so it applies without touching a single tile.
             """

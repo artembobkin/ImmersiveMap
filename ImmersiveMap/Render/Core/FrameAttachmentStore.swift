@@ -15,15 +15,8 @@ final class FrameAttachmentStore {
     private var postProcessingInputTexture: MTLTexture?
     private var depthTexture: MTLTexture?
     private var overlayDepthTexture: MTLTexture?
-    private var buildingImageColorTexture: MTLTexture?
-    private var buildingImageTexture: MTLTexture?
-    private var worldBuildingImageTexture: MTLTexture?
     private var shadowMapTexture: MTLTexture?
     private var groundShadowMaskTexture: MTLTexture?
-
-    /// See `SharedRenderResources.supportsFramebufferFetch`; recomputed here
-    /// from the device so the pass planner needs no extra plumbing.
-    let supportsFramebufferFetch: Bool
 
     init(metalDevice: MTLDevice,
          renderSampleCount: Int) {
@@ -36,15 +29,9 @@ final class FrameAttachmentStore {
         // older comment claimed an empty render there; it no longer reproduces).
         #if targetEnvironment(simulator)
         self.transientStorageMode = .private
-        self.supportsFramebufferFetch = false
         #else
         self.transientStorageMode = metalDevice.supportsFamily(.apple1) ? .memoryless : .private
-        self.supportsFramebufferFetch = metalDevice.supportsFamily(.apple1)
         #endif
-    }
-
-    var currentBuildingImageTexture: MTLTexture? {
-        buildingImageTexture
     }
 
     var currentShadowMapTexture: MTLTexture? {
@@ -90,40 +77,6 @@ final class FrameAttachmentStore {
         let newTexture = metalDevice.makeTexture(descriptor: descriptor)
         newTexture?.label = RenderResourceName.colorTexture.rawValue
         colorTexture = newTexture
-        return newTexture
-    }
-
-    /// Second color attachment of the framebuffer-fetch world pass: the
-    /// buildings render into it and the composite reads it back per sample,
-    /// all within the pass (clear in, dontCare out), so on Apple GPUs it is
-    /// memoryless and never exists outside tile memory.
-    func ensureWorldBuildingImageTexture(drawSize: CGSize,
-                                         pixelFormat: MTLPixelFormat) -> MTLTexture? {
-        let width = Int(drawSize.width)
-        let height = Int(drawSize.height)
-        guard width > 0, height > 0 else { return nil }
-
-        if let worldBuildingImageTexture,
-           worldBuildingImageTexture.width == width,
-           worldBuildingImageTexture.height == height,
-           worldBuildingImageTexture.pixelFormat == pixelFormat,
-           worldBuildingImageTexture.sampleCount == renderSampleCount {
-            return worldBuildingImageTexture
-        }
-
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
-                                                                  width: width,
-                                                                  height: height,
-                                                                  mipmapped: false)
-        if renderSampleCount > 1 {
-            descriptor.textureType = .type2DMultisample
-            descriptor.sampleCount = renderSampleCount
-        }
-        descriptor.usage = [.renderTarget]
-        descriptor.storageMode = transientStorageMode
-        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
-        newTexture?.label = RenderResourceName.worldBuildingImageTexture.rawValue
-        worldBuildingImageTexture = newTexture
         return newTexture
     }
 
@@ -203,67 +156,9 @@ final class FrameAttachmentStore {
         return newTexture
     }
 
-    /// MSAA target of the offscreen building image pass: lives only within the pass
-    /// (clear → multisampleResolve), so it uses transient storage.
-    func ensureBuildingImageColorTexture(drawSize: CGSize,
-                                         pixelFormat: MTLPixelFormat) -> MTLTexture? {
-        guard renderSampleCount > 1 else { return nil }
-
-        let width = Int(drawSize.width)
-        let height = Int(drawSize.height)
-        guard width > 0, height > 0 else { return nil }
-
-        if let buildingImageColorTexture,
-           buildingImageColorTexture.width == width,
-           buildingImageColorTexture.height == height,
-           buildingImageColorTexture.pixelFormat == pixelFormat {
-            return buildingImageColorTexture
-        }
-
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
-                                                                  width: width,
-                                                                  height: height,
-                                                                  mipmapped: false)
-        descriptor.textureType = .type2DMultisample
-        descriptor.sampleCount = renderSampleCount
-        descriptor.usage = [.renderTarget]
-        descriptor.storageMode = transientStorageMode
-        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
-        newTexture?.label = RenderResourceName.buildingImageColorTexture.rawValue
-        buildingImageColorTexture = newTexture
-        return newTexture
-    }
-
-    /// Readable buildings image: the resolve texture of the MSAA pass (or the direct
-    /// target without MSAA). The world pass composites it over the map with a shared alpha.
-    func ensureBuildingImageTexture(drawSize: CGSize,
-                                    pixelFormat: MTLPixelFormat) -> MTLTexture? {
-        let width = Int(drawSize.width)
-        let height = Int(drawSize.height)
-        guard width > 0, height > 0 else { return nil }
-
-        if let buildingImageTexture,
-           buildingImageTexture.width == width,
-           buildingImageTexture.height == height,
-           buildingImageTexture.pixelFormat == pixelFormat {
-            return buildingImageTexture
-        }
-
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat,
-                                                                  width: width,
-                                                                  height: height,
-                                                                  mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .private
-        let newTexture = metalDevice.makeTexture(descriptor: descriptor)
-        newTexture?.label = RenderResourceName.buildingImageTexture.rawValue
-        buildingImageTexture = newTexture
-        return newTexture
-    }
-
     /// Depth of the directional-light pass, a texture array with one square
-    /// slice per cascade (near → far), sampled later by the world and
-    /// buildingImage passes: unlike the transient depth attachments it must
+    /// slice per cascade (near → far), sampled later by the world pass:
+    /// unlike the transient depth attachments it must
     /// survive its pass (`.store`) and be readable, so it is always `.private`
     /// with `.shaderRead`, never memoryless.
     func ensureShadowMapTexture(resolution: Int) -> MTLTexture? {
@@ -322,9 +217,6 @@ final class FrameAttachmentStore {
         postProcessingInputTexture = nil
         depthTexture = nil
         overlayDepthTexture = nil
-        buildingImageColorTexture = nil
-        buildingImageTexture = nil
-        worldBuildingImageTexture = nil
         shadowMapTexture = nil
         groundShadowMaskTexture = nil
     }

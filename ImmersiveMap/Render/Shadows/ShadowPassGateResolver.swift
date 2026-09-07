@@ -46,7 +46,7 @@ struct GroundShadowMaskBinding {
 /// shadow state must exist AND at least one caster must be present. Called
 /// identically by `RenderPassGraph.plan` (pass injection) and by the receiver
 /// bind sites, so the pass and the samplers can never disagree within a frame
-/// (the same trick as `BuildingExtrusionPathResolver`). Both call after
+/// (the same trick as `RenderLayerPlanner`). Both call after
 /// subsystem updates, when `sharedState` is final for the frame.
 enum ShadowPassGateResolver {
     static func resolve(frameContext: FrameContext) -> ShadowFrameState? {

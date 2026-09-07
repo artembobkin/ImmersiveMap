@@ -75,6 +75,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             || oldValue.scene.light != newValue.scene.light
             || oldValue.scene.shadows != newValue.scene.shadows
             || oldValue.scene.atmosphere != newValue.scene.atmosphere
+            || oldValue.scene.fog != newValue.scene.fog
         if sceneLiveChanged {
             mark(.scene, actions: [.liveApply])
         }
@@ -108,15 +109,13 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             mark(.tiles, actions: [.recreateRenderer])
         }
 
+        // Every label field, the on/off switch included, changes what a
+        // prepared tile carries: with labels off the parser bakes no text.
         if oldValue.labels != newValue.labels {
             mark(.labels, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
         if oldValue.style != newValue.style {
-            if isOnlyBuildingExtrusionChanged(from: oldValue.style, to: newValue.style) {
-                mark(.style, actions: [.liveApply])
-            } else {
-                mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
-            }
+            mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         }
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
@@ -129,16 +128,5 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)
-    }
-
-    /// Building extrusion alpha and mode are per-frame uniforms: the subsystem reads
-    /// them from `FrameContext`, they never enter prepared tiles or GPU resources,
-    /// so changing only these fields does not require recreating the renderer.
-    private static func isOnlyBuildingExtrusionChanged(from oldStyle: ImmersiveMapSettings.StyleSettings,
-                                                       to newStyle: ImmersiveMapSettings.StyleSettings) -> Bool {
-        var oldStyleWithNewBuildingExtrusion = oldStyle
-        oldStyleWithNewBuildingExtrusion.buildingExtrusionAlpha = newStyle.buildingExtrusionAlpha
-        oldStyleWithNewBuildingExtrusion.buildingExtrusionMode = newStyle.buildingExtrusionMode
-        return oldStyleWithNewBuildingExtrusion == newStyle
     }
 }

@@ -26,6 +26,7 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                          pan: SIMD2<Double> = basePan,
                          scene: ImmersiveMapSettings.SceneSettings = ImmersiveMapSettings.default.scene) -> ShadowFrameState? {
         controller.resolveFrameState(renderSurfaceMode: .flat,
+                                     projectionView: ShadowFrameStateResolverTests.makeProjectionView(eye: eye),
                                      cameraEye: eye,
                                      centerWorldMercator: Self.equatorCenter,
                                      flatRenderPan: pan,

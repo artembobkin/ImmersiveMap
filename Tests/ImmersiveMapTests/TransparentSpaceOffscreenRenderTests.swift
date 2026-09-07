@@ -5,10 +5,9 @@
 import XCTest
 
 /// End-to-end: with transparent space a headless frame must come back with the
-/// area outside the globe unpainted while everything drawn on the globe keeps
-/// its own coverage. A headless frame has no tiles, so the globe is its
-/// placeholder fill, shaded by the night side at the scripted clock's date, and
-/// a route arc stands in for the content on the globe. Requires the compiled
+/// area outside the globe unpainted while the globe itself keeps its own
+/// coverage. The globe is covered with fixture water tiles, since a slot no
+/// tile has painted is left unpainted on purpose. Requires the compiled
 /// Metal library, so it skips under `swift test` and runs in the xcodebuild
 /// workspace suite.
 final class TransparentSpaceOffscreenRenderTests: XCTestCase {
@@ -18,13 +17,13 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
     func testTransparentSpaceLeavesTheAreaOutsideTheGlobeUnpainted() async throws {
         let settings = ImmersiveMapSettings.default
             .transparentSpace()
-        let frame = try await renderFrame(settings: settings, routeAlpha: 1.0)
+        let frame = try await renderFrame(settings: settings)
 
         for corner in frame.corners {
             XCTAssertEqual(corner.alpha, 0, "Nothing outside the globe may be painted")
         }
-        XCTAssertGreaterThan(frame.count(where: isOpaqueRoutePixel), 0,
-                             "What is drawn on the globe must stay opaque")
+        XCTAssertEqual(frame.pixel(x: frame.size / 2, y: frame.size / 2).alpha, 255,
+                       "The globe itself must stay opaque")
     }
 
     /// The default globe paints space, and that must not change.
@@ -33,7 +32,10 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
     /// and the limb is exactly the kind of hole a corner check would miss.
     @MainActor
     func testOpaqueSpacePaintsTheWholeFrame() async throws {
-        let frame = try await renderFrame(settings: .default, routeAlpha: 1.0)
+        // No settling: the stars twinkle with scene time, so the default
+        // frame never stops changing, and the claim holds with or without
+        // the tiles in it.
+        let frame = try await renderFrame(settings: .default, settles: false)
 
         XCTAssertEqual(frame.count(where: { $0.alpha != 255 }), 0,
                        "The default map must leave no pixel unpainted")
@@ -45,96 +47,36 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
     func testTransparentSpaceSurvivesPostProcessing() async throws {
         var settings = ImmersiveMapSettings.default.transparentSpace()
         settings.postProcessing = ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true)
-        let frame = try await renderFrame(settings: settings, routeAlpha: 1.0)
+        let frame = try await renderFrame(settings: settings)
 
         for corner in frame.corners {
             XCTAssertEqual(corner.alpha, 0, "FXAA must carry the frame alpha through")
         }
-        XCTAssertGreaterThan(frame.count(where: isOpaqueRoutePixel), 0)
-    }
-
-    /// Translucent content must land on the transparent frame with its own
-    /// coverage: blending alpha with `.sourceAlpha` would square it, so a route
-    /// at 50% would come back at 25% and read as washed out over the app's
-    /// background.
-    ///
-    /// The arc is placed past the limb, over empty space. Over the globe the
-    /// destination alpha is already 1 (the surface paints its placeholder fill
-    /// under the tiles), so the route's own contribution is unmeasurable there
-    /// and the check would pass whatever the blend factor is.
-    @MainActor
-    func testTranslucentContentKeepsItsCoverageOverTransparentSpace() async throws {
-        let frame = try await renderFrame(settings: .default.transparentSpace(),
-                                          routeAlpha: 0.5,
-                                          routeBeyondTheLimb: true)
-
-        let peak = try XCTUnwrap(peakRouteAlpha(in: frame), "The route must reach the frame")
-        XCTAssertGreaterThanOrEqual(Int(peak), 120, "A 50% route must keep ~50% coverage, not 25%")
-        XCTAssertLessThan(Int(peak), 200, "Over empty space the route cannot be more opaque than it is")
+        XCTAssertEqual(frame.pixel(x: frame.size / 2, y: frame.size / 2).alpha, 255)
     }
 
     // MARK: - Helpers
 
-    /// The map has no red anywhere in its default palette, so a red-dominated
-    /// pixel can only come from the route.
-    private func isRoutePixel(_ pixel: RenderedFrame.Pixel) -> Bool {
-        pixel.red > 60 && pixel.green < 40 && pixel.blue < 40
-    }
-
-    /// Route pixels that came out fully opaque: content on the globe must keep
-    /// its own coverage while the frame around it stays transparent.
-    private func isOpaqueRoutePixel(_ pixel: RenderedFrame.Pixel) -> Bool {
-        isRoutePixel(pixel) && pixel.alpha == 255
-    }
-
-    /// The strongest coverage the route reached, read at its centre line rather
-    /// than averaged, so antialiased edges do not drag the measurement down.
-    private func peakRouteAlpha(in frame: RenderedFrame) -> UInt8? {
-        frame.allPixels.lazy.filter(isRoutePixel).map(\.alpha).max()
-    }
-
-    /// A wide arc centred on the camera, lifted well off the surface so it
-    /// cannot be swallowed by the globe's own depth.
-    ///
-    /// `beyondTheLimb` moves it past the horizon and lifts it far enough to
-    /// clear the planet anyway, which puts it over empty space rather than over
-    /// the globe. That placement is what the coverage test needs: over the
-    /// globe the destination is opaque, so the alpha the route contributes
-    /// cannot be measured there at all.
-    private func makeRoute(around center: ImmersiveMapCameraPosition,
-                           alpha: Float,
-                           beyondTheLimb: Bool) -> ImmersiveMapRoute {
-        let path = beyondTheLimb
-            ? ImmersiveMapGeoPath(
-                from: GeoCoordinate(latitude: center.latitudeDegrees - 80,
-                                    longitude: center.longitudeDegrees - 5),
-                to: GeoCoordinate(latitude: center.latitudeDegrees - 80,
-                                  longitude: center.longitudeDegrees + 5),
-                baseAltitudeMeters: 2_500_000)
-            : ImmersiveMapGeoPath(
-                from: GeoCoordinate(latitude: center.latitudeDegrees,
-                                    longitude: center.longitudeDegrees - 20),
-                to: GeoCoordinate(latitude: center.latitudeDegrees,
-                                  longitude: center.longitudeDegrees + 20),
-                peakAltitudeMeters: 500_000)
-        return ImmersiveMapRoute(id: 1,
-                                 path: path,
-                                 color: SIMD4<Float>(1, 0, 0, alpha),
-                                 widthPoints: 6,
-                                 progress: 1)
-    }
-
-    /// Renders one offscreen frame of a globe at zoom 1 with a single route
-    /// across it.
+    /// Renders one offscreen frame of a globe at zoom 1, its surface painted
+    /// by water tiles at the three coarsest zooms.
     @MainActor
-    private func renderFrame(settings: ImmersiveMapSettings,
-                             routeAlpha: Float,
-                             routeBeyondTheLimb: Bool = false) async throws -> RenderedFrame {
+    private func renderFrame(settings: ImmersiveMapSettings, settles: Bool = true) async throws -> RenderedFrame {
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings)
         harness.setZoom(1.0)
-        harness.routes.add(makeRoute(around: harness.cameraPosition,
-                                     alpha: routeAlpha,
-                                     beyondTheLimb: routeBeyondTheLimb))
-        return try await harness.renderFrame()
+        let baseline = try await harness.renderFrame()
+        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        for z in 0 ... 2 {
+            for x in 0 ..< (1 << z) {
+                for y in 0 ..< (1 << z) {
+                    let loaded = await harness.tileRenderStore.parseTile(tile: Tile(x: x, y: y, z: z), data: water)
+                    XCTAssertTrue(loaded, "The fixture tile \(z)/\(x)/\(y) must parse")
+                }
+            }
+        }
+        guard settles else {
+            return try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(1))
+        }
+        return try await harness.renderUntilSettled(changedFrom: baseline,
+                                                    startingAt: OffscreenFrameHarness.frameTime(1))
     }
 }

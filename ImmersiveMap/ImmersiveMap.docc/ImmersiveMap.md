@@ -30,7 +30,7 @@ struct MapScreen: View {
 }
 ```
 
-Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:headers:)`, `.streetscape(isEnabled:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.sceneSettings(_:)`, `.shadows()`, `.buildingRoofShapes()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
+Everything else is a builder-style modifier on the view (`.tileURLTemplate(_:headers:)`, `.streetscape(isEnabled:)`, `.mapStyle(_:)`, `.labelSettings(_:)`, `.labels(isEnabled:)`, `.sceneSettings(_:)`, `.shadows()`, `.buildingRoofShapes()`, `.debugPanel()`, and the rest). Each one writes into the ``ImmersiveMapSettings`` value the renderer is configured from, so the same map can also be driven from one stored settings value.
 
 ### Presentation
 
@@ -38,7 +38,7 @@ Zoom drives a continuous transition between a globe and a flat map: the sphere u
 
 ### On the map
 
-Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-of-interest visibility, and per-language name selection. On the flat map, buildings extrude (solid or translucently composited) and cast real-time directional shadows from three cascades onto the ground, onto each other, and onto 3D models. Colors, road classes, landcover and label styles come from the map style, which an app tunes through its configuration or replaces outright.
+Labels rasterize from MSDF text atlases with GPU collision, rank-budgeted point-of-interest visibility, and per-language name selection, and switch off as one with `.labels(isEnabled: false)`. On the flat map, buildings extrude (solid or translucently composited) and cast real-time directional shadows from three cascades onto the ground, onto each other, and onto 3D models. Colors, road classes, landcover and label styles come from the map style, which an app tunes through its configuration or replaces outright.
 
 ### Your own content
 

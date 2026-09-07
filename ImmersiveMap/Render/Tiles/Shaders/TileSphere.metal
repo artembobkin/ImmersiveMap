@@ -99,7 +99,7 @@ constant float kTileSphereExtent = 4096.0;
 // the source's mark, every pass tests greaterEqual), the same mechanism
 // the flat map uses. The band spans about 2.1e-4 at the far plane, far
 // behind the sphere's limb (z about 0.9954 at zoom 6) and everything that
-// depth-tests with real geometry (caps, routes, models). The step is about
+// depth-tests with real geometry (caps, models). The step is about
 // 7 float32 ULP at 1.0; z is constant within a draw call. Mirrored by
 // GlobeSurfaceDepthRank.swift (pinned by TileClipDistanceContractTests).
 constant float kTileSphereLayerDepthStep = 4e-7;

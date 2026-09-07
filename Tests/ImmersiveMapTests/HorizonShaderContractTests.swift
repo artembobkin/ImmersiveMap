@@ -4,9 +4,9 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// What the horizon shader promises the rest of the world pass: it sits at
-/// the far plane (the two depth tests of the layer compare against it), it
-/// never discards (a fullscreen discard would defeat hidden surface removal
+/// What the horizon shader promises the rest of the world pass: its band
+/// sits at the far plane (the two depth tests of the layer compare against
+/// it), it never discards (a fullscreen discard would defeat hidden surface removal
 /// for every later layer of the pass), it carries the side switch as a
 /// function constant, and the sky profile's weights are the ones the CPU
 /// side documents. Reads the shader source off the checkout, so it cannot
@@ -15,8 +15,8 @@ final class HorizonShaderContractTests: XCTestCase {
     func testTheShaderSitsAtTheFarPlaneAndNeverDiscards() throws {
         let source = try shaderSource()
         XCTAssertNil(source.range(of: "discard_fragment"))
-        XCTAssertTrue(source.contains("out.position = float4(positions[vertexID], 1.0, 1.0);"),
-                      "The fullscreen triangle rasterizes at the far plane")
+        XCTAssertTrue(source.contains("out.position.z = out.position.w;"),
+                      "The band rasterizes at the far plane")
         XCTAssertTrue(source.contains("constant bool kHorizonGroundSide [[function_constant(0)]];"))
         XCTAssertTrue(source.contains("above = min(above, 0.0);"),
                       "The ground side clamps its angle to the edge")

@@ -9,6 +9,11 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(ImmersiveMapSettings.default.labels.language, .english)
     }
 
+    func testDefaultLabelsAreEnabled() {
+        XCTAssertTrue(ImmersiveMapSettings.default.labels.isEnabled)
+        XCTAssertFalse(ImmersiveMapSettings.default.labels(isEnabled: false).labels.isEnabled)
+    }
+
     func testDefaultSceneLightMatchesLegacyHardcodedDirection() {
         XCTAssertEqual(ImmersiveMapSettings.default.scene.light.direction, SIMD3<Float>(-0.4, -0.6, 1.0))
     }
@@ -20,6 +25,8 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(shadows.mapResolution, 2048)
         XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
         XCTAssertEqual(shadows.normalOffsetTexels, 2.5)
+        XCTAssertEqual(shadows.maxCasterHeightMeters, 10)
+        XCTAssertEqual(shadows.softness, 1.5)
     }
 
     /// The default shadow is soft and cool: light enough that a shadowed street

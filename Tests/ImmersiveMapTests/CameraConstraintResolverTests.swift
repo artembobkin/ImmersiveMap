@@ -13,9 +13,11 @@ final class CameraConstraintResolverTests: XCTestCase {
         XCTAssertEqual(flatMaximumPitch(at: 20), degrees(75), accuracy: 0.0001)
     }
 
-    func testGlobePitchLimitUnlocksLinearlyUntilZoomThree() {
-        XCTAssertEqual(globeMaximumPitch(at: 0), 0, accuracy: 0.0001)
-        XCTAssertEqual(globeMaximumPitch(at: 1.5), degrees(37.5), accuracy: 0.0001)
+    /// The globe's ceiling no longer eases in with zoom: it is the flat
+    /// map's fixed 75 degrees at every zoom, the whole planet included.
+    func testGlobePitchLimitIsAlwaysSeventyFiveDegrees() {
+        XCTAssertEqual(globeMaximumPitch(at: 0), degrees(75), accuracy: 0.0001)
+        XCTAssertEqual(globeMaximumPitch(at: 1.5), degrees(75), accuracy: 0.0001)
         XCTAssertEqual(globeMaximumPitch(at: 3), degrees(75), accuracy: 0.0001)
         XCTAssertEqual(globeMaximumPitch(at: 20), degrees(75), accuracy: 0.0001)
     }
@@ -36,14 +38,14 @@ final class CameraConstraintResolverTests: XCTestCase {
         XCTAssertEqual(resolve(.flat, at: 20, settings: settings).pitch.apply(to: 0), 0.35, accuracy: 0.0001)
     }
 
-    func testGlobePitchFloorYieldsToTheZoomedOutCeiling() {
-        // With the default unlock at zoom 3, the globe's ceiling at zoom 0 is
-        // 0: the floor gives way instead of pinning a whole-globe view at a
-        // tilt it is not allowed to have.
+    /// The globe's ceiling is the flat map's at every zoom, so a floor under
+    /// it holds on the sphere exactly as it does on the plane.
+    func testGlobePitchFloorHoldsAtEveryZoom() {
         var settings = settings
         settings.minimumPitch = 0.35
 
-        XCTAssertEqual(resolve(.spherical, at: 0, settings: settings).pitch.apply(to: 0.9), 0, accuracy: 0.0001)
+        XCTAssertEqual(resolve(.spherical, at: 0, settings: settings).pitch.apply(to: 0), 0.35, accuracy: 0.0001)
+        XCTAssertEqual(resolve(.spherical, at: 0, settings: settings).pitch.apply(to: 0.9), 0.9, accuracy: 0.0001)
         XCTAssertEqual(resolve(.spherical, at: 3, settings: settings).pitch.apply(to: 0), 0.35, accuracy: 0.0001)
     }
 

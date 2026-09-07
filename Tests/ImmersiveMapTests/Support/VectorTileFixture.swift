@@ -78,6 +78,8 @@ enum VectorTileFixture {
             case polygon(ring: [(Int32, Int32)])
             case polygonWithHoles(exterior: [(Int32, Int32)], interiors: [[(Int32, Int32)]])
             case line(points: [(Int32, Int32)])
+            /// One point, for the label layers: a named peak, a place, a POI.
+            case point(Int32, Int32)
         }
         let id: UInt64
         let geometry: Geometry
@@ -129,6 +131,9 @@ enum VectorTileFixture {
             case .line(let points):
                 encoded.type = .linestring
                 encoded.geometry = ringGeometry(points, closed: false)
+            case .point(let x, let y):
+                encoded.type = .point
+                encoded.geometry = ringGeometry([(x, y)], closed: false)
             }
             for key in feature.properties.keys.sorted() {
                 let value = feature.properties[key] ?? ""
@@ -209,6 +214,21 @@ enum WebMercatorTileScheme {
         return Tile(x: min(max(Int(x.rounded(.down)), 0), maximumIndex),
                     y: min(max(Int(y.rounded(.down)), 0), maximumIndex),
                     z: z)
+    }
+
+    /// Where `latitude`/`longitude` falls inside `tile`, in the tile's own
+    /// units (`extent` per side), for a test placing a point feature under
+    /// the camera. Outside the tile the coordinates lie outside `0..<extent`.
+    static func tileLocalPoint(latitude: Double,
+                               longitude: Double,
+                               in tile: Tile,
+                               extent: Int32 = 4096) -> (Int32, Int32) {
+        let scale = Double(1 << tile.z)
+        let x = (longitude + 180.0) / 360.0 * scale
+        let latitudeRadians = latitude * .pi / 180.0
+        let y = (1.0 - log(tan(latitudeRadians) + 1.0 / cos(latitudeRadians)) / .pi) / 2.0 * scale
+        return (Int32(((x - Double(tile.x)) * Double(extent)).rounded()),
+                Int32(((y - Double(tile.y)) * Double(extent)).rounded()))
     }
 
     /// Every tile within `radius` tiles of the one containing the coordinate,

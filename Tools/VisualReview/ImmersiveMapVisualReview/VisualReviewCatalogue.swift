@@ -12,21 +12,11 @@ import SwiftUI
 /// since you last approved them.
 struct VisualReviewScenario: Identifiable {
     enum Subject {
-        /// One frame, optionally with routes drawn over it.
-        ///
-        /// Routes live here rather than on the scenario because video export
-        /// cannot draw them: its runtime hands the renderer an empty route
-        /// source. A scenario that carried routes for either subject would
-        /// render them in a still and silently omit them from a clip, and the
-        /// reviewer would be judging a picture the tool never claimed to make.
-        case still(camera: ImmersiveMapCameraPosition, routes: [ImmersiveMapRoute])
+        /// One frame.
+        case still(camera: ImmersiveMapCameraPosition)
         /// A short clip. `establish` is where the camera starts, `shots` is
         /// the tour it then flies.
         case video(establish: ImmersiveMapCameraPosition, shots: [ImmersiveMapCameraTourShot])
-
-        static func still(camera: ImmersiveMapCameraPosition) -> Subject {
-            .still(camera: camera, routes: [])
-        }
     }
 
     /// The canvas a still is rendered onto.
@@ -344,16 +334,16 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.europe)),
 
         VisualReviewScenario(
-            id: "transition.horizon.handover",
-            title: "The atmosphere handing over to the fog band",
+            id: "transition.horizon.bare",
+            title: "The morph runs without air",
             lookFor: """
             Tilted, past half way through the unroll: the far edge of the \
-            surface is in frame with the sky above it. The halo is fading \
-            and has turned from blue toward the map's off-white; the ground \
-            near the edge is hazed in that same colour and the edge itself \
-            is whitened, so no hard line and no staircase shows where the \
-            surface ends. The haze must sit on the edge (not float above it \
-            or leave a bare strip below it) and must be zero under the camera.
+            surface is in frame. No halo, no haze and no sky: the surface \
+            simply ends against space, stars and all, with nothing \
+            painted around it, and the ground keeps its own colours right up \
+            to the edge. The edge itself shows the tile mesh as it is, which \
+            is expected here; what is not expected is any tint or band of \
+            colour at or near it.
             """,
             settings: .default,
             subject: .still(camera: Place.morphHandover)),
@@ -457,18 +447,6 @@ enum VisualReviewCatalogue {
             Facades keep their own shading, nothing goes flat grey.
             """,
             settings: .default.shadows(isEnabled: false),
-            subject: .still(camera: Place.manhattan)),
-
-        VisualReviewScenario(
-            id: "buildings.translucent",
-            title: "Manhattan with translucent buildings",
-            lookFor: """
-            The composited path, no longer the default: streets and labels \
-            show through the massing at the blend alpha, the roofs carry the \
-            ground shadow under them, and nothing z-fights or double-tints \
-            where buildings overlap.
-            """,
-            settings: .default.buildingExtrusionMode(.translucent),
             subject: .still(camera: Place.manhattan)),
 
         VisualReviewScenario(
@@ -615,31 +593,6 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.manhattanFlat)),
 
         VisualReviewScenario(
-            id: "routes.globe",
-            title: "Route arcs over the globe",
-            lookFor: """
-            The arcs lift off the surface cleanly, keep an even width along \
-            their length, and are hidden where they pass behind the planet.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.globe, routes: [
-                ImmersiveMapRoute(id: 1,
-                                  path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 40.64, longitude: -73.78),
-                                                            to: GeoCoordinate(latitude: 51.47, longitude: -0.45),
-                                                            peakAltitudeMeters: 700_000),
-                                  color: SIMD4<Float>(1, 0.35, 0.1, 1),
-                                  widthPoints: 5,
-                                  progress: 1),
-                ImmersiveMapRoute(id: 2,
-                                  path: ImmersiveMapGeoPath(from: GeoCoordinate(latitude: 35.55, longitude: 139.78),
-                                                            to: GeoCoordinate(latitude: 25.25, longitude: 55.36),
-                                                            peakAltitudeMeters: 500_000),
-                                  color: SIMD4<Float>(0.2, 0.7, 1, 1),
-                                  widthPoints: 5,
-                                  progress: 0.6)
-            ])),
-
-        VisualReviewScenario(
             id: "ground.fill.outlines.tilted",
             title: "Fill edges under a tilted camera",
             lookFor: """
@@ -663,15 +616,17 @@ enum VisualReviewCatalogue {
 
         VisualReviewScenario(
             id: "flat.horizon.fog",
-            title: "The flat horizon's fog band",
+            title: "The flat horizon's sky and haze",
             lookFor: """
-            The same tilt, judged at the horizon line. The far ground fogs \
-            into the map's off-white so that it meets the sky above the line \
-            in one colour with no seam, no hairline and no visible edge of \
-            the tile coverage; the fog thins over a few degrees under the \
-            line and is gone well before the middle of the frame, so the \
-            near map wears no haze at all. Nothing is painted above the \
-            line: the sky is the plain clear colour, no blue and no gradient.
+            The same tilt, judged at the horizon line. Above the line a \
+            blue sky with a short pale glow at the line only: white at the \
+            line, blue again within a few degrees, and blue to the top of \
+            the frame, with no banding. Below it a narrow white haze: the \
+            far ground veiled fully at the line so that ground and sky \
+            meet in one colour with no seam, no hairline and no visible \
+            edge of the tile coverage, thinning over the far part of the \
+            ground and gone well before the middle of the frame, so the \
+            map wears no haze at all but at the horizon.
             """,
             settings: .default,
             subject: .still(camera: Place.moscowRegionTilted)),

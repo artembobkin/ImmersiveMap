@@ -44,7 +44,6 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: StubMarkerSource(),
                                        sceneModelSource: StubSceneModelSource(),
-                                       routeSource: StubRouteSource(),
                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                        settings: settings,
                                        renderCamera: renderCamera,
@@ -89,8 +88,4 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         // alpha byte is 255.
         XCTAssertTrue(pixels.contains { $0 != 0 }, "Rendered texture must not be all zero")
     }
-}
-
-private final class StubRouteSource: RouteRenderSource {
-    var currentRoutesController: ImmersiveMapRoutesController? { nil }
 }

@@ -48,8 +48,7 @@ enum CameraConstraintResolver {
                                                              cameraSettings: cameraSettings,
                                                              renderSurfaceMode: renderSurfaceMode),
             pitch: CameraPitchConstraintResolver.resolve(cameraState: cameraState,
-                                                         cameraSettings: cameraSettings,
-                                                         renderSurfaceMode: renderSurfaceMode)
+                                                         cameraSettings: cameraSettings)
         )
     }
 }
@@ -94,30 +93,12 @@ enum CameraBearingConstraintResolver {
 }
 
 enum CameraPitchConstraintResolver {
+    /// The same ceiling on both surfaces: the configured maximum plus the
+    /// high-zoom extensions, so a whole-planet view can tilt as far as a
+    /// street view.
     static func resolve(cameraState: ImmersiveMapCameraState,
-                        cameraSettings: ImmersiveMapSettings.CameraSettings,
-                        renderSurfaceMode: ViewMode) -> CameraPitchConstraint {
-        guard renderSurfaceMode == .spherical else {
-            return CameraPitchConstraint(minimumPitch: cameraSettings.minimumPitch,
-                                         maximumPitch: cameraSettings.maximumReachablePitch(at: cameraState.zoom))
-        }
-
-        return CameraPitchConstraint(
-            minimumPitch: cameraSettings.minimumPitch,
-            maximumPitch: globeMaximumPitch(zoom: cameraState.zoom,
-                                            cameraSettings: cameraSettings)
-        )
-    }
-
-    static func globeMaximumPitch(zoom: Double,
-                                  cameraSettings: ImmersiveMapSettings.CameraSettings) -> Float {
-        let maximumPitch = cameraSettings.maximumReachablePitch(at: zoom)
-        let unlockZoom = max(cameraSettings.globePitchUnlockZoom, 0)
-        guard unlockZoom > Double.leastNonzeroMagnitude else {
-            return maximumPitch
-        }
-
-        let progress = min(max(zoom / unlockZoom, 0), 1)
-        return maximumPitch * Float(progress)
+                        cameraSettings: ImmersiveMapSettings.CameraSettings) -> CameraPitchConstraint {
+        CameraPitchConstraint(minimumPitch: cameraSettings.minimumPitch,
+                              maximumPitch: cameraSettings.maximumReachablePitch(at: cameraState.zoom))
     }
 }

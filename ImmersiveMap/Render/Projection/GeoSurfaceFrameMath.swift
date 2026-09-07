@@ -34,8 +34,8 @@ struct GeoSurfaceFrame {
 /// as `GeoScreenProjectionMath` (the CPU mirror of the globe shaders), so
 /// anything anchored through this function sits exactly on the morph geometry.
 ///
-/// Shared by scene model anchors and route tessellation: the model rides
-/// exactly on the drawn line because both resolve their position here.
+/// Scene model anchors and their path animations resolve their positions
+/// here, so a model rides exactly on the surface it is anchored to.
 enum GeoSurfaceFrameMath {
     /// Mercator clamps at +-85.05 degrees, so the flat meter scale never
     /// divides by a vanishing cos(latitude).

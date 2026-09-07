@@ -11,10 +11,12 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
     private let meshStore: SceneModelMeshStore
     private let pipeline: SceneModelPipeline
     private let extrudedDepthState: MTLDepthStencilState
+    /// World-pass draws: scene depth plus the surface mask bit, so the
+    /// horizon's haze passes the models by.
+    private let surfaceMaskState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
-    private let supportsFramebufferFetch: Bool
     private let presentationStateStore = SceneModelPresentationStateStore()
     private var drawItems: [SceneModelDrawItem] = []
     private var shadowCasterItems: [SceneModelDrawItem] = []
@@ -23,18 +25,18 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
          meshStore: SceneModelMeshStore,
          pipeline: SceneModelPipeline,
          extrudedDepthState: MTLDepthStencilState,
+         surfaceMaskState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture,
-         supportsFramebufferFetch: Bool) {
+         shadowFallbackTexture: MTLTexture) {
         self.sceneModelSource = sceneModelSource
         self.meshStore = meshStore
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
+        self.surfaceMaskState = surfaceMaskState
         self.depthDisabledState = depthDisabledState
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
-        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext: FrameContext) {
@@ -135,8 +137,9 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
 
     func contributePassAvailability(settings _: ImmersiveMapSettings,
                                     builder: inout RenderPassAvailabilityBuilder) {
-        builder.sceneModelOcclusionEnabled = builder.sceneModelOcclusionEnabled
-            || drawItems.isEmpty == false
+        let hasDrawItems = drawItems.isEmpty == false
+        builder.sceneModelsEnabled = builder.sceneModelsEnabled || hasDrawItems
+        builder.sceneModelOcclusionEnabled = builder.sceneModelOcclusionEnabled || hasDrawItems
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
@@ -148,23 +151,13 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                               shadowMapTexture: shadowMapTextureProvider(),
                                                               fallbackTexture: shadowFallbackTexture)
-            // The framebuffer-fetch world pass carries a second building
-            // attachment; every pipeline in it must declare that attachment
-            // to stay pass-compatible (same decision as RenderPassGraph.plan).
-            let withBuildingImageAttachment = BuildingExtrusionPathResolver.usesInPassBuildingImage(
-                style: frameContext.services.settings.style,
-                zoom: frameContext.zoom,
-                renderSurfaceMode: frameContext.renderSurfaceMode,
-                supportsFramebufferFetch: supportsFramebufferFetch
-            )
             SceneModelDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   shadowBinding: shadowBinding,
                                   items: drawItems,
                                   pipeline: pipeline,
-                                  extrudedDepthState: extrudedDepthState,
-                                  depthDisabledState: depthDisabledState,
-                                  withBuildingImageAttachment: withBuildingImageAttachment)
+                                  surfaceMaskState: surfaceMaskState,
+                                  depthDisabledState: depthDisabledState)
         case .sceneModelOcclusion:
             guard drawItems.isEmpty == false else { return }
             SceneModelDrawer.drawLabelOcclusion(renderEncoder: encoder,

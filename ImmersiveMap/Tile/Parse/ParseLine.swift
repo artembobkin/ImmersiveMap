@@ -180,8 +180,7 @@ final class LineClipper {
 class ParseLine {
     private static let epsilon: Float = 0.0001
     /// Extra extrusion beyond the styled half-width, in tile units, giving the
-    /// analytic antialiasing ramp room inside the geometry (the tile-unit
-    /// counterpart of the route renderer's `kRouteFeatherPx`). Two units cover
+    /// analytic antialiasing ramp room inside the geometry. Two units cover
     /// a one-pixel ramp down to a quarter of a screen pixel per tile unit; a
     /// tile minified further than that is already mip-filtered.
     static let featherTileUnits: Float = 2.0

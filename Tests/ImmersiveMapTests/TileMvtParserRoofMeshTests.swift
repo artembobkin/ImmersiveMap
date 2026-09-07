@@ -199,7 +199,9 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
                                       smallSettlementMaximumZoom: 14,
                                       landmarkMinimumZoom: 15,
                                       addTestBorders: false,
-                                      roofShapesEnabled: roofShapesEnabled).namespaceComponent
+                                      roofShapesEnabled: roofShapesEnabled,
+                                      buildingExtrusionEnabled: true,
+                                      labelsEnabled: true).namespaceComponent
         }
         XCTAssertNotEqual(namespace(roofShapesEnabled: true), namespace(roofShapesEnabled: false),
                           "A tile prepared with flat lids must not answer a map that wants shaped roofs")

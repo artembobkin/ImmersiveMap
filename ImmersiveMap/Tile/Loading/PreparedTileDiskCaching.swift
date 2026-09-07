@@ -22,6 +22,16 @@ struct PreparedTileCacheIdentity {
     /// identity: a tile prepared with flat lids must not answer a map that
     /// wants shaped roofs, and vice versa.
     let roofShapesEnabled: Bool
+    /// Extruded buildings are baked into the prepared tile (or, with the
+    /// switch off, left out of it), so the flag is identity: a tile
+    /// prepared flat must not answer a map that wants its buildings raised,
+    /// and vice versa.
+    let buildingExtrusionEnabled: Bool
+    /// With labels off the parser bakes no text at all (no place names, no
+    /// points of interest, no house numbers, no road names), so the switch
+    /// is identity: a tile prepared without labels must not answer a map
+    /// that wants them, and vice versa.
+    let labelsEnabled: Bool
     /// The streetscape archive the tile's road layer was merged with, or 0
     /// with the streetscape off. Identity twice over: with it on the tile
     /// carries a second source's features, and with it off the parser bakes
@@ -32,7 +42,7 @@ struct PreparedTileCacheIdentity {
     var streetscapeRevision: UInt64 = 0
 
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-o\(roofShapesEnabled ? 1 : 0)-w\(String(streetscapeRevision, radix: 16))"
+        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-o\(roofShapesEnabled ? 1 : 0)-e\(buildingExtrusionEnabled ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-w\(String(streetscapeRevision, radix: 16))"
     }
 
     /// 0 with the streetscape off (or on with no template to request), else

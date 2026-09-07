@@ -511,6 +511,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                   smallSettlementMaximumZoom: 12,
                                   landmarkMinimumZoom: 13,
                                   addTestBorders: false,
-                                      roofShapesEnabled: true)
+                                      roofShapesEnabled: true,
+                                      buildingExtrusionEnabled: true,
+                                      labelsEnabled: true)
     }
 }

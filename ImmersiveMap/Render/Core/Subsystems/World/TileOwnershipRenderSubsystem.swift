@@ -17,16 +17,13 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
     private let pipeline: TileOwnershipPipeline
     private let tileOwnershipWriteState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
-    private let supportsFramebufferFetch: Bool
 
     init(pipeline: TileOwnershipPipeline,
          tileOwnershipWriteState: MTLDepthStencilState,
-         depthDisabledState: MTLDepthStencilState,
-         supportsFramebufferFetch: Bool) {
+         depthDisabledState: MTLDepthStencilState) {
         self.pipeline = pipeline
         self.tileOwnershipWriteState = tileOwnershipWriteState
         self.depthDisabledState = depthDisabledState
-        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext _: FrameContext) {}
@@ -57,13 +54,7 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
             }
         }
 
-        // The second world-pass color attachment of the framebuffer-fetch
-        // building path must be declared by every pipeline in the pass.
-        let withBuildingImageAttachment = layerNeedsBuildingImageAttachment(frameContext: frameContext,
-                                                                            encoderLabel: encoder.label)
-
-        pipeline.selectPipeline(renderEncoder: encoder,
-                                withBuildingImageAttachment: withBuildingImageAttachment)
+        pipeline.selectPipeline(renderEncoder: encoder)
         encoder.setDepthStencilState(tileOwnershipWriteState)
         encoder.setCullMode(.none)
         var cameraUniformValue = frameContext.cameraUniform
@@ -85,23 +76,6 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }
         encoder.setDepthStencilState(depthDisabledState)
-    }
-
-    /// The prepass runs both in the world pass (which carries the second
-    /// attachment on the framebuffer-fetch building path) and in the
-    /// offscreen building-image pass (which never does); the two need
-    /// different, pass-compatible pipeline variants.
-    private func layerNeedsBuildingImageAttachment(frameContext: FrameContext,
-                                                   encoderLabel: String?) -> Bool {
-        guard encoderLabel != RenderPassName.buildingImage.rawValue else {
-            return false
-        }
-        return BuildingExtrusionPathResolver.usesInPassBuildingImage(
-            style: frameContext.services.settings.style,
-            zoom: frameContext.zoom,
-            renderSurfaceMode: frameContext.renderSurfaceMode,
-            supportsFramebufferFetch: supportsFramebufferFetch
-        )
     }
 
     func handleMemoryWarning() {}

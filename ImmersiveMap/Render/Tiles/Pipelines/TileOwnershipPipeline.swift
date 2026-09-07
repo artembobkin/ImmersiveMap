@@ -8,18 +8,12 @@ import Metal
 /// no fragment function and every color attachment's write mask is empty,
 /// so the draws touch nothing but the stencil.
 final class TileOwnershipPipeline {
-    /// The world pass and the offscreen building-image pass (one color
-    /// attachment).
     let pipelineState: MTLRenderPipelineState
-    /// Pass-compatible twin for the framebuffer-fetch world pass, which
-    /// carries the second (building image) color attachment.
-    let withBuildingImagePipelineState: MTLRenderPipelineState?
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
-         sampleCount: Int = 1,
-         supportsFramebufferFetch: Bool = false) {
+         sampleCount: Int = 1) {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.label = "TileOwnershipPipeline"
         descriptor.vertexFunction = library.makeFunction(name: "tileOwnershipVertexShader")
@@ -30,22 +24,9 @@ final class TileOwnershipPipeline {
         descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
-
-        if supportsFramebufferFetch {
-            descriptor.colorAttachments[1].pixelFormat = pixelFormat
-            descriptor.colorAttachments[1].writeMask = []
-            withBuildingImagePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
-        } else {
-            withBuildingImagePipelineState = nil
-        }
     }
 
-    func selectPipeline(renderEncoder: MTLRenderCommandEncoder,
-                        withBuildingImageAttachment: Bool) {
-        if withBuildingImageAttachment, let withBuildingImagePipelineState {
-            renderEncoder.setRenderPipelineState(withBuildingImagePipelineState)
-        } else {
-            renderEncoder.setRenderPipelineState(pipelineState)
-        }
+    func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(pipelineState)
     }
 }

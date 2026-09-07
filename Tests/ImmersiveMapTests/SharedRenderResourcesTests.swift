@@ -69,7 +69,6 @@ final class SharedRenderResourcesTests: XCTestCase {
                                 avatarSource: StubAvatarSource(),
                                 markerSource: StubMarkerSource(),
                                 sceneModelSource: StubSceneModelSource(),
-                                routeSource: StubRouteSource(),
                                 providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                 config: settings,
                                 eventSink: VideoExportRenderEventSink(),
@@ -85,8 +84,4 @@ final class SharedRenderResourcesTests: XCTestCase {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
     }
-}
-
-private final class StubRouteSource: RouteRenderSource {
-    var currentRoutesController: ImmersiveMapRoutesController? { nil }
 }

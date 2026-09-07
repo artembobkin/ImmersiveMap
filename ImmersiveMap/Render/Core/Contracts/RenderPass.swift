@@ -14,7 +14,6 @@ enum RenderLayer: String, CaseIterable {
     /// own pass right after the shadow map and read by every ground layer of
     /// the world pass in place of a cascade lookup per layer.
     case groundShadowMask
-    case buildingImage
     /// The stars around the globe, painted first over the pass's clear
     /// color (which is space); the tile geometry blends over them.
     case starfield
@@ -35,7 +34,6 @@ enum RenderLayer: String, CaseIterable {
     /// label fragments depth-test against it, so model silhouettes clip them
     /// while the visible models stay in the world pass with MSAA and shadows.
     case sceneModelOcclusion
-    case routes
     /// The air around the surface's edge, last of the world layers on both
     /// surfaces: the globe's atmosphere and limb feather, the flat map's fog
     /// band, and their handover through the morph. Two depth-split
@@ -59,6 +57,10 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noAvatarContent
     case noSceneModelContent
     case debugOverlayDisabled
+    /// Extruded buildings are switched off in the style: the tiles carry no
+    /// building geometry, so the building layer and the ownership prepass
+    /// that exists only for it are left out of the flat world pass.
+    case buildingExtrusionDisabled
     /// The starfield layer, which paints the space background and the stars,
     /// is off because space is configured transparent.
     case transparentSpace
@@ -75,6 +77,13 @@ struct RenderPassAvailability {
     /// False when space is configured transparent: nothing outside the globe is
     /// painted, so the space background and the stars are skipped.
     let starfieldEnabled: Bool
+    /// False when the style switches extruded buildings off: the prepared
+    /// tiles then carry no building geometry, and the building layer and the
+    /// ownership prepass (which serves only the buildings) are left out.
+    var buildingExtrusionEnabled: Bool = true
+    /// True when the frame has scene models to draw; without any the model
+    /// layer is left out of the world pass instead of encoding nothing.
+    var sceneModelsEnabled: Bool = true
 }
 
 struct RenderLayerPlanItem {
@@ -96,14 +105,21 @@ struct RenderLayerPlanner {
             // placeholder grid is gone), so the space background and the
             // stars paint the whole frame and the tile geometry blends over
             // them, opaque where its background quad lands. The horizon last,
-            // over routes and models near the limb.
-            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .routes, .horizon]
+            // over the models near the limb.
+            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .horizon]
         }
 
         return worldLayers.map { layer in
             switch layer {
             case .starfield where availability.starfieldEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
+            case .tileOwnership where availability.buildingExtrusionEnabled == false,
+                 .buildingExtrusion where availability.buildingExtrusionEnabled == false:
+                // The ground writes its own ownership marks as it draws; the
+                // prepass exists for the buildings, which draw before it.
+                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .buildingExtrusionDisabled)
+            case .sceneModels where availability.sceneModelsEnabled == false:
+                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .noSceneModelContent)
             default:
                 return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
             }

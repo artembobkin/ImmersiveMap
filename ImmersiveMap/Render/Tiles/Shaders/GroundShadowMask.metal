@@ -13,7 +13,8 @@ using namespace metal;
 // the same plane, and every one of them used to sample the shadow map again
 // for the same pixel: over a street that is four to six shadow lookups, and
 // everything under a building on top of that. The plane is the same for
-// every layer, so its shadow is a function of the pixel alone.
+// every layer, so its shadow is a function of the pixel alone. It matters
+// more now that the lookup is a four-tap tent rather than one compare.
 // This pass evaluates it once and the ground layers read the result with
 // one texture read (see the kGroundShadowMaskEnabled path in Tile.metal).
 //
@@ -83,8 +84,8 @@ fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stag
     if (shadow.strength <= 0.0) {
         return 1.0h;
     }
-    float distanceToEye = length(worldPosition - shadow.eye);
-    if (distanceToEye >= shadow.fadeEndDistance) {
+    float distanceToCenter = length(worldPosition.xy - shadow.fadeCenter);
+    if (distanceToCenter >= shadow.fadeEndDistance) {
         return 1.0h;
     }
 
@@ -94,6 +95,6 @@ fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stag
         ? shadowWindowVisibility(shadow.cascade, shadowMap, uvz)
         : 1.0;
 
-    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToEye);
+    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToCenter);
     return half(1.0 - (1.0 - mapVisibility) * shadow.strength * fade);
 }

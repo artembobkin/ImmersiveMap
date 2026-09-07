@@ -17,24 +17,25 @@ enum SceneModelDrawer {
         var baseColor: SIMD4<Float>
     }
 
-    /// Opaque model geometry with depth test and depth write in the world pass.
+    /// Opaque model geometry with depth test and depth write in the world
+    /// pass, raising the surface mask bit where it lands so the horizon's
+    /// haze passes it by.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      shadowBinding: ShadowReceiverBinding,
                      items: [SceneModelDrawItem],
                      pipeline: SceneModelPipeline,
-                     extrudedDepthState: MTLDepthStencilState,
-                     depthDisabledState: MTLDepthStencilState,
-                     withBuildingImageAttachment: Bool = false) {
+                     surfaceMaskState: MTLDepthStencilState,
+                     depthDisabledState: MTLDepthStencilState) {
         guard items.isEmpty == false else { return }
 
         var cameraUniformValue = cameraUniform
-        pipeline.selectPipeline(renderEncoder: renderEncoder,
-                                withBuildingImageAttachment: withBuildingImageAttachment)
+        pipeline.selectPipeline(renderEncoder: renderEncoder)
         renderEncoder.setCullMode(.back)
         // Model I/O meshes are counterclockwise-wound; Metal defaults to clockwise.
         renderEncoder.setFrontFacing(.counterClockwise)
-        renderEncoder.setDepthStencilState(extrudedDepthState)
+        renderEncoder.setDepthStencilState(surfaceMaskState)
+        renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.surfaceMaskBit)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
 
         var shadowUniformValue = shadowBinding.uniform

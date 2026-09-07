@@ -6,7 +6,7 @@ import Foundation
 /// A trajectory over the globe: waypoints joined by great-circle arcs, plus an
 /// altitude profile above the map surface.
 ///
-/// The same value describes the drawn route (``ImmersiveMapRoute``) and the
+/// The same value describes the
 /// trajectory a 3D model flies along
 /// (`ImmersiveMapSceneModelsController.animate(id:along:duration:)`), so the
 /// model is guaranteed to ride exactly on the line that is drawn.

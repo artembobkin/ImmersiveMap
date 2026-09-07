@@ -14,7 +14,7 @@ import QuartzCore
 /// screen at all, which is what generating thumbnails, share images or a batch
 /// of reference renders needs.
 ///
-/// Content is passed as values (routes, scene models, avatar markers) rather
+/// Content is passed as values (scene models, avatar markers) rather
 /// than as controllers. A controller hands its state to a renderer as a
 /// one-shot diff, so sharing one with a capture would drain the diff a live map
 /// had not consumed yet, and a second capture from the same controller would
@@ -63,14 +63,12 @@ public final class ImmersiveMapStillRecorder {
     ///   - camera: where to look from. `nil` uses the same default position an
     ///     untouched map starts at.
     ///   - avatars: avatar markers to draw.
-    ///   - routes: routes to draw.
     ///   - sceneModels: scene models to draw.
     ///   - configuration: output geometry and timing.
     /// - Throws: ``ImmersiveMapStillCaptureError``.
     public func capture(settings: ImmersiveMapSettings = .default,
                         camera: ImmersiveMapCameraPosition? = nil,
                         avatars: [AvatarMarker] = [],
-                        routes: [ImmersiveMapRoute] = [],
                         sceneModels: [ImmersiveMapSceneModel] = [],
                         configuration: ImmersiveMapStillConfiguration = .default) async throws -> CGImage {
         guard isCapturing == false else {
@@ -84,7 +82,6 @@ public final class ImmersiveMapStillRecorder {
         let runtime = try ImmersiveMapStillRuntime(settings: settings.debugPanel(false),
                                                    camera: camera,
                                                    avatars: avatars,
-                                                   routes: routes,
                                                    sceneModels: sceneModels,
                                                    configuration: configuration)
         return try await runtime.captureImage()
@@ -137,16 +134,6 @@ final class ImmersiveMapStillRuntime {
         var currentAvatarController: ImmersiveMapAvatarsController? { controller }
     }
 
-    private final class StillRouteSource: RouteRenderSource {
-        private let controller: ImmersiveMapRoutesController?
-
-        init(controller: ImmersiveMapRoutesController?) {
-            self.controller = controller
-        }
-
-        var currentRoutesController: ImmersiveMapRoutesController? { controller }
-    }
-
     private final class StillSceneModelSource: SceneModelRenderSource {
         private let controller: ImmersiveMapSceneModelsController?
 
@@ -167,7 +154,6 @@ final class ImmersiveMapStillRuntime {
     private let eventSink: VideoExportRenderEventSink
     private let avatarSource: StillAvatarSource
     private let markerSource: StillMarkerSource
-    private let routeSource: StillRouteSource
     private let sceneModelSource: StillSceneModelSource
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
@@ -179,7 +165,6 @@ final class ImmersiveMapStillRuntime {
     init(settings: ImmersiveMapSettings,
          camera: ImmersiveMapCameraPosition?,
          avatars: [AvatarMarker],
-         routes: [ImmersiveMapRoute],
          sceneModels: [ImmersiveMapSceneModel],
          configuration: ImmersiveMapStillConfiguration) throws {
         self.configuration = configuration
@@ -196,17 +181,13 @@ final class ImmersiveMapStillRuntime {
         self.presentationStateResolver = presentationStateResolver
 
         // Position first (when given), then the presentation-derived clamp,
-        // always. `setCameraPosition` limits zoom and the global pitch
-        // ceiling but takes bearing verbatim; the globe's own bearing and
-        // pitch limits are reachable only through `applyConstraints`, and
-        // nothing later re-applies them. Without this, a capture at zoom 2
-        // with bearing 120 would render 120 degrees where the live map and a
-        // video export both render 70, so the same `ImmersiveMapCameraPosition`
-        // would give a different picture depending on which of the three drew
-        // it. The default position needs the clamp just as much: a configured
-        // pitch floor is surface-blind and lifts the zoom-0 state onto a tilt
-        // the globe's own zoomed-out ceiling forbids, so skipping it would
-        // tilt a whole-globe still that the live map renders level.
+        // always. `setCameraPosition` limits zoom and the pitch range but
+        // takes bearing verbatim; the globe's own bearing window is reachable
+        // only through `applyConstraints`, and nothing later re-applies it.
+        // Without this, a capture at zoom 2 with bearing 120 would render 120
+        // degrees where the live map and a video export both render 70, so
+        // the same `ImmersiveMapCameraPosition` would give a different
+        // picture depending on which of the three drew it.
         if let camera {
             renderCamera.setCameraPosition(camera)
         }
@@ -225,14 +206,6 @@ final class ImmersiveMapStillRuntime {
             avatars.forEach { controller.add($0) }
             avatarsController = controller
         }
-        let routesController: ImmersiveMapRoutesController?
-        if routes.isEmpty {
-            routesController = nil
-        } else {
-            let controller = ImmersiveMapRoutesController()
-            controller.add(routes)
-            routesController = controller
-        }
         let sceneModelsController: ImmersiveMapSceneModelsController?
         if sceneModels.isEmpty {
             sceneModelsController = nil
@@ -244,11 +217,9 @@ final class ImmersiveMapStillRuntime {
 
         let avatarSource = StillAvatarSource(controller: avatarsController)
         let markerSource = StillMarkerSource()
-        let routeSource = StillRouteSource(controller: routesController)
         let sceneModelSource = StillSceneModelSource(controller: sceneModelsController)
         self.avatarSource = avatarSource
         self.markerSource = markerSource
-        self.routeSource = routeSource
         self.sceneModelSource = sceneModelSource
 
         // Device and pixel-format carrier only: the offscreen path never asks
@@ -259,7 +230,6 @@ final class ImmersiveMapStillRuntime {
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: sceneModelSource,
-                                        routeSource: routeSource,
                                         providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
                                         settings: settings,
                                         debugOverlayControls: DebugOverlayControlState(),

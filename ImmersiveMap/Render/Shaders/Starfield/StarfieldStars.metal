@@ -7,8 +7,9 @@ using namespace metal;
 #include "../Shared/GeoMath.h"
 
 // The stars around the globe. Space itself is not drawn here: the world
-// pass's clear color paints it (already blended toward the flat map's color
-// by the transition), and the stars blend additively over it.
+// pass's clear color paints it, and the stars blend additively over it. They
+// stay at full strength through the unroll: the clear color is space until
+// the surface switch, and the flat map's sky fades in over the stars.
 
 struct StarVertexIn {
     float3 position [[attribute(0)]];
@@ -29,7 +30,6 @@ struct StarVertexOut {
     half temperature;
     half twinklePhase;
     half halo;
-    half transition;
 };
 
 struct StarfieldParams {
@@ -57,7 +57,6 @@ vertex StarVertexOut starfieldVertexShader(StarVertexIn in [[stage_in]],
     out.temperature = half(in.temperature);
     out.twinklePhase = half(in.twinklePhase);
     out.halo = half(in.halo);
-    out.transition = half(globe.transition);
     return out;
 }
 
@@ -87,8 +86,7 @@ fragment float4 starfieldFragmentShader(StarVertexOut in [[stage_in]],
         ? mix(warm, neutral, clampedTemperature * 2.0h)
         : mix(neutral, cool, (clampedTemperature - 0.5h) * 2.0h);
 
-    half transitionAlpha = 1.0h - smoothstep(0.0h, 1.0h, in.transition);
-    half alpha = saturate(core * 0.95h + halo * 0.55h + crossGlow) * intensity * transitionAlpha;
-    half3 emissive = color * (core * 1.3h + halo * 0.75h + crossGlow * 1.6h) * intensity * transitionAlpha;
+    half alpha = saturate(core * 0.95h + halo * 0.55h + crossGlow) * intensity;
+    half3 emissive = color * (core * 1.3h + halo * 0.75h + crossGlow * 1.6h) * intensity;
     return float4(float3(emissive), float(alpha));
 }

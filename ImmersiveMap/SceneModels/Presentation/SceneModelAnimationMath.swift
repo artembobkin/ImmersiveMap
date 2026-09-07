@@ -7,7 +7,7 @@ import simd
 /// Deterministic animation math for scene models: move durations, quaternion
 /// orientation, and scalar easing. Kept inside SceneModels so the domain folder
 /// does not depend on Avatars. Great-circle interpolation itself lives in
-/// `GeoGreatCircleMath`, shared with route tessellation.
+/// `GeoGreatCircleMath`.
 enum SceneModelAnimationMath {
     static let minimumPositionDuration: TimeInterval = 0.14
     static let maximumPositionDuration: TimeInterval = 0.60

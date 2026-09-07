@@ -10,13 +10,19 @@ import ImmersiveMap
 /// Language is the interesting one: it selects a different name field in the
 /// vector tile and is part of the prepared-tile cache namespace
 /// (`LabelLanguage.preparedTileCacheNamespaceKey`), so switching languages
-/// re-prepares tiles rather than re-drawing the ones already in memory.
+/// re-prepares tiles rather than re-drawing the ones already in memory. The
+/// on/off switch is the exception: it applies on the next frame.
 struct LabelsPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PanelRow {
+                // `.labels(isEnabled:)` on the view. Live: the text stays in
+                // the prepared tiles, only the label layer stops drawing.
+                Toggle("Labels", isOn: $settings.labels.isEnabled)
+                    .toggleStyle(.switch)
+
                 Picker("Language", selection: $settings.labels.language) {
                     Text("English").tag(ImmersiveMapSettings.LabelLanguage.english)
                     Text("Russian").tag(ImmersiveMapSettings.LabelLanguage.russian)
@@ -98,7 +104,7 @@ struct LabelsPanel: View {
                 }
             }
 
-            DeferredNote(text: "Label sliders commit when you let go: every value re-prepares the visible tiles.")
+            DeferredNote(text: "Label sliders commit when you let go: every value but the Labels switch re-prepares the visible tiles.")
         }
     }
 }

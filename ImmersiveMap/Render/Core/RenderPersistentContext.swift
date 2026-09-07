@@ -51,10 +51,8 @@ final class RenderPersistentContext {
     let groundOutlineState: MTLDepthStencilState
     let tileOwnershipWriteState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
-    /// See `SharedRenderResources.compositeDepthResetState`.
-    let compositeDepthResetState: MTLDepthStencilState
-    /// See `SharedRenderResources.supportsFramebufferFetch`.
-    let supportsFramebufferFetch: Bool
+    /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
+    let sceneModelSurfaceMaskState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -78,11 +76,6 @@ final class RenderPersistentContext {
     let sceneModelMeshStore: SceneModelMeshStore
     let sceneModelPipeline: SceneModelPipeline
 
-    // MARK: - Route Resources
-
-    let routeSource: RouteRenderSource
-    let routePipeline: RoutePipeline
-
     // MARK: - Avatar and Debug Resources
 
     let avatarSource: AvatarRenderSource
@@ -100,7 +93,6 @@ final class RenderPersistentContext {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
-         routeSource: RouteRenderSource,
          providerRuntime: ImmersiveMapProviderRuntimeContext,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -123,17 +115,13 @@ final class RenderPersistentContext {
         self.groundOwnerState = shared.groundOwnerState
         self.tileOwnershipWriteState = shared.tileOwnershipWriteState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
+        self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.tileStencilTestState = shared.tileStencilTestState
         self.groundOutlineState = shared.groundOutlineState
-        self.compositeDepthResetState = shared.compositeDepthResetState
-        self.supportsFramebufferFetch = shared.supportsFramebufferFetch
         self.shadowFallbackTexture = shared.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 
         let mapBaseColors = providerRuntime.mapBaseColors
-
-        self.routeSource = routeSource
-        self.routePipeline = shared.routePipeline
 
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline

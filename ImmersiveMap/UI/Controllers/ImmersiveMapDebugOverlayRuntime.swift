@@ -115,6 +115,18 @@ final class ImmersiveMapDebugOverlayRuntime {
             settings.scene.light.direction = direction
             onSettingsChangeRequested?(settings)
         }
+        hudView.onFogSettingsChanged = { [weak self] fog in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.fog = fog
+            settings.scene.fog = fog
+            onSettingsChangeRequested?(settings)
+        }
+        hudView.onAtmosphereSettingsChanged = { [weak self] atmosphere in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.atmosphere = atmosphere
+            settings.scene.atmosphere = atmosphere
+            onSettingsChangeRequested?(settings)
+        }
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
@@ -153,6 +165,8 @@ final class ImmersiveMapDebugOverlayRuntime {
         #if os(macOS)
         hudView.apply(shadowSettings: settings.scene.shadows,
                       sunDirection: settings.scene.light.direction)
+        hudView.apply(fogSettings: settings.scene.fog)
+        hudView.apply(atmosphereSettings: settings.scene.atmosphere)
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())

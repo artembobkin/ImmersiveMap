@@ -19,11 +19,9 @@ enum FlatMapSurfaceDrawer {
                      tileStencilTestState: MTLDepthStencilState,
                      groundOutlineState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
-                     withBuildingImageAttachment: Bool = false,
                      opaqueFillsOnly: Bool = false,
                      markingCutoffWorldDistance: Float = .infinity) {
-        tilePipeline.selectPipeline(renderEncoder: renderEncoder,
-                                    withBuildingImageAttachment: withBuildingImageAttachment)
+        tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
         // (ParsedPolygon.firstClockwiseTriangle), and the flat projection
@@ -135,8 +133,7 @@ enum FlatMapSurfaceDrawer {
         }
         renderEncoder.pushDebugGroup("ground.opaqueFills")
         renderEncoder.setDepthStencilState(groundOwnerState)
-        tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder,
-                                              withBuildingImageAttachment: withBuildingImageAttachment)
+        tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder)
         drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
         // The horizon backdrop stops here: its job is the painted far band
@@ -163,8 +160,7 @@ enum FlatMapSurfaceDrawer {
         // that is translucent this frame (mid-fade) gets no outline: its
         // fill wrote no depth to test against, and the fringe would double
         // blend along the edge.
-        if tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder,
-                                                      withBuildingImageAttachment: withBuildingImageAttachment) {
+        if tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder) {
             renderEncoder.pushDebugGroup("ground.fillOutlines")
             renderEncoder.setDepthStencilState(groundOutlineState)
             var fillOutlineUniform = TileFillOutlineUniform(viewportSizePx: drawableSizePx)
@@ -181,13 +177,11 @@ enum FlatMapSurfaceDrawer {
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)
-        tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder,
-                                             withBuildingImageAttachment: withBuildingImageAttachment)
+        tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder)
         drawLayer(\.ground, bandOffset: 0, runFilter: isTranslucentFillRun)
         renderEncoder.popDebugGroup()
         renderEncoder.pushDebugGroup("ground.lineRibbons")
-        tilePipeline.selectPipeline(renderEncoder: renderEncoder,
-                                    withBuildingImageAttachment: withBuildingImageAttachment)
+        tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         drawLayer(\.ground,
                   bandOffset: GlobeSurfaceDepthRank.classDepthBand,
                   runFilter: { $0.isLinesClass })

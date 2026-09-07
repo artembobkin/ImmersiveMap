@@ -15,7 +15,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
     private let groundShadowMaskFallbackTexture: MTLTexture
-    private let supportsFramebufferFetch: Bool
 
     init(tilePipeline: TilePipeline,
          groundOwnerState: MTLDepthStencilState,
@@ -25,8 +24,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
-         groundShadowMaskFallbackTexture: MTLTexture,
-         supportsFramebufferFetch: Bool) {
+         groundShadowMaskFallbackTexture: MTLTexture) {
         self.tilePipeline = tilePipeline
         self.groundOwnerState = groundOwnerState
         self.tileStencilTestState = tileStencilTestState
@@ -36,7 +34,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
         self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
-        self.supportsFramebufferFetch = supportsFramebufferFetch
     }
 
     func update(frameContext _: FrameContext) {}
@@ -65,16 +62,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let markingCutoff = RoadMarkingDistanceLOD.cutoffWorldDistance(
             drawableHeightPx: Float(frameContext.drawSize.height),
             unitsPerMeter: Float(unitsPerMeter))
-        // The framebuffer-fetch world pass carries a second building
-        // attachment; every pipeline in it must declare that attachment to
-        // stay pass-compatible (same decision as RenderPassGraph.plan).
-        let withBuildingImageAttachment = BuildingExtrusionPathResolver.usesInPassBuildingImage(
-            style: frameContext.services.settings.style,
-            zoom: frameContext.zoom,
-            renderSurfaceMode: frameContext.renderSurfaceMode,
-            supportsFramebufferFetch: supportsFramebufferFetch
-        )
-
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
         // buildings, never written), the road buckets only test it.
@@ -101,7 +88,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  withBuildingImageAttachment: withBuildingImageAttachment,
                                   markingCutoffWorldDistance: markingCutoff)
 FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
@@ -118,7 +104,6 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   tileStencilTestState: tileStencilTestState,
                                   groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  withBuildingImageAttachment: withBuildingImageAttachment,
                                   // The far band under the fog needs only the painted
                                   // ground: the backdrop's sub-pixel linework is skipped
                                   // (see the drawer).

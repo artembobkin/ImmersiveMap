@@ -64,10 +64,28 @@ enum ShadowFrameStateResolver {
     /// dropped: near-horizontal light produces quasi-infinite shadows the
     /// cascade maps cannot represent.
     static let minimumLightDirectionZ: Float = 0.05
-    /// Caster-height cap: receivers above it fall outside the fitted depth
-    /// window, and taller casters are pancaked onto the near plane by the
-    /// depth clamp.
-    static let maxCasterHeightMeters = 1000.0
+    /// Range `ShadowSettings.maxCasterHeightMeters` is clamped to. Receivers
+    /// above the limit fall outside the fitted depth window, and taller
+    /// casters are pancaked onto the near plane by the depth clamp.
+    static let maxCasterHeightRange: ClosedRange<Float> = 10...500
+    /// ...and never taller than this many window radii.
+    ///
+    /// The window must be wider than its own disc by `height * |L.xy| / L.z`,
+    /// because that is how far a caster of that height throws its shadow into
+    /// the disc. Under a sun 54 degrees up that is about 0.72 of the height,
+    /// so a flat 1000 m cap adds ~720 m to every window no matter how small
+    /// the disc is. At a street camera that addition was ten times the disc
+    /// itself: the window stayed ~700 m wide however far the coverage was
+    /// wound down, so coverage moved the fade and nothing else, and the shadow
+    /// map's texels never got finer.
+    ///
+    /// Tying the cap to the radius makes coverage mean what it says at every
+    /// zoom. What it costs is casters above the cap not reaching that window,
+    /// which is the right trade by construction: a tower 700 m away throws
+    /// nothing meaningful into a disc nine meters across. Ten radii leaves the
+    /// full 1000 m in place at the shipping coverages and only bites where the
+    /// window is deliberately wound down.
+    static let maxCasterHeightWindowRadii: Float = 10
     /// Constant receiver bias, in shadow-map texels of depth slope. It is the
     /// only depth-side defense left: there is no receiver-plane gradient, so
     /// this has to cover the receiver's own depth variation across the
@@ -99,10 +117,30 @@ enum ShadowFrameStateResolver {
     /// gradient is gone.
     static let geometricCutoffStart: Float = 0.18
     static let geometricCutoffEnd: Float = 0.35
-    /// Sampling-rectangle inset in texels: keeps the bilinear tap inside the
-    /// fitted window.
+    /// Range `ShadowSettings.softness` is clamped to: the factor the tent's
+    /// four taps are pushed out by, about the sample point (see
+    /// `shadowWindowVisibility`). 1 is the plain 3x3 tent.
+    ///
+    /// The ceiling is what the tap positions stay honest at. The weights are
+    /// the exact 3x3 tent's, so spreading the taps without recomputing them
+    /// drifts the reconstructed kernel away from a tent; well past this the
+    /// four lobes start to read as a cross in the ramp. It is also what
+    /// `uvInsetTexels` is sized for.
+    static let softnessRange: ClosedRange<Float> = 1...2.5
+    /// Sampling-rectangle inset in texels: keeps the tent's taps inside the
+    /// fitted window, at the widest spread `softnessRange` allows.
+    ///
+    /// A tap sits at most one texel from the sample point before the spread
+    /// (the offsets `u0`/`u1` reach exactly 1 at their extremes), so at most
+    /// `softnessRange.upperBound` after it, and its own bilinear footprint
+    /// adds half a texel. Pinned by `ShadowFrameStateResolverTests`.
     static let uvInsetTexels: Float = 4.0
     static let mapResolutionRange: ClosedRange<Int> = 256...4096
+    /// Range `ShadowSettings.coverageCameraDistances` is clamped to. The floor
+    /// is far below anything worth shipping on purpose: it is what lets the
+    /// debug panel wind the window right down and look at the texel grid
+    /// itself. See `fadeDistances` for what happens under a coverage of 1.
+    static let coverageRange: ClosedRange<Float> = 0.25...48
 
     struct CascadeSpec {
         let radius: Float
@@ -113,12 +151,32 @@ enum ShadowFrameStateResolver {
     /// `coverageCameraDistances`, with the caster-height cap in world units.
     static func windowSpec(cameraDistance: Float,
                            unitsPerMeter: Double,
-                           coverageCameraDistances: Float) -> CascadeSpec {
-        // Floor 2: at coverage 1 the fade band [0.75R, R] would end exactly at
-        // the camera distance, and since no visible ground is ever closer than
-        // that, every shadow would fade to nothing while the pass still runs.
-        CascadeSpec(radius: max(coverageCameraDistances, 2.0) * cameraDistance,
-                    maxCasterHeight: Float(maxCasterHeightMeters * unitsPerMeter))
+                           coverageCameraDistances: Float,
+                           maxCasterHeightMeters: Float) -> CascadeSpec {
+        let coverage = min(max(coverageCameraDistances, coverageRange.lowerBound),
+                           coverageRange.upperBound)
+        let radius = coverage * cameraDistance
+        let limit = min(max(maxCasterHeightMeters, maxCasterHeightRange.lowerBound),
+                        maxCasterHeightRange.upperBound)
+        return CascadeSpec(radius: radius,
+                           maxCasterHeight: min(Float(Double(limit) * unitsPerMeter),
+                                                maxCasterHeightWindowRadii * radius))
+    }
+
+    /// Where shadows finish fading out, and where the band before it starts,
+    /// as radial distances from the window's centre.
+    ///
+    /// The window's own radius, always: the band is the outer quarter of the
+    /// fitted disc, so the window's edge is never reached and never shows as a
+    /// circle, at any coverage. This works only because the fade is measured
+    /// from the same point the window is fitted around. Measuring it from the
+    /// eye (as it was) described a different shape: it made the fade depend on
+    /// pitch, which is exactly what the pose-invariant disc exists to prevent,
+    /// and once the radius dropped under one camera distance the whole band
+    /// lay in front of the nearest visible ground, so every shadow in the
+    /// frame vanished instead of an edge being hidden.
+    static func fadeDistances(farRadius: Float) -> (start: Float, end: Float) {
+        (farRadius * 0.75, farRadius)
     }
 
     /// Everything the fit and the materialization derive from the frame:
@@ -132,13 +190,18 @@ enum ShadowFrameStateResolver {
         let mapResolution: Int
         let farRadius: Float
         let spec: CascadeSpec
+        /// The visible ground the window has to cover, in flat world XY.
+        let footprint: [SIMD2<Float>]
         let normalOffsetTexels: Float
+        /// Tap spread of the tent, clamped to `softnessRange`.
+        let softness: Float
         let panShift: SIMD3<Double>
         let strength: Float
         let tint: SIMD3<Float>
     }
 
     static func resolveInputs(renderSurfaceMode: ViewMode,
+                              projectionView: matrix_float4x4,
                               cameraEye: SIMD3<Float>,
                               centerWorldMercator: SIMD2<Double>,
                               flatRenderPan: SIMD2<Double>,
@@ -179,12 +242,18 @@ enum ShadowFrameStateResolver {
 
         let spec = windowSpec(cameraDistance: cameraDistance,
                               unitsPerMeter: unitsPerMeter,
-                              coverageCameraDistances: scene.shadows.coverageCameraDistances)
+                              coverageCameraDistances: scene.shadows.coverageCameraDistances,
+                              maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
 
         let halfMapSize = renderMapSize * 0.5
         let panShift = SIMD3<Double>(flatRenderPan.x * halfMapSize,
                                      -flatRenderPan.y * halfMapSize,
                                      0)
+
+        let footprint = visibleGroundFootprint(inverseProjectionView: simd_inverse(projectionView),
+                                               cameraEye: cameraEye,
+                                               maxDistance: spec.radius)
+        guard footprint.isEmpty == false else { return nil }
 
         let normalOffsetTexels = min(max(scene.shadows.normalOffsetTexels,
                                          normalOffsetTexelsRange.lowerBound),
@@ -197,7 +266,10 @@ enum ShadowFrameStateResolver {
                          mapResolution: mapResolution,
                          farRadius: spec.radius,
                          spec: spec,
+                         footprint: footprint,
                          normalOffsetTexels: normalOffsetTexels,
+                         softness: min(max(scene.shadows.softness, softnessRange.lowerBound),
+                                       softnessRange.upperBound),
                          panShift: panShift,
                          strength: min(max(scene.shadows.strength, 0), 1),
                          tint: simd_clamp(scene.shadows.tint,
@@ -206,12 +278,14 @@ enum ShadowFrameStateResolver {
     }
 
     static func resolve(renderSurfaceMode: ViewMode,
+                        projectionView: matrix_float4x4,
                         cameraEye: SIMD3<Float>,
                         centerWorldMercator: SIMD2<Double>,
                         flatRenderPan: SIMD2<Double>,
                         renderMapSize: Double,
                         scene: ImmersiveMapSettings.SceneSettings) -> ShadowFrameState? {
         guard let inputs = resolveInputs(renderSurfaceMode: renderSurfaceMode,
+                                         projectionView: projectionView,
                                          cameraEye: cameraEye,
                                          centerWorldMercator: centerWorldMercator,
                                          flatRenderPan: flatRenderPan,
@@ -223,11 +297,99 @@ enum ShadowFrameStateResolver {
         return materialize(fit: fit, inputs: inputs)
     }
 
-    /// Raw light-space extremes of one cascade's receiver volume: the disc
-    /// boundary and center, at the ground and lifted to the caster-height
-    /// cap. Shared by the fit (which quantizes a window around them) and by
-    /// the coverage check of a cached fit (which asks whether they still
-    /// land inside the fitted window).
+    /// The ground the camera can actually see, in flat world XY.
+    ///
+    /// The window is fitted to this instead of to a disc around the look-at
+    /// point. A disc has to reach as far as the farthest visible ground, and
+    /// then covers just as much ground *behind* the camera, which nobody is
+    /// looking at: at a tilted camera that was half the window's side spent on
+    /// nothing, and the texels went with it.
+    ///
+    /// The price is that the window now depends on where the camera points, so
+    /// turning changes the fitted rectangle and, with it, the texel grid. That
+    /// is the trade the disc was originally chosen to avoid; `radiusMargin`
+    /// and the texel snap still keep the grid still while the camera travels
+    /// inside a fit.
+    ///
+    /// Corner and edge rays of the view frustum are intersected with z = 0.
+    /// A ray that passes above the horizon never meets the plane, and one that
+    /// meets it kilometres out would size the window for ground the fade has
+    /// already taken to nothing, so every point is clamped to `maxDistance`
+    /// horizontally from the camera. That clamp is a circle around the camera,
+    /// which is exactly what the fade hides.
+    static func visibleGroundFootprint(inverseProjectionView: matrix_float4x4,
+                                       cameraEye: SIMD3<Float>,
+                                       maxDistance: Float) -> [SIMD2<Float>] {
+        guard maxDistance > 0, maxDistance.isFinite else { return [] }
+
+        let cameraGround = SIMD2<Float>(cameraEye.x, cameraEye.y)
+        var points: [SIMD2<Float>] = []
+        // The NDC boundary, sampled rather than just cornered: clamping turns
+        // the far edge into an arc, whose extremes are not at the corners.
+        let samplesPerEdge = 4
+        let edges: [(SIMD2<Float>, SIMD2<Float>)] = [
+            (SIMD2<Float>(-1, -1), SIMD2<Float>(1, -1)),
+            (SIMD2<Float>(1, -1), SIMD2<Float>(1, 1)),
+            (SIMD2<Float>(1, 1), SIMD2<Float>(-1, 1)),
+            (SIMD2<Float>(-1, 1), SIMD2<Float>(-1, -1))
+        ]
+        for (from, to) in edges {
+            for step in 0..<samplesPerEdge {
+                let t = Float(step) / Float(samplesPerEdge)
+                let ndc = from + (to - from) * t
+                guard let ground = groundPoint(ndc: ndc,
+                                               inverseProjectionView: inverseProjectionView,
+                                               cameraGround: cameraGround,
+                                               maxDistance: maxDistance) else {
+                    continue
+                }
+                points.append(ground)
+            }
+        }
+        return points
+    }
+
+    /// One NDC point's ground position, clamped into the coverage circle.
+    private static func groundPoint(ndc: SIMD2<Float>,
+                                    inverseProjectionView: matrix_float4x4,
+                                    cameraGround: SIMD2<Float>,
+                                    maxDistance: Float) -> SIMD2<Float>? {
+        func unproject(_ depth: Float) -> SIMD3<Float>? {
+            let clip = SIMD4<Float>(ndc.x, ndc.y, depth, 1)
+            let world = inverseProjectionView * clip
+            guard abs(world.w) > 1e-9 else { return nil }
+            return SIMD3<Float>(world.x, world.y, world.z) / world.w
+        }
+        guard let near = unproject(0), let far = unproject(1) else { return nil }
+
+        let direction = far - near
+        let horizontal = SIMD2<Float>(direction.x, direction.y)
+        guard simd_length_squared(horizontal) > 1e-20 else { return nil }
+
+        // Above the horizon the ray never reaches the ground: take the
+        // coverage circle in the direction it was heading, so the window still
+        // covers everything up to the fade.
+        var hit = cameraGround + simd_normalize(horizontal) * maxDistance
+        if abs(direction.z) > 1e-9 {
+            let t = -near.z / direction.z
+            if t > 0, t <= 1 {
+                let ground = near + direction * t
+                hit = SIMD2<Float>(ground.x, ground.y)
+            }
+        }
+        let offset = hit - cameraGround
+        let distance = simd_length(offset)
+        if distance > maxDistance, distance > 1e-9 {
+            hit = cameraGround + offset * (maxDistance / distance)
+        }
+        guard hit.x.isFinite, hit.y.isFinite else { return nil }
+        return hit
+    }
+
+    /// Raw light-space extremes of the receiver volume: the footprint at the
+    /// ground and lifted to the caster-height cap. Shared by the fit (which
+    /// quantizes a window around them) and by the coverage check of a cached
+    /// fit (which asks whether they still land inside the fitted window).
     struct CascadeExtremes {
         let minX: Float
         let maxX: Float
@@ -237,30 +399,12 @@ enum ShadowFrameStateResolver {
         let maxDepth: Float
     }
 
-    static func cascadeExtremes(spec: CascadeSpec,
-                                lightView: matrix_float4x4,
-                                lightDirection: SIMD3<Float>) -> CascadeExtremes? {
-        guard spec.radius > 0, spec.radius.isFinite,
-              spec.maxCasterHeight > 0, spec.maxCasterHeight.isFinite else {
+    static func cascadeExtremes(footprint: [SIMD2<Float>],
+                                maxCasterHeight: Float,
+                                lightView: matrix_float4x4) -> CascadeExtremes? {
+        guard footprint.isEmpty == false,
+              maxCasterHeight > 0, maxCasterHeight.isFinite else {
             return nil
-        }
-
-        // Receiver volume samples: the disc boundary (8 fixed directions PLUS
-        // the two exact depth-extreme azimuths ±L.xy: the fixed grid can miss
-        // the true disc depth extremum by up to (1-cos 22.5°)·|L.xy|·R, which
-        // would cut long shadows with a hard line inside the fade zone) and
-        // the center, at the ground and lifted to the caster-height cap. The
-        // lifted copies matter for the light-space Y extent, which grows with
-        // the horizontal light tilt.
-        var boundaryDirections: [SIMD2<Float>] = (0..<8).map { pointIndex in
-            let angle = Float(pointIndex) * (.pi / 4)
-            return SIMD2<Float>(cos(angle), sin(angle))
-        }
-        let horizontalLight = SIMD2<Float>(lightDirection.x, lightDirection.y)
-        if simd_length(horizontalLight) > 1e-5 {
-            let sunAzimuth = simd_normalize(horizontalLight)
-            boundaryDirections.append(sunAzimuth)
-            boundaryDirections.append(-sunAzimuth)
         }
 
         var minX = Float.greatestFiniteMagnitude
@@ -269,8 +413,11 @@ enum ShadowFrameStateResolver {
         var maxY = -Float.greatestFiniteMagnitude
         var minDepth = Float.greatestFiniteMagnitude
         var maxDepth = -Float.greatestFiniteMagnitude
-        for point in boundaryDirections.map({ $0 * spec.radius }) + [SIMD2<Float>.zero] {
-            for z in [Float(0), spec.maxCasterHeight] {
+        // The lifted copies matter for the light-space extent, which grows
+        // with the horizontal light tilt: a caster that tall standing on the
+        // footprint's rim still has to be inside the window.
+        for point in footprint {
+            for z in [Float(0), maxCasterHeight] {
                 let view = lightView * SIMD4<Float>(point.x, point.y, z, 1)
                 minX = min(minX, view.x)
                 maxX = max(maxX, view.x)
@@ -288,6 +435,16 @@ enum ShadowFrameStateResolver {
         }
         return CascadeExtremes(minX: minX, maxX: maxX, minY: minY, maxY: maxY,
                                minDepth: minDepth, maxDepth: maxDepth)
+    }
+
+    /// The footprint inflated about the camera, which is the travel slack the
+    /// reuse controller spends: the camera can move and turn inside it before
+    /// the fit stops covering the frame.
+    static func inflated(footprint: [SIMD2<Float>],
+                         about cameraGround: SIMD2<Float>,
+                         margin: Float) -> [SIMD2<Float>] {
+        guard margin != 1 else { return footprint }
+        return footprint.map { cameraGround + ($0 - cameraGround) * margin }
     }
 
     /// Light-space pan projections: how the pan shift reads along each
@@ -310,14 +467,16 @@ enum ShadowFrameStateResolver {
     /// with margin 1.0, which reproduces the historical frame-exact fit.
     static func resolveAnchoredFit(inputs: FitInputs, radiusMargin: Float) -> ShadowAnchoredFit? {
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
-        let spec = inputs.spec
-        let fitSpec = CascadeSpec(radius: spec.radius * radiusMargin,
-                                  maxCasterHeight: spec.maxCasterHeight)
-        guard let extremes = cascadeExtremes(spec: fitSpec,
-                                             lightView: inputs.lightView,
-                                             lightDirection: inputs.lightDirection) else {
+        let cameraGround = SIMD2<Float>(inputs.cameraEye.x, inputs.cameraEye.y)
+        let fitFootprint = inflated(footprint: inputs.footprint,
+                                    about: cameraGround,
+                                    margin: radiusMargin)
+        guard let extremes = cascadeExtremes(footprint: fitFootprint,
+                                             maxCasterHeight: inputs.spec.maxCasterHeight,
+                                             lightView: inputs.lightView) else {
             return nil
         }
+        let spec = inputs.spec
 
         // Square quantized window: the raw extent varies smoothly with the
         // zoom fraction, and letting the texel size follow it makes shadow
@@ -376,9 +535,9 @@ enum ShadowFrameStateResolver {
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
         let resolution = Float(fit.mapResolution)
         let spec = inputs.spec
-        guard let extremes = cascadeExtremes(spec: spec,
-                                             lightView: inputs.lightView,
-                                             lightDirection: inputs.lightDirection) else {
+        guard let extremes = cascadeExtremes(footprint: inputs.footprint,
+                                             maxCasterHeight: spec.maxCasterHeight,
+                                             lightView: inputs.lightView) else {
             return false
         }
         let window = fit.window
@@ -462,20 +621,27 @@ enum ShadowFrameStateResolver {
         let texelUV = SIMD2<Float>(repeating: 1.0 / resolution)
         let inset = uvInsetTexels * texelUV
         let cascade = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
-                                           kernelRadiusUV: .zero,
+                                           tentSpread: inputs.softness,
                                            depthBias: depthBias,
                                            uvMinimum: inset,
                                            uvMaximum: SIMD2<Float>(1, 1) - inset,
                                            normalOffsetWorld: inputs.normalOffsetTexels * texelWorldSize,
                                            texelSizeUV: texelUV)
 
+        let fade = fadeDistances(farRadius: inputs.farRadius)
         let uniform = ShadowUniform(cascade: cascade,
                                     eye: inputs.cameraEye,
                                     strength: inputs.strength,
-                                    fadeStartDistance: inputs.farRadius * 0.75,
-                                    fadeEndDistance: inputs.farRadius,
+                                    fadeStartDistance: fade.start,
+                                    fadeEndDistance: fade.end,
                                     lightDirection: inputs.lightDirection,
-                                    tint: inputs.tint)
+                                    tint: inputs.tint,
+                                    // The footprint is clamped to a circle
+                                    // around the camera, so that circle is the
+                                    // only window edge a viewer can reach, and
+                                    // the fade has to be measured from there.
+                                    fadeCenter: SIMD2<Float>(inputs.cameraEye.x,
+                                                             inputs.cameraEye.y))
         return ShadowFrameState(lightProjectionView: lightProjectionView,
                                 shadowUniform: uniform,
                                 mapResolution: fit.mapResolution)
