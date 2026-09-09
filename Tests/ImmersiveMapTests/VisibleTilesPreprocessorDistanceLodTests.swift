@@ -206,8 +206,10 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
     /// Past the ceiling the farthest parents go: every kept target starts
     /// nearer the eye than any tile left to the backdrop.
     func testTheCeilingTrimsOnlyTheFarthest() {
-        // A full disc of tiles around the eye, far more than the ceiling.
-        let camera = Self.camera(tilt: 75)
+        // A full disc of tiles around the eye, far more than the ceiling,
+        // with the reach pushed past the disc so the ceiling is what cuts.
+        var camera = Self.camera(tilt: 75)
+        camera.farRadius = 100
         let eye = camera.eyeGround
         var tiles: [VisibleTile] = []
         for row in -40 ... 40 {
@@ -242,6 +244,95 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         XCTAssertLessThan(nearestDropped, .infinity, "Something was trimmed")
         XCTAssertLessThanOrEqual(farthestKept, nearestDropped * 1.5,
                                  "The trimmed tiles are the farthest, allowing for a parent spanning both sides of the cut")
+    }
+
+    /// Beyond the reach nothing is placed at any zoom, the backdrop paints
+    /// the ground; within it the levels are as before. Without a backdrop
+    /// the reach does not apply.
+    func testBeyondTheReachNothingIsPlaced() {
+        var camera = Self.camera(tilt: 75)
+        // A street tilt's frustum, which runs to the horizon.
+        let tiles = Self.frustumTiles(tilt: 75)
+        let lookAtWorld = Self.world(ofTilePoint: Self.lookAt)
+        let cameraDistance = simd_length(camera.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
+        camera.farRadius = 6
+        let output = flatTargets(tiles, camera: camera)
+        var coveredBeyond = 0
+        var uncoveredWithin = 0
+        for tile in tiles {
+            let distance = simd_length(Self.worldCenter(of: tile) - camera.eye)
+            let zoom = tile.z - FlatDistanceCoverage.drop(distance: distance, cameraDistance: cameraDistance)
+            let covered = Self.cover(of: tile, in: output) != nil
+            if distance > camera.farRadius * cameraDistance * 1.05, covered {
+                // A parent placed for a nearer member may reach over the
+                // line; a tile beyond it never earns a placement itself.
+                XCTAssertTrue(output.contains { $0.z < Self.zoom && $0.tile.covers(tile.tile) },
+                              "beyond the reach only a nearer member's parent covers a tile")
+                coveredBeyond += 1
+            }
+            if distance < camera.farRadius * cameraDistance * 0.95, zoom > TileCulling.flatBackdropZoomLevel, covered == false {
+                uncoveredWithin += 1
+            }
+        }
+        XCTAssertEqual(uncoveredWithin, 0, "within the reach every tile the backdrop does not own is covered")
+        XCTAssertLessThan(output.filter { $0.z < Self.zoom }.count, FlatDistanceCoverage.maximumParents,
+                          "at a reach of 6 the ceiling is never reached")
+        XCTAssertGreaterThan(tiles.count - coveredBeyond, 0)
+
+        // No backdrop: the reach is ignored, the far ground stays covered.
+        camera.backdropZoom = nil
+        let uncut = flatTargets(tiles, camera: camera)
+        for tile in tiles {
+            XCTAssertNotNil(Self.cover(of: tile, in: uncut), "without a backdrop every tile stays covered")
+        }
+    }
+
+    /// The reach holds with the level hysteresis: a tile crosses the line
+    /// only once its distance is past it by the margin, either way.
+    func testTheReachHoldsWithHysteresis() {
+        XCTAssertFalse(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: nil, distance: 9.9, reach: 10))
+        XCTAssertTrue(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: nil, distance: 10.1, reach: 10))
+        XCTAssertFalse(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: false, distance: 10.5, reach: 10),
+                       "just past the line a tile that was within stays within")
+        XCTAssertTrue(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: false, distance: 11.5, reach: 10))
+        XCTAssertTrue(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: true, distance: 9.5, reach: 10),
+                      "just under the line a tile that was beyond stays beyond")
+        XCTAssertFalse(FlatDistanceCoverage.settledBeyondReach(previouslyBeyond: true, distance: 8.5, reach: 10))
+
+        // Through the preprocessor: a tile right at the line keeps its side.
+        let tile = VisibleTile(x: 256, y: 250, z: Self.zoom)
+        let cameraDistance = 1.2
+        func camera(eyeDistance: Double) -> FlatCoverageCamera {
+            let tileCenter = Self.worldCenter(of: tile)
+            let horizontal = (eyeDistance * eyeDistance - cameraDistance * cameraDistance).squareRoot()
+            let eye = SIMD3<Double>(tileCenter.x + horizontal, tileCenter.y, cameraDistance)
+            var camera = FlatCoverageCamera(eye: eye, flatRenderState: Self.flatRenderState,
+                                            eyeGround: SIMD2<Double>(256.5 + horizontal, 250.5),
+                                            lookAt: SIMD2<Double>(256.5 + horizontal, 250.5))
+            camera.farRadius = 4
+            return camera
+        }
+        let reach = 4 * cameraDistance
+        XCTAssertNotNil(Self.cover(of: tile, in: flatTargets([tile], camera: camera(eyeDistance: reach * 0.9))))
+        XCTAssertNotNil(Self.cover(of: tile, in: flatTargets([tile], camera: camera(eyeDistance: reach * 1.05))),
+                        "just past the reach the tile keeps its placement")
+        XCTAssertNil(Self.cover(of: tile, in: flatTargets([tile], camera: camera(eyeDistance: reach * 1.15))),
+                     "well past it the tile is left to the backdrop")
+        XCTAssertNil(Self.cover(of: tile, in: flatTargets([tile], camera: camera(eyeDistance: reach * 0.95))),
+                     "coming back, the tile stays beyond until the margin is crossed")
+        XCTAssertNotNil(Self.cover(of: tile, in: flatTargets([tile], camera: camera(eyeDistance: reach * 0.85))))
+    }
+
+    func testTheReachKnobIsClamped() {
+        XCTAssertEqual(FlatDistanceCoverage.clampFarRadius(1), FlatDistanceCoverage.farRadiusRange.lowerBound)
+        XCTAssertEqual(FlatDistanceCoverage.clampFarRadius(1000), FlatDistanceCoverage.farRadiusRange.upperBound)
+        XCTAssertEqual(FlatDistanceCoverage.clampFarRadius(.nan), FlatDistanceCoverage.farRadius)
+        let controls = DebugOverlayControlState()
+        XCTAssertEqual(controls.snapshot().coverageFarRadiusCameraDistances, Float(FlatDistanceCoverage.farRadius))
+        controls.setCoverageFarRadiusCameraDistances(7)
+        XCTAssertEqual(controls.snapshot().coverageFarRadiusCameraDistances, 7)
+        controls.setCoverageFarRadiusCameraDistances(0)
+        XCTAssertEqual(controls.snapshot().coverageFarRadiusCameraDistances, Float(FlatDistanceCoverage.farRadiusRange.lowerBound))
     }
 
     /// A tile changes level only once its distance has crossed the

@@ -104,10 +104,10 @@ enum TileArenaImageMath {
                                       vertexCount: preparedTile.extruded.vertices.count)
             case .extrudedStyles:
                 builder.append(.styles(preparedTile.extruded.styles))
-            case .glyphRunVertices(let tier, let run):
-                builder.append(.labelVertices(preparedTile.textLabels.set(for: tier).glyphRuns[run].localGlyphVertices))
-            case .poiIconRunVertices(let tier, let run):
-                builder.append(.labelVertices(preparedTile.textLabels.set(for: tier).poiIconRuns[run].localIconVertices))
+            case .glyphRunVertices(let run):
+                builder.append(.labelVertices(preparedTile.textLabels.glyphRuns[run].localGlyphVertices))
+            case .poiIconRunVertices(let run):
+                builder.append(.labelVertices(preparedTile.textLabels.poiIconRuns[run].localIconVertices))
             case .roadLabelGlyphVertices:
                 builder.append(.labelVertices(preparedTile.roadLabels.localGlyphVertices))
             }

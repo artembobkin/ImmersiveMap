@@ -116,6 +116,10 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setRoadFadeMinimumEndMeters(meters)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onCoverageFarRadiusCameraDistancesChanged = { [weak controls, weak renderRuntime] cameraDistances in
+            controls?.setCoverageFarRadiusCameraDistances(cameraDistances)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
             guard let self, var settings = currentSettings else { return }
             settingsOverride.shadows = shadows

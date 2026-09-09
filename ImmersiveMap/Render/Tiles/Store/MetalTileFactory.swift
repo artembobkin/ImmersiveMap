@@ -105,9 +105,7 @@ final class MetalTileFactory: @unchecked Sendable {
             spans: plan.spans,
             backingBuffer: backingBuffer,
             groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
-            full: Self.textLabelSetMeta(from: preparedTile.textLabels.full),
-            reduced: Self.textLabelSetMeta(from: preparedTile.textLabels.reduced),
-            minimal: Self.textLabelSetMeta(from: preparedTile.textLabels.minimal),
+            textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels)
         ) else {
             // The plan and the reader both walk the schema's slot sequence,
@@ -193,9 +191,7 @@ final class MetalTileFactory: @unchecked Sendable {
         guard let tileBuffers = Self.buildTileBuffers(spans: image.spans,
                                                       backingBuffer: backingBuffer,
                                                       groundStyleRuns: image.groundStyleRuns,
-                                                      full: image.textLabelsFull,
-                                                      reduced: image.textLabelsReduced,
-                                                      minimal: image.textLabelsMinimal,
+                                                      textLabels: image.textLabels,
                                                       roadLabels: image.roadLabels) else {
             return .imageUnreadable
         }
@@ -232,13 +228,9 @@ final class MetalTileFactory: @unchecked Sendable {
     private static func buildTileBuffers(spans: [TileArenaSpan],
                                          backingBuffer: MTLBuffer?,
                                          groundStyleRuns: [GroundStyleRun],
-                                         full: PreparedTileArenaImage.TextLabelSetMeta,
-                                         reduced: PreparedTileArenaImage.TextLabelSetMeta,
-                                         minimal: PreparedTileArenaImage.TextLabelSetMeta,
+                                         textLabels: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta) -> TileBuffers? {
-        let expectedSlots = TileArenaSchema.slots(full: TileArenaSchema.runCounts(of: full),
-                                                  reduced: TileArenaSchema.runCounts(of: reduced),
-                                                  minimal: TileArenaSchema.runCounts(of: minimal))
+        let expectedSlots = TileArenaSchema.slots(text: TileArenaSchema.runCounts(of: textLabels))
         var cursor = SpanCursor(spans: spans,
                                 expectedSlots: expectedSlots,
                                 backingBuffer: backingBuffer)
@@ -266,9 +258,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                             styles: cursor.takeView(.extrudedStyles),
                                             indexType: extrudedIndices.indexType)
 
-        let textLabels = TileBuffers.TextLabels(full: takeTextLabelSet(full, tier: .full, cursor: &cursor),
-                                                reduced: takeTextLabelSet(reduced, tier: .reduced, cursor: &cursor),
-                                                minimal: takeTextLabelSet(minimal, tier: .minimal, cursor: &cursor))
+        let textLabelBuffers = takeTextLabelSet(textLabels, cursor: &cursor)
         let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)
         let roadLabelBuffers = TileBuffers.RoadLabels(pathInputs: roadLabels.pathInputs,
                                                       pathRanges: roadLabels.pathRanges,
@@ -289,7 +279,7 @@ final class MetalTileFactory: @unchecked Sendable {
                            roads: roads,
                            bridgeOverlay: bridgeOverlay,
                            extruded: extruded,
-                           textLabels: textLabels,
+                           textLabels: textLabelBuffers,
                            roadLabels: roadLabelBuffers)
     }
 
@@ -315,15 +305,14 @@ final class MetalTileFactory: @unchecked Sendable {
     }
 
     private static func takeTextLabelSet(_ meta: PreparedTileArenaImage.TextLabelSetMeta,
-                                         tier: BaseLabelDetailTier,
                                          cursor: inout SpanCursor) -> TileBuffers.TextLabelSet {
         let glyphRuns = meta.glyphRunStyles.enumerated().map { run, style in
             LabelsByStyleRun(style: style,
-                             localGlyphVertices: cursor.takeView(.glyphRunVertices(tier: tier, run: run)))
+                             localGlyphVertices: cursor.takeView(.glyphRunVertices(run: run)))
         }
         let poiIconRuns = meta.poiIconRunStyles.enumerated().map { run, style in
             PoiIconRunBuffer(style: style,
-                             localVertices: cursor.takeView(.poiIconRunVertices(tier: tier, run: run)))
+                             localVertices: cursor.takeView(.poiIconRunVertices(run: run)))
         }
         return TileBuffers.TextLabelSet(placementInputs: meta.placementInputs,
                                         labelsByStyleRuns: glyphRuns,

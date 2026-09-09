@@ -75,9 +75,6 @@ final class BaseLabelTraceRecorderTests: XCTestCase {
                                         baseTrackedTilesChanged: true,
                                         roadTrackedTilesChanged: false,
                                         projectionChanged: true,
-                                        fullTileCount: 3,
-                                        reducedTileCount: 5,
-                                        minimalTileCount: 4,
                                         activeLabelSpanCount: 30,
                                         labelInputsCount: 28,
                                         validLabelCount: 24,
@@ -90,10 +87,6 @@ final class BaseLabelTraceRecorderTests: XCTestCase {
                                         horizonVisibleCount: 18,
                                         fadeVisibleCount: 7,
                                         fadeAnimatingCount: 3,
-                                        cycleActive: true,
-                                        cycleCursor: 256,
-                                        cycleGroupCount: 1024,
-                                        cycleComplete: false,
                                         labels: "0|42|cv=visible|a=1.00",
                                         hotBuckets: "4/2:8/3/2",
                                         maxHotBucketCount: 8,
@@ -107,9 +100,7 @@ final class BaseLabelTraceRecorderTests: XCTestCase {
         XCTAssertEqual(lines[0]["zoom"] as? Double, 11.5)
         XCTAssertEqual(lines[0]["pitchDegrees"] as? Double, 75.0)
         XCTAssertEqual(lines[0]["baseTrackedTilesChanged"] as? Bool, true)
-        XCTAssertEqual(lines[0]["fullTileCount"] as? Int, 3)
         XCTAssertEqual(lines[0]["collisionUnknownCount"] as? Int, 9)
-        XCTAssertEqual(lines[0]["cycleGroupCount"] as? Int, 1024)
         XCTAssertEqual(lines[0]["labelsIncluded"] as? Bool, true)
         XCTAssertEqual(lines[0]["labels"] as? String, "0|42|cv=visible|a=1.00")
         XCTAssertEqual(lines[0]["hotBuckets"] as? String, "4/2:8/3/2")
@@ -130,9 +121,6 @@ final class BaseLabelTraceRecorderTests: XCTestCase {
                                         baseTrackedTilesChanged: true,
                                         roadTrackedTilesChanged: false,
                                         projectionChanged: true,
-                                        fullTileCount: 3,
-                                        reducedTileCount: 5,
-                                        minimalTileCount: 4,
                                         activeLabelSpanCount: 30,
                                         labelInputsCount: 28,
                                         validLabelCount: 24,
@@ -145,10 +133,6 @@ final class BaseLabelTraceRecorderTests: XCTestCase {
                                         horizonVisibleCount: 18,
                                         fadeVisibleCount: 7,
                                         fadeAnimatingCount: 3,
-                                        cycleActive: true,
-                                        cycleCursor: 256,
-                                        cycleGroupCount: 1024,
-                                        cycleComplete: false,
                                         labels: nil,
                                         hotBuckets: "4/2:8/3/2",
                                         maxHotBucketCount: 8,

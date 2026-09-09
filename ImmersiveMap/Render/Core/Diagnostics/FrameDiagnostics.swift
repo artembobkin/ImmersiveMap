@@ -21,9 +21,6 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         /// "there are no models" from "the models are not here yet".
         case pendingSceneModelMeshes
         case baseLabelCount
-        case baseLabelFullTileCount
-        case baseLabelReducedTileCount
-        case baseLabelMinimalTileCount
         case roadLabelGlyphCount
         case roadLabelInstanceCount
         case roadLabelNearCameraCulledPathCount
@@ -54,6 +51,9 @@ final class FrameDiagnostics: FrameDiagnosticsService {
     private(set) var counters: [Counter: Int] = [:]
     private(set) var measurements: [Measurement: Double] = [:]
     private(set) var skipReasons: Set<RenderSkipReason> = []
+    /// CPU seconds each render subsystem spent in the frame's update and
+    /// prepareGPU calls together, by the subsystem's name.
+    private(set) var subsystemDurations: [String: TimeInterval] = [:]
 
     init(frameIndex: UInt64, frameDeltaTime: TimeInterval) {
         self.frameIndex = frameIndex
@@ -68,6 +68,10 @@ final class FrameDiagnostics: FrameDiagnosticsService {
 
     func recordStage(_ stage: FrameStage, duration: TimeInterval) {
         stageDurations[stage] = duration
+    }
+
+    func recordSubsystem(_ name: String, duration: TimeInterval) {
+        subsystemDurations[name, default: 0] += duration
     }
 
     func recordLayer(_ layer: RenderLayer, duration: TimeInterval) {

@@ -13,7 +13,6 @@ final class BaseLabelCache {
     private struct TileRecord {
         let ownerKey: VisibleTile
         var metalTileIdentity: ObjectIdentifier
-        var labelDetailTier: BaseLabelDetailTier
         var isRetained: Bool
         var tileSlotIndex: UInt32
         var allocation: BaseLabelTileArena.Allocation
@@ -51,14 +50,8 @@ final class BaseLabelCache {
     }
 
     func rebuild(trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                 tileIndexAllocator: VisibleTileIndexAllocator,
-                 center: Center,
-                 centerZoom: Int,
-                 renderSurfaceMode: ViewMode) {
-        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles,
-                                                              center: center,
-                                                              centerZoom: centerZoom,
-                                                              renderSurfaceMode: renderSurfaceMode),
+                 tileIndexAllocator: VisibleTileIndexAllocator) {
+        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles),
                     tileIndexAllocator: tileIndexAllocator,
                     trackedTilesChanged: true,
                     projectionChanged: true)
@@ -285,12 +278,11 @@ final class BaseLabelCache {
     private func upsertTileRecord(_ sourceEntry: BaseLabelSourceEntry) {
         let ownerKey = sourceEntry.ownerKey
         let metalTile = sourceEntry.metalTile
-        let selectedTextLabelSet = metalTile.tileBuffers.textLabels.set(for: sourceEntry.labelDetailTier)
+        let selectedTextLabelSet = metalTile.tileBuffers.textLabels
         let metalTileIdentity = sourceEntry.metalTileIdentity
 
         if var existingRecord = tileRecordsByOwnerKey[ownerKey] {
-            let payloadChanged = existingRecord.metalTileIdentity != metalTileIdentity ||
-                existingRecord.labelDetailTier != sourceEntry.labelDetailTier
+            let payloadChanged = existingRecord.metalTileIdentity != metalTileIdentity
             let requiresReallocation = selectedTextLabelSet.labelsCount > existingRecord.allocation.capacity
             if payloadChanged || requiresReallocation {
                 if requiresReallocation {
@@ -303,7 +295,6 @@ final class BaseLabelCache {
                 tilePointInputByOwnerKey[ownerKey] = pointInputs
                 writePointInputs(pointInputs, at: existingRecord.allocation.start)
                 existingRecord.metalTileIdentity = metalTileIdentity
-                existingRecord.labelDetailTier = sourceEntry.labelDetailTier
                 existingRecord.labelsCount = selectedTextLabelSet.labelsCount
                 existingRecord.labelKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.key)
                 existingRecord.labelSortKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey)
@@ -327,7 +318,6 @@ final class BaseLabelCache {
         writePointInputs(pointInputs, at: allocation.start)
         tileRecordsByOwnerKey[ownerKey] = TileRecord(ownerKey: ownerKey,
                                                            metalTileIdentity: metalTileIdentity,
-                                                           labelDetailTier: sourceEntry.labelDetailTier,
                                                            isRetained: sourceEntry.isRetained,
                                                            tileSlotIndex: tileSlotIndex,
                                                            allocation: allocation,

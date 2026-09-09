@@ -13,30 +13,21 @@ struct BaseLabelSourceEntry {
     let metalTile: MetalTile
     let isRetained: Bool
     let lodKind: TileLodKind
-    let labelDetailTier: BaseLabelDetailTier
 
     var metalTileIdentity: ObjectIdentifier {
         ObjectIdentifier(metalTile)
     }
 
-    static func build(from placeTiles: [PlaceTile],
-                      center: Center,
-                      centerZoom: Int,
-                      renderSurfaceMode: ViewMode) -> [BaseLabelSourceEntry] {
+    static func build(from placeTiles: [PlaceTile]) -> [BaseLabelSourceEntry] {
         var bestEntryByOwnerKey: [VisibleTile: BaseLabelSourceEntry] = [:]
         bestEntryByOwnerKey.reserveCapacity(placeTiles.count)
 
         for placeTile in placeTiles {
-            let labelDetailTier = makeLabelDetailTier(tile: placeTile.placeIn,
-                                                      center: center,
-                                                      centerZoom: centerZoom,
-                                                      renderSurfaceMode: renderSurfaceMode)
             let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: placeTile.metalTile.tile,
                                                                    loop: placeTile.placeIn.loop),
                                              metalTile: placeTile.metalTile,
                                              isRetained: false,
-                                             lodKind: placeTile.lodKind,
-                                             labelDetailTier: labelDetailTier)
+                                             lodKind: placeTile.lodKind)
             if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
                 if preferredWinner(lhs: entry, rhs: existingEntry) {
                     bestEntryByOwnerKey[entry.ownerKey] = entry
@@ -49,24 +40,16 @@ struct BaseLabelSourceEntry {
         return bestEntryByOwnerKey.values.sorted(by: sortForWinnerPriority(lhs:rhs:))
     }
 
-    static func build(from trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                      center: Center,
-                      centerZoom: Int,
-                      renderSurfaceMode: ViewMode) -> [BaseLabelSourceEntry] {
+    static func build(from trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile]) -> [BaseLabelSourceEntry] {
         var bestEntryByOwnerKey: [VisibleTile: BaseLabelSourceEntry] = [:]
         bestEntryByOwnerKey.reserveCapacity(trackedPlaceTiles.count)
 
         for trackedPlaceTile in trackedPlaceTiles {
-            let labelDetailTier = makeLabelDetailTier(tile: trackedPlaceTile.placeTile.placeIn,
-                                                      center: center,
-                                                      centerZoom: centerZoom,
-                                                      renderSurfaceMode: renderSurfaceMode)
             let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: trackedPlaceTile.placeTile.metalTile.tile,
                                                                    loop: trackedPlaceTile.placeTile.placeIn.loop),
                                              metalTile: trackedPlaceTile.placeTile.metalTile,
                                              isRetained: trackedPlaceTile.isRetained,
-                                             lodKind: trackedPlaceTile.placeTile.lodKind,
-                                             labelDetailTier: labelDetailTier)
+                                             lodKind: trackedPlaceTile.placeTile.lodKind)
             if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
                 if preferredWinner(lhs: entry, rhs: existingEntry) {
                     bestEntryByOwnerKey[entry.ownerKey] = entry
@@ -79,16 +62,10 @@ struct BaseLabelSourceEntry {
         return bestEntryByOwnerKey.values.sorted(by: sortForWinnerPriority(lhs:rhs:))
     }
 
-    static func makeBaseLabelHash(_ sourceEntries: [BaseLabelSourceEntry]) -> Int {
-        makeHash(sourceEntries, includesLabelDetailTier: true)
-    }
-
-    static func makeRoadLabelHash(_ sourceEntries: [BaseLabelSourceEntry]) -> Int {
-        makeHash(sourceEntries, includesLabelDetailTier: false)
-    }
-
-    private static func makeHash(_ sourceEntries: [BaseLabelSourceEntry],
-                                 includesLabelDetailTier: Bool) -> Int {
+    /// The identity of the frame's source set: which tiles, in which
+    /// slots, by which parsed objects. The base and the road label caches
+    /// both rebuild when it changes.
+    static func makeHash(_ sourceEntries: [BaseLabelSourceEntry]) -> Int {
         var hasher = Hasher()
         hasher.combine(sourceEntries.count)
         for entry in sourceEntries {
@@ -100,9 +77,6 @@ struct BaseLabelSourceEntry {
             hasher.combine(ownerKey.loop)
             hasher.combine(entry.isRetained)
             hasher.combine(entry.lodKind.rawValue)
-            if includesLabelDetailTier {
-                hasher.combine(entry.labelDetailTier.rawValue)
-            }
             hasher.combine(entry.metalTile.tile.x)
             hasher.combine(entry.metalTile.tile.y)
             hasher.combine(entry.metalTile.tile.z)
@@ -118,14 +92,6 @@ struct BaseLabelSourceEntry {
             return lhsPriority < rhsPriority
         }
 
-        if lhs.ownerKey == rhs.ownerKey {
-            let lhsDetailRank = detailRank(for: lhs.labelDetailTier)
-            let rhsDetailRank = detailRank(for: rhs.labelDetailTier)
-            if lhsDetailRank != rhsDetailRank {
-                return lhsDetailRank < rhsDetailRank
-            }
-        }
-
         if lhs.ownerKey.z != rhs.ownerKey.z {
             return lhs.ownerKey.z > rhs.ownerKey.z
         }
@@ -138,17 +104,6 @@ struct BaseLabelSourceEntry {
         return lhs.ownerKey.loop < rhs.ownerKey.loop
     }
 
-    static func detailRank(for tier: BaseLabelDetailTier) -> Int {
-        switch tier {
-        case .full:
-            return 0
-        case .reduced:
-            return 1
-        case .minimal:
-            return 2
-        }
-    }
-
     private static func preferredWinner(lhs: BaseLabelSourceEntry, rhs: BaseLabelSourceEntry) -> Bool {
         if sortForWinnerPriority(lhs: lhs, rhs: rhs) {
             return true
@@ -157,17 +112,6 @@ struct BaseLabelSourceEntry {
             return false
         }
         return false
-    }
-
-    private static func makeLabelDetailTier(tile: VisibleTile,
-                                            center: Center,
-                                            centerZoom: Int,
-                                            renderSurfaceMode: ViewMode) -> BaseLabelDetailTier {
-        let relativeDistance = BaseLabelDetailTier.relativeDistance(tile: tile,
-                                                                    center: center,
-                                                                    centerZoom: centerZoom,
-                                                                    renderSurfaceMode: renderSurfaceMode)
-        return BaseLabelDetailTier.tier(forRelativeDistance: relativeDistance)
     }
 
     static func priorityRank(for entry: BaseLabelSourceEntry) -> Int {

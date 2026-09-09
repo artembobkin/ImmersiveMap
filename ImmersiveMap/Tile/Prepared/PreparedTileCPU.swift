@@ -69,23 +69,6 @@ struct PreparedTileCPU: Sendable {
         let poiIconRuns: [PoiIconRun]
     }
 
-    struct TextLabels {
-        let full: TextLabelSet
-        let reduced: TextLabelSet
-        let minimal: TextLabelSet
-
-        func set(for tier: BaseLabelDetailTier) -> TextLabelSet {
-            switch tier {
-            case .full:
-                return full
-            case .reduced:
-                return reduced
-            case .minimal:
-                return minimal
-            }
-        }
-    }
-
     struct RoadLabels {
         let pathInputs: [TilePointInput]
         let pathRanges: [RoadPathRange]
@@ -104,6 +87,8 @@ struct PreparedTileCPU: Sendable {
     let roads: RoadStructureBuckets<RoadGeometryPhases<GeometryLayer>>
     let bridgeOverlay: GeometryLayer
     let extruded: Extruded
-    let textLabels: TextLabels
+    /// Every base label of the tile, one set: the frame draws them all and
+    /// the collision pass decides what shows.
+    let textLabels: TextLabelSet
     let roadLabels: RoadLabels
 }

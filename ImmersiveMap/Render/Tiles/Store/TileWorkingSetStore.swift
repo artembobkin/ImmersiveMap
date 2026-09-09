@@ -48,7 +48,11 @@ final class TileWorkingSetStore {
     private var mutationVersion: UInt64 = 0
     private var residentBytes = 0
 
-    init(tileTraceRecorder: TileTraceRecorder) {
+    /// The retention's size, `retentionLimit` unless a test asks otherwise.
+    let retentionLimit: Int
+
+    init(tileTraceRecorder: TileTraceRecorder, retentionLimit: Int = TileWorkingSetStore.retentionLimit) {
+        self.retentionLimit = max(0, retentionLimit)
         self.tileTraceRecorder = tileTraceRecorder
     }
 
@@ -110,7 +114,7 @@ final class TileWorkingSetStore {
             retained.append(key)
             retainedSet.insert(key)
         }
-        while retained.count > Self.retentionLimit {
+        while retained.count > retentionLimit {
             let key = retained.removeFirst()
             releaseLocked(key)
             releasedTiles.append(key)

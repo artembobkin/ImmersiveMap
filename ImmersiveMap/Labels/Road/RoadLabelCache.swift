@@ -276,14 +276,8 @@ final class RoadLabelCache {
     }
 
     func rebuild(trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                 tileIndexAllocator: VisibleTileIndexAllocator,
-                 center: Center,
-                 centerZoom: Int,
-                 renderSurfaceMode: ViewMode) {
-        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles,
-                                                              center: center,
-                                                              centerZoom: centerZoom,
-                                                              renderSurfaceMode: renderSurfaceMode),
+                 tileIndexAllocator: VisibleTileIndexAllocator) {
+        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles),
                     tileIndexAllocator: tileIndexAllocator,
                     trackedTilesChanged: true,
                     projectionChanged: true)

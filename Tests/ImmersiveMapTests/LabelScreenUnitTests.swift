@@ -26,7 +26,7 @@ final class LabelScreenUnitTests: XCTestCase {
         let style = makeStyle(sizePoints: 12)
         let labels = builder.build(textLabels: [makeTextLabel(text: "Point", style: style)],
                                    tile: Tile(x: 0, y: 0, z: 12))
-        let size = try XCTUnwrap(labels.full.placementInputs.first).placementMeta.labelSizePoints
+        let size = try XCTUnwrap(labels.placementInputs.first).placementMeta.labelSizePoints
 
         // The bake knows nothing about a display, so the box is the em size
         // times the font's metrics, in points. A 12 point label is roughly a
@@ -78,14 +78,18 @@ final class LabelScreenUnitTests: XCTestCase {
                                               visible: 1,
                                               visibilityAlpha: 1)]
 
+        // The cache keeps the box in layout points; the frame path scales it
+        // by the display's pixels per point next to the screen position it
+        // pairs with (BaseLabelPrepareSubsystem.rescaleBaseHalfSizes), and a
+        // label with a drawable point reserves its space.
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: candidate.isEnabled,
+                                                                screenVisible: screenPoints[0].visible != 0,
+                                                                horizonVisible: true,
+                                                                currentAlpha: 1,
+                                                                minCameraZoom: 0,
+                                                                cameraZoom: 14))
         func halfSize(at pixelsPerPoint: Float) -> SIMD2<Float> {
-            BaseLabelVisibilityResolver.collisionCandidates(baseCandidates: [candidate],
-                                                            screenPoints: screenPoints,
-                                                            horizonVisibility: [true],
-                                                            currentAlphas: [1],
-                                                            minCameraZooms: [0],
-                                                            cameraZoom: 14,
-                                                            screenScale: ScreenScale(pixelsPerPoint: pixelsPerPoint))[0].halfSize
+            ScreenScale(pixelsPerPoint: pixelsPerPoint).pixels(candidate.halfSize)
         }
 
         XCTAssertEqual(halfSize(at: 2), SIMD2<Float>(20, 8))
@@ -268,7 +272,7 @@ final class LabelScreenUnitTests: XCTestCase {
         let labels = builder.build(textLabels: [makeTextLabel(text: "Point",
                                                               style: makeStyle(sizePoints: sizePoints))],
                                    tile: Tile(x: 0, y: 0, z: 12))
-        return try XCTUnwrap(labels.full.placementInputs.first).placementMeta.labelSizePoints
+        return try XCTUnwrap(labels.placementInputs.first).placementMeta.labelSizePoints
     }
 
     private func makeStyle(sizePoints: Float, haloEm: Float = 0.15) -> LabelTextStyle {

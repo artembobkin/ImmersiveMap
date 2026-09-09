@@ -416,14 +416,22 @@ final class DebugOverlayRenderer {
         appendSection(title: "Tiles", body: [tileLine], into: &lines)
 
         let labelLine = "base:\(diagnostics.counterValue(.baseLabelCount)) " +
-            "bT:\(diagnostics.counterValue(.baseLabelFullTileCount))/" +
-            "\(diagnostics.counterValue(.baseLabelReducedTileCount))/" +
-            "\(diagnostics.counterValue(.baseLabelMinimalTileCount)) " +
             "roadG:\(diagnostics.counterValue(.roadLabelGlyphCount)) " +
             "roadI:\(diagnostics.counterValue(.roadLabelInstanceCount)) " +
             "roadCull:\(diagnostics.counterValue(.roadLabelNearCameraCulledPathCount))/" +
             "\(diagnostics.counterValue(.roadLabelNearCameraCulledAnchorCount))"
         appendSection(title: "Labels", body: [labelLine], into: &lines)
+
+        // The frame's CPU time by subsystem (update plus prepareGPU), the
+        // heaviest first: where a slow frame's milliseconds go.
+        let cpuLine = diagnostics.subsystemDurations
+            .sorted { lhs, rhs in lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key }
+            .prefix(4)
+            .map { "\($0.key):\(String(format: "%.2f", $0.value * 1000.0))" }
+            .joined(separator: " ")
+        if cpuLine.isEmpty == false {
+            appendSection(title: "CPU ms", body: [cpuLine], into: &lines)
+        }
 
         let resourcesLine = "buffers:\(diagnostics.counterValue(.resourceBufferCount)) " +
             "textures:\(diagnostics.counterValue(.resourceTextureCount)) " +

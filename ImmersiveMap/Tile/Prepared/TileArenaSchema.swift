@@ -13,8 +13,8 @@ enum TileArenaSlot: Equatable, Sendable {
     case extrudedVertices
     case extrudedIndices
     case extrudedStyles
-    case glyphRunVertices(tier: BaseLabelDetailTier, run: Int)
-    case poiIconRunVertices(tier: BaseLabelDetailTier, run: Int)
+    case glyphRunVertices(run: Int)
+    case poiIconRunVertices(run: Int)
     case roadLabelGlyphVertices
 }
 
@@ -25,7 +25,7 @@ enum TileArenaGeometryLayerID: Equatable, Sendable {
     case bridgeOverlay
 }
 
-/// Glyph-run and POI-icon-run counts of one text label set; the only
+/// Glyph-run and POI-icon-run counts of the text label set; the only
 /// data-dependent part of the slot sequence.
 struct TileArenaTextRunCounts: Equatable, Sendable {
     let glyphRunCount: Int
@@ -45,11 +45,9 @@ struct TileArenaTextRunCounts: Equatable, Sendable {
 /// `PreparedTileDiskCaching.preparedFormatVersion`.
 enum TileArenaSchema {
     /// The canonical slot sequence: ground, road buckets x phases (in their
-    /// draw orders), bridge overlay, extruded, text label sets by tier (glyph
+    /// draw orders), bridge overlay, extruded, the text label set (glyph
     /// runs, then POI icon runs), road label glyphs.
-    static func slots(full: TileArenaTextRunCounts,
-                      reduced: TileArenaTextRunCounts,
-                      minimal: TileArenaTextRunCounts) -> [TileArenaSlot] {
+    static func slots(text: TileArenaTextRunCounts) -> [TileArenaSlot] {
         var slots: [TileArenaSlot] = []
         appendGeometryLayer(.ground, to: &slots)
         for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
@@ -63,30 +61,22 @@ enum TileArenaSchema {
         slots.append(.extrudedIndices)
         slots.append(.extrudedStyles)
 
-        for (tier, counts) in [(BaseLabelDetailTier.full, full),
-                               (BaseLabelDetailTier.reduced, reduced),
-                               (BaseLabelDetailTier.minimal, minimal)] {
-            for run in 0..<counts.glyphRunCount {
-                slots.append(.glyphRunVertices(tier: tier, run: run))
-            }
-            for run in 0..<counts.poiIconRunCount {
-                slots.append(.poiIconRunVertices(tier: tier, run: run))
-            }
+        for run in 0..<text.glyphRunCount {
+            slots.append(.glyphRunVertices(run: run))
+        }
+        for run in 0..<text.poiIconRunCount {
+            slots.append(.poiIconRunVertices(run: run))
         }
         slots.append(.roadLabelGlyphVertices)
         return slots
     }
 
     static func slots(for preparedTile: PreparedTileCPU) -> [TileArenaSlot] {
-        slots(full: runCounts(of: preparedTile.textLabels.full),
-              reduced: runCounts(of: preparedTile.textLabels.reduced),
-              minimal: runCounts(of: preparedTile.textLabels.minimal))
+        slots(text: runCounts(of: preparedTile.textLabels))
     }
 
     static func slots(for image: PreparedTileArenaImage) -> [TileArenaSlot] {
-        slots(full: runCounts(of: image.textLabelsFull),
-              reduced: runCounts(of: image.textLabelsReduced),
-              minimal: runCounts(of: image.textLabelsMinimal))
+        slots(text: runCounts(of: image.textLabels))
     }
 
     static func runCounts(of set: PreparedTileCPU.TextLabelSet) -> TileArenaTextRunCounts {

@@ -41,7 +41,11 @@ vertex VertexOut roadLabelTextVertex(LabelVertexIn in [[stage_in]],
     // closer, clips the label to the model silhouette.
     out.position.z = out.position.w;
     out.uv = in.uv;
-    out.alpha = placement.visible != 0u ? meta.fadeAlpha : 0.0;
+    bool isVisible = placement.visible != 0u && meta.fadeAlpha > 0.0;
+    out.alpha = isVisible ? meta.fadeAlpha : 0.0;
+    if (!isVisible) {
+        out.position = hiddenLabelClipPosition();
+    }
     out.spriteUV = in.spriteUV;
     return out;
 }

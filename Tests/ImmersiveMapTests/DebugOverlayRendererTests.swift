@@ -395,7 +395,7 @@ final class DebugOverlayRendererTests: XCTestCase {
             "vis:16 ready:25 req:0 draw:16",
             "",
             "[Labels]",
-            "base:181 bT:0/0/0 roadG:0 roadI:0 roadCull:12/34",
+            "base:181 roadG:0 roadI:0 roadCull:12/34",
             "",
             "[Resources]",
             "buffers:1 textures:3 pipelines:5",

@@ -108,7 +108,7 @@ final class TileWorkingSetStoreTests: XCTestCase {
     }
 
     func testATileThatLeavesAgainGoesToTheBackOfTheQueue() throws {
-        let store = makeStore()
+        let store = makeStore(retentionLimit: 2)
         let first = Tile(x: 1, y: 0, z: 10)
         let second = Tile(x: 2, y: 0, z: 10)
         store.insert(try makeMetalTile(first), forKey: first)
@@ -247,7 +247,7 @@ final class TileWorkingSetStoreTests: XCTestCase {
     }
 
     func testResidentByteCountFollowsInsertsAndReleases() throws {
-        let store = makeStore()
+        let store = makeStore(retentionLimit: 2)
         let first = Tile(x: 1, y: 2, z: 10)
         let second = Tile(x: 2, y: 2, z: 10)
 
@@ -261,8 +261,8 @@ final class TileWorkingSetStoreTests: XCTestCase {
 
         store.updateDemandedTiles([] as [Tile])
         XCTAssertEqual(store.residentTileCount, 2, "both retained")
-        try fillRetention(store)
-        XCTAssertEqual(store.residentTileCount, TileWorkingSetStore.retentionLimit)
+        try fillRetention(store, count: store.retentionLimit)
+        XCTAssertEqual(store.residentTileCount, store.retentionLimit)
         XCTAssertNil(store.tile(forKey: first))
         XCTAssertNil(store.tile(forKey: second))
         store.removeAll()
@@ -282,8 +282,8 @@ final class TileWorkingSetStoreTests: XCTestCase {
         XCTAssertNotNil(store.tile(forKey: tile))
     }
 
-    private func makeStore() -> TileWorkingSetStore {
-        TileWorkingSetStore(tileTraceRecorder: TileTraceRecorder())
+    private func makeStore(retentionLimit: Int = TileWorkingSetStore.retentionLimit) -> TileWorkingSetStore {
+        TileWorkingSetStore(tileTraceRecorder: TileTraceRecorder(), retentionLimit: retentionLimit)
     }
 
     private func makeMetalTile(_ tile: Tile) throws -> MetalTile {

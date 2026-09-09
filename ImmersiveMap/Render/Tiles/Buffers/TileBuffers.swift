@@ -96,23 +96,6 @@ struct TileBuffers {
         }
     }
 
-    struct TextLabels {
-        let full: TextLabelSet
-        let reduced: TextLabelSet
-        let minimal: TextLabelSet
-
-        func set(for tier: BaseLabelDetailTier) -> TextLabelSet {
-            switch tier {
-            case .full:
-                return full
-            case .reduced:
-                return reduced
-            case .minimal:
-                return minimal
-            }
-        }
-    }
-
     struct RoadLabels {
         let pathInputs: [TilePointInput]
         let pathRanges: [RoadPathRange]
@@ -138,7 +121,7 @@ struct TileBuffers {
     let roads: RoadStructureBuckets<RoadGeometryPhases<GeometryLayer>>
     let bridgeOverlay: GeometryLayer
     let extruded: Extruded
-    let textLabels: TextLabels
+    let textLabels: TextLabelSet
     let roadLabels: RoadLabels
 }
 

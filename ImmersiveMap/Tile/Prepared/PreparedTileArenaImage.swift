@@ -73,9 +73,7 @@ struct PreparedTileArenaImage: Sendable {
     /// Per-style runs of the ground index buffer, in paint order; what the
     /// sphere drawer draws the ground layers by (see GroundStyleRun).
     let groundStyleRuns: [GroundStyleRun]
-    let textLabelsFull: TextLabelSetMeta
-    let textLabelsReduced: TextLabelSetMeta
-    let textLabelsMinimal: TextLabelSetMeta
+    let textLabels: TextLabelSetMeta
     let roadLabels: RoadLabelsMeta
     let blob: GeometryBlob
 }

@@ -36,8 +36,12 @@ vertex VertexOut poiSpriteVertex(LabelVertexIn in [[stage_in]],
     out.position.z = out.position.w;
     out.uv = in.uv;
     bool isVisible = (screenPoint.visible != 0u) &&
-                     (runtimeState.duplicate == 0u);
+                     (runtimeState.duplicate == 0u) &&
+                     (runtimeState.fadeAlpha > 0.0);
     out.alpha = isVisible ? runtimeState.fadeAlpha : 0.0;
+    if (!isVisible) {
+        out.position = hiddenLabelClipPosition();
+    }
     out.spriteUV = in.spriteUV;
     return out;
 }

@@ -77,18 +77,11 @@ final class RendererLabelDrawer {
         }
 
         renderEncoder.setRenderPipelineState(textRenderer.labelPipelineState)
-        drawBaseLabelTextPass(renderEncoder: renderEncoder,
-                              screenScale: screenScale,
-                              textRenderer: textRenderer,
-                              baseLabelsDrawBatches: baseLabelsDrawBatches,
-                              pass: .outline,
-                              bindings: &bindings)
-        drawBaseLabelTextPass(renderEncoder: renderEncoder,
-                              screenScale: screenScale,
-                              textRenderer: textRenderer,
-                              baseLabelsDrawBatches: baseLabelsDrawBatches,
-                              pass: .fill,
-                              bindings: &bindings)
+        drawBaseLabelText(renderEncoder: renderEncoder,
+                          screenScale: screenScale,
+                          textRenderer: textRenderer,
+                          baseLabelsDrawBatches: baseLabelsDrawBatches,
+                          bindings: &bindings)
     }
 
     static func drawRoadLabels(renderEncoder: MTLRenderCommandEncoder,
@@ -132,38 +125,31 @@ final class RendererLabelDrawer {
             let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
             setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
 
-            let haloWidthPx = style.haloWidthPixels(screenScale: screenScale)
-            if haloWidthPx > 0.0 {
-                let outlineStyle = TextStyleUniform(textColor: style.strokeColor,
-                                                    strokeColor: style.strokeColor,
-                                                    strokeWidthPx: haloWidthPx)
-                setTextStyle(outlineStyle, renderEncoder: renderEncoder, bindings: &bindings)
-                renderEncoder.drawPrimitives(type: .triangle,
-                                             vertexStart: 0,
-                                             vertexCount: drawLabel.localGlyphVertexCount)
-            }
-
-            let fillStyle = TextStyleUniform(textColor: style.fillColor,
-                                             strokeColor: style.fillColor,
-                                             strokeWidthPx: 0.0)
-            setTextStyle(fillStyle, renderEncoder: renderEncoder, bindings: &bindings)
+            // One draw: the fragment stage resolves the fill and the halo
+            // from the two distance fields at once (shadeGlyph), so nothing
+            // is gained by an outline pass under a fill pass except twice the
+            // fragments.
+            let textStyle = TextStyleUniform(textColor: style.fillColor,
+                                             strokeColor: style.strokeColor,
+                                             strokeWidthPx: style.haloWidthPixels(screenScale: screenScale))
+            setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
                                          vertexCount: drawLabel.localGlyphVertexCount)
         }
     }
 
-    private enum BaseLabelTextPass {
-        case outline
-        case fill
-    }
-
-    private static func drawBaseLabelTextPass(renderEncoder: MTLRenderCommandEncoder,
-                                              screenScale: ScreenScale,
-                                              textRenderer: TextRenderer,
-                                              baseLabelsDrawBatches: [BaseLabelDrawBatch],
-                                              pass: BaseLabelTextPass,
-                                              bindings: inout EncoderBindings) {
+    /// The base label text, one draw per style run: the fragment stage
+    /// shades the fill and the halo together from the two distance fields
+    /// (shadeGlyph), so the former outline pass under a fill pass only
+    /// doubled the fragments. Where two labels touch, the later one's halo
+    /// now covers the earlier one's fill, which the collision pass keeps
+    /// rare and the halo width keeps small.
+    private static func drawBaseLabelText(renderEncoder: MTLRenderCommandEncoder,
+                                          screenScale: ScreenScale,
+                                          textRenderer: TextRenderer,
+                                          baseLabelsDrawBatches: [BaseLabelDrawBatch],
+                                          bindings: inout EncoderBindings) {
         for drawBatch in baseLabelsDrawBatches {
             for run in drawBatch.labelsByStyleRuns {
                 guard let localGlyphVertices = run.localGlyphVertices,
@@ -173,17 +159,9 @@ final class RendererLabelDrawer {
 
                 let style = run.style
                 let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
-                let textStyle: TextStyleUniform
-                switch pass {
-                case .outline:
-                    textStyle = TextStyleUniform(textColor: style.strokeColor,
+                let textStyle = TextStyleUniform(textColor: style.fillColor,
                                                  strokeColor: style.strokeColor,
                                                  strokeWidthPx: style.haloWidthPixels(screenScale: screenScale))
-                case .fill:
-                    textStyle = TextStyleUniform(textColor: style.fillColor,
-                                                 strokeColor: style.fillColor,
-                                                 strokeWidthPx: 0.0)
-                }
 
                 setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
                 setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)

@@ -18,6 +18,9 @@ struct DebugOverlayControlSnapshot: Equatable {
     let roadFadeEndCameraDistances: Float
     /// The floor of the ring's outer radius on the ground, in metres.
     let roadFadeMinimumEndMeters: Float
+    /// The flat coverage's reach about the eye, in camera distances
+    /// (FlatDistanceCoverage.farRadius): ground beyond it gets no tile.
+    let coverageFarRadiusCameraDistances: Float
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -29,7 +32,8 @@ struct DebugOverlayControlSnapshot: Equatable {
          tileGridDensity: Int = DebugTileGridDensity.standard,
          roadFadeStartCameraDistances: Float = RoadDistanceLOD.fadeStartCameraDistances,
          roadFadeEndCameraDistances: Float = RoadDistanceLOD.fadeEndCameraDistances,
-         roadFadeMinimumEndMeters: Float = RoadDistanceLOD.minimumFadeEndMeters) {
+         roadFadeMinimumEndMeters: Float = RoadDistanceLOD.minimumFadeEndMeters,
+         coverageFarRadiusCameraDistances: Float = Float(FlatDistanceCoverage.farRadius)) {
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
@@ -44,6 +48,7 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.roadFadeEndCameraDistances = max(start, RoadDistanceLOD.clampCameraDistances(roadFadeEndCameraDistances,
                                                                                           fallback: RoadDistanceLOD.fadeEndCameraDistances))
         self.roadFadeMinimumEndMeters = RoadDistanceLOD.clampMinimumFadeEndMeters(roadFadeMinimumEndMeters)
+        self.coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.clampFarRadius(Double(coverageFarRadiusCameraDistances)))
     }
 }
 
@@ -60,6 +65,7 @@ final class DebugOverlayControlState {
     private var roadFadeStartCameraDistances = RoadDistanceLOD.fadeStartCameraDistances
     private var roadFadeEndCameraDistances = RoadDistanceLOD.fadeEndCameraDistances
     private var roadFadeMinimumEndMeters = RoadDistanceLOD.minimumFadeEndMeters
+    private var coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.farRadius)
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -74,7 +80,8 @@ final class DebugOverlayControlState {
                                            tileGridDensity: tileGridDensity,
                                            roadFadeStartCameraDistances: roadFadeStartCameraDistances,
                                            roadFadeEndCameraDistances: roadFadeEndCameraDistances,
-                                           roadFadeMinimumEndMeters: roadFadeMinimumEndMeters)
+                                           roadFadeMinimumEndMeters: roadFadeMinimumEndMeters,
+                                           coverageFarRadiusCameraDistances: coverageFarRadiusCameraDistances)
     }
 
     func setAxesEnabled(_ isEnabled: Bool) {
@@ -144,6 +151,12 @@ final class DebugOverlayControlState {
     func setRoadFadeMinimumEndMeters(_ meters: Float) {
         lock.lock()
         roadFadeMinimumEndMeters = RoadDistanceLOD.clampMinimumFadeEndMeters(meters)
+        lock.unlock()
+    }
+
+    func setCoverageFarRadiusCameraDistances(_ cameraDistances: Float) {
+        lock.lock()
+        coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.clampFarRadius(Double(cameraDistances)))
         lock.unlock()
     }
 }

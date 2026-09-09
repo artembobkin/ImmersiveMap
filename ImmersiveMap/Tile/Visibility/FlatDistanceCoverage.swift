@@ -25,6 +25,10 @@ struct FlatCoverageCamera {
     /// none is: decided once, by the frame, for the coverage and the
     /// placement alike.
     var backdropZoom: Int? = TileCulling.flatBackdropZoomLevel
+    /// The coverage's reach in camera distances (`FlatDistanceCoverage.farRadius`
+    /// unless the debug panel moves it): ground farther than this is left to
+    /// the backdrop.
+    var farRadius: Double = FlatDistanceCoverage.farRadius
 }
 
 /// The flat map's coverage: every visible tile's zoom follows its distance
@@ -54,9 +58,17 @@ struct FlatCoverageCamera {
 /// not flicker the tiles under it. The memory is per target zoom and lasts
 /// while the tile stays visible.
 ///
+/// The coverage also stops at `farRadius` camera distances from the eye:
+/// beyond it no tile is placed at any zoom, the backdrop and the haze
+/// paint the horizon. That is where most of a tilted view's parents were
+/// going, a few tiles at a time per level for ground that the fog had all
+/// but covered, so the reach is the knob that decides the tile count at a
+/// street tilt. It holds with the same hysteresis as the levels.
+///
 /// A parent that would be the backdrop's zoom or coarser is not placed: the
 /// z3 backdrop already paints that ground. Without a backdrop (a target zoom
-/// no deeper than z3) it stays, down to z0, so no ground goes unpainted.
+/// no deeper than z3) it stays, down to z0, so no ground goes unpainted,
+/// and the reach does not apply either.
 final class FlatDistanceCoverage {
     /// The radius of the exact zone in camera distances: everything nearer
     /// than this many times the camera's distance to its look-at point is
@@ -75,6 +87,21 @@ final class FlatDistanceCoverage {
     /// How far past a level's threshold a tile's distance must go before
     /// the tile changes level, as a fraction of the threshold.
     static let hysteresis: Double = 0.1
+    /// The reach in camera distances: ground farther than this many times
+    /// the camera's distance to its look-at point is left to the backdrop.
+    /// 10 keeps a street tilt at about ten parents instead of the ceiling's
+    /// fourteen and cuts nothing at a gentle tilt, whose view ends nearer.
+    static let farRadius: Double = 10
+    /// The debug panel's range for the reach.
+    static let farRadiusRange: ClosedRange<Double> = 3 ... 40
+
+    static func clampFarRadius(_ farRadius: Double) -> Double {
+        guard farRadius.isFinite else { return Self.farRadius }
+        return min(max(farRadius, farRadiusRange.lowerBound), farRadiusRange.upperBound)
+    }
+
+    /// The level memory's mark for a tile that was beyond the reach.
+    private static let beyondReach = -1
 
     private var previousDropsByTile: [VisibleTile: Int] = [:]
     private var previousTargetZoom: Int?
@@ -125,8 +152,16 @@ final class FlatDistanceCoverage {
                                        Double(originAndSize.y) + Double(originAndSize.z) / 2,
                                        0)
             let distance = simd_length(center - camera.eye)
+            let previous = previousDropsByTile[tile]
+            if backdropZoom != nil,
+               Self.settledBeyondReach(previouslyBeyond: previous.map { $0 == Self.beyondReach },
+                                       distance: distance,
+                                       reach: camera.farRadius * cameraDistance) {
+                drops[tile] = Self.beyondReach
+                continue
+            }
             let drop = Self.settledDrop(raw: Self.drop(distance: distance, cameraDistance: cameraDistance),
-                                        previous: previousDropsByTile[tile],
+                                        previous: previous == Self.beyondReach ? nil : previous,
                                         distance: distance,
                                         cameraDistance: cameraDistance)
             drops[tile] = drop
@@ -174,6 +209,21 @@ final class FlatDistanceCoverage {
         return SIMD3<Double>(Double(originAndSize.x) + (point.x - Double(x)) * size,
                              Double(originAndSize.y) + (1 - (point.y - Double(y))) * size,
                              0)
+    }
+
+    /// Whether a tile is beyond the reach: past `reach` by the hysteresis
+    /// margin when it was within it the frame before, or still past
+    /// `reach` less the margin when it was beyond; without a memory, past
+    /// `reach` itself.
+    static func settledBeyondReach(previouslyBeyond: Bool?, distance: Double, reach: Double) -> Bool {
+        switch previouslyBeyond {
+        case nil:
+            return distance > reach
+        case true?:
+            return distance >= reach * (1 - hysteresis)
+        case false?:
+            return distance > reach * (1 + hysteresis)
+        }
     }
 
     /// The level a tile settles at: the raw level, unless its distance has

@@ -16,6 +16,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private let tileRenderStore: TileRenderStore
     private let tileTraceRecorder: TileTraceRecorder
     private let visibleTilesPreprocessor: VisibleTilesPreprocessor
+    /// The debug panel's coverage reach knob; nil outside a debug build of the graph.
+    private let debugOverlayControls: DebugOverlayControlState?
 
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
@@ -29,10 +31,12 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
-         visibleTilesPreprocessor: VisibleTilesPreprocessor = VisibleTilesPreprocessor()) {
+         visibleTilesPreprocessor: VisibleTilesPreprocessor = VisibleTilesPreprocessor(),
+         debugOverlayControls: DebugOverlayControlState? = nil) {
         self.tileRenderStore = tileRenderStore
         self.tileTraceRecorder = tileTraceRecorder
         self.visibleTilesPreprocessor = visibleTilesPreprocessor
+        self.debugOverlayControls = debugOverlayControls
     }
 
     func update(frameContext: FrameContext) {
@@ -48,9 +52,14 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // working set's contents (contentVersion changes on insert/release).
         // Skipping is allowed only when there are no requested-but-not-ready tiles:
         // the loader's retry logic relies on the per-frame request().
+        // The coverage reach is a debug knob: a moved slider re-runs the
+        // demand like a camera change would.
+        let coverageFarRadius = debugOverlayControls.map { Double($0.snapshot().coverageFarRadiusCameraDistances) }
+            ?? FlatDistanceCoverage.farRadius
         var gateHasher = Hasher()
         gateHasher.combine(visibleContent.coverageVersion)
         gateHasher.combine(tileRenderStore.cacheContentVersion)
+        gateHasher.combine(coverageFarRadius.bitPattern)
         let gateFingerprint = gateHasher.finalize()
         if gateFingerprint == demandGateFingerprint,
            latestRequestedTilesCount == 0 {
@@ -69,12 +78,21 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             ? Self.makeFlatCoverageCamera(frameContext: frameContext,
                                           center: center,
                                           tileZoomLevel: tileZoomLevel,
-                                          hasBackdrop: visibleContent.backdropTiles.isEmpty == false)
+                                          hasBackdrop: visibleContent.backdropTiles.isEmpty == false,
+                                          farRadius: coverageFarRadius)
+            : nil
+        // On the sphere the same rule reads the eye and the globe; the far
+        // field is asked for at the pinned world cover's zoom.
+        let globeCamera: GlobeCoverageCamera? = frameContext.renderSurfaceMode == .spherical
+            ? GlobeCoverageCamera(eye: frameContext.cameraEye,
+                                  globe: frameContext.resolvedPresentation.globeRenderState.globeUniform,
+                                  farRadius: coverageFarRadius)
             : nil
         let preprocessedVisibleTiles = visibleTilesPreprocessor.preprocess(visibleTiles: visibleTiles,
                                                                            center: center,
                                                                            renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                                           flatCamera: flatCamera)
+                                                                           flatCamera: flatCamera,
+                                                                           globeCamera: globeCamera)
         // The horizon backdrop bypasses the preprocessor: its distance filter
         // measures distances in target-zoom tiles and would discard the coarse
         // backdrop tiles. Its demand and placements are shared with the coverage.
@@ -84,6 +102,15 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // substitutes go to that zoom or coarser (it is already drawn by the
         // layer below).
         let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
+        // The sphere has no backdrop layer, but the pinned world cover is
+        // always resident and the placement stands it in on its own: the
+        // demand's stand-in walk stops above it there too, so a loading
+        // target does not pull a coarse parent off the disk for ground the
+        // cover already paints. The placement keeps its nil (nothing is
+        // painted under the sphere's slots).
+        let standInFloorZoomLevel = backdropZoomLevel
+            ?? (frameContext.renderSurfaceMode == .spherical && tileZoomLevel > GlobeDistanceCoverage.floorZoom
+                    ? GlobeDistanceCoverage.floorZoom : nil)
         // The demand: every target, plus for a target not resident yet at
         // most one stand-in ancestor that is already resident or prepared on
         // disk, so it comes back with no network request. Nothing is asked
@@ -93,7 +120,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // deduplicates. Residency is read here, before `requestTiles`
         // releases what the plan does not name.
         let demandPlan = TileDemandSourcePlanner.makePlan(targets: preprocessedVisibleTiles + backdropTiles,
-                                                          backdropZoomLevel: backdropZoomLevel,
+                                                          backdropZoomLevel: standInFloorZoomLevel,
                                                           isResident: tileRenderStore.isResident,
                                                           isAvailableLocally: tileRenderStore.isAvailableLocally)
         let demandedSourceTiles = demandPlan.demandedSourceTiles
@@ -190,7 +217,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private static func makeFlatCoverageCamera(frameContext: FrameContext,
                                                center: Center,
                                                tileZoomLevel: Int,
-                                               hasBackdrop: Bool) -> FlatCoverageCamera {
+                                               hasBackdrop: Bool,
+                                               farRadius: Double = FlatDistanceCoverage.farRadius) -> FlatCoverageCamera {
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
         let tileUnits = flatRenderState.renderMapSize / Double(1 << max(0, tileZoomLevel))
         let eye = frameContext.cameraEye
@@ -201,7 +229,8 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                   eyeGround: eyeGround,
                                   lookAt: lookAt,
                                   overzoomLevels: max(0, frameContext.zoomLevel - tileZoomLevel),
-                                  backdropZoom: hasBackdrop ? TileCulling.flatBackdropZoomLevel : nil)
+                                  backdropZoom: hasBackdrop ? TileCulling.flatBackdropZoomLevel : nil,
+                                  farRadius: farRadius)
     }
 
     private func publishState(frameContext: FrameContext,

@@ -30,4 +30,15 @@ struct VertexOut {
     float2 spriteUV;
 };
 
+/// The clip position of a hidden label's vertices: outside the clip volume
+/// on one side, so the rasterizer rejects the primitive whole and no
+/// fragment is ever shaded for a label that lost its collision, is a
+/// duplicate or lies beyond the horizon. Every vertex of a label shares
+/// the label's visibility, so the whole quad moves together and never
+/// straddles the volume. Alpha 0 alone would leave the quads rasterized
+/// at full fragment cost for nothing.
+static inline float4 hiddenLabelClipPosition() {
+    return float4(-2.0, -2.0, 0.0, 1.0);
+}
+
 #endif /* LabelTextCommon_h */

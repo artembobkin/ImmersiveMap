@@ -13,14 +13,8 @@ final class BaseLabelRebuildState {
     }
 
     func buildSnapshot(trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                       tileIndexAllocator: VisibleTileIndexAllocator,
-                       center: Center,
-                       centerZoom: Int,
-                       renderSurfaceMode: ViewMode) -> Snapshot {
-        let sourceEntries = BaseLabelSourceEntry.build(from: trackedPlaceTiles,
-                                                       center: center,
-                                                       centerZoom: centerZoom,
-                                                       renderSurfaceMode: renderSurfaceMode)
+                       tileIndexAllocator: VisibleTileIndexAllocator) -> Snapshot {
+        let sourceEntries = BaseLabelSourceEntry.build(from: trackedPlaceTiles)
         var tilePointInputs: [TilePointInput] = []
         var baseLabelsDrawBatches: [LabelsDrawBatch] = []
         // Per-label runtime flags used by collision and draw passes.
@@ -29,7 +23,7 @@ final class BaseLabelRebuildState {
 
         for sourceEntry in sourceEntries {
             let metalTile = sourceEntry.metalTile
-            let selectedTextLabelSet = metalTile.tileBuffers.textLabels.set(for: sourceEntry.labelDetailTier)
+            let selectedTextLabelSet = metalTile.tileBuffers.textLabels
             guard selectedTextLabelSet.labelsCount > 0 else {
                 continue
             }

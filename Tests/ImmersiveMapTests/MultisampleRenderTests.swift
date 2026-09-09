@@ -23,10 +23,11 @@ final class MultisampleRenderTests: XCTestCase {
         XCTAssertEqual(RendererSetup.resolvedRenderSampleCount(requested: 1, metalDevice: device), 1)
     }
 
-    /// The overlay pipelines are single-sample: a multisampled world pass
-    /// never takes them, models on screen or not.
-    func testAMultisampledWorldPassKeepsTheOverlaySeparate() {
-        XCTAssertTrue(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 1))
+    /// The overlay keeps its own pass whatever the sample count: the labels
+    /// order fill over halo through the overlay's own depth, and the overlay
+    /// pipelines are single-sample anyway.
+    func testTheOverlayAlwaysKeepsItsOwnPass() {
+        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 1))
         XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.sceneModelOcclusion, .labels], renderSampleCount: 1))
         XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 4))
     }

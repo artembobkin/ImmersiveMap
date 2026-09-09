@@ -13,8 +13,11 @@ import Foundation
 /// `FlatDistanceCoverage`: every tile's zoom follows its distance from the
 /// eye, overlaps allowed (the tile-priority stencil lets the finest painter
 /// own each pixel), the farthest parents trimmed to a ceiling. On the
-/// sphere it is the distance and latitude ladder with a non-overlapping
-/// selection.
+/// sphere the same distance rule (`GlobeDistanceCoverage`) sets each
+/// tile's preferred zoom, with the pinned world cover standing in for
+/// the far field, and a non-overlapping selection follows; without a
+/// globe camera (a tile-free test) the sphere falls back to its grid
+/// ladder.
 ///
 /// Invariants:
 /// - The sphere's output contains no overlapping targets inside the same
@@ -36,17 +39,18 @@ final class VisibleTilesPreprocessor {
     /// (`TileCulling.resolveFlatBackdropTiles`) long before it.
     static let defaultMaxVisibleRelativeDistance = 40
 
-    /// On the sphere, beyond this distance the far range stops being honest
-    /// coverage of the target ladder: preference falls to the backdrop's
-    /// absolute zoom (`TileCulling.flatBackdropZoomLevel`), z3 tiles are in
-    /// the world-coverage pinning. On the plane the distance rule decides
-    /// (`FlatDistanceCoverage`).
+    /// The sphere's grid ladder, used only without a globe camera: beyond
+    /// this distance the far range stops being honest coverage of the
+    /// target ladder and preference falls to the pinned world cover's zoom
+    /// (`TileCulling.flatBackdropZoomLevel`).
     private static let sphereFarRingRelativeDistance = 15
 
     private let maxVisibleRelativeDistance: Int
     private let exactRelativeDistanceRadius: Int
     /// The flat map's coverage rule, with its per-tile level memory.
     private let flatCoverage = FlatDistanceCoverage()
+    /// The sphere's coverage rule, with its own level memory.
+    private let globeCoverage = GlobeDistanceCoverage()
 
     init(maxVisibleRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance,
          exactRelativeDistanceRadius: Int = 2) {
@@ -64,10 +68,13 @@ final class VisibleTilesPreprocessor {
     /// `flatCamera` is the flat camera's eye and ground points; without one
     /// on the plane every tile is asked for exactly, which is what the flat
     /// cases of a tile-free test want and what the sphere never passes.
+    /// `globeCamera` is the sphere's eye and globe; without one the sphere
+    /// uses its grid ladder.
     func preprocess(visibleTiles: [VisibleTile],
                     center: Center,
                     renderSurfaceMode: ViewMode,
-                    flatCamera: FlatCoverageCamera? = nil) -> [VisibleTile] {
+                    flatCamera: FlatCoverageCamera? = nil,
+                    globeCamera: GlobeCoverageCamera? = nil) -> [VisibleTile] {
         switch renderSurfaceMode {
         case .flat:
             let inRange = visibleTiles.filter { tile in
@@ -83,7 +90,8 @@ final class VisibleTilesPreprocessor {
         case .spherical:
             let stagedInputs = buildStageInputs(visibleTiles: visibleTiles,
                                                 center: center,
-                                                renderSurfaceMode: renderSurfaceMode)
+                                                renderSurfaceMode: renderSurfaceMode,
+                                                globeCamera: globeCamera)
             let selectedTargets = selectCoverageTargets(from: sortInputsForSelection(stagedInputs))
             return sortTargetsForOutput(selectedTargets)
         }
@@ -96,10 +104,12 @@ final class VisibleTilesPreprocessor {
     /// - `preferredZoom` is clamped to `[0...visibleTile.z]`.
     private func buildStageInputs(visibleTiles: [VisibleTile],
                                   center: Center,
-                                  renderSurfaceMode: ViewMode) -> [InputTile] {
-        var inputs: [InputTile] = []
-        inputs.reserveCapacity(visibleTiles.count)
-
+                                  renderSurfaceMode: ViewMode,
+                                  globeCamera: GlobeCoverageCamera?) -> [InputTile] {
+        var inRange: [VisibleTile] = []
+        var distances: [Int] = []
+        inRange.reserveCapacity(visibleTiles.count)
+        distances.reserveCapacity(visibleTiles.count)
         for visibleTile in visibleTiles {
             let distance = maxRelativeDistance(tile: visibleTile,
                                                center: center,
@@ -107,12 +117,24 @@ final class VisibleTilesPreprocessor {
             guard distance <= maxVisibleRelativeDistance else {
                 continue
             }
-            let preferredZoom = spherePreferredZoom(for: visibleTile, distance: distance)
-            inputs.append(InputTile(visibleTile: visibleTile,
-                                    relativeDistance: distance,
-                                    preferredZoom: preferredZoom))
+            inRange.append(visibleTile)
+            distances.append(distance)
         }
 
+        let preferredZooms: [Int]
+        if let globeCamera {
+            preferredZooms = globeCoverage.preferredZooms(visibleTiles: inRange, camera: globeCamera)
+        } else {
+            preferredZooms = inRange.indices.map { spherePreferredZoom(for: inRange[$0], distance: distances[$0]) }
+        }
+
+        var inputs: [InputTile] = []
+        inputs.reserveCapacity(inRange.count)
+        for index in inRange.indices {
+            inputs.append(InputTile(visibleTile: inRange[index],
+                                    relativeDistance: distances[index],
+                                    preferredZoom: preferredZooms[index]))
+        }
         return inputs
     }
 
@@ -287,7 +309,7 @@ final class VisibleTilesPreprocessor {
         }
     }
 
-    /// The sphere's distance LOD steepness: 1.0 would be honest perspective
+    /// The grid ladder's steepness (the sphere without a globe camera): 1.0 would be honest perspective
     /// (one level per distance doubling); 1.5 coarsens the far range more,
     /// since detail near the limb only shimmers under minification anyway
     /// while covering it costs many times more tiles.
@@ -296,7 +318,8 @@ final class VisibleTilesPreprocessor {
     /// Cap on the sphere's distance drop: the far range never falls below z-4.
     private static let maximumDistanceDrop = 4
 
-    /// The sphere's preferred demand zoom from relative distance.
+    /// The grid ladder's preferred demand zoom from relative distance, the
+    /// sphere's rule when no globe camera is given.
     ///
     /// A tile's on-screen size in perspective falls as 1/distance; the ladder
     /// starts from the exact radius of 2: distance 3 → z-1, 4-5 → z-2,

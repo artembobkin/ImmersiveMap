@@ -36,6 +36,7 @@ final class RenderPersistentContext {
     let horizonRenderer: HorizonRenderer
     let flatTileOriginCalculator: FlatTileOriginCalculator
     let extrudedDepthState: MTLDepthStencilState
+    let labelDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     /// See `SharedRenderResources.skyBackdropDepthState`.
     let skyBackdropDepthState: MTLDepthStencilState
@@ -106,6 +107,7 @@ final class RenderPersistentContext {
         self.tileLoadingStatusReporter = config.debug.enableDebugPanel ? TileLoadingStatusReporter() : nil
 
         self.extrudedDepthState = shared.extrudedDepthState
+        self.labelDepthState = shared.labelDepthState
         self.globeCapDepthState = shared.globeCapDepthState
         self.skyBackdropDepthState = shared.skyBackdropDepthState
         self.horizonGroundDepthState = shared.horizonGroundDepthState

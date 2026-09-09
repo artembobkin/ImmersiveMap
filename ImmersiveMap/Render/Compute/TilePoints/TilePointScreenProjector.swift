@@ -32,20 +32,48 @@ struct TilePointScreenProjector {
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData]) -> TilePointScreenProjectionResult {
-        guard snapshot.pointsCount > 0 else {
-            return .empty
+        var result = TilePointScreenProjectionResult.empty
+        projectWithHorizonVisibility(snapshot: snapshot,
+                                     frameContext: frameContext,
+                                     tileOriginData: tileOriginData,
+                                     screenPoints: &result.screenPoints,
+                                     horizonVisibility: &result.horizonVisibility)
+        return result
+    }
+
+    /// The same projection written into the caller's arrays, which are
+    /// resized to the snapshot only when they do not fit: a frame with a
+    /// stable label set projects without allocating.
+    func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
+                                      frameContext: FrameContext,
+                                      tileOriginData: [FlatTileOriginData],
+                                      screenPoints: inout [ScreenPointOutput],
+                                      horizonVisibility: inout [Bool]) {
+        let count = snapshot.pointsCount
+        if screenPoints.count != count {
+            screenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
+        }
+        if horizonVisibility.count != count {
+            horizonVisibility = Array(repeating: false, count: count)
+        }
+        guard count > 0 else {
+            return
         }
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
-            let outputs = projectFlatScreenPoints(snapshot: snapshot,
-                                                  frameContext: frameContext,
-                                                  tileOriginData: tileOriginData)
-            return TilePointScreenProjectionResult(screenPoints: outputs,
-                                                   horizonVisibility: outputs.map { $0.visible != 0 })
+            projectFlatScreenPoints(snapshot: snapshot,
+                                    frameContext: frameContext,
+                                    tileOriginData: tileOriginData,
+                                    into: &screenPoints)
+            for index in 0..<count {
+                horizonVisibility[index] = screenPoints[index].visible != 0
+            }
         case .globe:
-            return projectGlobe(snapshot: snapshot,
-                                frameContext: frameContext)
+            projectGlobe(snapshot: snapshot,
+                         frameContext: frameContext,
+                         screenPoints: &screenPoints,
+                         horizonVisibility: &horizonVisibility)
         }
     }
 
@@ -90,22 +118,36 @@ struct TilePointScreenProjector {
     private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {
-        let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
-        let cameraMatrix = frameContext.cameraMatrices.projectionView
         var outputs = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0),
                             count: snapshot.pointsCount)
+        projectFlatScreenPoints(snapshot: snapshot,
+                                frameContext: frameContext,
+                                tileOriginData: tileOriginData,
+                                into: &outputs)
+        return outputs
+    }
+
+    private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
+                                         frameContext: FrameContext,
+                                         tileOriginData: [FlatTileOriginData],
+                                         into outputs: inout [ScreenPointOutput]) {
+        let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
+        let cameraMatrix = frameContext.cameraMatrices.projectionView
+        let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
 
         for index in snapshot.pointInputs.indices {
             let input = snapshot.pointInputs[index]
             let tileSlotIndex = Int(input.tileSlotIndex)
             guard tileSlotIndex >= 0,
                   tileSlotIndex < snapshot.tileSlotVisibleTileIndices.count else {
+                outputs[index] = invisible
                 continue
             }
 
             let visibleTileIndex = Int(snapshot.tileSlotVisibleTileIndices[tileSlotIndex])
             guard visibleTileIndex >= 0,
                   visibleTileIndex < tileOriginData.count else {
+                outputs[index] = invisible
                 continue
             }
 
@@ -119,19 +161,28 @@ struct TilePointScreenProjector {
             let clip = cameraMatrix * world
             outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
         }
-
-        return outputs
     }
 
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,
                               frameContext: FrameContext) -> TilePointScreenProjectionResult {
+        var result = TilePointScreenProjectionResult(
+            screenPoints: Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: snapshot.pointsCount),
+            horizonVisibility: Array(repeating: false, count: snapshot.pointsCount))
+        projectGlobe(snapshot: snapshot,
+                     frameContext: frameContext,
+                     screenPoints: &result.screenPoints,
+                     horizonVisibility: &result.horizonVisibility)
+        return result
+    }
+
+    private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,
+                              frameContext: FrameContext,
+                              screenPoints outputs: inout [ScreenPointOutput],
+                              horizonVisibility: inout [Bool]) {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraUniform = frameContext.cameraUniform
         let globe = frameContext.globeRenderUniform
         let constants = GlobeProjectionConstants(globe: globe)
-        var outputs = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0),
-                            count: snapshot.pointsCount)
-        var horizonVisibility = Array(repeating: false, count: snapshot.pointsCount)
 
         for index in snapshot.pointInputs.indices {
             let input = snapshot.pointInputs[index]
@@ -139,17 +190,16 @@ struct TilePointScreenProjector {
                                                 cameraUniform: cameraUniform,
                                                 constants: constants)
             var output = screenPointFromClip(clip: projection.clip, viewportSize: viewport)
+            var horizonVisible = false
             if output.visible != 0 {
-                horizonVisibility[index] = globeProjectionPassesHorizon(worldPosition: projection.worldPosition,
-                                                                        cameraUniform: cameraUniform,
-                                                                        constants: constants)
+                horizonVisible = globeProjectionPassesHorizon(worldPosition: projection.worldPosition,
+                                                              cameraUniform: cameraUniform,
+                                                              constants: constants)
                 output.visibilityAlpha = 1.0
             }
             outputs[index] = output
+            horizonVisibility[index] = horizonVisible
         }
-
-        return TilePointScreenProjectionResult(screenPoints: outputs,
-                                               horizonVisibility: horizonVisibility)
     }
 
     private func screenPointsWithHorizonMask(_ result: TilePointScreenProjectionResult) -> [ScreenPointOutput] {

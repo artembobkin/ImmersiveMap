@@ -1740,8 +1740,7 @@ class TileMvtParser {
                                                     collisionPriority: decision.priority.collisionRank,
                                                     textStyle: decision.style,
                                                     poiIcon: decision.poiIcon,
-                                                    minCameraZoom: style.labelMinCameraZoom,
-                                                    detailCategory: decision.detailCategory))
+                                                    minCameraZoom: style.labelMinCameraZoom))
                     }
                 }
             }

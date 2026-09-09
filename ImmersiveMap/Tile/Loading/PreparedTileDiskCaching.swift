@@ -739,7 +739,10 @@ final class PreparedTileDiskCaching {
     // 89: tiles coarser than z14 no longer carry extruded buildings (the
     // building coverage never draws them); a v88 entry of such a tile
     // carries walls and roofs the renderer would upload for nothing.
-    static let preparedFormatVersion: UInt32 = 89
+    // 90: one text label set per tile instead of three distance tiers; a
+    // v89 entry's span table and metadata carry three sets the reader no
+    // longer walks.
+    static let preparedFormatVersion: UInt32 = 90
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -27,18 +27,15 @@ final class RenderPassGraph {
         }
     }
 
-    /// Without the scene-model occlusion prepass the overlay layers need no
-    /// depth of their own: they fold into the end of the world pass (the
-    /// labels then draw with depth disabled, the same bit read by the label
-    /// subsystems via `sceneModelState.hasDrawnModels`), which drops a whole
-    /// drawable load/store round trip and puts the labels under the
-    /// post-processing antialiasing. With models on screen the overlay keeps
-    /// its own pass and its own cleared depth. So does a multisampled world
-    /// pass: the overlay pipelines are single-sample, and Metal accepts them
-    /// only in a single-sample pass, which the overlay pass is, over the
-    /// resolved image.
+    /// The overlay always keeps its own pass over its own cleared depth:
+    /// the labels draw fill and halo in one pass and use that depth to keep
+    /// a later glyph's halo off an earlier glyph's fill (TextShader.metal),
+    /// which the world pass's depth, full of the ground's layer ranks and
+    /// the buildings, cannot host. The merge that folded the overlay into
+    /// the world pass on model-free single-sample frames saved a drawable
+    /// load/store round trip; the single text pass saves far more.
     static func mergesOverlayIntoWorld(overlayLayers: [RenderLayer], renderSampleCount: Int) -> Bool {
-        overlayLayers.contains(.sceneModelOcclusion) == false && renderSampleCount == 1
+        false
     }
 
     /// The world pass draw order for the frame. The planner lists the flat

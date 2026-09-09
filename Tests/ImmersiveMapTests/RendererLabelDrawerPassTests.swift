@@ -4,23 +4,21 @@
 import XCTest
 
 final class RendererLabelDrawerPassTests: XCTestCase {
-    func testBaseLabelsDrawOutlineBeforeFill() throws {
+    /// The text draws once per run: the fragment stage shades the fill and
+    /// the halo together from the two distance fields, so an outline pass
+    /// under a fill pass only doubled the fragments. The halo reaches the
+    /// shader in device pixels, resolved from the style's em ratio and the
+    /// frame's scale: the shader's own math is derivative-based and genuinely
+    /// pixel-space, so this conversion has to happen here and nowhere else.
+    func testBaseAndRoadLabelsDrawFillAndHaloInOnePass() throws {
         let source = try rendererLabelDrawerSource()
-        let baseDrawSource = try XCTUnwrap(source.components(separatedBy: "static func drawRoadLabels").first)
-
-        XCTAssertTrue(baseDrawSource.contains("pass: .outline"))
-        XCTAssertTrue(baseDrawSource.contains("pass: .fill"))
-        // The halo reaches the shader in device pixels, resolved from the
-        // style's em ratio and the frame's scale. The shader's own math is
-        // derivative-based and genuinely pixel-space, so this conversion has to
-        // happen here and nowhere else.
-        XCTAssertTrue(source.contains("strokeWidthPx: style.haloWidthPixels(screenScale: screenScale)"))
-        XCTAssertTrue(source.contains("textColor: style.fillColor"))
-        XCTAssertTrue(source.contains("strokeWidthPx: 0.0"))
-        let outlineRange = try XCTUnwrap(baseDrawSource.range(of: "pass: .outline"))
-        let fillRange = try XCTUnwrap(baseDrawSource.range(of: "pass: .fill"))
-        XCTAssertLessThan(baseDrawSource.distance(from: baseDrawSource.startIndex, to: outlineRange.lowerBound),
-                          baseDrawSource.distance(from: baseDrawSource.startIndex, to: fillRange.lowerBound))
+        XCTAssertNil(source.range(of: "pass: .outline"))
+        XCTAssertNil(source.range(of: "pass: .fill"))
+        XCTAssertEqual(source.components(separatedBy: "strokeWidthPx: style.haloWidthPixels(screenScale: screenScale)").count - 1, 2,
+                       "The base and the road text each bind the halo width once")
+        XCTAssertEqual(source.components(separatedBy: "textColor: style.fillColor").count - 1, 2)
+        XCTAssertEqual(source.components(separatedBy: "strokeColor: style.strokeColor").count - 1, 2)
+        XCTAssertNil(source.range(of: "strokeWidthPx: 0.0"), "No fill-only pass remains")
     }
 
     private func rendererLabelDrawerSource() throws -> String {

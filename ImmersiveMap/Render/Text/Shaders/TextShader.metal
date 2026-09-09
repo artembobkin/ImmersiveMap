@@ -23,6 +23,24 @@ struct TextDistance {
     float screenPxRange;
 };
 
+// The label fragment's colour and its depth. The text draws fill and halo in
+// one pass, and neighbouring glyph quads overlap (each quad carries the
+// atlas's distance margin), so a later glyph's halo would paint over an
+// earlier glyph's fill where the quads meet. The depth orders them: a fill
+// fragment writes the nearer of two far-plane depths and a halo fragment the
+// farther, under lessEqual with depth write on, so a halo never lands on a
+// fill that is already there while a fill still lands on a halo. Both sit
+// just short of the far plane, so the scene model occlusion prepass (any
+// nearer depth) still clips the labels, and a fragment with no coverage
+// writes the far plane itself, which changes nothing.
+struct TextFragmentOut {
+    half4 color [[color(0)]];
+    float depth [[depth(less)]];
+};
+
+constant float kLabelFillDepth = 0.99999976;
+constant float kLabelHaloDepth = 0.99999988;
+
 vertex VertexOut textVertex(VertexIn in [[stage_in]],
                             constant float4x4& matrix [[buffer(1)]]
                             ) {
@@ -58,11 +76,11 @@ static TextDistance computeTextDistance(VertexOut in,
     return distance;
 }
 
-static half4 shadeGlyph(TextDistance distance,
-                        float fillPxDist,
-                        float strokeWidthPx,
-                        constant TextStyle& style,
-                        float vertexAlpha) {
+static TextFragmentOut shadeGlyph(TextDistance distance,
+                                  float fillPxDist,
+                                  float strokeWidthPx,
+                                  constant TextStyle& style,
+                                  float vertexAlpha) {
     half fill = half(smoothstep(-0.5, 0.5, fillPxDist));
     half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));
     // A style that asks for no halo gets none, exactly: the fill and the outer
@@ -76,10 +94,13 @@ static half4 shadeGlyph(TextDistance distance,
     half alpha = coverage * half(vertexAlpha);
     half3 color = (fill * half3(style.textColor) + stroke * half3(style.strokeColor))
         / max(coverage, 1.0e-4h);
-    return half4(color, alpha);
+    TextFragmentOut out;
+    out.color = half4(color, alpha);
+    out.depth = fill > 0.0h ? kLabelFillDepth : (stroke > 0.0h ? kLabelHaloDepth : 1.0);
+    return out;
 }
 
-fragment half4 textFragment(VertexOut in [[stage_in]],
+fragment TextFragmentOut textFragment(VertexOut in [[stage_in]],
                             texture2d<half> atlasTexture [[texture(0)]],
                             constant TextStyle& style [[buffer(0)]]
                             ) {
@@ -97,7 +118,7 @@ fragment half4 textFragment(VertexOut in [[stage_in]],
                       in.alpha);
 }
 
-fragment half4 roadTextFragment(VertexOut in [[stage_in]],
+fragment TextFragmentOut roadTextFragment(VertexOut in [[stage_in]],
                                 texture2d<half> atlasTexture [[texture(0)]],
                                 constant TextStyle& style [[buffer(0)]]
                                 ) {

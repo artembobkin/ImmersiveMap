@@ -335,9 +335,7 @@ enum PreparedTileDiskCodec {
         /// per-style runs in paint order.
         let groundStyleRuns: Data
         let groundStyleRunCount: UInt32
-        let textFull: TextLabelSetMetaValue
-        let textReduced: TextLabelSetMetaValue
-        let textMinimal: TextLabelSetMetaValue
+        let text: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
         let roadPathRanges: [RoadPathRangeValue]
@@ -660,9 +658,7 @@ enum PreparedTileDiskCodec {
             fileBlobChecksum: fileBlob.map(PreparedTileBlobChecksum.checksum),
             groundStyleRuns: encodePODArray(groundStyleRuns),
             groundStyleRunCount: encodeUInt32(groundStyleRuns.count, field: "Ground.styleRuns.count"),
-            textFull: TextLabelSetMetaValue(preparedTile.textLabels.full),
-            textReduced: TextLabelSetMetaValue(preparedTile.textLabels.reduced),
-            textMinimal: TextLabelSetMetaValue(preparedTile.textLabels.minimal),
+            text: TextLabelSetMetaValue(preparedTile.textLabels),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
             roadPathRanges: preparedTile.roadLabels.pathRanges.map(RoadPathRangeValue.init),
@@ -735,12 +731,8 @@ enum PreparedTileDiskCodec {
         }
         let arenaByteCount = Int(entry.arenaByteCount)
         let expectedSlots = TileArenaSchema.slots(
-            full: TileArenaTextRunCounts(glyphRunCount: entry.textFull.glyphRunStyles.count,
-                                         poiIconRunCount: entry.textFull.poiIconRunStyles.count),
-            reduced: TileArenaTextRunCounts(glyphRunCount: entry.textReduced.glyphRunStyles.count,
-                                            poiIconRunCount: entry.textReduced.poiIconRunStyles.count),
-            minimal: TileArenaTextRunCounts(glyphRunCount: entry.textMinimal.glyphRunStyles.count,
-                                            poiIconRunCount: entry.textMinimal.poiIconRunStyles.count))
+            text: TileArenaTextRunCounts(glyphRunCount: entry.text.glyphRunStyles.count,
+                                         poiIconRunCount: entry.text.poiIconRunStyles.count))
         let spans = try entry.spanTable.map { try $0.runtimeValue() }
         try validate(spans: spans, slots: expectedSlots, arenaByteCount: arenaByteCount)
 
@@ -775,9 +767,7 @@ enum PreparedTileDiskCodec {
                                                 count: Int(entry.groundStyleRunCount),
                                                 as: GroundStyleRun.self,
                                                 field: "Entry.groundStyleRuns"),
-            textLabelsFull: try entry.textFull.runtimeValue(),
-            textLabelsReduced: try entry.textReduced.runtimeValue(),
-            textLabelsMinimal: try entry.textMinimal.runtimeValue(),
+            textLabels: try entry.text.runtimeValue(),
             roadLabels: PreparedTileArenaImage.RoadLabelsMeta(
                 pathInputs: try decodePODArray(entry.roadPathInputs,
                                                count: Int(entry.roadPathInputCount),

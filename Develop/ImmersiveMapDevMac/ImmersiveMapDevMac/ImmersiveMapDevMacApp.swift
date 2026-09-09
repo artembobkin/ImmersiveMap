@@ -43,9 +43,8 @@ private struct MapScreen: View {
             .tileSettings(clearDiskCachesOnLaunch: true)
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map. A development aid, off by default.
-            .labels(isEnabled: false)
+            .labels(isEnabled: true)
             .buildingExtrusion(isEnabled: true)
-            .shadows(isEnabled: true)
             .debugPanel()
             .ignoresSafeArea()
     }

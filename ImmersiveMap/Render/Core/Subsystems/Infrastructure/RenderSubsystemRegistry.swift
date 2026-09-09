@@ -7,6 +7,7 @@
 //
 
 import Metal
+import QuartzCore
 
 final class RenderSubsystemRegistry {
     private let subsystems: [any RenderSubsystem]
@@ -21,13 +22,17 @@ final class RenderSubsystemRegistry {
 
     func update(frameContext: FrameContext) {
         for subsystem in subsystems {
+            let start = CACurrentMediaTime()
             subsystem.update(frameContext: frameContext)
+            frameContext.diagnostics.recordSubsystem(subsystem.name, duration: CACurrentMediaTime() - start)
         }
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
         for subsystem in subsystems {
+            let start = CACurrentMediaTime()
             subsystem.prepareGPU(frameContext: frameContext, resourceRegistry: resourceRegistry)
+            frameContext.diagnostics.recordSubsystem(subsystem.name, duration: CACurrentMediaTime() - start)
         }
     }
 

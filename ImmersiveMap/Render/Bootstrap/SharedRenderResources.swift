@@ -40,6 +40,12 @@ final class SharedRenderResources {
     // MARK: - Depth states and fallback textures
 
     let extrudedDepthState: MTLDepthStencilState
+    /// The label passes: lessEqual with the write on. The labels rasterize
+    /// at the far plane and their fragments write one of two depths just
+    /// short of it (TextShader.metal), fill nearer than halo, so a later
+    /// glyph's halo never covers an earlier glyph's fill; the scene model
+    /// occlusion prepass, nearer still, clips them as before.
+    let labelDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     /// The sky layers (the space background and the stars): drawn first on
     /// the sphere at the far plane, tested against the cleared depth without
@@ -147,6 +153,7 @@ final class SharedRenderResources {
         self.library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
         self.renderSampleCount = renderSampleCount
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
+        self.labelDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
         self.horizonGroundDepthState = device.makeDepthStencilState(descriptor: Self.makeHorizonGroundDepthDescriptor())!

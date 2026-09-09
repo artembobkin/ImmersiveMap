@@ -53,11 +53,9 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        // Same depth choice as BaseLabelDrawSubsystem: the occlusion prepass
-        // depth exists only in the separate overlay pass (models on screen);
-        // merged into the world pass the labels draw with depth disabled.
-        let hasOcclusionPrepass = frameContext.sharedState.sceneModelState.hasDrawnModels
-        encoder.setDepthStencilState(hasOcclusionPrepass ? labelDepthState : depthDisabledState)
+        // Same depth as BaseLabelDrawSubsystem: the overlay pass's own
+        // depth orders halo under fill and clips to the scene models.
+        encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            screenScale: frameContext.screenScale,

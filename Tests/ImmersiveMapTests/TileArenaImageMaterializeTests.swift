@@ -72,7 +72,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                 indices: [],
                 styles: []
             ),
-            textLabels: PreparedTileCPU.TextLabels(full: fullSet, reduced: emptySet, minimal: emptySet),
+            textLabels: fullSet,
             roadLabels: PreparedTileCPU.RoadLabels(pathInputs: [],
                                                    pathRanges: [],
                                                    pathLabels: [],
@@ -187,8 +187,8 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         XCTAssertEqual(materialized.tileBuffers.ground.indexType, parsed.tileBuffers.ground.indexType)
         XCTAssertEqual(materialized.tileBuffers.roads.ground.fill.indicesCount,
                        parsed.tileBuffers.roads.ground.fill.indicesCount)
-        XCTAssertEqual(materialized.tileBuffers.textLabels.full.labelsByStyleRuns.first?.localGlyphVertexCount,
-                       parsed.tileBuffers.textLabels.full.labelsByStyleRuns.first?.localGlyphVertexCount)
+        XCTAssertEqual(materialized.tileBuffers.textLabels.labelsByStyleRuns.first?.localGlyphVertexCount,
+                       parsed.tileBuffers.textLabels.labelsByStyleRuns.first?.localGlyphVertexCount)
         XCTAssertEqual(materialized.tileBuffers.roadLabels.localGlyphVertexCount,
                        parsed.tileBuffers.roadLabels.localGlyphVertexCount)
     }

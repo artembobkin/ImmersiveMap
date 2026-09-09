@@ -64,15 +64,13 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        // With models on screen the labels draw in the overlay pass: they
-        // rasterize at the far plane (see LabelTextVertex.metal), so lessEqual
-        // passes on the cleared overlay depth and fails wherever the scene
-        // model occlusion prepass wrote closer depth. Without models they
-        // draw at the end of the world pass, whose depth carries the ground's
-        // layer ranks, so the test is off (same bit as the pass planner's
-        // merge decision).
-        let hasOcclusionPrepass = frameContext.sharedState.sceneModelState.hasDrawnModels
-        encoder.setDepthStencilState(hasOcclusionPrepass ? labelDepthState : depthDisabledState)
+        // The labels always draw in the overlay pass over its own cleared
+        // depth: they rasterize at the far plane (see LabelTextVertex.metal)
+        // and write fill and halo depths just short of it, so the halo of a
+        // later glyph never covers the fill of an earlier one
+        // (TextShader.metal), while the scene model occlusion prepass,
+        // nearer still, clips them to the model silhouettes.
+        encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawBaseLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            screenScale: frameContext.screenScale,

@@ -152,6 +152,8 @@ final class DebugOverlayHUDView: NSView {
     private let roadFadeEndSlider = NSSlider()
     private let roadFadeFloorLabel = NSTextField(labelWithString: "")
     private let roadFadeFloorSlider = NSSlider()
+    private let coverageReachLabel = NSTextField(labelWithString: "")
+    private let coverageReachSlider = NSSlider()
     private let surfaceModeButton = NSButton()
 
     private var snapshot: DebugOverlayHUDSnapshot?
@@ -181,6 +183,8 @@ final class DebugOverlayHUDView: NSView {
     var onRoadFadeEndCameraDistancesChanged: ((Float) -> Void)?
     /// The floor of the ring's outer radius, in metres.
     var onRoadFadeMinimumEndMetersChanged: ((Float) -> Void)?
+    /// The flat coverage's reach, in camera distances.
+    var onCoverageFarRadiusCameraDistancesChanged: ((Float) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -229,6 +233,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(roadFadeStartLabel, text: "")
         configureControlLabel(roadFadeEndLabel, text: "")
         configureControlLabel(roadFadeFloorLabel, text: "")
+        configureControlLabel(coverageReachLabel, text: "")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
@@ -262,6 +267,7 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(roadFadeFloorSlider,
                         range: Double(RoadDistanceLOD.minimumFadeEndMetersRange.lowerBound) ... Double(RoadDistanceLOD.minimumFadeEndMetersRange.upperBound),
                         action: #selector(roadFadeFloorSliderChanged))
+        configureSlider(coverageReachSlider, range: FlatDistanceCoverage.farRadiusRange, action: #selector(coverageReachSliderChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -385,7 +391,7 @@ final class DebugOverlayHUDView: NSView {
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
          roadFadeStartLabel, roadFadeStartSlider, roadFadeEndLabel, roadFadeEndSlider,
-         roadFadeFloorLabel, roadFadeFloorSlider, surfaceModeButton,
+         roadFadeFloorLabel, roadFadeFloorSlider, coverageReachLabel, coverageReachSlider, surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
 
@@ -416,6 +422,8 @@ final class DebugOverlayHUDView: NSView {
         roadFadeEndLabel.stringValue = Self.roadFadeEndTitle(controls.roadFadeEndCameraDistances)
         roadFadeFloorSlider.doubleValue = Double(controls.roadFadeMinimumEndMeters)
         roadFadeFloorLabel.stringValue = Self.roadFadeFloorTitle(controls.roadFadeMinimumEndMeters)
+        coverageReachSlider.doubleValue = Double(controls.coverageFarRadiusCameraDistances)
+        coverageReachLabel.stringValue = Self.coverageReachTitle(controls.coverageFarRadiusCameraDistances)
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
@@ -598,6 +606,7 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(roadFadeStartLabel, roadFadeStartSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(roadFadeEndLabel, roadFadeEndSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(roadFadeFloorLabel, roadFadeFloorSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(coverageReachLabel, coverageReachSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor += Layout.groupSpacing
 
@@ -992,6 +1001,16 @@ final class DebugOverlayHUDView: NSView {
 
     static func roadFadeFloorTitle(_ meters: Float) -> String {
         String(format: "Roads reach at least %.0f m", meters)
+    }
+
+    @objc private func coverageReachSliderChanged() {
+        let cameraDistances = Float(coverageReachSlider.doubleValue)
+        coverageReachLabel.stringValue = Self.coverageReachTitle(cameraDistances)
+        onCoverageFarRadiusCameraDistancesChanged?(cameraDistances)
+    }
+
+    static func coverageReachTitle(_ cameraDistances: Float) -> String {
+        String(format: "Tiles reach %.0f cam. dist.", cameraDistances)
     }
 
     static func roadFadeStartTitle(_ cameraDistances: Float) -> String {
