@@ -161,6 +161,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .buildingExtrusion(isEnabled: true)
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)

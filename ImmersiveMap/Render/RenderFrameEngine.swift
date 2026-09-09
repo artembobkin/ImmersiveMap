@@ -316,7 +316,6 @@ final class RenderFrameEngine {
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
-                                                        sceneSettings: settings.scene,
                                                         diagnostics: diagnostics)
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.

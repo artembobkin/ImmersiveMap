@@ -302,13 +302,21 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var automaticTransitionStartZoom: Double
         public var automaticTransitionSpan: Double
         public var globeRadiusScale: Double
+        /// Whether the map is a globe at low zoom. On (the default), the
+        /// world is a sphere until the camera zooms into the transition
+        /// window and unrolls it into the plane. Off, the world is the
+        /// Mercator plane at every zoom: no sphere, no morph, no stars, the
+        /// flat map's sky and haze from zoom 0 up. Applies live.
+        public var isGlobeEnabled: Bool
 
         public init(automaticTransitionStartZoom: Double,
                     automaticTransitionSpan: Double,
-                    globeRadiusScale: Double) {
+                    globeRadiusScale: Double,
+                    isGlobeEnabled: Bool = true) {
             self.automaticTransitionStartZoom = automaticTransitionStartZoom
             self.automaticTransitionSpan = automaticTransitionSpan
             self.globeRadiusScale = globeRadiusScale
+            self.isGlobeEnabled = isGlobeEnabled
         }
     }
 
@@ -968,11 +976,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var preparedTileStyleRevision: UInt32
         public var flatSeparateRoadRenderingMinimumZoom: Int
         /// Whether buildings rise out of their footprints on the flat map.
-        /// On (the default), every building the tiles give a height is
-        /// extruded, solid and depth-correct. Off, no building is extruded:
-        /// the footprints stay as
-        /// flat fills in the building color, the way they draw on the globe,
-        /// and with nothing left to cast, the shadow pass skips itself.
+        /// Off (the default), no building is extruded: the footprints stay
+        /// as flat fills in the building color, the way they draw on the
+        /// globe, and with nothing left to cast, the shadow pass skips
+        /// itself. On, every building the tiles give a height is extruded,
+        /// solid and depth-correct.
         /// Baked at parse time: toggling re-parses the tiles, like any
         /// style change.
         public var buildingExtrusionEnabled: Bool
@@ -987,7 +995,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(preparedTileStyleRevision: UInt32,
                     flatSeparateRoadRenderingMinimumZoom: Int,
-                    buildingExtrusionEnabled: Bool = true,
+                    buildingExtrusionEnabled: Bool = false,
                     buildingRoofShapesEnabled: Bool = false,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {
@@ -1033,9 +1041,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// smoothing of geometry silhouettes (building edges most visibly),
         /// at the price of one fullscreen pass.
         public var fxaaEnabled: Bool
+        /// Multisampling of the world pass: 1 (the default) renders one
+        /// sample per pixel, 4 is MSAA 4x. The device decides what it can
+        /// do; a count it does not support falls back to the largest one
+        /// under it that it does. Unlike FXAA this is not a pass over the
+        /// finished frame but four depth and colour samples per pixel of
+        /// the whole world pass, which cleans geometry silhouettes
+        /// (buildings, models) while the tile shaders still run once per
+        /// pixel; the frame costs more in memory bandwidth and the overlay
+        /// (labels, avatars) takes its own pass over the resolved image.
+        /// Every pipeline state depends on it, so changing it recreates the
+        /// renderer.
+        public var multisampleCount: Int
 
-        public init(fxaaEnabled: Bool = false) {
+        public init(fxaaEnabled: Bool = false,
+                    multisampleCount: Int = 1) {
             self.fxaaEnabled = fxaaEnabled
+            self.multisampleCount = multisampleCount
         }
     }
 
@@ -1321,6 +1343,14 @@ public extension ImmersiveMapSettings {
     func presentationSettings(_ presentation: PresentationSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.presentation = presentation
+        return settings
+    }
+
+    /// The globe at low zoom on or off; off keeps the map a plane at every
+    /// zoom.
+    func globe(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.presentation.isGlobeEnabled = isEnabled
         return settings
     }
 
@@ -1691,6 +1721,14 @@ public extension ImmersiveMapSettings {
     func fxaa(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.postProcessing.fxaaEnabled = isEnabled
+        return settings
+    }
+
+    /// MSAA 4x on the world pass, or back to one sample per pixel; see
+    /// `PostProcessingSettings.multisampleCount`.
+    func msaa(isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.postProcessing.multisampleCount = isEnabled ? 4 : 1
         return settings
     }
 

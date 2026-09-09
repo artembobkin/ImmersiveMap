@@ -14,6 +14,9 @@ import ImmersiveMap
 /// away from the equator and the unfurl would otherwise run at different speeds
 /// in Rome and in Reykjavik. The readout below recomputes the same value the
 /// renderer uses, so dragging the sliders moves the numbers with the map.
+///
+/// The Globe switch takes the sphere away altogether: off, the map is the
+/// plane at every zoom, and the window above has nothing to open.
 struct PresentationPanel: View {
     @Binding var settings: ImmersiveMapSettings
     let camera: ImmersiveMapCameraController
@@ -23,6 +26,8 @@ struct PresentationPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PanelRow {
+                Toggle("Globe", isOn: $settings.presentation.isGlobeEnabled)
+                    .toggleStyle(.switch)
                 ValueSlider("Morph starts at z",
                             value: $settings.presentation.automaticTransitionStartZoom,
                             range: 2...12,
@@ -76,6 +81,9 @@ struct PresentationPanel: View {
     private var transition: Double {
         guard let position else {
             return 0
+        }
+        guard settings.presentation.isGlobeEnabled else {
+            return 1
         }
         let latitude = position.latitudeDegrees * .pi / 180
         let latitudeSpanExtension = log2(1.0 / max(cos(latitude), 0.01))

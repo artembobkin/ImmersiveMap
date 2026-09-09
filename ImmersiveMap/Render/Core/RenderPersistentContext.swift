@@ -98,7 +98,7 @@ final class RenderPersistentContext {
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
          baseLabelTraceRecorder: BaseLabelTraceRecorder) {
-        let shared = SharedRenderResources.shared()
+        let shared = SharedRenderResources.shared(sampleCount: config.postProcessing.multisampleCount)
         let metal = RendererSetup.buildMetal(layer: layer, sharedResources: shared)
         self.metalContext = metal
         self.tileTraceRecorder = tileTraceRecorder

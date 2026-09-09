@@ -11,7 +11,7 @@ import Foundation
 struct TilePlacementState {
     nonisolated(unsafe) static let empty = TilePlacementState(placeTilesContext: .empty,
                                           backdropPlaceTilesContext: .empty,
-                                          shadowCasterPlaceTilesContext: .empty,
+                                          buildingPlaceTilesContext: .empty,
                                           globeSurfaceSlots: [],
                                           placementVersion: 0,
                                           visibleTilesCount: 0,
@@ -23,10 +23,11 @@ struct TilePlacementState {
     /// Placements of the flat-mode horizon backdrop: drawn under the main
     /// coverage and excluded from labels/projections. Empty on the globe.
     let backdropPlaceTilesContext: PlaceTilesContext
-    /// Placements of the off-screen sun-ward caster strip: rendered into the
-    /// shadow cascade maps only, on top of the visible placements. Empty on
-    /// the globe and with shadows disabled.
-    let shadowCasterPlaceTilesContext: PlaceTilesContext
+    /// The tiles that draw their buildings this frame, a partition of the
+    /// near field with no overlaps (`BuildingCoveragePlanner`): what the
+    /// building and shadow passes draw, by the depth test alone. Empty on
+    /// the globe.
+    let buildingPlaceTilesContext: PlaceTilesContext
     /// Every target slot of the globe surface this frame (the preprocessed
     /// visible tiles): the placeholder grid draws each one, which is what
     /// writes the surface depth and paints the base under the tile geometry

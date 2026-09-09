@@ -13,14 +13,11 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
 
         let result = resolver.resolve(cameraFrameState: makeCameraFrameState(zoom: 1.74),
                                       resolvedPresentation: makePresentation(renderSurfaceMode: .spherical),
-                                      tileSettings: ImmersiveMapSettings.default.tiles,
-                                      sceneSettings: ImmersiveMapSettings.default.scene)
+                                      tileSettings: ImmersiveMapSettings.default.tiles)
 
         XCTAssertEqual(culling.targetZooms, [1])
         XCTAssertEqual(result.tileZoomLevel, 1)
         XCTAssertEqual(result.visibleTiles, [VisibleTile(x: 1, y: 1, z: 1)])
-        XCTAssertEqual(culling.shadowCasterSweeps, [nil],
-                       "The globe has no shadow pass, so no caster sweep must be forwarded")
     }
 
     func testFlatModeResolvesOnlyBaseVisibleTiles() {
@@ -29,15 +26,11 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
 
         let result = resolver.resolve(cameraFrameState: makeCameraFrameState(zoom: 1.74),
                                       resolvedPresentation: makePresentation(renderSurfaceMode: .flat),
-                                      tileSettings: ImmersiveMapSettings.default.tiles,
-                                      sceneSettings: ImmersiveMapSettings.default.scene)
+                                      tileSettings: ImmersiveMapSettings.default.tiles)
 
         XCTAssertEqual(culling.targetZooms, [1])
         XCTAssertEqual(result.tileZoomLevel, 1)
         XCTAssertEqual(result.visibleTiles, [VisibleTile(x: 1, y: 1, z: 1)])
-        XCTAssertEqual(culling.shadowCasterSweeps.count, 1)
-        XCTAssertNotNil(culling.shadowCasterSweeps.first ?? nil,
-                        "Flat mode with the default enabled-shadow scene must forward a caster sweep")
     }
 
     private func makeCameraFrameState(zoom: Double) -> CameraFrameState {
@@ -78,7 +71,6 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
 
 private final class RecordingTileCulling: TileCulling {
     private(set) var targetZooms: [Int] = []
-    private(set) var shadowCasterSweeps: [SIMD2<Float>?] = []
 
     override func resolveVisibleContent(cameraState: ImmersiveMapCameraState,
                                         resolvedPresentation: ResolvedPresentationState,
@@ -86,15 +78,12 @@ private final class RecordingTileCulling: TileCulling {
                                         cameraMatrix: matrix_float4x4?,
                                         cameraFrustum: Frustum?,
                                         cameraEye: SIMD3<Float>,
-                                        shadowCasterSweep: SIMD2<Float>? = nil,
                                         diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         targetZooms.append(targetZoom)
-        shadowCasterSweeps.append(shadowCasterSweep)
         return VisibleContentState(centerWorldMercator: cameraState.centerWorldMercator,
                                    center: Center(tileX: 0, tileY: 0),
                                    visibleTiles: [VisibleTile(x: targetZoom, y: targetZoom, z: targetZoom)],
                                    backdropTiles: [],
-                                   shadowCasterTiles: [],
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: UInt64(targetZoom))
     }

@@ -6,8 +6,9 @@ import simd
 
 /// Keeps the rendered shadow map alive across frames. The sun is static and
 /// the buildings do not move, so a rendered map only goes stale when the
-/// camera leaves the fitted window, the light or resolution changes, a new
-/// caster tile arrives, or scene models (which animate) cast.
+/// camera leaves the fitted window, the light or resolution changes, the
+/// set of tiles with buildings changes, or scene models (which animate)
+/// cast.
 /// Everything else is the common case: the receivers keep sampling the map
 /// rendered some frames ago, through matrices re-materialized for the
 /// current pan, and the whole caster pass simply does not run.
@@ -27,9 +28,11 @@ final class ShadowMapReuseController {
 
     /// One caster's identity in the rendered map: the parsed tile object
     /// (re-parsing the same coordinates makes a new object, which correctly
-    /// reads as a new caster) in one world-wrap copy.
+    /// reads as a new caster), the slot it draws in (a parent clipped to a
+    /// slot casts from that slot only) and the world-wrap copy.
     struct CasterKey: Hashable {
         let tile: ObjectIdentifier
+        let placeIn: Tile
         let loop: Int8
     }
 
@@ -90,7 +93,11 @@ final class ShadowMapReuseController {
             // Scene models animate and move: with model casters in the frame
             // the map is re-rendered every frame, exactly as before.
             || hasModelCasters
-            || casterKeys.isSubset(of: renderedCasterKeys) == false
+            // Any change of the caster set: a caster arriving is not in the
+            // rendered map, and a caster leaving may leave its shadows on
+            // ground whose buildings are no longer drawn (a cell handing
+            // over to a tile without buildings), so both re-render.
+            || casterKeys != renderedCasterKeys
         guard needsRender else {
             return false
         }
@@ -100,19 +107,16 @@ final class ShadowMapReuseController {
         return true
     }
 
-    /// Every building caster the frame would rasterize: the visible
-    /// placements plus the sun-ward strip. A tile leaving the set never
-    /// invalidates (its image is already baked and its shadows can no longer
-    /// reach the frame); a tile not yet in the rendered map always does.
+    /// Every building caster the frame would rasterize: the building
+    /// coverage's placements with buildings. The rendered map is reused
+    /// only while this set is unchanged.
     static func casterKeys(tilePlacementState: TilePlacementState) -> Set<CasterKey> {
         var keys = Set<CasterKey>()
-        for context in [tilePlacementState.placeTilesContext,
-                        tilePlacementState.shadowCasterPlaceTilesContext] {
-            for placement in context.tilePlacements
-            where placement.metalTile.tileBuffers.extruded.indicesCount > 0 {
-                keys.insert(CasterKey(tile: ObjectIdentifier(placement.metalTile),
-                                      loop: placement.placeIn.loop))
-            }
+        for placement in tilePlacementState.buildingPlaceTilesContext.tilePlacements
+        where placement.metalTile.tileBuffers.extruded.indicesCount > 0 {
+            keys.insert(CasterKey(tile: ObjectIdentifier(placement.metalTile),
+                                  placeIn: placement.placeIn.tile,
+                                  loop: placement.placeIn.loop))
         }
         return keys
     }

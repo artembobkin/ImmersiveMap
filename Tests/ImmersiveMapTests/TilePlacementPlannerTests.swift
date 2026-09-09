@@ -5,396 +5,172 @@
 import MetalKit
 import XCTest
 
+/// The placement as a function of the targets and the resident tiles: a
+/// resident target draws itself, a missing one draws its complete resident
+/// descendants, else its finest resident ancestor above the backdrop, else
+/// its partial descendants, else nothing. Nothing comes from a previous
+/// frame.
 final class TilePlacementPlannerTests: XCTestCase {
-    func testBuildPlacementsUsesCurrentReadyParentForMissingTile() throws {
-        let parentTile = Tile(x: 8, y: 5, z: 4)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let target = VisibleTile(tile: targetTile)
-        let parentMetalTile = MetalTile(tile: parentTile, tileBuffers: try makeTileBuffers())
+    private let parent = Tile(x: 17, y: 11, z: 5)
+    private var children: [Tile] {
+        [Tile(x: 34, y: 22, z: 6), Tile(x: 35, y: 22, z: 6), Tile(x: 34, y: 23, z: 6), Tile(x: 35, y: 23, z: 6)]
+    }
+    private let grandparent = Tile(x: 8, y: 5, z: 4)
 
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [target],
-            readyTilesBySource: [
-                targetTile: nil,
-                parentTile: parentMetalTile
-            ],
-            zoom: 6,
-            previousContext: .empty
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        guard let placement = context.tilePlacements.first else {
-            return
+    private func resident(_ tiles: [Tile]) throws -> [Tile: MetalTile] {
+        var resident: [Tile: MetalTile] = [:]
+        for tile in tiles {
+            resident[tile] = MetalTile(tile: tile, tileBuffers: try makeTileBuffers())
         }
-        XCTAssertEqual(placement.metalTile.tile, parentTile)
-        XCTAssertEqual(placement.placeIn.tile, targetTile)
-        XCTAssertEqual(placement.lodKind, .retainedReplacement)
+        return resident
     }
 
-    func testBuildPlacementsPrefersMostDetailedCurrentReadyParent() throws {
-        let coarseParentTile = Tile(x: 4, y: 2, z: 3)
-        let detailedParentTile = Tile(x: 8, y: 5, z: 4)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let target = VisibleTile(tile: targetTile)
-        let coarseParentMetalTile = MetalTile(tile: coarseParentTile, tileBuffers: try makeTileBuffers())
-        let detailedParentMetalTile = MetalTile(tile: detailedParentTile, tileBuffers: try makeTileBuffers())
+    private func placements(targets: [Tile], resident: [Tile: MetalTile], zoom: Int, backdropZoomLevel: Int? = nil) -> [PlaceTile] {
+        TilePlacementPlanner.buildPlacements(targets: targets.map { VisibleTile(tile: $0) },
+                                             resident: resident,
+                                             zoom: zoom,
+                                             backdropZoomLevel: backdropZoomLevel).tilePlacements
+    }
 
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [target],
-            readyTilesBySource: [
-                targetTile: nil,
-                coarseParentTile: coarseParentMetalTile,
-                detailedParentTile: detailedParentMetalTile
-            ],
-            zoom: 6,
-            previousContext: .empty
-        )
+    func testAResidentTargetDrawsItself() throws {
+        let resident = try resident([parent, grandparent])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(placed.count, 1)
+        XCTAssertEqual(placed.first?.metalTile.tile, parent)
+        XCTAssertEqual(placed.first?.placeIn.tile, parent)
+        XCTAssertEqual(placed.first?.lodKind, .exact)
+    }
 
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        guard let placement = context.tilePlacements.first else {
-            return
+    func testACoarserTargetIsMarkedAsASubstitute() throws {
+        let resident = try resident([parent])
+        let placed = placements(targets: [parent], resident: resident, zoom: 7)
+        XCTAssertEqual(placed.first?.lodKind, .coarseSubstitute)
+    }
+
+    func testAMissingTargetDrawsItsFinestResidentAncestor() throws {
+        let resident = try resident([grandparent, Tile(x: 4, y: 2, z: 3)])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(placed.count, 1)
+        XCTAssertEqual(placed.first?.metalTile.tile, grandparent, "the finest ancestor, not the coarser one")
+        XCTAssertEqual(placed.first?.placeIn.tile, parent, "placed in the target's slot")
+        XCTAssertEqual(placed.first?.lodKind, .coarseSubstitute)
+    }
+
+    func testAnAncestorAtTheBackdropZoomIsNotASubstitute() throws {
+        let resident = try resident([Tile(x: 4, y: 2, z: 3), Tile(x: 2, y: 1, z: 2)])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5, backdropZoomLevel: 3)
+        XCTAssertTrue(placed.isEmpty, "z3 and coarser carry nothing the backdrop does not; the target is left to it")
+        let withoutBackdrop = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(withoutBackdrop.first?.metalTile.tile, Tile(x: 4, y: 2, z: 3), "without a backdrop the z3 ancestor stands in")
+    }
+
+    func testCompleteResidentChildrenStandInForAMissingTarget() throws {
+        let resident = try resident(children + [grandparent])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children), "the four children cover the target whole")
+        XCTAssertTrue(placed.allSatisfy { $0.placeIn.tile == $0.metalTile.tile && $0.lodKind == .retainedReplacement },
+                      "each drawn at its own extent")
+    }
+
+    func testPartialChildrenLoseToAResidentAncestor() throws {
+        let resident = try resident([children[0], grandparent])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(placed.count, 1)
+        XCTAssertEqual(placed.first?.metalTile.tile, grandparent, "a whole coarse cover beats a detailed cover with holes")
+    }
+
+    func testPartialChildrenStandInWhenNoAncestorIsResident() throws {
+        let resident = try resident([children[0], children[3]])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), [children[0], children[3]], "better than an empty region")
+    }
+
+    func testNestedGrandchildrenCompleteAChild() throws {
+        let missingChild = children[3]
+        var grandchildren: [Tile] = []
+        for dx in 0 ... 1 {
+            for dy in 0 ... 1 {
+                grandchildren.append(Tile(x: missingChild.x * 2 + dx, y: missingChild.y * 2 + dy, z: 7))
+            }
         }
-        XCTAssertEqual(placement.metalTile.tile, detailedParentTile)
-        XCTAssertEqual(placement.placeIn.tile, targetTile)
-        XCTAssertEqual(placement.lodKind, .retainedReplacement)
+        let resident = try resident(Array(children.dropLast()) + grandchildren)
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children.dropLast() + grandchildren))
     }
 
-    func testBuildPlacementsKeepsRetainedAncestorOnZoomOut() throws {
-        let ancestorTile = Tile(x: 2, y: 1, z: 2)
-        let previousTargetTile = Tile(x: 34, y: 22, z: 6)
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        let ancestorMetalTile = MetalTile(tile: ancestorTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: ancestorMetalTile,
-                      placeIn: VisibleTile(tile: previousTargetTile),
-                      lodKind: .retainedReplacement)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        guard let placement = context.tilePlacements.first else {
-            return
+    func testTheDescendantSearchStopsAtItsDepth() throws {
+        // Everything four levels down is resident: too deep to count as
+        // cover, and no ancestor is resident, so nothing is placed.
+        var deep: [Tile] = []
+        for dx in 0 ..< 16 {
+            for dy in 0 ..< 16 {
+                deep.append(Tile(x: parent.x * 16 + dx, y: parent.y * 16 + dy, z: 9))
+            }
         }
-        XCTAssertEqual(placement.metalTile.tile, ancestorTile)
-        XCTAssertEqual(placement.placeIn.tile, targetTile)
-        XCTAssertEqual(placement.lodKind, .retainedReplacement)
+        let placed = placements(targets: [parent], resident: try resident(deep), zoom: 5)
+        XCTAssertTrue(placed.isEmpty)
     }
 
-    func testBuildPlacementsPrefersRetainedChildrenOverAncestorOnZoomOutWhenChildrenCoverTarget() throws {
-        let ancestorTile = Tile(x: 2, y: 1, z: 2)
-        let childTiles = [
-            Tile(x: 34, y: 22, z: 6),
-            Tile(x: 35, y: 22, z: 6),
-            Tile(x: 34, y: 23, z: 6),
-            Tile(x: 35, y: 23, z: 6)
-        ]
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        let ancestorMetalTile = MetalTile(tile: ancestorTile, tileBuffers: try makeTileBuffers())
-        var previousPlacements = try childTiles.map { childTile in
-            PlaceTile(metalTile: MetalTile(tile: childTile, tileBuffers: try makeTileBuffers()),
-                      placeIn: VisibleTile(tile: childTile),
-                      lodKind: .exact)
-        }
-        previousPlacements.append(PlaceTile(metalTile: ancestorMetalTile,
-                                            placeIn: VisibleTile(tile: Tile(x: 36, y: 22, z: 6)),
-                                            lodKind: .retainedReplacement))
-        let previousContext = PlaceTilesContext(tilePlacements: previousPlacements)
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 4)
-        XCTAssertEqual(Set(context.tilePlacements.map(\.metalTile.tile)), Set(childTiles))
-        XCTAssertTrue(context.tilePlacements.allSatisfy { $0.lodKind == .retainedReplacement })
+    func testNothingResidentPlacesNothing() throws {
+        let placed = placements(targets: [parent], resident: [:], zoom: 5)
+        XCTAssertTrue(placed.isEmpty)
     }
 
-    func testBuildPlacementsFallsBackToAncestorOnZoomOutWhenChildrenCoverTargetPartially() throws {
-        let ancestorTile = Tile(x: 2, y: 1, z: 2)
-        let childTile = Tile(x: 34, y: 22, z: 6)
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        let ancestorMetalTile = MetalTile(tile: ancestorTile, tileBuffers: try makeTileBuffers())
-        let childMetalTile = MetalTile(tile: childTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: childMetalTile,
-                      placeIn: VisibleTile(tile: childTile),
-                      lodKind: .exact),
-            PlaceTile(metalTile: ancestorMetalTile,
-                      placeIn: VisibleTile(tile: Tile(x: 35, y: 22, z: 6)),
-                      lodKind: .retainedReplacement)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext
-        )
-
-        // A single previous child covers a quarter of the target, so only the
-        // retained ancestor can show the region in full.
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        guard let placement = context.tilePlacements.first else {
-            return
-        }
-        XCTAssertEqual(placement.metalTile.tile, ancestorTile)
-        XCTAssertEqual(placement.placeIn.tile, targetTile)
-        XCTAssertEqual(placement.lodKind, .retainedReplacement)
+    /// Targets may overlap on the flat map: a missing parent and its missing
+    /// child both find the resident grandchild below them, and it comes out
+    /// once. (Emitting it per target, with the previous frame as the source,
+    /// once doubled the list every frame until a frame took seconds.)
+    func testAStandInInsideTwoOverlappingTargetsIsPlacedOnce() throws {
+        let child = children[0]
+        let grandchild = Tile(x: child.x * 2, y: child.y * 2, z: 7)
+        let resident = try resident([grandchild])
+        let placed = placements(targets: [child, parent], resident: resident, zoom: 7)
+        XCTAssertEqual(placed.count, 1)
+        XCTAssertEqual(placed.first?.metalTile.tile, grandchild)
     }
 
-    func testBuildPlacementsCoverageIgnoresNestedSourcesOnZoomOut() throws {
-        // 3 z6 children (75% of the area) + 4 z7 tiles nested inside the first
-        // child: the sum of shares ignoring nesting would come to exactly 1.0,
-        // but the real union is 75%, and only the ancestor covers the whole region.
-        let ancestorTile = Tile(x: 2, y: 1, z: 2)
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        let childTiles = [
-            Tile(x: 34, y: 22, z: 6),
-            Tile(x: 35, y: 22, z: 6),
-            Tile(x: 34, y: 23, z: 6)
-        ]
-        let nestedTiles = [
-            Tile(x: 68, y: 44, z: 7),
-            Tile(x: 69, y: 44, z: 7),
-            Tile(x: 68, y: 45, z: 7),
-            Tile(x: 69, y: 45, z: 7)
-        ]
-        var previousPlacements = try (childTiles + nestedTiles).map { tile in
-            PlaceTile(metalTile: MetalTile(tile: tile, tileBuffers: try makeTileBuffers()),
-                      placeIn: VisibleTile(tile: tile),
-                      lodKind: .exact)
-        }
-        let ancestorMetalTile = MetalTile(tile: ancestorTile, tileBuffers: try makeTileBuffers())
-        previousPlacements.append(PlaceTile(metalTile: ancestorMetalTile,
-                                            placeIn: VisibleTile(tile: Tile(x: 35, y: 23, z: 6)),
-                                            lodKind: .retainedReplacement))
-        let previousContext = PlaceTilesContext(tilePlacements: previousPlacements)
+    func testAWrappedTargetKeepsItsLoopInEveryStandIn() throws {
+        let resident = try resident([grandparent] + children)
+        let wrapped = VisibleTile(tile: parent, loop: 1)
+        let placed = TilePlacementPlanner.buildPlacements(targets: [wrapped], resident: resident, zoom: 5).tilePlacements
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children), "complete children win")
+        XCTAssertTrue(placed.allSatisfy { $0.placeIn.loop == 1 }, "drawn in the target's world copy")
 
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        guard let placement = context.tilePlacements.first else {
-            return
-        }
-        XCTAssertEqual(placement.metalTile.tile, ancestorTile)
-        XCTAssertEqual(placement.placeIn.tile, targetTile)
+        let ancestorOnly = try self.resident([grandparent])
+        let ancestor = TilePlacementPlanner.buildPlacements(targets: [wrapped], resident: ancestorOnly, zoom: 5).tilePlacements
+        XCTAssertEqual(ancestor.first?.placeIn, wrapped)
+        XCTAssertEqual(ancestor.first?.lodKind, .coarseSubstitute)
     }
 
-    func testBuildPlacementsPrefersUnclippedRetainedSourceOverClippedPartialCarries() throws {
-        // Source == target is retained from the previous context but placed in
-        // two clipped child slots, so only half of the target is actually
-        // painted. Full coverage comes from bestFullReplacement with the same
-        // tile unclipped.
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        let childA = Tile(x: 34, y: 22, z: 6)
-        let childB = Tile(x: 35, y: 22, z: 6)
-        let retainedMetalTile = MetalTile(tile: targetTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: retainedMetalTile,
-                      placeIn: VisibleTile(tile: childA),
-                      lodKind: .retainedReplacement),
-            PlaceTile(metalTile: retainedMetalTile,
-                      placeIn: VisibleTile(tile: childB),
-                      lodKind: .retainedReplacement)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, targetTile)
-        XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
+    func testAResidentTargetAlsoStandsInForItsMissingChildren() throws {
+        // Overlapping flat targets: the parent is a target of its own and
+        // the stand-in of two loading children, so it is placed three
+        // times, once per slot, with one source.
+        let resident = try resident([parent])
+        let placed = placements(targets: [parent, children[0], children[1]], resident: resident, zoom: 6)
+        XCTAssertEqual(placed.count, 3)
+        XCTAssertTrue(placed.allSatisfy { $0.metalTile.tile == parent })
+        XCTAssertEqual(Set(placed.map(\.placeIn.tile)), [parent, children[0], children[1]])
+        XCTAssertEqual(placed.first { $0.placeIn.tile == parent }?.lodKind, .coarseSubstitute, "a resident target coarser than the zoom")
     }
 
-    func testBuildPlacementsPrefersDetailedRetainedCoveringSourceOverCoarserReadyParent() throws {
-        // "Sharp → blur": a retained detailed source must not lose to a coarser
-        // parent that has just materialized from the cache.
-        let retainedTile = Tile(x: 17, y: 11, z: 5)
-        let readyParentTile = Tile(x: 4, y: 2, z: 3)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let retainedMetalTile = MetalTile(tile: retainedTile, tileBuffers: try makeTileBuffers())
-        let readyParentMetalTile = MetalTile(tile: readyParentTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: retainedMetalTile,
-                      placeIn: VisibleTile(tile: targetTile),
-                      lodKind: .retainedReplacement)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [
-                targetTile: nil,
-                readyParentTile: readyParentMetalTile
-            ],
-            zoom: 6,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, retainedTile)
-        XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
-        XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
+    func testTheBackdropContextSearchesNoDescendants() throws {
+        let backdrop = Tile(x: 4, y: 2, z: 3)
+        let resident = try resident([grandparent])
+        let placed = TilePlacementPlanner.buildPlacements(targets: [VisibleTile(tile: backdrop)],
+                                                          resident: resident,
+                                                          zoom: 5,
+                                                          descendantSearchDepth: 0).tilePlacements
+        XCTAssertTrue(placed.isEmpty, "A z4 child of a missing backdrop slot belongs to the main coverage, not the backdrop")
     }
 
-    func testBuildPlacementsPrefersReadyParentOverCoarserRetainedSource() throws {
-        let retainedAncestorTile = Tile(x: 2, y: 1, z: 2)
-        let readyParentTile = Tile(x: 17, y: 11, z: 5)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let retainedAncestorMetalTile = MetalTile(tile: retainedAncestorTile, tileBuffers: try makeTileBuffers())
-        let readyParentMetalTile = MetalTile(tile: readyParentTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: retainedAncestorMetalTile,
-                      placeIn: VisibleTile(tile: targetTile),
-                      lodKind: .retainedReplacement)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [
-                targetTile: nil,
-                readyParentTile: readyParentMetalTile
-            ],
-            zoom: 6,
-            previousContext: previousContext
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, readyParentTile)
-        XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
-        XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
-    }
-
-    func testBuildPlacementsKeepsPartialRetainedChildrenOverBackdropLevelParent() throws {
-        let backdropTile = Tile(x: 2, y: 1, z: 3)
-        let childTile = Tile(x: 68, y: 44, z: 7)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let backdropMetalTile = MetalTile(tile: backdropTile, tileBuffers: try makeTileBuffers())
-        let childMetalTile = MetalTile(tile: childTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: childMetalTile,
-                      placeIn: VisibleTile(tile: childTile),
-                      lodKind: .exact)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [
-                targetTile: nil,
-                backdropTile: backdropMetalTile
-            ],
-            zoom: 6,
-            previousContext: previousContext,
-            backdropZoomLevel: 3
-        )
-
-        // A backdrop of the same zoom is already drawn a layer below: partial
-        // detail is better than a solid copy of the backdrop on top of it.
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, childTile)
-        XCTAssertEqual(context.tilePlacements.first?.lodKind, .retainedReplacement)
-    }
-
-    func testBuildPlacementsStillPrefersUsefulParentOverPartialChildrenWithBackdrop() throws {
-        let readyParentTile = Tile(x: 17, y: 11, z: 5)
-        let childTile = Tile(x: 68, y: 44, z: 7)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let readyParentMetalTile = MetalTile(tile: readyParentTile, tileBuffers: try makeTileBuffers())
-        let childMetalTile = MetalTile(tile: childTile, tileBuffers: try makeTileBuffers())
-        let previousContext = PlaceTilesContext(tilePlacements: [
-            PlaceTile(metalTile: childMetalTile,
-                      placeIn: VisibleTile(tile: childTile),
-                      lodKind: .exact)
-        ])
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [
-                targetTile: nil,
-                readyParentTile: readyParentMetalTile
-            ],
-            zoom: 6,
-            previousContext: previousContext,
-            backdropZoomLevel: 3
-        )
-
-        // A parent more detailed than the backdrop still wins over holey detail.
-        XCTAssertEqual(context.tilePlacements.count, 1)
-        XCTAssertEqual(context.tilePlacements.first?.metalTile.tile, readyParentTile)
-        XCTAssertEqual(context.tilePlacements.first?.placeIn.tile, targetTile)
-    }
-
-    func testBuildPlacementsLeavesUncoveredTargetToBackdropUnderlay() throws {
-        let backdropTile = Tile(x: 2, y: 1, z: 3)
-        let targetTile = Tile(x: 34, y: 22, z: 6)
-        let backdropMetalTile = MetalTile(tile: backdropTile, tileBuffers: try makeTileBuffers())
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [
-                targetTile: nil,
-                backdropTile: backdropMetalTile
-            ],
-            zoom: 6,
-            previousContext: .empty,
-            backdropZoomLevel: 3
-        )
-
-        // No content at all: no point drawing a copy of the backdrop over the backdrop.
-        XCTAssertTrue(context.tilePlacements.isEmpty)
-    }
-
-    func testBuildPlacementsBackdropLevelRetainedSourceDoesNotPoisonPartialCoverage() throws {
-        // Zoom-out regression: a slot that fell to backdrop zoom in the previous
-        // frame does not count as coverage (source outside the target) and must
-        // not clobber detailed partial slots again via bestFullReplacement.
-        let backdropTile = Tile(x: 4, y: 2, z: 3)
-        let detailedChildTiles = [
-            Tile(x: 34, y: 22, z: 6),
-            Tile(x: 35, y: 22, z: 6),
-            Tile(x: 34, y: 23, z: 6)
-        ]
-        let poisonedChildSlot = Tile(x: 35, y: 23, z: 6)
-        let targetTile = Tile(x: 17, y: 11, z: 5)
-        var previousPlacements = try detailedChildTiles.map { childTile in
-            PlaceTile(metalTile: MetalTile(tile: childTile, tileBuffers: try makeTileBuffers()),
-                      placeIn: VisibleTile(tile: childTile),
-                      lodKind: .exact)
-        }
-        previousPlacements.append(PlaceTile(metalTile: MetalTile(tile: backdropTile,
-                                                                 tileBuffers: try makeTileBuffers()),
-                                            placeIn: VisibleTile(tile: poisonedChildSlot),
-                                            lodKind: .retainedReplacement))
-        let previousContext = PlaceTilesContext(tilePlacements: previousPlacements)
-
-        let context = TilePlacementPlanner.buildPlacements(
-            targets: [VisibleTile(tile: targetTile)],
-            readyTilesBySource: [targetTile: nil],
-            zoom: 5,
-            previousContext: previousContext,
-            backdropZoomLevel: 3
-        )
-
-        XCTAssertEqual(context.tilePlacements.count, 3)
-        XCTAssertEqual(Set(context.tilePlacements.map(\.metalTile.tile)), Set(detailedChildTiles))
-        XCTAssertTrue(context.tilePlacements.allSatisfy { $0.lodKind == .retainedReplacement })
+    func testTheOutputDoesNotDependOnAnyPreviousFrame() throws {
+        let resident = try resident([grandparent])
+        let first = placements(targets: [parent], resident: resident, zoom: 5)
+        let again = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertEqual(first, again)
+        XCTAssertEqual(placements(targets: [parent], resident: [:], zoom: 5), [],
+                       "once the ancestor is gone from residency it is gone from the placement, whatever was placed before")
     }
 
     private func makeTileBuffers() throws -> TileBuffers {

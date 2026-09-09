@@ -106,6 +106,34 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
+    /// The sample count is baked into every pipeline state, so switching
+    /// MSAA rebuilds the GPU resources and the renderer, unlike FXAA.
+    func testMultisampleCountChangeRecreatesTheRenderer() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.msaa()
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.postProcessing])
+        XCTAssertEqual(plan.actions, [.rebuildGPUResources, .recreateRenderer])
+        XCTAssertTrue(plan.requiresRendererRecreation)
+        XCTAssertEqual(newSettings.postProcessing.multisampleCount, 4)
+        XCTAssertEqual(newSettings.msaa(isEnabled: false).postProcessing.multisampleCount, 1)
+    }
+
+    /// The globe switch is a per-frame input of the presentation resolver:
+    /// no tile is prepared differently, so it applies live.
+    func testGlobeEnabledChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.globe(isEnabled: false)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.presentation])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
     func testMapStyleLabelPaletteChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault))

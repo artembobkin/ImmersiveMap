@@ -69,15 +69,15 @@ final class BuildingExtrusionToggleTests: XCTestCase {
                           "A tile prepared flat must not answer a map that wants its buildings raised")
     }
 
-    func testExtrusionIsOnByDefault() {
-        XCTAssertTrue(ImmersiveMapSettings.default.style.buildingExtrusionEnabled)
-        XCTAssertFalse(ImmersiveMapView().buildingExtrusion(isEnabled: false).settings.style.buildingExtrusionEnabled)
+    func testExtrusionIsOffByDefault() {
+        XCTAssertFalse(ImmersiveMapSettings.default.style.buildingExtrusionEnabled, "Buildings stay flat unless asked for")
+        XCTAssertTrue(ImmersiveMapView().buildingExtrusion(isEnabled: true).settings.style.buildingExtrusionEnabled)
     }
 
     func testTogglingTheFlagIsAHeavySettingsChange() {
         let old = ImmersiveMapSettings.default
         var new = old
-        new.style.buildingExtrusionEnabled = false
+        new.style.buildingExtrusionEnabled = true
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: old, to: new)
         XCTAssertTrue(plan.actions.contains(.rebuildPreparedData),
                       "Extrusions are baked at parse time: the prepared tiles must rebuild")

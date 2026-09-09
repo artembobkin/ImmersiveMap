@@ -113,10 +113,10 @@ struct RenderLayerPlanner {
             switch layer {
             case .starfield where availability.starfieldEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
-            case .tileOwnership where availability.buildingExtrusionEnabled == false,
-                 .buildingExtrusion where availability.buildingExtrusionEnabled == false:
-                // The ground writes its own ownership marks as it draws; the
-                // prepass exists for the buildings, which draw before it.
+            case .buildingExtrusion where availability.buildingExtrusionEnabled == false:
+                // The ownership prepass stays: the ground's overlapping
+                // sources rely on a complete map of marks before any of them
+                // draws, whatever the draw order.
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .buildingExtrusionDisabled)
             case .sceneModels where availability.sceneModelsEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .noSceneModelContent)

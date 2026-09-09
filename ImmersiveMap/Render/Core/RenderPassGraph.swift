@@ -27,6 +27,20 @@ final class RenderPassGraph {
         }
     }
 
+    /// Without the scene-model occlusion prepass the overlay layers need no
+    /// depth of their own: they fold into the end of the world pass (the
+    /// labels then draw with depth disabled, the same bit read by the label
+    /// subsystems via `sceneModelState.hasDrawnModels`), which drops a whole
+    /// drawable load/store round trip and puts the labels under the
+    /// post-processing antialiasing. With models on screen the overlay keeps
+    /// its own pass and its own cleared depth. So does a multisampled world
+    /// pass: the overlay pipelines are single-sample, and Metal accepts them
+    /// only in a single-sample pass, which the overlay pass is, over the
+    /// resolved image.
+    static func mergesOverlayIntoWorld(overlayLayers: [RenderLayer], renderSampleCount: Int) -> Bool {
+        overlayLayers.contains(.sceneModelOcclusion) == false && renderSampleCount == 1
+    }
+
     /// The world pass draw order for the frame. The planner lists the flat
     /// layers ground first; the order flips so the opaque buildings write
     /// depth before the ground is drawn and every ground fragment under a
@@ -252,14 +266,8 @@ final class RenderPassGraph {
             renderSampleCount: attachments.sampleCount
         )
 
-        // Without the scene-model occlusion prepass the overlay layers need
-        // no depth of their own: they fold into the end of the world pass
-        // (the labels then draw with depth disabled, the same bit read by
-        // the label subsystems via `sceneModelState.hasDrawnModels`), which
-        // drops a whole drawable load/store round trip and puts the labels
-        // under the post-processing antialiasing. With models on screen the
-        // overlay keeps its own pass and its own cleared depth.
-        let mergesOverlayIntoWorld = overlayLayers.contains(.sceneModelOcclusion) == false
+        let mergesOverlayIntoWorld = Self.mergesOverlayIntoWorld(overlayLayers: overlayLayers,
+                                                                 renderSampleCount: attachments.sampleCount)
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
                                                                                 depthTexture: depthTexture,

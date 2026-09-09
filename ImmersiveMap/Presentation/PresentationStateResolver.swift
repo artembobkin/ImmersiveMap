@@ -27,7 +27,8 @@ struct PresentationStateResolver {
         let automaticTransition = automaticTransition(cameraState: cameraState,
                                                       settings: settings)
         let transition = resolvedTransition(automaticTransition: automaticTransition,
-                                            forcedRenderSurfaceMode: forcedRenderSurfaceMode)
+                                            forcedRenderSurfaceMode: forcedRenderSurfaceMode,
+                                            isGlobeEnabled: settings.isGlobeEnabled)
         let globeRenderRadius = settings.globeRadiusScale * renderZoomScale
         let flatRenderMapSize = 2.0 * Double.pi * globeRenderRadius
         let globePan = ImmersiveMapProjection.globePan(fromCenterWorldMercator: cameraState.centerWorldMercator)
@@ -70,11 +71,15 @@ struct PresentationStateResolver {
         return Float(max(0.0, min(1.0, (cameraState.zoom - from) / span)))
     }
 
+    /// The forced mode (the debug panel's switch) wins; otherwise the zoom
+    /// decides, unless the globe is switched off, which is the plane at
+    /// every zoom.
     private static func resolvedTransition(automaticTransition: Float,
-                                           forcedRenderSurfaceMode: ViewMode?) -> Float {
+                                           forcedRenderSurfaceMode: ViewMode?,
+                                           isGlobeEnabled: Bool) -> Float {
         switch forcedRenderSurfaceMode {
         case nil:
-            return automaticTransition
+            return isGlobeEnabled ? automaticTransition : 1.0
         case .spherical:
             return 0.0
         case .flat:

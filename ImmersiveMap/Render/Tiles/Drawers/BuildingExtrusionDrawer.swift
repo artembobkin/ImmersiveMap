@@ -6,11 +6,11 @@ import simd
 
 enum BuildingExtrusionDrawer {
     /// Opaque building geometry with depth test and depth write, straight
-    /// into the world pass. Each unique source draws once at full
-    /// extent; the tile-priority stencil test against the ownership prepass
-    /// keeps a substitute's buildings out of every pixel a finer tile owns
-    /// (the old per-placement slot clip, which also multiplied a parent's
-    /// geometry by the number of slots it stood in).
+    /// into the world pass. Nothing keeps sources apart per pixel: the
+    /// building coverage is a partition of the ground
+    /// (`BuildingCoveragePlanner`), each placement draws its source either
+    /// at full extent or clipped to its slot by the vertex-stage slot clip,
+    /// so no two of them draw over the same ground.
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               shadowBinding: ShadowReceiverBinding,
@@ -82,44 +82,54 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setDepthClipMode(.clip)
     }
 
-    /// World-pass building draws: each unique (source, loop) once, at full
-    /// extent, with the source's tile-priority stencil reference. Whole
-    /// buildings are drawn or rejected per pixel, so back-face culling stays
-    /// on throughout (no clipped placement ever exposes an open cut).
+    /// World-pass building draws, one per placement. A placement in its
+    /// own slot draws whole with back-face culling on. A clipped one (a
+    /// parent filling a slot its finer tiles do not cover) is cut open at
+    /// the slot's edge, so it draws both faces: through the cut the inside
+    /// of the far walls and the underside of the roof read as a solid block
+    /// instead of a hollow shell.
     private static func drawExtrudedSources(renderEncoder: MTLRenderCommandEncoder,
                                             placeTilesContext: PlaceTilesContext,
                                             flatRenderState: FlatRenderState) {
-        struct SourceKey: Hashable {
-            let tile: Tile
-            let loop: Int8
-        }
-        var seenSources = Set<SourceKey>()
+        var cullMode = MTLCullMode.back
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
             let buffers = metalTile.tileBuffers
-            let loop = placeTile.placeIn.loop
+            let placeIn = placeTile.placeIn
 
             guard buffers.extruded.indicesCount > 0,
                   let extrudedIndices = buffers.extruded.indices,
                   let extrudedVertices = buffers.extruded.vertices,
                   let extrudedStyles = buffers.extruded.styles else { continue }
-            guard seenSources.insert(SourceKey(tile: tile, loop: loop)).inserted else { continue }
 
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,
                                                                              z: tile.z,
-                                                                             loop: loop,
+                                                                             loop: placeIn.loop,
                                                                              flatRenderPan: flatRenderState.pan,
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0
 
+            let placementCullMode: MTLCullMode = placeIn.tile == tile ? .back : .none
+            if placementCullMode != cullMode {
+                renderEncoder.setCullMode(placementCullMode)
+                cullMode = placementCullMode
+            }
+
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
-            // The priority to test against the prepass marks, and above it
-            // the surface mask bit the state writes where the building lands.
+            // The surface mask bit the state writes where the building lands;
+            // the priority below it is not tested any more (the building
+            // coverage never overlaps), it only keeps the reference shaped
+            // like every other tile pass's.
             renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z)
                                                    | TileSourceStencilPriority.surfaceMaskBit)
+
+            var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
+            renderEncoder.setVertexBytes(&localClipBounds,
+                                         length: MemoryLayout<SIMD4<Float>>.stride,
+                                         index: 4)
 
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,
@@ -136,11 +146,9 @@ enum BuildingExtrusionDrawer {
         }
     }
 
-    /// Shadow-caster draws: per placement, clipped to the placeIn slot by
-    /// the vertex stage's clip distances. The shadow pass renders into a
-    /// plain depth texture array with no stencil attachment, so the caster
-    /// path is the one place the slot clip remains: a retained parent's
-    /// buildings must not cast shadows over neighboring exact tiles.
+    /// Shadow-caster draws: per placement, with the vertex stage's slot clip
+    /// bounds set from the placement, so a parent filling a slot casts only
+    /// from that slot, exactly what the world pass draws of it.
     private static func drawClippedCasterGeometry(renderEncoder: MTLRenderCommandEncoder,
                                                   placeTilesContext: PlaceTilesContext,
                                                   flatRenderState: FlatRenderState,

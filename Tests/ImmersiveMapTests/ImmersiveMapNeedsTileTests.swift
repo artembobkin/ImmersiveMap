@@ -806,6 +806,20 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertEqual(stages?.map(\.name), ["disk", "ready"])
     }
 
+    func testIsPreparedOnDiskFollowsThePipelineAndTheDiskStage() {
+        let pipeline = ControlledTileLoadPipeline()
+        let loader = ImmersiveMapNeedsTile(config: ImmersiveMapSettings.default, loadPipeline: pipeline)
+        let tile = Tile(x: 1, y: 1, z: 4)
+        XCTAssertFalse(loader.isPreparedOnDisk(tile))
+        pipeline.setDiskEntry(tile, etag: nil)
+        XCTAssertTrue(loader.isPreparedOnDisk(tile))
+
+        let cacheless = ControlledTileLoadPipeline(hasPreparedDiskCache: false)
+        cacheless.setDiskEntry(tile, etag: nil)
+        let cachelessLoader = ImmersiveMapNeedsTile(config: ImmersiveMapSettings.default, loadPipeline: cacheless)
+        XCTAssertFalse(cachelessLoader.isPreparedOnDisk(tile), "Without a disk stage nothing is on disk")
+    }
+
     func testCachelessPipelineSkipsTheDiskStage() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1
@@ -1157,6 +1171,12 @@ private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sen
         lock.lock()
         diskEntries[tile] = etag
         lock.unlock()
+    }
+
+    func isPreparedOnDisk(_ tile: Tile) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return diskEntries[tile] != nil
     }
 
     func hasRemovedFromDisk(_ tile: Tile) -> Bool {

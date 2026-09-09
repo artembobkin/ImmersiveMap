@@ -30,6 +30,11 @@ protocol TileLoadPipeline {
     /// pipeline owns none); the loader then skips the disk stage instead of
     /// running a guaranteed miss for every tile.
     var hasPreparedDiskCache: Bool { get }
+    /// Whether the tile's prepared entry is on disk right now, from the
+    /// cache's in-memory availability index: synchronous, lock only, never
+    /// file IO, and a hint that may lag the disk by an IO-queue hop. The
+    /// demand planner asks it for a loading target's nearest ancestor.
+    func isPreparedOnDisk(_ tile: Tile) -> Bool
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit?
     func download(tile: Tile) async -> TileDownloader.DownloadResult
     /// `plan` is the arena plan of the same parse when the caller already

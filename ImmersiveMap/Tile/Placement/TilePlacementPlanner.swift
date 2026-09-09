@@ -1,159 +1,128 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+/// The frame's placements, a function of the targets and of what is
+/// resident right now: nothing is carried from one frame's placement to
+/// the next. A target that is resident draws itself. A target that is not
+/// yet resident draws a stand-in from the resident tiles, in this order:
+///
+/// 1. its resident descendants when they cover it whole (a zoom-out shows
+///    the detailed children until the parent arrives);
+/// 2. its finest resident ancestor above the backdrop's zoom (a zoom-in or
+///    a pan shows the parent until the child arrives);
+/// 3. whatever resident descendants it has, with holes (better than an
+///    empty region);
+/// 4. nothing: the backdrop paints it, or the globe's placeholder.
+///
+/// `backdropZoomLevel` is the zoom of the full-screen backdrop already drawn
+/// under the main coverage (flat mode). Substitutes at that zoom or coarser
+/// carry nothing the backdrop does not, so they are never placed. Nil on
+/// the globe and when no backdrop is drawn.
+///
+/// Targets may overlap (a parent under its children on the flat map), so
+/// the same stand-in can be found for two targets; the output holds it
+/// once.
 struct TilePlacementPlanner {
-    /// `backdropZoomLevel` - zoom of the full-screen backdrop already drawn
-    /// UNDER the main coverage (flat mode). Substitutes at this zoom or coarser
-    /// carry no information on top of the backdrop, so they do not compete with
-    /// detailed partial slots: without the filter, the pinned z3 backdrop won
-    /// over any incomplete retained coverage, while slots that fell to z3 do
-    /// not participate in the parent's coverage - and on zoom-out the coarse
-    /// zone crept from the edges across the whole screen over a few rebuilds.
-    /// nil - no backdrop (globe).
+    /// How many levels below a target the descendant search goes: a
+    /// zoom-out of more than this many levels shows the ancestor instead.
+    static let descendantSearchDepth = 3
+
+    /// `descendantSearchDepth` 0 turns the descendant stand-ins off: the
+    /// backdrop's z3 targets are covered by the main coverage's finer tiles
+    /// already, and placing them a second time would draw them twice.
     static func buildPlacements(targets: [VisibleTile],
-                                readyTilesBySource: [Tile: MetalTile?],
+                                resident: [Tile: MetalTile],
                                 zoom: Int,
-                                previousContext: PlaceTilesContext,
-                                backdropZoomLevel: Int? = nil) -> PlaceTilesContext {
+                                backdropZoomLevel: Int? = nil,
+                                descendantSearchDepth: Int = descendantSearchDepth) -> PlaceTilesContext {
+        // The ancestors of every resident tile, so the descendant search
+        // only descends into branches that hold something.
+        var branches = Set<Tile>()
+        for tile in resident.keys {
+            var ancestor = tile
+            while true {
+                guard branches.insert(ancestor).inserted else { break }
+                guard ancestor.z > 0, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) else { break }
+                ancestor = parent
+            }
+        }
+
+        /// The resident descendants of `tile` down to the search depth, and
+        /// whether they cover it whole.
+        func descendants(of tile: Tile, loop: Int8, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
+            if let metalTile = resident[tile] {
+                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, loop: loop), lodKind: .retainedReplacement)], true)
+            }
+            guard depth > 0, branches.contains(tile) else {
+                return ([], false)
+            }
+            var placements: [PlaceTile] = []
+            var complete = true
+            for child in children(of: tile) {
+                let resolved = descendants(of: child, loop: loop, depth: depth - 1)
+                placements.append(contentsOf: resolved.placements)
+                complete = complete && resolved.complete
+            }
+            return (placements, complete)
+        }
+
+        func isUsefulSubstitute(_ tile: Tile) -> Bool {
+            guard let backdropZoomLevel else { return true }
+            return tile.z > backdropZoomLevel
+        }
+
         var placeTiles: [PlaceTile] = []
-        let readyReplacementCandidates = readyTilesBySource.values.compactMap { $0 }.sorted { lhs, rhs in
-            if lhs.tile.z != rhs.tile.z {
-                return lhs.tile.z > rhs.tile.z
+        var seen = Set<PlaceTile>()
+        func append(_ placement: PlaceTile) {
+            if seen.insert(placement).inserted {
+                placeTiles.append(placement)
             }
-            if lhs.tile.x != rhs.tile.x {
-                return lhs.tile.x < rhs.tile.x
-            }
-            return lhs.tile.y < rhs.tile.y
         }
 
         for target in targets {
             let sourceTile = target.tile
-            let lodKind: TileLodKind = sourceTile.z < zoom ? .coarseSubstitute : .exact
-            let metalTile = readyTilesBySource[sourceTile] ?? nil
-
-            // A substitute is useful only if it is more detailed than the backdrop under the coverage.
-            func isUsefulSubstitute(_ tile: Tile) -> Bool {
-                guard let backdropZoomLevel else {
-                    return true
-                }
-                return tile.z > backdropZoomLevel
-            }
-
-            func bestFullReplacement() -> MetalTile? {
-                var bestReplacement: MetalTile?
-                for prev in previousContext.tilePlacements {
-                    let prevSourceTile = prev.metalTile.tile
-
-                    guard isUsefulSubstitute(prevSourceTile) else {
-                        continue
-                    }
-                    // Previous tile fully covers the required tile
-                    // (including exact same tile identity).
-                    if prevSourceTile == target.tile || prevSourceTile.covers(target.tile) {
-                        // Keep the most detailed fallback source among
-                        // all covering tiles from the previous frame.
-                        if prevSourceTile.z > (bestReplacement?.tile.z ?? Int.min) {
-                            bestReplacement = prev.metalTile
-                        }
-                    }
-                }
-                return bestReplacement
-            }
-
-            func collectPartialReplacements() -> (placements: [PlaceTile], coversTarget: Bool) {
-                var partialPlacements: [PlaceTile] = []
-                var uniquePlaceInTiles: Set<Tile> = []
-                for prev in previousContext.tilePlacements {
-                    let prevMetalTile = prev.metalTile
-                    let prevSourceTile = prev.metalTile.tile
-
-                    // Previous tile is inside the required tile
-                    // (including exact same tile identity).
-                    // Compare by placeIn.loop: content is shared between wrapped
-                    // copies, but a placement is drawn strictly in the world copy
-                    // of its placeIn - it does not paint the target's copy in
-                    // another loop.
-                    if prev.placeIn.loop == target.loop,
-                       prevSourceTile == target.tile || target.tile.covers(prevSourceTile) {
-                        partialPlacements.append(PlaceTile(metalTile: prevMetalTile,
-                                                           placeIn: prev.placeIn,
-                                                           lodKind: .retainedReplacement))
-                        uniquePlaceInTiles.insert(prev.placeIn.tile)
-                    }
-                }
-
-                // Coverage is the area of the UNION of placeIn slots (a slot of
-                // depth d occupies 1/4^d of the target's area): exactly the
-                // placeIn region is drawn (fragment clip), not the whole source.
-                // Slots from different generations can be nested - ones nested
-                // inside an already-counted coarser slot add no area.
-                var coveredFraction = 0.0
-                var countedPlaceInTiles: [Tile] = []
-                for placeInTile in uniquePlaceInTiles.sorted(by: { ($0.z, $0.x, $0.y) < ($1.z, $1.x, $1.y) }) {
-                    if countedPlaceInTiles.contains(where: { $0.covers(placeInTile) }) {
-                        continue
-                    }
-                    countedPlaceInTiles.append(placeInTile)
-                    let depth = placeInTile.z - target.tile.z
-                    coveredFraction += depth >= 30 ? 0 : 1.0 / Double(1 << (2 * depth))
-                }
-                return (partialPlacements, coveredFraction >= 0.999_999)
-            }
-
-            func bestReadyParent() -> MetalTile? {
-                for candidate in readyReplacementCandidates {
-                    let candidateTile = candidate.tile
-                    guard candidateTile != target.tile,
-                          candidateTile.covers(target.tile),
-                          isUsefulSubstitute(candidateTile) else {
-                        continue
-                    }
-                    return candidate
-                }
-
-                return nil
-            }
-
-            // Substitution cascade for a missing target - maximum detail first:
-            // 1) previous tiles INSIDE the target (always more detailed than any
-            //    covering source), but only if they cover it entirely -
-            //    detailed content with holes is worse than full coarse content;
-            // 2) the more detailed of: the previous frame's covering source
-            //    (retention, including the target itself via a strong reference)
-            //    and a ready parent from the cache; on a tie - the cached
-            //    parent (fresher);
-            // 3) incomplete previous tiles - better than an empty region.
-            // Two sources never mix in one slot: overlapping yields a double
-            // blend of translucent layers (roads).
-            if metalTile == nil {
-                let partial = collectPartialReplacements()
-                if partial.coversTarget {
-                    placeTiles.append(contentsOf: partial.placements)
-                    continue
-                }
-
-                let readyParent = bestReadyParent()
-                let fullReplacement = bestFullReplacement()
-                if let fullReplacement, fullReplacement.tile.z > (readyParent?.tile.z ?? Int.min) {
-                    placeTiles.append(PlaceTile(metalTile: fullReplacement,
-                                                placeIn: target,
-                                                lodKind: .retainedReplacement))
-                } else if let readyParent {
-                    placeTiles.append(PlaceTile(metalTile: readyParent,
-                                                placeIn: target,
-                                                lodKind: .retainedReplacement))
-                } else {
-                    placeTiles.append(contentsOf: partial.placements)
-                }
-
+            if let metalTile = resident[sourceTile] {
+                append(PlaceTile(metalTile: metalTile,
+                                 placeIn: target,
+                                 lodKind: sourceTile.z < zoom ? .coarseSubstitute : .exact))
                 continue
             }
 
-            placeTiles.append(PlaceTile(metalTile: metalTile!,
-                                        placeIn: target,
-                                        lodKind: lodKind))
+            let below: (placements: [PlaceTile], complete: Bool) = descendantSearchDepth > 0 && branches.contains(sourceTile)
+                ? descendants(of: sourceTile, loop: target.loop, depth: descendantSearchDepth)
+                : (placements: [], complete: false)
+            if below.complete, below.placements.isEmpty == false {
+                below.placements.forEach(append)
+                continue
+            }
+
+            var ancestorPlacement: PlaceTile?
+            if sourceTile.z > 0 {
+                for ancestorZoom in stride(from: sourceTile.z - 1, through: 0, by: -1) {
+                    guard let ancestor = sourceTile.findParentTile(atZoom: ancestorZoom), isUsefulSubstitute(ancestor) else {
+                        break
+                    }
+                    if let metalTile = resident[ancestor] {
+                        ancestorPlacement = PlaceTile(metalTile: metalTile, placeIn: target, lodKind: .coarseSubstitute)
+                        break
+                    }
+                }
+            }
+            if let ancestorPlacement {
+                append(ancestorPlacement)
+                continue
+            }
+            below.placements.forEach(append)
         }
 
         return PlaceTilesContext(tilePlacements: placeTiles)
+    }
+
+    private static func children(of tile: Tile) -> [Tile] {
+        let x = tile.x * 2
+        let y = tile.y * 2
+        let z = tile.z + 1
+        return [Tile(x: x, y: y, z: z), Tile(x: x + 1, y: y, z: z),
+                Tile(x: x, y: y + 1, z: z), Tile(x: x + 1, y: y + 1, z: z)]
     }
 }

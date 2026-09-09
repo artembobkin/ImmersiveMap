@@ -113,6 +113,13 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private var indexedFilesByPath: [String: IndexedFile] = [:]
     private var indexedByteCount: Int64 = 0
     private var isRootIndexPrepared = false
+    // The per-directory availability indexes (`PreparedTileAvailabilityIndex`):
+    // handed out synchronously to each cache instance for its own namespace
+    // directory, so the registry has its own lock, the one piece of state the
+    // IO queue does not confine. Every write, read, removal and reset of the
+    // root-wide file index also updates the index of the file's directory.
+    private let availabilityRegistryLock = NSLock()
+    private var availabilityIndexesByDirectoryPath: [String: PreparedTileAvailabilityIndex] = [:]
     // The cache root is process-global, so its active policy must be global as
     // well. The most recently initialized map view owns the current policy;
     // operations from older instances never restore stale limits.
@@ -137,6 +144,67 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
 
     func enqueue(_ work: @escaping () -> Void) {
         queue.async(execute: work)
+    }
+
+    /// The availability index of one cache directory, shared by every cache
+    /// instance on that namespace (the live map and an export engine, say).
+    /// Lock only: safe from any thread, never waits on the IO queue.
+    func availabilityIndex(forDirectory directory: URL, timeToLive: TimeInterval) -> PreparedTileAvailabilityIndex {
+        let key = Self.availabilityDirectoryKey(for: directory)
+        availabilityRegistryLock.lock()
+        defer { availabilityRegistryLock.unlock() }
+        if let existing = availabilityIndexesByDirectoryPath[key] {
+            return existing
+        }
+        let index = PreparedTileAvailabilityIndex(timeToLive: timeToLive)
+        availabilityIndexesByDirectoryPath[key] = index
+        return index
+    }
+
+    /// The registry key of a namespace directory: its last two path
+    /// components, `v<format>/<namespace>`, which is complete under one
+    /// root and does not depend on the path's spelling. `standardizedFileURL`
+    /// strips a leading `/private` only for a path that exists, so a key
+    /// taken from the directory before it is created (at init) would not
+    /// match the one taken from a file inside it later.
+    static func availabilityDirectoryKey(for directory: URL) -> String {
+        let components = directory.pathComponents
+        return components.suffix(2).joined(separator: "/")
+    }
+
+    private func availabilityIndex(forDirectoryKey key: String) -> PreparedTileAvailabilityIndex? {
+        availabilityRegistryLock.lock()
+        defer { availabilityRegistryLock.unlock() }
+        return availabilityIndexesByDirectoryPath[key]
+    }
+
+    private var registeredAvailabilityIndexes: [PreparedTileAvailabilityIndex] {
+        availabilityRegistryLock.lock()
+        defer { availabilityRegistryLock.unlock() }
+        return Array(availabilityIndexesByDirectoryPath.values)
+    }
+
+    /// Fills the directory's availability index from the root-wide file
+    /// index: the `.ptile` files inside that directory with their access
+    /// dates. Runs after the root index is prepared, so a cache instance
+    /// created later for a new namespace still starts complete, and the
+    /// hooks keep it current from then on.
+    private func seedAvailabilityIndex(forDirectory directory: URL, timeToLive: TimeInterval) {
+        let directoryKey = Self.availabilityDirectoryKey(for: directory)
+        for index in registeredAvailabilityIndexes {
+            index.updateTimeToLive(timeToLive)
+        }
+        guard let index = availabilityIndex(forDirectoryKey: directoryKey) else {
+            return
+        }
+        var entries: [Tile: Date] = [:]
+        for entry in indexedFilesByPath.values
+        where Self.availabilityDirectoryKey(for: entry.url.deletingLastPathComponent()) == directoryKey {
+            if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: entry.url.lastPathComponent) {
+                entries[tile] = entry.lastAccessDate
+            }
+        }
+        index.replaceAll(entries)
     }
 
     func performSync<T>(_ work: () throws -> T) rethrows -> T {
@@ -166,6 +234,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
             rebuildRootIndex()
             isRootIndexPrepared = true
         }
+        seedAvailabilityIndex(forDirectory: currentCacheDirectory, timeToLive: timeToLive)
         prune()
     }
 
@@ -354,20 +423,23 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     @discardableResult
     private func removeBestEffort(_ url: URL,
                                   cleanEmptyParents: Bool = true) -> Bool {
-        // Compute the lookup key while the file still exists. On macOS,
-        // `standardizedFileURL` can change `/var` to `/private/var` after the
-        // final path component is removed, which would leave the byte index stale.
+        // Compute the lookup keys while the file still exists: on macOS,
+        // `standardizedFileURL` strips a leading `/private` only for a path
+        // that exists, so a key taken after the removal would not match the
+        // one the file was indexed under.
         let key = indexKey(for: url)
+        let directoryKey = Self.availabilityDirectoryKey(for: url.deletingLastPathComponent())
+        let fileName = url.lastPathComponent
         do {
             try fileManager.removeItem(at: url)
-            forget(indexKey: key)
+            forget(indexKey: key, directoryKey: directoryKey, fileName: fileName)
             if cleanEmptyParents {
                 removeEmptyParentDirectories(startingAt: url.deletingLastPathComponent())
             }
             return true
         } catch {
             if fileManager.fileExists(atPath: url.path) == false {
-                forget(indexKey: key)
+                forget(indexKey: key, directoryKey: directoryKey, fileName: fileName)
                 if cleanEmptyParents {
                     removeEmptyParentDirectories(startingAt: url.deletingLastPathComponent())
                 }
@@ -400,6 +472,9 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private func resetIndex() {
         indexedFilesByPath.removeAll(keepingCapacity: true)
         indexedByteCount = 0
+        for index in registeredAvailabilityIndexes {
+            index.removeAll()
+        }
     }
 
     private func upsert(_ entry: IndexedFile) {
@@ -408,9 +483,21 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
             indexedByteCount = subtractClamped(indexedByteCount, replaced.byteCount)
         }
         indexedByteCount = addClamped(indexedByteCount, entry.byteCount)
+        if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: entry.url.lastPathComponent),
+           let index = availabilityIndex(forDirectoryKey: Self.availabilityDirectoryKey(for: entry.url.deletingLastPathComponent())) {
+            index.insert(tile, lastAccessDate: entry.lastAccessDate)
+        }
     }
 
-    private func forget(indexKey: String) {
+    private func forget(indexKey: String, directoryKey: String, fileName: String) {
+        // The entry or its blob: losing either makes the tile unreadable (a
+        // pruned `.ptgeo` leaves a `.ptile` that fails at materialize), so
+        // both take the tile out of the index.
+        if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: fileName)
+            ?? PreparedTileAvailabilityIndex.tile(forPreparedBlobFileName: fileName),
+           let index = availabilityIndex(forDirectoryKey: directoryKey) {
+            index.remove(tile)
+        }
         guard let removed = indexedFilesByPath.removeValue(forKey: indexKey) else {
             return
         }
@@ -649,13 +736,20 @@ final class PreparedTileDiskCaching {
     // instead of the carriageway width read off the lane count. A v87
     // entry prepared without the streetscape carries the carriageway
     // ribbons.
-    static let preparedFormatVersion: UInt32 = 88
+    // 89: tiles coarser than z14 no longer carry extruded buildings (the
+    // building coverage never draws them); a v88 entry of such a tile
+    // carries walls and roofs the renderer would upload for nothing.
+    static let preparedFormatVersion: UInt32 = 89
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
     private let ioCoordinator: PreparedTileDiskIOCoordinator
     private let compressionEnabled: Bool
     private let geometryTransport: any PreparedTileGeometryTransporting
+    /// Which tiles of this namespace are on disk right now, for the demand
+    /// planner's ancestor fallback. Shared with every other cache instance
+    /// on the same namespace.
+    let availabilityIndex: PreparedTileAvailabilityIndex
 
     init(config: ImmersiveMapSettings,
          cacheIdentity: PreparedTileCacheIdentity,
@@ -680,6 +774,8 @@ final class PreparedTileDiskCaching {
         let clearOnLaunch = config.tiles.cache.clearDiskCachesOnLaunch
         let quota = Int64(max(0, config.tiles.cache.preparedDiskCacheSizeInBytes))
         let timeToLive = config.tiles.cache.preparedDiskTimeToLive
+        self.availabilityIndex = coordinator.availabilityIndex(forDirectory: currentDirectory,
+                                                               timeToLive: timeToLive)
         coordinator.enqueue {
             do {
                 try coordinator.prepare(currentCacheDirectory: currentDirectory,
@@ -810,6 +906,15 @@ final class PreparedTileDiskCaching {
         }
     }
 
+    /// Removes only the blob, the way a quota prune can, for the test that
+    /// pins the index dropping the tile with it.
+    func removeBlobFromDiskForTesting(tile: Tile) {
+        let blobPath = blobPathFor(tile: tile)
+        ioCoordinator.enqueue { [ioCoordinator] in
+            ioCoordinator.removeFile(at: blobPath)
+        }
+    }
+
     func removeFromDisk(tile: Tile) {
         let cachePath = cachePathFor(tile: tile)
         let blobPath = blobPathFor(tile: tile)
@@ -823,6 +928,12 @@ final class PreparedTileDiskCaching {
         try ioCoordinator.performSync { [ioCoordinator, cacheDirectory] in
             try ioCoordinator.clearAndCreate(currentCacheDirectory: cacheDirectory)
         }
+    }
+
+    /// Whether the tile's prepared entry is on disk and unexpired: a lock-only
+    /// read of the availability index, safe on the frame path.
+    func isPreparedOnDisk(_ tile: Tile) -> Bool {
+        availabilityIndex.contains(tile)
     }
 
     func cachePathFor(tile: Tile) -> URL {

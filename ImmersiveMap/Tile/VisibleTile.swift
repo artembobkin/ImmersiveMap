@@ -26,5 +26,7 @@ struct VisibleTile: Hashable {
 enum TileLodKind: UInt8, Hashable {
     case exact = 0
     case coarseSubstitute = 1
+    /// A resident descendant standing in for a target that has not
+    /// arrived, drawn at its own extent.
     case retainedReplacement = 2
 }

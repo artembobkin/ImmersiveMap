@@ -146,6 +146,13 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     // Already started downloads are not cancelled on a brief drop out of demand:
     // the result still lands in the cache and keeps borderline tiles from
     // looping in the loading/fallback state.
+    /// Whether the tile would come back from the prepared disk cache without
+    /// a network request: false without a disk stage. Lock only, so the
+    /// demand planner can ask per frame.
+    func isPreparedOnDisk(_ tile: Tile) -> Bool {
+        usesDiskStage && loadPipeline.isPreparedOnDisk(tile)
+    }
+
     func request(tiles: [Tile]) {
         // Deduplication preserving the original `tiles` order: the order matters for load priority.
         // A separate `wanted` Set is needed for O(1) tile relevance checks.

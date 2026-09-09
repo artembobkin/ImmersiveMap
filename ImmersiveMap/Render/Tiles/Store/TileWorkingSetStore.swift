@@ -4,18 +4,24 @@
 import Foundation
 import Metal
 
-/// The tiles resident in GPU memory: exactly what the frame draws, with no
-/// history. Membership is the frame's demanded set (the visible tiles, their
-/// fallback parents, the horizon backdrop and the shadow-caster strip) plus
-/// the pinned world cover below, and every other tile is released the moment
-/// the demanded set stops naming it. There is no byte budget and no LRU: the
-/// prepared disk cache is the layer a revisited place comes back from.
+/// The tiles resident in GPU memory. Membership is the frame's demanded set
+/// (the coverage targets, the stand-in ancestors chosen for the loading
+/// ones, and the horizon backdrop), the pinned world cover below, and a
+/// short retention: the last `retentionLimit` tiles the demand stopped
+/// naming, oldest out first. The retention is what makes the placement a
+/// function of the present: a tile the camera left a moment ago is still
+/// here to stand in or to come straight back, and nothing has to be carried
+/// from one frame's placement to the next. Beyond it the prepared disk
+/// cache is the layer a revisited place comes back from.
 ///
-/// Substitute tiles that placements retain after leaving demand survive on
-/// their own strong references (`PlaceTile.metalTile`), and command buffers
-/// retain every resource they bind, so releasing an entry never frees a
-/// buffer the GPU still reads.
+/// Command buffers retain every resource they bind, so releasing an entry
+/// never frees a buffer the GPU still reads.
 final class TileWorkingSetStore {
+    /// How many tiles released by the demand stay resident, oldest out
+    /// first. Fifteen is a frame's worth of coverage: a turn of the camera
+    /// that swaps the far field can come back without touching the disk.
+    static let retentionLimit = 15
+
     /// Low-zoom world coverage is pinned lazily: once materialized, tiles
     /// with z <= this level are not released when they leave the demanded
     /// set, so the far zone of a tilted camera and the globe's back side
@@ -33,6 +39,12 @@ final class TileWorkingSetStore {
     private let tileTraceRecorder: TileTraceRecorder
     private var entries: [Tile: Entry] = [:]
     private var demandedTiles: Set<Tile> = []
+    /// The tiles the demand stopped naming, oldest first, still resident.
+    private var retained: [Tile] = []
+    /// Where each resident tile last stood in the demand's priority order
+    /// (nearest the camera first): what decides which of the tiles leaving
+    /// in one frame the retention keeps.
+    private var lastPriorityByTile: [Tile: Int] = [:]
     private var mutationVersion: UInt64 = 0
     private var residentBytes = 0
 
@@ -66,15 +78,40 @@ final class TileWorkingSetStore {
         return residentBytes
     }
 
-    /// The frame's demanded set. Every resident tile above the pinned world
-    /// cover that the set does not name is released here, synchronously:
-    /// this is the one release path in the steady state.
-    func updateDemandedTiles(_ tiles: Set<Tile>) {
+    /// The frame's demanded set, nearest the camera first. A resident tile
+    /// above the pinned world cover that the set does not name moves into
+    /// the retention; a retained tile the set names again leaves it; and
+    /// the retention's oldest entries beyond `retentionLimit` are released
+    /// here, synchronously: this is the one release path in the steady
+    /// state. Tiles leaving in the same frame queue farthest first, by the
+    /// priority they last had, so a level change that releases more than
+    /// the retention holds keeps the tiles nearest the camera.
+    func updateDemandedTiles(_ orderedTiles: [Tile]) {
+        let tiles = Set(orderedTiles)
         var releasedTiles: [Tile] = []
         stateLock.lock()
         demandedTiles = tiles
-        for key in Array(entries.keys)
-            where key.z > Self.pinnedWorldCoverMaxZoomLevel && tiles.contains(key) == false {
+        for (priority, tile) in orderedTiles.enumerated() {
+            lastPriorityByTile[tile] = priority
+        }
+        retained.removeAll { tiles.contains($0) || entries[$0] == nil }
+        var retainedSet = Set(retained)
+        let leavers = entries.keys
+            .filter { $0.z > Self.pinnedWorldCoverMaxZoomLevel && tiles.contains($0) == false && retainedSet.contains($0) == false }
+            .sorted { lhs, rhs in
+                let left = lastPriorityByTile[lhs] ?? Int.max
+                let right = lastPriorityByTile[rhs] ?? Int.max
+                if left != right {
+                    return left > right
+                }
+                return Self.isOrderedBefore(lhs, rhs)
+            }
+        for key in leavers {
+            retained.append(key)
+            retainedSet.insert(key)
+        }
+        while retained.count > Self.retentionLimit {
+            let key = retained.removeFirst()
             releaseLocked(key)
             releasedTiles.append(key)
         }
@@ -83,10 +120,31 @@ final class TileWorkingSetStore {
 
         for key in releasedTiles {
             tileTraceRecorder.record(.tileStoreRelease(key,
-                                                       reason: "left_demand",
+                                                       reason: "retention_full",
                                                        residentCount: snapshot.count,
                                                        residentBytes: snapshot.bytes))
         }
+    }
+
+    /// Every resident tile, the retention included: what the placement
+    /// planner builds a frame from.
+    func residentTiles() -> [Tile: MetalTile] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return entries.mapValues(\.metalTile)
+    }
+
+    /// Diagnostics and tests: the tiles in the retention, oldest first.
+    var retainedTiles: [Tile] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return retained
+    }
+
+    private static func isOrderedBefore(_ lhs: Tile, _ rhs: Tile) -> Bool {
+        if lhs.z != rhs.z { return lhs.z > rhs.z }
+        if lhs.x != rhs.x { return lhs.x < rhs.x }
+        return lhs.y < rhs.y
     }
 
     /// Always stores, a key outside the demanded set included: the loader
@@ -110,6 +168,14 @@ final class TileWorkingSetStore {
                                                   residentBytes: snapshot.bytes))
     }
 
+    /// Residency without the lookup trace: the demand planner asks this per
+    /// target per frame, and a trace event for each would drown the log.
+    func contains(_ key: Tile) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return entries[key] != nil
+    }
+
     func tile(forKey key: Tile) -> MetalTile? {
         stateLock.lock()
         let entry = entries[key]
@@ -124,9 +190,10 @@ final class TileWorkingSetStore {
     }
 
     /// The memory-warning response: releases everything outside the current
-    /// demanded set, the pinned world cover included, so the map on screen
-    /// stays intact while the off-screen residue is handed back. The cover
-    /// warms up again lazily from the prepared disk cache.
+    /// demanded set, the retention and the pinned world cover included, so
+    /// the map on screen stays intact while the off-screen residue is
+    /// handed back. The cover warms up again lazily from the prepared disk
+    /// cache.
     func releaseUndemandedTiles() {
         var releasedTiles: [Tile] = []
         stateLock.lock()
@@ -134,6 +201,7 @@ final class TileWorkingSetStore {
             releaseLocked(key)
             releasedTiles.append(key)
         }
+        retained.removeAll()
         if releasedTiles.isEmpty == false {
             mutationVersion &+= 1
         }
@@ -152,6 +220,8 @@ final class TileWorkingSetStore {
         stateLock.lock()
         let snapshot = (count: entries.count, bytes: residentBytes)
         entries.removeAll()
+        retained.removeAll()
+        lastPriorityByTile.removeAll()
         residentBytes = 0
         mutationVersion &+= 1
         stateLock.unlock()
@@ -164,6 +234,7 @@ final class TileWorkingSetStore {
         guard let removed = entries.removeValue(forKey: key) else {
             return
         }
+        lastPriorityByTile.removeValue(forKey: key)
         residentBytes = max(0, residentBytes - removed.byteCount)
     }
 

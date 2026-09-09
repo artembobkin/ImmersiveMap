@@ -146,6 +146,12 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
+    private let roadFadeStartLabel = NSTextField(labelWithString: "")
+    private let roadFadeStartSlider = NSSlider()
+    private let roadFadeEndLabel = NSTextField(labelWithString: "")
+    private let roadFadeEndSlider = NSSlider()
+    private let roadFadeFloorLabel = NSTextField(labelWithString: "")
+    private let roadFadeFloorSlider = NSSlider()
     private let surfaceModeButton = NSButton()
 
     private var snapshot: DebugOverlayHUDSnapshot?
@@ -170,6 +176,11 @@ final class DebugOverlayHUDView: NSView {
     var onTileGridEnabledChanged: ((Bool) -> Void)?
     var onTileGridDensityChanged: ((Int) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
+    /// The road distance LOD's fade band, in camera distances.
+    var onRoadFadeStartCameraDistancesChanged: ((Float) -> Void)?
+    var onRoadFadeEndCameraDistancesChanged: ((Float) -> Void)?
+    /// The floor of the ring's outer radius, in metres.
+    var onRoadFadeMinimumEndMetersChanged: ((Float) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -215,6 +226,9 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(tileLayersLabel, text: "Tile layers")
         configureControlLabel(tileGridLabel, text: "Tile grid")
         configureControlLabel(wireframeLabel, text: "Wireframe")
+        configureControlLabel(roadFadeStartLabel, text: "")
+        configureControlLabel(roadFadeEndLabel, text: "")
+        configureControlLabel(roadFadeFloorLabel, text: "")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
@@ -242,6 +256,12 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
+        let roadFadeRange = Double(RoadDistanceLOD.cameraDistancesRange.lowerBound) ... Double(RoadDistanceLOD.cameraDistancesRange.upperBound)
+        configureSlider(roadFadeStartSlider, range: roadFadeRange, action: #selector(roadFadeStartSliderChanged))
+        configureSlider(roadFadeEndSlider, range: roadFadeRange, action: #selector(roadFadeEndSliderChanged))
+        configureSlider(roadFadeFloorSlider,
+                        range: Double(RoadDistanceLOD.minimumFadeEndMetersRange.lowerBound) ... Double(RoadDistanceLOD.minimumFadeEndMetersRange.upperBound),
+                        action: #selector(roadFadeFloorSliderChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -363,7 +383,9 @@ final class DebugOverlayHUDView: NSView {
          atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider,
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
-         wireframeLabel, wireframeSwitch, surfaceModeButton,
+         wireframeLabel, wireframeSwitch,
+         roadFadeStartLabel, roadFadeStartSlider, roadFadeEndLabel, roadFadeEndSlider,
+         roadFadeFloorLabel, roadFadeFloorSlider, surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
 
@@ -388,6 +410,12 @@ final class DebugOverlayHUDView: NSView {
         tileGridSwitch.state = controls.tileGridEnabled ? .on : .off
         tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: controls.tileGridDensity)
         wireframeSwitch.state = controls.wireframeEnabled ? .on : .off
+        roadFadeStartSlider.doubleValue = Double(controls.roadFadeStartCameraDistances)
+        roadFadeStartLabel.stringValue = Self.roadFadeStartTitle(controls.roadFadeStartCameraDistances)
+        roadFadeEndSlider.doubleValue = Double(controls.roadFadeEndCameraDistances)
+        roadFadeEndLabel.stringValue = Self.roadFadeEndTitle(controls.roadFadeEndCameraDistances)
+        roadFadeFloorSlider.doubleValue = Double(controls.roadFadeMinimumEndMeters)
+        roadFadeFloorLabel.stringValue = Self.roadFadeFloorTitle(controls.roadFadeMinimumEndMeters)
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
@@ -567,6 +595,9 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(roadFadeStartLabel, roadFadeStartSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(roadFadeEndLabel, roadFadeEndSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(roadFadeFloorLabel, roadFadeFloorSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor += Layout.groupSpacing
 
@@ -939,6 +970,36 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func tileLayersSwitchChanged() {
         onTileLayersEnabledChanged?(tileLayersSwitch.state == .on)
+    }
+
+    @objc private func roadFadeStartSliderChanged() {
+        let cameraDistances = Float(roadFadeStartSlider.doubleValue)
+        roadFadeStartLabel.stringValue = Self.roadFadeStartTitle(cameraDistances)
+        onRoadFadeStartCameraDistancesChanged?(cameraDistances)
+    }
+
+    @objc private func roadFadeEndSliderChanged() {
+        let cameraDistances = Float(roadFadeEndSlider.doubleValue)
+        roadFadeEndLabel.stringValue = Self.roadFadeEndTitle(cameraDistances)
+        onRoadFadeEndCameraDistancesChanged?(cameraDistances)
+    }
+
+    @objc private func roadFadeFloorSliderChanged() {
+        let meters = Float(roadFadeFloorSlider.doubleValue)
+        roadFadeFloorLabel.stringValue = Self.roadFadeFloorTitle(meters)
+        onRoadFadeMinimumEndMetersChanged?(meters)
+    }
+
+    static func roadFadeFloorTitle(_ meters: Float) -> String {
+        String(format: "Roads reach at least %.0f m", meters)
+    }
+
+    static func roadFadeStartTitle(_ cameraDistances: Float) -> String {
+        String(format: "Roads fade from %.1f cam. dist.", cameraDistances)
+    }
+
+    static func roadFadeEndTitle(_ cameraDistances: Float) -> String {
+        String(format: "Roads gone at %.1f cam. dist.", cameraDistances)
     }
 
     @objc private func wireframeSwitchChanged() {

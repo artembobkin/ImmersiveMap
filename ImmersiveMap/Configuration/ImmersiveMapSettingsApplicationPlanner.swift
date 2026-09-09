@@ -123,8 +123,14 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.attribution != newValue.attribution {
             mark(.attribution, actions: [.liveApply])
         }
+        // FXAA is a pass-plan flag read per frame; the sample count is baked
+        // into every pipeline state, so it rebuilds the renderer.
         if oldValue.postProcessing != newValue.postProcessing {
-            mark(.postProcessing, actions: [.liveApply])
+            if oldValue.postProcessing.multisampleCount == newValue.postProcessing.multisampleCount {
+                mark(.postProcessing, actions: [.liveApply])
+            } else {
+                mark(.postProcessing, actions: [.rebuildGPUResources, .recreateRenderer])
+            }
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)

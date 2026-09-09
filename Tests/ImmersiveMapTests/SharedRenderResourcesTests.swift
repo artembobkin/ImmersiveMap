@@ -15,7 +15,7 @@ final class SharedRenderResourcesTests: XCTestCase {
     func testSharedReturnsTheSameInstance() throws {
         try skipUnlessMetalAvailable()
 
-        XCTAssertTrue(SharedRenderResources.shared() === SharedRenderResources.shared())
+        XCTAssertTrue(SharedRenderResources.shared(sampleCount: 1) === SharedRenderResources.shared(sampleCount: 1))
     }
 
     @MainActor

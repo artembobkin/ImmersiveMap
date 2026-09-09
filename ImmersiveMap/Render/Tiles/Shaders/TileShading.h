@@ -105,6 +105,23 @@ struct OverviewFadeUniform {
     float cameraZoom;
 };
 
+/// Per-draw road distance fade (Tile.metal, vertex buffer 9): the roads
+/// fade out with the ground distance from the look-at point (centerWorld,
+/// world units on the plane) over the ring startWorld to endWorld, and
+/// the vertex stage clips them at endWorld so no fragment is born beyond
+/// it. `enabled` 0 leaves a layer untouched (the ground fills and
+/// ribbons). Mirror of TileRoadDistanceFadeUniform; the radii come from
+/// RoadDistanceLOD.
+struct RoadDistanceFadeUniform {
+    float2 centerWorld;
+    float startWorld;
+    float endWorld;
+    float enabled;
+    float _padding0;
+    float _padding1;
+    float _padding2;
+};
+
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
 /// display scale. A constant of the tile and the viewport, never of the live
 /// camera, so the dash pattern stays anchored to the geometry instead of

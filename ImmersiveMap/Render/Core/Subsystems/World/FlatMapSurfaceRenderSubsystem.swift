@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Metal
+import simd
 
 final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
@@ -47,7 +48,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         }
 
         let tilePlacementState = frameContext.sharedState.tilePlacementState
-        let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
+        let debugControls = debugOverlayControls.snapshot()
+        let isWireframeEnabled = debugControls.wireframeEnabled
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),
                                                                fallbackTexture: groundShadowMaskFallbackTexture)
@@ -62,6 +64,24 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let markingCutoff = RoadMarkingDistanceLOD.cutoffWorldDistance(
             drawableHeightPx: Float(frameContext.drawSize.height),
             unitsPerMeter: Float(unitsPerMeter))
+        // Distance LOD for the roads: they fade over a ring of camera
+        // distances about the look-at point and are cut at its outer radius
+        // (RoadDistanceLOD). The camera distance is measured the way the
+        // ground coverage measures it, from the eye to the look-at point.
+        let center = frameContext.visibleContent.center
+        let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: SIMD2<Double>(center.tileX, center.tileY),
+                                                          zoom: frameContext.visibleContent.tileZoomLevel,
+                                                          flatRenderState: frameContext.resolvedPresentation.flatRenderState)
+        let eye = frameContext.cameraEye
+        let cameraDistance = simd_length(SIMD3<Double>(Double(eye.x), Double(eye.y), Double(eye.z)) - lookAtWorld)
+        let roadFadeRadii = RoadDistanceLOD.fadeWorldDistances(cameraDistance: Float(cameraDistance),
+                                                                unitsPerMeter: Float(unitsPerMeter),
+                                                                startCameraDistances: debugControls.roadFadeStartCameraDistances,
+                                                                endCameraDistances: debugControls.roadFadeEndCameraDistances,
+                                                                minimumEndMeters: debugControls.roadFadeMinimumEndMeters)
+        let roadFade = (centerWorld: SIMD2<Float>(Float(lookAtWorld.x), Float(lookAtWorld.y)),
+                        start: roadFadeRadii.start,
+                        end: roadFadeRadii.end)
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
         // buildings, never written), the road buckets only test it.
@@ -88,7 +108,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  markingCutoffWorldDistance: markingCutoff)
+                                  markingCutoffWorldDistance: markingCutoff,
+                                  roadFade: roadFade)
 FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,

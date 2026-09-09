@@ -49,7 +49,7 @@ final class ShadowMapAttachmentTests: XCTestCase {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 
-        let fallback = SharedRenderResources.shared().shadowFallbackTexture
+        let fallback = SharedRenderResources.shared(sampleCount: 1).shadowFallbackTexture
 
         XCTAssertEqual(fallback.textureType, .type2D)
         XCTAssertEqual(fallback.arrayLength, 1)

@@ -20,7 +20,8 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 39_167, y: 21_090, z: 16)
         let mvtData = MvtFixtureTileMessages.denseCity().serializedData()
 
-        let config = ImmersiveMapSettings.default
+        // Extrusion is off by default; the benchmark wants every parse path.
+        let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
@@ -58,7 +59,8 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 9, y: 5, z: 4)
         let mvtData = MvtFixtureTileMessages.oceanOverview().serializedData()
 
-        let config = ImmersiveMapSettings.default
+        // Extrusion is off by default; the benchmark wants every parse path.
+        let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),

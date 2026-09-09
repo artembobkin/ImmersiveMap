@@ -51,6 +51,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         preparedTileDiskCaching != nil
     }
 
+    func isPreparedOnDisk(_ tile: Tile) -> Bool {
+        preparedTileDiskCaching?.isPreparedOnDisk(tile) ?? false
+    }
+
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: matchingETag)
     }

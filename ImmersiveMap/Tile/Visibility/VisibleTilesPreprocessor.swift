@@ -8,12 +8,19 @@
 
 import Foundation
 
-/// Optimizes visible tile instances after culling:
-/// filters too-distant tiles, applies coarse LOD substitution
-/// and returns a non-overlapping coverage set for placement.
+/// Optimizes visible tile instances after culling: filters too-distant
+/// tiles and applies coarse LOD substitution. On the plane the coverage is
+/// `FlatDistanceCoverage`: every tile's zoom follows its distance from the
+/// eye, overlaps allowed (the tile-priority stencil lets the finest painter
+/// own each pixel), the farthest parents trimmed to a ceiling. On the
+/// sphere it is the distance and latitude ladder with a non-overlapping
+/// selection.
 ///
 /// Invariants:
-/// - Output contains no overlapping targets inside the same `loop`.
+/// - The sphere's output contains no overlapping targets inside the same
+///   `loop`; the plane's output holds at most
+///   `FlatDistanceCoverage.maximumParents` parents when a backdrop exists,
+///   plus the exact tiles within the exact radius.
 /// - Output ordering is deterministic (`z desc`, then `loop/x/y asc`).
 /// - The preprocessor never creates tiles outside source ancestry:
 ///   each selected tile is the input tile itself or one of its parents.
@@ -23,23 +30,23 @@ final class VisibleTilesPreprocessor {
     /// enumerating tiles beyond this radius is pointless - the filter drops them.
     ///
     /// The radius defines the visible range of the spherical presentation: a
-    /// short radius literally pulls the horizon closer. In flat mode the far range is
-    /// not limited by the radius: beyond `farRingRelativeDistance` the coverage
-    /// is fully handed to the solid z3 horizon backdrop (`TileCulling.resolveFlatBackdropTiles`).
+    /// short radius literally pulls the horizon closer. In flat mode the far
+    /// range is not limited by the radius: a tile whose parent would be the
+    /// backdrop's zoom is handed to the solid z3 horizon backdrop
+    /// (`TileCulling.resolveFlatBackdropTiles`) long before it.
     static let defaultMaxVisibleRelativeDistance = 40
 
-    /// Beyond this distance the far range stops being honest coverage of the
-    /// target ladder. Sphere: preference falls to the backdrop's absolute zoom
-    /// (`TileCulling.flatBackdropZoomLevel`), z3 tiles are in the world-coverage
-    /// pinning. Flat: the ring is dropped already at the input stage
-    /// (`isFarRingHandedToBackdrop`), the threshold is shorter, the far range is
-    /// aggressively handed to the backdrop to cut the vector tile count.
-    private static func farRingRelativeDistance(for renderSurfaceMode: ViewMode) -> Int {
-        renderSurfaceMode == .flat ? 10 : 15
-    }
+    /// On the sphere, beyond this distance the far range stops being honest
+    /// coverage of the target ladder: preference falls to the backdrop's
+    /// absolute zoom (`TileCulling.flatBackdropZoomLevel`), z3 tiles are in
+    /// the world-coverage pinning. On the plane the distance rule decides
+    /// (`FlatDistanceCoverage`).
+    private static let sphereFarRingRelativeDistance = 15
 
     private let maxVisibleRelativeDistance: Int
     private let exactRelativeDistanceRadius: Int
+    /// The flat map's coverage rule, with its per-tile level memory.
+    private let flatCoverage = FlatDistanceCoverage()
 
     init(maxVisibleRelativeDistance: Int = VisibleTilesPreprocessor.defaultMaxVisibleRelativeDistance,
          exactRelativeDistanceRadius: Int = 2) {
@@ -48,27 +55,45 @@ final class VisibleTilesPreprocessor {
     }
 
     /// Runs the full preprocessing pipeline:
-    /// 1) distance filter + preferred LOD stage,
-    /// 2) deterministic priority sort,
-    /// 3) non-overlapping coverage selection,
-    /// 4) deterministic output sort.
+    /// 1) distance filter,
+    /// 2) on the plane: the distance rule (`FlatDistanceCoverage`); on the
+    ///    sphere: the preferred LOD stage, deterministic priority sort and
+    ///    non-overlapping coverage selection,
+    /// 3) deterministic output sort.
     ///
-    /// `transition` is the globe-to-flat phase (0 = globe, 1 = flat):
-    /// it drives the latitude LOD on the sphere.
+    /// `transition` is the globe-to-flat phase (0 = globe, 1 = flat): it
+    /// drives the latitude LOD on the sphere. `flatCamera` is the flat
+    /// camera's eye and ground points; without one on the plane every tile is
+    /// asked for exactly, which is what the flat cases of a tile-free test
+    /// want and what the sphere never passes.
     func preprocess(visibleTiles: [VisibleTile],
                     center: Center,
                     renderSurfaceMode: ViewMode,
-                    transition: Float) -> [VisibleTile] {
-        let stagedInputs = buildStageInputs(visibleTiles: visibleTiles,
-                                            center: center,
-                                            renderSurfaceMode: renderSurfaceMode,
-                                            transition: transition)
-        let sortedInputs = sortInputsForSelection(stagedInputs)
-        let selectedTargets = selectCoverageTargets(from: sortedInputs)
-        return sortTargetsForOutput(selectedTargets)
+                    transition: Float,
+                    flatCamera: FlatCoverageCamera? = nil) -> [VisibleTile] {
+        switch renderSurfaceMode {
+        case .flat:
+            let inRange = visibleTiles.filter { tile in
+                maxRelativeDistance(tile: tile, center: center, renderSurfaceMode: renderSurfaceMode) <= maxVisibleRelativeDistance
+            }
+            guard let flatCamera else {
+                return sortTargetsForOutput(Set(inRange))
+            }
+            let targets = flatCoverage.targets(visibleTiles: inRange,
+                                               camera: flatCamera,
+                                               backdropZoom: flatCamera.backdropZoom)
+            return sortTargetsForOutput(Set(targets))
+        case .spherical:
+            let stagedInputs = buildStageInputs(visibleTiles: visibleTiles,
+                                                center: center,
+                                                renderSurfaceMode: renderSurfaceMode,
+                                                transition: transition)
+            let selectedTargets = selectCoverageTargets(from: sortInputsForSelection(stagedInputs))
+            return sortTargetsForOutput(selectedTargets)
+        }
     }
 
-    /// Builds candidate inputs for selection.
+    /// Builds the sphere's candidate inputs for selection.
     ///
     /// Invariants:
     /// - Every emitted `InputTile` has `relativeDistance <= maxVisibleRelativeDistance`.
@@ -87,26 +112,21 @@ final class VisibleTilesPreprocessor {
             guard distance <= maxVisibleRelativeDistance else {
                 continue
             }
-            guard !isFarRingHandedToBackdrop(visibleTile,
-                                             distance: distance,
-                                             renderSurfaceMode: renderSurfaceMode) else {
-                continue
-            }
             let latitudeDrop = latitudeCoarseningDrop(for: visibleTile,
                                                       renderSurfaceMode: renderSurfaceMode,
                                                       transition: transition)
+            let preferredZoom = spherePreferredZoom(for: visibleTile,
+                                                    distance: distance,
+                                                    latitudeDrop: latitudeDrop)
             inputs.append(InputTile(visibleTile: visibleTile,
                                     relativeDistance: distance,
-                                    preferredZoom: preferredZoom(for: visibleTile,
-                                                                 distance: distance,
-                                                                 latitudeDrop: latitudeDrop,
-                                                                 renderSurfaceMode: renderSurfaceMode)))
+                                    preferredZoom: preferredZoom))
         }
 
         return inputs
     }
 
-    /// Orders candidates for greedy selection.
+    /// Orders the sphere's candidates for greedy selection.
     ///
     /// Priority: finer preferred zoom -> closer distance -> stable tie-break by loop/x/y.
     /// This guarantees deterministic selection when input order is unstable.
@@ -133,7 +153,7 @@ final class VisibleTilesPreprocessor {
         return sortedInputs
     }
 
-    /// Greedily builds the final coverage set with overlap exclusion.
+    /// Greedily builds the sphere's coverage set with overlap exclusion.
     ///
     /// Invariants:
     /// - At most one identical `VisibleTile` is selected.
@@ -277,67 +297,42 @@ final class VisibleTilesPreprocessor {
         }
     }
 
-    /// Distance LOD steepness: 1.0 - honest perspective (one level per
-    /// distance doubling), higher - more aggressive coarsening of the far range.
-    /// Detail near the horizon only shimmers under minification anyway, while
-    /// covering it costs many times more tiles. In flat mode the steepness is
-    /// higher: the far range is purely decorative, tile count takes priority.
-    private static func distanceLodSteepness(for renderSurfaceMode: ViewMode) -> Double {
-        renderSurfaceMode == .flat ? 3.0 : 1.5
-    }
+    /// The sphere's distance LOD steepness: 1.0 would be honest perspective
+    /// (one level per distance doubling); 1.5 coarsens the far range more,
+    /// since detail near the limb only shimmers under minification anyway
+    /// while covering it costs many times more tiles.
+    private static let sphereDistanceLodSteepness = 1.5
 
-    /// Cap on the total distance drop: the far range never falls below z-4.
+    /// Cap on the sphere's distance drop: the far range never falls below z-4.
     private static let maximumDistanceDrop = 4
 
-    /// The flat far ring belongs to the backdrop: beyond the
-    /// `farRingRelativeDistance` threshold the tile is not placed at all, its
-    /// area is already painted by the solid z3 coverage of the frustum footprint
-    /// (`TileCulling.resolveFlatBackdropTiles`, drawn beneath the main
-    /// coverage). Placing a z3 ancestor in the main set is not allowed: it
-    /// would duplicate the backdrop with double drawing, and when overlapping
-    /// the near coverage the greedy selection would escalate it to a free finer
-    /// ancestor, turning the ring into real z5-z9 vector tiles.
-    /// Without a backdrop (target zoom no deeper than z3) the ring stays regular
-    /// coverage, otherwise wrapped world copies would remain holes.
-    private func isFarRingHandedToBackdrop(_ visibleTile: VisibleTile,
-                                           distance: Int,
-                                           renderSurfaceMode: ViewMode) -> Bool {
-        renderSurfaceMode == .flat
-            && visibleTile.z > TileCulling.flatBackdropZoomLevel
-            && distance > Self.farRingRelativeDistance(for: renderSurfaceMode)
-    }
-
-    /// Maps relative distance and latitude coarsening to preferred demand zoom.
+    /// The sphere's preferred demand zoom from relative distance and
+    /// latitude coarsening.
     ///
     /// A tile's on-screen size in perspective falls as 1/distance; the ladder
-    /// starts from the exact radius of 2. Sphere (steepness 1.5): distance 3 → z-1,
-    /// 4-5 → z-2, 6-8 → z-3, 9+ → z-4, beyond the ring threshold clamp to z3.
-    /// Flat (steepness 3.0): 3 → z-2, 4 → z-3, 5+ → z-4, the far ring never
-    /// reaches here (dropped in `isFarRingHandedToBackdrop`), the clamp
-    /// only fires for shallow target zooms where it changes nothing.
+    /// starts from the exact radius of 2: distance 3 → z-1, 4-5 → z-2,
+    /// 6-8 → z-3, 9+ → z-4, beyond the ring threshold clamp to z3.
     ///
     /// `latitudeDrop` is added to the distance drop: both effects
     /// (perspective and mercator compression) shrink a tile's on-screen size
     /// independently.
-    private func preferredZoom(for visibleTile: VisibleTile,
-                               distance: Int,
-                               latitudeDrop: Int,
-                               renderSurfaceMode: ViewMode) -> Int {
-        let distanceDrop = distanceCoarseningDrop(distance: distance, renderSurfaceMode: renderSurfaceMode)
-        let ladderZoom = max(0, visibleTile.z - distanceDrop - latitudeDrop)
-        guard distance > Self.farRingRelativeDistance(for: renderSurfaceMode) else {
+    private func spherePreferredZoom(for visibleTile: VisibleTile,
+                                     distance: Int,
+                                     latitudeDrop: Int) -> Int {
+        let ladderZoom = max(0, visibleTile.z - sphereDistanceCoarseningDrop(distance: distance) - latitudeDrop)
+        guard distance > Self.sphereFarRingRelativeDistance else {
             return ladderZoom
         }
         return min(ladderZoom, TileCulling.flatBackdropZoomLevel)
     }
 
-    private func distanceCoarseningDrop(distance: Int, renderSurfaceMode: ViewMode) -> Int {
+    private func sphereDistanceCoarseningDrop(distance: Int) -> Int {
         guard distance > exactRelativeDistanceRadius else {
             return 0
         }
 
         let doublings = log2(Double(distance) / Double(exactRelativeDistanceRadius))
-        let steepenedDrop = Int((doublings * Self.distanceLodSteepness(for: renderSurfaceMode)).rounded(.up))
+        let steepenedDrop = Int((doublings * Self.sphereDistanceLodSteepness).rounded(.up))
         return min(Self.maximumDistanceDrop, steepenedDrop)
     }
 

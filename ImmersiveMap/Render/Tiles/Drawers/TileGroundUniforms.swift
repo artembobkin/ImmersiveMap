@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import simd
+
 /// The per-draw uniforms of the tile ground shaders, shared by the flat
 /// surface, the sphere surface and the atlas bake; the layouts mirror the
 /// structs of the same names in TileShading.h.
@@ -74,4 +76,25 @@ struct TileFootprintFadeUniform {
         self.startUnits = startUnits
         self.endUnits = endUnits
     }
+}
+
+/// Mirror of `RoadDistanceFadeUniform` (TileShading.h, Tile.metal vertex
+/// buffer 9): the road fade ring around the look-at point in world units,
+/// and whether the layer being drawn takes it. See `RoadDistanceLOD`.
+struct TileRoadDistanceFadeUniform {
+    var centerWorld: SIMD2<Float>
+    var startWorld: Float
+    var endWorld: Float
+    var enabled: Float
+    var padding0: Float = 0
+    var padding1: Float = 0
+    var padding2: Float = 0
+
+    /// The ring, for the road layers.
+    static func fade(centerWorld: SIMD2<Float>, startWorld: Float, endWorld: Float) -> TileRoadDistanceFadeUniform {
+        TileRoadDistanceFadeUniform(centerWorld: centerWorld, startWorld: startWorld, endWorld: endWorld, enabled: 1)
+    }
+
+    /// Untouched: the ground fills and ribbons.
+    static let disabled = TileRoadDistanceFadeUniform(centerWorld: .zero, startWorld: 0, endWorld: 0, enabled: 0)
 }

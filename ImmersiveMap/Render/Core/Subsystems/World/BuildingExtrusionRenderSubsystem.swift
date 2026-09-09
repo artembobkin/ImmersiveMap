@@ -37,8 +37,8 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem, RenderPassAvailab
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     /// With extrusion off the tiles carry no building geometry: the layer
-    /// (and the ownership prepass that serves only it) is planned out of the
-    /// world pass rather than encoding its state for nothing.
+    /// is planned out of the world pass rather than encoding its state for
+    /// nothing.
     func contributePassAvailability(settings: ImmersiveMapSettings,
                                     builder: inout RenderPassAvailabilityBuilder) {
         builder.buildingExtrusionEnabled = settings.style.buildingExtrusionEnabled
@@ -51,16 +51,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem, RenderPassAvailab
 
         if layer == .shadowCasters {
             guard let shadowState = frameContext.shadowFrameState else { return }
-            // Visible placements plus the off-screen sun-ward strip: buildings
-            // just past the frustum edge still cast into the frame, and without
-            // them their shadows pop in and out while the camera pans.
-            let tilePlacementState = frameContext.sharedState.tilePlacementState
-            let casterPlacements = tilePlacementState.placeTilesContext.tilePlacements
-                + tilePlacementState.shadowCasterPlaceTilesContext.tilePlacements
+            // The casters are the building coverage, the same partition the
+            // world pass draws, so a building casts exactly once.
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
                 lightProjectionView: shadowState.lightProjectionView,
-                placeTilesContext: PlaceTilesContext(tilePlacements: casterPlacements),
+                placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
@@ -83,7 +79,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem, RenderPassAvailab
         BuildingExtrusionDrawer.drawBuildings(renderEncoder: encoder,
                                               cameraUniform: frameContext.cameraUniform,
                                               shadowBinding: shadowBinding,
-                                              placeTilesContext: frameContext.sharedState.tilePlacementState.placeTilesContext,
+                                              placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,

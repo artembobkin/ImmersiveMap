@@ -23,12 +23,19 @@ enum RendererSetup {
                                   renderSampleCount: sharedResources.renderSampleCount)
     }
 
-    /// One sample everywhere: the ground's lines are antialiased
-    /// analytically in the tile shaders, and the frame time the 4x world
-    /// pass cost outweighed the edge smoothing it bought. The resolve
-    /// machinery stays: a value above 1 turns it back on wholesale.
-    static func preferredRenderSampleCount(metalDevice _: MTLDevice) -> Int {
-        1
+    /// The sample counts a world pass can render with, best first.
+    static let supportedRenderSampleCounts = [8, 4, 2, 1]
+
+    /// The sample count the world pass will actually use for the one the
+    /// settings ask for: the largest of the supported counts that is not
+    /// above the request and that the device can render into. One sample
+    /// is always available, and it is the shipped default: the ground's
+    /// lines are antialiased analytically in the tile shaders, so the
+    /// multisampled pass buys only geometry silhouettes.
+    static func resolvedRenderSampleCount(requested: Int, metalDevice: MTLDevice) -> Int {
+        supportedRenderSampleCounts.first { count in
+            count <= requested && (count == 1 || metalDevice.supportsTextureSampleCount(count))
+        } ?? 1
     }
 
     static func makeLibrary(metalDevice: MTLDevice, bundle: Bundle) -> MTLLibrary {

@@ -90,7 +90,7 @@ final class TileTraceRecorderTests: XCTestCase {
                                          residentCount: 2,
                                          residentBytes: 76))
         recorder.record(.tileStoreRelease(Tile(x: 2, y: 3, z: 4),
-                                          reason: "left_demand",
+                                          reason: "retention_full",
                                           residentCount: 1,
                                           residentBytes: 12))
         recorder.record(.tileStoreRemoveAll(removedCount: 1, removedBytes: 12))
@@ -107,7 +107,7 @@ final class TileTraceRecorderTests: XCTestCase {
         XCTAssertEqual(lines[0]["replaced"] as? Bool, false)
         XCTAssertEqual(lines[0]["residentBytes"] as? Int, 76)
         XCTAssertEqual(lines[1]["hit"] as? Bool, true)
-        XCTAssertEqual(lines[2]["reason"] as? String, "left_demand")
+        XCTAssertEqual(lines[2]["reason"] as? String, "retention_full")
         XCTAssertEqual(lines[2]["residentCount"] as? Int, 1)
         XCTAssertEqual(lines[3]["removedCount"] as? Int, 1)
     }

@@ -29,6 +29,11 @@ struct DiagnosticsPanel: View {
                     .toggleStyle(.switch)
                 Toggle("FXAA", isOn: $settings.postProcessing.fxaaEnabled)
                     .toggleStyle(.switch)
+                // Four samples per pixel of the whole world pass: every
+                // pipeline depends on it, so the renderer is rebuilt.
+                Toggle("MSAA 4x", isOn: Binding(get: { settings.postProcessing.multisampleCount > 1 },
+                                                set: { settings.postProcessing.multisampleCount = $0 ? 4 : 1 }))
+                    .toggleStyle(.switch)
                 Toggle("Continuous rendering", isOn: $settings.renderLoop.forceContinuousRendering)
                     .toggleStyle(.switch)
 

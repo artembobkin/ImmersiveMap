@@ -438,6 +438,18 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Whether the map is a globe at low zoom. On by default: the world is
+    /// a sphere until the camera zooms in and unrolls it into the plane.
+    /// Off, the world is the Mercator plane at every zoom, with no sphere,
+    /// no morph and no stars, and the flat map's sky and haze from zoom 0
+    /// up. Applies live; stills and video exports of the same settings come
+    /// out flat too.
+    public func globe(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.globe(isEnabled: isEnabled)
+        return view
+    }
+
     /// Points the map at any tile endpoint with one URL template:
     ///
     ///     ImmersiveMapView()
@@ -819,6 +831,18 @@ public extension ImmersiveMapView {
     public func fxaa(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fxaa(isEnabled: isEnabled)
+        return view
+    }
+
+    /// MSAA 4x on the world pass. Off by default: four depth and colour
+    /// samples per pixel clean geometry silhouettes (buildings, models most
+    /// visibly) at a real cost in memory bandwidth, while the map's own
+    /// lines are antialiased analytically either way. Falls back to what
+    /// the device supports; changing it recreates the renderer. See
+    /// `PostProcessingSettings.multisampleCount` for other counts.
+    public func msaa(isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.msaa(isEnabled: isEnabled)
         return view
     }
 

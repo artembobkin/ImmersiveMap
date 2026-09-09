@@ -97,8 +97,25 @@ final class TileRenderStore: @unchecked Sendable {
         workingSet.contentVersion
     }
 
+    /// Whether the tile is resident in the working set, GPU buffers and all.
+    func isResident(_ tile: Tile) -> Bool {
+        workingSet.contains(tile)
+    }
+
+    /// Every resident tile, the retention included.
+    func residentTiles() -> [Tile: MetalTile] {
+        workingSet.residentTiles()
+    }
+
+    /// Whether the tile would be on screen a few frames after being demanded
+    /// with no network request: resident already, or prepared on disk. What
+    /// the demand planner picks a loading target's stand-in ancestor by.
+    func isAvailableLocally(_ tile: Tile) -> Bool {
+        isResident(tile) || (mapNeedsTile?.isPreparedOnDisk(tile) ?? false)
+    }
+
     func requestTiles(_ tiles: [Tile], frameIndex: UInt64? = nil) -> TileRequestResult {
-        workingSet.updateDemandedTiles(Set(tiles))
+        workingSet.updateDemandedTiles(tiles)
         var readyTilesBySource: [Tile: MetalTile?] = [:]
         readyTilesBySource.reserveCapacity(tiles.count)
         var request: [Tile] = []

@@ -20,7 +20,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
     private var backdropPlaceTilesContext: PlaceTilesContext = .empty
-    private var shadowCasterPlaceTilesContext: PlaceTilesContext = .empty
+    private var buildingPlaceTilesContext: PlaceTilesContext = .empty
     private var globeSurfaceSlots: [Tile] = []
     private var placementVersion: UInt64 = 0
     private var demandGateFingerprint: Int?
@@ -61,28 +61,43 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             return
         }
 
-        // Visible-tiles post-processing:
-        // shortens the raw visible list and substitutes distant tiles
-        // with coarser parents to reduce load/placement pressure.
+        // Visible-tiles post-processing: shortens the raw visible list and
+        // substitutes tiles with coarser parents to reduce load/placement
+        // pressure. On the plane every tile's zoom follows its distance from
+        // the eye (`FlatDistanceCoverage`).
+        let flatCamera: FlatCoverageCamera? = frameContext.renderSurfaceMode == .flat
+            ? Self.makeFlatCoverageCamera(frameContext: frameContext,
+                                          center: center,
+                                          tileZoomLevel: tileZoomLevel,
+                                          hasBackdrop: visibleContent.backdropTiles.isEmpty == false)
+            : nil
         let preprocessedVisibleTiles = visibleTilesPreprocessor.preprocess(visibleTiles: visibleTiles,
                                                                            center: center,
                                                                            renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                                           transition: frameContext.transition)
+                                                                           transition: frameContext.transition,
+                                                                           flatCamera: flatCamera)
         // The horizon backdrop bypasses the preprocessor: its distance filter
         // measures distances in target-zoom tiles and would discard the coarse
         // backdrop tiles. Its demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
-        // The sun-ward caster strip also bypasses the preprocessor: it is a
-        // thin band of exact-zoom tiles just past the frustum edge, and its
-        // demand rides at the tail of the priority order (shadows fill in
-        // after the visible map).
-        let shadowCasterTiles = visibleContent.shadowCasterTiles
-        // `VisibleTile` includes `loop`, so flat-mode wrapped copies can produce
-        // multiple placement targets that share the same content tile (`Tile`).
-        // Deduplicate before storage request to avoid repeated cache lookup/request
-        // for identical source bytes.
-        let demandedSourceTiles = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: preprocessedVisibleTiles + backdropTiles + shadowCasterTiles,
-                                                                                  parentFallbackDepth: 2)
+        // A backdrop exists - beneath the main coverage the whole frame is painted
+        // at its zoom, so neither the demand's stand-ins nor the planner's
+        // substitutes go to that zoom or coarser (it is already drawn by the
+        // layer below).
+        let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
+        // The demand: every target, plus for a target not resident yet at
+        // most one stand-in ancestor that is already resident or prepared on
+        // disk, so it comes back with no network request. Nothing is asked
+        // for blindly: with no ancestor available the backdrop shows until
+        // the target arrives. `VisibleTile` includes `loop`, so flat-mode
+        // wrapped copies share one content tile (`Tile`); the plan
+        // deduplicates. Residency is read here, before `requestTiles`
+        // releases what the plan does not name.
+        let demandPlan = TileDemandSourcePlanner.makePlan(targets: preprocessedVisibleTiles + backdropTiles,
+                                                          backdropZoomLevel: backdropZoomLevel,
+                                                          isResident: tileRenderStore.isResident,
+                                                          isAvailableLocally: tileRenderStore.isAvailableLocally)
+        let demandedSourceTiles = demandPlan.demandedSourceTiles
         // Demand order = network and parsing priority: tiles closest to the camera
         // start first. The placement hash uses the stable
         // `demandedSourceTiles` (center-based sorting would change on every
@@ -90,8 +105,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(preprocessedVisibleTiles,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
-        let prioritizedDemand = TileDemandSourcePlanner.makeDemandedSourceTiles(targets: prioritizedTargets + backdropTiles + shadowCasterTiles,
-                                                                                parentFallbackDepth: 2)
+        let prioritizedDemand = demandPlan.demandedSourceTiles(orderedBy: prioritizedTargets + backdropTiles)
         // Returns source-tile availability map for GPU rendering:
         // value contains Metal-ready tile buffers, or `nil` while still loading.
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
@@ -100,31 +114,38 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
 
         var hashBuilder = Hasher()
         hashBuilder.combine(PreprocessedVisibleTilesHasher.computePreprocessedVisibleTilesHash(
-            preprocessedVisibleTiles: preprocessedVisibleTiles + backdropTiles + shadowCasterTiles,
+            preprocessedVisibleTiles: preprocessedVisibleTiles + backdropTiles,
             demandedSourceTiles: demandedSourceTiles,
             readyTilesBySource: readyTilesBySource
         ))
+        // The placement also reads the retention (descendants standing in
+        // are never demanded), so a tile landing outside the demand, which
+        // bumps the content version, rebuilds it too.
+        hashBuilder.combine(tileRenderStore.cacheContentVersion)
         let preprocessedVisibleTilesHash = hashBuilder.finalize()
 
         let placementChanged = preprocessedVisibleTilesHashTracker.stage(preprocessedVisibleTilesHash)
         if placementChanged {
-            // A backdrop exists - beneath the main coverage the whole frame is painted
-            // at its zoom, and the planner must not fill holes with content
-            // of that zoom (it is already drawn by the layer below).
-            let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
+            // The placement is a function of the targets and of what is
+            // resident now (the retention included): nothing is carried
+            // over from the previous frame's placement.
+            let resident = tileRenderStore.residentTiles()
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: preprocessedVisibleTiles,
-                                                                     readyTilesBySource: readyTilesBySource,
+                                                                     resident: resident,
                                                                      zoom: tileZoomLevel,
-                                                                     previousContext: placeTilesContext,
                                                                      backdropZoomLevel: backdropZoomLevel)
             backdropPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: backdropTiles,
-                                                                             readyTilesBySource: readyTilesBySource,
+                                                                             resident: resident,
                                                                              zoom: tileZoomLevel,
-                                                                             previousContext: backdropPlaceTilesContext)
-            shadowCasterPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: shadowCasterTiles,
-                                                                                 readyTilesBySource: readyTilesBySource,
-                                                                                 zoom: tileZoomLevel,
-                                                                                 previousContext: shadowCasterPlaceTilesContext)
+                                                                             descendantSearchDepth: 0)
+            // The buildings: a partition of the near field over the resident
+            // tiles, never a substitute (see the planner).
+            let eyeGroundCell = flatCamera.map { camera in
+                camera.eyeGround * pow(2.0, Double(BuildingCoveragePlanner.minimumSourceZoom - tileZoomLevel))
+            }
+            buildingPlaceTilesContext = BuildingCoveragePlanner.plan(resident: resident,
+                                                                     visibleTiles: visibleTiles,
+                                                                     eyeGroundCell: eyeGroundCell)
             globeSurfaceSlots = preprocessedVisibleTiles.map(\.tile)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
@@ -162,6 +183,28 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                      requestedTilesCount: requestedTilesCount)
     }
 
+
+    /// The flat camera looks at the world origin (the pan moves the world
+    /// under it), so the eye is taken as it is, and its ground point is its
+    /// x and y over the exact tile's world size, away from the look-at
+    /// point in tile units. World y grows north while tile y grows south.
+    private static func makeFlatCoverageCamera(frameContext: FrameContext,
+                                               center: Center,
+                                               tileZoomLevel: Int,
+                                               hasBackdrop: Bool) -> FlatCoverageCamera {
+        let flatRenderState = frameContext.resolvedPresentation.flatRenderState
+        let tileUnits = flatRenderState.renderMapSize / Double(1 << max(0, tileZoomLevel))
+        let eye = frameContext.cameraEye
+        let lookAt = SIMD2<Double>(center.tileX, center.tileY)
+        let eyeGround = lookAt + SIMD2<Double>(Double(eye.x), -Double(eye.y)) / tileUnits
+        return FlatCoverageCamera(eye: SIMD3<Double>(Double(eye.x), Double(eye.y), Double(eye.z)),
+                                  flatRenderState: flatRenderState,
+                                  eyeGround: eyeGround,
+                                  lookAt: lookAt,
+                                  overzoomLevels: max(0, frameContext.zoomLevel - tileZoomLevel),
+                                  backdropZoom: hasBackdrop ? TileCulling.flatBackdropZoomLevel : nil)
+    }
+
     private func publishState(frameContext: FrameContext,
                               visibleTilesCount: Int,
                               readyTilesCount: Int,
@@ -170,7 +213,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
             backdropPlaceTilesContext: backdropPlaceTilesContext,
-            shadowCasterPlaceTilesContext: shadowCasterPlaceTilesContext,
+            buildingPlaceTilesContext: buildingPlaceTilesContext,
             globeSurfaceSlots: globeSurfaceSlots,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
@@ -204,7 +247,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         tileRenderStore.evict()
         placeTilesContext = .empty
         backdropPlaceTilesContext = .empty
-        shadowCasterPlaceTilesContext = .empty
+        buildingPlaceTilesContext = .empty
         globeSurfaceSlots = []
         preprocessedVisibleTilesHashTracker.invalidate()
         demandGateFingerprint = nil

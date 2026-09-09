@@ -27,6 +27,7 @@ struct VertexOut {
     float3 worldPosition;
     half3 worldNormal;
     half4 color;
+    float clipDistance [[clip_distance]] [4];
 };
 
 // The fragment stage's view of VertexOut, matched by name and without the
@@ -50,13 +51,13 @@ struct Style {
 };
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local
-// coordinates, shadow-caster path only (the shadow pass has no stencil
-// attachment). A retained substitution's casters draw in full, clipped to
-// the placeIn slot by the rasterizer, otherwise the parent's buildings
-// would cast shadows over neighboring exact tiles. In the world pass the
-// same rejection is the tile-priority stencil test against the ownership
-// prepass (TileOwnershipRenderSubsystem), so the main vertex stage exports
-// no clip distances.
+// coordinates, on the world-pass and the shadow-caster path alike. The
+// building coverage is a partition of the ground: a parent filling a slot
+// its finer tiles do not cover draws in full and is cut to the slot by the
+// rasterizer, on the ground footprint of every vertex (a wall is cut where
+// its base crosses the slot's edge), otherwise its copy of a building
+// would cut through the finer tile's copy next to it. A placement in its
+// own slot gets the disabled bounds and draws whole.
 static inline void writeLocalClipDistances(thread float (&clipDistance)[4],
                                            float2 localPosition,
                                            float4 localClipBounds) {
@@ -69,7 +70,8 @@ static inline void writeLocalClipDistances(thread float (&clipDistance)[4],
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
-                                          constant float4x4& modelMatrix [[buffer(3)]]) {
+                                          constant float4x4& modelMatrix [[buffer(3)]],
+                                          constant float4& localClipBounds [[buffer(4)]]) {
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
@@ -84,6 +86,7 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.color = half4(style.color);
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = half3(worldNormal);
+    writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
     return out;
 }
 

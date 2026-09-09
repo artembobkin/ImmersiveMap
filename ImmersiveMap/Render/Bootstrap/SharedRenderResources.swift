@@ -10,10 +10,10 @@ import MetalKit
 /// shader library load, ~26 pipeline states, the MSDF text atlases (two PNG
 /// decodes + uploads and two JSON metric decodes), the POI sprite
 /// rasterization, and the procedural sphere/cap geometry. None of it depends
-/// on anything that varies between views: the device is the system singleton,
-/// the color format is always `bgra8Unorm` and the MSAA sample count is a pure
-/// function of the device, so one set serves the whole process and a second
-/// map view (or a settings-driven renderer recreation) skips the entire cost.
+/// on anything that varies between views but the sample count: the device is
+/// the system singleton and the color format is always `bgra8Unorm`, so one
+/// set per sample count serves the whole process and a second map view (or a
+/// settings-driven renderer recreation) skips the entire cost.
 ///
 /// Everything held here is immutable after creation and is safe to read from
 /// any thread (Metal objects are thread-safe for use; the Swift wrappers never
@@ -122,25 +122,30 @@ final class SharedRenderResources {
 
     // MARK: - Lifecycle
 
-    private static var cached: SharedRenderResources?
+    private static var cached: [Int: SharedRenderResources] = [:]
+    private static let sharedDevice: MTLDevice? = MTLCreateSystemDefaultDevice()
 
-    /// Returns the process-wide instance, creating it on first use.
-    static func shared() -> SharedRenderResources {
-        if let cached {
+    /// Returns the process-wide instance for a sample count, creating it on
+    /// first use. The count is the one the device can actually render with
+    /// (`RendererSetup.resolvedRenderSampleCount`), so two requests the
+    /// device resolves alike share one set.
+    static func shared(sampleCount: Int = 1) -> SharedRenderResources {
+        guard let device = sharedDevice else {
+            fatalError("Metal is not supported on this device")
+        }
+        let resolved = RendererSetup.resolvedRenderSampleCount(requested: sampleCount, metalDevice: device)
+        if let cached = cached[resolved] {
             return cached
         }
-        let resources = SharedRenderResources()
-        cached = resources
+        let resources = SharedRenderResources(device: device, renderSampleCount: resolved)
+        cached[resolved] = resources
         return resources
     }
 
-    private init() {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError("Metal is not supported on this device")
-        }
+    private init(device: MTLDevice, renderSampleCount: Int) {
         self.device = device
         self.library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
-        self.renderSampleCount = RendererSetup.preferredRenderSampleCount(metalDevice: device)
+        self.renderSampleCount = renderSampleCount
         self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
         self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
         self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
@@ -497,14 +502,17 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The world-pass buildings: scene depth for their own occlusion, plus
-    /// the non-owning tile-priority test against the ownership prepass,
-    /// and the surface mask bit raised where a building lands (the
-    /// reference carries it above the priority).
+    /// The world-pass buildings: scene depth for their own occlusion and
+    /// nothing else to test. The building coverage is a partition of the
+    /// ground (`BuildingCoveragePlanner`), so no two tiles draw a building
+    /// over the same ground and the tile-priority test is not needed; a
+    /// wall rises into the pixels of the ground behind it, where that test
+    /// would compare it against the wrong tile anyway. The surface mask bit
+    /// is still raised where a building lands, for the horizon.
     private static func makeExtrudedStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
-        descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .greaterEqual)
-        descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .greaterEqual)
+        descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
+        descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
         return descriptor
     }
 

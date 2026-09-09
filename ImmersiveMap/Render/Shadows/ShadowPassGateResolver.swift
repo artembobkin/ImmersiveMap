@@ -53,9 +53,7 @@ enum ShadowPassGateResolver {
         let tilePlacementState = frameContext.sharedState.tilePlacementState
         return resolve(shadowFrameState: frameContext.shadowFrameState,
                        hasBuildingCasters: hasBuildingCasters(
-                           placeTilesContext: tilePlacementState.placeTilesContext)
-                           || hasBuildingCasters(
-                               placeTilesContext: tilePlacementState.shadowCasterPlaceTilesContext),
+                           placeTilesContext: tilePlacementState.buildingPlaceTilesContext),
                        hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters)
     }
 

@@ -21,31 +21,47 @@ final class TileClipDistanceContractTests: XCTestCase {
         // The flat tiles carry NO slot clip distances any more: a retained
         // substitute draws at full extent and the tile-priority stencil
         // rejects it wherever a finer tile painted, exactly like the
-        // sphere. Only the buildings keep their clips (TileExtruded).
-        XCTAssertNil(source.range(of: "[[clip_distance]]"))
+        // sphere. Only the buildings keep their slot clips (TileExtruded).
+        // The one clip distance here is the road distance cut, the outer
+        // radius of the road fade ring about the look-at point
+        // (RoadDistanceLOD), no slot's edge.
         XCTAssertNil(source.range(of: "localClipBounds"))
+        XCTAssertNil(source.range(of: "[[clip_distance]] [4]"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
+        XCTAssertTrue(source.contains("constant RoadDistanceFadeUniform& roadFade [[buffer(9)]]"))
+        XCTAssertTrue(source.contains("float centerDistance = length(worldPosition.xy - roadFade.centerWorld);"),
+                      "The fade measures on the ground plane from the look-at point, not from the eye")
+        XCTAssertTrue(source.contains("out.clipDistance[0] = roadFade.enabled > 0.5 ? roadFade.endWorld - centerDistance : 1.0;"))
+        XCTAssertTrue(source.contains("color.a *= half(in.distanceFade);"),
+                      "The lines fragment applies the fade the vertex stage resolved")
+        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.stride, 32,
+                       "A float2 and six floats, the shader's RoadDistanceFadeUniform")
+        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.offset(of: \.startWorld), 8)
+        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.offset(of: \.enabled), 16)
         // The flat rank-depth step is one value with the sphere's, both
         // mirrored by GlobeSurfaceDepthRank.
         XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
         XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
     }
 
-    func testBuildingShadersClipOnlyOnTheShadowCasterPath() throws {
+    func testBuildingShadersClipWithSlotDistancesOnBothPaths() throws {
         let source = try shaderSource("Render/Tiles/Shaders/TileExtruded.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The building shaders must not discard, on the main path or the shadow-caster path")
-        // The world-pass buildings are rejected per pixel by the
-        // tile-priority stencil test against the ownership prepass; only the
-        // shadow-caster path keeps the slot clip, because the shadow pass
-        // renders into a plain depth texture array with no stencil.
-        XCTAssertEqual(source.components(separatedBy: "float clipDistance [[clip_distance]] [4];").count - 1, 1,
-                       "Only the shadow-caster vertex output carries the clip distances")
-        XCTAssertEqual(source.components(separatedBy: "constant float4& localClipBounds [[buffer(4)]]").count - 1, 1,
-                       "Only the shadow-caster vertex stage takes the bounds at buffer 4")
+        // The building coverage is a partition of the ground: a parent
+        // filling a slot its finer tiles do not cover is cut to the slot by
+        // the vertex-stage clip, in the world pass and in the shadow pass
+        // alike (the shadow pass has no stencil, the world pass tests none
+        // for buildings), so both vertex stages carry the four distances
+        // and take the bounds at buffer 4.
+        XCTAssertEqual(source.components(separatedBy: "float clipDistance [[clip_distance]] [4];").count - 1, 2,
+                       "Both vertex outputs carry the slot clip distances")
+        XCTAssertEqual(source.components(separatedBy: "constant float4& localClipBounds [[buffer(4)]]").count - 1, 2,
+                       "Both vertex stages take the bounds at buffer 4")
         let mainVertex = source.components(separatedBy: "vertex VertexOut tileExtrudedVertexShader")[1]
             .components(separatedBy: "fragment")[0]
-        XCTAssertNil(mainVertex.range(of: "ClipDistances"),
-                     "The main vertex stage must not write clip distances")
+        XCTAssertNotNil(mainVertex.range(of: "writeLocalClipDistances(out.clipDistance"),
+                        "The main vertex stage writes the slot clip distances")
         XCTAssertNil(source.range(of: "tileExtrudedShadowFragmentShader"),
                      "The shadow-caster pass is depth-only: no fragment function replicates the clip")
     }

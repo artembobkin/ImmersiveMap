@@ -48,7 +48,7 @@ final class ShadowMapReuseControllerTests: XCTestCase {
     }
 
     private func makeKeys(_ objects: [AnyObject]) -> Set<ShadowMapReuseController.CasterKey> {
-        Set(objects.map { ShadowMapReuseController.CasterKey(tile: ObjectIdentifier($0), loop: 0) })
+        Set(objects.map { ShadowMapReuseController.CasterKey(tile: ObjectIdentifier($0), placeIn: Tile(x: 0, y: 0, z: 14), loop: 0) })
     }
 
     func testHoldRendersOnceAndThenReuses() throws {
@@ -164,10 +164,15 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                                                   hasModelCasters: false,
                                                   texture: texture))
         XCTAssertNotNil(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: makeKeys([stayingCaster]),
+                                                  hasModelCasters: false,
+                                                  texture: texture),
+                      "A departed caster re-renders: its shadows may lie on ground whose buildings are gone")
+        XCTAssertNotNil(resolve(controller))
         XCTAssertFalse(controller.planShadowRender(casterKeys: makeKeys([stayingCaster]),
                                                    hasModelCasters: false,
                                                    texture: texture),
-                       "A departed caster leaves a correct baked image behind")
+                       "The same set reuses")
         XCTAssertNotNil(resolve(controller))
         XCTAssertTrue(controller.planShadowRender(casterKeys: makeKeys([stayingCaster, arrivingCaster]),
                                                   hasModelCasters: false,

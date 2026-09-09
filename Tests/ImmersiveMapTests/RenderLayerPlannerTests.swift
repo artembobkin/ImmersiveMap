@@ -201,11 +201,10 @@ final class RenderLayerPlannerTests: XCTestCase {
     }
 
 
-    /// Extrusion off: the tiles carry no building geometry, so the building
-    /// layer is left out, and with it the ownership prepass, which exists
-    /// only so the buildings can test a complete ownership map (the ground
-    /// writes its own marks as it draws).
-    func testExtrusionOffLeavesOutTheBuildingsAndTheOwnershipPrepass() {
+    /// With extrusion off the building layer is left out; the ownership
+    /// prepass stays, since the ground's overlapping sources rely on a
+    /// complete map of marks before any of them draws.
+    func testExtrusionOffLeavesOutTheBuildingsButKeepsTheOwnershipPrepass() {
         let plan = RenderLayerPlanner.plan(
             availability: RenderPassAvailability(renderSurfaceMode: .flat,
                                                  labelsEnabled: true,
@@ -216,8 +215,8 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  buildingExtrusionEnabled: false)
         )
 
-        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .sceneModels, .horizon, .labels])
-        XCTAssertEqual(skipReason(for: .tileOwnership, in: plan), .buildingExtrusionDisabled)
+        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .sceneModels, .horizon, .labels])
+        XCTAssertNil(skipReason(for: .tileOwnership, in: plan))
         XCTAssertEqual(skipReason(for: .buildingExtrusion, in: plan), .buildingExtrusionDisabled)
     }
 

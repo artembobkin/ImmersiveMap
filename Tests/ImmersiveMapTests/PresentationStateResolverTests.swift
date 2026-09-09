@@ -33,6 +33,36 @@ final class PresentationStateResolverTests: XCTestCase {
         XCTAssertEqual(resolvedPresentation.transition, 1.0)
     }
 
+    /// With the globe off the map is the plane at every zoom: a completed
+    /// transition and the flat surface where the default would be a sphere.
+    func testGlobeDisabledIsTheFlatSurfaceAtEveryZoom() {
+        let resolver = MapPresentationStateController(settings: .default.globe(isEnabled: false))
+        for zoom in [0.0, 3.0, 5.9, 7.0] {
+            let cameraState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),
+                                                      zoom: zoom,
+                                                      bearing: 0,
+                                                      pitch: 0)
+            let resolvedPresentation = resolver.resolve(cameraState: cameraState)
+            XCTAssertEqual(resolvedPresentation.renderSurfaceMode, .flat, "at zoom \(zoom)")
+            XCTAssertEqual(resolvedPresentation.transition, 1.0, "at zoom \(zoom)")
+        }
+    }
+
+    /// The debug panel's switch still shows the sphere on a globe-disabled
+    /// map, and switching again returns to the plane the setting asks for.
+    func testTheDebugSwitchStillForcesTheSphereWithTheGlobeDisabled() {
+        let resolver = MapPresentationStateController(settings: .default.globe(isEnabled: false))
+        let cameraState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),
+                                                  zoom: 2.0,
+                                                  bearing: 0,
+                                                  pitch: 0)
+        XCTAssertEqual(resolver.resolve(cameraState: cameraState).renderSurfaceMode, .flat)
+        resolver.switchRenderSurfaceMode(cameraState: cameraState)
+        XCTAssertEqual(resolver.resolve(cameraState: cameraState).renderSurfaceMode, .spherical)
+        resolver.switchRenderSurfaceMode(cameraState: cameraState)
+        XCTAssertEqual(resolver.resolve(cameraState: cameraState).renderSurfaceMode, .flat)
+    }
+
     /// Near the pole the transition window is stretched by log2(1/cos(latitude)) levels: at a zoom
     /// where the equator is already flat, high latitudes are still mid-morph.
     func testTransitionWindowIsStretchedNearPole() {

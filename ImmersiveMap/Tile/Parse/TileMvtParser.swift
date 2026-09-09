@@ -1230,7 +1230,11 @@ class TileMvtParser {
                     // extruded at all and the footprint stays a flat ground
                     // fill; the flag is prepared-cache identity, so toggling
                     // re-parses instead of serving the other shape from disk.
+                    // Tiles coarser than the building grid never draw
+                    // buildings (`BuildingCoveragePlanner`), so their merged
+                    // blocks are not tessellated or uploaded either.
                     let shouldExtrude = config.style.buildingExtrusionEnabled
+                        && tile.z >= BuildingCoveragePlanner.minimumSourceZoom
                         && style.usesExtrusion
                         && (extrudeFlag != false)
                         && !isTruthy(attributes["hide_3d"])

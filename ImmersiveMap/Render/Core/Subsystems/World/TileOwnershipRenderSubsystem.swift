@@ -7,10 +7,12 @@ import simd
 /// The tile-ownership stencil prepass of the flat passes: before anything
 /// else draws, one full-extent quad per unique source of the main coverage
 /// writes the tile-priority stencil (finest first, greaterEqual + replace,
-/// no color and no depth). The buildings, which draw before the ground on
-/// the solid path, test these marks instead of carrying slot clip
-/// distances: a substitute's buildings are rejected wherever a finer tile
-/// owns the pixel, streets and courtyards included.
+/// no color and no depth). The ground's sources overlap (a coarse parent
+/// under fine children, substitutes at full extent), and every ground pass
+/// tests these marks, so which source owns a pixel is settled before any
+/// of them draws and does not depend on their draw order or rank depths.
+/// The buildings do not test them: the building coverage is a partition
+/// (`BuildingCoveragePlanner`).
 final class TileOwnershipRenderSubsystem: RenderSubsystem {
     let name: String = "TileOwnership"
 

@@ -45,6 +45,7 @@ private struct MapScreen: View {
             // chrome above the map. A development aid, off by default.
             .labels(isEnabled: false)
             .buildingExtrusion(isEnabled: true)
+            .shadows(isEnabled: true)
             .debugPanel()
             .ignoresSafeArea()
     }
