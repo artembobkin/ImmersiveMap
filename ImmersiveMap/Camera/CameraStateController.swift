@@ -52,8 +52,12 @@ class CameraStateController {
     private static let horizontalPanCompensationEndZoom = 5.0
 
     /// Shifts the map center by the gesture delta. `transition` is the globe-to-flat
-    /// phase (0 = globe, 1 = flat): on the sphere the mercator delta is divided by
-    /// `cos(latitude)` so the angular pan speed does not drop near the poles.
+    /// phase (0 = globe, 1 = flat). On the sphere a screen point covers
+    /// `1 / cos(latitude)` more Mercator than on the plane at the same camera
+    /// distance, and the camera's globe proximity (`GlobeCameraProximity`)
+    /// moves in by the same scale: the Mercator delta per point is the
+    /// proximity factor over the surface scale, which is 1 once the
+    /// proximity is fully in, and the old `1 / cos` below its activation.
     ///
     /// Vertically the compensation is full at any zoom. Horizontally, near a pole
     /// a swipe is a rotation around the view axis: at low zooms (the whole globe
@@ -64,6 +68,7 @@ class CameraStateController {
         let startForward = SIMD2<Double>(0, 1)
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: cameraState.centerWorldMercator.y)
         let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
+        let proximity = GlobeCameraProximity.distanceFactor(latitude: latitude, transition: transition, zoom: zoom)
         let sensitivity = settings.worldPanSensitivity / pow(2.0, zoom)
 
         let cosYaw = cos(-yaw)
@@ -77,7 +82,7 @@ class CameraStateController {
         )
 
         let panDelta = sensitivity * (forward * deltaY * settings.worldPanSpeed + right * deltaX * settings.worldPanSpeed)
-        let verticalCompensation = 1.0 / surfaceScale
+        let verticalCompensation = proximity / surfaceScale
         let horizontalCompensation = 1.0 + (verticalCompensation - 1.0) * horizontalCompensationRamp(zoom: zoom)
         let worldDelta = SIMD2<Double>(-0.5 * panDelta.x * horizontalCompensation,
                                        -0.5 * panDelta.y * verticalCompensation)

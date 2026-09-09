@@ -23,6 +23,7 @@ final class FrameCameraStateResolver {
     private let cameraStateController: CameraStateController
     private let cameraPoseResolver: RenderCameraPoseResolver
     private let screenMatrix: ScreenMatrix
+    private let presentationSettings: ImmersiveMapSettings.PresentationSettings
     private var lastDrawableSize: CGSize = .zero
 
     init(settings: ImmersiveMapSettings) {
@@ -30,11 +31,16 @@ final class FrameCameraStateResolver {
         self.cameraStateController = CameraStateController(settings: settings.camera)
         self.cameraPoseResolver = RenderCameraPoseResolver()
         self.screenMatrix = ScreenMatrix()
+        self.presentationSettings = settings.presentation
         RendererSetup.configureCamera(cameraStateController)
         requestRenderCameraUpdate()
     }
 
-    func makeFrameState(drawSize: CGSize, diagnostics: FrameDiagnostics) -> CameraFrameState? {
+    /// `transition` is the frame's globe-to-plane phase as the presentation
+    /// resolved it (the forced surface included); nil resolves the automatic
+    /// phase from the settings, which is what a caller without a
+    /// presentation controller gets.
+    func makeFrameState(drawSize: CGSize, diagnostics: FrameDiagnostics, transition: Float? = nil) -> CameraFrameState? {
         guard drawSize.width > 0, drawSize.height > 0 else {
             diagnostics.recordSkipReason(.zeroDrawableSize)
             return nil
@@ -52,7 +58,11 @@ final class FrameCameraStateResolver {
             return nil
         }
 
-        cameraPoseResolver.updateIfNeeded(camera: camera, cameraState: cameraStateController.cameraState)
+        let cameraState = cameraStateController.cameraState
+        let resolvedTransition = transition
+            ?? PresentationStateResolver.resolve(cameraState: cameraState,
+                                                 settings: presentationSettings).presentationState.transition
+        cameraPoseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: resolvedTransition)
         guard let cameraMatrix = camera.cameraMatrix,
               let cameraView = camera.view else {
             diagnostics.recordSkipReason(.missingCameraState)

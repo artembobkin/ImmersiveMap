@@ -74,7 +74,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let preprocessedVisibleTiles = visibleTilesPreprocessor.preprocess(visibleTiles: visibleTiles,
                                                                            center: center,
                                                                            renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                                           transition: frameContext.transition,
                                                                            flatCamera: flatCamera)
         // The horizon backdrop bypasses the preprocessor: its distance filter
         // measures distances in target-zoom tiles and would discard the coarse

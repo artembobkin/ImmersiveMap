@@ -156,7 +156,7 @@ final class GeoSurfaceFrameMathTests: XCTestCase {
         let camera = RenderCamera()
         camera.recalculateProjection(aspect: Float(drawSize.width / drawSize.height))
         let poseResolver = RenderCameraPoseResolver()
-        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState)
+        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: presentation.presentationState.transition)
         let cameraMatrix = try XCTUnwrap(camera.cameraMatrix)
         return GeoScreenProjectionMath.FrameConstants(
             drawSize: drawSize,

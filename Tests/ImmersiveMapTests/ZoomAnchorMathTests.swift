@@ -187,7 +187,7 @@ final class ZoomAnchorMathTests: XCTestCase {
         let camera = RenderCamera()
         camera.recalculateProjection(aspect: Float(viewport.width / viewport.height))
         let poseResolver = RenderCameraPoseResolver()
-        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState)
+        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: presentation.presentationState.transition)
         guard let cameraMatrix = camera.cameraMatrix else {
             return nil
         }

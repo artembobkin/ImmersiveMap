@@ -44,12 +44,10 @@ final class FlatVisibleTileResolverTests: XCTestCase {
 
             let resolvedCoverage = Set(preprocessor.preprocess(visibleTiles: Array(resolved),
                                                                center: center,
-                                                               renderSurfaceMode: .flat,
-                                                               transition: 1))
+                                                               renderSurfaceMode: .flat))
             let referenceCoverage = Set(preprocessor.preprocess(visibleTiles: Array(reference),
                                                                 center: center,
-                                                                renderSurfaceMode: .flat,
-                                                                transition: 1))
+                                                                renderSurfaceMode: .flat))
             XCTAssertEqual(resolvedCoverage, referenceCoverage,
                            "Mismatch at iteration \(iteration): z\(targetZoom) pitch \(pitch) bearing \(bearing) pan \(pan)")
         }

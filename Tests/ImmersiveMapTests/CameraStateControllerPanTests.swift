@@ -25,12 +25,24 @@ final class CameraStateControllerPanTests: XCTestCase {
         return controller.cameraState.centerWorldMercator - before
     }
 
-    func testGlobePanCompensatesLatitudeAtLocalZoom() {
+    func testGlobePanMovesTheSameMercatorAtLocalZoom() {
         let equator = panDelta(latitudeDegrees: 0, zoom: 5.5, transition: 0)
         let lat60 = panDelta(latitudeDegrees: 60, zoom: 5.5, transition: 0)
 
-        // cos(60°) = 0.5: at latitude 60° the mercator delta is twice the equatorial one.
-        XCTAssertEqual(lat60.x / equator.x, 2.0, accuracy: 1e-6)
+        // At local zoom the camera has moved in by cos(60°) = 0.5
+        // (GlobeCameraProximity), so the screen shows the Mercator scale and
+        // a swipe moves the same Mercator delta as at the equator.
+        XCTAssertEqual(lat60.x / equator.x, 1.0, accuracy: 1e-6)
+        XCTAssertEqual(lat60.y / equator.y, 1.0, accuracy: 1e-6)
+    }
+
+    func testGlobePanCompensatesLatitudeBelowTheProximityActivation() {
+        let equator = panDelta(latitudeDegrees: 0, zoom: 2, transition: 0)
+        let lat60 = panDelta(latitudeDegrees: 60, zoom: 2, transition: 0)
+
+        // Below the activation zoom the camera stays at the zoom's distance:
+        // cos(60°) = 0.5, so the vertical Mercator delta is twice the
+        // equatorial one (the horizontal one ramps in separately).
         XCTAssertEqual(lat60.y / equator.y, 2.0, accuracy: 1e-6)
     }
 
@@ -44,11 +56,15 @@ final class CameraStateControllerPanTests: XCTestCase {
         XCTAssertEqual(lat60.y / equator.y, 2.0, accuracy: 1e-6)
     }
 
-    func testGlobePanKeepsAngularLatitudeSpeed() {
+    /// The ground under the finger follows the finger: with the camera
+    /// moved in by the surface scale, the angular pan per screen point
+    /// shrinks by that same scale, exactly as the ground on screen did.
+    func testGlobePanAngularSpeedFollowsTheCameraProximity() {
         let equatorLatitude = angularLatitudeDelta(latitudeDegrees: 0)
         let polarLatitude = angularLatitudeDelta(latitudeDegrees: 82.8)
+        let proximity = GlobeCameraProximity.distanceFactor(latitude: 82.8 * .pi / 180, transition: 0, zoom: 4)
 
-        XCTAssertEqual(polarLatitude / equatorLatitude, 1.0, accuracy: 0.05)
+        XCTAssertEqual(polarLatitude / equatorLatitude, proximity, accuracy: 0.05 * proximity)
     }
 
     func testFlatPanIgnoresLatitude() {

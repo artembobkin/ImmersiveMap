@@ -241,9 +241,10 @@ final class GeoScreenProjectionMathTests: XCTestCase {
     /// must not flash over empty ocean.
     func testLateMorphKeepsFarMarkerHiddenDuringUnfurlTransit() throws {
         let tokyoLatitude = 35.6595
-        let latitudeExtension = log2(1.0 / cos(tokyoLatitude * .pi / 180.0))
+        // The window is the settings' span at every latitude (the camera's
+        // globe proximity absorbs the Mercator inflation).
         let lateMorphZoom = presentationSettings.automaticTransitionStartZoom
-            + (presentationSettings.automaticTransitionSpan + latitudeExtension) * 0.79
+            + presentationSettings.automaticTransitionSpan * 0.79
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: tokyoLatitude,
                                          longitude: 139.7005,
@@ -263,9 +264,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
     }
 
     /// With the morph nearly complete (geometry already flat, surface still
-    /// globe) the former far side is legitimately visible. Camera on the
-    /// equator: at latitude the morph window stretches by log2(1/cos(lat)),
-    /// and the phase fraction would be computed from a different span.
+    /// globe) the former far side is legitimately visible.
     func testNearFlatMorphShowsFormerFarSideMarker() throws {
         let nearFlatZoom = presentationSettings.automaticTransitionStartZoom
             + presentationSettings.automaticTransitionSpan * 0.92
@@ -295,7 +294,7 @@ final class GeoScreenProjectionMathTests: XCTestCase {
         let camera = RenderCamera()
         camera.recalculateProjection(aspect: Float(drawSize.width / drawSize.height))
         let poseResolver = RenderCameraPoseResolver()
-        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState)
+        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: presentation.presentationState.transition)
         let cameraMatrix = try XCTUnwrap(camera.cameraMatrix)
         let cameraUniform = CameraUniform(matrix: cameraMatrix,
                                           eye: camera.eye,

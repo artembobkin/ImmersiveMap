@@ -299,8 +299,13 @@ final class RenderFrameEngine {
                                    value: lastCompletedGPUFrameDuration.withLock { $0 } * 1000.0)
         let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: clock.currentDate())
 
+        // The presentation depends on the semantic camera state alone, and
+        // the render camera's pose depends on the presentation's phase (the
+        // globe proximity), so the presentation resolves first.
+        let resolvedPresentation = presentationStateResolver.resolve(cameraState: renderCamera.currentCameraState())
         guard let cameraFrameState = renderCamera.makeFrameState(drawSize: drawSize,
-                                                                 diagnostics: diagnostics) else {
+                                                                 diagnostics: diagnostics,
+                                                                 transition: resolvedPresentation.presentationState.transition) else {
             currentDiagnostics = diagnostics
             return nil
         }
@@ -312,7 +317,6 @@ final class RenderFrameEngine {
         }
 
         publishStaticResources(frameIndex: frameTick.index)
-        let resolvedPresentation = presentationStateResolver.resolve(cameraState: cameraFrameState.mapCameraState)
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,

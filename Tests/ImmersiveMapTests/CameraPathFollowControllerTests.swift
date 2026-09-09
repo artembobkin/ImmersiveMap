@@ -358,7 +358,7 @@ final class CameraPathFollowControllerTests: XCTestCase {
                                                              settings: ImmersiveMapSettings.default.presentation)
         let renderCamera = RenderCamera()
         renderCamera.recalculateProjection(aspect: Float(drawSize.width / drawSize.height))
-        RenderCameraPoseResolver().updateIfNeeded(camera: renderCamera, cameraState: cameraState)
+        RenderCameraPoseResolver().updateIfNeeded(camera: renderCamera, cameraState: cameraState, transition: presentation.presentationState.transition)
         let matrix = try XCTUnwrap(renderCamera.cameraMatrix)
         return GeoScreenProjectionMath.FrameConstants(
             drawSize: drawSize,

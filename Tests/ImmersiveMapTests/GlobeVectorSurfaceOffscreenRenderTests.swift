@@ -120,9 +120,10 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
     func testTheNearSideStaysWaterMidMorph() async throws {
         let harness = try makeHarness(size: 256)
         let presentation = ImmersiveMapSettings.default.presentation
-        let latitudeExtension = log2(1.0 / cos(Self.latitude * .pi / 180.0))
+        // The window is the settings' span at every latitude (the camera's
+        // globe proximity absorbs the Mercator inflation).
         let midMorphZoom = presentation.automaticTransitionStartZoom
-            + (presentation.automaticTransitionSpan + latitudeExtension) * 0.5
+            + presentation.automaticTransitionSpan * 0.5
         let center = ImmersiveMapProjection.worldMercator(latitude: Self.latitude * .pi / 180.0,
                                                           longitude: Self.longitude * .pi / 180.0)
         let resolved = PresentationStateResolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: center,

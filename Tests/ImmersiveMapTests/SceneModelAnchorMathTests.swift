@@ -300,7 +300,7 @@ final class SceneModelAnchorMathTests: XCTestCase {
         let camera = RenderCamera()
         camera.recalculateProjection(aspect: Float(drawSize.width / drawSize.height))
         let poseResolver = RenderCameraPoseResolver()
-        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState)
+        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: presentation.presentationState.transition)
         let cameraMatrix = try XCTUnwrap(camera.cameraMatrix)
         let cameraUniform = CameraUniform(matrix: cameraMatrix,
                                           eye: camera.eye,

@@ -65,51 +65,41 @@ final class PresentationStateResolverTests: XCTestCase {
 
     /// Near the pole the transition window is stretched by log2(1/cos(latitude)) levels: at a zoom
     /// where the equator is already flat, high latitudes are still mid-morph.
-    func testTransitionWindowIsStretchedNearPole() {
+    func testTransitionWindowIsTheSameAtEveryLatitude() {
         let resolver = MapPresentationStateController(settings: .default)
+        let settings = ImmersiveMapSettings.default.presentation
         let polarCenter = ImmersiveMapProjection.worldMercator(latitude: 83.0 * .pi / 180.0,
                                                               longitude: 0)
-        let midTransitionState = ImmersiveMapCameraState(centerWorldMercator: polarCenter,
-                                                         zoom: 7.0,
-                                                         bearing: 0,
-                                                         pitch: 0)
-
-        let midTransition = resolver.resolve(cameraState: midTransitionState)
-
-        // cos(83°) ≈ 0.122: window ≈ 1 + 3.04 levels, at z7 only a quarter is covered.
-        XCTAssertEqual(midTransition.renderSurfaceMode, .spherical)
-        XCTAssertGreaterThan(midTransition.transition, 0.0)
-        XCTAssertLessThan(midTransition.transition, 0.5)
-
-        let deepZoomState = ImmersiveMapCameraState(centerWorldMercator: polarCenter,
-                                                    zoom: 10.5,
-                                                    bearing: 0,
-                                                    pitch: 0)
-        let completedTransition = resolver.resolve(cameraState: deepZoomState)
-
-        XCTAssertEqual(completedTransition.renderSurfaceMode, .flat)
-        XCTAssertEqual(completedTransition.transition, 1.0)
+        let equatorCenter = ImmersiveMapProjection.worldMercator(latitude: 0, longitude: 0)
+        // The camera's globe proximity absorbs the Mercator inflation
+        // (GlobeCameraProximity), so the window is the settings' span at
+        // the pole as at the equator.
+        for fraction in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let zoom = settings.automaticTransitionStartZoom + settings.automaticTransitionSpan * fraction
+            let polar = resolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: polarCenter, zoom: zoom, bearing: 0, pitch: 0))
+            let equator = resolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: equatorCenter, zoom: zoom, bearing: 0, pitch: 0))
+            XCTAssertEqual(polar.transition, equator.transition, accuracy: 1e-6)
+            XCTAssertEqual(Double(polar.transition), fraction, accuracy: 1e-6)
+        }
     }
 
     func testTransitionGrowsMonotonicallyWithZoomNearPole() {
         let resolver = MapPresentationStateController(settings: .default)
+        let settings = ImmersiveMapSettings.default.presentation
         let polarCenter = ImmersiveMapProjection.worldMercator(latitude: 83.0 * .pi / 180.0,
                                                               longitude: 0)
-        let transitions = [6.5, 7.5, 8.5, 9.5].map { zoom in
-            resolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: polarCenter,
-                                                                  zoom: zoom,
-                                                                  bearing: 0,
-                                                                  pitch: 0)).transition
+        let transitions = [0.1, 0.35, 0.6, 0.85].map { fraction in
+            let zoom = settings.automaticTransitionStartZoom + settings.automaticTransitionSpan * fraction
+            return resolver.resolve(cameraState: ImmersiveMapCameraState(centerWorldMercator: polarCenter,
+                                                                         zoom: zoom,
+                                                                         bearing: 0,
+                                                                         pitch: 0)).transition
         }
 
         XCTAssertEqual(transitions, transitions.sorted())
         XCTAssertEqual(Set(transitions).count, transitions.count, "The transition steps must not collapse into each other")
     }
 
-    /// The morph geometry finishes unfurling by 90% of the phase: for the final tenth
-    /// the globe path renders a finished plane, and the surface swap at t = 1
-    /// happens between geometrically identical frames. The semantic
-    /// transition still keeps growing to 1.
     func testMorphGeometryCompletesBeforeSurfaceSwap() {
         let resolver = MapPresentationStateController(settings: .default)
         let lateMorphState = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),

@@ -10,7 +10,8 @@ import simd
 /// toward the cursor when zooming in and away from it when zooming out.
 ///
 /// The screen model mirrors the renderer: a perspective camera with fov π/4 at
-/// distance `1 - 0.5·frac(zoom)` and a world of size `2π·globeRadiusScale·2^floor(zoom)`
+/// distance `1 - 0.5·frac(zoom)` times the globe proximity
+/// (`GlobeCameraProximity`) and a world of size `2π·globeRadiusScale·2^floor(zoom)`
 /// (`RenderCameraPoseResolver` + `PresentationStateResolver`). In the globe phase
 /// the sphere locally compresses the world near the screen center by `cos(latitude)`,
 /// so a linear approximation is used: anchoring is approximate near the globe edges.
@@ -90,17 +91,20 @@ enum ZoomAnchorMath {
     }
 
     /// Normalized-world units per screen point along the horizontal at the screen center:
-    /// q(z) = 2·d(z)·tan(fov/2) / (H·mapSize(z)·surfaceScale).
-    /// `surfaceScale` interpolates the local surface scale between the sphere
-    /// (cos(lat)) and the plane (1) by the transition phase.
+    /// q(z) = 2·d(z)·proximity·tan(fov/2) / (H·mapSize(z)·surfaceScale).
+    /// `surfaceScale` is the local surface scale at the centre (cos(lat) on the
+    /// sphere, 1 on the plane, the morph's curve between) and `proximity` the
+    /// camera's globe move-in by that same scale, so once the move-in is fully
+    /// active the two cancel and the globe zooms like the plane.
     private static func normalizedWorldUnitsPerPoint(zoom: Double,
                                                      transition: Float,
                                                      latitude: Double,
                                                      viewportHeight: Double,
                                                      globeRadiusScale: Double) -> Double {
         let cameraDistance = 1.0 - 0.5 * zoom.truncatingRemainder(dividingBy: 1.0)
+        let proximity = GlobeCameraProximity.distanceFactor(latitude: latitude, transition: transition, zoom: zoom)
         let renderMapSize = 2.0 * Double.pi * globeRadiusScale * pow(2.0, floor(zoom))
         let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
-        return (2.0 * cameraDistance * halfFovTangent) / (viewportHeight * renderMapSize * surfaceScale)
+        return (2.0 * cameraDistance * proximity * halfFovTangent) / (viewportHeight * renderMapSize * surfaceScale)
     }
 }

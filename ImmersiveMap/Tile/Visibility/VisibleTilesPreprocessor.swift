@@ -61,15 +61,12 @@ final class VisibleTilesPreprocessor {
     ///    non-overlapping coverage selection,
     /// 3) deterministic output sort.
     ///
-    /// `transition` is the globe-to-flat phase (0 = globe, 1 = flat): it
-    /// drives the latitude LOD on the sphere. `flatCamera` is the flat
-    /// camera's eye and ground points; without one on the plane every tile is
-    /// asked for exactly, which is what the flat cases of a tile-free test
-    /// want and what the sphere never passes.
+    /// `flatCamera` is the flat camera's eye and ground points; without one
+    /// on the plane every tile is asked for exactly, which is what the flat
+    /// cases of a tile-free test want and what the sphere never passes.
     func preprocess(visibleTiles: [VisibleTile],
                     center: Center,
                     renderSurfaceMode: ViewMode,
-                    transition: Float,
                     flatCamera: FlatCoverageCamera? = nil) -> [VisibleTile] {
         switch renderSurfaceMode {
         case .flat:
@@ -86,8 +83,7 @@ final class VisibleTilesPreprocessor {
         case .spherical:
             let stagedInputs = buildStageInputs(visibleTiles: visibleTiles,
                                                 center: center,
-                                                renderSurfaceMode: renderSurfaceMode,
-                                                transition: transition)
+                                                renderSurfaceMode: renderSurfaceMode)
             let selectedTargets = selectCoverageTargets(from: sortInputsForSelection(stagedInputs))
             return sortTargetsForOutput(selectedTargets)
         }
@@ -100,8 +96,7 @@ final class VisibleTilesPreprocessor {
     /// - `preferredZoom` is clamped to `[0...visibleTile.z]`.
     private func buildStageInputs(visibleTiles: [VisibleTile],
                                   center: Center,
-                                  renderSurfaceMode: ViewMode,
-                                  transition: Float) -> [InputTile] {
+                                  renderSurfaceMode: ViewMode) -> [InputTile] {
         var inputs: [InputTile] = []
         inputs.reserveCapacity(visibleTiles.count)
 
@@ -112,12 +107,7 @@ final class VisibleTilesPreprocessor {
             guard distance <= maxVisibleRelativeDistance else {
                 continue
             }
-            let latitudeDrop = latitudeCoarseningDrop(for: visibleTile,
-                                                      renderSurfaceMode: renderSurfaceMode,
-                                                      transition: transition)
-            let preferredZoom = spherePreferredZoom(for: visibleTile,
-                                                    distance: distance,
-                                                    latitudeDrop: latitudeDrop)
+            let preferredZoom = spherePreferredZoom(for: visibleTile, distance: distance)
             inputs.append(InputTile(visibleTile: visibleTile,
                                     relativeDistance: distance,
                                     preferredZoom: preferredZoom))
@@ -306,20 +296,18 @@ final class VisibleTilesPreprocessor {
     /// Cap on the sphere's distance drop: the far range never falls below z-4.
     private static let maximumDistanceDrop = 4
 
-    /// The sphere's preferred demand zoom from relative distance and
-    /// latitude coarsening.
+    /// The sphere's preferred demand zoom from relative distance.
     ///
     /// A tile's on-screen size in perspective falls as 1/distance; the ladder
     /// starts from the exact radius of 2: distance 3 → z-1, 4-5 → z-2,
     /// 6-8 → z-3, 9+ → z-4, beyond the ring threshold clamp to z3.
     ///
-    /// `latitudeDrop` is added to the distance drop: both effects
-    /// (perspective and mercator compression) shrink a tile's on-screen size
-    /// independently.
+    /// No latitude term: the Mercator compression near the poles is
+    /// answered by the camera moving in (`GlobeCameraProximity`), so the
+    /// frustum holds the same number of tiles at every latitude.
     private func spherePreferredZoom(for visibleTile: VisibleTile,
-                                     distance: Int,
-                                     latitudeDrop: Int) -> Int {
-        let ladderZoom = max(0, visibleTile.z - sphereDistanceCoarseningDrop(distance: distance) - latitudeDrop)
+                                     distance: Int) -> Int {
+        let ladderZoom = max(0, visibleTile.z - sphereDistanceCoarseningDrop(distance: distance))
         guard distance > Self.sphereFarRingRelativeDistance else {
             return ladderZoom
         }
@@ -334,31 +322,6 @@ final class VisibleTilesPreprocessor {
         let doublings = log2(Double(distance) / Double(exactRelativeDistanceRadius))
         let steepenedDrop = Int((doublings * Self.sphereDistanceLodSteepness).rounded(.up))
         return min(Self.maximumDistanceDrop, steepenedDrop)
-    }
-
-    /// On the sphere a mercator tile near a pole is `cos(latitude)` times smaller
-    /// than an equatorial one, so near-polar tiles are lowered by `log2(1/cos)`
-    /// levels: on-screen coverage density is equalized with the equator. The
-    /// latitude is taken at the tile edge nearest the equator - a conservative
-    /// estimate of the compression.
-    private func latitudeCoarseningDrop(for visibleTile: VisibleTile,
-                                        renderSurfaceMode: ViewMode,
-                                        transition: Float) -> Int {
-        guard renderSurfaceMode == .spherical else {
-            return 0
-        }
-
-        let tilesCount = Double(1 << visibleTile.z)
-        let northEdgeY = Double(visibleTile.y) / tilesCount
-        let southEdgeY = Double(visibleTile.y + 1) / tilesCount
-        guard northEdgeY > 0.5 || southEdgeY < 0.5 else {
-            return 0
-        }
-
-        let nearestToEquatorY = southEdgeY < 0.5 ? southEdgeY : northEdgeY
-        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: nearestToEquatorY)
-        let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
-        return max(0, Int(floor(-log2(surfaceScale))))
     }
 
     /// Computes Chebyshev-like relative tile distance from map center.

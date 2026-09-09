@@ -100,7 +100,6 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         preprocessor.preprocess(visibleTiles: tiles,
                                 center: Self.center,
                                 renderSurfaceMode: .flat,
-                                transition: 1,
                                 flatCamera: camera)
     }
 
@@ -135,8 +134,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
             let tiles = Self.frustumTiles(tilt: tilt)
             let visible = Set(tiles)
             let camera = Self.camera(tilt: tilt)
-            let output = VisibleTilesPreprocessor().preprocess(visibleTiles: tiles, center: Self.center, renderSurfaceMode: .flat,
-                                                               transition: 1, flatCamera: camera)
+            let output = VisibleTilesPreprocessor().preprocess(visibleTiles: tiles, center: Self.center, renderSurfaceMode: .flat, flatCamera: camera)
             guard output.filter({ $0.z < Self.zoom }).count < FlatDistanceCoverage.maximumParents else { continue }
             tiltsCompared += 1
             let lookAtWorld = Self.world(ofTilePoint: Self.lookAt)
@@ -312,8 +310,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         XCTAssertFalse(flatTargets(tiles, camera: camera).count == tiles.count && flatTargets(tiles, camera: camera).allSatisfy { $0.z == Self.zoom },
                        "Without the overzoom scale the tiles read as sixteen camera distances away")
         camera.overzoomLevels = 4
-        let output = VisibleTilesPreprocessor().preprocess(visibleTiles: tiles, center: Self.center, renderSurfaceMode: .flat,
-                                                           transition: 1, flatCamera: camera)
+        let output = VisibleTilesPreprocessor().preprocess(visibleTiles: tiles, center: Self.center, renderSurfaceMode: .flat, flatCamera: camera)
         XCTAssertEqual(Set(output), Set(tiles))
     }
 
@@ -382,7 +379,6 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         let output = preprocessor.preprocess(visibleTiles: tiles,
                                              center: Center(tileX: lookAt.x, tileY: lookAt.y),
                                              renderSurfaceMode: .flat,
-                                             transition: 1,
                                              flatCamera: camera)
         XCTAssertFalse(output.isEmpty)
         XCTAssertTrue(output.allSatisfy { $0.z > TileCulling.flatBackdropZoomLevel },
@@ -414,7 +410,6 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         let output = preprocessor.preprocess(visibleTiles: tiles,
                                              center: Center(tileX: lookAt.x, tileY: lookAt.y),
                                              renderSurfaceMode: .flat,
-                                             transition: 1,
                                              flatCamera: camera)
         for tile in tiles {
             XCTAssertNotNil(Self.cover(of: tile, in: output), "\(tile) is covered in its own world copy: \(output)")
@@ -428,7 +423,6 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         let output = preprocessor.preprocess(visibleTiles: [tile],
                                              center: Center(tileX: 0.0, tileY: 10.0),
                                              renderSurfaceMode: .flat,
-                                             transition: 1,
                                              flatCamera: FlatCoverageCamera(eye: SIMD3<Double>(0, 0, 1), flatRenderState: state,
                                                                             eyeGround: SIMD2<Double>(0, 10), lookAt: SIMD2<Double>(0, 10)))
         XCTAssertTrue(output.isEmpty)
@@ -440,8 +434,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
         let tile = VisibleTile(x: 5, y: 10, z: 6)
         let output = preprocessor.preprocess(visibleTiles: [tile],
                                              center: Center(tileX: 0.0, tileY: 10.0),
-                                             renderSurfaceMode: .flat,
-                                             transition: 1)
+                                             renderSurfaceMode: .flat)
         XCTAssertEqual(output, [tile])
     }
 
@@ -459,8 +452,7 @@ final class VisibleTilesPreprocessorDistanceLodTests: XCTestCase {
             let tile = VisibleTile(x: testCase.distance, y: 31, z: 6)
             let output = preprocessor.preprocess(visibleTiles: [tile],
                                                  center: Center(tileX: 0.0, tileY: 31.0),
-                                                 renderSurfaceMode: .spherical,
-                                                 transition: 0)
+                                                 renderSurfaceMode: .spherical)
 
             XCTAssertEqual(output.count, 1, "distance \(testCase.distance)")
             XCTAssertEqual(output.first?.z, testCase.expectedZoom,

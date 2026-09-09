@@ -16,9 +16,8 @@ final class AvatarSelectionProjectorConsistencyTests: XCTestCase {
 
     func testProjectionMatchesSharedProjectorMidMorphAtHighTilt() throws {
         let dubai = GeoCoordinate(latitude: 25.1972, longitude: 55.2744)
-        let latitudeExtension = log2(1.0 / cos(dubai.latitude * .pi / 180.0))
         let midMorphZoom = presentationSettings.automaticTransitionStartZoom
-            + (presentationSettings.automaticTransitionSpan + latitudeExtension) * 0.45
+            + presentationSettings.automaticTransitionSpan * 0.45
         let cameraState = makeCameraState(latitude: dubai.latitude,
                                           longitude: dubai.longitude,
                                           zoom: midMorphZoom,
@@ -32,7 +31,7 @@ final class AvatarSelectionProjectorConsistencyTests: XCTestCase {
         let camera = RenderCamera()
         camera.recalculateProjection(aspect: Float(drawSize.width / drawSize.height))
         let poseResolver = RenderCameraPoseResolver()
-        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState)
+        poseResolver.updateIfNeeded(camera: camera, cameraState: cameraState, transition: presentation.presentationState.transition)
         let cameraUniform = CameraUniform(matrix: try XCTUnwrap(camera.cameraMatrix),
                                           eye: camera.eye,
                                           padding: 0)
