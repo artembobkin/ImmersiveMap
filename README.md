@@ -35,7 +35,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 - Swift 6.0+
 - Xcode 16+
 - iOS 18+
-- macOS 15+ (native AppKit, not Mac Catalyst)
+- macOS 15+
 - Metal-capable device or simulator
 
 ## Features
@@ -52,9 +52,7 @@ Maps powered by ImmersiveMap (immersivemap.dev)
 
 ## Contributing
 
-ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Bug reports and feature requests belong in [Issues](https://github.com/artembobkin/ImmersiveMap/issues). Questions, ideas, and anything open-ended belong in [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions).
+ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests belong in [Issues](https://github.com/artembobkin/ImmersiveMap/issues). Questions, ideas, and anything open-ended belong in [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions).
 
 ## License
 
