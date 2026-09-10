@@ -976,11 +976,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var preparedTileStyleRevision: UInt32
         public var flatSeparateRoadRenderingMinimumZoom: Int
         /// Whether buildings rise out of their footprints on the flat map.
-        /// Off (the default), no building is extruded: the footprints stay
-        /// as flat fills in the building color, the way they draw on the
-        /// globe, and with nothing left to cast, the shadow pass skips
-        /// itself. On, every building the tiles give a height is extruded,
-        /// solid and depth-correct.
+        /// On (the default), every building the tiles give a height is
+        /// extruded, solid and depth-correct. Off, no building is extruded:
+        /// the footprints stay as flat fills in the building color, the way
+        /// they draw on the globe, and with nothing left to cast, the shadow
+        /// pass skips itself.
         /// Baked at parse time: toggling re-parses the tiles, like any
         /// style change.
         public var buildingExtrusionEnabled: Bool
@@ -995,7 +995,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(preparedTileStyleRevision: UInt32,
                     flatSeparateRoadRenderingMinimumZoom: Int,
-                    buildingExtrusionEnabled: Bool = false,
+                    buildingExtrusionEnabled: Bool = true,
                     buildingRoofShapesEnabled: Bool = false,
                     fallbackFeatureColor: SIMD4<Float>,
                     baseColors: BaseColors) {

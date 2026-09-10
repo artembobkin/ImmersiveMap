@@ -76,6 +76,55 @@ final class RoadLabelPlacementKernelTests: XCTestCase {
         XCTAssertEqual(outputs[1].position.x, 360, accuracy: 0.01)
     }
 
+    /// A stitched road that hooks back at a junction: the path runs right
+    /// along the label's segment and then turns hard back left, so its
+    /// chord points left. The text reads along its own span, rightward,
+    /// not along the chord.
+    func testTheReadingDirectionFollowsTheLabelsSpanNotThePathsChord() throws {
+        let harness = try Self.makeHarness()
+        let outputs = try harness.run(
+            pathPoints: [
+                ScreenPointOutput(position: SIMD2<Float>(100, 300), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(700, 300), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(0, 900), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(400, 300), depth: 0, visible: 1)
+            ],
+            pathPointCount: 3,
+            anchors: [RoadLabelAnchorGpu(pathIndex: 0, segmentIndex: 0, pointIndex: 3)],
+            glyphInputs: [
+                Self.makeGlyphInput(glyphCenter: 50),
+                Self.makeGlyphInput(glyphCenter: 10)
+            ]
+        )
+        XCTAssertEqual(outputs[0].visible, 1)
+        XCTAssertEqual(cos(outputs[0].angle), 1, accuracy: 1e-5, "upright along a rightward span")
+        XCTAssertEqual(outputs[1].position.x, 360, accuracy: 0.01, "the left glyph sits to the left")
+    }
+
+    /// The mirror case: the label's segment runs left while the chord of the
+    /// hooked path points right. The text is turned to read, so the left
+    /// glyph of the label still lands on the left of the screen.
+    func testALeftwardSpanTurnsTheTextWhateverTheChordSays() throws {
+        let harness = try Self.makeHarness()
+        let outputs = try harness.run(
+            pathPoints: [
+                ScreenPointOutput(position: SIMD2<Float>(700, 300), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(100, 300), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(800, 900), depth: 0, visible: 1),
+                ScreenPointOutput(position: SIMD2<Float>(400, 300), depth: 0, visible: 1)
+            ],
+            pathPointCount: 3,
+            anchors: [RoadLabelAnchorGpu(pathIndex: 0, segmentIndex: 0, pointIndex: 3)],
+            glyphInputs: [
+                Self.makeGlyphInput(glyphCenter: 50),
+                Self.makeGlyphInput(glyphCenter: 10)
+            ]
+        )
+        XCTAssertEqual(outputs[0].visible, 1)
+        XCTAssertEqual(cos(outputs[0].angle), 1, accuracy: 1e-5, "turned by a half turn to read upright")
+        XCTAssertEqual(outputs[1].position.x, 360, accuracy: 0.01, "the left glyph still sits to the left")
+    }
+
     func testInvisibleAnchorPointHidesTheLabel() throws {
         let harness = try Self.makeHarness()
         let outputs = try harness.run(
@@ -126,6 +175,7 @@ final class RoadLabelPlacementKernelTests: XCTestCase {
         let calculator: RoadLabelPlacementCalculator
 
         func run(pathPoints: [ScreenPointOutput],
+                 pathPointCount: Int = 2,
                  anchors: [RoadLabelAnchorGpu],
                  glyphInputs: [RoadGlyphInput]) throws -> [RoadGlyphPlacementOutput] {
             let glyphCount = glyphInputs.count
@@ -140,7 +190,7 @@ final class RoadLabelPlacementKernelTests: XCTestCase {
                                                   count: glyphCount))
             let dispatch = RoadLabelPlacementCalculator.RecordDispatch(
                 pathPointsBuffer: try makeBuffer(values: pathPoints),
-                pathRangesBuffer: try makeBuffer(values: [RoadPathRangeGpu(start: 0, count: 2)]),
+                pathRangesBuffer: try makeBuffer(values: [RoadPathRangeGpu(start: 0, count: UInt32(pathPointCount))]),
                 anchorsBuffer: try makeBuffer(values: anchors),
                 glyphInputsBuffer: try makeBuffer(values: glyphInputs),
                 placementsBuffer: placementsBuffer,

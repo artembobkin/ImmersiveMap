@@ -7,6 +7,26 @@ using namespace metal;
 #include "../../Shaders/Shared/ScreenCollisionCommon.h"
 #include "../../Shaders/Road/RoadLabelCommon.h"
 
+/// The point `distance` pixels along the path from its first point,
+/// clamped to the path's ends.
+static float2 roadLabelPointAlongPath(const device ScreenPointOutput* pathPoints,
+                                      uint start,
+                                      uint end,
+                                      float distance) {
+    float accumulated = 0.0;
+    float2 p0 = pathPoints[start].position;
+    for (uint i = start + 1; i < end; i++) {
+        float2 p1 = pathPoints[i].position;
+        float segmentLength = length(p1 - p0);
+        if (segmentLength > 0.0 && accumulated + segmentLength >= distance) {
+            return mix(p0, p1, clamp((distance - accumulated) / segmentLength, 0.0, 1.0));
+        }
+        accumulated += segmentLength;
+        p0 = p1;
+    }
+    return p0;
+}
+
 kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints [[buffer(0)]],
                                      const device RoadPathRange* pathRanges [[buffer(1)]],
                                      const device RoadLabelAnchor* anchors [[buffer(2)]],
@@ -65,14 +85,6 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
     }
 
     float2 startPos = pathPoints[start].position;
-    float2 endPos = pathPoints[end - 1].position;
-    float2 overall = endPos - startPos;
-    bool reverse = false;
-    if (length(overall) > 0.0) {
-        float overallAngle = atan2(overall.y, overall.x);
-        reverse = (overallAngle > M_PI_2_F || overallAngle < -M_PI_2_F);
-    }
-
     float2 prev = startPos;
     if (pathPoints[start].visible == 0) {
         hasInvisible = true;
@@ -105,6 +117,21 @@ kernel void roadLabelPlacementKernel(const device ScreenPointOutput* pathPoints 
         collisionAabb[gid] = collisionOut;
         return;
     }
+
+    // Which way the text reads: the label's own span of the path, from
+    // half a label before the anchor to half a label after it, runs left on
+    // screen or right. The whole path's chord is no guide: a stitched road
+    // that hooks back at a junction has a chord pointing against the
+    // straight part the label sits on, and the label came out upside down.
+    // A span too short to have a direction (a label at a path's very end)
+    // falls back to the anchor's segment.
+    float halfSpan = input.labelWidth * 0.5 * pixelsPerPoint;
+    float2 span = roadLabelPointAlongPath(pathPoints, start, end, clamp(anchorDistance + halfSpan, 0.0, totalLength))
+        - roadLabelPointAlongPath(pathPoints, start, end, clamp(anchorDistance - halfSpan, 0.0, totalLength));
+    if (dot(span, span) <= 0.0) {
+        span = pathPoints[start + anchorSegmentIndex + 1].position - pathPoints[start + anchorSegmentIndex].position;
+    }
+    bool reverse = span.x < 0.0;
 
     // Glyph metrics are in layout points; the path arc length they are placed
     // along was accumulated from screen positions, which are device pixels.
