@@ -4,6 +4,8 @@ The streetscape is the measured street: the carriageway surfaces and the paint o
 
 ```swift
 ImmersiveMapView()
+    .tileURLTemplate("https://tiles.com/map/{z}/{x}/{y}.mvt")
+    .streetscapeTileURLTemplate("https://tiles.com/streetscape/{z}/{x}/{y}.mvt")
     .streetscape(isEnabled: true)
 ```
 
