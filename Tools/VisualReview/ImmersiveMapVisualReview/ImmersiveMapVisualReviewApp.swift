@@ -6,6 +6,10 @@ import CoreGraphics
 import ImageIO
 import ImmersiveMap
 import SwiftUI
+#if os(macOS)
+import AppKit
+import UniformTypeIdentifiers
+#endif
 
 @main
 struct ImmersiveMapVisualReviewApp: App {
@@ -115,6 +119,9 @@ final class VisualReviewModel {
     var reportURL: URL?
     var isPreparingReport = false
     var reportFailure: String?
+    /// Where the report was last copied to from the app, so the banner can
+    /// say so instead of leaving the person to check the folder.
+    var savedReportURL: URL?
 
     /// When the last verdict was recorded, to tell a decision from a key that
     /// is simply still held down. Well under the pace of someone looking at
@@ -184,9 +191,30 @@ final class VisualReviewModel {
         do {
             reportURL = try await VisualReviewReportBuilder.makeReport(for: items)
             reportFailure = nil
+            savedReportURL = nil
         } catch {
             reportURL = nil
             reportFailure = String(describing: error)
+        }
+    }
+
+    /// Copies the built report to a place of the person's choosing.
+    ///
+    /// The zip lives in the checkout's `Reports` folder, which the share sheet
+    /// cannot save from: on a Mac it offers AirDrop, Mail and the like, and no
+    /// "save to Downloads". A copy replaces whatever already has that name.
+    func saveReport(to destination: URL) {
+        guard let reportURL else { return }
+        do {
+            let manager = FileManager.default
+            if manager.fileExists(atPath: destination.path) {
+                try manager.removeItem(at: destination)
+            }
+            try manager.copyItem(at: reportURL, to: destination)
+            savedReportURL = destination
+            reportFailure = nil
+        } catch {
+            reportFailure = "Could not save the report: " + String(describing: error)
         }
     }
 
@@ -415,6 +443,9 @@ struct VisualReviewScreen: View {
             if model.isRendering {
                 Divider()
                 renderingBanner
+            } else if model.reportURL != nil {
+                Divider()
+                reportBanner
             }
         }
         .toolbar {
@@ -581,6 +612,71 @@ struct VisualReviewScreen: View {
     #endif
 
     #if os(macOS)
+    /// Where the report is, and two ways to get at it that the share sheet
+    /// does not offer: the folder itself, and a copy anywhere else.
+    ///
+    /// The path is on screen because the zip is written into the checkout,
+    /// under `Tools/VisualReview/Reports`, and nothing else in the window says
+    /// so: "Send the report" opens a share sheet that names the file but not
+    /// where it lives, and a person looking for the file has nowhere to read
+    /// it off.
+    private var reportBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let url = model.reportURL {
+                HStack(spacing: 12) {
+                    Label("Report", systemImage: "shippingbox")
+                        .font(.callout.weight(.medium))
+                    Text(url.path)
+                        .font(.callout.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Reveal in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                    Button("Save the report\u{2026}") {
+                        presentSavePanel(for: url)
+                    }
+                }
+            }
+            if let saved = model.savedReportURL {
+                Text("Saved to \(saved.path)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            if let failure = model.reportFailure {
+                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    /// A save panel opened on Downloads with the report's own name filled in,
+    /// so the common case is one click on Save.
+    private func presentSavePanel(for url: URL) {
+        let panel = NSSavePanel()
+        panel.title = "Save the report"
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory,
+                                                      in: .userDomainMask).first
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            model.saveReport(to: destination)
+        }
+    }
+
     /// The same two steps as on a phone, folded into one toolbar item. A Mac
     /// pass is made by whoever owns the checkout, and the renders are already
     /// sitting in it, but a report is still the way to send a pass to someone
