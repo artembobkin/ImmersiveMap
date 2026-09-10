@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
-ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms.
+ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms, about +6 MB of app size.
 
 ## Quick Start
 
@@ -40,51 +40,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 ## Features
 
-- SwiftUI integration
-- Native iOS (UIKit host)
-- Native macOS (AppKit host, no Catalyst)
-- Native Metal renderer
-- [Built-in vector tiles, no token required](Documentation/docs/map-data.md)
-- [Your own MVT tile source](Documentation/docs/custom-tile-provider.md)
-- [Customizable attribution badge](ATTRIBUTION.md)
-- [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md)
-- [The globe's atmosphere and the flat horizon's fog band](Documentation/docs/atmosphere.md)
-- [Labels with MSDF text and GPU collision](Documentation/docs/labels.md)
-- [Map styling and colors](Documentation/docs/styling.md)
-- [The streetscape: measured carriageways and road paint, opt-in](Documentation/docs/streetscape.md)
-- [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md)
-- [SwiftUI markers](Documentation/docs/markers.md)
-- [Avatars / live markers](Documentation/docs/avatars.md)
-- [Tap selection of avatars and models](Documentation/docs/selection.md)
-- [Routes on the globe](Documentation/docs/routes.md)
-- [3D scene models](Documentation/docs/scene-models.md)
-- [Camera flights and scripted tours](Documentation/docs/camera.md)
-- [Camera travelling along a path](Documentation/docs/camera-path-follow.md)
-- [Tour video export](Documentation/docs/tour-video-export.md)
-- [Tile caches: two disk layers, a working set in memory](Documentation/docs/tile-cache.md)
-- [Offline regions: download once, render without a network](Documentation/docs/offline-tiles.md)
-- [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md)
-
-## App size
-
-Measured from a Release archive of the iOS demo app (`Examples/ImmersiveMapIOS`, arm64, unsigned). That demo is about twenty lines of SwiftUI, so these numbers are effectively what the engine itself adds to an app.
-
-| Part | Size |
-|---|---|
-| **App bundle, total** | **6.5 MB** |
-| Binary (engine, no dependencies) | 3.4 MB |
-| Resources | 2.9 MB |
-| ├ MSDF font atlases, two weights | 2.3 MB |
-| ├ Compiled Metal library | 392 KB |
-| └ Glyph metrics | 192 KB |
-
-Most of the resource weight is the bundled Noto Sans MSDF atlases that draw every label on the map. If your app only needs a subset of scripts, regenerate smaller atlases with `Tools/TextAtlas/generate_text_atlas.sh`.
-
-The App Store download size is lower than the archive size, since the store compresses and thins the bundle.
-
-## Example Apps
-
-The `Examples` folder holds small host apps that show the engine's features in practice: camera tours and video export, markers, avatars, routes, 3D scene models, live settings, offline regions, and a custom tile source. Clone the repository, open `ImmersiveMap.xcworkspace`, pick an example scheme, and run: they reference the package locally, and every one but the custom tile source renders the built-in tile provider with no token or account.
+SwiftUI integration, native iOS (UIKit host), native macOS (AppKit host, no Catalyst), native Metal renderer, [built-in vector tiles](Documentation/docs/map-data.md), [your own MVT tile source](Documentation/docs/custom-tile-provider.md), [customizable attribution badge](ATTRIBUTION.md), [globe rendering and globe-to-flat morph](Documentation/docs/globe.md), [atmosphere and horizon fog](Documentation/docs/atmosphere.md), [MSDF labels with GPU collision](Documentation/docs/labels.md), [map styling and colors](Documentation/docs/styling.md), [the streetscape](Documentation/docs/streetscape.md), [extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [tap selection](Documentation/docs/selection.md), [routes](Documentation/docs/routes.md), [3D scene models](Documentation/docs/scene-models.md), [camera flights and tours](Documentation/docs/camera.md), [camera path following](Documentation/docs/camera-path-follow.md), [tour video export](Documentation/docs/tour-video-export.md), [tile caches](Documentation/docs/tile-cache.md), [offline regions](Documentation/docs/offline-tiles.md), [render loop and debug HUD](Documentation/docs/performance-and-debug.md).
 
 ## Where the map data comes from
 
@@ -103,12 +59,6 @@ Maps powered by ImmersiveMap (immersivemap.dev)
 ```
 
 And if you ship something built with ImmersiveMap, [say hello in Discussions](https://github.com/artembobkin/ImmersiveMap/discussions). Knowing where the engine ends up is what keeps it moving.
-
-## Known Limitations
-
-- Apple platforms only. Requires Metal.
-- App size is measured (see [App size](#app-size)), frame time and memory numbers are not published yet.
-- Maintained by one person. Issues and integration questions are answered quickly, but plan accordingly.
 
 ## Contributing
 
