@@ -36,6 +36,35 @@ final class ParsePolygonClippedSpaceTests: XCTestCase {
                        "The fill's vertices are the flipped ring, nothing else")
     }
 
+    /// A fill as the hosted tiles produced it: a road surface a few units
+    /// tall with holes for its crossings, rounded to the Int16 grid, which
+    /// earcut handed back with one ear wound clockwise by more than the
+    /// rounding tolerance (the debug funnel's assertion caught it at
+    /// runtime). Settling the winding on the rounded vertices makes every
+    /// triangle counter-clockwise without changing what they cover.
+    func testWindingIsSettledOnTheRoundedVertices() {
+        let points: [(Int16, Int16)] = [(2007, 71), (2020, 51), (2026, 48), (2033, 49), (2040, 54), (2080, 55), (2091, 62),
+                                        (2091, 63), (2086, 62), (2080, 57), (2020, 57), (2010, 71), (2066, 60), (2067, 61),
+                                        (2051, 50), (2051, 53), (2048, 51), (2048, 53), (2048, 54), (2039, 56), (2032, 51),
+                                        (2024, 54), (2031, 52), (2031, 54), (2028, 50)]
+        let indices: [UInt32] = [0, 1, 2, 2, 3, 4, 5, 6, 7, 7, 8, 9, 10, 11, 0, 5, 7, 9, 12, 5, 9, 12, 9, 13, 14, 12, 13,
+                                 14, 13, 15, 4, 16, 17, 16, 14, 15, 16, 15, 17, 4, 17, 18, 4, 18, 19, 17, 15, 18, 4, 19, 20,
+                                 2, 4, 20, 21, 22, 0, 0, 21, 2, 2, 20, 23, 10, 0, 2, 2, 23, 21, 21, 10, 2]
+        var polygon = TileMvtParser.ParsedPolygon(vertices: points.map { SIMD2<Int16>($0.0, $0.1) }, indices: indices)
+        XCTAssertEqual(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices), 19)
+
+        polygon.windCounterClockwise()
+
+        XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices))
+        XCTAssertEqual(polygon.indices.count, indices.count)
+        XCTAssertEqual(Set(polygon.indices), Set(indices), "the same vertices, only the order of a triangle's corners changes")
+        for triangle in 0 ..< indices.count / 3 {
+            let before = Set(indices[triangle * 3 ..< triangle * 3 + 3])
+            let after = Set(polygon.indices[triangle * 3 ..< triangle * 3 + 3])
+            XCTAssertEqual(before, after, "triangle \(triangle) keeps its corners")
+        }
+    }
+
     /// The flip precedes the winding decision: a convex ring tessellates
     /// with counter-clockwise triangles in render space regardless of which
     /// way the source ring winds in tile space.

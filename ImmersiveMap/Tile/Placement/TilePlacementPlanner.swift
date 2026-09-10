@@ -4,15 +4,23 @@
 /// The frame's placements, a function of the targets and of what is
 /// resident right now: nothing is carried from one frame's placement to
 /// the next. A target that is resident draws itself. A target that is not
-/// yet resident draws a stand-in from the resident tiles, in this order:
+/// yet resident draws its stand-ins from the resident tiles:
 ///
-/// 1. its resident descendants when they cover it whole (a zoom-out shows
-///    the detailed children until the parent arrives);
-/// 2. its finest resident ancestor above the backdrop's zoom (a zoom-in or
-///    a pan shows the parent until the child arrives);
-/// 3. whatever resident descendants it has, with holes (better than an
-///    empty region);
-/// 4. nothing: the backdrop paints it, or the globe's placeholder.
+/// - its resident descendants, at any depth, whether or not they cover it
+///   whole: a zoom-out keeps showing the detailed tiles the camera was
+///   looking at until the parent arrives, however far the zoom has run
+///   ahead of the loads (the eye has settled on that ground; swapping it
+///   for something coarser and then for the target is two cuts instead of
+///   one), and a fast zoom-out, where only some of them had landed, keeps
+///   the ones that had;
+/// - and, wherever those leave a hole, its finest resident ancestor above
+///   the backdrop's zoom: a zoom-in or a pan shows the parent until the
+///   child arrives. The ancestor is placed whole; both surfaces draw unique
+///   sources finest first and let the finer painter own each pixel (the
+///   flat map's tile-priority stencil, the sphere's rank depth), so the
+///   descendants stay on top and the ancestor shows through the holes only;
+/// - nothing, when neither exists: the backdrop paints it, or the globe's
+///   placeholder.
 ///
 /// `backdropZoomLevel` is the zoom of the full-screen backdrop already drawn
 /// under the main coverage (flat mode). Substitutes at that zoom or coarser
@@ -23,9 +31,12 @@
 /// the same stand-in can be found for two targets; the output holds it
 /// once.
 struct TilePlacementPlanner {
-    /// How many levels below a target the descendant search goes: a
-    /// zoom-out of more than this many levels shows the ancestor instead.
-    static let descendantSearchDepth = 3
+    /// How many levels below a target the descendant search goes: the
+    /// whole tree, a resident tile stands in for a loading ancestor at any
+    /// depth. The search only descends into branches that hold a resident
+    /// tile, so its cost is the resident tiles' ancestor chains, not the
+    /// tree.
+    static let descendantSearchDepth = Int.max
 
     /// `descendantSearchDepth` 0 turns the descendant stand-ins off: the
     /// backdrop's z3 targets are covered by the main coverage's finer tiles
@@ -91,28 +102,24 @@ struct TilePlacementPlanner {
             let below: (placements: [PlaceTile], complete: Bool) = descendantSearchDepth > 0 && branches.contains(sourceTile)
                 ? descendants(of: sourceTile, loop: target.loop, depth: descendantSearchDepth)
                 : (placements: [], complete: false)
+            below.placements.forEach(append)
             if below.complete, below.placements.isEmpty == false {
-                below.placements.forEach(append)
                 continue
             }
 
-            var ancestorPlacement: PlaceTile?
+            // The holes between the descendants, or the whole target when
+            // there are none: the finest resident ancestor, drawn under them.
             if sourceTile.z > 0 {
                 for ancestorZoom in stride(from: sourceTile.z - 1, through: 0, by: -1) {
                     guard let ancestor = sourceTile.findParentTile(atZoom: ancestorZoom), isUsefulSubstitute(ancestor) else {
                         break
                     }
                     if let metalTile = resident[ancestor] {
-                        ancestorPlacement = PlaceTile(metalTile: metalTile, placeIn: target, lodKind: .coarseSubstitute)
+                        append(PlaceTile(metalTile: metalTile, placeIn: target, lodKind: .coarseSubstitute))
                         break
                     }
                 }
             }
-            if let ancestorPlacement {
-                append(ancestorPlacement)
-                continue
-            }
-            below.placements.forEach(append)
         }
 
         return PlaceTilesContext(tilePlacements: placeTiles)

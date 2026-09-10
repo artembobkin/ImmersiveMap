@@ -22,12 +22,17 @@ final class TileClipDistanceContractTests: XCTestCase {
         // substitute draws at full extent and the tile-priority stencil
         // rejects it wherever a finer tile painted, exactly like the
         // sphere. Only the buildings keep their slot clips (TileExtruded).
-        // The one clip distance here is the road distance cut, the outer
+        // The two clip distances here are the road distance cut, the outer
         // radius of the road fade ring about the look-at point
-        // (RoadDistanceLOD), no slot's edge.
+        // (RoadDistanceLOD), and the camera's near plane, which the rank
+        // depth takes away from the z clip; no slot's edge.
         XCTAssertNil(source.range(of: "localClipBounds"))
         XCTAssertNil(source.range(of: "[[clip_distance]] [4]"))
-        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [2];"))
+        XCTAssertTrue(source.contains("out.clipDistance[1] = out.position.w - kFlatCameraNearPlane;"),
+                      "A ground triangle running behind the eye is cut at the near plane, not at w = 0")
+        XCTAssertTrue(source.contains("constant float kFlatCameraNearPlane = \(RenderCamera.nearPlane);"),
+                      "The shader's near plane is the camera's")
         XCTAssertTrue(source.contains("constant RoadDistanceFadeUniform& roadFade [[buffer(9)]]"))
         XCTAssertTrue(source.contains("float centerDistance = length(worldPosition.xy - roadFade.centerWorld);"),
                       "The fade measures on the ground plane from the look-at point, not from the eye")
@@ -42,6 +47,11 @@ final class TileClipDistanceContractTests: XCTestCase {
         // mirrored by GlobeSurfaceDepthRank.
         XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
         XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
+        // The fragment writes no depth: doing so (a flat rank depth, exact
+        // but shaded for every fill layer) cost more than the sliver
+        // artifact it cured; that is kept away by the camera limits instead.
+        XCTAssertNil(source.range(of: "[[depth("))
+        XCTAssertTrue(source.contains("out.position.z = layerNdcZ * out.position.w;"))
     }
 
     func testBuildingShadersClipWithSlotDistancesOnBothPaths() throws {

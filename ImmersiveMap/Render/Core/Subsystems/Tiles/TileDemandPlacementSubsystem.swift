@@ -98,32 +98,17 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // backdrop tiles. Its demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
         // A backdrop exists - beneath the main coverage the whole frame is painted
-        // at its zoom, so neither the demand's stand-ins nor the planner's
-        // substitutes go to that zoom or coarser (it is already drawn by the
-        // layer below).
+        // at its zoom, so the planner's substitutes never go to that zoom or
+        // coarser (it is already drawn by the layer below).
         let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
-        // The sphere has no backdrop layer, but the pinned world cover is
-        // always resident and the placement stands it in on its own: the
-        // demand's stand-in walk stops above it there too, so a loading
-        // target does not pull a coarse parent off the disk for ground the
-        // cover already paints. The placement keeps its nil (nothing is
-        // painted under the sphere's slots).
-        let standInFloorZoomLevel = backdropZoomLevel
-            ?? (frameContext.renderSurfaceMode == .spherical && tileZoomLevel > GlobeDistanceCoverage.floorZoom
-                    ? GlobeDistanceCoverage.floorZoom : nil)
-        // The demand: every target, plus for a target not resident yet at
-        // most one stand-in ancestor that is already resident or prepared on
-        // disk, so it comes back with no network request. Nothing is asked
-        // for blindly: with no ancestor available the backdrop shows until
-        // the target arrives. `VisibleTile` includes `loop`, so flat-mode
-        // wrapped copies share one content tile (`Tile`); the plan
-        // deduplicates. Residency is read here, before `requestTiles`
-        // releases what the plan does not name.
-        let demandPlan = TileDemandSourcePlanner.makePlan(targets: preprocessedVisibleTiles + backdropTiles,
-                                                          backdropZoomLevel: standInFloorZoomLevel,
-                                                          isResident: tileRenderStore.isResident,
-                                                          isAvailableLocally: tileRenderStore.isAvailableLocally)
-        let demandedSourceTiles = demandPlan.demandedSourceTiles
+        // The demand is the targets and the backdrop, nothing else: no
+        // stand-in is asked for. What covers a loading target is what is
+        // resident already (the working set keeps the tiles that stand in
+        // for one, see `TileWorkingSetStore`), and beneath it the backdrop
+        // or the pinned world cover. `VisibleTile` includes `loop`, so
+        // flat-mode wrapped copies share one content tile (`Tile`); the
+        // list is deduplicated.
+        let demandedSourceTiles = Self.uniqueSourceTiles(of: preprocessedVisibleTiles + backdropTiles)
         // Demand order = network and parsing priority: tiles closest to the camera
         // start first. The placement hash uses the stable
         // `demandedSourceTiles` (center-based sorting would change on every
@@ -131,7 +116,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(preprocessedVisibleTiles,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
-        let prioritizedDemand = demandPlan.demandedSourceTiles(orderedBy: prioritizedTargets + backdropTiles)
+        let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets + backdropTiles)
         // Returns source-tile availability map for GPU rendering:
         // value contains Metal-ready tile buffers, or `nil` while still loading.
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
@@ -144,7 +129,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             demandedSourceTiles: demandedSourceTiles,
             readyTilesBySource: readyTilesBySource
         ))
-        // The placement also reads the retention (descendants standing in
+        // The placement also reads the stand-ins (descendants standing in
         // are never demanded), so a tile landing outside the demand, which
         // bumps the content version, rebuilds it too.
         hashBuilder.combine(tileRenderStore.cacheContentVersion)
@@ -153,7 +138,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         let placementChanged = preprocessedVisibleTilesHashTracker.stage(preprocessedVisibleTilesHash)
         if placementChanged {
             // The placement is a function of the targets and of what is
-            // resident now (the retention included): nothing is carried
+            // resident now (the stand-ins included): nothing is carried
             // over from the previous frame's placement.
             let resident = tileRenderStore.residentTiles()
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: preprocessedVisibleTiles,
@@ -214,6 +199,18 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     /// under it), so the eye is taken as it is, and its ground point is its
     /// x and y over the exact tile's world size, away from the look-at
     /// point in tile units. World y grows north while tile y grows south.
+    /// The content tiles of the targets, first occurrence first.
+    private static func uniqueSourceTiles(of targets: [VisibleTile]) -> [Tile] {
+        var seen = Set<Tile>()
+        seen.reserveCapacity(targets.count)
+        var tiles: [Tile] = []
+        tiles.reserveCapacity(targets.count)
+        for target in targets where seen.insert(target.tile).inserted {
+            tiles.append(target.tile)
+        }
+        return tiles
+    }
+
     private static func makeFlatCoverageCamera(frameContext: FrameContext,
                                                center: Center,
                                                tileZoomLevel: Int,

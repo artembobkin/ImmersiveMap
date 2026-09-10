@@ -13,7 +13,7 @@ import simd
 /// so a pixel test cannot tell the parent's copy of a building from the
 /// child's, and the two versions cut through each other. Buildings are
 /// owned by ground area instead. The planner takes the tiles resident in
-/// the working set (the retention included), never demands more, and
+/// the working set (the stand-ins included), never demands more, and
 /// hands every slot of the building quadtree to exactly one of them:
 ///
 /// - the grid is the `minimumSourceZoom` tiles (z14, the zoom where the
@@ -30,12 +30,15 @@ import simd
 ///   only the slots that are actually missing, cut at the slot's edge the
 ///   way the ground's stencil cuts the coarse ground under a fine tile;
 /// - a slot with no resident tile at or above it (down from the grid)
-///   borrows nothing coarser than the grid: it stays empty until its tile
-///   arrives, and the resident tiles under it draw what they have;
+///   borrows nothing coarser than the grid: the resident tiles under it
+///   draw what they have, at their own extents, the finer ones included
+///   (a zoom-out's tiles stand in for the parent they wait for, as they
+///   do for the ground), and what none of them covers stays empty until
+///   its tile arrives;
 /// - cells farther than `fieldRadiusInCells` from the eye's ground point
 ///   are skipped: buildings are a near-field feature;
 /// - a frame whose target zoom is coarser than the grid draws no
-///   buildings at all: its ground carries none, and the retention's tiles
+///   buildings at all: its ground carries none, and the tiles standing in
 ///   from a closer view would draw as islands.
 ///
 /// A clipped placement (`placeIn` below the source) is drawn with the
@@ -58,8 +61,8 @@ enum BuildingCoveragePlanner {
                      visibleTiles: [VisibleTile],
                      eyeGroundCell: SIMD2<Double>?) -> PlaceTilesContext {
         // Coarser than the grid nothing draws: the ground tiles carry no
-        // buildings there, and whatever the retention still holds from a
-        // closer view would draw as islands of its own outline.
+        // buildings there, and whatever still stands in from a closer
+        // view would draw as islands of its own outline.
         guard let eyeGroundCell, let targetZoom = visibleTiles.first?.z, targetZoom >= minimumSourceZoom else {
             return .empty
         }
@@ -114,10 +117,21 @@ enum BuildingCoveragePlanner {
         /// at or above `tile` (nil when there is none down from the grid).
         /// A needed child with resident tiles under it resolves on its own;
         /// every other needed child is a slot the cover draws into, clipped;
-        /// a tile with nothing resident under it draws the cover whole.
+        /// a tile with nothing resident under it draws the cover whole. At
+        /// or below the target zoom a resident tile draws whole, its finer
+        /// residents unused; a missing one hands its slot to the finer
+        /// residents it has, and the cover fills the quadrants they leave.
         func resolve(_ tile: Tile, loop: Int8, cover: MetalTile?) -> [PlaceTile] {
-            let cover = resident[tile] ?? cover
-            let needed = tile.z < targetZoom ? children(of: tile).filter { isNeeded($0, loop: loop) } : []
+            let own = resident[tile]
+            let cover = own ?? cover
+            let needed: [Tile]
+            if tile.z < targetZoom {
+                needed = children(of: tile).filter { isNeeded($0, loop: loop) }
+            } else if own == nil, children(of: tile).contains(where: { present.contains(Key(tile: $0, loop: loop)) }) {
+                needed = children(of: tile)
+            } else {
+                needed = []
+            }
             let branches = needed.filter { present.contains(Key(tile: $0, loop: loop)) }
             guard let cover else {
                 return branches.flatMap { resolve($0, loop: loop, cover: nil) }

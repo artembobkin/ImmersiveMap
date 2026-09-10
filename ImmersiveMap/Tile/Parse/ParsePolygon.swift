@@ -98,6 +98,7 @@ class ParsePolygon {
         let renderExterior = TileCoordinateSpace.renderPoints(clipped.exterior)
         if clipped.interiors.isEmpty,
            var polygon = triangulateConvexExterior(exterior: renderExterior) {
+            polygon.windCounterClockwise()
             polygon.outlineIndices = Self.outlineIndices(rings: [renderExterior], tileExtent: tileExtent)
             return ParsedGeometry(clipped: clipped,
                                   parsedPolygon: polygon)
@@ -106,6 +107,9 @@ class ParsePolygon {
         let renderInteriors = clipped.interiors.map(TileCoordinateSpace.renderPoints)
         guard var polygon = triangulateEarcut(exterior: renderExterior,
                                               interiors: renderInteriors) else { return nil }
+        // The tessellators wind on the float ring; the rounded vertices are
+        // what draws, so the winding is settled on them last.
+        polygon.windCounterClockwise()
         // Both tessellators keep the ring vertices in ring order (the
         // exterior first, then each interior), which is what lets the
         // outline index the fill's own vertices.

@@ -8,6 +8,11 @@ class RenderCamera {
     /// The fixed vertical field of view of the render camera; shared with
     /// the screen-resolvability math (RoadMarkingDistanceLOD).
     static let verticalFovRadians = Float.pi / 4
+    /// The near plane, in view units. The flat surface's rank depth
+    /// bypasses the z clip, so Tile.metal cuts at this distance itself
+    /// (kFlatCameraNearPlane, pinned by TileClipDistanceContractTests).
+    static let nearPlane: Float = 0.01
+    static let farPlane: Float = 200.0
 
     var projection: matrix_float4x4?
     var view: matrix_float4x4?
@@ -29,7 +34,7 @@ class RenderCamera {
         // scale doubles while the clip stays at the same 20 units).
         // With far = 200 the clip lies within ~a pixel of the vanishing line, whose
         // position does not depend on zoom.
-        self.projection = Matrix.perspectiveMatrix(fovRadians: Self.verticalFovRadians, aspect: aspect, near: 0.01, far: 200.0)
+        self.projection = Matrix.perspectiveMatrix(fovRadians: Self.verticalFovRadians, aspect: aspect, near: Self.nearPlane, far: Self.farPlane)
         recalculateMatrix()
     }
 

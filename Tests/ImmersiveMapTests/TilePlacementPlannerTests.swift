@@ -6,10 +6,9 @@ import MetalKit
 import XCTest
 
 /// The placement as a function of the targets and the resident tiles: a
-/// resident target draws itself, a missing one draws its complete resident
-/// descendants, else its finest resident ancestor above the backdrop, else
-/// its partial descendants, else nothing. Nothing comes from a previous
-/// frame.
+/// resident target draws itself, a missing one draws its resident
+/// descendants and, in the holes they leave, its finest resident ancestor
+/// above the backdrop, else nothing. Nothing comes from a previous frame.
 final class TilePlacementPlannerTests: XCTestCase {
     private let parent = Tile(x: 17, y: 11, z: 5)
     private var children: [Tile] {
@@ -72,11 +71,23 @@ final class TilePlacementPlannerTests: XCTestCase {
                       "each drawn at its own extent")
     }
 
-    func testPartialChildrenLoseToAResidentAncestor() throws {
+    func testPartialChildrenStayAndTheAncestorFillsTheHoles() throws {
         let resident = try resident([children[0], grandparent])
         let placed = placements(targets: [parent], resident: resident, zoom: 5)
-        XCTAssertEqual(placed.count, 1)
-        XCTAssertEqual(placed.first?.metalTile.tile, grandparent, "a whole coarse cover beats a detailed cover with holes")
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), [children[0], grandparent],
+                       "the detailed child the camera saw stays, the coarse ancestor paints the rest")
+        let child = placed.first { $0.metalTile.tile == children[0] }
+        let ancestor = placed.first { $0.metalTile.tile == grandparent }
+        XCTAssertEqual(child?.lodKind, .retainedReplacement)
+        XCTAssertEqual(child?.placeIn.tile, children[0], "the child is drawn at its own extent")
+        XCTAssertEqual(ancestor?.lodKind, .coarseSubstitute)
+        XCTAssertEqual(ancestor?.placeIn.tile, parent, "the ancestor is placed for the whole target")
+    }
+
+    func testCompleteChildrenNeedNoAncestor() throws {
+        let resident = try resident(children + [grandparent])
+        let placed = placements(targets: [parent], resident: resident, zoom: 5)
+        XCTAssertFalse(placed.contains { $0.metalTile.tile == grandparent }, "no hole, nothing to fill")
     }
 
     func testPartialChildrenStandInWhenNoAncestorIsResident() throws {
@@ -98,17 +109,14 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children.dropLast() + grandchildren))
     }
 
-    func testTheDescendantSearchStopsAtItsDepth() throws {
-        // Everything four levels down is resident: too deep to count as
-        // cover, and no ancestor is resident, so nothing is placed.
-        var deep: [Tile] = []
-        for dx in 0 ..< 16 {
-            for dy in 0 ..< 16 {
-                deep.append(Tile(x: parent.x * 16 + dx, y: parent.y * 16 + dy, z: 9))
-            }
-        }
-        let placed = placements(targets: [parent], resident: try resident(deep), zoom: 5)
-        XCTAssertTrue(placed.isEmpty)
+    func testDescendantsStandInAtAnyDepth() throws {
+        // A single tile eleven levels down, the block the camera was looking
+        // at before a long zoom-out: it is placed at its own extent, and the
+        // resident ancestor fills the rest.
+        let deep = Tile(x: parent.x << 11, y: parent.y << 11, z: 16)
+        let placed = placements(targets: [parent], resident: try resident([deep, grandparent]), zoom: 5)
+        XCTAssertEqual(Set(placed.map(\.metalTile.tile)), [deep, grandparent])
+        XCTAssertEqual(placed.first { $0.metalTile.tile == deep }?.placeIn.tile, deep)
     }
 
     func testNothingResidentPlacesNothing() throws {

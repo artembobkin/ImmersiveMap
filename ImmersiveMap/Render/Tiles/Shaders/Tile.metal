@@ -53,6 +53,15 @@ constant float kGroundShadowMaskScale = 0.4;
 // (kTileSphereLayerDepthStep; mirrored by GlobeSurfaceDepthRank and pinned
 // by TileClipDistanceContractTests).
 constant float kFlatTileLayerDepthStep = 4e-7;
+// The camera's near plane in view units (RenderCamera.nearPlane, pinned
+// by TileClipDistanceContractTests). The surface writes its depth as the
+// rank band, not the projection's z, which leaves Metal's z clip with
+// nothing to cut at the near plane: a triangle running behind the eye is
+// then cut at the eye's own plane (w = 0) and its cut vertex projects to
+// infinity, which the rasterizer resolves differently from frame to
+// frame, blocks of the near ground dropping out at a street tilt on the
+// deepest zoom. The near clip distance below cuts at the real plane.
+constant float kFlatCameraNearPlane = 0.01;
 
 // lineStyle packs the per-style constants (edge threshold, width points,
 // dash points, gap points); constant per primitive, so half is exact enough.
@@ -84,11 +93,13 @@ struct VertexOut {
     // with this fragment, and unlike a screen position computed per vertex
     // it survives a segment clipped by the near plane.
     float4 clipPosition [[function_constant(kTileFillOutline)]];
-    // The road distance cut: the far end of the fade band, where the roads
-    // are fully transparent anyway, so the rasterizer drops them there and
-    // no fragment beyond it is shaded. Not a slot clip (see above): a
-    // constant positive value on the layers the fade is off for.
-    float clipDistance [[clip_distance]] [1];
+    // Two cuts, neither a slot clip (see above). [0] is the road distance
+    // cut: the far end of the fade band, where the roads are fully
+    // transparent anyway, so the rasterizer drops them there and no
+    // fragment beyond it is shaded; a constant positive value on the
+    // layers the fade is off for. [1] is the camera's near plane, which the
+    // rank depth took away from the z clip (kFlatCameraNearPlane).
+    float clipDistance [[clip_distance]] [2];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -142,6 +153,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         ? 1.0 - smoothstep(roadFade.startWorld, roadFade.endWorld, centerDistance)
         : 1.0;
     out.clipDistance[0] = roadFade.enabled > 0.5 ? roadFade.endWorld - centerDistance : 1.0;
+    // The near plane, in the clip space w (the view depth): what the z clip
+    // would have cut had z been the projection's.
+    out.clipDistance[1] = out.position.w - kFlatCameraNearPlane;
     if (kTileFillOutline) {
         out.clipPosition = out.position;
     }

@@ -1224,7 +1224,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                        labelFadeFramesPerSecond: 30),
         camera: CameraSettings(maximumPitch: Float.pi * 5.0 / 12.0,
                                minimumZoom: 0.0,
-                               maximumZoom: 20.0,
+                               // Two levels past the deepest tile (z16): closer
+                               // in, a street tilt lays the camera on a few
+                               // tiles blown up to many screens, whose fills
+                               // are fans of slivers the depth test cannot
+                               // order cleanly, and blocks of the near ground
+                               // drop out at the screen's edge.
+                               maximumZoom: 18.0,
                                focusedMarkerZoom: 15.25,
                                globeMinimumAbsoluteBearing: Float.pi / 12.0,
                                globeBearingUnlockZoom: 6.0,

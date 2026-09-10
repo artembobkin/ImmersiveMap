@@ -742,7 +742,10 @@ final class PreparedTileDiskCaching {
     // 90: one text label set per tile instead of three distance tiers; a
     // v89 entry's span table and metadata carry three sets the reader no
     // longer walks.
-    static let preparedFormatVersion: UInt32 = 90
+    // 91: fill triangles are wound counter-clockwise on the rounded
+    // vertices; a v90 entry of a sliver fill can carry a triangle that
+    // back-face culling drops.
+    static let preparedFormatVersion: UInt32 = 91
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

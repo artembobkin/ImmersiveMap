@@ -46,6 +46,30 @@ extension TileMvtParser.ParsedPolygon {
     /// stroke (the 0.35 metre marking at z16) is 2.3 units.
     static let clockwiseTolerancePerEdgeUnit: Double = 1.5
 
+    /// Turns every clockwise triangle counter-clockwise by swapping two of
+    /// its indices, judged on the vertices as they are, after the Int16
+    /// rounding. A tessellator decides its winding on the float ring; a
+    /// sliver polygon, a road surface a few units tall with holes for its
+    /// crossings, say, can round into a shape whose triangles no longer
+    /// agree with that decision by more than the rounding tolerance, and
+    /// earcut hands such a ring back with the odd inverted ear. A flipped
+    /// triangle covers the same ground either way, and a degenerate one is
+    /// left alone. In place, no allocation.
+    mutating func windCounterClockwise() {
+        var start = 0
+        while start + 2 < indices.count {
+            let a = vertices[Int(indices[start])]
+            let b = vertices[Int(indices[start + 1])]
+            let c = vertices[Int(indices[start + 2])]
+            let doubled = (Int64(b.x) - Int64(a.x)) * (Int64(c.y) - Int64(a.y))
+                - (Int64(b.y) - Int64(a.y)) * (Int64(c.x) - Int64(a.x))
+            if doubled < 0 {
+                indices.swapAt(start + 1, start + 2)
+            }
+            start += 3
+        }
+    }
+
     /// Index (in triangles) of the first triangle wound clockwise in render
     /// space by more than the vertex rounding can explain, or nil when every
     /// triangle is counter-clockwise or degenerate.

@@ -202,6 +202,40 @@ final class BuildingCoveragePlannerTests: XCTestCase {
         XCTAssertEqual(pairs(placed), own(Array(children.dropLast()) + present))
     }
 
+    /// A zoom-out: the view is at z15, the z15 tiles have not arrived, and
+    /// the z16 tiles the camera was just looking at are resident. They draw
+    /// their buildings at their own extents until their parent lands, as
+    /// the ground under them does.
+    func testAMissingTargetHandsItsSlotToItsResidentFinerTiles() throws {
+        let finer = grandchildren(of: children[0]) + grandchildren(of: children[3])
+        let placed = plan(resident: try resident(finer), visible: wholeCellVisible(at: 15))
+        XCTAssertEqual(pairs(placed), own(finer), "each finer tile draws whole, in its own slot")
+    }
+
+    func testAResidentTargetOutranksItsFinerTiles() throws {
+        let finer = grandchildren(of: children[0])
+        let placed = plan(resident: try resident([children[0]] + finer), visible: wholeCellVisible(at: 15))
+        XCTAssertEqual(pairs(placed), own([children[0]]), "the target itself draws, the finer tiles under it stay unused")
+    }
+
+    func testAResidentCellFillsTheQuadrantsTheFinerTilesLeave() throws {
+        // The cell is resident, one target is missing and only half of it is
+        // covered by finer tiles: those draw, the cell is clipped into the
+        // slots of the other three targets and into the two quadrants of
+        // the missing target that no finer tile covers.
+        let all = grandchildren(of: children[0])
+        let finer = Array(all.prefix(2))
+        let placed = plan(resident: try resident([cell] + finer), visible: wholeCellVisible(at: 15))
+        var expected = own(finer)
+        for child in children.dropFirst() {
+            expected.insert(Pair(source: cell, slot: child))
+        }
+        for quadrant in all.dropFirst(2) {
+            expected.insert(Pair(source: cell, slot: quadrant))
+        }
+        XCTAssertEqual(pairs(placed), expected)
+    }
+
     func testTilesCoarserThanTheGridNeverDrawBuildings() throws {
         let placed = plan(resident: try resident([Tile(x: 4954, y: 2570, z: 13), Tile(x: 2477, y: 1285, z: 12)]))
         XCTAssertTrue(placed.tilePlacements.isEmpty)
