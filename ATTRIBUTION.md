@@ -1,6 +1,6 @@
 # Attribution
 
-If you use the built-in tile provider, the credit is **© OpenStreetMap**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright). Keep the map data credit visible wherever the map is. Crediting ImmersiveMap itself is not required.
+With the built-in tiles the credit is **© OpenStreetMap**, linking to [openstreetmap.org/copyright](https://www.openstreetmap.org/copyright) if you use the built-in tile provider. Keep the map data credit visible wherever the map is. Crediting ImmersiveMap itself is not required.
 
 ## Sources
 
