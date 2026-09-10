@@ -1,7 +1,8 @@
 .DS_Store
-# Personal, machine specific agent permissions. The shared project rules live in
-# the tracked .claude/settings.json next to it.
-.claude/settings.local.json
+# AI assistant configuration and instructions: local tooling, not part of the
+# package. Kept out of the repository entirely.
+.claude/
+CLAUDE.md
 # playwright-mcp browser-automation artifacts (console logs, screenshots)
 /.playwright-mcp/
 /.build/
