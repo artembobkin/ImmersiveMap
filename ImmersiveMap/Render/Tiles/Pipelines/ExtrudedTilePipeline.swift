@@ -56,8 +56,8 @@ class ExtrudedTilePipeline {
         // window, so no instancing and no [[render_target_array_index]].
         shadowDescriptor.inputPrimitiveTopology = .triangle
 
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+        self.pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+        self.shadowPipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: shadowDescriptor)
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {

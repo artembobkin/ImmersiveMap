@@ -44,7 +44,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 ## Attribution
 
-"© OpenStreetMap" is required if you use the built-in tile provider, see [ATTRIBUTION.md](ATTRIBUTION.md). Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
+"© OpenStreetMap" is required if you use the built-in tile provider. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
 
 ```text
 Maps powered by ImmersiveMap (immersivemap.dev)

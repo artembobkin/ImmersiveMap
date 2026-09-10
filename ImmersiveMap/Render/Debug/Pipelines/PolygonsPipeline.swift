@@ -55,7 +55,7 @@ class PolygonsPipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         
         do {
-            pipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineState = try metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
         } catch {
             fatalError("Could not create the pipeline: \(error)")
         }

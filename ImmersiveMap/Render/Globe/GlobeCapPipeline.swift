@@ -38,7 +38,7 @@ class GlobeCapPipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        self.pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {

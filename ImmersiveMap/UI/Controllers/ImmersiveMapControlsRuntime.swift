@@ -63,7 +63,7 @@ final class ImmersiveMapControlsRuntime {
         data credit in your app, or make the badge visible. If your app already shows the \
         credit, declare it with .attributionProvidedExternally() to silence this warning. \
         What has to be credited and where it has to appear: \
-        https://github.com/artembobkin/ImmersiveMap/blob/main/ATTRIBUTION.md
+        https://github.com/artembobkin/ImmersiveMap#attribution
         """)
     }
 

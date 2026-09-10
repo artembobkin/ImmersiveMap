@@ -63,7 +63,7 @@ final class StarfieldPipeline {
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
 
         do {
-            starsPipelineState = try metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            starsPipelineState = try metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
         } catch {
             fatalError("Failed to create starfield pipeline: \(error)")
         }

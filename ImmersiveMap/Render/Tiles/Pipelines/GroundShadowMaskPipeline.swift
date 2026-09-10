@@ -33,7 +33,7 @@ final class GroundShadowMaskPipeline {
         descriptor.fragmentFunction = library.makeFunction(name: "groundShadowMaskFragmentShader")
         descriptor.rasterSampleCount = 1
         descriptor.colorAttachments[0].pixelFormat = Self.pixelFormat
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
+        self.pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: descriptor)
     }
 
     func select(renderEncoder: MTLRenderCommandEncoder) {

@@ -25,6 +25,9 @@ final class ImmersiveMapFrameRenderDelegate: ImmersiveMapRenderDriverFrameDelega
     func renderDriverDidTick(_ driver: ImmersiveMapRenderDriver,
                              currentTime: CFTimeInterval,
                              drawable: any CAMetalDrawable) {
+        // The wakeup is the start of the frame's main-thread time: the
+        // animation step before the render is part of what the frame costs.
+        let frameStartTime = CACurrentMediaTime()
         guard renderRuntime.beginFrame() else {
             return
         }
@@ -36,6 +39,8 @@ final class ImmersiveMapFrameRenderDelegate: ImmersiveMapRenderDriverFrameDelega
 
         renderRuntime.renderFrame(layer: layer,
                                   drawable: drawable,
+                                  frameStartTime: frameStartTime,
+                                  targetPresentationTimestamp: currentTime,
                                   viewportRuntime: viewportRuntime)
     }
 

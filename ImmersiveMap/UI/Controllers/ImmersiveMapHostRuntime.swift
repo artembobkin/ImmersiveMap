@@ -20,6 +20,10 @@ final class ImmersiveMapHostRuntime {
     /// marker views into the video.
     private var currentMarkerContent: MarkerViewContent?
     private var powerStateObservers: NotificationObserverBag?
+    /// The build of the shared resources the renderer waits for, while the
+    /// process has none for the settings' sample count yet; see
+    /// `createRenderer`.
+    private var pendingRendererCreation: Task<Void, Never>?
 
     init(mapView: ImmersiveMapHostView,
          layer: CAMetalLayer,
@@ -108,6 +112,7 @@ final class ImmersiveMapHostRuntime {
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
@@ -117,7 +122,8 @@ final class ImmersiveMapHostRuntime {
                         cameraController: cameraController,
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction,
-                        sceneModelTapAction: sceneModelTapAction)
+                        sceneModelTapAction: sceneModelTapAction,
+                        frameRenderedAction: frameRenderedAction)
         syncTourVideoRecorder(tourVideoRecorder)
         updateMarkerContent(markerContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
@@ -138,7 +144,8 @@ final class ImmersiveMapHostRuntime {
                         cameraController: nil,
                         selectionController: nil,
                         avatarTapAction: nil,
-                        sceneModelTapAction: nil)
+                        sceneModelTapAction: nil,
+                        frameRenderedAction: nil)
         syncTourVideoRecorder(nil)
         updateMarkerContent(nil)
     }
@@ -186,9 +193,11 @@ final class ImmersiveMapHostRuntime {
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
                          avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
-                         sceneModelTapAction newSceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil) {
+                         sceneModelTapAction newSceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                         frameRenderedAction newFrameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil) {
         runtimeGraph.selectionHandler.setAvatarTapAction(newAvatarTapAction)
         runtimeGraph.selectionHandler.setSceneModelTapAction(newSceneModelTapAction)
+        runtimeGraph.renderRuntime.setFrameRenderedAction(newFrameRenderedAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
@@ -240,8 +249,37 @@ final class ImmersiveMapHostRuntime {
         )
     }
 
+    /// Creates the renderer for the settings: at once when the process
+    /// already holds the shared GPU resources for their sample count (a
+    /// prewarm, an earlier map view, a recreation), otherwise after they
+    /// are built on a background task, so the first map view of a process
+    /// never blocks the main thread on shader pipelines and atlases. Until
+    /// the renderer exists the view shows nothing, the camera keeps every
+    /// position it is given, and the first frame follows the creation.
     private func createRenderer(settings: ImmersiveMapSettings,
                                 cameraPosition: ImmersiveMapCameraPosition?) {
+        pendingRendererCreation?.cancel()
+        pendingRendererCreation = nil
+        let sampleCount = settings.postProcessing.multisampleCount
+        guard SharedRenderResources.isAvailable(sampleCount: sampleCount) == false else {
+            createRendererNow(settings: settings, cameraPosition: cameraPosition)
+            return
+        }
+        pendingRendererCreation = Task { @MainActor [weak self] in
+            _ = await SharedRenderResources.resources(sampleCount: sampleCount)
+            guard let self, Task.isCancelled == false else {
+                return
+            }
+            self.pendingRendererCreation = nil
+            // The settings and the camera may have moved on while the
+            // resources were building; the renderer starts from the latest.
+            self.createRendererNow(settings: self.runtimeGraph.cameraRuntime.currentSettings,
+                                   cameraPosition: self.runtimeGraph.cameraRuntime.cameraPositionForRendererRecreation())
+        }
+    }
+
+    private func createRendererNow(settings: ImmersiveMapSettings,
+                                   cameraPosition: ImmersiveMapCameraPosition?) {
         // A fresh renderer starts with an empty presentation store, so any
         // path animation it would have finished is gone: resolve the app's
         // completions now instead of leaving chains waiting forever.
@@ -262,6 +300,8 @@ final class ImmersiveMapHostRuntime {
         // on a continuation that would otherwise never resume).
         runtimeGraph.cameraAnimationRuntime.cancelAnimations()
         let cameraPosition = runtimeGraph.cameraRuntime.cameraPositionForRendererRecreation()
+        pendingRendererCreation?.cancel()
+        pendingRendererCreation = nil
         renderer?.prepareForDiscard()
         runtimeGraph.renderRuntime.detachRenderer()
         renderer = nil
@@ -272,6 +312,7 @@ final class ImmersiveMapHostRuntime {
     }
 
     deinit {
+        pendingRendererCreation?.cancel()
         let detachedGraph = runtimeGraph
         Task { @MainActor in
             detachedGraph.cameraAnimationRuntime.reset()

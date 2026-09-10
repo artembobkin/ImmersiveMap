@@ -68,7 +68,7 @@ private struct CustomTilesScreen: View {
             // actually being served. This example defaults to the hosted
             // endpoint, an OpenStreetMap planet, so the badge credits
             // OpenStreetMap. Point the URL field at your own source and this
-            // string becomes yours to get right, see ATTRIBUTION.md.
+            // string becomes yours to get right, see the README.
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(
                 attributionOverride: ImmersiveMapAttribution(
                     title: "© OpenStreetMap",

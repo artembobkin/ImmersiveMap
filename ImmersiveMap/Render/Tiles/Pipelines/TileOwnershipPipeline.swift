@@ -23,7 +23,7 @@ final class TileOwnershipPipeline {
         descriptor.colorAttachments[0].writeMask = []
         descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
+        pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: descriptor)
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {

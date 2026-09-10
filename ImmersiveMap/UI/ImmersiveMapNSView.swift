@@ -86,6 +86,7 @@ public class ImmersiveMapNSView: NSView {
          selectionController: ImmersiveMapSelectionController?,
          avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
          sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+         frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
          markerContent: MarkerViewContent? = nil) {
         super.init(frame: frame)
         setup(settings: settings,
@@ -95,7 +96,8 @@ public class ImmersiveMapNSView: NSView {
                                     cameraController: cameraController,
                                     selectionController: selectionController,
                                     avatarTapAction: avatarTapAction,
-                                    sceneModelTapAction: sceneModelTapAction)
+                                    sceneModelTapAction: sceneModelTapAction,
+                                    frameRenderedAction: frameRenderedAction)
         hostRuntime.updateMarkerContent(markerContent)
     }
 
@@ -211,6 +213,7 @@ public class ImmersiveMapNSView: NSView {
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
@@ -221,6 +224,7 @@ public class ImmersiveMapNSView: NSView {
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
                            sceneModelTapAction: sceneModelTapAction,
+                           frameRenderedAction: frameRenderedAction,
                            markerContent: markerContent,
                            cameraPosition: cameraPosition,
                            tourVideoRecorder: tourVideoRecorder)
@@ -265,6 +269,7 @@ public class ImmersiveMapNSView: NSView {
                             selectionController: ImmersiveMapSelectionController?,
                             avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                             sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                            frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                             markerContent: MarkerViewContent?) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
@@ -273,6 +278,7 @@ public class ImmersiveMapNSView: NSView {
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
                            sceneModelTapAction: sceneModelTapAction,
+                           frameRenderedAction: frameRenderedAction,
                            markerContent: markerContent,
                            cameraPosition: cameraPosition)
         renderRuntime.setParked(false)

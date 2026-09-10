@@ -1,0 +1,12 @@
+{
+  "builtAt": "2026-09-10T12:46:49+00:00",
+  "gpuFamilies": [
+    "apple7",
+    "apple8",
+    "apple9"
+  ],
+  "metalToolchainVersion": "Apple metal version 32023.883 (metalfe-32023.883)",
+  "pipelineCount": 23,
+  "shaderSourceHash": "c875eea5e17bf7f08f408cdae41adcbc6ea7d0b329501d00b21cafc431a4ff91",
+  "specializedPipelineCount": 13
+}

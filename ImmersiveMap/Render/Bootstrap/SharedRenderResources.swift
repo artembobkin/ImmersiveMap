@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import Metal
-import MetalKit
 
 /// Process-wide immutable GPU resources shared by every renderer instance.
 ///
 /// A new `ImmersiveMapView` used to rebuild all of this from scratch: the
-/// shader library load, ~26 pipeline states, the MSDF text atlases (two PNG
-/// decodes + uploads and two JSON metric decodes), the POI sprite
+/// shader library load, ~26 pipeline states, the MSDF text atlases (two raw
+/// pixel uploads and two JSON metric decodes), the POI sprite
 /// rasterization, and the procedural sphere/cap geometry. None of it depends
 /// on anything that varies between views but the sample count: the device is
 /// the system singleton and the color format is always `bgra8Unorm`, so one
@@ -18,7 +17,10 @@ import MetalKit
 /// Everything held here is immutable after creation and is safe to read from
 /// any thread (Metal objects are thread-safe for use; the Swift wrappers never
 /// mutate after init). The cache itself is `@MainActor` because every renderer
-/// creation path already runs on the main actor.
+/// creation path already runs on the main actor; the build behind it runs
+/// on a detached task (`resources(sampleCount:)`, `prewarm(sampleCount:)`),
+/// so the first map view of a process, or an app that prewarms at launch,
+/// never stalls the main thread on shader pipelines and atlases.
 ///
 /// Deliberate trade-offs of process-lifetime caching:
 /// - The set stays resident after the last map view goes away (the decoded
@@ -129,50 +131,171 @@ final class SharedRenderResources {
     // MARK: - Lifecycle
 
     private static var cached: [Int: SharedRenderResources] = [:]
-    private static let sharedDevice: MTLDevice? = MTLCreateSystemDefaultDevice()
+    /// The builds in progress, one per resolved sample count, so a prewarm
+    /// and the first map view that arrives while it runs share one build.
+    private static var inFlight: [Int: Task<SharedRenderResources, Never>] = [:]
+    /// Metal objects are thread-safe; the box carries the device into the
+    /// background build under strict concurrency.
+    private struct DeviceBox: @unchecked Sendable {
+        let device: MTLDevice
+    }
+    private static let sharedDevice: DeviceBox? = MTLCreateSystemDefaultDevice().map(DeviceBox.init)
 
-    /// Returns the process-wide instance for a sample count, creating it on
-    /// first use. The count is the one the device can actually render with
-    /// (`RendererSetup.resolvedRenderSampleCount`), so two requests the
-    /// device resolves alike share one set.
-    static func shared(sampleCount: Int = 1) -> SharedRenderResources {
-        guard let device = sharedDevice else {
+    private static func resolvedSampleCount(_ sampleCount: Int) -> (device: MTLDevice, sampleCount: Int) {
+        guard let box = sharedDevice else {
             fatalError("Metal is not supported on this device")
         }
-        let resolved = RendererSetup.resolvedRenderSampleCount(requested: sampleCount, metalDevice: device)
+        return (box.device, RendererSetup.resolvedRenderSampleCount(requested: sampleCount, metalDevice: box.device))
+    }
+
+    /// Returns the process-wide instance for a sample count, creating it on
+    /// the calling thread when nothing has built it yet. The count is the
+    /// one the device can actually render with
+    /// (`RendererSetup.resolvedRenderSampleCount`), so two requests the
+    /// device resolves alike share one set. The synchronous path: the
+    /// offscreen recorders and the tests take it; a map view goes through
+    /// `resources(sampleCount:)` so the build never blocks the main thread.
+    static func shared(sampleCount: Int = 1) -> SharedRenderResources {
+        let (device, resolved) = resolvedSampleCount(sampleCount)
         if let cached = cached[resolved] {
             return cached
         }
-        let resources = SharedRenderResources(device: device, renderSampleCount: resolved)
+        let resources = SharedRenderResources(built: Self.build(device: device, renderSampleCount: resolved))
         cached[resolved] = resources
         return resources
     }
 
-    private init(device: MTLDevice, renderSampleCount: Int) {
-        self.device = device
-        self.library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
-        self.renderSampleCount = renderSampleCount
-        self.extrudedDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
-        self.labelDepthState = device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!
-        self.globeCapDepthState = device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!
-        self.skyBackdropDepthState = device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!
-        self.horizonGroundDepthState = device.makeDepthStencilState(descriptor: Self.makeHorizonGroundDepthDescriptor())!
-        self.depthDisabledState = device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!
-        self.groundDepthState = device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!
-        self.sphereOpaqueOwnerState = device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!
-        self.groundOwnerState = device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!
-        self.tileStencilTestState = device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!
-        self.groundOutlineState = device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!
-        self.tileOwnershipWriteState = device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!
-        self.extrudedStencilTestState = device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!
-        self.sceneModelSurfaceMaskState = device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!
-        self.shadowFallbackTexture = Self.makeShadowFallbackTexture(device: device)
-        self.groundShadowMaskFallbackTexture = Self.makeGroundShadowMaskFallbackTexture(device: device)
+    /// Whether `shared(sampleCount:)` would return without building.
+    static func isAvailable(sampleCount: Int = 1) -> Bool {
+        cached[resolvedSampleCount(sampleCount).sampleCount] != nil
+    }
 
+    /// The process-wide instance for a sample count, built off the main
+    /// thread when it does not exist yet: the shader library, the pipeline
+    /// states, the atlases and the geometry come together on a detached
+    /// task, and only the SF Symbol sprite atlas, which rasterizes through
+    /// UIImage/NSImage, is made here at the end. Concurrent callers await
+    /// the same build; a synchronous `shared` call that lands in the
+    /// meantime builds its own copy and wins, and the awaited build is then
+    /// dropped in its favour.
+    static func resources(sampleCount: Int = 1) async -> SharedRenderResources {
+        let (device, resolved) = resolvedSampleCount(sampleCount)
+        if let cached = cached[resolved] {
+            return cached
+        }
+        if let inFlight = inFlight[resolved] {
+            return await inFlight.value
+        }
+        let box = DeviceBox(device: device)
+        let task = Task { @MainActor () -> SharedRenderResources in
+            let built = await Task.detached(priority: .userInitiated) {
+                Self.build(device: box.device, renderSampleCount: resolved)
+            }.value
+            if let cached = cached[resolved] {
+                inFlight[resolved] = nil
+                return cached
+            }
+            let resources = SharedRenderResources(built: built)
+            cached[resolved] = resources
+            inFlight[resolved] = nil
+            return resources
+        }
+        inFlight[resolved] = task
+        return await task.value
+    }
+
+    /// Builds the resources for a sample count ahead of the first map view,
+    /// off the main thread; see `resources(sampleCount:)`. Returns when
+    /// they are ready.
+    static func prewarm(sampleCount: Int = 1) async {
+        _ = await resources(sampleCount: sampleCount)
+    }
+
+    #if DEBUG
+    /// Forgets the built set for a sample count, so a test can watch it
+    /// being built again. Engines holding the old set keep it.
+    static func dropCachedForTesting(sampleCount: Int) {
+        let resolved = resolvedSampleCount(sampleCount).sampleCount
+        cached[resolved] = nil
+        inFlight[resolved] = nil
+    }
+    #endif
+
+    /// Everything the build makes away from the main actor: immutable
+    /// Metal objects and the engine's wrappers around them.
+    private struct Built: @unchecked Sendable {
+        let device: MTLDevice
+        let library: MTLLibrary
+        let renderSampleCount: Int
+        let extrudedDepthState: MTLDepthStencilState
+        let labelDepthState: MTLDepthStencilState
+        let globeCapDepthState: MTLDepthStencilState
+        let skyBackdropDepthState: MTLDepthStencilState
+        let horizonGroundDepthState: MTLDepthStencilState
+        let depthDisabledState: MTLDepthStencilState
+        let groundDepthState: MTLDepthStencilState
+        let sphereOpaqueOwnerState: MTLDepthStencilState
+        let groundOwnerState: MTLDepthStencilState
+        let tileStencilTestState: MTLDepthStencilState
+        let groundOutlineState: MTLDepthStencilState
+        let tileOwnershipWriteState: MTLDepthStencilState
+        let extrudedStencilTestState: MTLDepthStencilState
+        let sceneModelSurfaceMaskState: MTLDepthStencilState
+        let shadowFallbackTexture: MTLTexture
+        let groundShadowMaskFallbackTexture: MTLTexture
+        let compiled: ConcurrentlyCompiledResources
+    }
+
+    private nonisolated static func build(device: MTLDevice, renderSampleCount: Int) -> Built {
+        let library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
         let compiled = Self.makeConcurrentlyCompiledResources(device: device,
                                                               library: library,
-                                                              pixelFormat: colorPixelFormat,
+                                                              pixelFormat: .bgra8Unorm,
                                                               sampleCount: renderSampleCount)
+        return Built(device: device,
+                     library: library,
+                     renderSampleCount: renderSampleCount,
+                     extrudedDepthState: device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!,
+                     labelDepthState: device.makeDepthStencilState(descriptor: Self.makeSceneDepthDescriptor())!,
+                     globeCapDepthState: device.makeDepthStencilState(descriptor: Self.makeGlobeCapDepthDescriptor())!,
+                     skyBackdropDepthState: device.makeDepthStencilState(descriptor: Self.makeSkyBackdropDepthDescriptor())!,
+                     horizonGroundDepthState: device.makeDepthStencilState(descriptor: Self.makeHorizonGroundDepthDescriptor())!,
+                     depthDisabledState: device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!,
+                     groundDepthState: device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!,
+                     sphereOpaqueOwnerState: device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!,
+                     groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
+                     tileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!,
+                     groundOutlineState: device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!,
+                     tileOwnershipWriteState: device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!,
+                     extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
+                     sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
+                     shadowFallbackTexture: Self.makeShadowFallbackTexture(device: device),
+                     groundShadowMaskFallbackTexture: Self.makeGroundShadowMaskFallbackTexture(device: device),
+                     compiled: compiled)
+    }
+
+    private init(built: Built) {
+        self.device = built.device
+        self.library = built.library
+        self.renderSampleCount = built.renderSampleCount
+        self.extrudedDepthState = built.extrudedDepthState
+        self.labelDepthState = built.labelDepthState
+        self.globeCapDepthState = built.globeCapDepthState
+        self.skyBackdropDepthState = built.skyBackdropDepthState
+        self.horizonGroundDepthState = built.horizonGroundDepthState
+        self.depthDisabledState = built.depthDisabledState
+        self.groundDepthState = built.groundDepthState
+        self.sphereOpaqueOwnerState = built.sphereOpaqueOwnerState
+        self.groundOwnerState = built.groundOwnerState
+        self.tileStencilTestState = built.tileStencilTestState
+        self.groundOutlineState = built.groundOutlineState
+        self.tileOwnershipWriteState = built.tileOwnershipWriteState
+        self.extrudedStencilTestState = built.extrudedStencilTestState
+        self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
+        self.shadowFallbackTexture = built.shadowFallbackTexture
+        self.groundShadowMaskFallbackTexture = built.groundShadowMaskFallbackTexture
+
+        let compiled = built.compiled
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
@@ -190,15 +313,15 @@ final class SharedRenderResources {
         self.textRenderer = compiled.textRenderer
 
         // SF Symbol rasterization goes through UIImage/NSImage and stays on
-        // the calling (main) thread rather than joining the concurrent batch.
-        self.poiSpriteAtlas = PoiSpriteAtlas(device: device)
+        // the main thread rather than joining the background build.
+        self.poiSpriteAtlas = PoiSpriteAtlas(device: built.device)
     }
 
     // MARK: - Concurrent pipeline compilation
 
     /// The pipeline groups and shared resources whose construction touches
     /// only the device and the library.
-    private struct ConcurrentlyCompiledResources {
+    private struct ConcurrentlyCompiledResources: @unchecked Sendable {
         let polygonPipeline: PolygonsPipeline
         let tilePipeline: TilePipeline
         let globeVectorSurfacePipeline: TilePipeline
@@ -325,7 +448,7 @@ final class SharedRenderResources {
 
     /// One lit texel for the ground pipeline's mask slot on frames without
     /// the mask pass. A color texture, so it can be filled from the CPU.
-    private static func makeGroundShadowMaskFallbackTexture(device: MTLDevice) -> MTLTexture {
+    private nonisolated static func makeGroundShadowMaskFallbackTexture(device: MTLDevice) -> MTLTexture {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: GroundShadowMaskPipeline.pixelFormat,
                                                                   width: 1,
                                                                   height: 1,
@@ -343,7 +466,7 @@ final class SharedRenderResources {
         return texture
     }
 
-    private static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
+    private nonisolated static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = .type2D
         descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
@@ -368,7 +491,7 @@ final class SharedRenderResources {
     /// The no-draw pass that leaves the fallback texture cleared to the far
     /// plane. Every receiver samples this texture while shadows are off, so it
     /// has to arrive cleared.
-    static func makeShadowFallbackClearDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
+    nonisolated static func makeShadowFallbackClearDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
         let passDescriptor = MTLRenderPassDescriptor()
         passDescriptor.depthAttachment.texture = texture
         passDescriptor.depthAttachment.loadAction = .clear
@@ -379,21 +502,21 @@ final class SharedRenderResources {
 
     // MARK: - Depth descriptors
 
-    private static func makeSceneDepthDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeSceneDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = true
         return descriptor
     }
 
-    private static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeGlobeCapDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = false
         return descriptor
     }
 
-    private static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeSkyBackdropDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = false
@@ -403,7 +526,7 @@ final class SharedRenderResources {
     /// The horizon layer's ground side: a far-plane fragment (z = 1) passes
     /// the greater test exactly where a nearer depth was written, which is
     /// every painted pixel, and fails on the cleared depth of the sky.
-    private static func makeHorizonGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeHorizonGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .greater
         descriptor.isDepthWriteEnabled = false
@@ -422,7 +545,7 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    private static func makeGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeGroundDepthDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .less
         descriptor.isDepthWriteEnabled = false
@@ -433,7 +556,7 @@ final class SharedRenderResources {
     /// pass tests greaterEqual against the finest painter's mark, and the
     /// owner passes replace it where they pass both tests, so a coarser
     /// substitute's overflow is rejected wherever a finer tile painted.
-    private static func makeTilePriorityStencil(writes: Bool) -> MTLStencilDescriptor {
+    private nonisolated static func makeTilePriorityStencil(writes: Bool) -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
         stencil.stencilCompareFunction = .greaterEqual
         stencil.stencilFailureOperation = .keep
@@ -449,7 +572,7 @@ final class SharedRenderResources {
     /// The surface mask (TileSourceStencilPriority.surfaceMaskBit): a
     /// standing surface raises the bit wherever it passes both tests, and
     /// nothing else in the stencil changes.
-    private static func makeSurfaceMaskWrite(compare: MTLCompareFunction) -> MTLStencilDescriptor {
+    private nonisolated static func makeSurfaceMaskWrite(compare: MTLCompareFunction) -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
         stencil.stencilCompareFunction = compare
         stencil.stencilFailureOperation = .keep
@@ -462,7 +585,7 @@ final class SharedRenderResources {
 
     /// The sphere's opaque ground pass: the layer-rank depth (lessEqual,
     /// written) plus the owning tile-priority stencil write.
-    private static func makeSphereOpaqueOwnerDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeSphereOpaqueOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
@@ -474,7 +597,7 @@ final class SharedRenderResources {
     /// still rejects everything under a building), WRITING the band so a
     /// pixel is shaded once by its topmost opaque layer, and owning the
     /// tile-priority stencil.
-    private static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.isDepthWriteEnabled = true
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
@@ -484,7 +607,7 @@ final class SharedRenderResources {
 
     /// Every non-owning tile pass (translucent fills, ribbons, roads): the
     /// ground depth test plus the tile-priority stencil test, no writes.
-    private static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
@@ -494,7 +617,7 @@ final class SharedRenderResources {
     /// The flat fill outlines: lessEqual against the rank band the opaque
     /// fills wrote (see `groundOutlineState`), no writes, the non-owning
     /// tile-priority test.
-    private static func makeGroundOutlineDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeGroundOutlineDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeTileStencilTestDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         return descriptor
@@ -502,7 +625,7 @@ final class SharedRenderResources {
 
     /// The tile-ownership prepass: depth always passes and is never written,
     /// so the owning stencil write lands on every pixel of the quad.
-    private static func makeTileOwnershipWriteDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeTileOwnershipWriteDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeDepthDisabledDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
@@ -516,7 +639,7 @@ final class SharedRenderResources {
     /// wall rises into the pixels of the ground behind it, where that test
     /// would compare it against the wrong tile anyway. The surface mask bit
     /// is still raised where a building lands, for the horizon.
-    private static func makeExtrudedStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeExtrudedStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
         descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
@@ -525,14 +648,14 @@ final class SharedRenderResources {
 
     /// The world-pass scene models: scene depth, no priority test (a model
     /// belongs to no tile), and the surface mask bit raised where it lands.
-    private static func makeSceneModelSurfaceMaskDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeSceneModelSurfaceMaskDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
         descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
         return descriptor
     }
 
-    private static func makeDepthDisabledDescriptor() -> MTLDepthStencilDescriptor {
+    private nonisolated static func makeDepthDisabledDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = .always
         descriptor.isDepthWriteEnabled = false

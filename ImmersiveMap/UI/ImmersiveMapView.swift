@@ -18,6 +18,7 @@ public struct ImmersiveMapView: View {
     private var selectionController: ImmersiveMapSelectionController?
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     private var markerContent: MarkerViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -46,6 +47,7 @@ public struct ImmersiveMapView: View {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        frameRenderedAction: frameRenderedAction,
                                         markerContent: markerContent,
                                         tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
@@ -68,6 +70,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -84,6 +87,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
+                                       frameRenderedAction: frameRenderedAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -96,6 +100,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        frameRenderedAction: frameRenderedAction,
                                         markerContent: markerContent)
         return uiView
     }
@@ -108,6 +113,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
+                      frameRenderedAction: frameRenderedAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -127,6 +133,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -143,6 +150,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
+                                       frameRenderedAction: frameRenderedAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -155,6 +163,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        frameRenderedAction: frameRenderedAction,
                                         markerContent: markerContent)
         return nsView
     }
@@ -167,6 +176,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
+                      frameRenderedAction: frameRenderedAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -179,6 +189,25 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
 #endif
 
 public extension ImmersiveMapView {
+
+    /// Builds the GPU resources every map view in the process shares (the
+    /// shader library and its pipeline states, the text atlases, the
+    /// marker and globe geometry) ahead of the first map view, off the main
+    /// thread. Call it once at app launch, before a screen with a map is
+    /// likely: the first map view then appears with its renderer at once
+    /// instead of building it, and an app that skips the call loses nothing
+    /// but that, since the first view builds the same resources on its own
+    /// background task and shows its first frame when they are ready.
+    /// Returns when the resources are built; a second call, or a map view
+    /// created while the build runs, waits for the same build. Safe to call
+    /// from any task.
+    ///
+    /// - Parameter settings: the settings the map views will use; only the
+    ///   multisample count of ``ImmersiveMapSettings/PostProcessingSettings``
+    ///   selects a resource set.
+    static func prewarm(settings: ImmersiveMapSettings = .default) async {
+        await SharedRenderResources.prewarm(sampleCount: settings.postProcessing.multisampleCount)
+    }
 
     func avatars(_ controller: ImmersiveMapAvatarsController?) -> ImmersiveMapView {
         var view = self
@@ -392,6 +421,23 @@ public extension ImmersiveMapView {
     func onSceneModelTap(_ action: @escaping (ImmersiveMapSceneModelTapEvent) -> Void) -> ImmersiveMapView {
         var view = self
         view.sceneModelTapAction = action
+        return view
+    }
+
+    /// Calls `action` on the main thread once per frame the map draws on
+    /// screen, right after the frame's command buffer was committed to the
+    /// GPU; see ``ImmersiveMapRenderedFrame`` for what the event carries and
+    /// what moment it marks. Rendering is on-demand, so a still map delivers
+    /// nothing: the frames come while the camera moves, labels fade or tiles
+    /// arrive. Offscreen rendering (video export, still capture) never
+    /// reports here.
+    ///
+    /// The action runs inside the frame's display-link callback: keep it to
+    /// bookkeeping (a counter, a timestamp, a ring buffer) and hand anything
+    /// heavier to a later turn of the run loop, or it delays the next frame.
+    func onFrameRendered(_ action: @escaping (ImmersiveMapRenderedFrame) -> Void) -> ImmersiveMapView {
+        var view = self
+        view.frameRenderedAction = action
         return view
     }
 
@@ -811,7 +857,7 @@ public extension ImmersiveMapView {
     /// stay visible on or next to the map, on every screen that shows one.
     ///
     /// What each provider requires and where it has to appear:
-    /// https://github.com/artembobkin/ImmersiveMap/blob/main/ATTRIBUTION.md
+    /// https://github.com/artembobkin/ImmersiveMap#attribution
     public func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionProvidedExternally(isProvidedExternally)

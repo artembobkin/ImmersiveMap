@@ -1,8 +1,9 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import MetalKit
 import Foundation
+import Metal
+import simd
 
 struct TextSize {
     let width: simd_float1
@@ -176,8 +177,10 @@ class TextRenderer {
         self.sampleCount = sampleCount
         self.bundle = .module
         
-        loadAtlasTexture()
+        // The JSON first: it carries the dimensions the raw pixel file has
+        // no header for.
         loadAtlasJSON()
+        loadAtlasTexture()
         buildGlyphLookupTables()
         createPipelines()
     }
@@ -263,8 +266,8 @@ class TextRenderer {
     }
     
     private func loadAtlasTexture() {
-        texture = loadAtlasTexture(named: boldAtlasName) ?? makeFallbackTexture()
-        thinTexture = loadAtlasTexture(named: thinAtlasName) ?? texture
+        texture = loadAtlasTexture(named: boldAtlasName, atlas: atlasData.atlas) ?? makeFallbackTexture()
+        thinTexture = loadAtlasTexture(named: thinAtlasName, atlas: thinAtlasData.atlas) ?? texture
     }
     
     private func loadAtlasJSON() {
@@ -306,30 +309,64 @@ class TextRenderer {
         )
     }
 
-    private func loadAtlasTexture(named name: String) -> MTLTexture? {
-        guard let url = bundle.url(forResource: name, withExtension: "png") else {
+    /// The atlas pixels ship raw (`<name>.bgra`: BGRA8, the byte order of
+    /// `bgra8Unorm`, row major, top row first, `width * height * 4` bytes,
+    /// no header), the bytes the image decoder used to produce, written
+    /// once by `Tools/TextAtlas/png_to_rgba.swift`. Loading is then a copy into a
+    /// staging buffer and a blit into the private texture: no PNG inflate
+    /// and unfilter, which was the largest single item of the engine's
+    /// creation on the main thread.
+    private func loadAtlasTexture(named name: String, atlas: AtlasInfo) -> MTLTexture? {
+        guard let url = bundle.url(forResource: name, withExtension: "bgra") else {
             #if DEBUG
-            print("Could not find atlas texture in bundle: \(name).png")
+            print("Could not find atlas pixels in bundle: \(name).bgra")
             #endif
             return nil
         }
-        let textureLoader = MTKTextureLoader(device: device)
-        // .private: the atlas is static, no CPU access is needed after upload. The
-        // loader fills the data via a staging blit, and the texture keeps no shadow
-        // CPU copy (managed/shared would hold one for its entire lifetime).
-        let options: [MTKTextureLoader.Option: Any] = [
-            .SRGB: false,
-            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
-        ]
-        do {
-            let texture = try textureLoader.newTexture(URL: url, options: options)
-            return texture
-        } catch {
+        let width = atlas.width
+        let height = atlas.height
+        let bytesPerRow = width * 4
+        guard width > 0, height > 0,
+              let pixels = try? Data(contentsOf: url, options: .mappedIfSafe),
+              pixels.count == bytesPerRow * height else {
             #if DEBUG
-            print("Failed to load atlas texture \(name).png: \(error)")
+            print("Atlas pixels \(name).bgra do not match the \(width)x\(height) atlas in \(name).json")
             #endif
             return nil
         }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
+                                                                  width: width,
+                                                                  height: height,
+                                                                  mipmapped: false)
+        descriptor.usage = [.shaderRead]
+        // .private: the atlas is static, no CPU access is needed after the
+        // upload, and a shared texture would keep a CPU copy for its whole
+        // lifetime (2 x 16 MB).
+        descriptor.storageMode = .private
+        guard let texture = device.makeTexture(descriptor: descriptor),
+              let staging = pixels.withUnsafeBytes({ bytes in
+                  device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
+              }),
+              let queue = device.makeCommandQueue(),
+              let commandBuffer = queue.makeCommandBuffer(),
+              let blit = commandBuffer.makeBlitCommandEncoder() else {
+            return nil
+        }
+        blit.copy(from: staging,
+                  sourceOffset: 0,
+                  sourceBytesPerRow: bytesPerRow,
+                  sourceBytesPerImage: bytesPerRow * height,
+                  sourceSize: MTLSize(width: width, height: height, depth: 1),
+                  to: texture,
+                  destinationSlice: 0,
+                  destinationLevel: 0,
+                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        commandBuffer.commit()
+        // The render queues that sample the atlas are not ordered against
+        // this one; waiting here is what makes the texture whole for them.
+        commandBuffer.waitUntilCompleted()
+        return texture
     }
 
     private func loadAtlasData(named name: String) -> AtlasData? {
@@ -871,6 +908,6 @@ class TextRenderer {
         descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
         descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        return try device.makeRenderPipelineState(descriptor: descriptor)
+        return try device.makeArchivedRenderPipelineState(descriptor: descriptor)
     }
 }

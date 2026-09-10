@@ -48,7 +48,7 @@ class SceneModelPipeline {
         pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
 
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        self.pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
         shadowDescriptor.vertexFunction = library.makeFunction(name: "sceneModelShadowVertexShader")
@@ -59,7 +59,7 @@ class SceneModelPipeline {
         // The caster pass writes a plain 2D depth attachment: one shadow
         // window, so no instancing and no [[render_target_array_index]].
         shadowDescriptor.inputPrimitiveTopology = .triangle
-        self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+        self.shadowPipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: shadowDescriptor)
 
         let occlusionDescriptor = MTLRenderPipelineDescriptor()
         occlusionDescriptor.vertexFunction = library.makeFunction(name: "sceneModelDepthOnlyVertexShader")
@@ -70,7 +70,7 @@ class SceneModelPipeline {
         occlusionDescriptor.colorAttachments[0].writeMask = []
         occlusionDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         occlusionDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        self.labelOcclusionPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: occlusionDescriptor)
+        self.labelOcclusionPipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: occlusionDescriptor)
 
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear

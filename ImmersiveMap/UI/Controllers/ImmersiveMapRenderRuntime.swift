@@ -7,6 +7,12 @@ import QuartzCore
 /// Wraps `ImmersiveMapRenderDriver`, tracks render activities, frame requests, and renderer attachment.
 final class ImmersiveMapRenderRuntime {
     private let driver: ImmersiveMapRenderDriver
+    /// The engine the driver renders with, kept here for the frame index the
+    /// rendered-frame event reports; the driver owns the attachment.
+    private weak var renderer: RenderFrameEngine?
+    /// The app's `onFrameRendered` action, if any. Called on the main thread
+    /// from the display-link callback, after the frame committed.
+    private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
 
     init(configuration: ImmersiveMapSettings.RenderLoopSettings) {
         self.driver = ImmersiveMapRenderDriver(configuration: configuration)
@@ -32,11 +38,17 @@ final class ImmersiveMapRenderRuntime {
     }
 
     func attachRenderer(_ renderer: RenderFrameEngine) {
+        self.renderer = renderer
         driver.attachRenderer(renderer)
     }
 
     func detachRenderer() {
+        renderer = nil
         driver.detachRenderer()
+    }
+
+    func setFrameRenderedAction(_ action: ((ImmersiveMapRenderedFrame) -> Void)?) {
+        frameRenderedAction = action
     }
 
     func updateRenderLoopSettings(_ settings: ImmersiveMapSettings.RenderLoopSettings) {
@@ -101,12 +113,26 @@ final class ImmersiveMapRenderRuntime {
         driver.continueFrameAfterPreparation()
     }
 
+    /// Renders one display-link update. `frameStartTime` is when the update
+    /// arrived and `targetPresentationTimestamp` when the display is expected
+    /// to show it; a frame that schedules is reported to the app's
+    /// `onFrameRendered` action with both, a skipped update reports nothing.
     @discardableResult
     func renderFrame(layer: CAMetalLayer,
                      drawable: any CAMetalDrawable,
+                     frameStartTime: CFTimeInterval,
+                     targetPresentationTimestamp: CFTimeInterval,
                      viewportRuntime: ImmersiveMapViewportRuntime) -> Bool {
-        driver.renderFrame(layer: layer,
-                           drawable: drawable,
-                           isRenderable: viewportRuntime.isRenderable)
+        let didSchedule = driver.renderFrame(layer: layer,
+                                             drawable: drawable,
+                                             isRenderable: viewportRuntime.isRenderable)
+        guard didSchedule, let frameRenderedAction else {
+            return didSchedule
+        }
+        let frame = ImmersiveMapRenderedFrame(frameIndex: renderer?.currentDiagnostics?.frameIndex ?? 0,
+                                              cpuDuration: max(0, CACurrentMediaTime() - frameStartTime),
+                                              targetPresentationTimestamp: targetPresentationTimestamp)
+        frameRenderedAction(frame)
+        return didSchedule
     }
 }
