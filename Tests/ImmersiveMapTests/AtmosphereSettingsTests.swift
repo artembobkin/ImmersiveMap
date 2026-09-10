@@ -7,6 +7,7 @@ import XCTest
 /// The atmosphere's public API, as it shipped in 0.7.1: the same fields,
 /// the same defaults, the same two modifiers on the settings value and on
 /// the view.
+@MainActor
 final class AtmosphereSettingsTests: XCTestCase {
     func testTheDefaultsAreTheShippedOnes() {
         let atmosphere = ImmersiveMapSettings.AtmosphereSettings()

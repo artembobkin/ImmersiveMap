@@ -7,6 +7,7 @@ import XCTest
 /// The extrusion toggle (`StyleSettings.buildingExtrusionEnabled`): off, the
 /// parser raises no building and the footprint stays a flat ground fill. The
 /// flag is prepared-cache identity and a heavy settings change.
+@MainActor
 final class BuildingExtrusionToggleTests: XCTestCase {
     private static let tile = Tile(x: 9908, y: 5140, z: 14)
 
