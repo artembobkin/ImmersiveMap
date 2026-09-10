@@ -427,25 +427,27 @@ struct VisualReviewScreen: View {
     /// use the container that breaks them. Nothing here needs what it offered:
     /// there is one fixed list, no navigation stack and no collapsing.
     private var platformBody: some View {
-        // The progress strip is a sibling of the split rather than a
+        // The status strips are siblings of the split rather than a
         // `safeAreaInset` on it. `HSplitView` is backed by `NSSplitView` and
-        // does not pass a bottom safe-area inset down to its columns: the strip
-        // came out floating over the review panel, cutting the verdict buttons
-        // off the bottom of the window while a run was in flight. A stack
-        // reserves the space it takes.
+        // does not pass a safe-area inset down to its columns: the strip came
+        // out floating over the review panel while a run was in flight. A
+        // stack reserves the space it takes.
         VStack(spacing: 0) {
+            // The strips sit at the top, under the toolbar, where the eye
+            // already goes for status; at the bottom they were under the
+            // verdict buttons and a long path read as part of the panel.
+            if model.isRendering {
+                renderingBanner
+                Divider()
+            } else if model.reportURL != nil {
+                reportBanner
+                Divider()
+            }
             HSplitView {
                 sidebar
                     .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
                 detail
                     .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
-            }
-            if model.isRendering {
-                Divider()
-                renderingBanner
-            } else if model.reportURL != nil {
-                Divider()
-                reportBanner
             }
         }
         .toolbar {

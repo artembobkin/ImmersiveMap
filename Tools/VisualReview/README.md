@@ -90,7 +90,7 @@ way too.
 
 Reports are written to `Reports/` next to this file on a Mac, and into the
 app's Documents container on a phone, where the Files app can also reach them.
-On a Mac the window shows the path under the map once the report exists, with
+On a Mac the window shows the path in a strip at the top once the report exists, with
 **Reveal in Finder** and **Save the report**, which copies the zip anywhere
 (the panel opens on Downloads); the share sheet alone cannot save a file.
 They are gitignored: the report is a copy of state that already lives in the
