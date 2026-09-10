@@ -53,8 +53,21 @@ final class PreparedTileDiskCachingAvailabilityTests: XCTestCase {
     /// exists, so a base under `/private` (every iPhone temporary directory)
     /// spells the namespace directory one way at init, before it exists, and
     /// another way once files land in it. The registry key must not care.
-    func testABaseDirectoryUnderPrivateStillIndexes() async {
-        let privateBase = URL(fileURLWithPath: "/private" + baseDirectory.path)
+    func testABaseDirectoryUnderPrivateStillIndexes() async throws {
+        // The twin spelling of the temporary directory through the `/private`
+        // link, whichever side of it the platform put the directory on: a
+        // Mac's temporary directory is under `/var`, a simulator's under the
+        // host's home, where no twin exists and the case does not apply.
+        let path = baseDirectory.path
+        let twinPath: String
+        if path.hasPrefix("/var/") {
+            twinPath = "/private" + path
+        } else if path.hasPrefix("/private/var/") {
+            twinPath = String(path.dropFirst("/private".count))
+        } else {
+            throw XCTSkip("The temporary directory has no /private twin here: \(path)")
+        }
+        let privateBase = URL(fileURLWithPath: twinPath)
         let cache = PreparedTileDiskCaching(config: ImmersiveMapSettings.default,
                                             cacheIdentity: makeCacheIdentity(),
                                             baseCachesDirectory: privateBase)
