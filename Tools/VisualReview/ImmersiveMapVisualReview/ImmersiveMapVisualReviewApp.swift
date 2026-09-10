@@ -50,6 +50,14 @@ final class VisualReviewItem: Identifiable {
     var state: State = .pending
     var artifact: VisualReviewArtifact?
     var verdict: VisualReviewVerdict?
+    /// Set by a render in this session and cleared by a verdict, so a fresh
+    /// render is looked at even when its pixels match the approved one.
+    ///
+    /// The fingerprint alone would let a re-render of the whole catalogue
+    /// come up all green and give the pass nothing to do: the point of
+    /// pressing Render all is to look again, and a render nobody has seen is
+    /// not approved, however much it resembles one that was.
+    var awaitsLook = false
 
     init(scenario: VisualReviewScenario, verdict: VisualReviewVerdict?) {
         self.id = scenario.id
@@ -68,7 +76,7 @@ final class VisualReviewItem: Identifiable {
 
     var needsAttention: Bool {
         guard case .rendered = state else { return false }
-        return isUnchangedSinceVerdict == false
+        return awaitsLook || isUnchangedSinceVerdict == false
     }
 
     var statusSymbol: String {
@@ -78,7 +86,7 @@ final class VisualReviewItem: Identifiable {
         case .failed: return "exclamationmark.triangle.fill"
         case .rendered:
             guard let verdict else { return "questionmark.circle" }
-            if isUnchangedSinceVerdict == false { return "arrow.triangle.2.circlepath" }
+            if needsAttention { return "arrow.triangle.2.circlepath" }
             return verdict.ruling == .ok ? "checkmark.circle.fill" : "xmark.circle.fill"
         }
     }
@@ -90,7 +98,7 @@ final class VisualReviewItem: Identifiable {
         case .failed: return .orange
         case .rendered:
             guard let verdict else { return .secondary }
-            if isUnchangedSinceVerdict == false { return .yellow }
+            if needsAttention { return .yellow }
             return verdict.ruling == .ok ? .green : .red
         }
     }
@@ -278,6 +286,7 @@ final class VisualReviewModel {
                                                                    into: directory)
                 }
                 item.state = .rendered
+                item.awaitsLook = true
             } catch {
                 item.state = .failed(String(describing: error))
             }
@@ -344,6 +353,7 @@ final class VisualReviewModel {
                                           fingerprint: artifact.fingerprint,
                                           commit: VisualReviewPaths.currentCommit())
         item.verdict = verdict
+        item.awaitsLook = false
         // Surfaced rather than swallowed. Writing the file is the one thing
         // this whole tool exists to do, and a discarded error means the row
         // turns green, the selection advances, and nothing was recorded: the
@@ -778,7 +788,7 @@ struct VisualReviewScreen: View {
             Label("Needs a look (\(model.attentionCount))", systemImage: "eye")
         }
         .toolbarLabelStyle()
-        .help("Show only scenarios whose render differs from the one they were approved for.")
+        .help("Show only scenarios rendered in this session or whose render differs from the one they were approved for.")
     }
 
     /// How a pass leaves the device.

@@ -101,8 +101,12 @@ newest is kept.
 
 Reviewing forty scenes from scratch every release is how a ritual like this
 dies. Each rendered artifact gets a coarse fingerprint, stored with the verdict
-it was approved under. On the next run anything that still matches is marked
-unchanged, and **Needs a look** filters the list down to what actually moved.
+it was approved under. When the app opens on renders left by an earlier run,
+anything that still matches is marked unchanged, and **Needs a look** filters
+the list down to what actually moved. A render made in this session is
+different: pressing **Render all** puts every scene it rendered back into
+**Needs a look** until a verdict is given, whether or not its pixels match the
+approved ones, because a picture nobody has looked at is not approved.
 
 The fingerprint is deliberately blunt: a 16x16 thumbnail with each channel
 quantized to 4 bits. Rendering is not bit-identical across GPU models, driver
