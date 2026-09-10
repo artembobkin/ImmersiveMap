@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
-ImmersiveMap is a pure Swift + Metal map rendering engine for SwiftUI apps on Apple platforms.
+ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms.
 
 ## Quick Start
 
@@ -22,6 +22,14 @@ struct ContentView: View {
 }
 ```
 
+## Installation
+
+Add ImmersiveMap as a Swift Package dependency:
+
+```text
+https://github.com/artembobkin/ImmersiveMap.git
+```
+
 ## Requirements
 
 - Swift 6.0+
@@ -30,51 +38,32 @@ struct ContentView: View {
 - macOS 15+ (native AppKit, not Mac Catalyst)
 - Metal-capable device or simulator
 
-## Installation
-
-ImmersiveMap is available on the [Swift Package Index](https://swiftpackageindex.com/artembobkin/ImmersiveMap).
-
-Add ImmersiveMap as a Swift Package dependency:
-
-```text
-https://github.com/artembobkin/ImmersiveMap.git
-```
-
-Or in Xcode:
-
-1. Open your project.
-2. Select **File → Add Package Dependencies…**
-3. Paste the repository URL.
-4. Add the `ImmersiveMap` library to your app target.
-
 ## Features
 
-| Feature | Status |
-|---|---|
-| SwiftUI integration | Available |
-| Native iOS (UIKit host) | Available |
-| Native macOS (AppKit host, no Catalyst) | Available |
-| Native Metal renderer | Available |
-| [Built-in vector tiles, no token required](Documentation/docs/map-data.md) | Available |
-| [Your own MVT tile source](Documentation/docs/custom-tile-provider.md) | Available |
-| [Customizable attribution badge](ATTRIBUTION.md) | Available |
-| [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md) | Available |
-| [The globe's atmosphere and the flat horizon's fog band](Documentation/docs/atmosphere.md) | Available |
-| [Labels with MSDF text and GPU collision](Documentation/docs/labels.md) | Available |
-| [Map styling and colors](Documentation/docs/styling.md) | Available |
-| [The streetscape: measured carriageways and road paint, opt-in](Documentation/docs/streetscape.md) | Available |
-| [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md) | Available |
-| [SwiftUI markers](Documentation/docs/markers.md) | Available |
-| [Avatars / live markers](Documentation/docs/avatars.md) | Available |
-| [Tap selection of avatars and models](Documentation/docs/selection.md) | Available |
-| [Routes on the globe](Documentation/docs/routes.md) | Available |
-| [3D scene models](Documentation/docs/scene-models.md) | Available |
-| [Camera flights and scripted tours](Documentation/docs/camera.md) | Available |
-| [Camera travelling along a path](Documentation/docs/camera-path-follow.md) | Available |
-| [Tour video export](Documentation/docs/tour-video-export.md) | Available |
-| [Tile caches: two disk layers, a working set in memory](Documentation/docs/tile-cache.md) | Available |
-| [Offline regions: download once, render without a network](Documentation/docs/offline-tiles.md) | Available |
-| [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md) | Available |
+- SwiftUI integration
+- Native iOS (UIKit host)
+- Native macOS (AppKit host, no Catalyst)
+- Native Metal renderer
+- [Built-in vector tiles, no token required](Documentation/docs/map-data.md)
+- [Your own MVT tile source](Documentation/docs/custom-tile-provider.md)
+- [Customizable attribution badge](ATTRIBUTION.md)
+- [Globe rendering and globe-to-flat morph](Documentation/docs/globe.md)
+- [The globe's atmosphere and the flat horizon's fog band](Documentation/docs/atmosphere.md)
+- [Labels with MSDF text and GPU collision](Documentation/docs/labels.md)
+- [Map styling and colors](Documentation/docs/styling.md)
+- [The streetscape: measured carriageways and road paint, opt-in](Documentation/docs/streetscape.md)
+- [Extruded buildings and shadows](Documentation/docs/buildings-and-shadows.md)
+- [SwiftUI markers](Documentation/docs/markers.md)
+- [Avatars / live markers](Documentation/docs/avatars.md)
+- [Tap selection of avatars and models](Documentation/docs/selection.md)
+- [Routes on the globe](Documentation/docs/routes.md)
+- [3D scene models](Documentation/docs/scene-models.md)
+- [Camera flights and scripted tours](Documentation/docs/camera.md)
+- [Camera travelling along a path](Documentation/docs/camera-path-follow.md)
+- [Tour video export](Documentation/docs/tour-video-export.md)
+- [Tile caches: two disk layers, a working set in memory](Documentation/docs/tile-cache.md)
+- [Offline regions: download once, render without a network](Documentation/docs/offline-tiles.md)
+- [Render loop, view reuse and debug HUD](Documentation/docs/performance-and-debug.md)
 
 ## App size
 
