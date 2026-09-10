@@ -2,13 +2,25 @@
 
 [![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
-https://github.com/user-attachments/assets/bbd2b88b-1873-4f14-8e60-1c88b53d4c05
+ImmersiveMap is a pure Swift + Metal map rendering engine for SwiftUI apps on Apple platforms.
 
-Native Swift + Metal map rendering engine for SwiftUI apps.
+## Quick Start
 
-ImmersiveMap is a **native Swift + Metal map rendering engine for SwiftUI** apps on Apple platforms. Pure Swift and Metal, with no native SDK wrapped in a Swift API.
+```swift
+import SwiftUI
+import ImmersiveMap
 
-It is built for apps where the map *is* the product rather than decoration: live location and social maps, games, travel, logistics, data visualisation. You get direct control over rendering, your own vector tile data, globe rendering, and an engine you can read and extend.
+struct ContentView: View {
+    @State private var camera = ImmersiveMapCameraController()
+
+    var body: some View {
+        ImmersiveMapView()
+            .cameraController(camera)
+            .enableCameraUIControls()
+            .ignoresSafeArea()
+    }
+}
+```
 
 ## Requirements
 
@@ -34,28 +46,6 @@ Or in Xcode:
 2. Select **File → Add Package Dependencies…**
 3. Paste the repository URL.
 4. Add the `ImmersiveMap` library to your app target.
-
-## Quick Start
-
-```swift
-import SwiftUI
-import ImmersiveMap
-
-struct ContentView: View {
-    @State private var camera = ImmersiveMapCameraController()
-
-    var body: some View {
-        ImmersiveMapView()
-            .cameraController(camera)
-            .enableCameraUIControls()
-            .ignoresSafeArea()
-    }
-}
-```
-
-ImmersiveMap ships with a built-in tile provider, so the snippet above renders a map out of the box - no token or account required (see [Where the map data comes from](Documentation/docs/map-data.md)). The same SwiftUI code runs natively on iOS (UIKit host) and macOS (AppKit host): `ImmersiveMapView` bridges to the platform view internally.
-
-Any other MVT source plugs in with one URL template, `.tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")`, see the [custom tile source guide](Documentation/docs/custom-tile-provider.md).
 
 ## Features
 
