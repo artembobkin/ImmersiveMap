@@ -4,6 +4,15 @@
 
 ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms, about +6 MB of app size.
 
+<p align="center">
+  <img src="Documentation/Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
+  <img src="Documentation/Assets/readme-globe.png" width="49%" alt="The globe with the atmosphere and stars">
+</p>
+<p align="center">
+  <img src="Documentation/Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
+  <img src="Documentation/Assets/readme-alps.png" width="49%" alt="The Alps with terrain and landcover">
+</p>
+
 ## Performance
 
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
