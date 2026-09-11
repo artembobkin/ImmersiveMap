@@ -217,11 +217,11 @@ enum VisualReviewCatalogue {
                                                               pitch: 0.9)
         /// The Bolshoi Theatre from Teatralnaya Square, facing its portico,
         /// with the measured streetscape of the square in front.
-        static let bolshoi = ImmersiveMapCameraPosition(latitudeDegrees: 55.7596,
+        static let bolshoi = ImmersiveMapCameraPosition(latitudeDegrees: 55.7587,
                                                         longitudeDegrees: 37.6187,
-                                                        zoom: 18.0,
+                                                        zoom: 17.9,
                                                         bearing: 0.0,
-                                                        pitch: 1.2)
+                                                        pitch: 1.15)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
