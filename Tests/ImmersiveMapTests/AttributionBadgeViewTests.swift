@@ -20,6 +20,23 @@ final class AttributionBadgeViewTests: XCTestCase {
         XCTAssertFalse(view.isHidden)
     }
 
+    /// No plate behind the words: the badge is the text itself, each glyph
+    /// stroked dark so it reads on any map colour underneath.
+    func testTheBadgeIsPlainTextOutlinedForAnyBackground() throws {
+        let settings = ImmersiveMapSettings.default
+        let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
+                                        settings: settings.attribution)
+
+        XCTAssertEqual(view.backgroundColor, .clear, "Nothing is painted behind the text")
+        let title = try XCTUnwrap(view.subviews.compactMap { $0 as? UILabel }.first?.attributedText)
+        XCTAssertEqual(title.string, settings.resolvedAttribution.title)
+        let attributes = title.attributes(at: 0, effectiveRange: nil)
+        let strokeWidth = try XCTUnwrap(attributes[.strokeWidth] as? CGFloat)
+        XCTAssertLessThan(strokeWidth, 0, "A negative stroke width fills and strokes the glyphs")
+        XCTAssertNotNil(attributes[.strokeColor] as? UIColor)
+        XCTAssertNotNil(attributes[.foregroundColor] as? UIColor)
+    }
+
     func testEmptyAttributionHidesBadge() {
         let view = AttributionBadgeView(attribution: .none,
                                         settings: ImmersiveMapSettings.AttributionSettings())

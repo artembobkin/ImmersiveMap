@@ -5,11 +5,18 @@
 
 import UIKit
 
-/// Renders the compact attribution overlay.
+/// Renders the compact attribution overlay: plain text over the map, no
+/// plate, each glyph outlined in a dark stroke so the words read on any
+/// map colour underneath.
 /// Owns only the badge labels, styling, and layout; map state stays in the
 /// surrounding runtimes. Size, position and text color come from
 /// `AttributionSettings`; the geometry lives in `AttributionBadgeLayoutMath`.
 final class AttributionBadgeView: UIView {
+    /// The outline around every glyph, as a fraction of the font size
+    /// (UIKit's `strokeWidth` is a percentage; negative strokes and fills).
+    static let strokeWidthPercent: CGFloat = -3.5
+    static let strokeColor = UIColor.black.withAlphaComponent(0.85)
+
     private let titleLabel = UILabel()
     private let copyrightLabel = UILabel()
     private var linkURL: URL?
@@ -27,8 +34,7 @@ final class AttributionBadgeView: UIView {
         super.init(frame: frame)
         isUserInteractionEnabled = false
         isOpaque = false
-        backgroundColor = UIColor.black.withAlphaComponent(0.56)
-        layer.masksToBounds = true
+        backgroundColor = .clear
 
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.adjustsFontSizeToFitWidth = true
@@ -60,26 +66,33 @@ final class AttributionBadgeView: UIView {
         linkURL = attribution.linkURL
         isUserInteractionEnabled = attribution.linkURL != nil
         accessibilityTraits = attribution.linkURL == nil ? [] : [.link]
-        titleLabel.text = attribution.title
-        copyrightLabel.text = attribution.copyright
         copyrightLabel.isHidden = attribution.copyright.isEmpty
-        titleLabel.font = .systemFont(ofSize: metrics.titleFontSize, weight: .semibold)
-        copyrightLabel.font = .systemFont(ofSize: metrics.copyrightFontSize, weight: .regular)
-        layer.cornerRadius = metrics.cornerRadius
-        applyTextColor(settings.textColor)
+        let color = settings.textColor ?? SIMD4<Float>(1, 1, 1, 1)
+        titleLabel.attributedText = Self.outlinedText(attribution.title,
+                                                      font: .systemFont(ofSize: metrics.titleFontSize, weight: .semibold),
+                                                      color: color,
+                                                      alpha: 1)
+        copyrightLabel.attributedText = Self.outlinedText(attribution.copyright,
+                                                          font: .systemFont(ofSize: metrics.copyrightFontSize, weight: .regular),
+                                                          color: color,
+                                                          alpha: 0.76)
         setNeedsLayout()
     }
 
-    private func applyTextColor(_ textColor: SIMD4<Float>?) {
-        let color = textColor ?? SIMD4<Float>(1, 1, 1, 1)
-        titleLabel.textColor = UIColor(red: CGFloat(color.x),
-                                       green: CGFloat(color.y),
-                                       blue: CGFloat(color.z),
-                                       alpha: CGFloat(color.w))
-        copyrightLabel.textColor = UIColor(red: CGFloat(color.x),
-                                           green: CGFloat(color.y),
-                                           blue: CGFloat(color.z),
-                                           alpha: CGFloat(color.w) * 0.76)
+    /// The text filled in the settings' colour and stroked dark around every
+    /// glyph, which is what keeps it legible over water, forest or a dark
+    /// palette alike without a plate behind it.
+    static func outlinedText(_ text: String, font: UIFont, color: SIMD4<Float>, alpha: CGFloat) -> NSAttributedString {
+        let fill = UIColor(red: CGFloat(color.x),
+                           green: CGFloat(color.y),
+                           blue: CGFloat(color.z),
+                           alpha: CGFloat(color.w) * alpha)
+        return NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: fill,
+            .strokeColor: strokeColor.withAlphaComponent(strokeColor.cgColor.alpha * alpha),
+            .strokeWidth: strokeWidthPercent
+        ])
     }
 
     @objc private func handleTap() {
@@ -104,17 +117,6 @@ final class AttributionBadgeView: UIView {
             margin: margin,
             isRightToLeft: effectiveUserInterfaceLayoutDirection == .rightToLeft
         )
-        layer.maskedCorners = Self.cornerMask(
-            for: AttributionBadgeLayoutMath.roundedCorners(badgeFrame: frame, bounds: bounds))
-    }
-
-    private static func cornerMask(for rounded: AttributionBadgeLayoutMath.RoundedCorners) -> CACornerMask {
-        var mask: CACornerMask = []
-        if rounded.topLeft { mask.insert(.layerMinXMinYCorner) }
-        if rounded.topRight { mask.insert(.layerMaxXMinYCorner) }
-        if rounded.bottomLeft { mask.insert(.layerMinXMaxYCorner) }
-        if rounded.bottomRight { mask.insert(.layerMaxXMaxYCorner) }
-        return mask
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
