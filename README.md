@@ -47,7 +47,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
 with tilt, a 20 second pan, an idle map. Defaults, 3D buildings and shadows on, warm caches.
 
-| | |
+| Metric | Result |
 |---|---:|
 | Frame rate on screen | 119 to 120 fps |
 | GPU per frame | 4.5 to 4.7 ms |
