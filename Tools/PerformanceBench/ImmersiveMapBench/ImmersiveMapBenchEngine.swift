@@ -7,13 +7,19 @@ import UIKit
 
 /// The variants this binary carries. ImmersiveMap needs no SDK-level setup
 /// before the baseline: credentials travel as request headers, and a cold
-/// cache is the engine's own `clearDiskCachesOnLaunch`.
+/// cache is the engine's own `clearDiskCachesOnLaunch`. `BENCH_PREWARM=1`
+/// builds the shared GPU resources here, ahead of the map view, the way an
+/// app calls `ImmersiveMapView.prewarm` at launch: the A/B for what the
+/// first map view costs the main thread without it.
 @MainActor
 final class ImmersiveMapEngineCatalog: BenchEngineCatalog {
     let defaultEngineName = "immersivemap"
 
     func prepare(engineName: String, coldCache: Bool) async -> Bool {
-        true
+        if ProcessInfo.processInfo.environment["BENCH_PREWARM"] == "1" {
+            await ImmersiveMapView.prewarm()
+        }
+        return true
     }
 
     func makeEngine(named name: String, targetFPS: Int, coldCache: Bool) -> BenchEngine? {
@@ -48,8 +54,16 @@ final class ImmersiveMapBenchEngine: BenchEngine {
     let name: String
     let version: String
     let view: UIView
-    var onFrame: (() -> Void)?
+    /// Fed by the engine's `onFrameRendered` action, which fires once per
+    /// frame the map committed to the GPU: what the harness counts as an
+    /// engine frame. The box exists because the action is installed on the
+    /// view before `self` is fully initialized.
+    var onFrame: (() -> Void)? {
+        get { frameSink.onFrame }
+        set { frameSink.onFrame = newValue }
+    }
 
+    private let frameSink = BenchFrameSink()
     private let camera = ImmersiveMapCameraController()
     private let host: UIHostingController<AnyView>
 
@@ -65,9 +79,11 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         let renderLoop = ImmersiveMapSettings.RenderLoopSettings(forceContinuousRendering: continuous,
                                                                  interactionFramesPerSecond: targetFPS,
                                                                  labelFadeFramesPerSecond: 30)
+        let frameSink = frameSink
         var map = ImmersiveMapView()
             .tileURLTemplate(BenchSecrets.immersiveMapTileTemplate, headers: BenchSecrets.immersiveMapHeaders())
             .camera(camera)
+            .onFrameRendered { _ in frameSink.onFrame?() }
             .renderLoopSettings(renderLoop)
             .tileSettings(clearDiskCachesOnLaunch: coldCache)
             .viewReuse(false)
@@ -92,12 +108,6 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         host = UIHostingController(rootView: AnyView(rootView))
         host.view.backgroundColor = .black
         view = host.view
-        // The camera position callback fires on every frame the camera moves,
-        // which is every frame of a flight or a pan: the closest thing to a
-        // frame callback the public API has.
-        camera.onCameraPositionChanged = { [weak self] _ in
-            Task { @MainActor in self?.onFrame?() }
-        }
     }
 
     func jump(to pose: BenchPose) {
@@ -138,4 +148,11 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         }
         return "checkout"
     }
+}
+
+/// Holds the harness's frame counter hook for the map's `onFrameRendered`
+/// action.
+@MainActor
+private final class BenchFrameSink {
+    var onFrame: (() -> Void)?
 }

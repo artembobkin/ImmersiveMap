@@ -208,6 +208,7 @@ final class BenchViewController: UIViewController {
                            hostIntervalP95Ms: weighted { $0.hostIntervalP95Ms },
                            hostIntervalP99Ms: weighted { $0.hostIntervalP99Ms },
                            hostIntervalMaxMs: parts.map(\.hostIntervalMaxMs).max() ?? 0,
+                           hostIntervalMaxAtSeconds: parts.max { $0.hostIntervalMaxMs < $1.hostIntervalMaxMs }?.hostIntervalMaxAtSeconds ?? 0,
                            hostHitches: parts.reduce(0) { $0 + $1.hostHitches },
                            hostHitchTimeMs: parts.reduce(0) { $0 + $1.hostHitchTimeMs },
                            engineFrames: frames,

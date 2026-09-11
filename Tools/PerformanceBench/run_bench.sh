@@ -45,10 +45,10 @@ for combo in "$@"; do
     *) echo "unknown engine $engine"; exit 1 ;;
   esac
   index=$((index + 1))
-  # BENCH_FPS, BENCH_EXIT, BENCH_CONTINUOUS and BENCH_ROOFS ride along from
-  # this shell's environment when they are set.
+  # BENCH_FPS, BENCH_EXIT, BENCH_CONTINUOUS, BENCH_ROOFS and BENCH_PREWARM
+  # ride along from this shell's environment when they are set.
   extra=""
-  for var in BENCH_FPS BENCH_EXIT BENCH_CONTINUOUS BENCH_ROOFS; do
+  for var in BENCH_FPS BENCH_EXIT BENCH_CONTINUOUS BENCH_ROOFS BENCH_PREWARM; do
     eval "value=\${$var:-}"
     if [ -n "$value" ]; then
       extra="$extra,\"$var\":\"$value\""

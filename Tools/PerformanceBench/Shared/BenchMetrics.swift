@@ -20,6 +20,10 @@ struct BenchWindow: Codable {
     var hostIntervalP95Ms: Double
     var hostIntervalP99Ms: Double
     var hostIntervalMaxMs: Double
+    /// Seconds from the window's start to the tick that ended the longest
+    /// interval: where in the window the worst stall sits, which tells an
+    /// engine's creation apart from its first tiles.
+    var hostIntervalMaxAtSeconds: Double
     /// Ticks that arrived two or more vsyncs late at the requested rate.
     var hostHitches: Int
     /// Time the display spent inside those late ticks, past the first vsync.
@@ -112,8 +116,15 @@ final class BenchMetrics {
 
         var intervals: [Double] = []
         intervals.reserveCapacity(tickTimestamps.count)
+        var maxIntervalEnd = windowStart
+        var maxInterval = 0.0
         for i in 1..<max(tickTimestamps.count, 1) {
-            intervals.append((tickTimestamps[i] - tickTimestamps[i - 1]) * 1000)
+            let interval = (tickTimestamps[i] - tickTimestamps[i - 1]) * 1000
+            if interval > maxInterval {
+                maxInterval = interval
+                maxIntervalEnd = tickTimestamps[i]
+            }
+            intervals.append(interval)
         }
         let sorted = intervals.sorted()
         let vsyncMs = 1000.0 / Double(targetFPS)
@@ -135,6 +146,7 @@ final class BenchMetrics {
             hostIntervalP95Ms: percentile(0.95),
             hostIntervalP99Ms: percentile(0.99),
             hostIntervalMaxMs: sorted.last ?? 0,
+            hostIntervalMaxAtSeconds: maxIntervalEnd - windowStart,
             hostHitches: late.count,
             hostHitchTimeMs: late.reduce(0) { $0 + ($1 - vsyncMs) },
             engineFrames: engineFrameCount,
