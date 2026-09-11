@@ -31,10 +31,9 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 ## Performance
 
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
-with tilt, a 20 second pan, an idle map. The same session, phone and hours for the Mapbox
-Maps SDK 11.26.0 in its Standard style (3D buildings, the closest match to the defaults
-here), one engine per process, the engines interleaved: five warm and two cold runs of
-each through the bench harness, and three Metal System Traces of each, over two days.
+with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard style,
+measured the same way on the same phone: five warm runs and three Metal System Traces
+per engine.
 
 | Metric | ImmersiveMap | Mapbox Standard |
 |---|---:|---:|
@@ -47,15 +46,11 @@ each through the bench harness, and three Metal System Traces of each, over two 
 | Memory, idle | 160 to 200 MB | 290 to 720 MB |
 | First map view, main thread | 60 to 75 ms | not measured |
 
-Frame rate and GPU time come from the traces: the frame rate is the tenth percentile to
-the median of the seconds in motion, the mean GPU time is the total per frame over the
-flights and over the pan, and the percentiles are of the GPU span of every frame (first
-encoder start to last encoder end), the median trace of the three. CPU and memory come
-from the harness, the range across the warm runs. Mapbox Standard's memory differs run to
-run (270 MB on one cold cache, 940 MB on a warm one); the range covers both. The two
-engines draw different data in different styles, so this compares two products at their
-defaults, not two renderers on the same input. Measured with `Tools/PerformanceBench` on
-one device; rerun before quoting for another.
+Frame rate and GPU time are from the traces (frame rate: the tenth percentile to the median
+of the seconds in motion), CPU and memory from the harness. Mapbox Standard's memory varies
+with its cache, hence the wide range. The engines draw different data in different styles:
+two products at their defaults, not two renderers on one input. Measured with
+`Tools/PerformanceBench`; rerun before quoting for another device.
 
 ## Features
 
