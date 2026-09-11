@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImageIO
 import ImmersiveMap
 import SwiftUI
 
@@ -190,12 +191,12 @@ enum VisualReviewCatalogue {
                                                                    zoom: 8.4,
                                                                    bearing: 0.0,
                                                                    pitch: 1.25)
-        /// Shinjuku's towers under a low camera, looking east.
-        static let tokyoTilted = ImmersiveMapCameraPosition(latitudeDegrees: 35.6905,
-                                                            longitudeDegrees: 139.6890,
-                                                            zoom: 16.0,
-                                                            bearing: 1.2,
-                                                            pitch: 1.0)
+        /// The Chicago Loop from the river, under a low camera.
+        static let chicagoTilted = ImmersiveMapCameraPosition(latitudeDegrees: 41.8855,
+                                                              longitudeDegrees: -87.6330,
+                                                              zoom: 16.0,
+                                                              bearing: 0.9,
+                                                              pitch: 1.0)
         /// Mitte from the south-east, Museumsinsel ahead.
         static let berlinTilted = ImmersiveMapCameraPosition(latitudeDegrees: 52.5194,
                                                              longitudeDegrees: 13.3985,
@@ -667,15 +668,15 @@ enum VisualReviewCatalogue {
         // content the public API puts on the map, and the dark palette.
 
         VisualReviewScenario(
-            id: "showcase.tokyo.tilted",
-            title: "Shinjuku towers under a low camera",
+            id: "showcase.chicago.tilted",
+            title: "The Chicago Loop under a low camera",
             lookFor: """
             Towers stand solid with soft cool shadows, the streets between \
             them read to the horizon, and the far ground fades into the fog \
             band rather than ending in a hard edge.
             """,
             settings: .default,
-            subject: .still(camera: Place.tokyoTilted)),
+            subject: .still(camera: Place.chicagoTilted)),
 
         VisualReviewScenario(
             id: "showcase.berlin.tilted",
@@ -703,9 +704,9 @@ enum VisualReviewCatalogue {
             id: "showcase.avatars.shibuya",
             title: "Avatar markers at Shibuya crossing",
             lookFor: """
-            A crowd of avatar markers with battery and speed badges over the \
-            crossing, laid out without overlaps, each standing on its point \
-            under the tilted camera.
+            A handful of avatar markers with portraits and battery and speed \
+            badges over the crossing, laid out without overlaps, each \
+            standing on its point under the tilted camera.
             """,
             settings: .default,
             subject: .still(camera: Place.shibuyaTilted),
@@ -715,8 +716,8 @@ enum VisualReviewCatalogue {
             id: "showcase.avatars.globe",
             title: "Avatar markers on the globe",
             lookFor: """
-            Avatars in a dozen cities around the planet, the ones beyond the \
-            horizon hidden, the rest facing the camera at one size.
+            Avatars in five cities on the visible side of the planet, facing \
+            the camera at one size.
             """,
             settings: .default,
             subject: .still(camera: Place.globe),
@@ -726,8 +727,9 @@ enum VisualReviewCatalogue {
             id: "showcase.models.paris",
             title: "3D scene models by the Eiffel Tower",
             lookFor: """
-            Two textured models, one on the Champ de Mars and one in the air \
-            over the river, lit and shadowed with the buildings around them.
+            Two textured models facing the camera, one on the Champ de Mars \
+            and one in the air over the river, lit and shadowed with the \
+            buildings around them.
             """,
             settings: .default,
             subject: .still(camera: Place.parisTilted),
@@ -819,37 +821,48 @@ extension ImmersiveMapView {
 /// What the showcase scenes put on the map: content that comes through the
 /// public controllers rather than from tiles, and the dark palette.
 enum Showcase {
-    /// The avatar crowd of the `ImmersiveMapAvatarsMac` example, with the
-    /// numbered placeholders as portraits so the render needs no network.
+    /// A portrait for an avatar: the photos under `Tools/VisualReview/
+    /// Portraits` (randomuser.me, free for mockups), read off the checkout,
+    /// with the numbered placeholder where there is no checkout.
+    static func portrait(_ index: Int) -> CGImage {
+        #if !os(iOS)
+        let url = VisualReviewPaths.repositoryRoot
+            .appending(path: "Tools/VisualReview/Portraits/portrait-\(index).jpg")
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let image = CGImageSourceCreateImageAtIndex(source, 0, nil) {
+            return image
+        }
+        #endif
+        return AvatarMarkerImageFactory.number(index)
+    }
+
+    /// Five people around Shibuya crossing, far enough apart to read as
+    /// separate markers under the tilted camera.
     static func shibuyaAvatars() -> [AvatarMarker] {
         let center = GeoCoordinate(latitude: 35.6595, longitude: 139.7005)
-        let offsets: [(Double, Double, Int?, Int?)] = [
-            (0.0012, 0.0018, 84, nil), (-0.0016, 0.0009, nil, 14), (0.0007, -0.0021, 47, nil),
-            (-0.0011, -0.0013, nil, nil), (0.0024, -0.0004, 92, 5), (-0.0025, 0.0022, nil, nil),
-            (0.0003, 0.0032, 61, nil), (-0.0005, -0.0034, nil, 32), (0.0018, 0.0006, 30, nil),
-            (-0.0020, -0.0002, nil, 8),
+        let people: [(Double, Double, Int?, Int?)] = [
+            (0.0006, 0.0004, 84, nil), (-0.0012, 0.0016, nil, 14), (0.0016, -0.0018, 47, nil),
+            (-0.0018, -0.0010, nil, nil), (0.0022, 0.0020, 92, 5),
         ]
-        return offsets.enumerated().map { index, offset in
+        return people.enumerated().map { index, person in
             AvatarMarker(id: UInt64(index + 1),
-                         coordinate: GeoCoordinate(latitude: center.latitude + offset.0,
-                                                   longitude: center.longitude + offset.1),
-                         image: AvatarMarkerImageFactory.number(index + 1),
-                         batteryBadge: offset.2.map { AvatarBatteryBadge(levelPct: $0) },
-                         speedBadge: offset.3.map { AvatarSpeedBadge(kilometersPerHour: $0) })
+                         coordinate: GeoCoordinate(latitude: center.latitude + person.0,
+                                                   longitude: center.longitude + person.1),
+                         image: portrait(index + 1),
+                         batteryBadge: person.2.map { AvatarBatteryBadge(levelPct: $0) },
+                         speedBadge: person.3.map { AvatarSpeedBadge(kilometersPerHour: $0) })
         }
     }
 
-    /// Avatars in cities around the planet, for the globe.
+    /// Five cities on the side of the planet the globe scene shows.
     static func worldAvatars() -> [AvatarMarker] {
         let cities: [(Double, Double)] = [
-            (55.7558, 37.6173), (-22.9068, -43.1729), (37.7749, -122.4194), (19.4326, -99.1332),
-            (51.5074, -0.1278), (48.8566, 2.3522), (40.7128, -74.0060), (35.6762, 139.6503),
-            (25.2048, 55.2708), (-33.8688, 151.2093), (1.3521, 103.8198), (-1.2921, 36.8219),
+            (51.5074, -0.1278), (55.7558, 37.6173), (6.5244, 3.3792), (-33.9249, 18.4241), (-22.9068, -43.1729),
         ]
         return cities.enumerated().map { index, city in
             AvatarMarker(id: UInt64(100 + index),
                          coordinate: GeoCoordinate(latitude: city.0, longitude: city.1),
-                         image: AvatarMarkerImageFactory.number(index + 1))
+                         image: portrait(index + 1))
         }
     }
 
@@ -865,19 +878,21 @@ enum Showcase {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return []
         }
+        // The camera looks along bearing 0.35 rad (20 degrees); the models
+        // face it, so they look back down the view direction.
         let spot = ImmersiveMapSceneModel.Source(url: url)
         return [
             ImmersiveMapSceneModel(id: 9001,
                                    source: spot,
-                                   coordinate: GeoCoordinate(latitude: 48.8570, longitude: 2.2952),
-                                   headingDegrees: -35,
+                                   coordinate: GeoCoordinate(latitude: 48.8560, longitude: 2.2970),
+                                   headingDegrees: 200,
                                    fitDiameterMeters: 160),
             ImmersiveMapSceneModel(id: 9002,
                                    source: spot,
-                                   coordinate: GeoCoordinate(latitude: 48.8615, longitude: 2.2890),
-                                   altitudeMeters: 260,
-                                   headingDegrees: 120,
-                                   pitchDegrees: 12,
+                                   coordinate: GeoCoordinate(latitude: 48.8598, longitude: 2.2930),
+                                   altitudeMeters: 220,
+                                   headingDegrees: 200,
+                                   pitchDegrees: 8,
                                    fitDiameterMeters: 110),
         ]
         #endif
