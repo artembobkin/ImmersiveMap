@@ -50,7 +50,7 @@ Frame rate and GPU time are from the traces (frame rate: the tenth percentile to
 of the seconds in motion), CPU and memory from the harness. Mapbox Standard's memory varies
 with its cache, hence the wide range. The engines draw different data in different styles:
 two products at their defaults, not two renderers on one input. Measured with
-`Tools/PerformanceBench`; rerun before quoting for another device.
+`Tools/PerformanceBench`. Rerun before quoting for another device.
 
 ## Features
 

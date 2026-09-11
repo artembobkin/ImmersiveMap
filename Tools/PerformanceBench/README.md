@@ -22,7 +22,7 @@ The result also records the device, the OS, Low Power Mode and the thermal state
 
 ## Running
 
-The ImmersiveMap tile service is public and needs no key. The Mapbox bench needs a `MAPBOX_ACCESS_TOKEN`, a public `pk.` token with the default scopes, read from the gitignored `LocalSecrets.plist` at the repository root and copied into the bundle by the "Bundle LocalSecrets" phase; the environment variable of the same name wins when set (`IMMERSIVEMAP_API_KEY` is read the same way but stays empty).
+The ImmersiveMap tile service is public and needs no key. The Mapbox bench needs a `MAPBOX_ACCESS_TOKEN`, a public `pk.` token with the default scopes, read from the gitignored `LocalSecrets.plist` at the repository root and copied into the bundle by the "Bundle LocalSecrets" phase. The environment variable of the same name wins when set (`IMMERSIVEMAP_API_KEY` is read the same way but stays empty).
 
 ```sh
 xcrun xctrace list devices                                   # find the device id

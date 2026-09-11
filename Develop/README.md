@@ -49,7 +49,7 @@ project is a copy of a sibling with the names changed.
 The hosted tile service is public and needs no key. The headers helper only
 forwards an `Authorization` header when `IMMERSIVEMAP_API_KEY` is set in the
 environment or in the gitignored `LocalSecrets.plist` at the repository root,
-which is for pointing the app at a private endpoint of your own; the shared
+which is for pointing the app at a private endpoint of your own. The shared
 scheme carries the variable with an empty value, and nothing secret is ever
 committed, here least of all.
 
