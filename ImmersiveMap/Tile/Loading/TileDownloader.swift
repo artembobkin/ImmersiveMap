@@ -64,17 +64,18 @@ class TileDownloader: @unchecked Sendable {
         return "ImmersiveMap: tile requests are being rate limited (HTTP 429), so tiles will be missing until the limit clears."
     }
 
-    /// What to do about a rejected credential, spelled out. The advice names
-    /// the account page only when the request actually went to the hosted
-    /// service; any other endpoint gets the generic pointer at the two places
-    /// a credential can travel. A server-provided `message` is appended, same
-    /// convention as the rate-limit body.
+    /// What to do about a rejected credential, spelled out. The hosted
+    /// service is public and asks for none, so a rejection there points at a
+    /// header the request should not have carried; any other endpoint gets
+    /// the generic pointer at the two places a credential can travel. A
+    /// server-provided `message` is appended, same convention as the
+    /// rate-limit body.
     static func authorizationFailureMessage(statusCode: Int, url: URL?, responseBody: Data) -> String {
         let reason = statusCode == 401 ? "unauthorized" : "forbidden"
         let host = url?.host
         var message = "ImmersiveMap: the tile server\(host.map { " at \($0)" } ?? "") returned HTTP \(statusCode) (\(reason))."
         if host?.hasSuffix("immersivemap.dev") == true {
-            message += " If you are using https://immersivemap.dev, check your token in your account: https://immersivemap.dev/account."
+            message += " https://immersivemap.dev is public and needs no credential, so check that tileURLTemplate(_:headers:) sends no stale Authorization header."
         } else {
             message += " Check the credential the tile source sends: a key in the URL template's query, or an Authorization header in tileURLTemplate(_:headers:)."
         }

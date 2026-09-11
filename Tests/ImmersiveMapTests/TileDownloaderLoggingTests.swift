@@ -100,9 +100,10 @@ final class TileDownloaderLoggingTests: XCTestCase {
         XCTAssertFalse(output.contains("Get a key"), "the advice belongs in the unified log, not stdout: \(output)")
     }
 
-    // A bare "401" is a number, not an instruction. The warning has to tell
-    // the developer where the credential lives and where to fix it.
-    func testAuthorizationMessagePointsAtTheAccountForTheHostedService() {
+    // A bare "401" is a number, not an instruction. The hosted service is
+    // public, so the warning says a credential is not the fix and points at
+    // the header the request should not be sending.
+    func testAuthorizationMessageSaysTheHostedServiceNeedsNoCredential() {
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 401,
             url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt"),
@@ -111,7 +112,9 @@ final class TileDownloaderLoggingTests: XCTestCase {
         XCTAssertTrue(message.contains("401"), message)
         XCTAssertTrue(message.contains("unauthorized"), message)
         XCTAssertTrue(message.contains("immersivemap.dev"), message)
-        XCTAssertTrue(message.contains("https://immersivemap.dev/account"), message)
+        XCTAssertTrue(message.contains("needs no credential"), message)
+        XCTAssertTrue(message.contains("tileURLTemplate"), message)
+        XCTAssertFalse(message.contains("account"), message)
     }
 
     // Someone else's endpoint gets the generic advice: the engine cannot know
@@ -126,7 +129,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
         XCTAssertTrue(message.contains("forbidden"), message)
         XCTAssertTrue(message.contains("tiles.example.com"), message)
         XCTAssertTrue(message.contains("tileURLTemplate"), message)
-        XCTAssertFalse(message.contains("immersivemap.dev/account"), message)
+        XCTAssertFalse(message.contains("needs no credential"), message)
     }
 
     // The service knows more than the engine (expired vs revoked vs wrong
@@ -178,7 +181,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
             XCTAssertEqual(result, .failure(.unauthorized))
         }
 
-        XCTAssertFalse(output.contains("immersivemap.dev/account"),
+        XCTAssertFalse(output.contains("needs no credential"),
                        "the advice belongs in the unified log, not stdout: \(output)")
     }
 }
