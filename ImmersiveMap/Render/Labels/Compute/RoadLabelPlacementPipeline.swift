@@ -8,7 +8,7 @@ final class RoadLabelPlacementPipeline {
 
     init(metalDevice: MTLDevice, library: MTLLibrary) {
         let kernel = library.makeFunction(name: "roadLabelPlacementKernel")
-        self.pipelineState = try! metalDevice.makeArchivedComputePipelineState(function: kernel!)
+        self.pipelineState = try! metalDevice.makeComputePipelineState(function: kernel!)
     }
 
     func encode(encoder: MTLComputeCommandEncoder) {

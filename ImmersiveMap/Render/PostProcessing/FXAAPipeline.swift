@@ -19,7 +19,7 @@ final class FXAAPipeline {
         descriptor.vertexFunction = library.makeFunction(name: "postProcessingVertexShader")
         descriptor.fragmentFunction = library.makeFunction(name: "fxaaFragmentShader")
         descriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: descriptor)
+        pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,

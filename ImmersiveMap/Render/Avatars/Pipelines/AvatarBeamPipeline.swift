@@ -51,6 +51,6 @@ final class AvatarBeamPipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
-        return try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+        return try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
 }

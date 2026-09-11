@@ -59,7 +59,7 @@ final class HorizonPipeline {
             descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
             descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
             do {
-                return try metalDevice.makeArchivedRenderPipelineState(descriptor: descriptor)
+                return try metalDevice.makeRenderPipelineState(descriptor: descriptor)
             } catch {
                 fatalError("Failed to create the horizon pipeline: \(error)")
             }

@@ -20,8 +20,8 @@ final class TilePointScreenPipelines {
     init(metalDevice: MTLDevice, library: MTLLibrary) {
         let flatKernel = library.makeFunction(name: "tilePointToScreenFlatKernel")
         let globeKernel = library.makeFunction(name: "tilePointToScreenGlobeKernel")
-        self.flat = try! metalDevice.makeArchivedComputePipelineState(function: flatKernel!)
-        self.globe = try! metalDevice.makeArchivedComputePipelineState(function: globeKernel!)
+        self.flat = try! metalDevice.makeComputePipelineState(function: flatKernel!)
+        self.globe = try! metalDevice.makeComputePipelineState(function: globeKernel!)
     }
 }
 

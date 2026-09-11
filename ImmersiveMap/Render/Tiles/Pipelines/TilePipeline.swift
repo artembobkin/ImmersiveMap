@@ -152,7 +152,7 @@ class TilePipeline {
         pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         
-        self.pipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
         if spherePureVertexFunctions.isEmpty == false {
             func makeClassStates(vertexFns: [Bool: MTLFunction],
@@ -161,14 +161,14 @@ class TilePipeline {
                                                                        ribbons: MTLRenderPipelineState) {
                 pipelineDescriptor.vertexFunction = vertexFns[false]
                 pipelineDescriptor.fragmentFunction = fragmentFns[false]
-                let fills = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+                let fills = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
                 // The opaque fills variant: same functions, no blending.
                 pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
-                let opaqueFills = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+                let opaqueFills = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
                 pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
                 pipelineDescriptor.vertexFunction = vertexFns[true]
                 pipelineDescriptor.fragmentFunction = fragmentFns[true]
-                let ribbons = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+                let ribbons = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
                 return (fills, opaqueFills, ribbons)
             }
             let pure = makeClassStates(vertexFns: spherePureVertexFunctions,
@@ -196,13 +196,13 @@ class TilePipeline {
            let flatFillOutlineVertexFunction, let flatFillOutlineFragmentFunction {
             pipelineDescriptor.vertexFunction = flatFillsVertexFunction
             pipelineDescriptor.fragmentFunction = flatFillsFragmentFunction
-            self.flatFillsPipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+            self.flatFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
-            self.flatOpaquePipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+            self.flatOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
             pipelineDescriptor.vertexFunction = flatFillOutlineVertexFunction
             pipelineDescriptor.fragmentFunction = flatFillOutlineFragmentFunction
-            self.flatFillOutlinePipelineState = try! metalDevice.makeArchivedRenderPipelineState(descriptor: pipelineDescriptor)
+            self.flatFillOutlinePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
