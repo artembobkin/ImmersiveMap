@@ -7,10 +7,10 @@ Usage:
   generate_text_atlas.sh --font /path/to/font.ttf|otf [options]
 
 Required:
-  --font PATH              Primary font for atlas.json and atlas.png.
+  --font PATH              Primary font for atlas.json and atlas.bgra.
 
 Options:
-  --thin-font PATH         Font for atlas_thin.json and atlas_thin.png.
+  --thin-font PATH         Font for atlas_thin.json and atlas_thin.bgra.
                            Defaults to --font for pipeline smoke tests.
   --charset PATH           Charset file. Defaults to
                            Tools/TextAtlas/charsets/labels-basic.txt.
@@ -23,7 +23,13 @@ Options:
   -h, --help               Show this help.
 
 Generated outputs:
-  atlas.json, atlas.png, atlas_thin.json, atlas_thin.png
+  atlas.json, atlas.bgra, atlas_thin.json, atlas_thin.bgra
+
+The .bgra files are the atlas pixels as they go to the GPU: BGRA8 (the
+byte order of Metal's bgra8Unorm), row major, top row first,
+width * height * 4 bytes, no header (the JSON carries the dimensions). msdf-atlas-gen writes a PNG, which png_to_rgba.swift
+(next to this script, compiled on the fly) unpacks, so the engine uploads
+the texture without an image decode.
 EOF
 }
 
@@ -95,6 +101,25 @@ generate_atlas() {
 
   [[ -s "$json_output" ]] || fail "missing generated JSON: $json_output"
   [[ -s "$image_output" ]] || fail "missing generated PNG: $image_output"
+}
+
+# Unpacks a generated PNG into the raw RGBA8 file the engine loads.
+unpack_atlas() {
+  local work_dir="$1"
+  local image_name="$2"
+  local raw_name="$3"
+
+  "$converter_path" "$work_dir/$image_name" "$work_dir/$raw_name"
+  [[ -s "$work_dir/$raw_name" ]] || fail "missing unpacked atlas: $work_dir/$raw_name"
+}
+
+build_converter() {
+  local work_dir="$1"
+  local source="$script_dir/png_to_rgba.swift"
+
+  [[ -f "$source" ]] || fail "missing converter source: $source"
+  swiftc -O -o "$work_dir/png_to_rgba" "$source" || fail "could not compile png_to_rgba.swift"
+  printf '%s\n' "$work_dir/png_to_rgba"
 }
 
 install_output() {
@@ -192,12 +217,16 @@ trap 'rm -rf "$tmp_dir"' EXIT
 clean_charset="$tmp_dir/charset.txt"
 strip_charset_comments "$charset_path" "$clean_charset"
 
+converter_path="$(build_converter "$tmp_dir")"
+
 generate_atlas "$font_path" "atlas.json" "atlas.png" "$tmp_dir"
 generate_atlas "$thin_font_path" "atlas_thin.json" "atlas_thin.png" "$tmp_dir"
+unpack_atlas "$tmp_dir" "atlas.png" "atlas.bgra"
+unpack_atlas "$tmp_dir" "atlas_thin.png" "atlas_thin.bgra"
 
 install_output "$tmp_dir" "atlas.json"
-install_output "$tmp_dir" "atlas.png"
+install_output "$tmp_dir" "atlas.bgra"
 install_output "$tmp_dir" "atlas_thin.json"
-install_output "$tmp_dir" "atlas_thin.png"
+install_output "$tmp_dir" "atlas_thin.bgra"
 
 printf 'Generated text atlas resources in %s\n' "$output_dir"

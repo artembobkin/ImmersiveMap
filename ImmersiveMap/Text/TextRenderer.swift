@@ -908,6 +908,6 @@ class TextRenderer {
         descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
         descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        return try device.makeArchivedRenderPipelineState(descriptor: descriptor)
+        return try device.makeRenderPipelineState(descriptor: descriptor)
     }
 }
