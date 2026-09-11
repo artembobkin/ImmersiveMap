@@ -31,19 +31,31 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 ## Performance
 
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
-with tilt, a 20 second pan, an idle map.
+with tilt, a 20 second pan, an idle map. The same session, phone and hours for the Mapbox
+Maps SDK 11.26.0 in its Standard style (3D buildings, the closest match to the defaults
+here), one engine per process, the engines interleaved: five warm and two cold runs of
+each through the bench harness, and three Metal System Traces of each, over two days.
 
-| Metric | Result |
-|---|---:|
-| Frame rate on screen | 119 to 120 fps |
-| GPU per frame | 4.5 to 4.7 ms |
-| CPU, pan | 40 % of one core |
-| CPU, idle | 1 %, no frames drawn |
-| Memory, moving | 240 to 290 MB |
-| Memory, idle | 170 to 220 MB |
-| First map view, main thread | 60 to 75 ms |
+| Metric | ImmersiveMap | Mapbox Standard |
+|---|---:|---:|
+| Frame rate on screen | 117 to 120 fps | 108 to 120 fps |
+| GPU per frame, mean | 4.4 to 4.7 ms | 4.0 to 4.7 ms |
+| GPU per frame, p50 / p75 / p90 / p99 | 3.8 / 4.7 / 5.5 / 6.9 ms | 4.1 / 5.0 / 6.0 / 8.2 ms |
+| CPU, pan | 40 % of one core | 50 % |
+| CPU, idle | 1 %, no frames drawn | 1 to 2 % |
+| Memory, moving | 230 to 290 MB | 270 to 940 MB |
+| Memory, idle | 160 to 200 MB | 290 to 720 MB |
+| First map view, main thread | 60 to 75 ms | not measured |
 
-Measured with `Tools/PerformanceBench` on one device; rerun before quoting for another.
+Frame rate and GPU time come from the traces: the frame rate is the tenth percentile to
+the median of the seconds in motion, the mean GPU time is the total per frame over the
+flights and over the pan, and the percentiles are of the GPU span of every frame (first
+encoder start to last encoder end), the median trace of the three. CPU and memory come
+from the harness, the range across the warm runs. Mapbox Standard's memory differs run to
+run (270 MB on one cold cache, 940 MB on a warm one); the range covers both. The two
+engines draw different data in different styles, so this compares two products at their
+defaults, not two renderers on the same input. Measured with `Tools/PerformanceBench` on
+one device; rerun before quoting for another.
 
 ## Features
 
