@@ -21,7 +21,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
   <img src="Documentation/Assets/readme-avatars-globe.png" width="49%" alt="Avatar markers on the globe">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-streetscape.png" width="49%" alt="The measured streetscape at a Moscow junction">
+  <img src="Documentation/Assets/readme-streetscape.png" width="49%" alt="The Bolshoi Theatre over the measured streetscape">
   <img src="Documentation/Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
 </p>
 <p align="center">

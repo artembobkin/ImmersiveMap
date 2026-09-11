@@ -215,6 +215,13 @@ enum VisualReviewCatalogue {
                                                               zoom: 16.2,
                                                               bearing: 0.5,
                                                               pitch: 0.9)
+        /// The Bolshoi Theatre from Teatralnaya Square, facing its portico,
+        /// with the measured streetscape of the square in front.
+        static let bolshoi = ImmersiveMapCameraPosition(latitudeDegrees: 55.7596,
+                                                        longitudeDegrees: 37.6187,
+                                                        zoom: 18.0,
+                                                        bearing: 0.0,
+                                                        pitch: 1.2)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -734,6 +741,17 @@ enum VisualReviewCatalogue {
             settings: .default,
             subject: .still(camera: Place.parisTilted),
             sceneModels: Showcase.parisModels()),
+
+        VisualReviewScenario(
+            id: "showcase.bolshoi.streetscape",
+            title: "The Bolshoi Theatre over the measured streetscape",
+            lookFor: """
+            The theatre's front under a low camera, the square in front of \
+            it drawn from the measured streetscape: carriageways, lane \
+            markings and crossings as surfaces rather than strokes.
+            """,
+            settings: .default.streetscape(isEnabled: true),
+            subject: .still(camera: Place.bolshoi)),
 
         VisualReviewScenario(
             id: "video.globe.to.street",
