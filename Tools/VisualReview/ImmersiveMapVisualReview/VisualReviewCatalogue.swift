@@ -52,6 +52,10 @@ struct VisualReviewScenario: Identifiable {
     let settings: ImmersiveMapSettings
     let subject: Subject
     let output: Output
+    /// Avatar markers drawn over the map, for the scenes that show them.
+    let avatars: [AvatarMarker]
+    /// 3D scene models drawn in the world pass, for the scenes that show them.
+    let sceneModels: [ImmersiveMapSceneModel]
 
     var isVideo: Bool {
         if case .video = subject { return true }
@@ -63,10 +67,14 @@ struct VisualReviewScenario: Identifiable {
          lookFor: String,
          settings: ImmersiveMapSettings,
          subject: Subject,
-         output: Output = .desktop) {
+         output: Output = .desktop,
+         avatars: [AvatarMarker] = [],
+         sceneModels: [ImmersiveMapSceneModel] = []) {
         self.id = id
         self.title = title
         self.lookFor = lookFor
+        self.avatars = avatars
+        self.sceneModels = sceneModels
         // Every scenario renders the hosted endpoint through the one-line
         // template; the API key comes from `IMMERSIVEMAP_API_KEY` in the
         // environment or from the gitignored `LocalSecrets.plist` at the
@@ -182,6 +190,30 @@ enum VisualReviewCatalogue {
                                                                    zoom: 8.4,
                                                                    bearing: 0.0,
                                                                    pitch: 1.25)
+        /// Shinjuku's towers under a low camera, looking east.
+        static let tokyoTilted = ImmersiveMapCameraPosition(latitudeDegrees: 35.6905,
+                                                            longitudeDegrees: 139.6890,
+                                                            zoom: 16.0,
+                                                            bearing: 1.2,
+                                                            pitch: 1.0)
+        /// Mitte from the south-east, Museumsinsel ahead.
+        static let berlinTilted = ImmersiveMapCameraPosition(latitudeDegrees: 52.5194,
+                                                             longitudeDegrees: 13.3985,
+                                                             zoom: 16,
+                                                             bearing: -0.698,
+                                                             pitch: 1.047)
+        /// The Eiffel Tower and the Champ de Mars from the river side.
+        static let parisTilted = ImmersiveMapCameraPosition(latitudeDegrees: 48.8570,
+                                                            longitudeDegrees: 2.2952,
+                                                            zoom: 15.4,
+                                                            bearing: 0.35,
+                                                            pitch: 0.95)
+        /// Shibuya crossing, where the avatar crowd stands.
+        static let shibuyaTilted = ImmersiveMapCameraPosition(latitudeDegrees: 35.6595,
+                                                              longitudeDegrees: 139.7005,
+                                                              zoom: 16.2,
+                                                              bearing: 0.5,
+                                                              pitch: 0.9)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -631,6 +663,76 @@ enum VisualReviewCatalogue {
             settings: .default,
             subject: .still(camera: Place.moscowRegionTilted)),
 
+        // The showcase: the scenes the README opens with. Tilted cities,
+        // content the public API puts on the map, and the dark palette.
+
+        VisualReviewScenario(
+            id: "showcase.tokyo.tilted",
+            title: "Shinjuku towers under a low camera",
+            lookFor: """
+            Towers stand solid with soft cool shadows, the streets between \
+            them read to the horizon, and the far ground fades into the fog \
+            band rather than ending in a hard edge.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.tokyoTilted)),
+
+        VisualReviewScenario(
+            id: "showcase.berlin.tilted",
+            title: "Mitte from the south-east",
+            lookFor: """
+            The Spree, Museumsinsel and the blocks of Mitte under a tilted \
+            camera: water, parks and buildings all keep their colour at the \
+            far edge of the frame.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.berlinTilted)),
+
+        VisualReviewScenario(
+            id: "showcase.berlin.night",
+            title: "Mitte at night",
+            lookFor: """
+            The dark palette from the Berlin post: dark land, deep water, \
+            lit labels, warm roads, buildings a shade lighter than the \
+            streets, long shadows from a low sun.
+            """,
+            settings: Showcase.nightSettings,
+            subject: .still(camera: Place.berlinTilted)),
+
+        VisualReviewScenario(
+            id: "showcase.avatars.shibuya",
+            title: "Avatar markers at Shibuya crossing",
+            lookFor: """
+            A crowd of avatar markers with battery and speed badges over the \
+            crossing, laid out without overlaps, each standing on its point \
+            under the tilted camera.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.shibuyaTilted),
+            avatars: Showcase.shibuyaAvatars()),
+
+        VisualReviewScenario(
+            id: "showcase.avatars.globe",
+            title: "Avatar markers on the globe",
+            lookFor: """
+            Avatars in a dozen cities around the planet, the ones beyond the \
+            horizon hidden, the rest facing the camera at one size.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.globe),
+            avatars: Showcase.worldAvatars()),
+
+        VisualReviewScenario(
+            id: "showcase.models.paris",
+            title: "3D scene models by the Eiffel Tower",
+            lookFor: """
+            Two textured models, one on the Champ de Mars and one in the air \
+            over the river, lit and shadowed with the buildings around them.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.parisTilted),
+            sceneModels: Showcase.parisModels()),
+
         VisualReviewScenario(
             id: "video.globe.to.street",
             title: "Flight from globe to street level",
@@ -711,5 +813,143 @@ extension ImmersiveMapView {
             .attributionSettings(settings.attribution)
             .postProcessingSettings(settings.postProcessing)
             .debugSettings(settings.debug)
+    }
+}
+
+/// What the showcase scenes put on the map: content that comes through the
+/// public controllers rather than from tiles, and the dark palette.
+enum Showcase {
+    /// The avatar crowd of the `ImmersiveMapAvatarsMac` example, with the
+    /// numbered placeholders as portraits so the render needs no network.
+    static func shibuyaAvatars() -> [AvatarMarker] {
+        let center = GeoCoordinate(latitude: 35.6595, longitude: 139.7005)
+        let offsets: [(Double, Double, Int?, Int?)] = [
+            (0.0012, 0.0018, 84, nil), (-0.0016, 0.0009, nil, 14), (0.0007, -0.0021, 47, nil),
+            (-0.0011, -0.0013, nil, nil), (0.0024, -0.0004, 92, 5), (-0.0025, 0.0022, nil, nil),
+            (0.0003, 0.0032, 61, nil), (-0.0005, -0.0034, nil, 32), (0.0018, 0.0006, 30, nil),
+            (-0.0020, -0.0002, nil, 8),
+        ]
+        return offsets.enumerated().map { index, offset in
+            AvatarMarker(id: UInt64(index + 1),
+                         coordinate: GeoCoordinate(latitude: center.latitude + offset.0,
+                                                   longitude: center.longitude + offset.1),
+                         image: AvatarMarkerImageFactory.number(index + 1),
+                         batteryBadge: offset.2.map { AvatarBatteryBadge(levelPct: $0) },
+                         speedBadge: offset.3.map { AvatarSpeedBadge(kilometersPerHour: $0) })
+        }
+    }
+
+    /// Avatars in cities around the planet, for the globe.
+    static func worldAvatars() -> [AvatarMarker] {
+        let cities: [(Double, Double)] = [
+            (55.7558, 37.6173), (-22.9068, -43.1729), (37.7749, -122.4194), (19.4326, -99.1332),
+            (51.5074, -0.1278), (48.8566, 2.3522), (40.7128, -74.0060), (35.6762, 139.6503),
+            (25.2048, 55.2708), (-33.8688, 151.2093), (1.3521, 103.8198), (-1.2921, 36.8219),
+        ]
+        return cities.enumerated().map { index, city in
+            AvatarMarker(id: UInt64(100 + index),
+                         coordinate: GeoCoordinate(latitude: city.0, longitude: city.1),
+                         image: AvatarMarkerImageFactory.number(index + 1))
+        }
+    }
+
+    /// The `ImmersiveMapSceneModelsMac` example's models: "Spot" by Keenan
+    /// Crane (public domain), read off the checkout, so the review app
+    /// carries no copy of the asset. Mac only: a phone has no checkout.
+    static func parisModels() -> [ImmersiveMapSceneModel] {
+        #if os(iOS)
+        return []
+        #else
+        let url = VisualReviewPaths.repositoryRoot
+            .appending(path: "Examples/macOS/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac/Resources/spot.usdz")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return []
+        }
+        let spot = ImmersiveMapSceneModel.Source(url: url)
+        return [
+            ImmersiveMapSceneModel(id: 9001,
+                                   source: spot,
+                                   coordinate: GeoCoordinate(latitude: 48.8570, longitude: 2.2952),
+                                   headingDegrees: -35,
+                                   fitDiameterMeters: 160),
+            ImmersiveMapSceneModel(id: 9002,
+                                   source: spot,
+                                   coordinate: GeoCoordinate(latitude: 48.8615, longitude: 2.2890),
+                                   altitudeMeters: 260,
+                                   headingDegrees: 120,
+                                   pitchDegrees: 12,
+                                   fitDiameterMeters: 110),
+        ]
+        #endif
+    }
+
+    /// The dark palette of the `BerlinNightDescent` post, as settings: the
+    /// tile colours through the style, the engine colours no tile carries
+    /// through the base colours, and a low sun for long shadows.
+    static var nightSettings: ImmersiveMapSettings {
+        var settings = ImmersiveMapSettings.default.mapStyle(AnyImmersiveMapMapStyle(nightStyle))
+        settings.style.baseColors.tileBackground = nightLand
+        settings.style.baseColors.globeBackground = SIMD4<Double>(0.02, 0.03, 0.07, 1.0)
+        settings.style.baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+        settings.style.baseColors.landCover = SIMD4<Float>(0.08, 0.16, 0.12, 0.7)
+        settings.style.baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
+        settings.scene.mapClearColor = SIMD4<Double>(0.09, 0.10, 0.13, 1.0)
+        settings.scene.light.direction = SIMD3<Float>(0.55, -0.62, 0.56)
+        settings.scene.shadows.isEnabled = true
+        settings.scene.shadows.strength = 0.45
+        settings.labels.language = ImmersiveMapSettings.LabelLanguage("de")
+        settings.labels.houseNumbers.enabled = false
+        return settings
+    }
+
+    private static let nightLand = SIMD4<Float>(0.09, 0.10, 0.13, 1)
+
+    private static var nightStyle: ImmersiveMapTilesMapStyle {
+        ImmersiveMapTilesMapStyle(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+            .layers { layers in
+                layers.land = nightLand
+                layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+                layers.wood = SIMD4<Float>(0.06, 0.14, 0.11, 1)
+                layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
+                layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
+                layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
+                layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
+                layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
+                layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
+                layers.aeroway = SIMD4<Float>(0.16, 0.16, 0.19, 1)
+                layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
+                let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
+                let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
+                layers.roads = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
+                    motorway: base, trunk: base, primary: base,
+                    secondary: minor, tertiary: minor, minor: minor, service: minor, path: minor, rail: minor,
+                    casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))
+            }
+            .features { features in
+                features.buildingFillColor = SIMD4<Float>(0.22, 0.21, 0.24, 1)
+            }
+            .labels { labels in
+                let fill = SIMD3<Float>(0.92, 0.94, 1.0)
+                let stroke = SIMD3<Float>(0.02, 0.03, 0.06)
+                labels.city.fillColor = fill; labels.city.strokeColor = stroke
+                labels.town.fillColor = fill; labels.town.strokeColor = stroke
+                labels.country.fillColor = fill; labels.country.strokeColor = stroke
+                labels.poi.fillColor = fill; labels.poi.strokeColor = stroke
+                labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96); labels.water.strokeColor = stroke
+                labels.road.fillColor = fill; labels.road.strokeColor = stroke
+            }
+            .labelVisibility { visibility in
+                visibility.poiMinimumZoom = 30
+            }
+            .globalLandcover { landcover in
+                landcover.land = SIMD4<Float>(0.10, 0.12, 0.14, 1)
+                landcover.water = SIMD4<Float>(0.03, 0.07, 0.16, 1)
+                landcover.forest = SIMD4<Float>(0.07, 0.14, 0.11, 1)
+                landcover.grass = SIMD4<Float>(0.10, 0.15, 0.11, 1)
+                landcover.crop = SIMD4<Float>(0.12, 0.14, 0.10, 1)
+                landcover.barren = SIMD4<Float>(0.16, 0.15, 0.13, 1)
+                landcover.wetland = SIMD4<Float>(0.08, 0.14, 0.13, 1)
+                landcover.snow = SIMD4<Float>(0.30, 0.32, 0.36, 1)
+            })
     }
 }

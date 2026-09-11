@@ -216,6 +216,8 @@ final class VisualReviewRenderer {
 
         let image = try await stillRecorder.capture(settings: scenario.settings,
                                                     camera: camera,
+                                                    avatars: scenario.avatars,
+                                                    sceneModels: scenario.sceneModels,
                                                     configuration: configuration)
         let url = directory.appending(path: "\(scenario.id).png")
         try write(image, to: url)
