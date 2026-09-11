@@ -172,12 +172,13 @@ final class SharedRenderResources {
 
     /// The process-wide instance for a sample count, built off the main
     /// thread when it does not exist yet: the shader library, the pipeline
-    /// states, the atlases and the geometry come together on a detached
-    /// task, and only the SF Symbol sprite atlas, which rasterizes through
-    /// UIImage/NSImage, is made here at the end. Concurrent callers await
-    /// the same build; a synchronous `shared` call that lands in the
-    /// meantime builds its own copy and wins, and the awaited build is then
-    /// dropped in its favour.
+    /// states (which is where the device compiles the shaders, once per
+    /// build, the system caching the binaries after that), the atlases and
+    /// the geometry come together on a detached task, and only the SF
+    /// Symbol sprite atlas, which rasterizes through UIImage/NSImage, is
+    /// made here at the end. Concurrent callers await the same build; a
+    /// synchronous `shared` call that lands in the meantime builds its own
+    /// copy and wins, and the awaited build is then dropped in its favour.
     static func resources(sampleCount: Int = 1) async -> SharedRenderResources {
         let (device, resolved) = resolvedSampleCount(sampleCount)
         if let cached = cached[resolved] {

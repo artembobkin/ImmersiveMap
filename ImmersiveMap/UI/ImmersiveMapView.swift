@@ -191,16 +191,17 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
 public extension ImmersiveMapView {
 
     /// Builds the GPU resources every map view in the process shares (the
-    /// shader library and its pipeline states, the text atlases, the
-    /// marker and globe geometry) ahead of the first map view, off the main
-    /// thread. Call it once at app launch, before a screen with a map is
-    /// likely: the first map view then appears with its renderer at once
-    /// instead of building it, and an app that skips the call loses nothing
-    /// but that, since the first view builds the same resources on its own
-    /// background task and shows its first frame when they are ready.
-    /// Returns when the resources are built; a second call, or a map view
-    /// created while the build runs, waits for the same build. Safe to call
-    /// from any task.
+    /// shader library and its pipeline states, which is where the device
+    /// compiles the shaders on the first launch after an install or an
+    /// update, the text atlases, the marker and globe geometry) ahead of
+    /// the first map view, off the main thread. Call it once at app
+    /// launch, before a screen with a map is likely: the first map view
+    /// then appears with its renderer at once instead of waiting for it,
+    /// and an app that skips the call loses nothing but that, since the
+    /// first view builds the same resources on its own background task and
+    /// shows its first frame when they are ready. Returns when the
+    /// resources are built; a second call, or a map view created while the
+    /// build runs, waits for the same build. Safe to call from any task.
     ///
     /// - Parameter settings: the settings the map views will use; only the
     ///   multisample count of ``ImmersiveMapSettings/PostProcessingSettings``

@@ -129,6 +129,24 @@ enum FixtureTiles {
         cacheless.tiles.cache.urlCacheEnabled = false
         cacheless.tiles.cache.preparedTileCacheEnabled = false
         cacheless.tiles.offline.mode = .disabled
+        prewarmSharedRenderResourcesIfPossible()
         return cacheless
+    }
+
+    /// A map view builds its renderer only once the process holds the
+    /// shared GPU resources, on a background task otherwise, which would
+    /// leave every test that reads the renderer right after making a view
+    /// looking at nil. The tests keep their synchronous contract by holding
+    /// the default resource set before the first view: built here, once,
+    /// where every fixture settings value is made. Nothing to build without
+    /// the compiled shaders; the Metal-backed tests skip themselves then.
+    private static func prewarmSharedRenderResourcesIfPossible() {
+        guard Thread.isMainThread,
+              MetalTestEnvironment.unavailabilityReason() == nil else {
+            return
+        }
+        MainActor.assumeIsolated {
+            _ = SharedRenderResources.shared()
+        }
     }
 }
