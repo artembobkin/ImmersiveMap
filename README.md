@@ -42,6 +42,23 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 [Built-in vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS (AppKit host, no Catalyst), SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [the streetscape](Documentation/docs/streetscape.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
 
+## Performance
+
+iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
+with tilt, a 20 second pan, an idle map. Defaults, 3D buildings and shadows on, warm caches.
+
+| | |
+|---|---:|
+| Frame rate on screen | 119 to 120 fps |
+| GPU per frame | 4.5 to 4.7 ms |
+| CPU, pan | 40 % of one core |
+| CPU, idle | 1 %, no frames drawn |
+| Memory, moving | 240 to 290 MB |
+| Memory, idle | 170 to 220 MB |
+| First map view, main thread | 60 to 75 ms |
+
+Measured with `Tools/PerformanceBench` on one device; rerun before quoting for another.
+
 ## Attribution
 
 "© OpenStreetMap" is required if you use the built-in tile provider. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
