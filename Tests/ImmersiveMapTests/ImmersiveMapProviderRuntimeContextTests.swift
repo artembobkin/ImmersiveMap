@@ -83,6 +83,14 @@ private final class RuntimeContextTestStyle: ImmersiveMapStyle {
             parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1)
         )
     }
+
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        makeStyle(data: DetFeatureStyleData(layerName: "", properties: [:], tile: tile))
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        backgroundStyle(tile: Tile(x: 0, y: 0, z: 0))
+    }
 }
 
 private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderProfile {

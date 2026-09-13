@@ -358,7 +358,22 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
         default:
             labelTextStyle = nil
         }
+        return waterStyle(labelTextStyle)
+    }
 
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        waterStyle(nil)
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        waterStyle(nil)
+    }
+
+    func waterNameStyle(_ kind: WaterNameKind, tile: Tile) -> FeatureStyle? {
+        waterStyle(kind == .ocean ? oceanLabelTextStyle : seaLabelTextStyle)
+    }
+
+    private func waterStyle(_ labelTextStyle: LabelTextStyle?) -> FeatureStyle {
         var style = FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
                                  color: SIMD4<Float>(1, 1, 1, 1),
                                  parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
@@ -376,8 +391,21 @@ private final class ParserSolidPolygonStyle: ImmersiveMapStyle {
     }
 
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
-        let key: UInt8 = data.layerName == "background" ? 1 : 2
-        return FeatureStyle(key: key,
+        var style = solid(key: 2)
+        style.splitsComplexHoles = data.layerName == "ocean"
+        return style
+    }
+
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        solid(key: 1)
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        solid(key: 1)
+    }
+
+    private func solid(key: UInt8) -> FeatureStyle {
+        FeatureStyle(key: key,
                      color: SIMD4<Float>(1, 1, 1, 1),
                      parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1))
     }

@@ -32,6 +32,19 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
         mapBaseColors
     }
 
+    /// Transparent: the tile background colour of the style's base colours
+    /// shows through. The key sits below the range the feature keys hash
+    /// into.
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        FeatureStyle(key: 1,
+                     color: SIMD4<Float>(0, 0, 0, 0),
+                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0))
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        fallbackStyle
+    }
+
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         let context = ImmersiveMapFeatureStyleContext(
             providerID: providerID,

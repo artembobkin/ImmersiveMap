@@ -214,6 +214,11 @@ struct FeatureStyle {
     /// A parking lot whose bays are parallel to the kerb (a car length
     /// apart) rather than perpendicular to it.
     var parkingBaysParallel: Bool = false
+    /// A fill whose polygons with many holes (an ocean with its islands)
+    /// are not tessellated as one polygon: the exterior draws as the fill
+    /// and each hole as the background, so the tessellator never sees the
+    /// hundreds of islands of a coastal tile at once.
+    var splitsComplexHoles: Bool = false
 
     init(
         key: UInt8,

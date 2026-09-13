@@ -90,4 +90,14 @@ private final class RoadLabelStyle: ImmersiveMapStyle {
                      includeRoadLabelPath: true,
                      roadLabelTextStyle: roadLabelTextStyle)
     }
+
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        FeatureStyle(key: 1,
+                     color: SIMD4<Float>(1, 1, 1, 1),
+                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8))
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        backgroundStyle(tile: Tile(x: 0, y: 0, z: 0))
+    }
 }

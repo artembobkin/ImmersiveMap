@@ -64,10 +64,10 @@ struct LabelFeatureReader {
         }
     }
 
-    /// The ocean and sea names of zooms 0 to 2, which the tiles carry
-    /// unreliably: added for every water body whose anchor falls in the tile
-    /// and whose name no label of the tile already shows, styled as a
-    /// `natural_label` feature so the style decides the look.
+    /// The ocean and sea names of zooms 0 to 2, for a schema whose tiles
+    /// carry them unreliably: added for every water body whose anchor falls
+    /// in the tile and whose name no label of the tile already shows, in the
+    /// style the map style gives such a name, or not at all.
     func appendLowZoomWaterLabels(tile: Tile, into result: inout ReadingStageResult) {
         guard tile.z <= 2 else {
             return
@@ -84,17 +84,8 @@ struct LabelFeatureReader {
                 continue
             }
 
-            let attributes: [String: MvtValue] = [
-                "class": .string(fallback.styleClass),
-                "type": .string(fallback.styleClass),
-                "name": .string(name)
-            ]
-
-            let style = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "natural_label",
-                                                                     properties: attributes,
-                                                                     tile: tile,
-                                                                     geometryType: .point))
-            guard let textStyle = style.labelTextStyle else {
+            guard let style = mapStyle.waterNameStyle(fallback.kind, tile: tile),
+                  let textStyle = style.labelTextStyle else {
                 continue
             }
 
@@ -103,7 +94,7 @@ struct LabelFeatureReader {
                                                      tile: tile,
                                                      featureId: 0,
                                                      hasFeatureId: false,
-                                                     layerName: "natural_label",
+                                                     layerName: LowZoomWaterLabels.identityNamespace,
                                                      sortKey: fallback.sortKey,
                                                      collisionPriority: fallback.sortKey,
                                                      textStyle: textStyle,

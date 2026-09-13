@@ -20,7 +20,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             XCTAssertEqual(water.streetColor, configuration.layers.water, "z\(zoom)")
         }
         for zoom in [8, 9, 10, 12] {
-            let background = makeStyle(style, layerName: "background", zoom: zoom)
+            let background = style.backgroundStyle(tile: Tile(x: 0, y: 0, z: zoom))
             XCTAssertEqual(background.color, configuration.globalLandcover.land, "z\(zoom)")
             XCTAssertEqual(background.streetColor, configuration.layers.land, "z\(zoom)")
         }

@@ -57,6 +57,31 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         mapBaseColors
     }
 
+    func backgroundStyle(tile: Tile) -> FeatureStyle {
+        // The full-tile base quad the engine emits per tile. OpenMapTiles
+        // has no land polygon, so this is what paints the land; without it
+        // the base falls through to the red debug fallback. The street
+        // color rides along in every tile: the shader lerps to it
+        // continuously in camera zoom, so no tile-zoom boundary flips the
+        // ground.
+        let overviewColor = tile.z <= massiveOverviewMaximumZoom
+            ? configuration.globalLandcover.grass
+            : configuration.globalLandcover.land
+        return polygon(key: 1,
+                       color: overviewColor,
+                       streetColor: configuration.layers.land)
+    }
+
+    func debugBorderStyle() -> FeatureStyle {
+        fallbackStyle
+    }
+
+    /// OpenMapTiles ships the ocean and sea names in `water_name`, so the
+    /// parser adds none of its own.
+    func waterNameStyle(_ kind: WaterNameKind, tile: Tile) -> FeatureStyle? {
+        nil
+    }
+
     /// From this class priority up a road is part of the automobile network
     /// and draws in the tier above the pedestrian one: service roads sit at
     /// 45 and paths at 35 with rail between.
@@ -103,18 +128,6 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let subclass = props["subclass"]?.stringValue?.lowercased()
 
         switch layer {
-        case "background":
-            // Synthetic full-tile base quad the engine emits per tile. OpenMapTiles
-            // has no land polygon, so this is what paints the land; without it the
-            // base falls through to the red debug fallback. The street color
-            // rides along in every tile: the shader lerps to it continuously
-            // in camera zoom, so no tile-zoom boundary flips the ground.
-            let overviewColor = z <= massiveOverviewMaximumZoom
-                ? configuration.globalLandcover.grass
-                : configuration.globalLandcover.land
-            return polygon(key: 1,
-                           color: overviewColor,
-                           streetColor: configuration.layers.land)
         case "water":
             // Same pair for water: the saturated globe blue eases into the
             // pale street blue with the camera, identically in every tile.

@@ -26,10 +26,10 @@ struct GroundFeatureReader {
     }
 
     /// Whether a feature's polygons take the ocean split, decided once per
-    /// feature: only the ocean layer, and only when one of its polygons is
-    /// complex enough.
-    func splitsComplexOceanHoles(layerName: String, polygons: MultiPolygon) -> Bool {
-        layerName == "ocean"
+    /// feature: only a fill whose style asks for it, and only when one of
+    /// its polygons is complex enough.
+    func splitsComplexOceanHoles(style: FeatureStyle, polygons: MultiPolygon) -> Bool {
+        style.splitsComplexHoles
             && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
     }
 
@@ -56,10 +56,7 @@ struct GroundFeatureReader {
         result.polygonByStyle[style.key, default: []].append(parsedOcean)
         result.styles[style.key] = style
 
-        let landStyle = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "background",
-                                                                      properties: [:],
-                                                                      tile: tile,
-                                                                      geometryType: .polygon))
+        let landStyle = mapStyle.backgroundStyle(tile: tile)
         guard landStyle.key != 0 else {
             return true
         }
@@ -95,12 +92,7 @@ struct GroundFeatureReader {
         // zoom-banded (overview grass, land base, street land), and a
         // hardcoded z0 froze every tile on the overview branch, painting the
         // vegetation tone under the whole map at every zoom.
-        let style = mapStyle.makeStyle(data: DetFeatureStyleData(
-            layerName: "background",
-            properties: [:],
-            tile: tile,
-            geometryType: .polygon)
-        )
+        let style = mapStyle.backgroundStyle(tile: tile)
 
         // One quad in render space, wound counter-clockwise like every
         // other ground triangle. The density the sphere needs is not decided
@@ -119,12 +111,7 @@ struct GroundFeatureReader {
     }
 
     private func appendBorder(width borderWidth: Int16, into result: inout ReadingStageResult) {
-        let style = mapStyle.makeStyle(data: DetFeatureStyleData(
-            layerName: "border",
-            properties: [:],
-            tile: Tile(x: 0, y: 0, z: 0),
-            geometryType: .polygon)
-        )
+        let style = mapStyle.debugBorderStyle()
 
         let tileSize: Int16 = 4096
         var polygons = [ParsedPolygon]()

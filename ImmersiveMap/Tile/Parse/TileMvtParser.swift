@@ -186,7 +186,7 @@ final class TileMvtParser {
 
                 if feature.type == .polygon {
                     let polygons = layerGeometry.polygons(of: feature)
-                    let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(layerName: layerName,
+                    let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(style: style,
                                                                                             polygons: polygons)
                     let extrusion = buildingReader.extrusion(feature: feature,
                                                              style: style,

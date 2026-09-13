@@ -8,6 +8,10 @@ import Foundation
 /// puts an anchor into a tile. Data only: `LabelFeatureReader` decides which
 /// of them a tile shows.
 enum LowZoomWaterLabels {
+    /// The layer name the labels' identities are minted under, so they
+    /// never collide with a tile's own labels.
+    static let identityNamespace = "natural_label"
+
     struct Label {
         /// Spellings keyed by language code, the keys `TileLabelDecisions.localizedName`
         /// walks.
@@ -15,8 +19,7 @@ enum LowZoomWaterLabels {
         let latitude: Double
         let longitude: Double
         let sortKey: Int
-        /// The `class` and `type` the label is styled as: `ocean` or `sea`.
-        let styleClass: String
+        let kind: WaterNameKind
 
         var aliases: Set<String> {
             Set(names.values.filter { $0.isEmpty == false })
@@ -41,7 +44,7 @@ enum LowZoomWaterLabels {
                 "it": "Oceano Pacifico",
                 "pt": "Oceano Pacífico",
                 "tr": "Pasifik Okyanusu"
-            ], latitude: 0.0, longitude: -150.0, sortKey: 20, styleClass: "ocean"),
+            ], latitude: 0.0, longitude: -150.0, sortKey: 20, kind: .ocean),
             Label(names: [
                 "en": "Atlantic Ocean",
                 "ru": "Атлантический океан",
@@ -51,7 +54,7 @@ enum LowZoomWaterLabels {
                 "it": "Oceano Atlantico",
                 "pt": "Oceano Atlântico",
                 "tr": "Atlas Okyanusu"
-            ], latitude: 8.0, longitude: -32.0, sortKey: 18, styleClass: "ocean"),
+            ], latitude: 8.0, longitude: -32.0, sortKey: 18, kind: .ocean),
             Label(names: [
                 "en": "Indian Ocean",
                 "ru": "Индийский океан",
@@ -61,7 +64,7 @@ enum LowZoomWaterLabels {
                 "it": "Oceano Indiano",
                 "pt": "Oceano Índico",
                 "tr": "Hint Okyanusu"
-            ], latitude: -18.0, longitude: 80.0, sortKey: 22, styleClass: "ocean"),
+            ], latitude: -18.0, longitude: 80.0, sortKey: 22, kind: .ocean),
             Label(names: [
                 "en": "Arctic Ocean",
                 "ru": "Северный Ледовитый океан",
@@ -71,7 +74,7 @@ enum LowZoomWaterLabels {
                 "it": "Mar Glaciale Artico",
                 "pt": "Oceano Ártico",
                 "tr": "Arktik Okyanusu"
-            ], latitude: 76.0, longitude: 15.0, sortKey: 16, styleClass: "ocean"),
+            ], latitude: 76.0, longitude: 15.0, sortKey: 16, kind: .ocean),
             Label(names: [
                 "en": "Southern Ocean",
                 "ru": "Южный океан",
@@ -81,7 +84,7 @@ enum LowZoomWaterLabels {
                 "it": "Oceano Australe",
                 "pt": "Oceano Antártico",
                 "tr": "Güney Okyanusu"
-            ], latitude: -56.0, longitude: 25.0, sortKey: 24, styleClass: "ocean")
+            ], latitude: -56.0, longitude: 25.0, sortKey: 24, kind: .ocean)
         ]
 
         if tile.z == 2 {
@@ -94,7 +97,7 @@ enum LowZoomWaterLabels {
                 "it": "Mar Mediterraneo",
                 "pt": "Mar Mediterrâneo",
                 "tr": "Akdeniz"
-            ], latitude: 35.0, longitude: 18.0, sortKey: 30, styleClass: "sea"))
+            ], latitude: 35.0, longitude: 18.0, sortKey: 30, kind: .sea))
             labels.append(Label(names: [
                 "en": "Caribbean Sea",
                 "ru": "Карибское море",
@@ -104,7 +107,7 @@ enum LowZoomWaterLabels {
                 "it": "Mar dei Caraibi",
                 "pt": "Mar do Caribe",
                 "tr": "Karayip Denizi"
-            ], latitude: 15.0, longitude: -74.0, sortKey: 32, styleClass: "sea"))
+            ], latitude: 15.0, longitude: -74.0, sortKey: 32, kind: .sea))
             labels.append(Label(names: [
                 "en": "Arabian Sea",
                 "ru": "Аравийское море",
@@ -114,7 +117,7 @@ enum LowZoomWaterLabels {
                 "it": "Mar Arabico",
                 "pt": "Mar Arábico",
                 "tr": "Umman Denizi"
-            ], latitude: 15.0, longitude: 64.0, sortKey: 34, styleClass: "sea"))
+            ], latitude: 15.0, longitude: 64.0, sortKey: 34, kind: .sea))
             labels.append(Label(names: [
                 "en": "Bering Sea",
                 "ru": "Берингово море",
@@ -124,7 +127,7 @@ enum LowZoomWaterLabels {
                 "it": "Mare di Bering",
                 "pt": "Mar de Bering",
                 "tr": "Bering Denizi"
-            ], latitude: 57.0, longitude: -178.0, sortKey: 36, styleClass: "sea"))
+            ], latitude: 57.0, longitude: -178.0, sortKey: 36, kind: .sea))
         }
 
         return labels
