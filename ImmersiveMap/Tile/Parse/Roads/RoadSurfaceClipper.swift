@@ -14,7 +14,7 @@ import simd
 /// outside ends and nothing in between.
 enum RoadSurfaceClipper {
     static func clip(polyline: [SIMD2<Float>],
-                     outside areas: [TileMvtParser.RoadSurfaceArea]) -> [[SIMD2<Float>]] {
+                     outside areas: [RoadSurfaceArea]) -> [[SIMD2<Float>]] {
         guard polyline.count >= 2, areas.isEmpty == false else { return [polyline] }
 
         var pieces: [[SIMD2<Float>]] = []
@@ -62,7 +62,7 @@ enum RoadSurfaceClipper {
     }
 
     private static func segmentMayTouch(_ a: SIMD2<Float>, _ b: SIMD2<Float>,
-                                        _ area: TileMvtParser.RoadSurfaceArea) -> Bool {
+                                        _ area: RoadSurfaceArea) -> Bool {
         let lower = simd_min(a, b)
         let upper = simd_max(a, b)
         return lower.x <= area.bounds.max.x && upper.x >= area.bounds.min.x
@@ -83,7 +83,7 @@ enum RoadSurfaceClipper {
         return t
     }
 
-    private static func contains(_ area: TileMvtParser.RoadSurfaceArea, _ point: SIMD2<Float>) -> Bool {
+    private static func contains(_ area: RoadSurfaceArea, _ point: SIMD2<Float>) -> Bool {
         guard point.x >= area.bounds.min.x, point.x <= area.bounds.max.x,
               point.y >= area.bounds.min.y, point.y <= area.bounds.max.y else {
             return false

@@ -1390,7 +1390,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// The equatorial circumference the Web Mercator tile grid is built on.
     private static let equatorialCircumferenceMetres: Double = 40_075_016.686
     /// The canonical tile coordinate space every parsed geometry lives in
-    /// (`TileMvtParser.tileExtent`).
+    /// (`TileCoordinateSpace.tileExtentDouble`).
     private static let tileExtentUnits: Double = 4096
 
     /// Tile units per ground metre for one tile.

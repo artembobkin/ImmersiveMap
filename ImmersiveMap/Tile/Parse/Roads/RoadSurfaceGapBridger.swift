@@ -65,7 +65,7 @@ enum RoadSurfaceGapBridger {
     /// the width, but not threefold.
     private static let maximumEdgeLengthRatio: Float = 3
 
-    static func findBridges(surfaceAreas: [TileMvtParser.RoadSurfaceArea],
+    static func findBridges(surfaceAreas: [RoadSurfaceArea],
                             linesByFeatureIndex: [[[SIMD2<Float>]]],
                             featureStyles: [FeatureStyle],
                             featureStreets: [String],

@@ -1,0 +1,433 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+import Foundation
+import Mvt
+import simd
+
+/// Reads a line feature into the ribbons its style's passes draw, the
+/// decorations stamped along it (crossings, arrows, bus lane letters, bus
+/// stop zigzags), and its road name label.
+///
+/// On the road layer at street zooms the feature takes the separate-road
+/// path: its lines come pre-clipped and stitched from the layer's
+/// `RoadLayerPrecomputation`, its ribbons join the road phases sorted by
+/// structure and class, paint stops at junctions, and ends that continue
+/// into a neighbouring tile or another road stay hard. Every other line (a
+/// boundary, a waterway, a road at an overview zoom) draws as ground or
+/// bridge geometry clipped to the tile with no junction knowledge.
+///
+/// Stateless across tiles: the per-tile clipper and tessellator come in as
+/// arguments.
+struct LineFeatureReader {
+    /// A road label on a fragment cut by the tile edge needs this much line
+    /// inside the tile, or the name is left to the neighbour.
+    private static let minClippedRoadLabelFragmentLength: Float = 256.0
+
+    private let labelDecisions: TileLabelDecisions
+    private let labelsEnabled: Bool
+    private let crosswalkZebraBuilder = CrosswalkZebraGeometryBuilder()
+    private let roadDirectionArrowBuilder = RoadDirectionArrowGeometryBuilder()
+    private let busLaneLetterBuilder = BusLaneLetterGeometryBuilder()
+    private let busStopZigzagBuilder = BusStopZigzagGeometryBuilder()
+    private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
+
+    init(labelDecisions: TileLabelDecisions, options: TileParseOptions) {
+        self.labelDecisions = labelDecisions
+        self.labelsEnabled = options.labelsEnabled
+    }
+
+    func read(feature: MvtDecodedFeature,
+              featureIndex: Int,
+              attributes: [String: MvtValue],
+              style: FeatureStyle,
+              geometry: TileLayerGeometry,
+              layerName: String,
+              tile: Tile,
+              roads: RoadLayerContext,
+              tools: TileParseTools,
+              into result: inout ReadingStageResult) {
+        let lineRenderPasses = style.resolvedLineRenderPasses.filter { $0.parseGeometryStyleData.lineWidth > 0 }
+        if lineRenderPasses.isEmpty {
+            return
+        }
+        let usesSeparateRoadRendering = roads.usesSeparateRoadRendering
+        let precomputation = roads.precomputation
+        let lineClipper = tools.lineClipper
+
+        // Labels off: no road name is resolved or baked. The
+        // switch is prepared-cache identity, so a tile prepared
+        // without labels never answers a map that wants them.
+        let labelText = labelsEnabled
+            ? labelDecisions.roadLabelText(properties: attributes)
+            : nil
+        let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
+        let roadLabelStyle = style.roadLabelTextStyle
+        let roadClassPriority = style.roadClassPriority
+        let roadStructure = RoadFeatureAttributes.drawStructure(
+            physical: RoadFeatureAttributes.structureKind(attributes: attributes),
+            classPriority: roadClassPriority
+        )
+        let roadLayer = RoadFeatureAttributes.layer(attributes: attributes)
+        let sharedRoadPadding = Float(
+            lineRenderPasses.reduce(0.0) { partial, pass in
+                max(partial, pass.parseGeometryStyleData.lineWidth * 0.5)
+            }
+        )
+        let preparedLines: [PreparedRoadLine]
+        if usesSeparateRoadRendering {
+            preparedLines = precomputation.linesByFeatureIndex[featureIndex]
+        } else {
+            let lines = geometry.lines(of: feature)
+            var converted: [PreparedRoadLine] = []
+            converted.reserveCapacity(lines.count)
+            for line in lines {
+                let points = RoadLayerPrecomputation.floatPoints(line)
+                converted.append(PreparedRoadLine(points: points,
+                                                  exactFragments: lineClipper.clip(points: points,
+                                                                                   tileExtent: tileExtent)))
+            }
+            preparedLines = converted
+        }
+        // Two tracks of the same feature: the ribbon and its
+        // labels draw from lines cut by every carriageway
+        // surface, the paint from lines cut only by crossings
+        // (see paintLinesByFeatureIndex).
+        let paintPreparedLines = usesSeparateRoadRendering
+            ? precomputation.paintLinesByFeatureIndex[featureIndex]
+            : preparedLines
+        let passGroups: [(lines: [PreparedRoadLine], passes: [LineRenderPass], emitsLabels: Bool)] = [
+            (preparedLines, lineRenderPasses.filter { $0.roadPassRole != .detail }, true),
+            (paintPreparedLines, lineRenderPasses.filter { $0.roadPassRole == .detail }, false)
+        ]
+        for group in passGroups where group.passes.isEmpty == false || group.emitsLabels {
+            for preparedLine in group.lines {
+                let linePoints = preparedLine.points
+                let exactClippedFragments = preparedLine.exactFragments
+                guard exactClippedFragments.isEmpty == false else {
+                    continue
+                }
+                let sharedPaddedFragments = usesSeparateRoadRendering
+                    ? lineClipper.clip(points: linePoints,
+                                       tileExtent: tileExtent,
+                                       padding: sharedRoadPadding)
+                    : []
+
+                for lineRenderPass in group.passes {
+                    if style.roadDecorationKind == .zebraCrossing,
+                       roadStructure == .tunnel
+                           || (roads.hasShippedCrossings && style.isShippedRoadPaint == false) {
+                        continue
+                    }
+
+                    let passStyle = FeatureStyle(
+                        key: lineRenderPass.key,
+                        color: lineRenderPass.color,
+                        streetColor: lineRenderPass.streetColor,
+                        lowZoomFadeMask: lineRenderPass.lowZoomFadeMask,
+                        lineWidthPoints: lineRenderPass.lineWidthPoints,
+                        dashLengthPoints: lineRenderPass.dashLengthPoints,
+                        dashGapPoints: lineRenderPass.dashGapPoints,
+                        dashInTileUnits: lineRenderPass.dashInTileUnits,
+                        minimumWidthPoints: lineRenderPass.minimumWidthPoints,
+                        maximumWidthPoints: lineRenderPass.maximumWidthPoints,
+                        parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
+                        includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
+                        linePlacement: lineRenderPass.placement,
+                        roadClassPriority: roadClassPriority,
+                        roadLabelTextStyle: roadLabelStyle,
+                        roadDecorationKind: style.roadDecorationKind
+                    )
+                    if usesSeparateRoadRendering {
+                        result.registerRoadStyle(passStyle, key: lineRenderPass.key)
+                    } else {
+                        result.registerStyle(passStyle, key: lineRenderPass.key, placement: lineRenderPass.placement)
+                    }
+
+                    if usesSeparateRoadRendering,
+                       appendDecoration(style: style,
+                                        pass: lineRenderPass,
+                                        fragments: exactClippedFragments,
+                                        structure: roadStructure,
+                                        layer: roadLayer,
+                                        tile: tile,
+                                        into: &result) {
+                        continue
+                    }
+
+                    let padding = Float(lineRenderPass.parseGeometryStyleData.lineWidth * 0.5)
+                    let paddedFragments = usesSeparateRoadRendering
+                        ? sharedPaddedFragments
+                        : lineClipper.clip(points: linePoints,
+                                           tileExtent: tileExtent,
+                                           padding: padding)
+
+                    for fragment in paddedFragments {
+                        // Paint stops at a junction, as it does on the
+                        // ground: a street's centre line does not run
+                        // across the street it meets. The tiles ship a
+                        // through street as one line with the junctions
+                        // as interior vertices, so the inset at the two
+                        // ends is not enough; the line is cut at every
+                        // interior point another carriageway touches,
+                        // and each piece is inset from its own new
+                        // ends. Only marking passes are cut: the
+                        // carriageway and its kerb run through.
+                        let junctionSplit = lineRenderPass.parseGeometryStyleData.endInset > 0
+                            && usesSeparateRoadRendering
+                            ? RoadPolylineMath.splitAtJunctionsWithOrigins(fragment: fragment,
+                                                                            automobilePointCounts: precomputation.automobilePointCounts)
+                            : [(fragment: fragment, arcLengthOrigin: Float(0))]
+                        let renderFragments = junctionSplit.flatMap { piece in
+                            RoadDashPattern.fragments(for: piece.fragment,
+                                                      styleData: lineRenderPass.parseGeometryStyleData)
+                                .map { (fragment: $0, arcLengthOrigin: piece.arcLengthOrigin) }
+                        }
+
+                        for (renderFragment, pieceArcLengthOrigin) in renderFragments {
+                            let startConnected = usesSeparateRoadRendering
+                                && renderFragment.points.first.map {
+                                    (precomputation.sharedPointCounts[RoadConnectionPointKey(point: $0)] ?? 0) > 1
+                                } == true
+                            let endConnected = usesSeparateRoadRendering
+                                && renderFragment.points.last.map {
+                                    (precomputation.sharedPointCounts[RoadConnectionPointKey(point: $0)] ?? 0) > 1
+                                } == true
+                            let startBoundaryContinuation = usesSeparateRoadRendering
+                                && isRoadBoundaryContinuationEndpoint(renderFragment.points.first)
+                            let endBoundaryContinuation = usesSeparateRoadRendering
+                                && isRoadBoundaryContinuationEndpoint(renderFragment.points.last)
+                            let startContinuation = usesSeparateRoadRendering
+                                && (renderFragment.startClipped || startBoundaryContinuation)
+                            let endContinuation = usesSeparateRoadRendering
+                                && (renderFragment.endClipped || endBoundaryContinuation)
+                            let shouldExtendStart = usesSeparateRoadRendering
+                                && ((renderFragment.startClipped && shouldExtendClippedRoadEndpoint(renderFragment.points.first))
+                                    || (startBoundaryContinuation && shouldExtendRoadBoundaryEndpoint(renderFragment.points.first)))
+                            let shouldExtendEnd = usesSeparateRoadRendering
+                                && ((renderFragment.endClipped && shouldExtendClippedRoadEndpoint(renderFragment.points.last))
+                                    || (endBoundaryContinuation && shouldExtendRoadBoundaryEndpoint(renderFragment.points.last)))
+
+                            // A free end is a genuine end of the line: not a cut that
+                            // continues into a neighboring tile, not a shared road
+                            // junction, and not sitting on the tile boundary. Free ends
+                            // are the ones that may be capped or feathered; every other
+                            // cut must stay hard so it meets adjacent geometry flush.
+                            let startFree = startContinuation == false
+                                && startConnected == false
+                                && renderFragment.points.first.map { isPointStrictlyInsideTile($0) } == true
+                            let endFree = endContinuation == false
+                                && endConnected == false
+                                && renderFragment.points.last.map { isPointStrictlyInsideTile($0) } == true
+                            let startCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && startFree
+                            let endCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && endFree
+
+                            // An inset pulls the line back from a genuine end or a
+                            // junction; a tile-seam cut keeps its point so the line
+                            // continues flush in the neighbour. The room a marking
+                            // leaves at a junction is the widest carriageway that
+                            // meets it, not its own: a lane line running into a
+                            // six-lane avenue has to clear the avenue.
+                            let styleData = lineRenderPass.parseGeometryStyleData
+                            func junctionInset(_ point: SIMD2<Float>?, isContinuation: Bool) -> Float {
+                                guard styleData.endInset > 0, isContinuation == false, let point else { return 0 }
+                                // An end the crossing's surface cut already
+                                // stands at the edge of the gap: backing off
+                                // by the inset too ate the whole stroke on a
+                                // street crossed by a chain of junctions.
+                                if preparedLine.paintCutAtStart, point == preparedLine.points.first {
+                                    return 0
+                                }
+                                if preparedLine.paintCutAtEnd, point == preparedLine.points.last {
+                                    return 0
+                                }
+                                return max(Float(styleData.endInset),
+                                           precomputation.junctionHalfWidths[RoadConnectionPointKey(point: point)] ?? 0)
+                            }
+                            // The inset is length the paint gives up at
+                            // the start of the piece, so the pattern has
+                            // to count it too.
+                            let startInset = junctionInset(renderFragment.points.first, isContinuation: startContinuation)
+                            let insetPoints = RoadPolylineMath.insetLineEnds(
+                                renderFragment.points,
+                                startInset: startInset,
+                                endInset: junctionInset(renderFragment.points.last, isContinuation: endContinuation)
+                            )
+                            guard let insetPoints else {
+                                continue
+                            }
+                            let passPoints = RoadPolylineMath.offsetPolyline(
+                                insetPoints,
+                                by: Float(styleData.lateralOffset)
+                            )
+
+                            if let linePolygon = tools.parseLine.parse(points: passPoints,
+                                                                       width: lineRenderPass.parseGeometryStyleData.lineWidth,
+                                                                       tileExtent: tileExtent,
+                                                                       startCapRound: startCapRound,
+                                                                       endCapRound: endCapRound,
+                                                                       lineJoinRound: styleData.lineJoinRound,
+                                                                       featherStart: startFree,
+                                                                       featherEnd: endFree,
+                                                                       emitsArcLength: lineRenderPass.dashLengthPoints > 0,
+                                                                       arcLengthOrigin: pieceArcLengthOrigin + startInset,
+                                                                       extendClippedStart: shouldExtendStart,
+                                                                       extendClippedEnd: shouldExtendEnd,
+                                                                       clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
+                                                                       clipGeometryToTileBounds: usesSeparateRoadRendering == false) {
+                                if usesSeparateRoadRendering {
+                                    result.appendRoad(linePolygon,
+                                                      key: lineRenderPass.key,
+                                                      structureKind: roadStructure,
+                                                      layer: roadLayer,
+                                                      classPriority: roadClassPriority,
+                                                      passRole: lineRenderPass.roadPassRole)
+                                } else {
+                                    result.appendGround(linePolygon, key: lineRenderPass.key, placement: lineRenderPass.placement)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if group.emitsLabels,
+                   roadLabelPass != nil,
+                   let labelText,
+                   let roadLabelStyle {
+                    for fragment in exactClippedFragments {
+                        guard shouldIncludeRoadLabelFragment(fragment) else {
+                            continue
+                        }
+                        let path = linePath(points: fragment.points)
+                        if path.count >= 2 {
+                            result.roadTextLabels.append(ParsedRoadTextLabel(text: labelText,
+                                                                             path: path,
+                                                                             tile: tile,
+                                                                             featureId: feature.id,
+                                                                             hasFeatureId: feature.hasID,
+                                                                             layerName: layerName,
+                                                                             textStyle: roadLabelStyle))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The decoration a pass stamps along the feature's exact fragments on
+    /// the separate-road path, appended in place: the zebra of a crossing
+    /// (under any pass, except in a tunnel), and under the detail pass the
+    /// bus lane's letter, the bus stop's sawtooth and the oneway arrows.
+    /// Returns false when the pass draws the plain ribbon instead.
+    private func appendDecoration(style: FeatureStyle,
+                                  pass: LineRenderPass,
+                                  fragments: [ClippedLineFragment],
+                                  structure: RoadStructureKind,
+                                  layer: Int,
+                                  tile: Tile,
+                                  into result: inout ReadingStageResult) -> Bool {
+        func append(_ polygons: [ParsedPolygon]) {
+            for polygon in polygons {
+                result.appendRoad(polygon,
+                                  key: pass.key,
+                                  structureKind: structure,
+                                  layer: layer,
+                                  classPriority: style.roadClassPriority,
+                                  passRole: pass.roadPassRole)
+            }
+        }
+        switch style.roadDecorationKind {
+        case .zebraCrossing where structure != .tunnel:
+            for fragment in fragments {
+                append(crosswalkZebraBuilder.buildPolygons(
+                    points: fragment.points,
+                    zoneWidth: Float(pass.parseGeometryStyleData.lineWidth)
+                ))
+            }
+            return true
+        case .busLaneLetter where pass.roadPassRole == .detail:
+            // The bus lane's axis: the letter A stamped along it, from the
+            // same polygon path the zebra and the arrows take.
+            for fragment in fragments {
+                append(busLaneLetterBuilder.buildPolygons(
+                    points: fragment.points,
+                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                ))
+            }
+            return true
+        case .busStopZigzag where pass.roadPassRole == .detail:
+            // The stop's kerb: the yellow sawtooth, folded from the shipped
+            // axis.
+            for fragment in fragments {
+                append(busStopZigzagBuilder.buildPolygons(
+                    points: fragment.points,
+                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                ))
+            }
+            return true
+        case .onewayArrow where pass.roadPassRole == .detail:
+            for fragment in fragments {
+                append(roadDirectionArrowBuilder.buildPolygons(
+                    points: fragment.points,
+                    lineWidth: Float(pass.parseGeometryStyleData.lineWidth)
+                ))
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func linePath(points: [SIMD2<Float>]) -> [SIMD2<Int16>] {
+        points.map { point in
+            let clampedX = min(max(point.x, 0.0), tileExtent)
+            let clampedY = min(max(point.y, 0.0), tileExtent)
+            return SIMD2(Int16(clamping: Int(clampedX.rounded())),
+                         Int16(clamping: Int(clampedY.rounded())))
+        }
+    }
+
+    private func isPointStrictlyInsideTile(_ point: SIMD2<Float>) -> Bool {
+        point.x > 0.0 &&
+        point.x < tileExtent &&
+        point.y > 0.0 &&
+        point.y < tileExtent
+    }
+
+    private func isRoadBoundaryContinuationEndpoint(_ point: SIMD2<Float>?) -> Bool {
+        guard let point else {
+            return false
+        }
+        return LineClipper.isOnTileBoundary(point, tileExtent: tileExtent)
+    }
+
+    private func shouldExtendRoadBoundaryEndpoint(_ point: SIMD2<Float>?) -> Bool {
+        guard let point else {
+            return false
+        }
+
+        let epsilon: Float = 0.0001
+        return abs(point.x - tileExtent) <= epsilon || abs(point.y - tileExtent) <= epsilon
+    }
+
+    private func shouldExtendClippedRoadEndpoint(_ point: SIMD2<Float>?) -> Bool {
+        guard let point else {
+            return false
+        }
+
+        return point.x > tileExtent || point.y > tileExtent
+    }
+
+    private func shouldIncludeRoadLabelFragment(_ fragment: ClippedLineFragment) -> Bool {
+        guard fragment.points.count >= 2 else {
+            return false
+        }
+
+        let isEdgeClipped = fragment.startClipped || fragment.endClipped
+        guard isEdgeClipped else {
+            return true
+        }
+
+        return RoadPolylineMath.length(of: fragment.points) >= Self.minClippedRoadLabelFragmentLength
+    }
+}

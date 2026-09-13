@@ -34,7 +34,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
                                                              properties: props,
                                                              tile: Tile(x: 39616, y: 20486, z: 16))).roadClassPriority
         }
-        let floor = TileMvtParser.automobileRoadClassPriorityFloor
+        let floor = RoadFeatureAttributes.automobileRoadClassPriorityFloor
         for automobile in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
             XCTAssertGreaterThanOrEqual(priority(automobile), floor, "\(automobile) is automobile")
         }
@@ -47,7 +47,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
 
     func testInsetPullsBothEndsBackAlongThePath() throws {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(100, 100)]
-        let inset = try XCTUnwrap(TileMvtParser.insetLineEnds(line, inset: 10, insetStart: true, insetEnd: true))
+        let inset = try XCTUnwrap(RoadPolylineMath.insetLineEnds(line, inset: 10, insetStart: true, insetEnd: true))
         XCTAssertEqual(inset.first, SIMD2<Float>(10, 0))
         XCTAssertEqual(inset.last, SIMD2<Float>(100, 90))
         XCTAssertEqual(inset.count, 3, "An inset shorter than the end segments keeps every corner")
@@ -55,28 +55,28 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
 
     func testInsetConsumesWholeSegmentsWhenLongerThanThem() throws {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(5, 0), SIMD2(100, 0)]
-        let inset = try XCTUnwrap(TileMvtParser.insetLineEnds(line, inset: 20, insetStart: true, insetEnd: false))
+        let inset = try XCTUnwrap(RoadPolylineMath.insetLineEnds(line, inset: 20, insetStart: true, insetEnd: false))
         XCTAssertEqual(inset.first, SIMD2<Float>(20, 0), "The 5-unit first segment is consumed and the inset continues into the next")
         XCTAssertEqual(inset.count, 2)
     }
 
     func testASeamEndKeepsItsPointSoTheLineContinuesFlush() throws {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0)]
-        let inset = try XCTUnwrap(TileMvtParser.insetLineEnds(line, inset: 10, insetStart: false, insetEnd: true))
+        let inset = try XCTUnwrap(RoadPolylineMath.insetLineEnds(line, inset: 10, insetStart: false, insetEnd: true))
         XCTAssertEqual(inset.first, SIMD2<Float>(0, 0), "A tile-seam end is not an end: no inset")
         XCTAssertEqual(inset.last, SIMD2<Float>(90, 0))
     }
 
     func testAStubShorterThanItsInsetsIsNoPaint() {
         let stub: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(15, 0)]
-        XCTAssertNil(TileMvtParser.insetLineEnds(stub, inset: 10, insetStart: true, insetEnd: true),
+        XCTAssertNil(RoadPolylineMath.insetLineEnds(stub, inset: 10, insetStart: true, insetEnd: true),
                      "Two 10-unit insets on a 15-unit stub leave nothing to paint")
-        XCTAssertNotNil(TileMvtParser.insetLineEnds(stub, inset: 10, insetStart: true, insetEnd: false))
+        XCTAssertNotNil(RoadPolylineMath.insetLineEnds(stub, inset: 10, insetStart: true, insetEnd: false))
     }
 
     func testNoInsetIsIdentity() {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0)]
-        XCTAssertEqual(TileMvtParser.insetLineEnds(line, inset: 0, insetStart: true, insetEnd: true), line)
+        XCTAssertEqual(RoadPolylineMath.insetLineEnds(line, inset: 0, insetStart: true, insetEnd: true), line)
     }
 
     /// What the tiles state is what gets painted.
@@ -159,7 +159,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         let counts: [RoadConnectionPointKey: Int] = [
             .init(point: SIMD2(200, 0)): 2
         ]
-        let pieces = TileMvtParser.splitAtJunctions(fragment: fragment, automobilePointCounts: counts)
+        let pieces = RoadPolylineMath.splitAtJunctions(fragment: fragment, automobilePointCounts: counts)
         XCTAssertEqual(pieces.count, 2, "The line is cut at the junction")
         XCTAssertEqual(pieces[0].points, [SIMD2(0, 0), SIMD2(100, 0), SIMD2(200, 0)])
         XCTAssertEqual(pieces[1].points, [SIMD2(200, 0), SIMD2(300, 0)])
@@ -167,7 +167,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         XCTAssertFalse(pieces[1].startClipped, "and to the piece that starts there")
 
         // A point only this street touches is not a junction.
-        let untouched = TileMvtParser.splitAtJunctions(fragment: fragment, automobilePointCounts: [:])
+        let untouched = RoadPolylineMath.splitAtJunctions(fragment: fragment, automobilePointCounts: [:])
         XCTAssertEqual(untouched.count, 1, "A plain interior vertex is not a junction")
         XCTAssertEqual(untouched[0].points, line)
     }

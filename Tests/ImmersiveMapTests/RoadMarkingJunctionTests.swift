@@ -115,7 +115,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
             .init(point: SIMD2(100, 0)): 2,
             .init(point: SIMD2(250, 0)): 2
         ]
-        let pieces = TileMvtParser.splitAtJunctionsWithOrigins(fragment: fragment,
+        let pieces = RoadPolylineMath.splitAtJunctionsWithOrigins(fragment: fragment,
                                                                automobilePointCounts: counts)
         XCTAssertEqual(pieces.count, 3)
         XCTAssertEqual(pieces[0].arcLengthOrigin, 0, "The first piece starts the count")

@@ -12,10 +12,10 @@ import simd
 /// symbol to its true surface continuously with the camera rather than
 /// doubling at every tile level.
 final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
-    private func area(_ ring: [SIMD2<Float>], priority: Int = 80) -> TileMvtParser.RoadSurfaceArea {
+    private func area(_ ring: [SIMD2<Float>], priority: Int = 80) -> RoadSurfaceArea {
         var lower = ring[0], upper = ring[0]
         for p in ring { lower = simd_min(lower, p); upper = simd_max(upper, p) }
-        return TileMvtParser.RoadSurfaceArea(exterior: ring, classPriority: priority, bounds: (lower, upper))
+        return RoadSurfaceArea(exterior: ring, classPriority: priority, bounds: (lower, upper))
     }
 
     // MARK: - Surface clipping
@@ -52,14 +52,14 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
 
     func testOffsetPolylineStaysParallelAndMitersCorners() {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(100, 100)]
-        let shifted = TileMvtParser.offsetPolyline(line, by: 10)
+        let shifted = RoadPolylineMath.offsetPolyline(line, by: 10)
         // Left of eastbound travel is +y; left of northbound is -x.
         XCTAssertEqual(shifted[0], SIMD2<Float>(0, 10))
         XCTAssertEqual(shifted[2], SIMD2<Float>(90, 100))
         // The corner miters: shifted by 10 in both normals.
         XCTAssertEqual(shifted[1].x, 90, accuracy: 0.01)
         XCTAssertEqual(shifted[1].y, 10, accuracy: 0.01)
-        XCTAssertEqual(TileMvtParser.offsetPolyline(line, by: 0), line)
+        XCTAssertEqual(RoadPolylineMath.offsetPolyline(line, by: 0), line)
     }
 
     // MARK: - Symbol to surface
