@@ -13,6 +13,7 @@ class TileMvtParser {
     let determineFeatureStyle               : DetermineFeatureStyle
     let options                             : TileParseOptions
     private let labelDecisions              : TileLabelDecisions
+    private let labelReader                 : LabelFeatureReader
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
@@ -45,6 +46,8 @@ class TileMvtParser {
          options: TileParseOptions) {
         self.determineFeatureStyle = determineFeatureStyle
         self.labelDecisions = labelDecisions
+        self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions,
+                                              determineFeatureStyle: determineFeatureStyle)
         self.options = options
     }
     
@@ -85,13 +88,6 @@ class TileMvtParser {
             return SIMD2(Int16(clamping: Int(clampedX.rounded())),
                          Int16(clamping: Int(clampedY.rounded())))
         }
-    }
-
-    private func isPointInsideTile(_ point: Point) -> Bool {
-        point.x >= 0 &&
-        point.x <= Int32(tileExtent) &&
-        point.y >= 0 &&
-        point.y <= Int32(tileExtent)
     }
 
     private func isPointStrictlyInsideTile(_ point: SIMD2<Float>) -> Bool {
@@ -350,18 +346,18 @@ class TileMvtParser {
         var featureIndex: Int = -1
     }
 
-    private func buildHighZoomRoadPrecomputation(layer: MvtDecodedLayer,
+    private func buildHighZoomRoadPrecomputation(geometry: TileLayerGeometry,
                                                  featureStyles: [FeatureStyle],
                                                  featureAttributes: [[String: MvtValue]],
                                                  lineClipper: LineClipper,
-                                                 data: Data,
                                                  tile: Tile) -> HighZoomRoadPrecomputation {
+        let layer = geometry.layer
         var rawLinesByFeatureIndex = Array(repeating: [[SIMD2<Float>]](), count: layer.features.count)
         var surfaceAreas: [RoadSurfaceArea] = []
 
         // One payload mapping for the whole pre-pass instead of one per
         // feature geometry.
-        data.withUnsafeBytes { bytes in
+        geometry.data.withUnsafeBytes { bytes in
             for (featureIndex, feature) in layer.features.enumerated() {
                 let style = featureStyles[featureIndex]
                 guard style.key != 0 else {
@@ -369,10 +365,10 @@ class TileMvtParser {
                 }
                 switch feature.type {
                 case .linestring:
-                    let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes), layer: layer)
+                    let lines = geometry.lines(of: feature, in: bytes)
                     rawLinesByFeatureIndex[featureIndex] = lines.map(floatPoints)
                 case .polygon where style.isRoadSurfaceArea:
-                    let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: bytes), layer: layer)
+                    let polygons = geometry.polygons(of: feature, in: bytes)
                     for polygon in polygons where polygon.exteriorRing.count >= 3 {
                         // Raw tile space, y down, exactly like the road lines
                         // the clipper cuts against: the flip to render space
@@ -846,197 +842,6 @@ class TileMvtParser {
         return dashed
     }
 
-    private struct LocalizedFallbackLabel {
-        let names: [String: String]
-        let latitude: Double
-        let longitude: Double
-        let sortKey: Int
-        let styleClass: String
-
-        var aliases: Set<String> {
-            Set(names.values.filter { $0.isEmpty == false })
-        }
-
-        func isDuplicate(of existingWaterText: Set<String>) -> Bool {
-            aliases.isDisjoint(with: existingWaterText) == false
-        }
-    }
-
-    private func fallbackLowZoomWaterLabels(for tile: Tile) -> [LocalizedFallbackLabel] {
-        var labels: [LocalizedFallbackLabel] = [
-            LocalizedFallbackLabel(names: [
-                "en": "Pacific Ocean",
-                "ru": "Тихий океан",
-                "fr": "Océan Pacifique",
-                "de": "Pazifischer Ozean",
-                "es": "Océano Pacífico",
-                "it": "Oceano Pacifico",
-                "pt": "Oceano Pacífico",
-                "tr": "Pasifik Okyanusu"
-            ], latitude: 0.0, longitude: -150.0, sortKey: 20, styleClass: "ocean"),
-            LocalizedFallbackLabel(names: [
-                "en": "Atlantic Ocean",
-                "ru": "Атлантический океан",
-                "fr": "Océan Atlantique",
-                "de": "Atlantischer Ozean",
-                "es": "Océano Atlántico",
-                "it": "Oceano Atlantico",
-                "pt": "Oceano Atlântico",
-                "tr": "Atlas Okyanusu"
-            ], latitude: 8.0, longitude: -32.0, sortKey: 18, styleClass: "ocean"),
-            LocalizedFallbackLabel(names: [
-                "en": "Indian Ocean",
-                "ru": "Индийский океан",
-                "fr": "Océan Indien",
-                "de": "Indischer Ozean",
-                "es": "Océano Índico",
-                "it": "Oceano Indiano",
-                "pt": "Oceano Índico",
-                "tr": "Hint Okyanusu"
-            ], latitude: -18.0, longitude: 80.0, sortKey: 22, styleClass: "ocean"),
-            LocalizedFallbackLabel(names: [
-                "en": "Arctic Ocean",
-                "ru": "Северный Ледовитый океан",
-                "fr": "Océan Arctique",
-                "de": "Arktischer Ozean",
-                "es": "Océano Ártico",
-                "it": "Mar Glaciale Artico",
-                "pt": "Oceano Ártico",
-                "tr": "Arktik Okyanusu"
-            ], latitude: 76.0, longitude: 15.0, sortKey: 16, styleClass: "ocean"),
-            LocalizedFallbackLabel(names: [
-                "en": "Southern Ocean",
-                "ru": "Южный океан",
-                "fr": "Océan Austral",
-                "de": "Südlicher Ozean",
-                "es": "Océano Austral",
-                "it": "Oceano Australe",
-                "pt": "Oceano Antártico",
-                "tr": "Güney Okyanusu"
-            ], latitude: -56.0, longitude: 25.0, sortKey: 24, styleClass: "ocean")
-        ]
-
-        if tile.z == 2 {
-            labels.append(LocalizedFallbackLabel(names: [
-                "en": "Mediterranean Sea",
-                "ru": "Средиземное море",
-                "fr": "Mer Méditerranée",
-                "de": "Mittelmeer",
-                "es": "Mar Mediterráneo",
-                "it": "Mar Mediterraneo",
-                "pt": "Mar Mediterrâneo",
-                "tr": "Akdeniz"
-            ], latitude: 35.0, longitude: 18.0, sortKey: 30, styleClass: "sea"))
-            labels.append(LocalizedFallbackLabel(names: [
-                "en": "Caribbean Sea",
-                "ru": "Карибское море",
-                "fr": "Mer des Caraïbes",
-                "de": "Karibisches Meer",
-                "es": "Mar Caribe",
-                "it": "Mar dei Caraibi",
-                "pt": "Mar do Caribe",
-                "tr": "Karayip Denizi"
-            ], latitude: 15.0, longitude: -74.0, sortKey: 32, styleClass: "sea"))
-            labels.append(LocalizedFallbackLabel(names: [
-                "en": "Arabian Sea",
-                "ru": "Аравийское море",
-                "fr": "Mer d'Arabie",
-                "de": "Arabisches Meer",
-                "es": "Mar Arábigo",
-                "it": "Mar Arabico",
-                "pt": "Mar Arábico",
-                "tr": "Umman Denizi"
-            ], latitude: 15.0, longitude: 64.0, sortKey: 34, styleClass: "sea"))
-            labels.append(LocalizedFallbackLabel(names: [
-                "en": "Bering Sea",
-                "ru": "Берингово море",
-                "fr": "Mer de Béring",
-                "de": "Beringmeer",
-                "es": "Mar de Bering",
-                "it": "Mare di Bering",
-                "pt": "Mar de Bering",
-                "tr": "Bering Denizi"
-            ], latitude: 57.0, longitude: -178.0, sortKey: 36, styleClass: "sea"))
-        }
-
-        return labels
-    }
-
-    private func stringTileValue(_ value: String) -> MvtValue {
-        .string(value)
-    }
-
-    private func tilePoint(forLatitude latitude: Double,
-                           longitude: Double,
-                           tile: Tile) -> SIMD2<Int16>? {
-        let n = pow(2.0, Double(tile.z))
-        guard n > 0 else { return nil }
-
-        let wrappedLongitude = ((longitude + 180.0).truncatingRemainder(dividingBy: 360.0) + 360.0).truncatingRemainder(dividingBy: 360.0) - 180.0
-        let x = (wrappedLongitude + 180.0) / 360.0 * n
-
-        let clampedLatitude = min(max(latitude, -85.05112878), 85.05112878)
-        let latitudeRadians = clampedLatitude * .pi / 180.0
-        let y = (1.0 - log(tan(latitudeRadians) + 1.0 / cos(latitudeRadians)) / .pi) * 0.5 * n
-
-        let localX = (x - Double(tile.x)) * 4096.0
-        let localY = (y - Double(tile.y)) * 4096.0
-        guard localX >= 0.0, localX <= 4096.0, localY >= 0.0, localY <= 4096.0 else {
-            return nil
-        }
-
-        let roundedX = Int16(max(0, min(4096, Int(localX.rounded()))))
-        let roundedY = Int16(max(0, min(4096, Int(localY.rounded()))))
-        return SIMD2<Int16>(roundedX, roundedY)
-    }
-
-    private func appendFallbackLowZoomWaterLabels(into textLabels: inout [ParsedTextLabel], tile: Tile) {
-        guard tile.z <= 2 else {
-            return
-        }
-
-        let existingWaterText = Set(
-            textLabels.filter { $0.textStyle.key == 3 || $0.textStyle.key == 4 }
-                .map(\.text)
-        )
-
-        for fallback in fallbackLowZoomWaterLabels(for: tile) {
-            guard let name = labelDecisions.localizedName(from: fallback.names),
-                  fallback.isDuplicate(of: existingWaterText) == false,
-                  let point = tilePoint(forLatitude: fallback.latitude,
-                                        longitude: fallback.longitude,
-                                        tile: tile) else {
-                continue
-            }
-
-            let attributes: [String: MvtValue] = [
-                "class": stringTileValue(fallback.styleClass),
-                "type": stringTileValue(fallback.styleClass),
-                "name": stringTileValue(name)
-            ]
-
-            let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(layerName: "natural_label",
-                                                                                  properties: attributes,
-                                                                                  tile: tile))
-            guard let textStyle = style.labelTextStyle else {
-                continue
-            }
-
-            textLabels.append(ParsedTextLabel(text: name,
-                                        position: point,
-                                        tile: tile,
-                                        featureId: 0,
-                                        hasFeatureId: false,
-                                        layerName: "natural_label",
-                                        sortKey: fallback.sortKey,
-                                        collisionPriority: fallback.sortKey,
-                                        textStyle: textStyle,
-                                        poiIcon: nil,
-                                        minCameraZoom: style.labelMinCameraZoom))
-        }
-    }
-
-    
     func readingStage(decodedTile: MvtDecodedTile, tile: Tile) -> ReadingStageResult {
         let mvtData = decodedTile.sourceData
         let parsePolygon = ParsePolygon()
@@ -1048,6 +853,7 @@ class TileMvtParser {
         for layer in decodedTile.layers {
             let layerStart = DispatchTime.now().uptimeNanoseconds
             let layerName = layer.name
+            let layerGeometry = TileLayerGeometry(layer: layer, data: mvtData)
             let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
                 && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
@@ -1087,16 +893,15 @@ class TileMvtParser {
             }
 
             let buildingPartInfo = layerName == "building"
-                ? collectBuildingPartInfo(layer: layer, featureAttributes: featureAttributes, data: mvtData)
+                ? collectBuildingPartInfo(geometry: layerGeometry, featureAttributes: featureAttributes)
                 : (partIds: Set<UInt64>(), footprintSignatures: Set<BuildingFootprintSignature>())
             let buildingPartIds = buildingPartInfo.partIds
             let buildingPartFootprintSignatures = buildingPartInfo.footprintSignatures
             let highZoomRoads = usesSeparateRoadRendering
-                ? buildHighZoomRoadPrecomputation(layer: layer,
+                ? buildHighZoomRoadPrecomputation(geometry: layerGeometry,
                                                   featureStyles: featureStyles,
                                                   featureAttributes: featureAttributes,
                                                   lineClipper: lineClipper,
-                                                  data: mvtData,
                                                   tile: tile)
                 : .empty
             // Where the tiles ship measured crossing lines, the attribute
@@ -1129,8 +934,7 @@ class TileMvtParser {
                 
                 
                 if feature.type == .polygon {
-                    let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: mvtData),
-                                             layer: layer)
+                    let polygons = layerGeometry.polygons(of: feature)
                     let shouldSplitComplexOceanHoles = layerName == "ocean"
                         && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
                     let extrudeFlag = attributes["extrude"].flatMap(parseBoolValue)
@@ -1275,8 +1079,7 @@ class TileMvtParser {
                     if usesSeparateRoadRendering {
                         preparedLines = highZoomRoads.linesByFeatureIndex[featureIndex]
                     } else {
-                        let lines = normalize(MvtGeometryDecoder.decodeLines(feature.geometry, in: mvtData),
-                                              layer: layer)
+                        let lines = layerGeometry.lines(of: feature)
                         var converted: [PreparedRoadLine] = []
                         converted.reserveCapacity(lines.count)
                         for line in lines {
@@ -1587,34 +1390,14 @@ class TileMvtParser {
                 } else if feature.type == .point {
                     // Point features exist only to be labelled: with labels
                     // off the layer is skipped whole, decision engine included.
-                    guard options.labelsEnabled,
-                          let labelTextStyle = style.labelTextStyle else { continue }
-                    let points = normalize(MvtGeometryDecoder.decodePoints(feature.geometry, in: mvtData),
-                                           layer: layer)
-                    let featureID = feature.hasID ? feature.id : nil
-                    let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
-                    for point in points where isPointInsideTile(point) {
-                        let anchor = SIMD2(Int16(point.x), Int16(point.y))
-                        let labelFeature = VectorTileLabelFeature(providerID: labelDecisions.providerID,
-                                                                  tile: tile,
-                                                                  layerName: layerName,
-                                                                  featureID: featureID,
-                                                                  anchor: anchor,
-                                                                  properties: attributes)
-                        guard let decision = labelDecisions.pointLabelDecision(feature: labelFeature,
-                                                                               style: labelTextStyle,
-                                                                               poiIcon: poiIcon) else {
-                            continue
-                        }
-                        result.textLabels.append(ParsedTextLabel(text: decision.text,
-                                                    position: anchor,
-                                                    key: decision.identity.runtimeKey,
-                                                    sortKey: decision.priority.visibilityRank,
-                                                    collisionPriority: decision.priority.collisionRank,
-                                                    textStyle: decision.style,
-                                                    poiIcon: decision.poiIcon,
-                                                    minCameraZoom: style.labelMinCameraZoom))
-                    }
+                    guard options.labelsEnabled else { continue }
+                    labelReader.read(feature: feature,
+                                     attributes: attributes,
+                                     style: style,
+                                     geometry: layerGeometry,
+                                     layerName: layerName,
+                                     tile: tile,
+                                     into: &result)
                 }
             }
             // The paved slits between trimmed pieces of one street: each
@@ -1650,7 +1433,7 @@ class TileMvtParser {
         }
 
         if options.labelsEnabled {
-            appendFallbackLowZoomWaterLabels(into: &result.textLabels, tile: tile)
+            labelReader.appendLowZoomWaterLabels(tile: tile, into: &result)
         }
         
         addBackground(into: &result, tile: tile)

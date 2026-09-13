@@ -149,17 +149,16 @@ extension TileMvtParser {
     /// One pass over a building layer collecting both the part identifiers and
     /// the part footprint signatures, from attributes the caller already
     /// decoded.
-    func collectBuildingPartInfo(layer: MvtDecodedLayer,
-                                 featureAttributes: [[String: MvtValue]],
-                                 data: Data)
+    func collectBuildingPartInfo(geometry: TileLayerGeometry,
+                                 featureAttributes: [[String: MvtValue]])
         -> (partIds: Set<UInt64>, footprintSignatures: Set<BuildingFootprintSignature>) {
         var partIds = Set<UInt64>()
         var signatures = Set<BuildingFootprintSignature>()
-        for (featureIndex, feature) in layer.features.enumerated() {
+        for (featureIndex, feature) in geometry.layer.features.enumerated() {
             let attributes = featureAttributes[featureIndex]
             guard isTruthy(attributes["building:part"]) else { continue }
             partIds.insert(buildingIdentifier(attributes: attributes, featureId: feature.id))
-            let polygons = normalize(MvtGeometryDecoder.decodePolygons(feature.geometry, in: data), layer: layer)
+            let polygons = geometry.polygons(of: feature)
             for polygon in polygons {
                 if let signature = buildingFootprintSignature(for: polygon) {
                     signatures.insert(signature)
@@ -167,47 +166,6 @@ extension TileMvtParser {
             }
         }
         return (partIds, signatures)
-    }
-
-    func normalize(_ polygons: MultiPolygon, layer: MvtDecodedLayer) -> MultiPolygon {
-        let scale = coordinateScale(for: layer)
-        guard scale != 1 else {
-            return polygons
-        }
-        return polygons.map { polygon in
-            Polygon(exteriorRing: normalize(polygon.exteriorRing, scale: scale),
-                    interiorRings: polygon.interiorRings.map { normalize($0, scale: scale) })
-        }
-    }
-
-    func normalize(_ lines: MultiLineString, layer: MvtDecodedLayer) -> MultiLineString {
-        let scale = coordinateScale(for: layer)
-        guard scale != 1 else {
-            return lines
-        }
-        return lines.map { normalize($0, scale: scale) }
-    }
-
-    func normalize(_ points: MultiPoint, layer: MvtDecodedLayer) -> MultiPoint {
-        let scale = coordinateScale(for: layer)
-        guard scale != 1 else {
-            return points
-        }
-        return normalize(points, scale: scale)
-    }
-
-    private func coordinateScale(for layer: MvtDecodedLayer) -> Double {
-        guard layer.extent > 0 else {
-            return 1
-        }
-        return tileExtent / Double(layer.extent)
-    }
-
-    private func normalize(_ points: [Point], scale: Double) -> [Point] {
-        points.map { point in
-            Point(x: Int32((Double(point.x) * scale).rounded()),
-                  y: Int32((Double(point.y) * scale).rounded()))
-        }
     }
 
     func buildingFootprintSignature(for polygon: Polygon) -> BuildingFootprintSignature? {
