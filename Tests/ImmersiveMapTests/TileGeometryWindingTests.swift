@@ -50,7 +50,7 @@ final class TileGeometryWindingTests: XCTestCase {
         // landcover, the motorway skeleton); a control parse of an empty
         // layer pins what the parser emits on its own, the background and
         // the debug borders, so each layer is checked to add to it.
-        let holes: [[(Int32, Int32)]] = (0..<TileMvtParser.complexOceanHoleSplitThreshold).map { index in
+        let holes: [[(Int32, Int32)]] = (0..<GroundFeatureReader.complexOceanHoleSplitThreshold).map { index in
             Array(Self.square(200 + Int32(index % 8) * 450, 200 + Int32(index / 8) * 450, 200).reversed())
         }
         let layers: [(name: String, features: [VectorTileFixture.Feature])] = [

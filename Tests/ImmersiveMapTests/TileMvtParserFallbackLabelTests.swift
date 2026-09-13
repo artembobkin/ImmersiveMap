@@ -196,7 +196,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
             SIMD2(0, 4096)
         ], to: &geometry, cursor: &cursor)
 
-        let holeCount = TileMvtParser.complexOceanHoleSplitThreshold + 1
+        let holeCount = GroundFeatureReader.complexOceanHoleSplitThreshold + 1
         for index in 0..<holeCount {
             let column = index % 13
             let row = index / 13

@@ -9,12 +9,12 @@ import Mvt
 class TileMvtParser {
     private static let dashEpsilon: Float = 0.0001
     private static let minClippedRoadLabelFragmentLength: Float = 256.0
-    static let complexOceanHoleSplitThreshold = 64
     let determineFeatureStyle               : DetermineFeatureStyle
     let options                             : TileParseOptions
     private let labelDecisions              : TileLabelDecisions
     private let labelReader                 : LabelFeatureReader
     private let buildingReader              : BuildingFeatureReader
+    private let groundReader                : GroundFeatureReader
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
@@ -50,6 +50,7 @@ class TileMvtParser {
         self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions,
                                               determineFeatureStyle: determineFeatureStyle)
         self.buildingReader = BuildingFeatureReader(options: options)
+        self.groundReader = GroundFeatureReader(determineFeatureStyle: determineFeatureStyle)
         self.options = options
     }
     
@@ -935,8 +936,8 @@ class TileMvtParser {
                 
                 if feature.type == .polygon {
                     let polygons = layerGeometry.polygons(of: feature)
-                    let shouldSplitComplexOceanHoles = layerName == "ocean"
-                        && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
+                    let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(layerName: layerName,
+                                                                                            polygons: polygons)
                     let extrusion = buildingReader.extrusion(feature: feature,
                                                              attributes: attributes,
                                                              style: style,
@@ -946,11 +947,11 @@ class TileMvtParser {
                     
                     for polygon in polygons {
                         if shouldSplitComplexOceanHoles,
-                           appendComplexOceanPolygon(polygon,
-                                                     style: style,
-                                                     into: &result,
-                                                     parsePolygon: parsePolygon,
-                                                     tile: tile) {
+                           groundReader.appendComplexOceanPolygon(polygon,
+                                                                  style: style,
+                                                                  into: &result,
+                                                                  parsePolygon: parsePolygon,
+                                                                  tile: tile) {
                             continue
                         }
 
@@ -1379,12 +1380,7 @@ class TileMvtParser {
             labelReader.appendLowZoomWaterLabels(tile: tile, into: &result)
         }
         
-        addBackground(into: &result, tile: tile)
-        if options.addTestBorders { addBorder(into: &result, borderWidth: 1) }
-        // The ground of a coarse tile is drawn straight onto the sphere:
-        // split its triangles so their chords stay under a pixel of the
-        // true surface (see GroundGeometrySubdivider).
-        GroundGeometrySubdivider.subdivideIfNeeded(&result.polygonByStyle, tileZoom: tile.z)
+        groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
         buildingReader.appendExtrudedMeshes(resolving: buildingExtrusionCandidates, into: &result)
         
