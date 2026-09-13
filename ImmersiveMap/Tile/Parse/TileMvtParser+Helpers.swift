@@ -96,8 +96,7 @@ extension TileMvtParser {
 
     func appendComplexOceanPolygon(_ polygon: Polygon,
                                    style: FeatureStyle,
-                                   polygonByStyle: inout [UInt8: [ParsedPolygon]],
-                                   styles: inout [UInt8: FeatureStyle],
+                                   into result: inout ReadingStageResult,
                                    parsePolygon: ParsePolygon,
                                    tile: Tile) -> Bool {
         guard polygon.interiorRings.count >= Self.complexOceanHoleSplitThreshold else {
@@ -111,8 +110,8 @@ extension TileMvtParser {
             return false
         }
 
-        polygonByStyle[style.key, default: []].append(parsedOcean)
-        styles[style.key] = style
+        result.polygonByStyle[style.key, default: []].append(parsedOcean)
+        result.styles[style.key] = style
 
         let landStyle = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(layerName: "background",
                                                                                   properties: [:],
@@ -121,13 +120,13 @@ extension TileMvtParser {
             return true
         }
 
-        styles[landStyle.key] = landStyle
+        result.styles[landStyle.key] = landStyle
         for interiorRing in polygon.interiorRings {
             let landPolygon = Polygon(exteriorRing: interiorRing,
                                       interiorRings: [])
             if let parsedLand = parsePolygon.parse(polygon: landPolygon,
                                                    tileExtent: Float(tileExtent)) {
-                polygonByStyle[landStyle.key, default: []].append(parsedLand)
+                result.polygonByStyle[landStyle.key, default: []].append(parsedLand)
             }
         }
         return true
@@ -877,11 +876,7 @@ extension TileMvtParser {
         }
     }
 
-    func addBorder(
-        polygonByStyle: inout [UInt8: [ParsedPolygon]],
-        styles: inout [UInt8: FeatureStyle],
-        borderWidth: Int16
-    ) {
+    func addBorder(into result: inout ReadingStageResult, borderWidth: Int16) {
         let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "border",
             properties: [:],
@@ -934,15 +929,11 @@ extension TileMvtParser {
         indices = [0, 1, 2, 1, 3, 2]
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
         
-        polygonByStyle[style.key] = polygons
-        styles[style.key] = style
+        result.polygonByStyle[style.key] = polygons
+        result.styles[style.key] = style
     }
     
-    func addBackground(
-        polygonByStyle: inout [UInt8: [ParsedPolygon]],
-        styles: inout [UInt8: FeatureStyle],
-        tile: Tile
-    ) {
+    func addBackground(into result: inout ReadingStageResult, tile: Tile) {
         // The real tile, not a placeholder: the background color is
         // zoom-banded (overview grass, land base, street land), and a
         // hardcoded z0 froze every tile on the overview branch, painting the
@@ -965,8 +956,8 @@ extension TileMvtParser {
         let parsedPolygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(extent, 0), SIMD2(extent, extent), SIMD2(0, extent)],
                                           indices: [0, 1, 2, 0, 2, 3])
         
-        polygonByStyle[style.key, default: []].insert(parsedPolygon, at: 0)
-        styles[style.key] = style
+        result.polygonByStyle[style.key, default: []].insert(parsedPolygon, at: 0)
+        result.styles[style.key] = style
     }
 
     /// Puts a carriageway-surface polygon (a junction area) into the road
@@ -986,10 +977,7 @@ extension TileMvtParser {
                                attributes: [String: MvtValue],
                                tile: Tile,
                                surfaceAreas: [TileMvtParser.RoadSurfaceArea],
-                               roadStyles: inout [UInt8: FeatureStyle],
-                               roadPolygonByStyle: inout [UInt8: [ParsedPolygon]],
-                               orderedRoadPolygons: inout [OrderedRoadPolygon],
-                               roadPolygonSequence: inout Int,
+                               into result: inout ReadingStageResult,
                                parseLine: ParseLine) {
         let structure: RoadStructureKind = roadStructureKind(attributes: attributes) == .ground
             ? .automobileGround
@@ -1004,9 +992,7 @@ extension TileMvtParser {
                 parseGeometryStyleData: pass.parseGeometryStyleData,
                 roadClassPriority: style.roadClassPriority
             )
-            if roadStyles[pass.key] == nil {
-                roadStyles[pass.key] = passStyle
-            }
+            result.registerRoadStyle(passStyle, key: pass.key)
             var polygons: [ParsedPolygon] = []
             switch pass.roadPassRole {
             case .fill:
@@ -1073,17 +1059,12 @@ extension TileMvtParser {
                 continue
             }
             for polygon in polygons {
-                roadPolygonByStyle[pass.key, default: []].append(polygon)
-                orderedRoadPolygons.append(
-                    OrderedRoadPolygon(polygon: polygon,
-                                       styleKey: pass.key,
-                                       structureKind: structure,
-                                       layer: layer,
-                                       classPriority: style.roadClassPriority,
-                                       passRole: pass.roadPassRole,
-                                       sequence: roadPolygonSequence)
-                )
-                roadPolygonSequence += 1
+                result.appendRoad(polygon,
+                                  key: pass.key,
+                                  structureKind: structure,
+                                  layer: layer,
+                                  classPriority: style.roadClassPriority,
+                                  passRole: pass.roadPassRole)
             }
         }
     }

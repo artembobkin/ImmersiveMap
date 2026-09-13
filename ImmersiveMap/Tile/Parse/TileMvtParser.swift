@@ -1042,19 +1042,8 @@ class TileMvtParser {
         let parsePolygon = ParsePolygon()
         let parseLine = ParseLine()
         let lineClipper = LineClipper()
-        var polygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-        var roadPolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-        var orderedRoadPolygons: [OrderedRoadPolygon] = []
-        var bridgePolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-        var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
-        var styles: [UInt8: FeatureStyle] = [:]
-        var roadStyles: [UInt8: FeatureStyle] = [:]
-        var bridgeStyles: [UInt8: FeatureStyle] = [:]
-        var textLabels: [ParsedTextLabel] = []
-        var roadTextLabels: [ParsedRoadTextLabel] = []
-        var roadPolygonSequence = 0
+        var result = ReadingStageResult()
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
-        var layerTimings: [TileParseLayerTiming] = []
         
         for layer in decodedTile.layers {
             let layerStart = DispatchTime.now().uptimeNanoseconds
@@ -1135,16 +1124,7 @@ class TileMvtParser {
                     continue
                 }
                 if feature.type != .linestring || usesSeparateRoadRendering == false {
-                    switch style.linePlacement {
-                    case .ground:
-                        if styles[styleKey] == nil {
-                            styles[styleKey] = style
-                        }
-                    case .bridgeOverlay:
-                        if bridgeStyles[styleKey] == nil {
-                            bridgeStyles[styleKey] = style
-                        }
-                    }
+                    result.registerStyle(style, key: styleKey, placement: style.linePlacement)
                 }
                 
                 
@@ -1204,8 +1184,7 @@ class TileMvtParser {
                         if shouldSplitComplexOceanHoles,
                            appendComplexOceanPolygon(polygon,
                                                      style: style,
-                                                     polygonByStyle: &polygonByStyle,
-                                                     styles: &styles,
+                                                     into: &result,
                                                      parsePolygon: parsePolygon,
                                                      tile: tile) {
                             continue
@@ -1229,19 +1208,11 @@ class TileMvtParser {
                                                   attributes: attributes,
                                                   tile: tile,
                                                   surfaceAreas: highZoomRoads.surfaceAreas,
-                                                  roadStyles: &roadStyles,
-                                                  roadPolygonByStyle: &roadPolygonByStyle,
-                                                  orderedRoadPolygons: &orderedRoadPolygons,
-                                                  roadPolygonSequence: &roadPolygonSequence,
+                                                  into: &result,
                                                   parseLine: parseLine)
                             continue
                         }
-                        switch style.linePlacement {
-                        case .ground:
-                            polygonByStyle[styleKey, default: []].append(parsedGeometry.parsedPolygon)
-                        case .bridgeOverlay:
-                            bridgePolygonByStyle[styleKey, default: []].append(parsedGeometry.parsedPolygon)
-                        }
+                        result.appendGround(parsedGeometry.parsedPolygon, key: styleKey, placement: style.linePlacement)
                         
                         if let extrusion,
                            extrusion.top > extrusion.base,
@@ -1366,20 +1337,9 @@ class TileMvtParser {
                                 roadDecorationKind: style.roadDecorationKind
                             )
                             if usesSeparateRoadRendering {
-                                if roadStyles[lineRenderPass.key] == nil {
-                                    roadStyles[lineRenderPass.key] = passStyle
-                                }
+                                result.registerRoadStyle(passStyle, key: lineRenderPass.key)
                             } else {
-                                switch lineRenderPass.placement {
-                                case .ground:
-                                    if styles[lineRenderPass.key] == nil {
-                                        styles[lineRenderPass.key] = passStyle
-                                    }
-                                case .bridgeOverlay:
-                                    if bridgeStyles[lineRenderPass.key] == nil {
-                                        bridgeStyles[lineRenderPass.key] = passStyle
-                                    }
-                                }
+                                result.registerStyle(passStyle, key: lineRenderPass.key, placement: lineRenderPass.placement)
                             }
 
                             if shouldRenderCrosswalkZebra(style: style,
@@ -1391,19 +1351,12 @@ class TileMvtParser {
                                         zoneWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth)
                                     )
                                     for zebraPolygon in zebraPolygons {
-                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(zebraPolygon)
-                                        orderedRoadPolygons.append(
-                                            OrderedRoadPolygon(
-                                                polygon: zebraPolygon,
-                                                styleKey: lineRenderPass.key,
-                                                structureKind: roadStructure,
-                                                layer: roadLayer,
-                                                classPriority: roadClassPriority,
-                                                passRole: lineRenderPass.roadPassRole,
-                                                sequence: roadPolygonSequence
-                                            )
-                                        )
-                                        roadPolygonSequence += 1
+                                        result.appendRoad(zebraPolygon,
+                                                          key: lineRenderPass.key,
+                                                          structureKind: roadStructure,
+                                                          layer: roadLayer,
+                                                          classPriority: roadClassPriority,
+                                                          passRole: lineRenderPass.roadPassRole)
                                     }
                                 }
                                 continue
@@ -1421,19 +1374,12 @@ class TileMvtParser {
                                         unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
                                     )
                                     for letterPolygon in letterPolygons {
-                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(letterPolygon)
-                                        orderedRoadPolygons.append(
-                                            OrderedRoadPolygon(
-                                                polygon: letterPolygon,
-                                                styleKey: lineRenderPass.key,
-                                                structureKind: roadStructure,
-                                                layer: roadLayer,
-                                                classPriority: roadClassPriority,
-                                                passRole: lineRenderPass.roadPassRole,
-                                                sequence: roadPolygonSequence
-                                            )
-                                        )
-                                        roadPolygonSequence += 1
+                                        result.appendRoad(letterPolygon,
+                                                          key: lineRenderPass.key,
+                                                          structureKind: roadStructure,
+                                                          layer: roadLayer,
+                                                          classPriority: roadClassPriority,
+                                                          passRole: lineRenderPass.roadPassRole)
                                     }
                                 }
                                 continue
@@ -1450,19 +1396,12 @@ class TileMvtParser {
                                         unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
                                     )
                                     for zigzagPolygon in zigzagPolygons {
-                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(zigzagPolygon)
-                                        orderedRoadPolygons.append(
-                                            OrderedRoadPolygon(
-                                                polygon: zigzagPolygon,
-                                                styleKey: lineRenderPass.key,
-                                                structureKind: roadStructure,
-                                                layer: roadLayer,
-                                                classPriority: roadClassPriority,
-                                                passRole: lineRenderPass.roadPassRole,
-                                                sequence: roadPolygonSequence
-                                            )
-                                        )
-                                        roadPolygonSequence += 1
+                                        result.appendRoad(zigzagPolygon,
+                                                          key: lineRenderPass.key,
+                                                          structureKind: roadStructure,
+                                                          layer: roadLayer,
+                                                          classPriority: roadClassPriority,
+                                                          passRole: lineRenderPass.roadPassRole)
                                     }
                                 }
                                 continue
@@ -1477,19 +1416,12 @@ class TileMvtParser {
                                         lineWidth: Float(lineRenderPass.parseGeometryStyleData.lineWidth)
                                     )
                                     for arrowPolygon in arrowPolygons {
-                                        roadPolygonByStyle[lineRenderPass.key, default: []].append(arrowPolygon)
-                                        orderedRoadPolygons.append(
-                                            OrderedRoadPolygon(
-                                                polygon: arrowPolygon,
-                                                styleKey: lineRenderPass.key,
-                                                structureKind: roadStructure,
-                                                layer: roadLayer,
-                                                classPriority: roadClassPriority,
-                                                passRole: lineRenderPass.roadPassRole,
-                                                sequence: roadPolygonSequence
-                                            )
-                                        )
-                                        roadPolygonSequence += 1
+                                        result.appendRoad(arrowPolygon,
+                                                          key: lineRenderPass.key,
+                                                          structureKind: roadStructure,
+                                                          layer: roadLayer,
+                                                          classPriority: roadClassPriority,
+                                                          passRole: lineRenderPass.roadPassRole)
                                     }
                                 }
                                 continue
@@ -1616,26 +1548,14 @@ class TileMvtParser {
                                                                          clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
                                                                          clipGeometryToTileBounds: usesSeparateRoadRendering == false) {
                                         if usesSeparateRoadRendering {
-                                            roadPolygonByStyle[lineRenderPass.key, default: []].append(linePolygon)
-                                            orderedRoadPolygons.append(
-                                                OrderedRoadPolygon(
-                                                    polygon: linePolygon,
-                                                    styleKey: lineRenderPass.key,
-                                                    structureKind: roadStructure,
-                                                    layer: roadLayer,
-                                                    classPriority: roadClassPriority,
-                                                    passRole: lineRenderPass.roadPassRole,
-                                                    sequence: roadPolygonSequence
-                                                )
-                                            )
-                                            roadPolygonSequence += 1
+                                            result.appendRoad(linePolygon,
+                                                              key: lineRenderPass.key,
+                                                              structureKind: roadStructure,
+                                                              layer: roadLayer,
+                                                              classPriority: roadClassPriority,
+                                                              passRole: lineRenderPass.roadPassRole)
                                         } else {
-                                            switch lineRenderPass.placement {
-                                            case .ground:
-                                                polygonByStyle[lineRenderPass.key, default: []].append(linePolygon)
-                                            case .bridgeOverlay:
-                                                bridgePolygonByStyle[lineRenderPass.key, default: []].append(linePolygon)
-                                            }
+                                            result.appendGround(linePolygon, key: lineRenderPass.key, placement: lineRenderPass.placement)
                                         }
                                     }
                                 }
@@ -1652,7 +1572,7 @@ class TileMvtParser {
                                 }
                                 let path = linePath(points: fragment.points)
                                 if path.count >= 2 {
-                                    roadTextLabels.append(ParsedRoadTextLabel(text: labelText,
+                                    result.roadTextLabels.append(ParsedRoadTextLabel(text: labelText,
                                                                         path: path,
                                                                         tile: tile,
                                                                         featureId: feature.id,
@@ -1686,7 +1606,7 @@ class TileMvtParser {
                                                                                poiIcon: poiIcon) else {
                             continue
                         }
-                        textLabels.append(ParsedTextLabel(text: decision.text,
+                        result.textLabels.append(ParsedTextLabel(text: decision.text,
                                                     position: anchor,
                                                     key: decision.identity.runtimeKey,
                                                     sortKey: decision.priority.visibilityRank,
@@ -1720,28 +1640,25 @@ class TileMvtParser {
                                       attributes: featureAttributes[owner.featureIndex],
                                       tile: tile,
                                       surfaceAreas: highZoomRoads.surfaceAreas,
-                                      roadStyles: &roadStyles,
-                                      roadPolygonByStyle: &roadPolygonByStyle,
-                                      orderedRoadPolygons: &orderedRoadPolygons,
-                                      roadPolygonSequence: &roadPolygonSequence,
+                                      into: &result,
                                       parseLine: parseLine)
             }
             let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - layerStart
-            layerTimings.append(TileParseLayerTiming(layerName: layerName,
+            result.layerTimings.append(TileParseLayerTiming(layerName: layerName,
                                                      duration: TimeInterval(elapsedNanoseconds) / 1_000_000_000.0))
 
         }
 
         if options.labelsEnabled {
-            appendFallbackLowZoomWaterLabels(into: &textLabels, tile: tile)
+            appendFallbackLowZoomWaterLabels(into: &result.textLabels, tile: tile)
         }
         
-        addBackground(polygonByStyle: &polygonByStyle, styles: &styles, tile: tile)
-        if options.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }
+        addBackground(into: &result, tile: tile)
+        if options.addTestBorders { addBorder(into: &result, borderWidth: 1) }
         // The ground of a coarse tile is drawn straight onto the sphere:
         // split its triangles so their chords stay under a pixel of the
         // true surface (see GroundGeometrySubdivider).
-        GroundGeometrySubdivider.subdivideIfNeeded(&polygonByStyle, tileZoom: tile.z)
+        GroundGeometrySubdivider.subdivideIfNeeded(&result.polygonByStyle, tileZoom: tile.z)
 
         let resolvedBuildingExtrusions = resolveExteriorBuildingExtrusions(buildingExtrusionCandidates)
         for candidate in resolvedBuildingExtrusions {
@@ -1754,23 +1671,12 @@ class TileMvtParser {
                                                     baseHeight: candidate.baseHeight,
                                                     topHeight: candidate.topHeight,
                                                     tileExtent: Float(tileExtent)) {
-                extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
+                result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
             }
         }
         
-        return ReadingStageResult(
-            polygonByStyle: polygonByStyle.filter { $0.value.isEmpty == false },
-            roadPolygonByStyle: roadPolygonByStyle.filter { $0.value.isEmpty == false },
-            orderedRoadPolygons: orderedRoadPolygons,
-            bridgePolygonByStyle: bridgePolygonByStyle.filter { $0.value.isEmpty == false },
-            extrudedByStyle: extrudedByStyle.filter { $0.value.isEmpty == false },
-            styles: styles,
-            roadStyles: roadStyles,
-            bridgeStyles: bridgeStyles,
-            textLabels: textLabels,
-            roadTextLabels: roadTextLabels,
-            layerTimings: layerTimings
-        )
+        result.removeEmptyBuckets()
+        return result
     }
 
     /// Cuts a line at every interior point where another carriageway meets

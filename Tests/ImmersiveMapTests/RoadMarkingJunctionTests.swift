@@ -111,7 +111,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
     func testTheDashPatternCarriesOnAcrossAJunction() {
         let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(250, 0), SIMD2(400, 0)]
         let fragment = ClippedLineFragment(points: line, startClipped: false, endClipped: false)
-        let counts: [TileMvtParser.RoadConnectionPointKey: Int] = [
+        let counts: [RoadConnectionPointKey: Int] = [
             .init(point: SIMD2(100, 0)): 2,
             .init(point: SIMD2(250, 0)): 2
         ]

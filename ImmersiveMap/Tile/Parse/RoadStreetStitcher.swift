@@ -124,7 +124,7 @@ enum RoadStreetStitcher {
         // How many distinct drive-tier features touch each endpoint (any
         // road feature, stitchable or not: a T with an unnamed service road
         // is still a T).
-        var featuresAtPoint: [TileMvtParser.RoadConnectionPointKey: Set<Int>] = [:]
+        var featuresAtPoint: [RoadConnectionPointKey: Set<Int>] = [:]
         for index in 0..<featureCount where featureStyles[index].roadClassPriority >= TileMvtParser.automobileRoadClassPriorityFloor {
             for line in linesByFeatureIndex[index] {
                 guard let first = line.first, let last = line.last else { continue }
@@ -139,7 +139,7 @@ enum RoadStreetStitcher {
             let piece: Int
             let isStart: Bool
         }
-        var endsAtPoint: [TileMvtParser.RoadConnectionPointKey: [End]] = [:]
+        var endsAtPoint: [RoadConnectionPointKey: [End]] = [:]
         for (pieceIndex, piece) in pieces.enumerated() {
             endsAtPoint[.init(point: piece.points[0]), default: []].append(End(piece: pieceIndex, isStart: true))
             endsAtPoint[.init(point: piece.points[piece.points.count - 1]), default: []].append(End(piece: pieceIndex, isStart: false))
@@ -148,7 +148,7 @@ enum RoadStreetStitcher {
         func partner(of pieceIndex: Int, atStart: Bool) -> End? {
             let piece = pieces[pieceIndex]
             let point = atStart ? piece.points[0] : piece.points[piece.points.count - 1]
-            let key = TileMvtParser.RoadConnectionPointKey(point: point)
+            let key = RoadConnectionPointKey(point: point)
             // Exactly two drive-tier features meet here, or it is a junction.
             guard featuresAtPoint[key]?.count == 2 else { return nil }
             guard let candidates = endsAtPoint[key] else { return nil }

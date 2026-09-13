@@ -25,7 +25,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
     }
 
     private func makeMesh(roofShape: RoofShape?,
-                          interiors: [[SIMD2<Float>]] = []) -> TileMvtParser.ParsedExtrudedMesh? {
+                          interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
         let parser = makeParser()
         let roofVertices = rectangle.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
         let roofInfo = roofShape.map {
@@ -43,7 +43,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
 
     /// Plan-view winding signs of the roof-surface triangles. The roof surface
     /// is the first surface appended, so its vertices carry surfaceID 1.
-    private func roofWindingSigns(of mesh: TileMvtParser.ParsedExtrudedMesh) -> [Float] {
+    private func roofWindingSigns(of mesh: ParsedExtrudedMesh) -> [Float] {
         var signs: [Float] = []
         var index = 0
         while index + 2 < mesh.indices.count {

@@ -19,7 +19,7 @@ final class TileMvtParserWallNormalTests: XCTestCase {
     }
 
     private func makeMesh(exterior: [SIMD2<Float>],
-                          interiors: [[SIMD2<Float>]] = []) -> TileMvtParser.ParsedExtrudedMesh? {
+                          interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
         let parser = makeParser()
         let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
         return parser.buildExtrudedMesh(clippedExterior: exterior,
@@ -34,7 +34,7 @@ final class TileMvtParserWallNormalTests: XCTestCase {
 
     /// Signed radial component of a wall vertex normal relative to `center`:
     /// positive when the normal points away from the center.
-    private func radialComponents(of mesh: TileMvtParser.ParsedExtrudedMesh,
+    private func radialComponents(of mesh: ParsedExtrudedMesh,
                                   center: SIMD2<Float>,
                                   where isIncluded: (SIMD3<Float>) -> Bool = { _ in true }) -> [Float] {
         mesh.vertices.compactMap { vertex in
