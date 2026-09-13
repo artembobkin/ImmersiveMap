@@ -38,7 +38,7 @@ extension FeatureStyle {
     /// for the sphere's foreshortening toward the limb, where the rim clamp
     /// thins the stroke anyway. Part of the prepared tile geometry, so a
     /// change here bumps `PreparedTileDiskCaching.preparedFormatVersion`.
-    static let pointLockedRibbonUnitsPerPoint: Double = 12
+    public static let pointLockedRibbonUnitsPerPoint: Double = 12
 
     static func pointLockedLine(key: UInt8,
                                 color: SIMD4<Float>,
@@ -56,7 +56,7 @@ extension FeatureStyle {
             lineWidthPoints: widthPoints,
             dashLengthPoints: dashLengthPoints,
             dashGapPoints: dashGapPoints,
-            parseGeometryStyleData: ParseGeometryStyleData(
+            lineGeometry: LineGeometryStyle(
                 lineWidth: Double(widthPoints) * Self.pointLockedRibbonUnitsPerPoint
             ),
             roadClassPriority: roadClassPriority,

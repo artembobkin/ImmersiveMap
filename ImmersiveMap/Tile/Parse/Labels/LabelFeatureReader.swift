@@ -15,10 +15,10 @@ import Mvt
 /// a map that wants them.
 struct LabelFeatureReader {
     private let labelDecisions: TileLabelDecisions
-    private let mapStyle: any ImmersiveMapStyle
+    private let mapStyle: MapStyleRuntime
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
-    init(labelDecisions: TileLabelDecisions, mapStyle: any ImmersiveMapStyle) {
+    init(labelDecisions: TileLabelDecisions, mapStyle: MapStyleRuntime) {
         self.labelDecisions = labelDecisions
         self.mapStyle = mapStyle
     }

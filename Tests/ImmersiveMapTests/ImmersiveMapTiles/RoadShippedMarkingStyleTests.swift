@@ -47,9 +47,9 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
         XCTAssertEqual(dividing.resolvedLineRenderPasses.count, 1, "One pass: the stroke itself")
         XCTAssertEqual(pass?.roadPassRole, .detail, "drawn above every carriageway fill")
         XCTAssertEqual(pass?.key, 60)
-        XCTAssertEqual(pass?.parseGeometryStyleData.endInset ?? -1, 0,
+        XCTAssertEqual(pass?.lineGeometry.endInset ?? -1, 0,
                        "No junction inset: the line already ends where the paint ends")
-        XCTAssertEqual(pass?.parseGeometryStyleData.lateralOffset ?? -1, 0,
+        XCTAssertEqual(pass?.lineGeometry.lateralOffset ?? -1, 0,
                        "and no lateral offset: the polyline IS the paint")
         XCTAssertEqual(pass?.dashInTileUnits, true, "The pattern is world-locked")
         let metres = metresPerUnit(moscowTile(z: 16))

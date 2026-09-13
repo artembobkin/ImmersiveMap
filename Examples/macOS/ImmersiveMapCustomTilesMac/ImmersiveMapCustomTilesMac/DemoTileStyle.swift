@@ -9,7 +9,9 @@ import ImmersiveMap
 /// A style is one function: given a feature (its layer, its zoom, its
 /// properties), say how to draw it. Everything the engine knows about the data
 /// arrives through `ImmersiveMapFeatureStyleContext`, so this type is where a
-/// custom MVT schema turns into geometry.
+/// custom MVT schema turns into geometry. The `key` of each style is its
+/// identity within a tile and its place in the draw order: ground fills draw
+/// in ascending key, so water (20) covers land cover (10).
 ///
 /// `cacheFingerprint` matters as much as the drawing: prepared tiles are cached
 /// on disk keyed by it, so any change to the rules here must change the number
@@ -28,13 +30,13 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             landCover: SIMD4<Float>(0.12, 0.14, 0.16, 1))
     }
 
-    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> ImmersiveMapFeatureStyle {
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         switch feature.layerName {
         case "water":
-            return .polygon(color: SIMD4<Float>(0.10, 0.20, 0.36, 1))
+            return .polygon(key: 20, color: SIMD4<Float>(0.10, 0.20, 0.36, 1))
 
         case "waterway":
-            return .line(color: SIMD4<Float>(0.12, 0.24, 0.42, 1), width: 1.2)
+            return .line(key: 22, color: SIMD4<Float>(0.12, 0.24, 0.42, 1), width: 1.2)
 
         case "landcover":
             let kind = feature.properties.string("class") ?? ""
@@ -45,17 +47,18 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             case "sand": SIMD4<Float>(0.26, 0.24, 0.18, 1)
             default: SIMD4<Float>(0.13, 0.15, 0.16, 1)
             }
-            return .polygon(color: color)
+            return .polygon(key: 10, color: color)
 
         case "landuse":
-            return .polygon(color: SIMD4<Float>(0.14, 0.15, 0.17, 1))
+            return .polygon(key: 12, color: SIMD4<Float>(0.14, 0.15, 0.17, 1))
 
         case "building":
             // What the feature is as a building (its height, its base, its
             // roof) is the style's reading of the tags; the OpenStreetMap
             // reading covers this schema. `fallbackHeight` applies when the
             // tile states no height.
-            return .extrudedPolygon(color: SIMD4<Float>(0.22, 0.24, 0.29, 1),
+            return .extrudedPolygon(key: 30,
+                                    color: SIMD4<Float>(0.22, 0.24, 0.29, 1),
                                     building: .openStreetMap(feature.properties),
                                     heightScale: 1.0,
                                     anchorZoom: 16,
@@ -73,7 +76,7 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             // Where the road sits (tunnel, bridge, its layer) and which
             // street it is a piece of are the style's reading too; the
             // OpenStreetMap reading covers this schema.
-            return .line(color: color, width: width, road: .openStreetMap(feature.properties))
+            return .line(key: 40, color: color, width: width, road: .openStreetMap(feature.properties))
 
         case "boundary":
             // The point-locked line mode: the width is stated in on-screen
@@ -81,7 +84,8 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             // butt ends, and the dash pattern is in points too. This is how
             // the built-in style draws country borders; a plain `.line` width
             // lives in tile units and thins into the distance instead.
-            return .pointLockedLine(color: SIMD4<Float>(0.42, 0.36, 0.46, 1),
+            return .pointLockedLine(key: 100,
+                                    color: SIMD4<Float>(0.42, 0.36, 0.46, 1),
                                     widthPoints: 1.2,
                                     dashLengthPoints: 6,
                                     dashGapPoints: 3)
@@ -89,17 +93,17 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
         case "place":
             // A point label: the text itself comes from the provider's label
             // profile, this only says how to draw it.
-            return .pointLabel(placeLabelStyle(for: feature))
+            return .pointLabel(key: 70, placeLabelStyle(for: feature))
 
         default:
             return .hidden
         }
     }
 
-    private func placeLabelStyle(for feature: ImmersiveMapFeatureStyleContext) -> ImmersiveMapLabelTextStyle {
+    private func placeLabelStyle(for feature: ImmersiveMapFeatureStyleContext) -> LabelTextStyle {
         let kind = feature.properties.string("class") ?? ""
         let isMajor = kind == "city" || kind == "country"
-        return ImmersiveMapLabelTextStyle(
+        return LabelTextStyle(
             fillColor: SIMD3<Float>(0.93, 0.94, 0.97),
             strokeColor: SIMD3<Float>(0.03, 0.04, 0.06),
             haloEm: 0.13,

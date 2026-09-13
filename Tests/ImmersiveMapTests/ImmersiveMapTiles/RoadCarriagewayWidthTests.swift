@@ -52,7 +52,7 @@ final class RoadCarriagewayWidthTests: XCTestCase {
     private func fillWidthMetres(_ className: String, lanes: Int? = nil, z: Int) -> Double {
         let featureStyle = roadStyle(className, lanes: lanes, z: z)
         let fill = featureStyle.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
-        return (fill?.parseGeometryStyleData.lineWidth ?? 0) * metresPerUnit(moscowTile(z: z))
+        return (fill?.lineGeometry.lineWidth ?? 0) * metresPerUnit(moscowTile(z: z))
     }
 
     /// A width the tiles state outright wins over any deduction from lanes.
@@ -76,7 +76,7 @@ final class RoadCarriagewayWidthTests: XCTestCase {
             let feature = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                     properties: properties,
                                                                     tile: Tile(x: 39615, y: 20486, z: 16)))
-            return feature.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.parseGeometryStyleData.lineWidth ?? 0
+            return feature.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.lineGeometry.lineWidth ?? 0
         }
         // 75 decimetres = 7.5 m; the lane model would say 4 lanes x 4 m = 16 m.
         let stated = widthUnits(["class": "primary", "lanes": 4, "width": 75])
@@ -155,15 +155,15 @@ final class RoadCarriagewayWidthTests: XCTestCase {
         // The ribbon hosts the point width with margin but stays tight: a
         // wide ribbon is a long corner wedge, the source of the notches seen
         // at every bend of a dashed marking.
-        XCTAssertGreaterThanOrEqual(marking.parseGeometryStyleData.lineWidth,
+        XCTAssertGreaterThanOrEqual(marking.lineGeometry.lineWidth,
                                     Double(marking.lineWidthPoints) * 4,
                                     "The ribbon must host the point width")
-        XCTAssertLessThan(marking.parseGeometryStyleData.lineWidth,
+        XCTAssertLessThan(marking.lineGeometry.lineWidth,
                           Double(marking.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
                           "and must be far tighter than an overview line's ribbon")
-        XCTAssertTrue(marking.parseGeometryStyleData.lineJoinRound,
+        XCTAssertTrue(marking.lineGeometry.lineJoinRound,
                       "Round joins fill the corner wedge so a dash across a bend does not notch")
-        XCTAssertFalse(marking.parseGeometryStyleData.lineCapRound,
+        XCTAssertFalse(marking.lineGeometry.lineCapRound,
                        "No round caps: the dashes stop on the road instead of laying a disc past its end")
 
         // The through hierarchy is painted where the tiles state a lane count.

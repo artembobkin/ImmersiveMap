@@ -47,7 +47,7 @@ struct LineFeatureReader {
               roads: RoadLayerContext,
               tools: TileParseTools,
               into result: inout ReadingStageResult) {
-        let lineRenderPasses = style.resolvedLineRenderPasses.filter { $0.parseGeometryStyleData.lineWidth > 0 }
+        let lineRenderPasses = style.resolvedLineRenderPasses.filter { $0.lineGeometry.lineWidth > 0 }
         if lineRenderPasses.isEmpty {
             return
         }
@@ -68,7 +68,7 @@ struct LineFeatureReader {
         let roadLayer = style.road.layer
         let sharedRoadPadding = Float(
             lineRenderPasses.reduce(0.0) { partial, pass in
-                max(partial, pass.parseGeometryStyleData.lineWidth * 0.5)
+                max(partial, pass.lineGeometry.lineWidth * 0.5)
             }
         )
         let preparedLines: [PreparedRoadLine]
@@ -128,7 +128,7 @@ struct LineFeatureReader {
                         dashInTileUnits: lineRenderPass.dashInTileUnits,
                         minimumWidthPoints: lineRenderPass.minimumWidthPoints,
                         maximumWidthPoints: lineRenderPass.maximumWidthPoints,
-                        parseGeometryStyleData: lineRenderPass.parseGeometryStyleData,
+                        lineGeometry: lineRenderPass.lineGeometry,
                         includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
                         linePlacement: lineRenderPass.placement,
                         roadClassPriority: roadClassPriority,
@@ -152,7 +152,7 @@ struct LineFeatureReader {
                         continue
                     }
 
-                    let padding = Float(lineRenderPass.parseGeometryStyleData.lineWidth * 0.5)
+                    let padding = Float(lineRenderPass.lineGeometry.lineWidth * 0.5)
                     let paddedFragments = usesSeparateRoadRendering
                         ? sharedPaddedFragments
                         : lineClipper.clip(points: linePoints,
@@ -170,14 +170,14 @@ struct LineFeatureReader {
                         // and each piece is inset from its own new
                         // ends. Only marking passes are cut: the
                         // carriageway and its kerb run through.
-                        let junctionSplit = lineRenderPass.parseGeometryStyleData.endInset > 0
+                        let junctionSplit = lineRenderPass.lineGeometry.endInset > 0
                             && usesSeparateRoadRendering
                             ? RoadPolylineMath.splitAtJunctionsWithOrigins(fragment: fragment,
                                                                             automobilePointCounts: precomputation.automobilePointCounts)
                             : [(fragment: fragment, arcLengthOrigin: Float(0))]
                         let renderFragments = junctionSplit.flatMap { piece in
                             RoadDashPattern.fragments(for: piece.fragment,
-                                                      styleData: lineRenderPass.parseGeometryStyleData)
+                                                      styleData: lineRenderPass.lineGeometry)
                                 .map { (fragment: $0, arcLengthOrigin: piece.arcLengthOrigin) }
                         }
 
@@ -216,8 +216,8 @@ struct LineFeatureReader {
                             let endFree = endContinuation == false
                                 && endConnected == false
                                 && renderFragment.points.last.map { isPointStrictlyInsideTile($0) } == true
-                            let startCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && startFree
-                            let endCapRound = lineRenderPass.parseGeometryStyleData.lineCapRound && endFree
+                            let startCapRound = lineRenderPass.lineGeometry.lineCapRound && startFree
+                            let endCapRound = lineRenderPass.lineGeometry.lineCapRound && endFree
 
                             // An inset pulls the line back from a genuine end or a
                             // junction; a tile-seam cut keeps its point so the line
@@ -225,7 +225,7 @@ struct LineFeatureReader {
                             // leaves at a junction is the widest carriageway that
                             // meets it, not its own: a lane line running into a
                             // six-lane avenue has to clear the avenue.
-                            let styleData = lineRenderPass.parseGeometryStyleData
+                            let styleData = lineRenderPass.lineGeometry
                             func junctionInset(_ point: SIMD2<Float>?, isContinuation: Bool) -> Float {
                                 guard styleData.endInset > 0, isContinuation == false, let point else { return 0 }
                                 // An end the crossing's surface cut already
@@ -259,7 +259,7 @@ struct LineFeatureReader {
                             )
 
                             if let linePolygon = tools.parseLine.parse(points: passPoints,
-                                                                       width: lineRenderPass.parseGeometryStyleData.lineWidth,
+                                                                       width: lineRenderPass.lineGeometry.lineWidth,
                                                                        tileExtent: tileExtent,
                                                                        startCapRound: startCapRound,
                                                                        endCapRound: endCapRound,
@@ -338,7 +338,7 @@ struct LineFeatureReader {
             for fragment in fragments {
                 append(crosswalkZebraBuilder.buildPolygons(
                     points: fragment.points,
-                    zoneWidth: Float(pass.parseGeometryStyleData.lineWidth)
+                    zoneWidth: Float(pass.lineGeometry.lineWidth)
                 ))
             }
             return true
@@ -366,7 +366,7 @@ struct LineFeatureReader {
             for fragment in fragments {
                 append(roadDirectionArrowBuilder.buildPolygons(
                     points: fragment.points,
-                    lineWidth: Float(pass.parseGeometryStyleData.lineWidth)
+                    lineWidth: Float(pass.lineGeometry.lineWidth)
                 ))
             }
             return true

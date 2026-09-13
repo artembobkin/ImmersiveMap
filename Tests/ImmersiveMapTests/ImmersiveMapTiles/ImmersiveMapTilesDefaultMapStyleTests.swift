@@ -20,7 +20,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             XCTAssertEqual(water.streetColor, configuration.layers.water, "z\(zoom)")
         }
         for zoom in [8, 9, 10, 12] {
-            let background = style.backgroundStyle(tile: Tile(x: 0, y: 0, z: zoom))
+            let background = style.backgroundStyle(tileZoom: zoom)
             XCTAssertEqual(background.color, configuration.globalLandcover.land, "z\(zoom)")
             XCTAssertEqual(background.streetColor, configuration.layers.land, "z\(zoom)")
         }
@@ -222,9 +222,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(fill.lineWidthPoints, 1.6)
         XCTAssertEqual(fill.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 5),
                        "Overview roads fade in per class, never on the shared road band")
-        XCTAssertTrue(fill.parseGeometryStyleData.lineCapRound)
-        XCTAssertTrue(fill.parseGeometryStyleData.lineJoinRound)
-        XCTAssertEqual(fill.parseGeometryStyleData.lineWidth,
+        XCTAssertTrue(fill.lineGeometry.lineCapRound)
+        XCTAssertTrue(fill.lineGeometry.lineJoinRound)
+        XCTAssertEqual(fill.lineGeometry.lineWidth,
                        Double(fill.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
                        accuracy: 0.01,
                        "The ribbon must host the point width")
@@ -250,7 +250,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         for (className, zoom) in [("trunk", 6), ("secondary", 9), ("tertiary", 11)] {
             let road = makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
             XCTAssertGreaterThan(road.resolvedLineRenderPasses[0].lineWidthPoints, 0, "\(className) at z\(zoom)")
-            XCTAssertTrue(road.resolvedLineRenderPasses[0].parseGeometryStyleData.lineJoinRound, "\(className) at z\(zoom)")
+            XCTAssertTrue(road.resolvedLineRenderPasses[0].lineGeometry.lineJoinRound, "\(className) at z\(zoom)")
         }
 
         // From z12 the world width takes over: no point lock, floor as a
@@ -285,7 +285,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertGreaterThan(fill.dashLengthPoints, 0)
         XCTAssertEqual(SIMD3(fill.color.x, fill.color.y, fill.color.z),
                        SIMD3(configuration.layers.roads.motorway.x, configuration.layers.roads.motorway.y, configuration.layers.roads.motorway.z))
-        XCTAssertFalse(fill.parseGeometryStyleData.lineCapRound)
+        XCTAssertFalse(fill.lineGeometry.lineCapRound)
         XCTAssertNil(fill.streetColor)
         XCTAssertFalse(construction.resolvedLineRenderPasses.contains { $0.roadPassRole == .casing })
         XCTAssertEqual(makeStyle(style, layerName: "transportation",
@@ -314,9 +314,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertNotEqual(originalConfiguration.cacheFingerprint,
                           updatedConfiguration.cacheFingerprint)
         XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: originalConfiguration)
-                            .preparedTileStyleRevision,
+                            .cacheFingerprint,
                           ImmersiveMapTilesDefaultMapStyle(configuration: updatedConfiguration)
-                            .preparedTileStyleRevision)
+                            .cacheFingerprint)
     }
 
     func testPoiMinCameraZoomDerivesFromOverzoomBudgetAndPriorities() {
@@ -379,8 +379,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
     }
 
     /// A POI the icon set cannot depict is left out by default, and a
@@ -410,8 +410,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
     }
 
     func testIconlessPoiZoomChangesPreparedTileRevision() {
@@ -421,8 +421,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).preparedTileStyleRevision,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).preparedTileStyleRevision)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
     }
 
     func testBoundaryStyleSuppressesPolygonFill() {
@@ -451,8 +451,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // stays a continuous solid ribbon (no unit dashes, no caps), and the
         // dash lengths live in points on the style.
         let boundary = makeStyle(style, layerName: "boundary", zoom: 5)
-        XCTAssertFalse(boundary.parseGeometryStyleData.usesDashPattern)
-        XCTAssertFalse(boundary.parseGeometryStyleData.lineCapRound)
+        XCTAssertFalse(boundary.lineGeometry.usesDashPattern)
+        XCTAssertFalse(boundary.lineGeometry.lineCapRound)
         XCTAssertGreaterThan(boundary.dashLengthPoints, 0)
         XCTAssertGreaterThan(boundary.dashGapPoints, 0)
 

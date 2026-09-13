@@ -45,7 +45,7 @@ struct RoadSurfaceAreaReader {
                 color: pass.color,
                 streetColor: pass.streetColor,
                 lowZoomFadeMask: pass.lowZoomFadeMask,
-                parseGeometryStyleData: pass.parseGeometryStyleData,
+                lineGeometry: pass.lineGeometry,
                 roadClassPriority: style.roadClassPriority
             )
             result.registerRoadStyle(passStyle, key: pass.key)
@@ -67,7 +67,7 @@ struct RoadSurfaceAreaReader {
                     closed.append(ring[0])
                     closed.append(ring[1])
                     if let kerb = tools.parseLine.parse(points: closed,
-                                                        width: pass.parseGeometryStyleData.lineWidth,
+                                                        width: pass.lineGeometry.lineWidth,
                                                         tileExtent: tileExtent,
                                                         startCapRound: false,
                                                         endCapRound: false,
@@ -102,7 +102,7 @@ struct RoadSurfaceAreaReader {
                 }
                 for stripe in stripes {
                     if let stroke = tools.parseLine.parse(points: stripe,
-                                                          width: pass.parseGeometryStyleData.lineWidth,
+                                                          width: pass.lineGeometry.lineWidth,
                                                           tileExtent: tileExtent,
                                                           startCapRound: false,
                                                           endCapRound: false,

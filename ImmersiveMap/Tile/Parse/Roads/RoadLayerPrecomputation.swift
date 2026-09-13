@@ -330,7 +330,7 @@ struct RoadLayerPrecomputation {
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches
             // from its centreline.
-            let halfWidth = Float(featureStyles[featureIndex].parseGeometryStyleData.lineWidth) * 0.5
+            let halfWidth = Float(featureStyles[featureIndex].lineGeometry.lineWidth) * 0.5
             for points in lines {
                 let fragments = lineClipper.clip(points: points, tileExtent: tileExtent)
                 for fragment in fragments {

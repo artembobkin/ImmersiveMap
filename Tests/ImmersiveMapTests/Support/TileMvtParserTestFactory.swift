@@ -11,10 +11,10 @@ extension TileMvtParser {
     /// legacy atlas coverage. A test hands its own style or coverage when
     /// that is what it exercises.
     static func forTests(settings: ImmersiveMapSettings,
-                         mapStyle: (any ImmersiveMapStyle)? = nil,
+                         mapStyle: (any ImmersiveMapVectorTileStyle)? = nil,
                          glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests) -> TileMvtParser {
-        let runtimeContext = MapStyleRuntime(settings: settings)
-        return TileMvtParser(mapStyle: mapStyle ?? runtimeContext.mapStyle,
+        let runtimeContext = MapStyleRuntime(mapStyle: settings.mapStyle, settings: settings, style: mapStyle)
+        return TileMvtParser(mapStyle: runtimeContext,
                              labelDecisions: TileLabelDecisions(profile: runtimeContext.labelProfile,
                                                                 glyphCoverage: glyphCoverage,
                                                                 language: settings.labels.language,

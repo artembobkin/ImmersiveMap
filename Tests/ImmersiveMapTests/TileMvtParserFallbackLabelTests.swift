@@ -328,8 +328,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     }
 }
 
-private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
-    let preparedTileStyleRevision: UInt32 = 1
+private struct FallbackWaterLabelStyle: ImmersiveMapVectorTileStyle {
+    let cacheFingerprint: UInt32 = 1
 
     private let oceanLabelTextStyle = LabelTextStyle(key: 3,
                                                      fillColor: SIMD3<Float>(0, 0, 1),
@@ -344,13 +344,9 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
                                                    sizePoints: 10,
                                                    weight: .thin)
 
-    func getMapBaseColors() -> ImmersiveMapBaseColors {
-        ImmersiveMapBaseColors()
-    }
-
-    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         let labelTextStyle: LabelTextStyle?
-        switch data.properties["class"]?.stringValue {
+        switch feature.properties.string("class") {
         case "ocean":
             labelTextStyle = oceanLabelTextStyle
         case "sea":
@@ -361,53 +357,41 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
         return waterStyle(labelTextStyle)
     }
 
-    func backgroundStyle(tile: Tile) -> FeatureStyle {
+    func backgroundStyle(tileZoom: Int) -> FeatureStyle {
         waterStyle(nil)
     }
 
-    func debugBorderStyle() -> FeatureStyle {
-        waterStyle(nil)
-    }
-
-    func waterNameStyle(_ kind: WaterNameKind, tile: Tile) -> FeatureStyle? {
+    func waterNameStyle(_ kind: WaterNameKind, tileZoom: Int) -> FeatureStyle? {
         waterStyle(kind == .ocean ? oceanLabelTextStyle : seaLabelTextStyle)
     }
 
     private func waterStyle(_ labelTextStyle: LabelTextStyle?) -> FeatureStyle {
         var style = FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
                                  color: SIMD4<Float>(1, 1, 1, 1),
-                                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
+                                 lineGeometry: LineGeometryStyle(lineWidth: 1),
                                  labelTextStyle: labelTextStyle)
         style.isWaterName = labelTextStyle != nil
         return style
     }
 }
 
-private final class ParserSolidPolygonStyle: ImmersiveMapStyle {
-    let preparedTileStyleRevision: UInt32 = 1
+private struct ParserSolidPolygonStyle: ImmersiveMapVectorTileStyle {
+    let cacheFingerprint: UInt32 = 1
 
-    func getMapBaseColors() -> ImmersiveMapBaseColors {
-        ImmersiveMapBaseColors()
-    }
-
-    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         var style = solid(key: 2)
-        style.splitsComplexHoles = data.layerName == "ocean"
+        style.splitsComplexHoles = feature.layerName == "ocean"
         return style
     }
 
-    func backgroundStyle(tile: Tile) -> FeatureStyle {
-        solid(key: 1)
-    }
-
-    func debugBorderStyle() -> FeatureStyle {
+    func backgroundStyle(tileZoom: Int) -> FeatureStyle {
         solid(key: 1)
     }
 
     private func solid(key: UInt8) -> FeatureStyle {
         FeatureStyle(key: key,
                      color: SIMD4<Float>(1, 1, 1, 1),
-                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1))
+                     lineGeometry: LineGeometryStyle(lineWidth: 1))
     }
 }
 
@@ -419,15 +403,11 @@ private struct ParserStyleIDTestMapStyle: ImmersiveMapMapStyle {
     }
 
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        BasicVectorTileStyle(cacheFingerprint: 1)
+        FallbackWaterLabelStyle()
     }
 }
 
 extension ParserStyleIDTestMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        FallbackWaterLabelStyle()
-    }
-
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
         ParserStyleIDTestLabelStyleProfile(styleID: id)
     }

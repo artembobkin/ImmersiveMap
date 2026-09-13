@@ -15,7 +15,7 @@ final class MapStyleRuntimeTests: XCTestCase {
 
         let context = MapStyleRuntime(settings: settings)
 
-        XCTAssertEqual(context.mapStyle.preparedTileStyleRevision, 42)
+        XCTAssertEqual(context.style.cacheFingerprint, 42)
         XCTAssertEqual(context.labelProfile.styleID, "runtime-context-style")
         XCTAssertEqual(context.mapBaseColors.getTileBgColor(), SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
     }
@@ -46,50 +46,36 @@ private struct RuntimeContextTestMapStyle: ImmersiveMapMapStyle {
     }
 
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        BasicVectorTileStyle(cacheFingerprint: 42)
+        RuntimeContextTestStyle()
     }
 }
 
 extension RuntimeContextTestMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        RuntimeContextTestStyle()
-    }
-
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
         RuntimeContextTestLabelStyleProfile(styleID: "runtime-context-style")
     }
 }
 
-private final class RuntimeContextTestStyle: ImmersiveMapStyle {
-    var preparedTileStyleRevision: UInt32 {
+private struct RuntimeContextTestStyle: ImmersiveMapVectorTileStyle {
+    var cacheFingerprint: UInt32 {
         42
     }
 
-    func getMapBaseColors() -> ImmersiveMapBaseColors {
-        ImmersiveMapBaseColors(
-            settings: ImmersiveMapSettings.StyleSettings.BaseColors(
-                tileBackground: SIMD4<Float>(0.1, 0.2, 0.3, 1.0),
-                globeBackground: SIMD4<Double>(0.0, 0.0, 0.0, 1.0),
-                water: SIMD4<Float>(0.0, 0.0, 1.0, 1.0),
-                landCover: SIMD4<Float>(0.0, 1.0, 0.0, 1.0)
-            )
+    var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
+        ImmersiveMapSettings.StyleSettings.BaseColors(
+            tileBackground: SIMD4<Float>(0.1, 0.2, 0.3, 1.0),
+            globeBackground: SIMD4<Double>(0.0, 0.0, 0.0, 1.0),
+            water: SIMD4<Float>(0.0, 0.0, 1.0, 1.0),
+            landCover: SIMD4<Float>(0.0, 1.0, 0.0, 1.0)
         )
     }
 
-    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
-        FeatureStyle(
-            key: 1,
-            color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1)
-        )
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
+        .polygon(key: 1, color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0))
     }
 
-    func backgroundStyle(tile: Tile) -> FeatureStyle {
-        makeStyle(data: DetFeatureStyleData(layerName: "", properties: [:], tile: tile))
-    }
-
-    func debugBorderStyle() -> FeatureStyle {
-        backgroundStyle(tile: Tile(x: 0, y: 0, z: 0))
+    func backgroundStyle(tileZoom: Int) -> FeatureStyle {
+        .polygon(key: 1, color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0))
     }
 }
 

@@ -51,9 +51,9 @@ final class GroundFootprintFadeTests: XCTestCase {
         let config = ImmersiveMapSettings.default
         let runtimeContext = MapStyleRuntime(settings: config)
         func style(layer: String, cls: String, z: Int = 8) -> FeatureStyle {
-            runtimeContext.mapStyle.makeStyle(data: DetFeatureStyleData(layerName: layer,
-                                                                        properties: ["class": .string(cls)],
-                                                                        tile: Tile(x: 0, y: 0, z: z)))
+            runtimeContext.makeStyle(data: DetFeatureStyleData(layerName: layer,
+                                                               properties: ["class": .string(cls)],
+                                                               tile: Tile(x: 0, y: 0, z: z)))
         }
         let crop = style(layer: "globallandcover", cls: "crop")
         let forest = style(layer: "globallandcover", cls: "forest")

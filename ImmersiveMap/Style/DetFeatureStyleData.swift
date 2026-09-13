@@ -23,4 +23,36 @@ struct DetFeatureStyleData {
     /// tunnel tag of its own, only the tunnel's `layer`, and the style draws
     /// it the way the tunnel's centreline would have been drawn.
     var isTunnelRoof: Bool = false
+
+    init(layerName: String,
+         properties: [String: MvtValue],
+         tile: Tile,
+         streetscapeEnabled: Bool = true,
+         geometryType: MvtGeometryType = .unknown,
+         isTunnelRoof: Bool = false) {
+        self.layerName = layerName
+        self.properties = properties
+        self.tile = tile
+        self.streetscapeEnabled = streetscapeEnabled
+        self.geometryType = geometryType
+        self.isTunnelRoof = isTunnelRoof
+    }
+
+    /// The same feature as the public context describes it, for a style
+    /// written against the raw properties.
+    init(_ context: ImmersiveMapFeatureStyleContext) {
+        let geometryType: MvtGeometryType
+        switch context.geometry {
+        case .point: geometryType = .point
+        case .line: geometryType = .linestring
+        case .polygon: geometryType = .polygon
+        case .unknown: geometryType = .unknown
+        }
+        self.init(layerName: context.layerName,
+                  properties: context.properties.values,
+                  tile: Tile(x: context.tileX, y: context.tileY, z: context.tileZoom),
+                  streetscapeEnabled: context.streetscapeEnabled,
+                  geometryType: geometryType,
+                  isTunnelRoof: context.isTunnelRoof)
+    }
 }

@@ -18,10 +18,10 @@ struct GroundFeatureReader {
     /// earcut never sees the hundreds of islands of a coastal tile at once.
     static let complexOceanHoleSplitThreshold = 64
 
-    private let mapStyle: any ImmersiveMapStyle
+    private let mapStyle: MapStyleRuntime
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
-    init(mapStyle: any ImmersiveMapStyle) {
+    init(mapStyle: MapStyleRuntime) {
         self.mapStyle = mapStyle
     }
 

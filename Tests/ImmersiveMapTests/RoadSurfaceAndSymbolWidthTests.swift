@@ -74,7 +74,7 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertEqual(fill.maximumWidthPoints, 6.0, "a primary is a 6-point symbol until the surface takes over")
         XCTAssertNil(primary.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
                      "the symbol draws kerbless like the rest of the automobile tier")
-        XCTAssertGreaterThan(fill.parseGeometryStyleData.lineWidth, 0, "the ribbon is still the true width")
+        XCTAssertGreaterThan(fill.lineGeometry.lineWidth, 0, "the ribbon is still the true width")
     }
 
     func testTheSurfaceBlendIsContinuousAcrossTheHandoverZooms() {

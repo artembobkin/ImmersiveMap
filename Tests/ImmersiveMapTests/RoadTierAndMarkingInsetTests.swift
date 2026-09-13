@@ -108,7 +108,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         /// Painted lines, counted once each: every line is drawn by two
         /// passes, the dashed body and the solid approach to a junction.
         func markingLines(_ attributes: [String: Any]) -> Int {
-            Set(markingPasses(attributes).map { $0.parseGeometryStyleData.lateralOffset }).count
+            Set(markingPasses(attributes).map { $0.lineGeometry.lateralOffset }).count
         }
 
         XCTAssertEqual(markingLines(["class": "primary", "lanes": 2]), 1,
@@ -182,9 +182,9 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         let passes = featureStyle.resolvedLineRenderPasses
         let fill = try XCTUnwrap(passes.first { $0.roadPassRole == .fill })
         let marking = try XCTUnwrap(passes.first { $0.roadPassRole == .detail })
-        XCTAssertEqual(marking.parseGeometryStyleData.endInset, fill.parseGeometryStyleData.lineWidth * 0.5,
+        XCTAssertEqual(marking.lineGeometry.endInset, fill.lineGeometry.lineWidth * 0.5,
                        accuracy: 0.001,
                        "Paint stops half a carriageway short of the road's ends and junctions")
-        XCTAssertEqual(fill.parseGeometryStyleData.endInset, 0, "The carriageway itself runs to its ends")
+        XCTAssertEqual(fill.lineGeometry.endInset, 0, "The carriageway itself runs to its ends")
     }
 }

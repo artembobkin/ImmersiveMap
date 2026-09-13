@@ -181,7 +181,7 @@ enum TileUnificationStage {
     /// the two stay one definition; a style with no line width keeps a zero
     /// threshold, which is what tells the shader to skip line coverage.
     static func makeTileLineStyle(from style: FeatureStyle) -> TileLineStyle {
-        let halfWidth = Float(style.parseGeometryStyleData.lineWidth) * 0.5
+        let halfWidth = Float(style.lineGeometry.lineWidth) * 0.5
         let edgeThreshold = halfWidth > 0
             ? halfWidth / (halfWidth + ParseLine.featherTileUnits)
             : 0

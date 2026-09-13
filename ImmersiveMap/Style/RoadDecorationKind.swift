@@ -3,7 +3,9 @@
 
 import Foundation
 
-enum RoadDecorationKind {
+/// A decoration the separate-road path stamps along a line or over a
+/// surface instead of, or on top of, its ribbon.
+public enum RoadDecorationKind: Sendable {
     case none
     case onewayArrow
     case zebraCrossing

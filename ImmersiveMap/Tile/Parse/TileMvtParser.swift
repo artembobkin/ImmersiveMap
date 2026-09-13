@@ -31,7 +31,7 @@ import Mvt
 /// loading, caching or networking. Every geometry follows the y-axis
 /// contract stated once in `TileCoordinateSpace`.
 final class TileMvtParser {
-    private let mapStyle: any ImmersiveMapStyle
+    private let mapStyle: MapStyleRuntime
     private let options: TileParseOptions
     private let labelReader: LabelFeatureReader
     private let buildingReader: BuildingFeatureReader
@@ -60,7 +60,7 @@ final class TileMvtParser {
         options.streetscapeEnabled == false
     }
 
-    init(mapStyle: any ImmersiveMapStyle,
+    init(mapStyle: MapStyleRuntime,
          labelDecisions: TileLabelDecisions,
          options: TileParseOptions) {
         self.mapStyle = mapStyle

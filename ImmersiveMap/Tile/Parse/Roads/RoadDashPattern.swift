@@ -15,7 +15,7 @@ enum RoadDashPattern {
     /// every segment of the line and centres its whole dashes on it, pulled
     /// in from the corners; otherwise it runs continuously along the path.
     static func fragments(for fragment: ClippedLineFragment,
-                          styleData: ParseGeometryStyleData) -> [ClippedLineFragment] {
+                          styleData: LineGeometryStyle) -> [ClippedLineFragment] {
         guard styleData.usesDashPattern else {
             return [fragment]
         }

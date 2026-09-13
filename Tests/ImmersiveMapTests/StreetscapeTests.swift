@@ -109,14 +109,14 @@ final class StreetscapeTests: XCTestCase {
     func testAStrokeWidthIsTheClassesAloneNotTheLaneCount() {
         let twoLanes = roadStyle(["class": "primary", "lanes": "2", "lanes_src": "tagged"], tile: tile, streetscape: false)
         let eightLanes = roadStyle(["class": "primary", "lanes": "8", "lanes_src": "tagged"], tile: tile, streetscape: false)
-        XCTAssertEqual(twoLanes.parseGeometryStyleData.lineWidth, eightLanes.parseGeometryStyleData.lineWidth,
+        XCTAssertEqual(twoLanes.lineGeometry.lineWidth, eightLanes.lineGeometry.lineWidth,
                        "Without the streetscape the lane count says nothing about the width")
-        XCTAssertEqual(twoLanes.parseGeometryStyleData.lineWidth,
+        XCTAssertEqual(twoLanes.lineGeometry.lineWidth,
                        ImmersiveMapTilesDefaultMapStyle.streetStrokeWidthUnits(cls: "primary", tile: tile))
 
         let carriageway2 = roadStyle(["class": "primary", "lanes": "2", "lanes_src": "tagged"], tile: tile, streetscape: true)
         let carriageway8 = roadStyle(["class": "primary", "lanes": "8", "lanes_src": "tagged"], tile: tile, streetscape: true)
-        XCTAssertGreaterThan(carriageway8.parseGeometryStyleData.lineWidth, carriageway2.parseGeometryStyleData.lineWidth,
+        XCTAssertGreaterThan(carriageway8.lineGeometry.lineWidth, carriageway2.lineGeometry.lineWidth,
                              "With the streetscape on the road is its real carriageway")
     }
 
@@ -140,8 +140,8 @@ final class StreetscapeTests: XCTestCase {
         let casing = stroke.lineRenderPasses.first { $0.roadPassRole == .casing }
         XCTAssertNotNil(casing, "A street map's road has a casing")
         let strokeUnitsPerPoint = ImmersiveMapTilesDefaultMapStyle.streetStrokeUnitsPerPoint(tile: tile)
-        XCTAssertEqual(casing?.parseGeometryStyleData.lineWidth ?? 0,
-                       stroke.parseGeometryStyleData.lineWidth + 2 * strokeUnitsPerPoint,
+        XCTAssertEqual(casing?.lineGeometry.lineWidth ?? 0,
+                       stroke.lineGeometry.lineWidth + 2 * strokeUnitsPerPoint,
                        accuracy: 1e-9,
                        "a point wide on each side")
         let fill = stroke.lineRenderPasses.first { $0.roadPassRole == .fill }

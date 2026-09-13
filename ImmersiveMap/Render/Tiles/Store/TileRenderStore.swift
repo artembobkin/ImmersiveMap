@@ -31,10 +31,9 @@ final class TileRenderStore: @unchecked Sendable {
         tileLoadingStatusReporter: TileLoadingStatusReporter?
     ) {
         self.tileTraceRecorder = tileTraceRecorder
-        let mapStyle = styleRuntime.mapStyle
         let preparedTileCacheIdentity = PreparedTileCacheIdentity(
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
-            styleRevision: mapStyle.preparedTileStyleRevision,
+            styleRevision: styleRuntime.preparedTileStyleRevision,
             tileSourceRevision: PreparedTileCacheIdentity.tileSourceRevision(for: config.tiles.network),
             flatSeparateRoadRenderingMinimumZoom: UInt32(max(0, config.style.flatSeparateRoadRenderingMinimumZoom)),
             textRevision: textRenderer.preparedTileTextRevision,
@@ -56,7 +55,7 @@ final class TileRenderStore: @unchecked Sendable {
                                                 glyphCoverage: textRenderer.glyphCoverage,
                                                 language: config.labels.language,
                                                 fallbackPolicy: config.labels.fallbackPolicy)
-        let tileParser = TileMvtParser(mapStyle: mapStyle,
+        let tileParser = TileMvtParser(mapStyle: styleRuntime,
                                        labelDecisions: labelDecisions,
                                        options: TileParseOptions(settings: config))
         let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)

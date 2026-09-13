@@ -287,14 +287,14 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                            "brunnel": value("tunnel")], z: 14)
         let ribbonFill = try XCTUnwrap(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .fill })
         XCTAssertEqual(ribbonFill.color.w, opacity, accuracy: 1e-6, "The ribbon carries the tunnel opacity")
-        XCTAssertFalse(ribbonFill.parseGeometryStyleData.usesDashPattern, "and is no longer dashed")
-        XCTAssertFalse(ribbonFill.parseGeometryStyleData.lineCapRound,
+        XCTAssertFalse(ribbonFill.lineGeometry.usesDashPattern, "and is no longer dashed")
+        XCTAssertFalse(ribbonFill.lineGeometry.lineCapRound,
                        "and ends flat: a round cap on the stub the surface leaves bulged back over the tunnel")
         XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }, "no kerb")
         XCTAssertNil(ribbon.resolvedLineRenderPasses.first { $0.roadPassRole == .detail }, "no paint")
 
         let overview = make(["class": value("motorway"), "brunnel": value("tunnel")], z: 8)
         XCTAssertEqual(overview.color.w, opacity, accuracy: 1e-6, "The overview stroke carries the tunnel opacity")
-        XCTAssertFalse(overview.parseGeometryStyleData.usesDashPattern, "and is not dashed either")
+        XCTAssertFalse(overview.lineGeometry.usesDashPattern, "and is not dashed either")
     }
 }

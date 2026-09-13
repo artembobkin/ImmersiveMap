@@ -31,7 +31,7 @@ final class TileSourceStyleSeparationTests: XCTestCase {
         XCTAssertEqual(settings.mapStyle.configurationFingerprint, mapStyle.configurationFingerprint)
 
         let runtime = MapStyleRuntime(settings: settings)
-        XCTAssertEqual(runtime.mapStyle.preparedTileStyleRevision, 77)
+        XCTAssertEqual(runtime.style.cacheFingerprint, 77)
         XCTAssertEqual(runtime.labelProfile.styleID, AnyImmersiveMapMapStyle.genericStyleID)
         XCTAssertEqual(runtime.labelProfile.labelTextKeys, ["title"])
     }

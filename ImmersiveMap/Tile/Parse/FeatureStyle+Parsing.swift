@@ -34,7 +34,7 @@ extension FeatureStyle {
         if paintOnly {
             return FeatureStyle(key: 0,
                                 color: SIMD4<Float>(repeating: 0),
-                                parseGeometryStyleData: parseGeometryStyleData)
+                                lineGeometry: lineGeometry)
         }
         return FeatureStyle(key: key,
                             color: color,
@@ -48,7 +48,7 @@ extension FeatureStyle {
                             dashInTileUnits: dashInTileUnits,
                             minimumWidthPoints: minimumWidthPoints,
                             maximumWidthPoints: maximumWidthPoints,
-                            parseGeometryStyleData: parseGeometryStyleData,
+                            lineGeometry: lineGeometry,
                             includeRoadLabelPath: includeRoadLabelPath,
                             linePlacement: linePlacement,
                             lineRenderPasses: keptPasses,
@@ -83,7 +83,7 @@ extension FeatureStyle {
                            dashInTileUnits: dashInTileUnits,
                            minimumWidthPoints: minimumWidthPoints,
                            maximumWidthPoints: maximumWidthPoints,
-                           parseGeometryStyleData: parseGeometryStyleData,
+                           lineGeometry: lineGeometry,
                            includeRoadLabelPath: includeRoadLabelPath,
                            placement: linePlacement,
                            roadPassRole: .fill)

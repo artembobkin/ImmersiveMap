@@ -13,8 +13,11 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
         UInt64(configuration.cacheFingerprint)
     }
 
+    /// The rules, reading the palette and the label appearances from the
+    /// configuration. A public value like any other style's: an app can ask
+    /// it directly what a feature draws as.
     public var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        ImmersiveMapTilesVectorTileStyle(configuration: configuration)
+        ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
     }
 
     public init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault) {
@@ -23,23 +26,7 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
 }
 
 extension ImmersiveMapTilesMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        ImmersiveMapTilesDefaultMapStyle(configuration: configuration, settings: settings)
-    }
-
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
         ImmersiveMapTilesLabelStyleProfile(settings: settings)
-    }
-}
-
-private struct ImmersiveMapTilesVectorTileStyle: ImmersiveMapVectorTileStyle {
-    let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
-
-    var cacheFingerprint: UInt32 {
-        configuration.cacheFingerprint
-    }
-
-    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> ImmersiveMapFeatureStyle {
-        .hidden
     }
 }

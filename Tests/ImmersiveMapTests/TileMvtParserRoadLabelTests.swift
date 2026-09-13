@@ -69,8 +69,8 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
     }
 }
 
-private final class RoadLabelStyle: ImmersiveMapStyle {
-    let preparedTileStyleRevision: UInt32 = 1
+private struct RoadLabelStyle: ImmersiveMapVectorTileStyle {
+    let cacheFingerprint: UInt32 = 1
 
     private let roadLabelTextStyle = LabelTextStyle(key: 1,
                                                     fillColor: SIMD3<Float>(1, 1, 1),
@@ -79,25 +79,17 @@ private final class RoadLabelStyle: ImmersiveMapStyle {
                                                     sizePoints: 12,
                                                     weight: .thin)
 
-    func getMapBaseColors() -> ImmersiveMapBaseColors {
-        ImmersiveMapBaseColors()
-    }
-
-    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         FeatureStyle(key: 1,
                      color: SIMD4<Float>(1, 1, 1, 1),
-                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8),
+                     lineGeometry: LineGeometryStyle(lineWidth: 8),
                      includeRoadLabelPath: true,
                      roadLabelTextStyle: roadLabelTextStyle)
     }
 
-    func backgroundStyle(tile: Tile) -> FeatureStyle {
+    func backgroundStyle(tileZoom: Int) -> FeatureStyle {
         FeatureStyle(key: 1,
                      color: SIMD4<Float>(1, 1, 1, 1),
-                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8))
-    }
-
-    func debugBorderStyle() -> FeatureStyle {
-        backgroundStyle(tile: Tile(x: 0, y: 0, z: 0))
+                     lineGeometry: LineGeometryStyle(lineWidth: 8))
     }
 }

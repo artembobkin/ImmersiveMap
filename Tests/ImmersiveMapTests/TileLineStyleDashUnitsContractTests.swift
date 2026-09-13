@@ -56,13 +56,13 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
                                    dashLengthPoints: 40,
                                    dashGapPoints: 80,
                                    dashInTileUnits: true,
-                                   parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8))
+                                   lineGeometry: LineGeometryStyle(lineWidth: 8))
         let plain = FeatureStyle(key: 2,
                                  color: SIMD4<Float>(1, 1, 1, 1),
                                  lineWidthPoints: 1,
                                  dashLengthPoints: 7,
                                  dashGapPoints: 3.5,
-                                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8))
+                                 lineGeometry: LineGeometryStyle(lineWidth: 8))
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: flagged).dashInTileUnits, 1)
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: plain).dashInTileUnits, 0)
         // The synthesized single pass keeps the flag too.

@@ -1,17 +1,18 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+/// A map style as an app configures it: the vector tile style that says how
+/// every feature draws, and a fingerprint of the whole configuration that
+/// the disk caches are keyed by.
 public protocol ImmersiveMapMapStyle: Sendable {
     var configurationFingerprint: UInt64 { get }
     var vectorTileStyle: any ImmersiveMapVectorTileStyle { get }
 }
 
-/// The runtime side of a map style: how to build the live style object and the
-/// label profile that says which MVT properties carry label text. The tile
-/// source is just a URL; everything about interpreting the bytes it serves
-/// lives here.
+/// The label side of a map style: the profile that says which MVT
+/// properties carry label text, rank and kind, and how labels are
+/// identified. A map style that declares none gets the generic profile.
 protocol ImmersiveMapMapStyleRuntime: Sendable {
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile
 }
 
@@ -23,7 +24,6 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
     public let configurationFingerprint: UInt64
 
     let vectorTileStyle: any ImmersiveMapVectorTileStyle
-    private let runtimeMapStyleFactory: @Sendable (ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
     private let labelProfileFactory: @Sendable (ImmersiveMapSettings) -> any LabelStyleProfile
 
     public init<S: ImmersiveMapMapStyle>(_ mapStyle: S) {
@@ -31,28 +31,18 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
         self.vectorTileStyle = mapStyle.vectorTileStyle
 
         if let runtimeStyle = mapStyle as? ImmersiveMapMapStyleRuntime {
-            self.runtimeMapStyleFactory = runtimeStyle.makeRuntimeMapStyle
             self.labelProfileFactory = runtimeStyle.makeLabelProfile
         } else {
-            self.runtimeMapStyleFactory = { settings in
-                GenericVectorTileStyle(styleID: Self.genericStyleID,
-                                       style: mapStyle.vectorTileStyle,
-                                       settings: settings)
-            }
             self.labelProfileFactory = { settings in
                 GenericLabelStyleProfile(styleID: Self.genericStyleID,
-                                                      settings: settings,
-                                                      profile: .generic)
+                                         settings: settings,
+                                         profile: .generic)
             }
         }
     }
 
     public static func == (lhs: AnyImmersiveMapMapStyle, rhs: AnyImmersiveMapMapStyle) -> Bool {
         lhs.configurationFingerprint == rhs.configurationFingerprint
-    }
-
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        runtimeMapStyleFactory(settings)
     }
 
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
@@ -63,7 +53,7 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
 /// Draws any MVT source with a hand-written per-feature style. The label
 /// profile names which MVT properties carry label text, rank and kind, since
 /// every tile schema names them differently; `.generic` reads the usual
-/// OpenMapTiles-style keys.
+/// OpenStreetMap-derived keys.
 public struct VectorTileMapStyle: ImmersiveMapMapStyle {
     public let configurationFingerprint: UInt64
     public let vectorTileStyle: any ImmersiveMapVectorTileStyle
@@ -89,15 +79,9 @@ public struct VectorTileMapStyle: ImmersiveMapMapStyle {
 }
 
 extension VectorTileMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        GenericVectorTileStyle(styleID: AnyImmersiveMapMapStyle.genericStyleID,
-                               style: vectorTileStyle,
-                               settings: settings)
-    }
-
     func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
         GenericLabelStyleProfile(styleID: AnyImmersiveMapMapStyle.genericStyleID,
-                                              settings: settings,
-                                              profile: labelProfile)
+                                 settings: settings,
+                                 profile: labelProfile)
     }
 }

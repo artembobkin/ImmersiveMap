@@ -221,7 +221,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             var a = attributes(name: "X", lanes: lanes)
             if let oneway { a["oneway"] = oneway }
             let passes = styles(for: [a])[0].resolvedLineRenderPasses.filter { $0.roadPassRole == .detail }
-            return Set(passes.map { $0.parseGeometryStyleData.lateralOffset }).sorted()
+            return Set(passes.map { $0.lineGeometry.lateralOffset }).sorted()
         }
         // Two-way: one divider, on the centreline, and only where the lanes
         // divide evenly. An odd count leaves the centre inside a lane.
