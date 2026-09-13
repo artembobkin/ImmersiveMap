@@ -24,9 +24,12 @@ import Mvt
 /// each a struct with no state across tiles: `Ground/`, `Buildings/`,
 /// `Roads/` (with the per-layer pre-pass its line and surface readers draw
 /// from) and `Labels/`, all appending into one `ReadingStageResult`. The
-/// folder holds no label policy, no Metal, and no loading, caching or
-/// networking. Every geometry follows the y-axis contract stated once in
-/// `TileCoordinateSpace`.
+/// folder knows no tile schema: it never reads an attribute by name and
+/// never compares a layer name, since what a feature is (a building of
+/// some height, a road in a tunnel, a piece of some street) is the
+/// style's reading of the tile. It holds no label policy, no Metal, and no
+/// loading, caching or networking. Every geometry follows the y-axis
+/// contract stated once in `TileCoordinateSpace`.
 final class TileMvtParser {
     private let mapStyle: any ImmersiveMapStyle
     private let options: TileParseOptions
