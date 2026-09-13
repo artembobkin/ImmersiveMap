@@ -4,15 +4,15 @@
 import Foundation
 import Mvt
 
-struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
-    let providerID: String
+struct GenericLabelStyleProfile: LabelStyleProfile {
+    let styleID: String
     let languagePreferences: VectorTileLabelLanguagePreferences
     let profile: ImmersiveMapVectorTileLabelProfile
 
-    init(providerID: String,
+    init(styleID: String,
          settings: ImmersiveMapSettings,
          profile: ImmersiveMapVectorTileLabelProfile = .generic) {
-        self.providerID = providerID
+        self.styleID = styleID
         self.profile = profile
         self.languagePreferences = VectorTileLabelLanguagePreferences.from(
             settingsLanguage: settings.labels.language,
@@ -60,7 +60,7 @@ struct GenericVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
 
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
         if profile.usesFeatureIdentity, let featureID = feature.featureID {
-            return .providerFeature(providerID: providerID,
+            return .styleFeature(styleID: styleID,
                                     layerName: feature.layerName,
                                     featureID: featureID)
         }

@@ -11,7 +11,7 @@ import Foundation
 /// Every field here is part of the prepared-tile identity
 /// (`PreparedTileCacheIdentity`): a tile parsed under one value of it must
 /// never be served to a map that wants another. Adding a field means adding
-/// it there too. The label policy (language, fallback chain, the provider's
+/// it there too. The label policy (language, fallback chain, the style's
 /// name fields) is not here: it comes in as `TileLabelDecisions`.
 struct TileParseOptions: Equatable {
     /// Whether point and road labels are resolved and baked. Off, point

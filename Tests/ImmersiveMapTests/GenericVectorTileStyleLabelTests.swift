@@ -7,7 +7,7 @@ import XCTest
 final class GenericVectorTileStyleLabelTests: XCTestCase {
     func testPointLabelStyleMapsToInternalLabelTextStyle() {
         let style = GenericVectorTileStyle(
-            providerID: "custom",
+            styleID: "custom",
             style: CustomLabelVectorTileStyle(),
             settings: ImmersiveMapSettings.default.style
         )
@@ -30,7 +30,7 @@ final class GenericVectorTileStyleLabelTests: XCTestCase {
 
     func testRoadLabelStyleMapsToLineAndInternalRoadLabelTextStyle() {
         let style = GenericVectorTileStyle(
-            providerID: "custom",
+            styleID: "custom",
             style: CustomLabelVectorTileStyle(),
             settings: ImmersiveMapSettings.default.style
         )

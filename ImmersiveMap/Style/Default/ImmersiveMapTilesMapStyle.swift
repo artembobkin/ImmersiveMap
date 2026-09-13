@@ -3,10 +3,9 @@
 
 import Foundation
 
-/// The built-in style: draws OpenMapTiles-schema vector tiles (the schema the
-/// hosted service and any self-hosted OpenFreeMap/OpenMapTiles planet build
-/// serve). The default for a bare `ImmersiveMapView()`; a source in another
-/// schema pairs a `VectorTileMapStyle` with its own per-feature style instead.
+/// The built-in style: draws the hosted service's tiles. The default for a
+/// bare `ImmersiveMapView()`; a source in another schema pairs a
+/// `VectorTileMapStyle` with its own per-feature style instead.
 public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
     public let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
 
@@ -15,7 +14,7 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
     }
 
     public var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        ImmersiveMapTilesProviderVectorTileStyle(configuration: configuration)
+        ImmersiveMapTilesVectorTileStyle(configuration: configuration)
     }
 
     public init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault) {
@@ -28,12 +27,12 @@ extension ImmersiveMapTilesMapStyle: ImmersiveMapMapStyleRuntime {
         ImmersiveMapTilesDefaultMapStyle(configuration: configuration, settings: settings)
     }
 
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        ImmersiveMapTilesVectorTileLabelProviderProfile(settings: settings)
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
+        ImmersiveMapTilesLabelStyleProfile(settings: settings)
     }
 }
 
-private struct ImmersiveMapTilesProviderVectorTileStyle: ImmersiveMapVectorTileStyle {
+private struct ImmersiveMapTilesVectorTileStyle: ImmersiveMapVectorTileStyle {
     let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
 
     var cacheFingerprint: UInt32 {

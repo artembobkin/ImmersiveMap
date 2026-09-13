@@ -115,7 +115,7 @@ final class ImmersiveMapVideoExportRuntime {
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: VideoExportSceneModelSource(),
-                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                        styleRuntime: MapStyleRuntime(settings: settings),
                                         settings: settings,
                                         debugOverlayControls: DebugOverlayControlState(),
                                         renderCamera: renderCamera,

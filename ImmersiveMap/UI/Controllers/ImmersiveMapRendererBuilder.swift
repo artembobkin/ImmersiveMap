@@ -50,12 +50,12 @@ final class ImmersiveMapRendererBuilder {
                                                     markerRuntime: markerRuntime,
                                                     sceneModelRuntime: sceneModelRuntime,
                                                     debugOverlayHUDSnapshotStore: debugOverlayHUDSnapshotStore)
-        let providerRuntime = ImmersiveMapProviderRuntimeContext(settings: settings)
+        let styleRuntime = MapStyleRuntime(settings: settings)
         return RenderFrameEngine(layer: layer,
                                  avatarSource: avatarRuntime,
                                  markerSource: markerRuntime,
                                  sceneModelSource: sceneModelRuntime,
-                                 providerRuntime: providerRuntime,
+                                 styleRuntime: styleRuntime,
                                  settings: settings,
                                  debugOverlayControls: debugOverlayControls,
                                  renderCamera: renderCamera,

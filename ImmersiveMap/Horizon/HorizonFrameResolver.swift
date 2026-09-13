@@ -75,7 +75,7 @@ struct HorizonHaze: Equatable {
 /// the air painted around it, the maths and the per-frame decisions, with the
 /// shader's edge angle mirrored bit for bit so tests agree with the picture.
 /// Drawing is `Render/Horizon` and `Render/Shaders/Horizon`: no Metal here, no
-/// tile or provider logic, no camera controllers or UI.
+/// tile or style logic, no camera controllers or UI.
 enum HorizonFrameResolver {
     /// The atmosphere fades out over the first stretch of the semantic
     /// transition and is gone by here.

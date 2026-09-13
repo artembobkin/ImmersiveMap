@@ -5,9 +5,18 @@
 /// style object, the label profile that says which MVT properties carry label
 /// text, and the base colors. The tile source contributes nothing here; it is
 /// only a URL the loader fetches bytes from.
-struct ImmersiveMapProviderRuntimeContext {
+///
+/// The `Style` folder: the public style API (`ImmersiveMapMapStyle`,
+/// `ImmersiveMapVectorTileStyle`, the building and road readings), the
+/// resolved style the parser reads (`FeatureStyle` and the internal
+/// `ImmersiveMapStyle` protocol), the bridge between the two
+/// (`GenericVectorTileStyle`), the label profiles in `Labels/`, and the
+/// built-in style in `Default/`. Everything about interpreting a tile's
+/// bytes lives here; nothing about fetching them does. No Metal, no
+/// parsing, no networking.
+struct MapStyleRuntime {
     let mapStyle: any ImmersiveMapStyle
-    let labelProviderProfile: any VectorTileLabelProviderProfile
+    let labelProfile: any LabelStyleProfile
     let mapBaseColors: ImmersiveMapBaseColors
 
     init(settings: ImmersiveMapSettings) {
@@ -17,7 +26,7 @@ struct ImmersiveMapProviderRuntimeContext {
     init(mapStyle: AnyImmersiveMapMapStyle, settings: ImmersiveMapSettings) {
         let runtimeMapStyle = mapStyle.makeRuntimeMapStyle(settings: settings.style)
         self.mapStyle = runtimeMapStyle
-        self.labelProviderProfile = mapStyle.makeLabelProviderProfile(settings: settings)
+        self.labelProfile = mapStyle.makeLabelProfile(settings: settings)
         self.mapBaseColors = runtimeMapStyle.getMapBaseColors()
     }
 }

@@ -44,7 +44,7 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: StubMarkerSource(),
                                        sceneModelSource: StubSceneModelSource(),
-                                       providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                       styleRuntime: MapStyleRuntime(settings: settings),
                                        settings: settings,
                                        renderCamera: renderCamera,
                                        presentationStateResolver: presentation,

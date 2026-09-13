@@ -13,7 +13,7 @@ import QuartzCore
 /// frame engine, the render graph and passes, the Metal pipelines, shaders,
 /// GPU resources and frame attachments. No networking or disk cache policy
 /// (the night-lights texture source under `EarthScene/` fetches and caches its
-/// own raster tiles and is the one exception), no provider adaptation or label
+/// own raster tiles and is the one exception), no style or label
 /// policy, no views, gestures or host-app lifecycle.
 ///
 /// Owns the map's Metal frame pipeline: resources, subsystem graph, frame attachments, and the render-loop workflow.
@@ -81,7 +81,7 @@ final class RenderFrameEngine {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
-         providerRuntime: ImmersiveMapProviderRuntimeContext,
+         styleRuntime: MapStyleRuntime,
          settings: ImmersiveMapSettings = .default,
          debugOverlayControls: DebugOverlayControlState = DebugOverlayControlState(),
          renderCamera: FrameCameraStateResolver,
@@ -94,7 +94,7 @@ final class RenderFrameEngine {
                                                         avatarSource: avatarSource,
                                                         markerSource: markerSource,
                                                         sceneModelSource: sceneModelSource,
-                                                        providerRuntime: providerRuntime,
+                                                        styleRuntime: styleRuntime,
                                                         config: settings,
                                                         eventSink: eventSink,
                                                         tileTraceRecorder: tileTraceRecorder,

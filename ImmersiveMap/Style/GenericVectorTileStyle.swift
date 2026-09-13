@@ -5,15 +5,15 @@ import Mvt
 import simd
 
 final class GenericVectorTileStyle: ImmersiveMapStyle {
-    private let providerID: String
+    private let styleID: String
     private let style: any ImmersiveMapVectorTileStyle
     private let mapBaseColors: ImmersiveMapBaseColors
     private let fallbackStyle: FeatureStyle
 
-    init(providerID: String,
+    init(styleID: String,
          style: any ImmersiveMapVectorTileStyle,
          settings: ImmersiveMapSettings.StyleSettings) {
-        self.providerID = providerID
+        self.styleID = styleID
         self.style = style
         let baseColors = style.baseColors ?? settings.baseColors
         self.mapBaseColors = ImmersiveMapBaseColors(settings: baseColors)
@@ -55,7 +55,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
 
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         let context = ImmersiveMapFeatureStyleContext(
-            providerID: providerID,
+            styleID: styleID,
             layerName: data.layerName,
             tileZoom: data.tile.z,
             tileX: data.tile.x,
@@ -160,7 +160,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
 
     private func styleKey(layerName: String, style: ImmersiveMapFeatureStyle) -> UInt8 {
         var hasher = StableFNV1aHasher()
-        hasher.combine(providerID)
+        hasher.combine(styleID)
         hasher.combine(layerName)
         Self.combine(style, into: &hasher)
         return UInt8(3 + (hasher.finalize() % 205))

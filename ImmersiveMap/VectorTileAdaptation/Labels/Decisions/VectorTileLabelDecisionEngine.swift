@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 struct VectorTileLabelDecisionEngine {
-    private let profile: VectorTileLabelProviderProfile
+    private let profile: LabelStyleProfile
     private let textResolver: VectorTileLabelTextResolver
 
-    init(profile: VectorTileLabelProviderProfile,
+    init(profile: LabelStyleProfile,
          textResolver: VectorTileLabelTextResolver) {
         self.profile = profile
         self.textResolver = textResolver

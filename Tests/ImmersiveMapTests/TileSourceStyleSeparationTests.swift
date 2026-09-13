@@ -7,7 +7,7 @@ import XCTest
 /// The tile source and the map style are independent settings: the source is
 /// only a URL bytes come from, and everything about interpreting them (style,
 /// label profile) is configured on the style side.
-final class ImmersiveMapTileProviderStyleSeparationTests: XCTestCase {
+final class TileSourceStyleSeparationTests: XCTestCase {
     func testSettingsDoNotKeepLegacyCombinedProviderState() {
         let settings = ImmersiveMapSettings.default
 
@@ -30,10 +30,10 @@ final class ImmersiveMapTileProviderStyleSeparationTests: XCTestCase {
                        "https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.mapStyle.configurationFingerprint, mapStyle.configurationFingerprint)
 
-        let runtime = ImmersiveMapProviderRuntimeContext(settings: settings)
+        let runtime = MapStyleRuntime(settings: settings)
         XCTAssertEqual(runtime.mapStyle.preparedTileStyleRevision, 77)
-        XCTAssertEqual(runtime.labelProviderProfile.providerID, AnyImmersiveMapMapStyle.genericStyleID)
-        XCTAssertEqual(runtime.labelProviderProfile.labelTextKeys, ["title"])
+        XCTAssertEqual(runtime.labelProfile.styleID, AnyImmersiveMapMapStyle.genericStyleID)
+        XCTAssertEqual(runtime.labelProfile.labelTextKeys, ["title"])
     }
 
     func testChangingOnlyMapStyleIsAStyleChangeNotATileSourceChange() {

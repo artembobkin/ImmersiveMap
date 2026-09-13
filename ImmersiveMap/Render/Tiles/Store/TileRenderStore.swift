@@ -23,7 +23,7 @@ final class TileRenderStore: @unchecked Sendable {
     weak var eventSink: RenderFrameEventSink?
 
     init(
-        providerRuntime: ImmersiveMapProviderRuntimeContext,
+        styleRuntime: MapStyleRuntime,
         metalDevice: MTLDevice,
         textRenderer: TextRenderer,
         config: ImmersiveMapSettings,
@@ -31,7 +31,7 @@ final class TileRenderStore: @unchecked Sendable {
         tileLoadingStatusReporter: TileLoadingStatusReporter?
     ) {
         self.tileTraceRecorder = tileTraceRecorder
-        let mapStyle = providerRuntime.mapStyle
+        let mapStyle = styleRuntime.mapStyle
         let preparedTileCacheIdentity = PreparedTileCacheIdentity(
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
             styleRevision: mapStyle.preparedTileStyleRevision,
@@ -52,7 +52,7 @@ final class TileRenderStore: @unchecked Sendable {
             labelsEnabled: config.labels.isEnabled,
             streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
         )
-        let labelDecisions = TileLabelDecisions(profile: providerRuntime.labelProviderProfile,
+        let labelDecisions = TileLabelDecisions(profile: styleRuntime.labelProfile,
                                                 glyphCoverage: textRenderer.glyphCoverage,
                                                 language: config.labels.language,
                                                 fallbackPolicy: config.labels.fallbackPolicy)

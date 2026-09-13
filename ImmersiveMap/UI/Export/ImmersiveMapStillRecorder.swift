@@ -230,7 +230,7 @@ final class ImmersiveMapStillRuntime {
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: sceneModelSource,
-                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                        styleRuntime: MapStyleRuntime(settings: settings),
                                         settings: settings,
                                         debugOverlayControls: DebugOverlayControlState(),
                                         renderCamera: renderCamera,

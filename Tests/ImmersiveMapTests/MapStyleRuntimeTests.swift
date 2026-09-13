@@ -8,15 +8,15 @@ import XCTest
 /// The runtime context is derived entirely from the configured map style: the
 /// live style object, the label profile, the base colors. The tile source
 /// contributes nothing; it is only a URL the loader fetches bytes from.
-final class ImmersiveMapProviderRuntimeContextTests: XCTestCase {
+final class MapStyleRuntimeTests: XCTestCase {
     func testRuntimeContextMaterializesStyleAndLabelProfileOutsideRenderer() {
         let settings = ImmersiveMapSettings.default
             .mapStyle(RuntimeContextTestMapStyle())
 
-        let context = ImmersiveMapProviderRuntimeContext(settings: settings)
+        let context = MapStyleRuntime(settings: settings)
 
         XCTAssertEqual(context.mapStyle.preparedTileStyleRevision, 42)
-        XCTAssertEqual(context.labelProviderProfile.providerID, "runtime-context-style")
+        XCTAssertEqual(context.labelProfile.styleID, "runtime-context-style")
         XCTAssertEqual(context.mapBaseColors.getTileBgColor(), SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
     }
 
@@ -24,9 +24,9 @@ final class ImmersiveMapProviderRuntimeContextTests: XCTestCase {
         let settings = ImmersiveMapSettings.default
             .mapStyle(PlainTestMapStyle())
 
-        let context = ImmersiveMapProviderRuntimeContext(settings: settings)
+        let context = MapStyleRuntime(settings: settings)
 
-        XCTAssertEqual(context.labelProviderProfile.providerID, AnyImmersiveMapMapStyle.genericStyleID)
+        XCTAssertEqual(context.labelProfile.styleID, AnyImmersiveMapMapStyle.genericStyleID)
     }
 }
 
@@ -55,8 +55,8 @@ extension RuntimeContextTestMapStyle: ImmersiveMapMapStyleRuntime {
         RuntimeContextTestStyle()
     }
 
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        RuntimeContextTestLabelProviderProfile(providerID: "runtime-context-style")
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
+        RuntimeContextTestLabelStyleProfile(styleID: "runtime-context-style")
     }
 }
 
@@ -93,8 +93,8 @@ private final class RuntimeContextTestStyle: ImmersiveMapStyle {
     }
 }
 
-private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderProfile {
-    let providerID: String
+private struct RuntimeContextTestLabelStyleProfile: LabelStyleProfile {
+    let styleID: String
 
     var languagePreferences: VectorTileLabelLanguagePreferences {
         .from(settingsLanguage: .english, fallbackPolicy: .international)
@@ -116,7 +116,7 @@ private struct RuntimeContextTestLabelProviderProfile: VectorTileLabelProviderPr
     }
 
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
-        .providerFeature(providerID: providerID,
+        .styleFeature(styleID: styleID,
                          layerName: feature.layerName,
                          featureID: feature.featureID ?? 0)
     }

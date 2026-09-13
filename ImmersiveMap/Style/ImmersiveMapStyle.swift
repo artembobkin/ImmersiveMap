@@ -40,8 +40,7 @@ enum WaterNameKind {
 }
 
 extension ImmersiveMapStyle {
-    /// The OpenMapTiles and Mapbox Streets road layers, and the hosted
-    /// service's streetscape.
+    /// The hosted tiles' road and streetscape layers, and `road`.
     var roadLayerNames: Set<String> {
         ["transportation", "road"]
     }

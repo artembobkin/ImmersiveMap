@@ -122,7 +122,7 @@ public enum ImmersiveMapFeatureGeometry: Sendable {
 }
 
 public struct ImmersiveMapFeatureStyleContext {
-    public let providerID: String
+    public let styleID: String
     public let layerName: String
     public let tileZoom: Int
     public let tileX: Int
@@ -162,8 +162,8 @@ public enum ImmersiveMapFeatureStyle: Equatable {
     /// A line of a width in tile units. `road` is what the feature is as a
     /// road (where it sits, which street it is a piece of), read by the
     /// style from the tile: `ImmersiveMapRoadFacts.openStreetMap(_:)` for
-    /// an OpenStreetMap-derived schema, `.ground` for a line that is not a
-    /// road or whose schema says nothing about it.
+    /// a schema carrying the OpenStreetMap tags, `.ground` for a line that
+    /// is not a road or whose schema says nothing about it.
     case line(color: SIMD4<Float>, width: Float, road: ImmersiveMapRoadFacts = .ground)
     /// A line whose width is stated in on-screen points and held there at
     /// every zoom: the drawing mode the built-in style uses for country
@@ -183,8 +183,8 @@ public enum ImmersiveMapFeatureStyle: Equatable {
     /// A building. What the feature is as a building (its height, its base,
     /// the building it belongs to, its roof) is the style's reading of the
     /// tile's tags: `ImmersiveMapBuildingExtrusion.openStreetMap(_:)` for
-    /// an OpenStreetMap-derived schema, or the fields stated from another
-    /// schema's tags. `heightScale`, `anchorZoom` and `fallbackHeight` say
+    /// a schema carrying the OpenStreetMap tags, or the fields stated from
+    /// another schema's tags. `heightScale`, `anchorZoom` and `fallbackHeight` say
     /// how metres become tile units and what a building without a height
     /// gets.
     case extrudedPolygon(color: SIMD4<Float>,
@@ -208,7 +208,7 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// casing under the fill, sorted by structure and class, where the
     /// lines' `ImmersiveMapRoadFacts` decide the order and the stitching.
     /// Every other layer's lines draw as plain ground geometry. The default
-    /// names the OpenMapTiles and Mapbox Streets road layers.
+    /// names the hosted tiles' road layer, `transportation`, and `road`.
     var roadLayerNames: Set<String> { get }
     /// The layer of a measured streetscape (carriageway surfaces and the
     /// paint on them) that the tile source ships as a second archive

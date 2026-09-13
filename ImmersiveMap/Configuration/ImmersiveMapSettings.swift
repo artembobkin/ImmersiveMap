@@ -22,7 +22,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.code = normalized.isEmpty ? Self.english.code : normalized
         }
 
-        public var providerFieldSuffix: String {
+        public var nameFieldSuffix: String {
             code.split(separator: "-").first.map(String.init) ?? Self.english.code
         }
 
@@ -350,7 +350,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// HTTP header fields added to every tile request. This is how
             /// header-based credentials travel, e.g. `["Authorization": "Bearer xxx"]`.
             public var tileRequestHeaders: [String: String]
-            /// Provider `configurationFingerprint`, folded into the raw and prepared
+            /// The map style's `configurationFingerprint`, folded into the raw and prepared
             /// disk-cache namespaces so a provider/content change invalidates the
             /// caches even when the base URL is unchanged (e.g. a server-side layer
             /// was added). 0 means "not provider-derived".

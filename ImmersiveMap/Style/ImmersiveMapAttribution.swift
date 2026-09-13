@@ -4,8 +4,8 @@
 import Foundation
 
 /// Map data source attribution: what a product using third-party tiles is
-/// obligated to display. It belongs to the provider, not the engine: the
-/// provider brings the tiles, so it knows whose data they are and under
+/// obligated to display. It belongs to the tile source, not the engine: the
+/// source brings the tiles, so it knows whose data they are and under
 /// which license they are served.
 ///
 /// The engine never puts its own brand here: a map drawn on top of
@@ -30,9 +30,9 @@ public struct ImmersiveMapAttribution: Equatable, Sendable {
         self.linkURL = linkURL
     }
 
-    /// Empty attribution: the badge draws nothing. The default for providers
-    /// whose data source is unknown to the engine. If such a provider serves OSM
-    /// or other data that requires attribution, the provider's author must set it.
+    /// Empty attribution: the badge draws nothing. The default for sources
+    /// whose data source is unknown to the engine. If such a source serves OSM
+    /// or other data that requires attribution, its author must set it.
     public static let none = ImmersiveMapAttribution(title: "", copyright: "")
 
     /// Minimal attribution for OpenStreetMap data (ODbL).

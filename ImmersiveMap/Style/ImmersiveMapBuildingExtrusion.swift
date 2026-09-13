@@ -8,9 +8,9 @@ import Foundation
 /// whether it is a part of one, and what roof it carries. The engine turns
 /// this into the extrusion; it never reads a building tag itself.
 ///
-/// A style for an OpenStreetMap-derived schema (OpenMapTiles, Mapbox
-/// Streets) gets the reading for free with `openStreetMap(_:)`. A style for
-/// another schema states the fields from its own tags.
+/// A schema that carries the OpenStreetMap tags, as the hosted tiles do,
+/// gets the reading for free with `openStreetMap(_:)`. A style for another
+/// schema states the fields from its own tags.
 public struct ImmersiveMapBuildingExtrusion: Equatable, Sendable {
     /// The height above ground in metres, nil when the tile states none: the
     /// style's fallback height applies, and the building stays flat when that
@@ -49,9 +49,9 @@ public struct ImmersiveMapBuildingExtrusion: Equatable, Sendable {
     /// height.
     public static let metresPerLevel: Float = 3.2
 
-    /// The reading of the OpenStreetMap-derived schemas. Heights come from
-    /// `height` and `min_height` (Mapbox Streets) or `render_height` and
-    /// `render_min_height` (OpenMapTiles), or from `building:levels` and
+    /// The reading of the OpenStreetMap tags. Heights come from `height`
+    /// and `min_height` or `render_height` and `render_min_height`, either
+    /// spelling, or from `building:levels` and
     /// `building:min_level` at `metresPerLevel` each, in metres or feet. The
     /// building identity is `osm_id`, `id` or `building_id`, a part is
     /// `building:part`, and the feature is hidden by `extrude=false`, by

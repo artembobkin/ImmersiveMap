@@ -5,7 +5,7 @@ import Mvt
 import simd
 
 struct VectorTileLabelFeature {
-    let providerID: String
+    let styleID: String
     let tile: Tile
     let layerName: String
     let featureID: UInt64?

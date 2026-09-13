@@ -152,7 +152,7 @@ final class OffscreenFrameHarness {
                                         avatarSource: avatarSource,
                                         markerSource: markerSource,
                                         sceneModelSource: sceneModelSource,
-                                        providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                        styleRuntime: MapStyleRuntime(settings: settings),
                                         settings: settings,
                                         renderCamera: camera,
                                         presentationStateResolver: MapPresentationStateController(settings: settings),

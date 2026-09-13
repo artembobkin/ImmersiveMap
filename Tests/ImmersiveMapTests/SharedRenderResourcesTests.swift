@@ -69,7 +69,7 @@ final class SharedRenderResourcesTests: XCTestCase {
                                 avatarSource: StubAvatarSource(),
                                 markerSource: StubMarkerSource(),
                                 sceneModelSource: StubSceneModelSource(),
-                                providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                styleRuntime: MapStyleRuntime(settings: settings),
                                 config: settings,
                                 eventSink: VideoExportRenderEventSink(),
                                 tileTraceRecorder: TileTraceRecorder(),

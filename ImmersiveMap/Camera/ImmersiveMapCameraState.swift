@@ -12,7 +12,7 @@ import simd
 /// limits) and the gesture-independent zoom and view-mode math that `UI`,
 /// `Presentation`, tile visibility and `Render` share without owning camera
 /// policy. No gesture recognizers or views, no Metal or frame state, no tile
-/// loading or provider configuration, no label, avatar or starfield state.
+/// loading or style configuration, no label, avatar or starfield state.
 struct ImmersiveMapCameraState {
     static let `default` = ImmersiveMapCameraState(centerWorldMercator: SIMD2<Double>(0.5, 0.5),
                                           zoom: 0,

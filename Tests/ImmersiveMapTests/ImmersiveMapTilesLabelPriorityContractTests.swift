@@ -15,8 +15,8 @@ final class ImmersiveMapTilesLabelPriorityContractTests: XCTestCase {
         .int(Int64(value))
     }
 
-    private func makeProfile() -> ImmersiveMapTilesVectorTileLabelProviderProfile {
-        ImmersiveMapTilesVectorTileLabelProviderProfile(settings: .default)
+    private func makeProfile() -> ImmersiveMapTilesLabelStyleProfile {
+        ImmersiveMapTilesLabelStyleProfile(settings: .default)
     }
 
     func testRankIsTheSortKey() {

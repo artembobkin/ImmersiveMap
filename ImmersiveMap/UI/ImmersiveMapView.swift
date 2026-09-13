@@ -15,7 +15,7 @@ import AppKit
 // engine. Platform code lives in per-platform files under `#if
 // canImport(UIKit)` and `#if os(macOS)`, never `targetEnvironment(macCatalyst)`.
 // No Metal pipelines or render graph internals (`Render`), no tile parsing,
-// styling or caching, no provider label policy, no host-app delegates or
+// styling or caching, no label policy, no host-app delegates or
 // launch environment, no keys or secrets.
 
 public struct ImmersiveMapView: View {

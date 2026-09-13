@@ -185,7 +185,7 @@ final class TileTextLabelsBuilder {
     /// in the same run.
     ///
     /// Grouping by this identity (rather than by `style.key` alone) keeps each run
-    /// self-consistent even when the provider reuses one `key` for several
+    /// self-consistent even when the style reuses one `key` for several
     /// stylings - e.g. OpenMapTiles/OSM put bold cities and thin villages under
     /// `key = 70`. Mixing weights in a run with a single bound texture made glyphs
     /// built against a different atlas sample from the wrong region = garbage instead of letters.

@@ -9,14 +9,14 @@ import Mvt
 /// feature is labelled at all and at what priority, and which spelling of a
 /// name the map's language and the text atlas allow.
 ///
-/// Assembled once by the caller from the provider profile, the glyph
+/// Assembled once by the caller from the style's label profile, the glyph
 /// coverage of the text atlas and the language settings, then handed to
 /// `TileMvtParser`, which holds nothing of the policy itself: the parser
 /// decodes geometry and asks, this answers. Every answer is pure, so one
 /// value serves every parse of a map.
 struct TileLabelDecisions {
-    /// The provider the label identities are minted for.
-    let providerID: String
+    /// The style the label identities are minted for.
+    let styleID: String
 
     private let labelTextKeys: [String]
     private let languagePreferences: VectorTileLabelLanguagePreferences
@@ -25,11 +25,11 @@ struct TileLabelDecisions {
     private let decisionEngine: VectorTileLabelDecisionEngine
     private let poiSpriteResolver = PoiSpriteResolver()
 
-    init(profile: any VectorTileLabelProviderProfile,
+    init(profile: any LabelStyleProfile,
          glyphCoverage: VectorTileLabelGlyphCoverage,
          language: ImmersiveMapSettings.LabelLanguage,
          fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy) {
-        self.providerID = profile.providerID
+        self.styleID = profile.styleID
         self.labelTextKeys = profile.labelTextKeys
         self.languagePreferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: language,
                                                                            fallbackPolicy: fallbackPolicy)
@@ -55,7 +55,7 @@ struct TileLabelDecisions {
     }
 
     /// Whether and how a point feature is labelled: its text, identity,
-    /// priorities and style, or nil when the provider profile leaves it out.
+    /// priorities and style, or nil when the label profile leaves it out.
     func pointLabelDecision(feature: VectorTileLabelFeature,
                             style: LabelTextStyle,
                             poiIcon: PoiSpriteIcon?) -> VectorTileLabelDecision? {

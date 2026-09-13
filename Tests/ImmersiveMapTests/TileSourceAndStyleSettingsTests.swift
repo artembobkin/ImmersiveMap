@@ -4,7 +4,7 @@
 @testable import ImmersiveMap
 import XCTest
 
-final class ImmersiveMapProviderSettingsTests: XCTestCase {
+final class TileSourceAndStyleSettingsTests: XCTestCase {
     func testTemplateAndMapStyleConfigureSourceAndStyleSeparately() {
         let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
             labels.town.haloEm = 0.125

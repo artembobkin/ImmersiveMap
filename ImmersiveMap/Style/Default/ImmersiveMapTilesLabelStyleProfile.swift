@@ -8,7 +8,7 @@ import Mvt
 /// are `place`, `water_name`, `poi`, `mountain_peak`, `aerodrome_label` and
 /// `housenumber`; road labels ride the `transportation_name` geometry and are
 /// handled by the style, not here.
-struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderProfile {
+struct ImmersiveMapTilesLabelStyleProfile: LabelStyleProfile {
     private let lowZoomOverviewMaximumTileZoom = 4
     private let poiMinimumZoom = 13
 
@@ -28,7 +28,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
     /// i.e. the cap holds exactly what the schedule can show by tile.z + 3.
     private static let maximumPoiRank = 64
 
-    let providerID = "immersivemaptiles"
+    let styleID = "immersivemaptiles"
     let languagePreferences: VectorTileLabelLanguagePreferences
 
     init(settings: ImmersiveMapSettings) {
@@ -99,7 +99,7 @@ struct ImmersiveMapTilesVectorTileLabelProviderProfile: VectorTileLabelProviderP
 
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
         if let featureID = feature.featureID {
-            return .providerFeature(providerID: providerID,
+            return .styleFeature(styleID: styleID,
                                     layerName: feature.layerName,
                                     featureID: featureID)
         }

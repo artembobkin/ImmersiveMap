@@ -37,7 +37,7 @@ struct VectorTileLabelLanguagePreferences: Equatable {
             appendLanguage("en", kind: .english)
             fallbackChain.append(Candidate(fieldName: "name", kind: .native))
         } else {
-            appendLanguage(settingsLanguage.providerFieldSuffix, kind: .preferred)
+            appendLanguage(settingsLanguage.nameFieldSuffix, kind: .preferred)
             switch fallbackPolicy {
             case .international:
                 appendLanguage("en", kind: .english)

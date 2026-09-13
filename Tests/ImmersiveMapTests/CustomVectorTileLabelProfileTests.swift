@@ -19,7 +19,7 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
             )
         )
 
-        let profile = AnyImmersiveMapMapStyle(mapStyle).makeLabelProviderProfile(settings: .default)
+        let profile = AnyImmersiveMapMapStyle(mapStyle).makeLabelProfile(settings: .default)
 
         XCTAssertEqual(profile.sortKey(properties: ["priority": intValue(7)]), 7)
         XCTAssertTrue(profile.includesBasePointLabel(layerName: "custom_label",
@@ -47,8 +47,8 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
     }
 
     func testCustomLabelProfileResolvesTextFromCustomKey() {
-        let profile = GenericVectorTileLabelProviderProfile(
-            providerID: "custom",
+        let profile = GenericLabelStyleProfile(
+            styleID: "custom",
             settings: .default,
             profile: ImmersiveMapVectorTileLabelProfile(textKeys: ["title"])
         )
@@ -57,7 +57,7 @@ final class CustomVectorTileLabelProfileTests: XCTestCase {
             textResolver: VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         )
         let feature = VectorTileLabelFeature(
-            providerID: "custom",
+            styleID: "custom",
             tile: Tile(x: 1, y: 2, z: 10),
             layerName: "custom_label",
             featureID: nil,

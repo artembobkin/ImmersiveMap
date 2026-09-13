@@ -94,7 +94,7 @@ final class RenderPersistentContext {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
-         providerRuntime: ImmersiveMapProviderRuntimeContext,
+         styleRuntime: MapStyleRuntime,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
@@ -123,7 +123,7 @@ final class RenderPersistentContext {
         self.shadowFallbackTexture = shared.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 
-        let mapBaseColors = providerRuntime.mapBaseColors
+        let mapBaseColors = styleRuntime.mapBaseColors
 
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline
@@ -150,7 +150,7 @@ final class RenderPersistentContext {
                                                  mapBaseColors: mapBaseColors)
         self.textRenderer = shared.textRenderer
         self.poiSpriteAtlas = shared.poiSpriteAtlas
-        self.tileRenderStore = TileRenderStore(providerRuntime: providerRuntime,
+        self.tileRenderStore = TileRenderStore(styleRuntime: styleRuntime,
                                                metalDevice: metal.device,
                                                textRenderer: textRenderer,
                                                config: config,

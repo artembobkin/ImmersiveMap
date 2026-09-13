@@ -137,21 +137,21 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         XCTAssertNil(resolver.resolveText(properties: properties, preferences: preferences))
     }
 
-    func testProviderFeatureIdentityParticipatesInCrossTileDeduplication() {
-        let identity = VectorTileLabelIdentity.providerFeature(providerID: "example",
+    func testStyleFeatureIdentityParticipatesInCrossTileDeduplication() {
+        let identity = VectorTileLabelIdentity.styleFeature(styleID: "example",
                                                                layerName: "place_label",
                                                                featureID: 42)
 
         XCTAssertTrue(identity.participatesInCrossTileDeduplication)
         XCTAssertEqual(identity.runtimeKey, 8141700374101987561)
         XCTAssertEqual(identity.runtimeKey,
-                       VectorTileLabelIdentity.providerFeature(providerID: "example",
+                       VectorTileLabelIdentity.styleFeature(styleID: "example",
                                                                layerName: "place_label",
                                                                featureID: 42).runtimeKey)
     }
 
     func testSemanticIdentityUsesStableRuntimeKey() {
-        let identity = VectorTileLabelIdentity.semantic(providerID: "example",
+        let identity = VectorTileLabelIdentity.semantic(styleID: "example",
                                                         kind: "place",
                                                         text: "Moscow",
                                                         worldBucket: SIMD2<Int32>(10, 20))
@@ -183,10 +183,10 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                                    haloEm: 0.15,
                                    sizePoints: 24,
                                    weight: .thin)
-        let profile = ImmersiveMapTilesVectorTileLabelProviderProfile(settings: .default)
+        let profile = ImmersiveMapTilesLabelStyleProfile(settings: .default)
         let engine = VectorTileLabelDecisionEngine(profile: profile,
                                                    textResolver: VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests))
-        let feature = VectorTileLabelFeature(providerID: "immersivemaptiles",
+        let feature = VectorTileLabelFeature(styleID: "immersivemaptiles",
                                              tile: Tile(x: 123, y: 456, z: 10),
                                              layerName: "place",
                                              featureID: 7,
@@ -205,7 +205,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                        profile.collisionRank(layerName: "place",
                                              sortKey: decision?.priority.visibilityRank ?? -1))
         XCTAssertEqual(decision?.identity,
-                       .providerFeature(providerID: "immersivemaptiles",
+                       .styleFeature(styleID: "immersivemaptiles",
                                         layerName: "place",
                                         featureID: 7))
         XCTAssertEqual(decision?.style.key, style.key)
@@ -236,11 +236,11 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         XCTAssertEqual(label.collisionPriority, 200_050)
     }
 
-    func testLabelLanguageNormalizesBCP47CodeForProviderFields() {
+    func testLabelLanguageNormalizesBCP47CodeForNameFields() {
         let language = ImmersiveMapSettings.LabelLanguage("PT-BR")
 
         XCTAssertEqual(language.code, "pt-br")
-        XCTAssertEqual(language.providerFieldSuffix, "pt")
+        XCTAssertEqual(language.nameFieldSuffix, "pt")
         XCTAssertEqual(language.preparedTileCacheNamespaceKey, "pt-br")
     }
 

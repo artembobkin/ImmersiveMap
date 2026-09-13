@@ -9,7 +9,7 @@
 import simd
 
 /// The `Geo` folder: the projection and great-circle math the engine shares
-/// (coordinate conversion, path sampling) with no knowledge of providers,
+/// (coordinate conversion, path sampling) with no knowledge of styles,
 /// render passes or UI. Small, deterministic, and free of camera controllers,
 /// Metal resources, tile loading, and label or avatar runtime state. The tile
 /// geometry y-axis contract is `TileCoordinateSpace`.

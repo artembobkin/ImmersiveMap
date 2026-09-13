@@ -46,7 +46,7 @@ final class RenderFramePresentationSyncTests: XCTestCase {
                                        avatarSource: StubAvatarSource(),
                                        markerSource: markerSource,
                                        sceneModelSource: StubSceneModelSource(),
-                                       providerRuntime: ImmersiveMapProviderRuntimeContext(settings: settings),
+                                       styleRuntime: MapStyleRuntime(settings: settings),
                                        settings: settings,
                                        renderCamera: FrameCameraStateResolver(settings: settings),
                                        presentationStateResolver: MapPresentationStateController(settings: settings),

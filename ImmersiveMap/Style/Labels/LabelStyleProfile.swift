@@ -3,16 +3,16 @@
 
 import Mvt
 
-/// The `VectorTileAdaptation` folder: where provider-specific vector tile
-/// schemas become provider-neutral label decisions, before anything reaches
-/// the tile buffers, the label caches or the draw code. It normalizes layer
-/// names, classes, ranks and name fields, chooses label text through the
-/// language fallback chain and the glyph coverage, mints stable label
-/// identities, and decides visibility, collision and draw priority. Pure
-/// decisions: no Metal, no runtime caches or fade state (`Labels`), no tile
-/// fetching, no views, and no public API while the model is unstable.
-protocol VectorTileLabelProviderProfile {
-    var providerID: String { get }
+/// The label half of a style: which properties of the schema carry a
+/// label's text, rank and kind, and how a feature's label is ranked and
+/// identified. The `VectorTileAdaptation` folder turns these answers into
+/// label decisions (text through the language fallback chain and the glyph
+/// coverage, stable identities, visibility, collision and draw priority)
+/// before anything reaches the tile buffers, the label caches or the draw
+/// code. Pure decisions: no Metal, no runtime caches or fade state
+/// (`Labels`), no tile fetching, no views.
+protocol LabelStyleProfile {
+    var styleID: String { get }
     var languagePreferences: VectorTileLabelLanguagePreferences { get }
     var labelTextKeys: [String] { get }
     var houseNumberTextKeys: [String] { get }
@@ -28,7 +28,7 @@ protocol VectorTileLabelProviderProfile {
     func isHouseNumberLayer(_ layerName: String) -> Bool
 }
 
-extension VectorTileLabelProviderProfile {
+extension LabelStyleProfile {
     var labelTextKeys: [String] {
         []
     }

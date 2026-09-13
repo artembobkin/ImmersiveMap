@@ -10,7 +10,7 @@ import XCTest
 /// get all five decisions, and a style that does not opt in must get none.
 final class GenericVectorTilePointLockedLineTests: XCTestCase {
     private func makeStyle(_ vectorStyle: any ImmersiveMapVectorTileStyle) -> GenericVectorTileStyle {
-        GenericVectorTileStyle(providerID: "custom",
+        GenericVectorTileStyle(styleID: "custom",
                                style: vectorStyle,
                                settings: ImmersiveMapSettings.default.style)
     }

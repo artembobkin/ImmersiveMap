@@ -45,10 +45,10 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         XCTAssertFalse(labels.contains("Mar Mediterráneo"))
     }
 
-    func testExistingProviderWaterAliasSuppressesLocalizedFallbackDuplicate() throws {
+    func testExistingTileWaterAliasSuppressesLocalizedFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .russian,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: makeProviderAtlanticOceanTile().serializedData())
+                                                  mvtData: makeTileWithAtlanticOceanLabel().serializedData())
 
         XCTAssertEqual(labels.filter { $0 == "Atlantic Ocean" }.count, 1)
         XCTAssertFalse(labels.contains("Атлантический океан"))
@@ -93,10 +93,10 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         XCTAssertFalse(labels.contains("Atlantic Ocean"))
     }
 
-    func testExistingProviderWaterAliasSuppressesPortugueseFallbackDuplicate() throws {
+    func testExistingTileWaterAliasSuppressesPortugueseFallbackDuplicate() throws {
         let labels = try parseFallbackWaterLabels(language: .portuguese,
                                                   tile: Tile(x: 0, y: 0, z: 0),
-                                                  mvtData: makeProviderAtlanticOceanTile(name: "Oceano Atlântico",
+                                                  mvtData: makeTileWithAtlanticOceanLabel(name: "Oceano Atlântico",
                                                                                             englishName: "Atlantic Ocean").serializedData(),
                                                   glyphCoverage: Self.bundledGlyphCoverage(),
                                                   fallbackPolicy: .localFirst)
@@ -105,23 +105,23 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         XCTAssertFalse(labels.contains("Atlantic Ocean"))
     }
 
-    func testPointLabelsUseConfiguredProviderIDInRuntimeProfile() throws {
+    func testPointLabelsUseTheConfiguredStyleIDInTheRuntimeProfile() throws {
         var config = ImmersiveMapSettings.default
-        config = config.mapStyle(ParserProviderIDTestMapStyle(id: "parser-provider"))
+        config = config.mapStyle(ParserStyleIDTestMapStyle(id: "parser-provider"))
 
         let parser = TileMvtParser.forTests(settings: config,
                                             mapStyle: FallbackWaterLabelStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
-                                          mvtData: makeProviderAtlanticOceanTile().serializedData())
-        let expectedKey = VectorTileLabelIdentity.providerFeature(providerID: "parser-provider",
+                                          mvtData: makeTileWithAtlanticOceanLabel().serializedData())
+        let expectedKey = VectorTileLabelIdentity.styleFeature(styleID: "parser-provider",
                                                                   layerName: "water_name",
                                                                   featureID: 1).runtimeKey
-        let defaultProviderKey = VectorTileLabelIdentity.providerFeature(providerID: "immersivemaptiles",
+        let defaultStyleKey = VectorTileLabelIdentity.styleFeature(styleID: "immersivemaptiles",
                                                                          layerName: "water_name",
                                                                          featureID: 1).runtimeKey
 
         XCTAssertTrue(parsedTile.textLabels.map(\.key).contains(expectedKey))
-        XCTAssertFalse(parsedTile.textLabels.map(\.key).contains(defaultProviderKey))
+        XCTAssertFalse(parsedTile.textLabels.map(\.key).contains(defaultStyleKey))
     }
 
     func testParserNormalizesLayerExtentToInternalTileExtent() throws {
@@ -280,7 +280,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         return try JSONDecoder().decode(AtlasData.self, from: data)
     }
 
-    private func makeProviderAtlanticOceanTile(name: String = "Atlantic Ocean",
+    private func makeTileWithAtlanticOceanLabel(name: String = "Atlantic Ocean",
                                                englishName: String = "Atlantic Ocean") -> MvtTileMessage {
         var feature = MvtFeatureMessage()
         feature.id = 1
@@ -411,7 +411,7 @@ private final class ParserSolidPolygonStyle: ImmersiveMapStyle {
     }
 }
 
-private struct ParserProviderIDTestMapStyle: ImmersiveMapMapStyle {
+private struct ParserStyleIDTestMapStyle: ImmersiveMapMapStyle {
     let id: String
 
     var configurationFingerprint: UInt64 {
@@ -423,18 +423,18 @@ private struct ParserProviderIDTestMapStyle: ImmersiveMapMapStyle {
     }
 }
 
-extension ParserProviderIDTestMapStyle: ImmersiveMapMapStyleRuntime {
+extension ParserStyleIDTestMapStyle: ImmersiveMapMapStyleRuntime {
     func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
         FallbackWaterLabelStyle()
     }
 
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        ParserProviderIDTestLabelProviderProfile(providerID: id)
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
+        ParserStyleIDTestLabelStyleProfile(styleID: id)
     }
 }
 
-private struct ParserProviderIDTestLabelProviderProfile: VectorTileLabelProviderProfile {
-    let providerID: String
+private struct ParserStyleIDTestLabelStyleProfile: LabelStyleProfile {
+    let styleID: String
 
     var languagePreferences: VectorTileLabelLanguagePreferences {
         .from(settingsLanguage: .english, fallbackPolicy: .international)
@@ -456,7 +456,7 @@ private struct ParserProviderIDTestLabelProviderProfile: VectorTileLabelProvider
     }
 
     func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
-        .providerFeature(providerID: feature.providerID,
+        .styleFeature(styleID: feature.styleID,
                          layerName: feature.layerName,
                          featureID: feature.featureID ?? 0)
     }

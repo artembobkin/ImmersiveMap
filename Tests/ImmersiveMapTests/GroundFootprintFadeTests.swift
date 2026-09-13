@@ -49,7 +49,7 @@ final class GroundFootprintFadeTests: XCTestCase {
     /// leaves water at full contrast at every distance.
     func testDefaultStyleAssignsFarTonesToLandCoverOnly() {
         let config = ImmersiveMapSettings.default
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
+        let runtimeContext = MapStyleRuntime(settings: config)
         func style(layer: String, cls: String, z: Int = 8) -> FeatureStyle {
             runtimeContext.mapStyle.makeStyle(data: DetFeatureStyleData(layerName: layer,
                                                                         properties: ["class": .string(cls)],

@@ -13,9 +13,9 @@ extension TileMvtParser {
     static func forTests(settings: ImmersiveMapSettings,
                          mapStyle: (any ImmersiveMapStyle)? = nil,
                          glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests) -> TileMvtParser {
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: settings)
+        let runtimeContext = MapStyleRuntime(settings: settings)
         return TileMvtParser(mapStyle: mapStyle ?? runtimeContext.mapStyle,
-                             labelDecisions: TileLabelDecisions(profile: runtimeContext.labelProviderProfile,
+                             labelDecisions: TileLabelDecisions(profile: runtimeContext.labelProfile,
                                                                 glyphCoverage: glyphCoverage,
                                                                 language: settings.labels.language,
                                                                 fallbackPolicy: settings.labels.fallbackPolicy),

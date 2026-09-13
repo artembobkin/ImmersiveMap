@@ -12,7 +12,7 @@ public protocol ImmersiveMapMapStyle: Sendable {
 /// lives here.
 protocol ImmersiveMapMapStyleRuntime: Sendable {
     func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile
 }
 
 public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
@@ -24,7 +24,7 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
 
     let vectorTileStyle: any ImmersiveMapVectorTileStyle
     private let runtimeMapStyleFactory: @Sendable (ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle
-    private let labelProviderProfileFactory: @Sendable (ImmersiveMapSettings) -> any VectorTileLabelProviderProfile
+    private let labelProfileFactory: @Sendable (ImmersiveMapSettings) -> any LabelStyleProfile
 
     public init<S: ImmersiveMapMapStyle>(_ mapStyle: S) {
         self.configurationFingerprint = mapStyle.configurationFingerprint
@@ -32,15 +32,15 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
 
         if let runtimeStyle = mapStyle as? ImmersiveMapMapStyleRuntime {
             self.runtimeMapStyleFactory = runtimeStyle.makeRuntimeMapStyle
-            self.labelProviderProfileFactory = runtimeStyle.makeLabelProviderProfile
+            self.labelProfileFactory = runtimeStyle.makeLabelProfile
         } else {
             self.runtimeMapStyleFactory = { settings in
-                GenericVectorTileStyle(providerID: Self.genericStyleID,
+                GenericVectorTileStyle(styleID: Self.genericStyleID,
                                        style: mapStyle.vectorTileStyle,
                                        settings: settings)
             }
-            self.labelProviderProfileFactory = { settings in
-                GenericVectorTileLabelProviderProfile(providerID: Self.genericStyleID,
+            self.labelProfileFactory = { settings in
+                GenericLabelStyleProfile(styleID: Self.genericStyleID,
                                                       settings: settings,
                                                       profile: .generic)
             }
@@ -55,8 +55,8 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
         runtimeMapStyleFactory(settings)
     }
 
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        labelProviderProfileFactory(settings)
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
+        labelProfileFactory(settings)
     }
 }
 
@@ -90,13 +90,13 @@ public struct VectorTileMapStyle: ImmersiveMapMapStyle {
 
 extension VectorTileMapStyle: ImmersiveMapMapStyleRuntime {
     func makeRuntimeMapStyle(settings: ImmersiveMapSettings.StyleSettings) -> any ImmersiveMapStyle {
-        GenericVectorTileStyle(providerID: AnyImmersiveMapMapStyle.genericStyleID,
+        GenericVectorTileStyle(styleID: AnyImmersiveMapMapStyle.genericStyleID,
                                style: vectorTileStyle,
                                settings: settings)
     }
 
-    func makeLabelProviderProfile(settings: ImmersiveMapSettings) -> any VectorTileLabelProviderProfile {
-        GenericVectorTileLabelProviderProfile(providerID: AnyImmersiveMapMapStyle.genericStyleID,
+    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
+        GenericLabelStyleProfile(styleID: AnyImmersiveMapMapStyle.genericStyleID,
                                               settings: settings,
                                               profile: labelProfile)
     }

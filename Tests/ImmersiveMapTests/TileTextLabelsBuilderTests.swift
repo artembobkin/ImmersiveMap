@@ -23,7 +23,7 @@ final class TileTextLabelsBuilderTests: XCTestCase {
     }
 
     func testLabelsSharingKeyButDifferingWeightSplitIntoSeparateRuns() throws {
-        // Providers (OpenMapTiles/OSM) reuse one style key across weights, e.g. key 70
+        // A style may reuse one style key across weights, e.g. key 70
         // for bold cities and thin towns. Bold and thin glyphs are built against different
         // atlas textures, so a run may bind only one texture. Merging them into one run
         // by key alone made the other weight's glyphs sample the wrong atlas (garbled text).

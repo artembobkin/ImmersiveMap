@@ -39,7 +39,7 @@ struct LabelFeatureReader {
         let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
         for point in points where isPointInsideTile(point) {
             let anchor = SIMD2(Int16(point.x), Int16(point.y))
-            let labelFeature = VectorTileLabelFeature(providerID: labelDecisions.providerID,
+            let labelFeature = VectorTileLabelFeature(styleID: labelDecisions.styleID,
                                                       tile: tile,
                                                       layerName: layerName,
                                                       featureID: featureID,

@@ -10,9 +10,9 @@ import Foundation
 /// carriageway surfaces and stitches the pieces of a street from them,
 /// and never reads a road tag itself.
 ///
-/// A style for an OpenStreetMap-derived schema (OpenMapTiles, Mapbox
-/// Streets) gets the reading for free with `openStreetMap(_:)`. A feature
-/// that is not a road (a river, a border) takes `ground`.
+/// A schema that carries the OpenStreetMap tags, as the hosted tiles do,
+/// gets the reading for free with `openStreetMap(_:)`. A feature that is
+/// not a road (a river, a border) takes `ground`.
 public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// The physical structure a road runs on, which decides its place in
     /// the draw order: tunnels under everything, bridges over everything.
@@ -57,7 +57,7 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// identity.
     public static let ground = ImmersiveMapRoadFacts()
 
-    /// The reading of the OpenStreetMap-derived schemas.
+    /// The reading of the OpenStreetMap tags.
     ///
     /// The structure comes from either schema's spelling of tunnel and
     /// bridge (`brunnel`, `structure`, `tunnel`, `bridge`, `underground`, a

@@ -4,9 +4,9 @@
 import Mvt
 import simd
 
-/// Default style for the OpenMapTiles-schema first-party provider, reading the
-/// OpenMapTiles layer and field contract
-/// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`/`capital`).
+/// The built-in style, for the hosted tiles' schema: the layer and field
+/// contract of `immersivemap.dev`
+/// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`).
 final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private static let implementationRevision: UInt32 = 74
 
@@ -53,8 +53,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         settings.preparedTileStyleRevision &+ configuration.cacheFingerprint &+ Self.implementationRevision
     }
 
-    /// OpenMapTiles ships the roads in `transportation`; the hosted service
-    /// adds the streetscape as `streetscape`.
+    /// The hosted tiles ship the roads in `transportation` and the
+    /// streetscape as `streetscape`.
     let roadLayerNames: Set<String> = ["transportation"]
     let streetscapeLayerName: String? = "streetscape"
 
@@ -81,8 +81,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         fallbackStyle
     }
 
-    /// OpenMapTiles ships the ocean and sea names in `water_name`, so the
-    /// parser adds none of its own.
+    /// The hosted tiles ship the ocean and sea names in `water_name`, so
+    /// the parser adds none of its own.
     func waterNameStyle(_ kind: WaterNameKind, tile: Tile) -> FeatureStyle? {
         nil
     }

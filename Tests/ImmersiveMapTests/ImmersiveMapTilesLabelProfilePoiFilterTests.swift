@@ -8,7 +8,7 @@ import XCTest
 /// Hard filters of the OpenMapTiles profile's poi layer: street furniture and
 /// the local-rank tail never become labels at all.
 final class ImmersiveMapTilesLabelProfilePoiFilterTests: XCTestCase {
-    private let profile = ImmersiveMapTilesVectorTileLabelProviderProfile(settings: .default)
+    private let profile = ImmersiveMapTilesLabelStyleProfile(settings: .default)
 
     func testNoisePoiClassesAreExcluded() {
         for noiseClass in ["bicycle_parking", "waste_basket", "gate", "entrance", "bench"] {
