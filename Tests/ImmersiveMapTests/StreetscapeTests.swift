@@ -169,13 +169,20 @@ final class StreetscapeTests: XCTestCase {
         return attributes
     }
 
+    /// The fold the parser does before reading a tile, with the built-in
+    /// style's layer names.
+    private func fold(_ tile: MvtDecodedTile) -> MvtDecodedTile {
+        let style = ImmersiveMapTilesDefaultMapStyle()
+        return tile.merging(layersNamed: style.streetscapeLayerName!, intoFirstLayerNamed: style.roadLayerNames)
+    }
+
     func testTheStreetscapeLayerFoldsIntoTheRoadLayerWithItsAttributesIntact() throws {
         let data = VectorTileFixture.layersTile([
             (layerName: "water", features: [.init(id: 9, geometry: .polygon(ring: [(0, 0), (100, 0), (100, 100), (0, 100)]), properties: ["class": "lake"])]),
             (layerName: "transportation", features: [street()]),
             (layerName: "streetscape", features: [surface, dividingLine]),
         ])
-        let folded = MvtRoadLayerFold.foldingStreetscapeLayers(try MvtTileDecoder.decode(data: data))
+        let folded = try fold(MvtTileDecoder.decode(data: data))
         XCTAssertEqual(folded.layers.map(\.name), ["water", "transportation"],
                        "The streetscape layer is gone, folded into the road layer, and the order of the rest holds")
         let road = folded.layers[1]
@@ -190,7 +197,7 @@ final class StreetscapeTests: XCTestCase {
 
     func testAStreetscapeLayerWithNoRoadLayerStaysItsOwnLayerAndStillDrawsAsRoads() throws {
         let data = VectorTileFixture.layerTile(layerName: "streetscape", features: [surface, dividingLine])
-        let folded = MvtRoadLayerFold.foldingStreetscapeLayers(try MvtTileDecoder.decode(data: data))
+        let folded = fold(try MvtTileDecoder.decode(data: data))
         XCTAssertEqual(folded.layers.map(\.name), ["streetscape"])
 
         let parsed = try parse(data, streetscape: true).drawingRoadPhases.automobileGround

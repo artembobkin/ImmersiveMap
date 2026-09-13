@@ -53,6 +53,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         settings.preparedTileStyleRevision &+ configuration.cacheFingerprint &+ Self.implementationRevision
     }
 
+    /// OpenMapTiles ships the roads in `transportation`; the hosted service
+    /// adds the streetscape as `streetscape`.
+    let roadLayerNames: Set<String> = ["transportation"]
+    let streetscapeLayerName: String? = "streetscape"
+
     func getMapBaseColors() -> ImmersiveMapBaseColors {
         mapBaseColors
     }

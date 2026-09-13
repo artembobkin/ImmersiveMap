@@ -202,6 +202,20 @@ public enum ImmersiveMapFeatureStyle: Equatable {
 public protocol ImmersiveMapVectorTileStyle: Sendable {
     var cacheFingerprint: UInt32 { get }
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? { get }
+    /// The layers whose line features are roads. From the zoom
+    /// `StyleSettings.flatSeparateRoadRenderingMinimumZoom` names, a road
+    /// layer draws on the separate-road path: seamless ribbons with the
+    /// casing under the fill, sorted by structure and class, where the
+    /// lines' `ImmersiveMapRoadFacts` decide the order and the stitching.
+    /// Every other layer's lines draw as plain ground geometry. The default
+    /// names the OpenMapTiles and Mapbox Streets road layers.
+    var roadLayerNames: Set<String> { get }
+    /// The layer of a measured streetscape (carriageway surfaces and the
+    /// paint on them) that the tile source ships as a second archive
+    /// (`TileSettings.StreetscapeSettings`), folded into the first road
+    /// layer of a tile before the style sees either. Nil for a source that
+    /// ships none.
+    var streetscapeLayerName: String? { get }
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> ImmersiveMapFeatureStyle
 }
@@ -209,6 +223,14 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
 public extension ImmersiveMapVectorTileStyle {
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
         nil
+    }
+
+    var roadLayerNames: Set<String> {
+        ["transportation", "road"]
+    }
+
+    var streetscapeLayerName: String? {
+        "streetscape"
     }
 }
 

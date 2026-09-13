@@ -24,7 +24,7 @@ package enum MvtWireDecodeError: Error {
 /// `MvtDecodedTile.merging(layersNamed:intoFirstLayerNamed:)` folds one layer
 /// into another, and `MvtValue` and the tile-space `Point` and `Polygon` are
 /// the values and geometry the engine consumes in place. The module knows no
-/// layer name, no schema meaning and no style: the engine's `MvtRoadLayerFold`
+/// layer name, no schema meaning and no style: the engine's map style
 /// names the layers it merges. Tests build tile bytes with the encoder in
 /// `TestSupport/` (the `MvtTestSupport` target), which is independent of this
 /// decoder so a round trip checks both against the specification.

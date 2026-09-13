@@ -7,6 +7,17 @@
 /// water names of the coarse zooms), and reads nothing else about the tile.
 protocol ImmersiveMapStyle {
     var preparedTileStyleRevision: UInt32 { get }
+    /// The layers whose features are roads. From the zoom the settings
+    /// name, a road layer takes the separate-road path: seamless ribbons
+    /// with the casing under the fill, sorted by structure and class, cut
+    /// by the carriageway surfaces, with the paint stopping at junctions.
+    /// Every other layer's lines draw as ground geometry.
+    var roadLayerNames: Set<String> { get }
+    /// The layer of the measured streetscape (the carriageway surfaces and
+    /// the paint on them), which the tile source ships as a second archive
+    /// and the parser folds into the first road layer of a tile before it
+    /// reads either. Nil for a schema that ships none.
+    var streetscapeLayerName: String? { get }
     func getMapBaseColors() -> ImmersiveMapBaseColors
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle
     /// The full-tile quad the parser puts under every feature of a tile,
@@ -29,6 +40,16 @@ enum WaterNameKind {
 }
 
 extension ImmersiveMapStyle {
+    /// The OpenMapTiles and Mapbox Streets road layers, and the hosted
+    /// service's streetscape.
+    var roadLayerNames: Set<String> {
+        ["transportation", "road"]
+    }
+
+    var streetscapeLayerName: String? {
+        "streetscape"
+    }
+
     /// A style that leaves the tiles' own water names as the only ones.
     func waterNameStyle(_ kind: WaterNameKind, tile: Tile) -> FeatureStyle? {
         nil

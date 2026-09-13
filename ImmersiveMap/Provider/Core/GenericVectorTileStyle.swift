@@ -28,6 +28,14 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
         style.cacheFingerprint
     }
 
+    var roadLayerNames: Set<String> {
+        style.roadLayerNames
+    }
+
+    var streetscapeLayerName: String? {
+        style.streetscapeLayerName
+    }
+
     func getMapBaseColors() -> ImmersiveMapBaseColors {
         mapBaseColors
     }

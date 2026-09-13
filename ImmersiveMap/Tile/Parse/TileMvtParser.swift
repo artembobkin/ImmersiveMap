@@ -36,16 +36,17 @@ final class TileMvtParser {
     private let lineReader: LineFeatureReader
     private let roadSurfaceReader = RoadSurfaceAreaReader()
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
-
-    /// The MVT layer that carries roads: `road` in the Mapbox schema, `transportation`
-    /// in OpenMapTiles, and `streetscape`, the tile service's measured
+    /// The style's road layers, and its streetscape layer: the measured
     /// carriageways and road paint, which arrive from a second archive and
-    /// are folded into the road layer before this is asked (see
-    /// `MvtRoadLayerFold`); the name is here for a tile that carries the
-    /// streetscape and no road layer. Only this layer flows through the
-    /// seamless, casing-under-fill separate-road rendering path.
-    private static func isSeparateRoadLayer(_ layerName: String) -> Bool {
-        layerName == "road" || layerName == "transportation" || layerName == MvtRoadLayerFold.streetscapeLayerName
+    /// are folded into the road layer before the layers are read. The name
+    /// is here for a tile that carries the streetscape and no road layer.
+    private let roadLayerNames: Set<String>
+    private let streetscapeLayerName: String?
+
+    /// Only a road layer flows through the seamless, casing-under-fill
+    /// separate-road rendering path.
+    private func isSeparateRoadLayer(_ layerName: String) -> Bool {
+        roadLayerNames.contains(layerName) || layerName == streetscapeLayerName
     }
 
     /// With the streetscape off, the parser bakes no road paint: see
@@ -60,6 +61,8 @@ final class TileMvtParser {
          labelDecisions: TileLabelDecisions,
          options: TileParseOptions) {
         self.mapStyle = mapStyle
+        self.roadLayerNames = mapStyle.roadLayerNames
+        self.streetscapeLayerName = mapStyle.streetscapeLayerName
         self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions, mapStyle: mapStyle)
         self.buildingReader = BuildingFeatureReader(options: options)
         self.groundReader = GroundFeatureReader(mapStyle: mapStyle)
@@ -71,7 +74,16 @@ final class TileMvtParser {
         tile: Tile,
         mvtData: Data
     ) throws -> ParsedTile {
-        let decodedTile = MvtRoadLayerFold.foldingStreetscapeLayers(try MvtTileDecoder.decode(data: mvtData))
+        var decodedTile = try MvtTileDecoder.decode(data: mvtData)
+        if let streetscapeLayerName {
+            // The streetscape's surfaces and paint and the roads they
+            // belong to have to be one feature list: the surfaces clip the
+            // ribbons of the roads that enter them, a measured crossing
+            // suppresses the crossing read off the same road's attributes,
+            // the tunnel roofs are found among the surfaces. The decoder
+            // does the merge; the style names the layers.
+            decodedTile = decodedTile.merging(layersNamed: streetscapeLayerName, intoFirstLayerNamed: roadLayerNames)
+        }
         let readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
         let unificationResult = TileUnificationStage.unify(readingStageResult)
 
@@ -107,7 +119,7 @@ final class TileMvtParser {
             let layerStart = DispatchTime.now().uptimeNanoseconds
             let layerName = layer.name
             let layerGeometry = TileLayerGeometry(layer: layer, data: mvtData)
-            let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
+            let usesSeparateRoadRendering = isSeparateRoadLayer(layerName)
                 && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
             // Attributes and style resolve exactly once per feature here; the
@@ -134,7 +146,7 @@ final class TileMvtParser {
                 // says nothing of the tunnel itself; the style is asked again
                 // for each surface the resolver finds to be a tunnel's roof,
                 // so it draws the tunnel look instead of open asphalt.
-                if Self.isSeparateRoadLayer(layerName) {
+                if isSeparateRoadLayer(layerName) {
                     for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
                                                                                   featureStyles: featureStyles,
                                                                                   bytes: bytes) {
@@ -148,7 +160,7 @@ final class TileMvtParser {
                         ))
                     }
                 }
-                if stripsRoadPaint, Self.isSeparateRoadLayer(layerName) {
+                if stripsRoadPaint, isSeparateRoadLayer(layerName) {
                     featureStyles = featureStyles.map { $0.strippingRoadPaint() }
                 }
             }

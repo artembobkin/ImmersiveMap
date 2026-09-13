@@ -12,8 +12,8 @@ import Foundation
 /// and appends every layer it meets. So the map tile's bytes followed by
 /// the streetscape tile's decode as one tile carrying both layer sets, and
 /// nothing between the download and the parser has to know there were two
-/// requests. The parser then folds the `streetscape` layer into the road
-/// layer (`MvtRoadLayerFold`).
+/// requests. The parser then folds the streetscape layer into the road
+/// layer, both named by the map style.
 ///
 /// What the streetscape's answer means:
 /// - success: the merged bytes, under an ETag naming both tiles, so a
