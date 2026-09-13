@@ -20,12 +20,8 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
 
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
-        return TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
-            labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        return TileMvtParser.forTests(settings: config,
+                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
     private func makeMesh(roofShape: RoofShape?,
@@ -153,12 +149,8 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
     private func makeParser(roofShapesEnabled: Bool) -> TileMvtParser {
         var config = ImmersiveMapSettings.default
         config.style.buildingRoofShapesEnabled = roofShapesEnabled
-        return TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
-            labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        return TileMvtParser.forTests(settings: config,
+                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
     private func heights(roofShapesEnabled: Bool) -> TileMvtParser.ExtrusionHeights? {

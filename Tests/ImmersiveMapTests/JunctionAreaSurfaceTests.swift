@@ -17,11 +17,7 @@ import simd
 final class JunctionAreaSurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                             labelProviderProfile: runtimeContext.labelProviderProfile,
-                             options: TileParseOptions(settings: config),
-                             glyphCoverage: .legacyAtlasForTests)
+        return TileMvtParser.forTests(settings: config)
     }
 
     /// Two primaries meeting inside a square junction area, at z16

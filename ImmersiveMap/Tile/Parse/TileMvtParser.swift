@@ -12,12 +12,7 @@ class TileMvtParser {
     static let complexOceanHoleSplitThreshold = 64
     let determineFeatureStyle               : DetermineFeatureStyle
     let options                             : TileParseOptions
-    private let labelTextResolver           : VectorTileLabelTextResolver
-    private let labelLanguagePreferences    : VectorTileLabelLanguagePreferences
-    private let glyphCoverage               : VectorTileLabelGlyphCoverage
-    private let labelDecisionEngine         : VectorTileLabelDecisionEngine
-    private let labelProviderProfile        : any VectorTileLabelProviderProfile
-    private let poiSpriteResolver           : PoiSpriteResolver = PoiSpriteResolver()
+    private let labelDecisions              : TileLabelDecisions
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
@@ -46,22 +41,11 @@ class TileMvtParser {
 
     
     init(determineFeatureStyle: DetermineFeatureStyle,
-         labelProviderProfile: any VectorTileLabelProviderProfile,
-         options: TileParseOptions,
-         glyphCoverage: VectorTileLabelGlyphCoverage) {
+         labelDecisions: TileLabelDecisions,
+         options: TileParseOptions) {
         self.determineFeatureStyle = determineFeatureStyle
+        self.labelDecisions = labelDecisions
         self.options = options
-        self.glyphCoverage = glyphCoverage
-        self.labelTextResolver = VectorTileLabelTextResolver(glyphCoverage: glyphCoverage)
-        self.labelLanguagePreferences = VectorTileLabelLanguagePreferences.from(
-            settingsLanguage: options.labelLanguage,
-            fallbackPolicy: options.labelFallbackPolicy
-        )
-        self.labelProviderProfile = labelProviderProfile
-        self.labelDecisionEngine = VectorTileLabelDecisionEngine(
-            profile: labelProviderProfile,
-            textResolver: labelTextResolver
-        )
     }
     
     func parse(
@@ -873,33 +857,6 @@ class TileMvtParser {
             Set(names.values.filter { $0.isEmpty == false })
         }
 
-        func name(preferences: VectorTileLabelLanguagePreferences,
-                  glyphCoverage: VectorTileLabelGlyphCoverage) -> String? {
-            for candidate in preferences.fallbackChain {
-                let code: String
-                if candidate.fieldName == "name" {
-                    code = "native"
-                } else {
-                    // The chain carries both source spellings of a language
-                    // field (`name_en` and `name:en`); either strips to the
-                    // same language code here.
-                    code = candidate.fieldName
-                        .replacingOccurrences(of: "name_", with: "")
-                        .replacingOccurrences(of: "name:", with: "")
-                }
-
-                guard let value = names[code],
-                      value.isEmpty == false,
-                      glyphCoverage.canRender(value) else {
-                    continue
-                }
-
-                return value
-            }
-
-            return names["en"].flatMap { glyphCoverage.canRender($0) ? $0 : nil }
-        }
-
         func isDuplicate(of existingWaterText: Set<String>) -> Bool {
             aliases.isDisjoint(with: existingWaterText) == false
         }
@@ -1044,8 +1001,7 @@ class TileMvtParser {
         )
 
         for fallback in fallbackLowZoomWaterLabels(for: tile) {
-            guard let name = fallback.name(preferences: labelLanguagePreferences,
-                                           glyphCoverage: glyphCoverage),
+            guard let name = labelDecisions.localizedName(from: fallback.names),
                   fallback.isDuplicate(of: existingWaterText) == false,
                   let point = tilePoint(forLatitude: fallback.latitude,
                                         longitude: fallback.longitude,
@@ -1324,9 +1280,7 @@ class TileMvtParser {
                     // switch is prepared-cache identity, so a tile prepared
                     // without labels never answers a map that wants them.
                     let labelText = options.labelsEnabled
-                        ? labelTextResolver.resolveText(properties: attributes,
-                                                        preferences: labelLanguagePreferences,
-                                                        additionalKeys: labelProviderProfile.labelTextKeys)
+                        ? labelDecisions.roadLabelText(properties: attributes)
                         : nil
                     let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
                     let roadLabelStyle = style.roadLabelTextStyle
@@ -1719,18 +1673,18 @@ class TileMvtParser {
                     let points = normalize(MvtGeometryDecoder.decodePoints(feature.geometry, in: mvtData),
                                            layer: layer)
                     let featureID = feature.hasID ? feature.id : nil
-                    let poiIcon = poiSpriteResolver.resolve(attributes: attributes, layerName: layerName)
+                    let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
                     for point in points where isPointInsideTile(point) {
                         let anchor = SIMD2(Int16(point.x), Int16(point.y))
-                        let labelFeature = VectorTileLabelFeature(providerID: labelProviderProfile.providerID,
+                        let labelFeature = VectorTileLabelFeature(providerID: labelDecisions.providerID,
                                                                   tile: tile,
                                                                   layerName: layerName,
                                                                   featureID: featureID,
                                                                   anchor: anchor,
                                                                   properties: attributes)
-                        guard let decision = labelDecisionEngine.makePointLabelDecision(feature: labelFeature,
-                                                                                        style: labelTextStyle,
-                                                                                        poiIcon: poiIcon) else {
+                        guard let decision = labelDecisions.pointLabelDecision(feature: labelFeature,
+                                                                               style: labelTextStyle,
+                                                                               poiIcon: poiIcon) else {
                             continue
                         }
                         textLabels.append(TextLabel(text: decision.text,

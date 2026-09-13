@@ -53,10 +53,13 @@ final class TileRenderStore: @unchecked Sendable {
             streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
         )
         let determineFeatureStyle = DetermineFeatureStyle(mapStyle: mapStyle)
+        let labelDecisions = TileLabelDecisions(profile: providerRuntime.labelProviderProfile,
+                                                glyphCoverage: textRenderer.glyphCoverage,
+                                                language: config.labels.language,
+                                                fallbackPolicy: config.labels.fallbackPolicy)
         let tileParser = TileMvtParser(determineFeatureStyle: determineFeatureStyle,
-                                       labelProviderProfile: providerRuntime.labelProviderProfile,
-                                       options: TileParseOptions(settings: config),
-                                       glyphCoverage: textRenderer.glyphCoverage)
+                                       labelDecisions: labelDecisions,
+                                       options: TileParseOptions(settings: config))
         let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)
         let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)
         self.preparedDataBuilder = TilePreparedDataBuilder(tileParser: tileParser,

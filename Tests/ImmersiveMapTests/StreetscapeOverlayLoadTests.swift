@@ -12,11 +12,7 @@ final class StreetscapeOverlayLoadTests: XCTestCase {
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 
     private func makeParser(_ settings: ImmersiveMapSettings) -> TileMvtParser {
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: settings)
-        return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                             labelProviderProfile: runtimeContext.labelProviderProfile,
-                             options: TileParseOptions(settings: settings),
-                             glyphCoverage: .legacyAtlasForTests)
+        return TileMvtParser.forTests(settings: settings)
     }
 
     private var street: VectorTileFixture.Feature {

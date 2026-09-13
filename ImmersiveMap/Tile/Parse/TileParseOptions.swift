@@ -11,15 +11,12 @@ import Foundation
 /// Every field here is part of the prepared-tile identity
 /// (`PreparedTileCacheIdentity`): a tile parsed under one value of it must
 /// never be served to a map that wants another. Adding a field means adding
-/// it there too.
+/// it there too. The label policy (language, fallback chain, the provider's
+/// name fields) is not here: it comes in as `TileLabelDecisions`.
 struct TileParseOptions: Equatable {
     /// Whether point and road labels are resolved and baked. Off, point
     /// features are skipped whole and no road name is looked up.
     var labelsEnabled: Bool
-    /// The language the label text is chosen in, and how the fallback chain
-    /// continues when a feature carries no name in it.
-    var labelLanguage: ImmersiveMapSettings.LabelLanguage
-    var labelFallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy
     /// Whether the map draws the measured streetscape. Off, every road paint
     /// pass is stripped from the styles and roads draw as bare
     /// casing-and-fill strokes (`FeatureStyle.strippingRoadPaint()`).
@@ -42,8 +39,6 @@ struct TileParseOptions: Equatable {
     var buildingMinimumSourceZoom: Int
 
     init(labelsEnabled: Bool,
-         labelLanguage: ImmersiveMapSettings.LabelLanguage,
-         labelFallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy,
          streetscapeEnabled: Bool,
          addTestBorders: Bool,
          flatSeparateRoadRenderingMinimumZoom: Int,
@@ -51,8 +46,6 @@ struct TileParseOptions: Equatable {
          buildingRoofShapesEnabled: Bool,
          buildingMinimumSourceZoom: Int) {
         self.labelsEnabled = labelsEnabled
-        self.labelLanguage = labelLanguage
-        self.labelFallbackPolicy = labelFallbackPolicy
         self.streetscapeEnabled = streetscapeEnabled
         self.addTestBorders = addTestBorders
         self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
@@ -66,8 +59,6 @@ struct TileParseOptions: Equatable {
     /// parse depends on.
     init(settings: ImmersiveMapSettings) {
         self.init(labelsEnabled: settings.labels.isEnabled,
-                  labelLanguage: settings.labels.language,
-                  labelFallbackPolicy: settings.labels.fallbackPolicy,
                   streetscapeEnabled: settings.tiles.streetscape.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   flatSeparateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,

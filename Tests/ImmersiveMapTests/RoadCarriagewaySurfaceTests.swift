@@ -18,11 +18,7 @@ import simd
 final class RoadCarriagewaySurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                             labelProviderProfile: runtimeContext.labelProviderProfile,
-                             options: TileParseOptions(settings: config),
-                             glyphCoverage: .legacyAtlasForTests)
+        return TileMvtParser.forTests(settings: config)
     }
 
     private let tile = Tile(x: 39615, y: 20486, z: 16)

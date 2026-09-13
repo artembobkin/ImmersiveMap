@@ -14,12 +14,8 @@ final class BuildingExtrusionToggleTests: XCTestCase {
     private func makeParser(extrusionEnabled: Bool) -> TileMvtParser {
         var config = ImmersiveMapSettings.default
         config.style.buildingExtrusionEnabled = extrusionEnabled
-        return TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
-            labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        return TileMvtParser.forTests(settings: config,
+                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
     private func parseBuildingTile(extrusionEnabled: Bool) throws -> TileMvtParser.ParsedTile {

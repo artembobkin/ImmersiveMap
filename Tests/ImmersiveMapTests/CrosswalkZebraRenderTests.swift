@@ -152,11 +152,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
 
     private func parse(features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                                   labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: VectorTileFixture.layerTile(layerName: "transportation",
                                                                      features: features))
@@ -164,11 +160,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
 
     private func parse(crossing: String?) throws -> TileMvtParser.ParsedTile {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                                   labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: Self.tileData(crossing: crossing))
     }

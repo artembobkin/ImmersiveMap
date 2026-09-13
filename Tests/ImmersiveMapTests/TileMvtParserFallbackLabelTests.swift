@@ -109,10 +109,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         var config = ImmersiveMapSettings.default
         config = config.mapStyle(ParserProviderIDTestMapStyle(id: "parser-provider"))
 
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: FallbackWaterLabelStyle()),
-                                   labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config,
+                                            mapStyle: FallbackWaterLabelStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeProviderAtlanticOceanTile().serializedData())
         let expectedKey = VectorTileLabelIdentity.providerFeature(providerID: "parser-provider",
@@ -128,10 +126,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
     func testParserNormalizesLayerExtentToInternalTileExtent() throws {
         let config = ImmersiveMapSettings.default
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: ParserSolidPolygonStyle()),
-                                   labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config,
+                                            mapStyle: ParserSolidPolygonStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeFullTilePolygonTile(extent: 2048).serializedData())
         let positions = parsedTile.drawingPolygon.vertices
@@ -146,10 +142,8 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
     func testParserSplitsComplexOceanHolesIntoBackgroundPolygons() throws {
         let config = ImmersiveMapSettings.default
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: ParserSolidPolygonStyle()),
-                                   labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config,
+                                            mapStyle: ParserSolidPolygonStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeComplexOceanTile().serializedData())
         let backgroundVertexCount = parsedTile.drawingPolygon.vertices
@@ -265,10 +259,9 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         config.labels.language = language
         config.labels.fallbackPolicy = fallbackPolicy
 
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: FallbackWaterLabelStyle()),
-                                   labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: glyphCoverage)
+        let parser = TileMvtParser.forTests(settings: config,
+                                            mapStyle: FallbackWaterLabelStyle(),
+                                            glyphCoverage: glyphCoverage)
         let parsedTile = try parser.parse(tile: tile,
                                           mvtData: mvtData ?? MvtTileMessage().serializedData())
 

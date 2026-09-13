@@ -11,11 +11,7 @@ import XCTest
 final class TileMvtParserFillOutlineTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                             labelProviderProfile: runtimeContext.labelProviderProfile,
-                             options: TileParseOptions(settings: config),
-                             glyphCoverage: .legacyAtlasForTests)
+        return TileMvtParser.forTests(settings: config)
     }
 
     private static let lake: [(Int32, Int32)] = [(1000, 1000), (2000, 1000), (2000, 2000), (1000, 2000)]

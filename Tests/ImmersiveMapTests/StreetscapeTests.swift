@@ -14,11 +14,7 @@ final class StreetscapeTests: XCTestCase {
 
     private func makeParser(streetscape: Bool) -> TileMvtParser {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: streetscape)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                             labelProviderProfile: runtimeContext.labelProviderProfile,
-                             options: TileParseOptions(settings: config),
-                             glyphCoverage: .legacyAtlasForTests)
+        return TileMvtParser.forTests(settings: config)
     }
 
     private func parse(_ data: Data, streetscape: Bool) throws -> TileMvtParser.ParsedTile {

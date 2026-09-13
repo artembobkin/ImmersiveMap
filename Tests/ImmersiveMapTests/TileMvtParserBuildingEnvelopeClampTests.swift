@@ -14,12 +14,8 @@ import XCTest
 final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
         let config = ImmersiveMapSettings.default
-        return TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
-            labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        return TileMvtParser.forTests(settings: config,
+                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
     private func makeCandidate(buildingId: UInt64,

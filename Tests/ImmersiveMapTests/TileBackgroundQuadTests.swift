@@ -12,11 +12,7 @@ import XCTest
 final class TileBackgroundQuadTests: XCTestCase {
     private func parseBackgroundOnly(_ tile: Tile) throws -> TileMvtParser.DrawingPolygonBytes {
         let config = ImmersiveMapSettings.default
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-                                   labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   options: TileParseOptions(settings: config),
-                                   glyphCoverage: .legacyAtlasForTests)
+        let parser = TileMvtParser.forTests(settings: config)
         let parsed = try parser.parse(tile: tile,
                                       mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))
         return parsed.drawingPolygon

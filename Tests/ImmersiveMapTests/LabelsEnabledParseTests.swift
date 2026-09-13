@@ -13,12 +13,8 @@ final class LabelsEnabledParseTests: XCTestCase {
     private func makeParser(labelsEnabled: Bool) -> TileMvtParser {
         var config = ImmersiveMapSettings.default
         config.labels.isEnabled = labelsEnabled
-        return TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
-            labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        return TileMvtParser.forTests(settings: config,
+                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
     /// A named peak and a named primary road: one point label, one road label.

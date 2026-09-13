@@ -22,13 +22,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
         // Extrusion is off by default; the benchmark wants every parse path.
         let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-            labelProviderProfile: runtimeContext.labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        let parser = TileMvtParser.forTests(settings: config)
 
         // The benchmark is only meaningful if the tile drives every stage.
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)
@@ -61,13 +55,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
 
         // Extrusion is off by default; the benchmark wants every parse path.
         let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
-        let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
-        let parser = TileMvtParser(
-            determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
-            labelProviderProfile: runtimeContext.labelProviderProfile,
-            options: TileParseOptions(settings: config),
-            glyphCoverage: .legacyAtlasForTests
-        )
+        let parser = TileMvtParser.forTests(settings: config)
 
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)
         XCTAssertGreaterThan(parsed.drawingPolygon.indices.count, 0, "overview polygons missing")
