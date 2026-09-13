@@ -24,7 +24,7 @@ enum RoadMarkingStrokeGeometry {
     /// decoration builders emit) as one polygon: both offsets at half the
     /// stroke, interior joints mitered, ends cut with a perpendicular butt.
     static func miteredBand(points: [SIMD2<Float>],
-                            stroke: Float) -> TileMvtParser.ParsedPolygon? {
+                            stroke: Float) -> ParsedPolygon? {
         // Collapse degenerate steps first: a zero-length segment has no
         // direction to offset along.
         var path: [SIMD2<Float>] = []
@@ -94,7 +94,7 @@ enum RoadMarkingStrokeGeometry {
                 indices.append(contentsOf: [left, right, nextRight, left, nextRight, nextLeft])
             }
         }
-        return TileMvtParser.ParsedPolygon(vertices: vertices, indices: indices)
+        return ParsedPolygon(vertices: vertices, indices: indices)
     }
 
     private static func normal(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> SIMD2<Float> {

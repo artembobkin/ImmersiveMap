@@ -64,13 +64,13 @@ final class ExtrudedArenaBuildTests: XCTestCase {
         let base = PreparedTileCPUTestFixtures.withGroundTriangle(tile: tile)
         let extruded = PreparedTileCPU.Extruded(
             vertices: [
-                TileMvtParser.ExtrudedVertexIn(position: SIMD3<Float>(100, 200, 0),
+                ExtrudedVertexIn(position: SIMD3<Float>(100, 200, 0),
                                                normal: SIMD3<Float>(0, -1, 0),
                                                styleIndex: 0),
-                TileMvtParser.ExtrudedVertexIn(position: SIMD3<Float>(300, 200, 0),
+                ExtrudedVertexIn(position: SIMD3<Float>(300, 200, 0),
                                                normal: SIMD3<Float>(0, -1, 0),
                                                styleIndex: 0),
-                TileMvtParser.ExtrudedVertexIn(position: SIMD3<Float>(300, 200, 55.5),
+                ExtrudedVertexIn(position: SIMD3<Float>(300, 200, 55.5),
                                                normal: SIMD3<Float>(0, -1, 0),
                                                styleIndex: 0)
             ],

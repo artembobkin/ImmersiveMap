@@ -224,7 +224,7 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                                                          text: "Cafe",
                                                          anchor: SIMD2<Int16>(120, 240))
 
-        let label = TileMvtParser.TextLabel(text: "Cafe",
+        let label = ParsedTextLabel(text: "Cafe",
                                             position: SIMD2<Int16>(120, 240),
                                             key: identity.runtimeKey,
                                             sortKey: 50,

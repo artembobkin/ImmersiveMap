@@ -27,7 +27,7 @@ struct BusLaneLetterGeometryBuilder {
     private static let endInsetMetres: Float = 3.0
 
     func buildPolygons(points: [SIMD2<Float>],
-                       unitsPerMetre: Float) -> [TileMvtParser.ParsedPolygon] {
+                       unitsPerMetre: Float) -> [ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = Self.polylineLength(renderPoints)
@@ -46,7 +46,7 @@ struct BusLaneLetterGeometryBuilder {
             placements = (0..<count).map { endInset + Float($0) * actualStep }
         }
 
-        var polygons: [TileMvtParser.ParsedPolygon] = []
+        var polygons: [ParsedPolygon] = []
         polygons.reserveCapacity(placements.count * 3)
         for distance in placements {
             guard let sample = Self.sample(atDistance: distance, points: renderPoints) else { continue }
@@ -71,7 +71,7 @@ struct BusLaneLetterGeometryBuilder {
     /// is what keeps the shared apex edge seamless in Int16.
     private static func makeLetter(center: SIMD2<Float>,
                                    up: SIMD2<Float>,
-                                   unitsPerMetre: Float) -> [TileMvtParser.ParsedPolygon] {
+                                   unitsPerMetre: Float) -> [ParsedPolygon] {
         let side = SIMD2<Float>(-up.y, up.x)
         let halfHeight = letterHeightMetres * unitsPerMetre * 0.5
         let halfWidth = letterHalfWidthMetres * unitsPerMetre
@@ -97,7 +97,7 @@ struct BusLaneLetterGeometryBuilder {
         // base, so the OUTER normal is resolved per leg (a plain perpendicular
         // points to opposite sides of the two mirrored legs, and using it
         // raw folded one leg's quad into a bowtie with a wedge missing).
-        func legQuad(foot: SIMD2<Float>) -> TileMvtParser.ParsedPolygon? {
+        func legQuad(foot: SIMD2<Float>) -> ParsedPolygon? {
             let direction = (apex - foot) / legLength
             var outerNormal = SIMD2<Float>(-direction.y, direction.x)
             if simd_dot(outerNormal, foot - baseCenter) < 0 {
@@ -114,7 +114,7 @@ struct BusLaneLetterGeometryBuilder {
             // decides the winding from the ring's area: counter-clockwise in
             // render space either way. The apex floats are shared with the
             // other leg, so the shared edge still quantizes identically.
-            return TileMvtParser.ParsedPolygon.counterClockwiseConvexFan([baseOuter, apexOuter, apexInner, baseInner])
+            return ParsedPolygon.counterClockwiseConvexFan([baseOuter, apexOuter, apexInner, baseInner])
         }
 
         // The crossbar: a band of the stroke's thickness at the crossbar
@@ -124,7 +124,7 @@ struct BusLaneLetterGeometryBuilder {
         let leftBar = leftFoot + (apex - leftFoot) * crossbarFraction
         let rightBar = rightFoot + (apex - rightFoot) * crossbarFraction
         let barLift = up * halfStroke
-        let crossbar = TileMvtParser.ParsedPolygon.counterClockwiseConvexFan(
+        let crossbar = ParsedPolygon.counterClockwiseConvexFan(
             [leftBar + barLift, rightBar + barLift, rightBar - barLift, leftBar - barLift]
         )
         return [legQuad(foot: leftFoot), legQuad(foot: rightFoot), crossbar].compactMap { $0 }

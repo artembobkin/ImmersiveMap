@@ -53,7 +53,7 @@ struct RoadStructureBuckets<Bucket> {
     let automobileGround: Bucket
     let bridge: Bucket
 
-    func bucket(for structureKind: TileMvtParser.RoadStructureKind) -> Bucket {
+    func bucket(for structureKind: RoadStructureKind) -> Bucket {
         switch structureKind {
         case .tunnel:
             return tunnel
@@ -74,16 +74,16 @@ struct RoadStructureBuckets<Bucket> {
     }
 
     var drawOrderBuckets: [Bucket] {
-        TileMvtParser.RoadStructureKind.drawOrder.map(bucket(for:))
+        RoadStructureKind.drawOrder.map(bucket(for:))
     }
 }
 
-extension TileMvtParser.RoadStructureKind {
+extension RoadStructureKind {
     /// Draw order of the road structure buckets. This list is also the
     /// arena-image span order (`TileArenaSchema` iterates it), so changing it
     /// is a prepared-cache format change: bump
     /// `PreparedTileDiskCaching.preparedFormatVersion`.
-    static let drawOrder: [TileMvtParser.RoadStructureKind] = [.tunnel, .ground, .automobileGround, .bridge]
+    static let drawOrder: [RoadStructureKind] = [.tunnel, .ground, .automobileGround, .bridge]
 }
 
 extension RoadStructureBuckets: Equatable where Bucket: Equatable {}

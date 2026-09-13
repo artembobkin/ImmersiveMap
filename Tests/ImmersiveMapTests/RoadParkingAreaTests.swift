@@ -62,7 +62,7 @@ final class RoadParkingAreaTests: XCTestCase {
 
     private let lotRing: [(Int32, Int32)] = [(1500, 1800), (2700, 1800), (2700, 2100), (1500, 2100)]
 
-    private func parse(_ features: [VectorTileFixture.Feature], z: Int = 16) throws -> TileMvtParser.ParsedTile {
+    private func parse(_ features: [VectorTileFixture.Feature], z: Int = 16) throws -> ParsedTile {
         let scale = 1 << max(0, 16 - z)
         return try makeParser().parse(tile: Tile(x: 39615 / scale, y: 20486 / scale, z: z),
                                       mvtData: VectorTileFixture.layerTile(layerName: "transportation",

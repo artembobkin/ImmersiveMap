@@ -990,7 +990,7 @@ class TileMvtParser {
         return SIMD2<Int16>(roundedX, roundedY)
     }
 
-    private func appendFallbackLowZoomWaterLabels(into textLabels: inout [TextLabel], tile: Tile) {
+    private func appendFallbackLowZoomWaterLabels(into textLabels: inout [ParsedTextLabel], tile: Tile) {
         guard tile.z <= 2 else {
             return
         }
@@ -1022,7 +1022,7 @@ class TileMvtParser {
                 continue
             }
 
-            textLabels.append(TextLabel(text: name,
+            textLabels.append(ParsedTextLabel(text: name,
                                         position: point,
                                         tile: tile,
                                         featureId: 0,
@@ -1046,13 +1046,12 @@ class TileMvtParser {
         var roadPolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
         var orderedRoadPolygons: [OrderedRoadPolygon] = []
         var bridgePolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-        let rawLineByStyle: [UInt8: [ParsedLineRawVertices]] = [:]
         var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
         var styles: [UInt8: FeatureStyle] = [:]
         var roadStyles: [UInt8: FeatureStyle] = [:]
         var bridgeStyles: [UInt8: FeatureStyle] = [:]
-        var textLabels: [TextLabel] = []
-        var roadTextLabels: [RoadTextLabel] = []
+        var textLabels: [ParsedTextLabel] = []
+        var roadTextLabels: [ParsedRoadTextLabel] = []
         var roadPolygonSequence = 0
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
         var layerTimings: [TileParseLayerTiming] = []
@@ -1653,7 +1652,7 @@ class TileMvtParser {
                                 }
                                 let path = linePath(points: fragment.points)
                                 if path.count >= 2 {
-                                    roadTextLabels.append(RoadTextLabel(text: labelText,
+                                    roadTextLabels.append(ParsedRoadTextLabel(text: labelText,
                                                                         path: path,
                                                                         tile: tile,
                                                                         featureId: feature.id,
@@ -1687,7 +1686,7 @@ class TileMvtParser {
                                                                                poiIcon: poiIcon) else {
                             continue
                         }
-                        textLabels.append(TextLabel(text: decision.text,
+                        textLabels.append(ParsedTextLabel(text: decision.text,
                                                     position: anchor,
                                                     key: decision.identity.runtimeKey,
                                                     sortKey: decision.priority.visibilityRank,
@@ -1764,7 +1763,6 @@ class TileMvtParser {
             roadPolygonByStyle: roadPolygonByStyle.filter { $0.value.isEmpty == false },
             orderedRoadPolygons: orderedRoadPolygons,
             bridgePolygonByStyle: bridgePolygonByStyle.filter { $0.value.isEmpty == false },
-            rawLineByStyle: rawLineByStyle.filter { $0.value.isEmpty == false },
             extrudedByStyle: extrudedByStyle.filter { $0.value.isEmpty == false },
             styles: styles,
             roadStyles: roadStyles,
@@ -2119,7 +2117,6 @@ class TileMvtParser {
         let polygonByStyle = readingStageResult.polygonByStyle
         let roadPolygonByStyle = readingStageResult.roadPolygonByStyle
         let bridgePolygonByStyle = readingStageResult.bridgePolygonByStyle
-        _ = readingStageResult.rawLineByStyle
         let extrudedByStyle = readingStageResult.extrudedByStyle
 
         let groundLayer = unifyPolygonLayer(polygonByStyle: polygonByStyle,

@@ -17,7 +17,7 @@ struct CrosswalkZebraGeometryBuilder {
     /// the decoration path's one named entry into render space, and the
     /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
-                       zoneWidth: Float) -> [TileMvtParser.ParsedPolygon] {
+                       zoneWidth: Float) -> [ParsedPolygon] {
         guard points.count >= 2 else {
             return []
         }
@@ -43,7 +43,7 @@ struct CrosswalkZebraGeometryBuilder {
                              crossingLength * (0.5 - Self.endInsetFactor))
         let normal = SIMD2<Float>(-direction.y, direction.x)
 
-        var polygons: [TileMvtParser.ParsedPolygon] = []
+        var polygons: [ParsedPolygon] = []
         polygons.reserveCapacity(max(1, Int(ceil(crossingLength / stripeStep))))
 
         var stripeStart = -halfLength
@@ -62,7 +62,7 @@ struct CrosswalkZebraGeometryBuilder {
             let topRight = stripeCenter + along - across
 
             polygons.append(
-                TileMvtParser.ParsedPolygon(
+                ParsedPolygon(
                     vertices: [
                         TileCoordinateSpace.quantized(topLeft),
                         TileCoordinateSpace.quantized(bottomLeft),

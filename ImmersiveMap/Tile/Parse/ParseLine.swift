@@ -268,7 +268,7 @@ class ParseLine {
                extendClippedStart: Bool = false,
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
-               clipGeometryToTileBounds: Bool = true) -> TileMvtParser.ParsedPolygon? {
+               clipGeometryToTileBounds: Bool = true) -> ParsedPolygon? {
         guard points.count >= 2, width > 0 else { return nil }
 
         // The geometry is extruded past the styled half-width so the shader's
@@ -344,7 +344,7 @@ class ParseLine {
     private func finalizePolygon(_ polygon: GeneratedPolygon,
                                  tileExtent: Float,
                                  clipGeometryToTileBounds: Bool,
-                                 emitsArcLength: Bool) -> TileMvtParser.ParsedPolygon? {
+                                 emitsArcLength: Bool) -> ParsedPolygon? {
         if clipGeometryToTileBounds {
             return clipToTile(polygon: polygon, tileExtent: tileExtent, emitsArcLength: emitsArcLength)
         }
@@ -698,7 +698,7 @@ class ParseLine {
 
     private func clipToTile(polygon: GeneratedPolygon,
                             tileExtent: Float,
-                            emitsArcLength: Bool) -> TileMvtParser.ParsedPolygon? {
+                            emitsArcLength: Bool) -> ParsedPolygon? {
         guard polygon.indices.isEmpty == false else { return nil }
         if polygon.vertices.allSatisfy({ isInsideTile($0, tileExtent: tileExtent) }) {
             return quantize(polygon: polygon, emitsArcLength: emitsArcLength)
@@ -759,7 +759,7 @@ class ParseLine {
         }
 
         guard clippedIndices.isEmpty == false else { return nil }
-        return TileMvtParser.ParsedPolygon(vertices: clippedVertices,
+        return ParsedPolygon(vertices: clippedVertices,
                                            indices: clippedIndices,
                                            lineDistances: clippedDistances,
                                            lineParameters: clippedParameters)
@@ -803,8 +803,8 @@ class ParseLine {
         return clipped
     }
 
-    private func quantize(polygon: GeneratedPolygon, emitsArcLength: Bool) -> TileMvtParser.ParsedPolygon {
-        TileMvtParser.ParsedPolygon(vertices: polygon.vertices.map(toShortVector),
+    private func quantize(polygon: GeneratedPolygon, emitsArcLength: Bool) -> ParsedPolygon {
+        ParsedPolygon(vertices: polygon.vertices.map(toShortVector),
                                     indices: polygon.indices,
                                     lineDistances: polygon.distances.map(Self.quantizeDistance),
                                     lineParameters: polygon.parameters.map {

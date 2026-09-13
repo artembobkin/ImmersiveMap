@@ -3,31 +3,32 @@
 
 import Foundation
 
-extension TileMvtParser {
-    struct ParsedPolygon {
-        var vertices: [SIMD2<Int16>] = []
-        var indices: [UInt32] = []
-        /// Per-vertex signed distance from a line's centerline, normalized so
-        /// the extruded rim is ±`Int8.max`. Empty for plain polygon geometry;
-        /// when non-empty it runs in lockstep with `vertices`.
-        var lineDistances: [Int8] = []
-        /// Per-vertex longitudinal parameter, lockstep with `lineDistances`;
-        /// see `TileVertexIn.lineParameter` for the two interpretations
-        /// (end-feather distance for solid styles, arc length for
-        /// point-dashed ones).
-        var lineParameters: [Int16] = []
-        /// The polygon's ring edges as a line list (pairs of indices into
-        /// `vertices`), for the fill-outline antialiasing pass: the flat
-        /// drawer rasterizes them as one-pixel line primitives in the fill's
-        /// colour over the fill's own staircase edge (the `fill-antialias`
-        /// construction of Mapbox GL). Edges lying on the tile boundary are
-        /// left out, since the polygon continues in the neighbour. Empty for
-        /// line ribbons and for every polygon that is not a plain fill.
-        var outlineIndices: [UInt32] = []
-    }
+/// One tessellated polygon in render space (x east, y up, Int16 tile
+/// units): a fill, a line ribbon or a decoration, before the unification
+/// stage packs it into a layer's streams.
+struct ParsedPolygon {
+    var vertices: [SIMD2<Int16>] = []
+    var indices: [UInt32] = []
+    /// Per-vertex signed distance from a line's centerline, normalized so
+    /// the extruded rim is ±`Int8.max`. Empty for plain polygon geometry;
+    /// when non-empty it runs in lockstep with `vertices`.
+    var lineDistances: [Int8] = []
+    /// Per-vertex longitudinal parameter, lockstep with `lineDistances`;
+    /// see `TileVertexIn.lineParameter` for the two interpretations
+    /// (end-feather distance for solid styles, arc length for
+    /// point-dashed ones).
+    var lineParameters: [Int16] = []
+    /// The polygon's ring edges as a line list (pairs of indices into
+    /// `vertices`), for the fill-outline antialiasing pass: the flat
+    /// drawer rasterizes them as one-pixel line primitives in the fill's
+    /// colour over the fill's own staircase edge (the `fill-antialias`
+    /// construction of Mapbox GL). Edges lying on the tile boundary are
+    /// left out, since the polygon continues in the neighbour. Empty for
+    /// line ribbons and for every polygon that is not a plain fill.
+    var outlineIndices: [UInt32] = []
 }
 
-extension TileMvtParser.ParsedPolygon {
+extension ParsedPolygon {
     /// The winding contract of every tile triangle: counter-clockwise in
     /// render space (x east, y up). That is the front face the tile drawers
     /// keep when they cull back faces (on the sphere the far side of the
@@ -101,7 +102,7 @@ extension TileMvtParser.ParsedPolygon {
     /// counter-clockwise whichever way the ring runs: the orientation is
     /// decided on the floats, before the Int16 rounding, the same decision
     /// `ParsePolygon`'s convex fan and `ParseLine`'s clip make.
-    static func counterClockwiseConvexFan(_ ring: [SIMD2<Float>]) -> TileMvtParser.ParsedPolygon {
+    static func counterClockwiseConvexFan(_ ring: [SIMD2<Float>]) -> ParsedPolygon {
         var doubledArea: Float = 0
         for index in ring.indices {
             let current = ring[index]
@@ -120,7 +121,7 @@ extension TileMvtParser.ParsedPolygon {
                 indices.append(UInt32(corner + 1))
             }
         }
-        return TileMvtParser.ParsedPolygon(vertices: ring.map(TileCoordinateSpace.quantized),
+        return ParsedPolygon(vertices: ring.map(TileCoordinateSpace.quantized),
                                            indices: indices)
     }
 }

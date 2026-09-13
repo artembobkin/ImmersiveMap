@@ -50,12 +50,12 @@ final class ParsePolygonClippedSpaceTests: XCTestCase {
         let indices: [UInt32] = [0, 1, 2, 2, 3, 4, 5, 6, 7, 7, 8, 9, 10, 11, 0, 5, 7, 9, 12, 5, 9, 12, 9, 13, 14, 12, 13,
                                  14, 13, 15, 4, 16, 17, 16, 14, 15, 16, 15, 17, 4, 17, 18, 4, 18, 19, 17, 15, 18, 4, 19, 20,
                                  2, 4, 20, 21, 22, 0, 0, 21, 2, 2, 20, 23, 10, 0, 2, 2, 23, 21, 21, 10, 2]
-        var polygon = TileMvtParser.ParsedPolygon(vertices: points.map { SIMD2<Int16>($0.0, $0.1) }, indices: indices)
-        XCTAssertEqual(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices), 19)
+        var polygon = ParsedPolygon(vertices: points.map { SIMD2<Int16>($0.0, $0.1) }, indices: indices)
+        XCTAssertEqual(ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices), 19)
 
         polygon.windCounterClockwise()
 
-        XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices))
+        XCTAssertNil(ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices))
         XCTAssertEqual(polygon.indices.count, indices.count)
         XCTAssertEqual(Set(polygon.indices), Set(indices), "the same vertices, only the order of a triangle's corners changes")
         for triangle in 0 ..< indices.count / 3 {
@@ -110,7 +110,7 @@ final class ParsePolygonClippedSpaceTests: XCTestCase {
             let parsed = try XCTUnwrap(ParsePolygon().parse(polygon: Polygon(exteriorRing: exterior,
                                                                              interiorRings: interiors),
                                                             tileExtent: 4096))
-            return TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: parsed.vertices,
+            return ParsedPolygon.firstClockwiseTriangle(vertices: parsed.vertices,
                                                                       indices: parsed.indices)
         }
         let hole = [Point(x: 900, y: 500), Point(x: 1100, y: 500),

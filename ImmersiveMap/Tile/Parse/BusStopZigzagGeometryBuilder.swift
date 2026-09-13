@@ -22,7 +22,7 @@ struct BusStopZigzagGeometryBuilder {
     private static let strokeMetres: Float = 0.35
 
     func buildPolygons(points: [SIMD2<Float>],
-                       unitsPerMetre: Float) -> [TileMvtParser.ParsedPolygon] {
+                       unitsPerMetre: Float) -> [ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let total = Self.polylineLength(renderPoints)

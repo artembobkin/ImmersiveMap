@@ -75,7 +75,7 @@ final class TileTextLabelsBuilder {
     /// under twelve, a little smaller than a city's.
     private static let poiCombinedLabelScale: Float = 1.05
 
-    func build(textLabels: [TileMvtParser.TextLabel], tile: Tile) -> PreparedTileCPU.TextLabelSet {
+    func build(textLabels: [ParsedTextLabel], tile: Tile) -> PreparedTileCPU.TextLabelSet {
         let tileIndices = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))
         var builtLabels: [BuiltBaseLabel] = []
         builtLabels.reserveCapacity(textLabels.count)

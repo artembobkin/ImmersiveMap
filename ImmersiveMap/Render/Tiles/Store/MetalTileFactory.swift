@@ -295,7 +295,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                          indexType: indices.indexType)
     }
 
-    private static func takeRoadPhases(_ structureKind: TileMvtParser.RoadStructureKind,
+    private static func takeRoadPhases(_ structureKind: RoadStructureKind,
                                        cursor: inout SpanCursor) -> RoadGeometryPhases<TileBuffers.GeometryLayer> {
         RoadGeometryPhases(shadow: takeGeometryLayer(.road(structureKind, .shadow), cursor: &cursor),
                            casing: takeGeometryLayer(.road(structureKind, .casing), cursor: &cursor),

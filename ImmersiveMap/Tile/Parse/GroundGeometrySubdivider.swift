@@ -51,7 +51,7 @@ enum GroundGeometrySubdivider {
         min(fillStep * 4, 4096)
     }
 
-    static func subdivideIfNeeded(_ polygonByStyle: inout [UInt8: [TileMvtParser.ParsedPolygon]],
+    static func subdivideIfNeeded(_ polygonByStyle: inout [UInt8: [ParsedPolygon]],
                                   tileZoom: Int) {
         guard let step = step(forTileZoom: tileZoom) else { return }
         let ribbonStep = Self.ribbonStep(fillStep: step)
@@ -70,13 +70,13 @@ enum GroundGeometrySubdivider {
         var lineParameter: Float
     }
 
-    static func subdivide(_ polygon: TileMvtParser.ParsedPolygon, step: Int) -> TileMvtParser.ParsedPolygon {
+    static func subdivide(_ polygon: ParsedPolygon, step: Int) -> ParsedPolygon {
         guard step > 0, polygon.indices.count >= 3 else { return polygon }
         let hasAttributes = polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count
         let stepValue = Float(step)
 
-        var output = TileMvtParser.ParsedPolygon()
+        var output = ParsedPolygon()
         output.vertices.reserveCapacity(polygon.vertices.count)
         output.indices.reserveCapacity(polygon.indices.count)
         if hasAttributes {

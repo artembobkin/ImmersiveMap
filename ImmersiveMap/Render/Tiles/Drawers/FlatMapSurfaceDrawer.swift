@@ -215,7 +215,7 @@ enum FlatMapSurfaceDrawer {
         if usesSeparateRoadRendering {
             // The casing draws from street zoom up only (RoadCasingZoomGate).
             let drawsCasing = RoadCasingZoomGate.drawsCasing(cameraZoom: cameraZoom)
-            func drawRoadGroup(_ structureKind: TileMvtParser.RoadStructureKind) {
+            func drawRoadGroup(_ structureKind: RoadStructureKind) {
                 for role in [RoadPassRole.shadow, .casing, .fill, .detail] where role != .casing || drawsCasing {
                     for source in roadSources {
                         let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
@@ -247,7 +247,7 @@ enum FlatMapSurfaceDrawer {
             drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, sources: roadSources, distanceFade: roadDistanceFade)
             drawRoadGroup(.bridge)
 
-            for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
+            for structureKind in RoadStructureKind.drawOrder {
                 for source in roadSources {
                     let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,

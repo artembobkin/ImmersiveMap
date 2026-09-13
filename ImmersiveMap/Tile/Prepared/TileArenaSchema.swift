@@ -21,7 +21,7 @@ enum TileArenaSlot: Equatable, Sendable {
 /// The geometry layers a tile carries, in schema vocabulary.
 enum TileArenaGeometryLayerID: Equatable, Sendable {
     case ground
-    case road(TileMvtParser.RoadStructureKind, RoadPassRole)
+    case road(RoadStructureKind, RoadPassRole)
     case bridgeOverlay
 }
 
@@ -50,7 +50,7 @@ enum TileArenaSchema {
     static func slots(text: TileArenaTextRunCounts) -> [TileArenaSlot] {
         var slots: [TileArenaSlot] = []
         appendGeometryLayer(.ground, to: &slots)
-        for structureKind in TileMvtParser.RoadStructureKind.drawOrder {
+        for structureKind in RoadStructureKind.drawOrder {
             for passRole in RoadPassRole.drawOrder {
                 appendGeometryLayer(.road(structureKind, passRole), to: &slots)
             }
@@ -97,7 +97,7 @@ enum TileArenaSchema {
         case .geometryVertices:
             return MemoryLayout<TileVertexIn>.stride
         case .extrudedVertices:
-            return MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride
+            return MemoryLayout<ExtrudedVertexIn>.stride
         case .geometryStyles, .extrudedStyles:
             return MemoryLayout<TilePolygonStyle>.stride
         case .geometryOverviewStyleMasks:

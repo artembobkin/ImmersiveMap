@@ -33,7 +33,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         }
         return parser.buildExtrudedMesh(clippedExterior: rectangle,
                                         clippedInteriors: interiors,
-                                        roof: TileMvtParser.ParsedPolygon(vertices: roofVertices,
+                                        roof: ParsedPolygon(vertices: roofVertices,
                                                                           indices: [0, 1, 2, 0, 2, 3]),
                                         roofInfo: roofInfo,
                                         baseHeight: 0,
@@ -106,7 +106,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
             clippedExterior: clipped,
             clippedInteriors: [],
             unclippedExterior: raw,
-            roof: TileMvtParser.ParsedPolygon(vertices: clipped.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) },
+            roof: ParsedPolygon(vertices: clipped.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) },
                                               indices: [0, 1, 2, 0, 2, 3]),
             roofInfo: RoofInfo(height: roofHeight, shape: .gabled, orientation: nil, directionDegrees: nil),
             baseHeight: 0,

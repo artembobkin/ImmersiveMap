@@ -150,7 +150,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func parse(features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
+    private func parse(features: [VectorTileFixture.Feature]) throws -> ParsedTile {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let parser = TileMvtParser.forTests(settings: config)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
@@ -158,7 +158,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
                                                                      features: features))
     }
 
-    private func parse(crossing: String?) throws -> TileMvtParser.ParsedTile {
+    private func parse(crossing: String?) throws -> ParsedTile {
         let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
         let parser = TileMvtParser.forTests(settings: config)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
@@ -168,7 +168,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     /// Triangles in the detail role whose style is the crossing's: it is the
     /// only pass there with no point-locked width, since a stripe is an area
     /// on the ground rather than a stroke.
-    private func zebraTriangleCount(_ parsed: TileMvtParser.ParsedTile) -> Int {
+    private func zebraTriangleCount(_ parsed: ParsedTile) -> Int {
         let detail = parsed.drawingRoadPhases.automobileGround.detail
         let zebraStyles = detail.lineStyles.indices.filter { detail.lineStyles[$0].widthPoints == 0 }
         guard zebraStyles.isEmpty == false else { return 0 }

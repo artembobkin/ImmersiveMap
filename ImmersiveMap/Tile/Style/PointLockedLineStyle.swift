@@ -56,7 +56,7 @@ extension FeatureStyle {
             lineWidthPoints: widthPoints,
             dashLengthPoints: dashLengthPoints,
             dashGapPoints: dashGapPoints,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+            parseGeometryStyleData: ParseGeometryStyleData(
                 lineWidth: Double(widthPoints) * Self.pointLockedRibbonUnitsPerPoint
             ),
             roadClassPriority: roadClassPriority,

@@ -22,7 +22,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
                            featherStart: Bool = false,
                            featherEnd: Bool = false,
                            emitsArcLength: Bool = false,
-                           clipGeometryToTileBounds: Bool = true) -> TileMvtParser.ParsedPolygon? {
+                           clipGeometryToTileBounds: Bool = true) -> ParsedPolygon? {
         ParseLine().parse(points: points,
                           width: width,
                           tileExtent: tileExtent,
@@ -203,7 +203,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     }
 
     func testPlainPolygonGeometryHasNoLineAttributes() {
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2<Int16>(0, 0)], indices: [0])
+        let polygon = ParsedPolygon(vertices: [SIMD2<Int16>(0, 0)], indices: [0])
         XCTAssertTrue(polygon.lineDistances.isEmpty)
         XCTAssertTrue(polygon.lineParameters.isEmpty)
         // The vertex an attribute-less polygon produces saturates the
@@ -218,12 +218,12 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     /// render space, on the unclipped fast path as much as through the clip,
     /// on either turn of a round join, and under every cap and feather.
     func testEveryTriangleIsCounterClockwiseInRenderSpace() throws {
-        func assertCounterClockwise(_ polygon: TileMvtParser.ParsedPolygon?,
+        func assertCounterClockwise(_ polygon: ParsedPolygon?,
                                     _ name: String,
                                     file: StaticString = #filePath,
                                     line: UInt = #line) throws {
             let polygon = try XCTUnwrap(polygon, name, file: file, line: line)
-            XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices,
+            XCTAssertNil(ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices,
                                                                              indices: polygon.indices),
                          "\(name): a clockwise triangle", file: file, line: line)
             var doubled: Int64 = 0

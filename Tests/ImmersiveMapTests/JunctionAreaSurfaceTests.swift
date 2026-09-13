@@ -202,7 +202,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let bare = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                           mvtData: VectorTileFixture.layerTile(layerName: "transportation",
                                                                                features: [street]))
-        for role in [\RoadGeometryPhases<TileMvtParser.DrawingGeometryLayer>.fill,
+        for role in [\RoadGeometryPhases<DrawingGeometryLayer>.fill,
                      \.casing, \.detail] {
             XCTAssertEqual(withArea.drawingRoadPhases.automobileGround[keyPath: role].drawing.indices.count,
                            bare.drawingRoadPhases.automobileGround[keyPath: role].drawing.indices.count,

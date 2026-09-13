@@ -361,7 +361,7 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
 
         return FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
                             color: SIMD4<Float>(1, 1, 1, 1),
-                            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 1),
+                            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
                             labelTextStyle: labelTextStyle)
     }
 }
@@ -377,7 +377,7 @@ private final class ParserSolidPolygonStyle: ImmersiveMapStyle {
         let key: UInt8 = data.layerName == "background" ? 1 : 2
         return FeatureStyle(key: key,
                      color: SIMD4<Float>(1, 1, 1, 1),
-                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 1))
+                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1))
     }
 }
 

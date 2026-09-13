@@ -45,7 +45,7 @@ struct TileArenaSpan: Equatable, Sendable {
 struct TileArenaImagePlan: Sendable {
     enum Payload: Sendable {
         case tileVertices([TileVertexIn])
-        case extrudedVertices([TileMvtParser.ExtrudedVertexIn])
+        case extrudedVertices([ExtrudedVertexIn])
         case indicesUInt16([UInt16])
         case indicesUInt32([UInt32])
         case styles([TilePolygonStyle])
@@ -217,7 +217,7 @@ enum TileArenaImageMath {
             case .tileVertices(let values):
                 return (values.count * MemoryLayout<TileVertexIn>.stride, values.count)
             case .extrudedVertices(let values):
-                return (values.count * MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride, values.count)
+                return (values.count * MemoryLayout<ExtrudedVertexIn>.stride, values.count)
             case .indicesUInt16(let values):
                 return (values.count * MemoryLayout<UInt16>.stride, values.count)
             case .indicesUInt32(let values):

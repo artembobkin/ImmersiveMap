@@ -14,7 +14,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     // MARK: - Tiers
 
     func testAutomobileGroundDrawsAboveThePedestrianGround() {
-        let order = TileMvtParser.RoadStructureKind.drawOrder
+        let order = RoadStructureKind.drawOrder
         let ground = order.firstIndex(of: .ground)!
         let automobile = order.firstIndex(of: .automobileGround)!
         let bridge = order.firstIndex(of: .bridge)!
@@ -22,7 +22,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         XCTAssertLessThan(automobile, bridge, "and bridges over both")
         XCTAssertEqual(order.first, .tunnel)
         // The arena image iterates the same order, slot by slot.
-        XCTAssertEqual(Set(order), Set(TileMvtParser.RoadStructureKind.allCases))
+        XCTAssertEqual(Set(order), Set(RoadStructureKind.allCases))
     }
 
     func testTheTierLineSitsBetweenServiceRoadsAndPaths() {

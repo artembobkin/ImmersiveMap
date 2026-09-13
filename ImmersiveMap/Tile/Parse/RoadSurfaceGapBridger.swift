@@ -69,7 +69,7 @@ enum RoadSurfaceGapBridger {
                             linesByFeatureIndex: [[[SIMD2<Float>]]],
                             featureStyles: [FeatureStyle],
                             featureStreets: [String],
-                            featureStructureKinds: [TileMvtParser.RoadStructureKind],
+                            featureStructureKinds: [RoadStructureKind],
                             featureLayers: [Int],
                             unitsPerMetre: Float) -> [Bridge] {
         guard unitsPerMetre > 0 else { return [] }

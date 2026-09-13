@@ -10,7 +10,7 @@ import XCTest
 /// zoom and no finer: the 64x64 cells of z0, one quad from z10 where the
 /// surface is flat.
 final class TileBackgroundQuadTests: XCTestCase {
-    private func parseBackgroundOnly(_ tile: Tile) throws -> TileMvtParser.DrawingPolygonBytes {
+    private func parseBackgroundOnly(_ tile: Tile) throws -> DrawingPolygonBytes {
         let config = ImmersiveMapSettings.default
         let parser = TileMvtParser.forTests(settings: config)
         let parsed = try parser.parse(tile: tile,
@@ -38,7 +38,7 @@ final class TileBackgroundQuadTests: XCTestCase {
             XCTAssertEqual(positions.map(\.x).max(), 4096, "z\(zoom)")
             XCTAssertEqual(positions.map(\.y).min(), 0, "z\(zoom)")
             XCTAssertEqual(positions.map(\.y).max(), 4096, "z\(zoom)")
-            XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: positions, indices: drawing.indices),
+            XCTAssertNil(ParsedPolygon.firstClockwiseTriangle(vertices: positions, indices: drawing.indices),
                          "z\(zoom): every background triangle is counter-clockwise")
         }
     }

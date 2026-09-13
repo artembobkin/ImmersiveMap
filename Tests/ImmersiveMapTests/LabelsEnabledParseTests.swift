@@ -18,7 +18,7 @@ final class LabelsEnabledParseTests: XCTestCase {
     }
 
     /// A named peak and a named primary road: one point label, one road label.
-    private func parseNamedTile(labelsEnabled: Bool) throws -> TileMvtParser.ParsedTile {
+    private func parseNamedTile(labelsEnabled: Bool) throws -> ParsedTile {
         let data = VectorTileFixture.layersTile([
             (layerName: "mountain_peak",
              features: [.init(id: 1, geometry: .point(2048, 2048), properties: ["name": "Peak", "rank": "1"])]),

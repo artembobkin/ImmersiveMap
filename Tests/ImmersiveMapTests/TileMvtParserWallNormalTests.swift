@@ -24,7 +24,7 @@ final class TileMvtParserWallNormalTests: XCTestCase {
         let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
         return parser.buildExtrudedMesh(clippedExterior: exterior,
                                         clippedInteriors: interiors,
-                                        roof: TileMvtParser.ParsedPolygon(vertices: roofVertices,
+                                        roof: ParsedPolygon(vertices: roofVertices,
                                                                           indices: [0, 1, 2, 0, 2, 3]),
                                         roofInfo: nil,
                                         baseHeight: 0,

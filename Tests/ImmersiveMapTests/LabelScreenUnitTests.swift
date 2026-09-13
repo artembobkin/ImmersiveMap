@@ -284,8 +284,8 @@ final class LabelScreenUnitTests: XCTestCase {
                        weight: .thin)
     }
 
-    private func makeTextLabel(text: String, style: LabelTextStyle) -> TileMvtParser.TextLabel {
-        TileMvtParser.TextLabel(text: text,
+    private func makeTextLabel(text: String, style: LabelTextStyle) -> ParsedTextLabel {
+        ParsedTextLabel(text: text,
                                 position: SIMD2<Int16>(2048, 2048),
                                 key: 1,
                                 sortKey: 0,

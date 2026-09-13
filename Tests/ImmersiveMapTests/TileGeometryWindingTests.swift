@@ -23,14 +23,14 @@ final class TileGeometryWindingTests: XCTestCase {
         return TileMvtParser.forTests(settings: config)
     }
 
-    private func assertCounterClockwise(_ drawing: TileMvtParser.DrawingPolygonBytes,
+    private func assertCounterClockwise(_ drawing: DrawingPolygonBytes,
                                         _ name: String,
                                         file: StaticString = #filePath,
                                         line: UInt = #line) {
         let positions = drawing.vertices.map(\.position)
         // The fill outline segment at the end is a line list, not triangles.
         let triangles = Array(drawing.triangleIndices)
-        if let triangle = TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: positions,
+        if let triangle = ParsedPolygon.firstClockwiseTriangle(vertices: positions,
                                                                              indices: triangles) {
             XCTFail("\(name): triangle \(triangle) of \(triangles.count / 3) is clockwise",
                     file: file, line: line)
@@ -130,7 +130,7 @@ final class TileGeometryWindingTests: XCTestCase {
                                                                            features: features))
         assertCounterClockwise(parsed.drawingPolygon, "ground")
         assertCounterClockwise(parsed.drawingBridgePolygon, "bridge overlay")
-        for structureKind in TileMvtParser.RoadStructureKind.allCases {
+        for structureKind in RoadStructureKind.allCases {
             let bucket = parsed.drawingRoadPhases.bucket(for: structureKind)
             for role in RoadPassRole.allCases {
                 assertCounterClockwise(bucket.layer(for: role).drawing, "\(structureKind) \(role)")

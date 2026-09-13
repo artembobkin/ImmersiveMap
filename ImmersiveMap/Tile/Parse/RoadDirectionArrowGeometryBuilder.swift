@@ -15,7 +15,7 @@ struct RoadDirectionArrowGeometryBuilder {
     /// the decoration path's one named entry into render space, and the
     /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
-                       lineWidth: Float) -> [TileMvtParser.ParsedPolygon] {
+                       lineWidth: Float) -> [ParsedPolygon] {
         guard points.count >= 2 else {
             return []
         }
@@ -43,7 +43,7 @@ struct RoadDirectionArrowGeometryBuilder {
             placements = (0..<arrowCount).map { endInset + Float($0) * actualStep }
         }
 
-        var polygons: [TileMvtParser.ParsedPolygon] = []
+        var polygons: [ParsedPolygon] = []
         polygons.reserveCapacity(placements.count * 2)
 
         let turnCheckTolerance = max(lineWidth, metrics.totalLength * 0.5)
@@ -66,7 +66,7 @@ struct RoadDirectionArrowGeometryBuilder {
 
     private func makeArrowPolygons(center: SIMD2<Float>,
                                    tangent: SIMD2<Float>,
-                                   metrics: ArrowMetrics) -> [TileMvtParser.ParsedPolygon] {
+                                   metrics: ArrowMetrics) -> [ParsedPolygon] {
         let normal = SIMD2<Float>(-tangent.y, tangent.x)
         let tailHalfWidth = metrics.tailWidth * 0.5
         let headHalfWidth = metrics.headWidth * 0.5
@@ -75,7 +75,7 @@ struct RoadDirectionArrowGeometryBuilder {
         let tailEnd = tailStart + tangent * metrics.tailLength
         let tip = tailStart + tangent * metrics.totalLength
 
-        let tailPolygon = TileMvtParser.ParsedPolygon(
+        let tailPolygon = ParsedPolygon(
             vertices: [
                 TileCoordinateSpace.quantized(tailStart + normal * tailHalfWidth),
                 TileCoordinateSpace.quantized(tailStart - normal * tailHalfWidth),
@@ -87,7 +87,7 @@ struct RoadDirectionArrowGeometryBuilder {
             indices: [0, 1, 2, 1, 3, 2]
         )
 
-        let headPolygon = TileMvtParser.ParsedPolygon(
+        let headPolygon = ParsedPolygon(
             vertices: [
                 TileCoordinateSpace.quantized(tailEnd + normal * headHalfWidth),
                 TileCoordinateSpace.quantized(tailEnd - normal * headHalfWidth),

@@ -86,7 +86,7 @@ private final class RoadLabelStyle: ImmersiveMapStyle {
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         FeatureStyle(key: 1,
                      color: SIMD4<Float>(1, 1, 1, 1),
-                     parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 8),
+                     parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8),
                      includeRoadLabelPath: true,
                      roadLabelTextStyle: roadLabelTextStyle)
     }

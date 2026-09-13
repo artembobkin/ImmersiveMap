@@ -27,12 +27,12 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         // One fill and one ribbon triangle of the same shape: after the
         // split the ribbon (line attributes present) must carry fewer
         // vertices than the fill, and both must respect their grid bound.
-        let fill = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
+        let fill = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
                                                indices: [0, 1, 2])
         var ribbon = fill
         ribbon.lineDistances = [127, 127, -127]
         ribbon.lineParameters = [0, Int16.max, Int16.max]
-        var byStyle: [UInt8: [TileMvtParser.ParsedPolygon]] = [0: [fill], 1: [ribbon]]
+        var byStyle: [UInt8: [ParsedPolygon]] = [0: [fill], 1: [ribbon]]
         GroundGeometrySubdivider.subdivideIfNeeded(&byStyle, tileZoom: 0)
 
         let splitFill = byStyle[0]![0]
@@ -45,7 +45,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         assertEdges(of: splitRibbon, within: ribbonEdgeBound)
     }
 
-    private func assertEdges(of polygon: TileMvtParser.ParsedPolygon, within bound: Float,
+    private func assertEdges(of polygon: ParsedPolygon, within bound: Float,
                              file: StaticString = #filePath, line: UInt = #line) {
         for triangle in stride(from: 0, to: polygon.indices.count, by: 3) {
             for edge in 0..<3 {
@@ -61,7 +61,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     }
 
     func testTileSpanningTriangleIsCutIntoCells() {
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
+        let polygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(0, 4096)],
                                                   indices: [0, 1, 2])
         let step = 1024
         let split = GroundGeometrySubdivider.subdivide(polygon, step: step)
@@ -86,7 +86,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     /// through every grid step that divides 4096, so the pieces are exactly
     /// the grid cells: two triangles per cell, one vertex per corner.
     func testTileQuadSubdividesIntoExactlyTheGridCells() {
-        let quad = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(4096, 4096), SIMD2(0, 4096)],
+        let quad = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(4096, 0), SIMD2(4096, 4096), SIMD2(0, 4096)],
                                                indices: [0, 1, 2, 0, 2, 3])
         for step in [64, 128, 256, 512, 1024, 2048] {
             let cells = 4096 / step
@@ -94,13 +94,13 @@ final class GroundGeometrySubdividerTests: XCTestCase {
             XCTAssertEqual(split.indices.count, cells * cells * 2 * 3, "step \(step): two triangles per cell")
             XCTAssertEqual(split.vertices.count, (cells + 1) * (cells + 1), "step \(step): one vertex per grid corner")
             XCTAssertEqual(signedArea(split), signedArea(quad), accuracy: 1, "step \(step): the pieces cover the quad")
-            XCTAssertNil(TileMvtParser.ParsedPolygon.firstClockwiseTriangle(vertices: split.vertices, indices: split.indices),
+            XCTAssertNil(ParsedPolygon.firstClockwiseTriangle(vertices: split.vertices, indices: split.indices),
                          "step \(step): every piece keeps the counter-clockwise winding")
         }
     }
 
     func testTriangleInsideOneCellPassesThroughUntouched() {
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(60, 20), SIMD2(30, 50)],
+        let polygon = ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(60, 20), SIMD2(30, 50)],
                                                   indices: [0, 1, 2])
         let split = GroundGeometrySubdivider.subdivide(polygon, step: 64)
         XCTAssertEqual(split.vertices, polygon.vertices)
@@ -111,7 +111,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     /// remapped to the deduplicated corner vertices and still name the
     /// same ring edges.
     func testFillOutlineIsRemappedToTheSplitVertices() {
-        let quad = TileMvtParser.ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(200, 10), SIMD2(200, 150), SIMD2(10, 150)],
+        let quad = ParsedPolygon(vertices: [SIMD2(10, 10), SIMD2(200, 10), SIMD2(200, 150), SIMD2(10, 150)],
                                                indices: [0, 1, 2, 0, 2, 3],
                                                outlineIndices: [0, 1, 1, 2, 2, 3, 3, 0])
         let split = GroundGeometrySubdivider.subdivide(quad, step: 64)
@@ -127,7 +127,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     func testAttributesInterpolateLinearlyAcrossASplit() {
         // A ribbon quad across one grid line at x = 64: the distance field
         // runs -127..127 across, the arc length 0..1000 along.
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
+        let polygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
                                                   indices: [0, 1, 2, 0, 2, 3],
                                                   lineDistances: [-127, -127, 127, 127],
                                                   lineParameters: [0, 1000, 1000, 0])
@@ -152,7 +152,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     func testSharedEdgesSplitIdentically() {
         // Two triangles sharing the diagonal (0,0)-(128,128), listed in
         // opposite directions: the crossing with x = 64 must be one vertex.
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 128), SIMD2(0, 128)],
+        let polygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 128), SIMD2(0, 128)],
                                                   indices: [0, 1, 2, 2, 3, 0])
         let split = GroundGeometrySubdivider.subdivide(polygon, step: 64)
         let onDiagonal = split.vertices.filter { $0.x == 64 && $0.y == 64 }
@@ -161,7 +161,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     }
 
     func testWindingIsPreserved() {
-        func crossings(_ split: TileMvtParser.ParsedPolygon) -> [Float] {
+        func crossings(_ split: ParsedPolygon) -> [Float] {
             stride(from: 0, to: split.indices.count, by: 3).map { triangle in
                 let a = split.vertices[Int(split.indices[triangle])]
                 let b = split.vertices[Int(split.indices[triangle + 1])]
@@ -170,13 +170,13 @@ final class GroundGeometrySubdividerTests: XCTestCase {
                     - (Float(b.y) - Float(a.y)) * (Float(c.x) - Float(a.x))
             }
         }
-        let counterClockwise = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(200, 0), SIMD2(0, 200)],
+        let counterClockwise = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(200, 0), SIMD2(0, 200)],
                                                            indices: [0, 1, 2])
         for cross in crossings(GroundGeometrySubdivider.subdivide(counterClockwise, step: 64)) {
             XCTAssertGreaterThan(cross, 0, "Every piece keeps the input's counter-clockwise winding")
         }
         // A ribbon quad with attributes takes the fan and the split path alike.
-        let ribbon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
+        let ribbon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(128, 0), SIMD2(128, 10), SIMD2(0, 10)],
                                                  indices: [0, 1, 2, 0, 2, 3],
                                                  lineDistances: [-127, -127, 127, 127],
                                                  lineParameters: [0, 1000, 1000, 0])
@@ -186,7 +186,7 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         // The subdivider is a pass-through, not the normalizer: a clockwise
         // input comes out clockwise in every piece. The emitters own the
         // winding contract (ParsedPolygon.firstClockwiseTriangle).
-        let clockwise = TileMvtParser.ParsedPolygon(vertices: counterClockwise.vertices, indices: [0, 2, 1])
+        let clockwise = ParsedPolygon(vertices: counterClockwise.vertices, indices: [0, 2, 1])
         let clockwisePieces = crossings(GroundGeometrySubdivider.subdivide(clockwise, step: 64))
         XCTAssertFalse(clockwisePieces.isEmpty)
         for cross in clockwisePieces {
@@ -195,14 +195,14 @@ final class GroundGeometrySubdividerTests: XCTestCase {
     }
 
     func testCoordinatesBeyondTheTileAreTolerated() {
-        let polygon = TileMvtParser.ParsedPolygon(vertices: [SIMD2(-40, -40), SIMD2(4140, -40), SIMD2(-40, 4140)],
+        let polygon = ParsedPolygon(vertices: [SIMD2(-40, -40), SIMD2(4140, -40), SIMD2(-40, 4140)],
                                                   indices: [0, 1, 2])
         let split = GroundGeometrySubdivider.subdivide(polygon, step: 1024)
         XCTAssertEqual(signedArea(split), signedArea(polygon), accuracy: 1)
         XCTAssertTrue(split.vertices.contains { $0.x < 0 }, "The stitching margin survives")
     }
 
-    private func signedArea(_ polygon: TileMvtParser.ParsedPolygon) -> Double {
+    private func signedArea(_ polygon: ParsedPolygon) -> Double {
         var area = 0.0
         for triangle in stride(from: 0, to: polygon.indices.count, by: 3) {
             let a = polygon.vertices[Int(polygon.indices[triangle])]

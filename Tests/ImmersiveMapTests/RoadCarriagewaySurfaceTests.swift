@@ -26,7 +26,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
     /// The tile as the service ships it: the roads in `transportation`, the
     /// measured surfaces and paint in the `streetscape` layer of the second
     /// archive, which the parser folds into the road layer.
-    private func parse(_ features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
+    private func parse(_ features: [VectorTileFixture.Feature]) throws -> ParsedTile {
         let streetscape = features.filter { feature in
             feature.properties["marking"] != nil
                 || feature.properties["subclass"] == "carriageway_area"

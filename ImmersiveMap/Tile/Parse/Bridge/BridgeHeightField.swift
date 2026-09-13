@@ -167,7 +167,7 @@ enum BridgeGeometry {
         return true
     }
 
-    static func centroid(of polygon: TileMvtParser.ParsedPolygon) -> SIMD2<Float> {
+    static func centroid(of polygon: ParsedPolygon) -> SIMD2<Float> {
         guard polygon.vertices.isEmpty == false else { return .zero }
         let sum = polygon.vertices.reduce(SIMD2<Float>.zero) { partial, vertex in
             partial + SIMD2<Float>(Float(vertex.x), Float(vertex.y))

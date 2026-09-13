@@ -17,7 +17,7 @@ final class TileRoadLabelsBuilder {
         self.textRenderer = textRenderer
     }
 
-    func build(roadTextLabels: [TileMvtParser.RoadTextLabel], tile: Tile) -> PreparedTileCPU.RoadLabels {
+    func build(roadTextLabels: [ParsedRoadTextLabel], tile: Tile) -> PreparedTileCPU.RoadLabels {
         let mergedRoadTextLabels = mergeRoadTextLabels(roadTextLabels)
         let tileIndices = SIMD3<Int32>(Int32(tile.x), Int32(tile.y), Int32(tile.z))
         var roadPathInputs: [TilePointInput] = []
@@ -138,7 +138,7 @@ final class TileRoadLabelsBuilder {
                                           anchors: roadLabelAnchors)
     }
 
-    private func mergeRoadTextLabels(_ roadTextLabels: [TileMvtParser.RoadTextLabel]) -> [MergedRoadTextLabel] {
+    private func mergeRoadTextLabels(_ roadTextLabels: [ParsedRoadTextLabel]) -> [MergedRoadTextLabel] {
         guard roadTextLabels.isEmpty == false else {
             return []
         }

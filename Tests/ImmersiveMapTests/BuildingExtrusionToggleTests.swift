@@ -18,7 +18,7 @@ final class BuildingExtrusionToggleTests: XCTestCase {
                                       mapStyle: ImmersiveMapTilesDefaultMapStyle())
     }
 
-    private func parseBuildingTile(extrusionEnabled: Bool) throws -> TileMvtParser.ParsedTile {
+    private func parseBuildingTile(extrusionEnabled: Bool) throws -> ParsedTile {
         let data = VectorTileFixture.layerTile(
             layerName: "building",
             features: [

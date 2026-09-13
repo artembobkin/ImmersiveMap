@@ -18,11 +18,11 @@ class ExtrudedTilePipeline {
         let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
         let fragmentFunction = library.makeFunction(name: "tileExtrudedFragmentShader")
 
-        // The 12-byte layout of TileMvtParser.ExtrudedVertexIn: quantized
+        // The 12-byte layout of ExtrudedVertexIn: quantized
         // positions fed as raw Int16 triples (the fetch converts integer
         // formats to float with the numeric value; the shader applies the
         // inverse fixed-point scale), normals as char3Normalized.
-        assert(MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride == 12,
+        assert(MemoryLayout<ExtrudedVertexIn>.stride == 12,
                "The vertex descriptor mirrors ExtrudedVertexIn byte for byte")
         let vertexDescriptor = MTLVertexDescriptor()
         vertexDescriptor.attributes[0].format = .short3
@@ -34,7 +34,7 @@ class ExtrudedTilePipeline {
         vertexDescriptor.attributes[2].format = .uchar
         vertexDescriptor.attributes[2].offset = 9
         vertexDescriptor.attributes[2].bufferIndex = 0
-        vertexDescriptor.layouts[0].stride = MemoryLayout<TileMvtParser.ExtrudedVertexIn>.stride
+        vertexDescriptor.layouts[0].stride = MemoryLayout<ExtrudedVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()

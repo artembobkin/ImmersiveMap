@@ -22,7 +22,7 @@ final class RoadSurfaceGapBridgeTests: XCTestCase {
 
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 
-    private func parse(_ features: [VectorTileFixture.Feature]) throws -> TileMvtParser.ParsedTile {
+    private func parse(_ features: [VectorTileFixture.Feature]) throws -> ParsedTile {
         try makeParser().parse(tile: tile,
                                mvtData: VectorTileFixture.layerTile(layerName: "transportation",
                                                                     features: features))
@@ -56,7 +56,7 @@ final class RoadSurfaceGapBridgeTests: XCTestCase {
 
     /// Whether any automobile-tier fill triangle covers the point (given in
     /// tile space, converted to the render space the vertices live in).
-    private func fillCovers(_ parsed: TileMvtParser.ParsedTile, tileSpacePoint: SIMD2<Float>) -> Bool {
+    private func fillCovers(_ parsed: ParsedTile, tileSpacePoint: SIMD2<Float>) -> Bool {
         let point = SIMD2<Float>(tileSpacePoint.x,
                                  TileCoordinateSpace.renderY(tileSpacePoint.y))
         let drawing = parsed.drawingRoadPhases.automobileGround.fill.drawing

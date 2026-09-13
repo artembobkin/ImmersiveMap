@@ -17,7 +17,7 @@ final class StreetscapeTests: XCTestCase {
         return TileMvtParser.forTests(settings: config)
     }
 
-    private func parse(_ data: Data, streetscape: Bool) throws -> TileMvtParser.ParsedTile {
+    private func parse(_ data: Data, streetscape: Bool) throws -> ParsedTile {
         try makeParser(streetscape: streetscape).parse(tile: tile, mvtData: data)
     }
 

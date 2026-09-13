@@ -9,13 +9,12 @@ extension TileMvtParser {
         let roadPolygonByStyle: [UInt8: [ParsedPolygon]]
         let orderedRoadPolygons: [OrderedRoadPolygon]
         let bridgePolygonByStyle: [UInt8: [ParsedPolygon]]
-        let rawLineByStyle: [UInt8: [ParsedLineRawVertices]]
         let extrudedByStyle: [UInt8: [ParsedExtrudedMesh]]
         let styles: [UInt8: FeatureStyle]
         let roadStyles: [UInt8: FeatureStyle]
         let bridgeStyles: [UInt8: FeatureStyle]
-        let textLabels: [TextLabel]
-        let roadTextLabels: [RoadTextLabel]
+        let textLabels: [ParsedTextLabel]
+        let roadTextLabels: [ParsedRoadTextLabel]
         let layerTimings: [TileParseLayerTiming]
     }
 }

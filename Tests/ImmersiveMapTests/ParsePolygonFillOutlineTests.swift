@@ -10,11 +10,11 @@ import simd
 /// antialiasing: a line list of its ring edges over the fill's own vertex
 /// order, with the edges lying on the tile boundary left out.
 final class ParsePolygonFillOutlineTests: XCTestCase {
-    private func parsed(_ polygon: Mvt.Polygon) throws -> TileMvtParser.ParsedPolygon {
+    private func parsed(_ polygon: Mvt.Polygon) throws -> ParsedPolygon {
         try XCTUnwrap(ParsePolygon().parse(polygon: polygon, tileExtent: 4096))
     }
 
-    private func outlineEdges(_ polygon: TileMvtParser.ParsedPolygon) -> [(SIMD2<Int16>, SIMD2<Int16>)] {
+    private func outlineEdges(_ polygon: ParsedPolygon) -> [(SIMD2<Int16>, SIMD2<Int16>)] {
         stride(from: 0, to: polygon.outlineIndices.count, by: 2).map { start in
             (polygon.vertices[Int(polygon.outlineIndices[start])],
              polygon.vertices[Int(polygon.outlineIndices[start + 1])])

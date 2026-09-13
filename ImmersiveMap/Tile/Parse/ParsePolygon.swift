@@ -24,7 +24,7 @@ class ParsePolygon {
     /// them happens once, inside `triangulateGeometry`.
     struct ParsedGeometry {
         let clipped: ClippedPolygon
-        let parsedPolygon: TileMvtParser.ParsedPolygon
+        let parsedPolygon: ParsedPolygon
     }
 
     private func clip(polygon: Polygon, tileExtent: Float) -> ClippedPolygon? {
@@ -87,7 +87,7 @@ class ParsePolygon {
         return triangulateGeometry(clipped: clipped, tileExtent: tileExtent)
     }
 
-    func parse(polygon: Polygon, tileExtent: Float) -> TileMvtParser.ParsedPolygon? {
+    func parse(polygon: Polygon, tileExtent: Float) -> ParsedPolygon? {
         return parseGeometry(polygon: polygon, tileExtent: tileExtent)?.parsedPolygon
     }
 
@@ -154,7 +154,7 @@ class ParsePolygon {
             || (onLine(a.y, tileExtent) && onLine(b.y, tileExtent))
     }
 
-    private func triangulateConvexExterior(exterior: [SIMD2<Float>]) -> TileMvtParser.ParsedPolygon? {
+    private func triangulateConvexExterior(exterior: [SIMD2<Float>]) -> ParsedPolygon? {
         guard exterior.count >= 3, isConvex(ring: exterior) else { return nil }
 
         var vertices: [SIMD2<Int16>] = []
@@ -177,11 +177,11 @@ class ParsePolygon {
             }
         }
 
-        return indices.isEmpty ? nil : TileMvtParser.ParsedPolygon(vertices: vertices, indices: indices)
+        return indices.isEmpty ? nil : ParsedPolygon(vertices: vertices, indices: indices)
     }
 
     private func triangulateEarcut(exterior: [SIMD2<Float>],
-                                   interiors: [[SIMD2<Float>]]) -> TileMvtParser.ParsedPolygon? {
+                                   interiors: [[SIMD2<Float>]]) -> ParsedPolygon? {
         earcutCoordinates.removeAll(keepingCapacity: true)
         earcutHoleIndices.removeAll(keepingCapacity: true)
         earcutVertices.removeAll(keepingCapacity: true)
@@ -204,7 +204,7 @@ class ParsePolygon {
                                               dim: 2)
         guard earcutIndices.isEmpty == false else { return nil }
 
-        return TileMvtParser.ParsedPolygon(vertices: Array(earcutVertices), indices: earcutIndices)
+        return ParsedPolygon(vertices: Array(earcutVertices), indices: earcutIndices)
     }
 
     private func appendRing(_ ring: [SIMD2<Float>]) {

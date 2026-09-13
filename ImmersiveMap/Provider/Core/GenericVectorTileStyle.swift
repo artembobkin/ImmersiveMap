@@ -19,7 +19,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
         self.fallbackStyle = FeatureStyle(
             key: 0,
             color: settings.fallbackFeatureColor,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100)
         )
     }
 
@@ -48,20 +48,20 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             return FeatureStyle(
                 key: key,
                 color: SIMD4<Float>(0, 0, 0, 0),
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0)
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0)
             )
         case .polygon(let color):
             return FeatureStyle(
                 key: key,
                 color: color,
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
                 fillOutlineAntialiasing: true
             )
         case .line(let color, let width):
             return FeatureStyle(
                 key: key,
                 color: color,
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: Double(max(Float(0), width)))
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: Double(max(Float(0), width)))
             )
         case .pointLockedLine(let color, let widthPoints, let dashLengthPoints, let dashGapPoints):
             return FeatureStyle.pointLockedLine(
@@ -76,7 +76,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             return FeatureStyle(
                 key: key,
                 color: color,
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
                 usesExtrusion: true,
                 extrusionHeightScale: heightScale,
                 extrusionAnchorZoom: anchorZoom,
@@ -86,14 +86,14 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             return FeatureStyle(
                 key: key,
                 color: SIMD4<Float>(0, 0, 0, 0),
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0),
                 labelTextStyle: makeLabelTextStyle(key: Int(key), style: textStyle)
             )
         case .roadLabel(let color, let width, let textStyle):
             return FeatureStyle(
                 key: key,
                 color: color,
-                parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: Double(max(Float(0), width))),
+                parseGeometryStyleData: ParseGeometryStyleData(lineWidth: Double(max(Float(0), width))),
                 includeRoadLabelPath: true,
                 roadLabelTextStyle: makeLabelTextStyle(key: Int(key), style: textStyle)
             )

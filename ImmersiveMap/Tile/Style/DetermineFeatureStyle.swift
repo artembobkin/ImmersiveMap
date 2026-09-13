@@ -12,7 +12,7 @@ class DetermineFeatureStyle {
         fallbackStyle = FeatureStyle(
             key: fallbackKey,
             color: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100)
         )
         
         self.mapStyle = mapStyle

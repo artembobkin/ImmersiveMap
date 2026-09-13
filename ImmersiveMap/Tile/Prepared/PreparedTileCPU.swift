@@ -48,7 +48,7 @@ struct PreparedTileCPU: Sendable {
     }
 
     struct Extruded {
-        let vertices: [TileMvtParser.ExtrudedVertexIn]
+        let vertices: [ExtrudedVertexIn]
         let indices: [UInt32]
         let styles: [TilePolygonStyle]
     }

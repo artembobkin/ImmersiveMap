@@ -70,7 +70,7 @@ struct LineRenderPass {
     /// with the overview-to-street handover (the motorway accent); nil bakes
     /// `color` twice.
     let streetColor: SIMD4<Float>?
-    let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
+    let parseGeometryStyleData: ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let placement: LinePlacement
     let roadPassRole: RoadPassRole
@@ -85,7 +85,7 @@ struct LineRenderPass {
          dashInTileUnits: Bool = false,
          minimumWidthPoints: Float = 0.0,
          maximumWidthPoints: Float = 0.0,
-         parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
+         parseGeometryStyleData: ParseGeometryStyleData,
          includeRoadLabelPath: Bool,
          placement: LinePlacement = .ground,
          roadPassRole: RoadPassRole = .fill) {
@@ -131,7 +131,7 @@ struct FeatureStyle {
     let minimumWidthPoints: Float
     /// See `TileLineStyle.maximumWidthPoints`.
     let maximumWidthPoints: Float
-    let parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData
+    let parseGeometryStyleData: ParseGeometryStyleData
     let includeRoadLabelPath: Bool
     let linePlacement: LinePlacement
     let lineRenderPasses: [LineRenderPass]
@@ -142,7 +142,7 @@ struct FeatureStyle {
     let extrusionFallbackHeight: Float
     let labelTextStyle: LabelTextStyle?
     let roadLabelTextStyle: LabelTextStyle?
-    let roadDecorationKind: TileMvtParser.RoadDecorationKind
+    let roadDecorationKind: RoadDecorationKind
     /// A polygon that is a carriageway surface (a junction area the tiles
     /// ship for a junction OSM maps as `area:highway`): it draws in the
     /// automobile road phases, its fill as the carriageway and its outline as
@@ -192,7 +192,7 @@ struct FeatureStyle {
         dashInTileUnits: Bool = false,
         minimumWidthPoints: Float = 0.0,
         maximumWidthPoints: Float = 0.0,
-        parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData,
+        parseGeometryStyleData: ParseGeometryStyleData,
         includeRoadLabelPath: Bool = false,
         linePlacement: LinePlacement = .ground,
         lineRenderPasses: [LineRenderPass] = [],
@@ -203,7 +203,7 @@ struct FeatureStyle {
         extrusionFallbackHeight: Float = 0,
         labelTextStyle: LabelTextStyle? = nil,
         roadLabelTextStyle: LabelTextStyle? = nil,
-        roadDecorationKind: TileMvtParser.RoadDecorationKind = .none,
+        roadDecorationKind: RoadDecorationKind = .none,
         isRoadSurfaceArea: Bool = false,
         surfaceAreaCutsPaint: Bool = false,
         isShippedRoadPaint: Bool = false,

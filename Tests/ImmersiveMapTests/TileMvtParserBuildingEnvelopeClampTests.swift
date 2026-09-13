@@ -36,7 +36,7 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
             clippedInteriors: [],
             unclippedExterior: exterior,
             hasUnclippedInteriorRings: false,
-            roof: TileMvtParser.ParsedPolygon(vertices: roofVertices, indices: [0, 1, 2]),
+            roof: ParsedPolygon(vertices: roofVertices, indices: [0, 1, 2]),
             roofInfo: nil,
             baseHeight: baseHeight,
             topHeight: topHeight

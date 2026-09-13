@@ -80,7 +80,7 @@ private final class RuntimeContextTestStyle: ImmersiveMapStyle {
         FeatureStyle(
             key: 1,
             color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 1)
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1)
         )
     }
 }

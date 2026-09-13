@@ -45,7 +45,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         self.fallbackStyle = FeatureStyle(
             key: fallbackKey,
             color: settings.fallbackFeatureColor,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100)
         )
     }
 
@@ -725,12 +725,12 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: Self.crosswalkKey,
             color: Self.roadMarkingColor,
             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: bandUnits),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: bandUnits),
             lineRenderPasses: [
                 LineRenderPass(key: Self.crosswalkKey,
                                color: Self.roadMarkingColor,
                                lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: bandUnits),
+                               parseGeometryStyleData: ParseGeometryStyleData(lineWidth: bandUnits),
                                includeRoadLabelPath: false,
                                roadPassRole: .detail)
             ],
@@ -869,7 +869,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // asphalt. No end inset and no lateral offset: the polyline IS the
         // paint, measured where it lies.
         let ribbonUnits = Double(widthPoints) * Self.roadMarkingRibbonUnitsPerPoint
-        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: ribbonUnits,
+        let geometry = ParseGeometryStyleData(lineWidth: ribbonUnits,
                                                             lineCapRound: false,
                                                             lineJoinRound: true)
         let pass = LineRenderPass(key: key,
@@ -938,7 +938,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                 LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                                color: roadCasingColor(from: classColor),
                                lowZoomFadeMask: roadLowZoomFadeMask,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: kerbWidth,
+                               parseGeometryStyleData: ParseGeometryStyleData(lineWidth: kerbWidth,
                                                                                              lineJoinRound: true),
                                includeRoadLabelPath: false,
                                roadPassRole: .casing)
@@ -948,7 +948,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             LineRenderPass(key: surfaceKey,
                            color: color,
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                           parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
         )
@@ -956,7 +956,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: surfaceKey,
             color: color,
             lowZoomFadeMask: roadLowZoomFadeMask,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
             lineRenderPasses: passes,
             roadClassPriority: priority,
             isRoadSurfaceArea: true,
@@ -982,14 +982,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
                            color: roadCasingColor(from: color),
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: kerbWidth,
+                           parseGeometryStyleData: ParseGeometryStyleData(lineWidth: kerbWidth,
                                                                                          lineJoinRound: true),
                            includeRoadLabelPath: false,
                            roadPassRole: .casing),
             LineRenderPass(key: fillKey,
                            color: color,
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+                           parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
                            includeRoadLabelPath: false,
                            roadPassRole: .fill)
         ]
@@ -1002,7 +1002,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                color: Self.roadMarkingColor,
                                lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
                                lineWidthPoints: Self.roadMarkingWidthPoints,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+                               parseGeometryStyleData: ParseGeometryStyleData(
                                    lineWidth: Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
                                ),
                                includeRoadLabelPath: false,
@@ -1013,7 +1013,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: fillKey,
             color: color,
             lowZoomFadeMask: roadLowZoomFadeMask,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
             lineRenderPasses: passes,
             roadClassPriority: 45,
             roadDecorationKind: .parkingBays,
@@ -1029,7 +1029,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// the builder does the stamping, and `isShippedRoadPaint` keeps the
     /// road machinery off the axis itself.
     private func busLaneLetterStyle() -> FeatureStyle {
-        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: 1)
+        let geometry = ParseGeometryStyleData(lineWidth: 1)
         return FeatureStyle(
             key: Self.busLaneLetterKey,
             color: Self.roadMarkingColor,
@@ -1055,7 +1055,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     /// the letter: a polygon decoration in the detail role, in the yellow
     /// road paint.
     private func busStopZigzagStyle() -> FeatureStyle {
-        let geometry = TileMvtParser.ParseGeometryStyleData(lineWidth: 1)
+        let geometry = ParseGeometryStyleData(lineWidth: 1)
         return FeatureStyle(
             key: Self.busStopZigzagKey,
             color: Self.roadMarkingYellowColor,
@@ -1174,7 +1174,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         let fillColor = tunnel ? Self.tunnelTone(veiled) : veiled
         // A dashed stroke keeps butt ends: a round cap would lay a disc past
         // the last dash of a corridor.
-        let geometry = TileMvtParser.ParseGeometryStyleData(
+        let geometry = ParseGeometryStyleData(
             lineWidth: Double(stroke.widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
             lineCapRound: dashed == false,
             lineJoinRound: true
@@ -1216,7 +1216,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         // translucent surface as a darker semicircle. The construction
         // point-dash only applies to surface segments.
         let fillGeometry = tunnel
-            ? TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
+            ? ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
             : makeRoadGeometry(width: width)
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
             ? (length: 5.0, gap: 2.5)
@@ -1331,7 +1331,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                                dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
                                dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
                                dashInTileUnits: true,
-                               parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(
+                               parseGeometryStyleData: ParseGeometryStyleData(
                                    lineWidth: markingRibbonUnits,
                                    lineCapRound: false,
                                    lineJoinRound: true,
@@ -1362,7 +1362,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         return FeatureStyle(
             key: 30,
             color: configuration.features.buildingFillColor,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0),
             usesExtrusion: true,
             extrusionHeightScale: 8.0,
             extrusionAnchorZoom: 16
@@ -1835,7 +1835,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         FeatureStyle(
             key: 90,
             color: SIMD4<Float>(0, 0, 0, 0),
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 1),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
             includeRoadLabelPath: true,
             roadClassPriority: roadLabelPriority(cls: cls),
             roadLabelTextStyle: labelTextStyle(key: 90, appearance: configuration.labels.road)
@@ -1860,7 +1860,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         FeatureStyle(
             key: fallbackKey,
             color: SIMD4<Float>(0, 0, 0, 0),
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100)
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100)
         )
     }
 
@@ -1899,7 +1899,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             streetColor: streetColor,
             farColor: far.map { SIMD4<Float>($0.color.x, $0.color.y, $0.color.z, $0.strength) },
             farStreetColor: far.map { SIMD4<Float>($0.streetColor.x, $0.streetColor.y, $0.streetColor.z, $0.strength) },
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 100),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
             fillOutlineAntialiasing: true
         )
     }
@@ -1939,7 +1939,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: key,
             color: color,
             minimumWidthPoints: minimumWidthPoints,
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: width,
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: width,
                                                                          lineCapRound: true,
                                                                          lineJoinRound: true,
                                                                          dashLength: dashLength,
@@ -1953,7 +1953,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         FeatureStyle(
             key: key,
             color: SIMD4<Float>(0, 0, 0, 0),
-            parseGeometryStyleData: TileMvtParser.ParseGeometryStyleData(lineWidth: 0),
+            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0),
             labelTextStyle: labelTextStyle(key: Int(key), appearance: appearance),
             labelMinCameraZoom: minCameraZoom
         )
@@ -1972,14 +1972,14 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
                      1.0)
     }
 
-    private func makeRoadGeometry(width: Double) -> TileMvtParser.ParseGeometryStyleData {
-        TileMvtParser.ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
+    private func makeRoadGeometry(width: Double) -> ParseGeometryStyleData {
+        ParseGeometryStyleData(lineWidth: width, lineCapRound: false, lineJoinRound: true)
     }
 
     private func makeDashedRoadGeometry(width: Double,
                                         dashLength: Double,
-                                        dashGap: Double) -> TileMvtParser.ParseGeometryStyleData {
-        TileMvtParser.ParseGeometryStyleData(lineWidth: width,
+                                        dashGap: Double) -> ParseGeometryStyleData {
+        ParseGeometryStyleData(lineWidth: width,
                                              lineCapRound: true,
                                              lineJoinRound: false,
                                              dashLength: dashLength,
