@@ -4,6 +4,22 @@
 // Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
+/// The `Earcut` module: the ear-clipping triangulator, a Swift port of
+/// mapbox/earcut v3.2.3 (ISC license, notice in `THIRD-PARTY-NOTICES.md` at
+/// the repository root). Ported are `earcut` and `deviation`. The optional
+/// `refine` pass toward a constrained Delaunay triangulation is not, since
+/// nothing in the engine reads triangle shape. The functions keep the
+/// reference implementation's names and bodies, split by phase into the
+/// `EarcutCore`, `EarcutLinkedList`, `EarcutEarClipping`, `EarcutHoles`,
+/// `EarcutHoleBridgeIndex`, `EarcutZOrder`, `EarcutGeometry` and
+/// `EarcutNodePool` files, so a diff against earcut.js still reads function by
+/// function. The target depends on nothing, not even Foundation, and knows
+/// nothing of the engine: no tile types, no SIMD vertex formats, no winding
+/// convention. Callers flatten rings into `[Double]` and read indices back.
+/// `Tests/` is the `EarcutTests` target, kept here with the fixture corpus of
+/// the ported release, which the tests run at four rotations requiring the
+/// triangle count to match the reference exactly.
+///
 /// Ear-clipping polygon triangulation: the whole surface of the `Earcut`
 /// module. Everything is `package` access: visible to every target of this
 /// package, invisible to an app that links the `ImmersiveMap` product.

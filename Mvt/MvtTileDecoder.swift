@@ -15,6 +15,20 @@ package enum MvtWireDecodeError: Error {
     case missingRequiredLayerField
 }
 
+/// The `Mvt` module: the Mapbox Vector Tile decoder, the hand-written reader
+/// of the `vector_tile.proto` wire format (version 2.1) and the types it
+/// produces, everything at `package` access so every target of the package can
+/// use it and no app can see it. This decoder walks the payload;
+/// `MvtGeometryDecoder` turns a feature's geometry field into rings straight
+/// from the packed bytes, `MvtAttributeDecoder` its tags into a dictionary,
+/// `MvtDecodedTile.merging(layersNamed:intoFirstLayerNamed:)` folds one layer
+/// into another, and `MvtValue` and the tile-space `Point` and `Polygon` are
+/// the values and geometry the engine consumes in place. The module knows no
+/// layer name, no schema meaning and no style: the engine's `MvtRoadLayerFold`
+/// names the layers it merges. Tests build tile bytes with the encoder in
+/// `TestSupport/` (the `MvtTestSupport` target), which is independent of this
+/// decoder so a round trip checks both against the specification.
+///
 /// Hand-written decoder for the Mapbox Vector Tile protobuf schema
 /// (`vector_tile.proto`, version 2.1). It is the only protobuf code in the
 /// package: the schema has four messages and seven value kinds, and reading

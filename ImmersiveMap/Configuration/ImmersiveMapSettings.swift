@@ -4,6 +4,12 @@
 import Foundation
 import simd
 
+// The `Configuration` folder: the public settings and the small planner that
+// classifies a settings change into the domains it touches. It describes
+// intent and performs no runtime side effect: no controllers mutating render,
+// tile, camera or UI state, no networking or secrets, no Metal, no tile
+// parsing or label decisions. Defaults here are safe to publish.
+
 public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct LabelLanguage: Hashable, Codable, Sendable {
         public let code: String

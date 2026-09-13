@@ -7,6 +7,15 @@ import MetalKit
 import os
 import QuartzCore
 
+/// The `Render` folder: the runtime drawing boundary. Data arrives already
+/// parsed, styled and normalized, with tile-local geometry in render space
+/// (the y-axis contract is `TileCoordinateSpace`), and this folder owns the
+/// frame engine, the render graph and passes, the Metal pipelines, shaders,
+/// GPU resources and frame attachments. No networking or disk cache policy
+/// (the night-lights texture source under `EarthScene/` fetches and caches its
+/// own raster tiles and is the one exception), no provider adaptation or label
+/// policy, no views, gestures or host-app lifecycle.
+///
 /// Owns the map's Metal frame pipeline: resources, subsystem graph, frame attachments, and the render-loop workflow.
 final class RenderFrameEngine {
     // MARK: - Dependencies

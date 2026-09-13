@@ -11,6 +11,22 @@ import Mvt
 /// the reader for its geometry kind; `TileUnificationStage` packs the
 /// result. One parser serves every parse of a map, from any thread: it
 /// holds nothing per tile, and the readers hold nothing across tiles.
+///
+/// This is the `Parse` folder's boundary. What a parse depends on comes in
+/// through the initializer and nothing else: `TileParseOptions` (the
+/// settings a parse reads, picked out of the settings tree by the caller,
+/// which is the folder's one look at `ImmersiveMapSettings`),
+/// `TileLabelDecisions` (the label policy, assembled in
+/// `VectorTileAdaptation`) and the style. What it produces is `Contract/`:
+/// `ParsedTile` and the types it is made of, plus the types the styles and
+/// the render side share with the parser, which they name directly and
+/// never through the parser's internals. One reader per geometry kind,
+/// each a struct with no state across tiles: `Ground/`, `Buildings/`,
+/// `Roads/` (with the per-layer pre-pass its line and surface readers draw
+/// from) and `Labels/`, all appending into one `ReadingStageResult`. The
+/// folder holds no label policy, no Metal, and no loading, caching or
+/// networking. Every geometry follows the y-axis contract stated once in
+/// `TileCoordinateSpace`.
 final class TileMvtParser {
     private let determineFeatureStyle: DetermineFeatureStyle
     private let options: TileParseOptions

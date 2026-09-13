@@ -8,6 +8,16 @@ import UIKit
 import AppKit
 #endif
 
+// The `UI` folder: the public SwiftUI surface, the platform host views
+// (`ImmersiveMapUIView` on iOS, `ImmersiveMapNSView` on macOS, unified as
+// `ImmersiveMapHostView`) and the runtime controllers that connect gestures,
+// camera commands, selection, settings, tiles and the render driver to the
+// engine. Platform code lives in per-platform files under `#if
+// canImport(UIKit)` and `#if os(macOS)`, never `targetEnvironment(macCatalyst)`.
+// No Metal pipelines or render graph internals (`Render`), no tile parsing,
+// styling or caching, no provider label policy, no host-app delegates or
+// launch environment, no keys or secrets.
+
 public struct ImmersiveMapView: View {
     var settings: ImmersiveMapSettings
     private var cameraPosition: ImmersiveMapCameraPosition?

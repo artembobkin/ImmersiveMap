@@ -8,6 +8,11 @@
 
 import simd
 
+/// The `Geo` folder: the projection and great-circle math the engine shares
+/// (coordinate conversion, path sampling) with no knowledge of providers,
+/// render passes or UI. Small, deterministic, and free of camera controllers,
+/// Metal resources, tile loading, and label or avatar runtime state. The tile
+/// geometry y-axis contract is `TileCoordinateSpace`.
 enum ImmersiveMapProjection {
     static let maxMercatorLatitude = 2.0 * atan(exp(Double.pi)) - (Double.pi * 0.5)
 

@@ -9,6 +9,13 @@
 import Metal
 import simd
 
+/// The `Labels` folder: runtime label state after the provider-specific
+/// decisions have been made in `VectorTileAdaptation`: the base and road label
+/// caches, collision inputs, draw batches, placement metadata and the visible
+/// tile indices, plus the POI sprite resolution over already normalized data.
+/// It never knows the raw provider schema, the language fallback or the label
+/// identity rules, and holds no Metal, no tile loading or parsing, and no
+/// views.
 final class BaseLabelCache {
     private struct TileRecord {
         let ownerKey: VisibleTile

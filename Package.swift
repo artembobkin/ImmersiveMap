@@ -22,7 +22,7 @@ let package = Package(
         .target(
             name: "Earcut",
             path: "Earcut",
-            exclude: ["README.md", "Tests"]
+            exclude: ["Tests"]
         ),
         // The Mapbox Vector Tile decoder: the wire format, the decoded model
         // and the tile-space geometry it produces. Its own module for the same
@@ -32,7 +32,7 @@ let package = Package(
         .target(
             name: "Mvt",
             path: "Mvt",
-            exclude: ["README.md", "Tests", "TestSupport"]
+            exclude: ["Tests", "TestSupport"]
         ),
         .target(
             name: "MvtTestSupport",
@@ -43,29 +43,6 @@ let package = Package(
             name: "ImmersiveMap",
             dependencies: ["Earcut", "Mvt"],
             path: "ImmersiveMap",
-            exclude: [
-                "Avatars/README.md",
-                "Camera/README.md",
-                "Configuration/README.md",
-                "Geo/README.md",
-                "Globe/README.md",
-                "Horizon/README.md",
-                "ImmersiveMap.docc/README.md",
-                "Labels/README.md",
-                "Markers/README.md",
-                "Presentation/README.md",
-                "Render/README.md",
-                "SceneModels/README.md",
-                "Starfield/README.md",
-                "StillCapture/README.md",
-                "Text/README.md",
-                "Tile/Parse/README.md",
-                "Tile/README.md",
-                "UI/README.md",
-                "Utils/README.md",
-                "VectorTileAdaptation/README.md",
-                "VideoExport/README.md"
-            ],
             resources: [
                 .process("Render/Avatars/Resources/avatar_marker_sdf.json"),
                 .process("Render/Avatars/Resources/avatar_marker_sdf.png"),

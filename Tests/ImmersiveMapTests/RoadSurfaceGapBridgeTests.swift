@@ -47,7 +47,7 @@ final class RoadSurfaceGapBridgeTests: XCTestCase {
         return .init(id: id, geometry: .polygon(ring: ring), properties: properties)
     }
 
-    /// Deliberately OFF the tile centre and y-asymmetric (see Tile/README.md):
+    /// Deliberately OFF the tile centre and y-asymmetric (see TileCoordinateSpace):
     /// two pieces of one street with a 40-unit slit (about 3.4 m at this
     /// tile) between their facing trim edges.
     private let westPiece: [(Int32, Int32)] = [(600, 700), (1400, 700), (1400, 950), (600, 950)]

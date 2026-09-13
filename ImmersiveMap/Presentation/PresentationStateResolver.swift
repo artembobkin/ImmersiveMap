@@ -4,6 +4,11 @@
 import Foundation
 import simd
 
+/// The `Presentation` folder: the resolved presentation state (globe, flat,
+/// the transition between them) that camera, tile, globe and render layers
+/// share, computed from camera and view-mode input. It owns neither the UI
+/// surface that receives gestures nor the renderer: no views, no Metal, no
+/// tile loading, no provider styling or label rules.
 struct PresentationStateResolver {
     static func resolve(cameraState: ImmersiveMapCameraState,
                         renderSurfaceMode: ViewMode) -> ResolvedPresentationState {

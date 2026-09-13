@@ -3,6 +3,14 @@
 
 import Foundation
 
+/// The `Tile` folder: tile identity, loading, parsing, styling, visibility and
+/// placement, the CPU pipeline from a tile request to the prepared content the
+/// renderer consumes. No Metal, render passes or GPU resources, no views,
+/// gestures or display link, no provider-specific label policy (that is
+/// `VectorTileAdaptation`), no runtime label state (`Labels`), and no keys,
+/// tokens or private endpoints. Every geometry here follows the y-axis
+/// contract stated once in `TileCoordinateSpace`.
+///
 /// Content identity of a vector tile.
 struct Tile: Hashable {
     let x: Int

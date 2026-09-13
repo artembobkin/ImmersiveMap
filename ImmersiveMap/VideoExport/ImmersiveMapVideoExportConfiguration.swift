@@ -3,6 +3,14 @@
 
 import Foundation
 
+// The `VideoExport` folder: the AVFoundation side of offline tour video
+// export, the public configuration, progress and error types and the
+// QuickTime writer that encodes rendered frames (HEVC or H.264, fixed-step
+// presentation times, BT.709). The rendering side (offscreen targets, the
+// scripted clock, pixel-buffer textures) is `Render`, the recorder and the
+// export frame loop are `UI`. No Metal here, no views, no camera, tile, label
+// or avatar state, no networking.
+
 /// Configuration of an offline tour video export: output dimensions, frame
 /// rate, codec, and readiness policy.
 ///

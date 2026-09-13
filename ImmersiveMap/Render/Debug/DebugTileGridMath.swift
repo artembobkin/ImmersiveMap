@@ -43,11 +43,11 @@ struct TileGridLineSegment {
 ///
 /// **Coordinate convention, which is the whole point of the overlay.** The
 /// bounds a cell prints are TILE space (raw `.mvt` units, y south from the
-/// north edge; see the contract in `Tile/README.md` and
-/// `TileCoordinateSpace`) - exactly what a tile decoder, a grep over tile
-/// bodies or the pipeline's GeoJSON shows, so a stamp can be pasted into any
-/// of them unchanged. The first cut printed y in render space instead, and
-/// the very first debugging session went to the mirrored half of the tile.
+/// north edge; see the contract in `TileCoordinateSpace`) - exactly what a
+/// tile decoder, a grep over tile bodies or the pipeline's GeoJSON shows, so
+/// a stamp can be pasted into any of them unchanged. The first cut printed y
+/// in render space instead, and the very first debugging session went to the
+/// mirrored half of the tile.
 ///
 /// A cell code is the same box spelled differently: the letter is the column
 /// index counted from the west (A is x 0 upward), the number is the row index

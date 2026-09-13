@@ -30,6 +30,12 @@ struct GlobeTileStaticVisibilityBound {
     let radiusScale: Float
 }
 
+/// The `Globe` folder: the CPU-side globe models that tile visibility,
+/// presentation and renderer setup share, such as the globe uniforms and the
+/// tile visibility bounds and their caching. Globe math only: no Metal
+/// pipelines or shaders, no tile loading or parsing, no UI, no provider
+/// adaptation, and no flat-map visibility, which belongs to `Tile` and
+/// `Presentation`.
 enum GlobeVisibilityModel {
     private static let staticBoundsCache = GlobeTileStaticBoundsCache()
 

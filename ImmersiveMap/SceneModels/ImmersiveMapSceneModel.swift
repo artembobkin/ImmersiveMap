@@ -3,6 +3,14 @@
 
 import Foundation
 
+// The `SceneModels` folder: the engine-side model and CPU presentation of 3D
+// models anchored at coordinates, from the public descriptor to the per-frame
+// presentation state (position, orientation, scale, altitude, the flight
+// along an `ImmersiveMapGeoPath` through the shared sampler in `Geo`) and the
+// hit volumes `Selection` resolves a tap against. Model I/O loading and
+// drawing are `Render/SceneModels`: no Metal here, no tile, style or label
+// logic, no views, and no networking, since sources are local file URLs only.
+
 /// A 3D model (USDZ or OBJ, loaded via Model I/O) anchored at a geographic
 /// coordinate. Rendered inside the map world pass in flat, globe, and the
 /// morph between them. Sized in real-world meters with the Web-Mercator

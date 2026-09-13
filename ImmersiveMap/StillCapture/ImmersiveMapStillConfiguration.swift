@@ -4,6 +4,13 @@
 import CoreGraphics
 import Foundation
 
+// The `StillCapture` folder: the public value types for rendering one frame
+// offscreen into an image, the configuration and its error, and the
+// validation of the capture geometry before any GPU work. The still sibling
+// of `VideoExport`, kept apart because it shares none of that machinery: no
+// AVFoundation or encoder. The rendering side is `Render`, the recorder and
+// the capture loop `UI/Export`. No Metal, no views, no map state.
+
 /// How one still of the map is rendered.
 public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
     public static let `default` = ImmersiveMapStillConfiguration()
