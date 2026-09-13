@@ -1,14 +1,14 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port; the ISC notice heads EarcutCore.swift and
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
 // Allocating nodes in the pool and relinking them: the only code that
 // writes the prev/next and prevZ/nextZ fields.
 extension EarcutCore {
-    /// Links two polygon vertices with a bridge; if the vertices belong to the
-    /// same ring, it splits the polygon into two; if one belongs to the outer
+    /// Links two polygon vertices with a bridge. If the vertices belong to the
+    /// same ring, it splits the polygon into two. If one belongs to the outer
     /// ring and another to a hole, it merges them into a single ring.
     func splitPolygon(_ a: Int32, _ b: Int32) -> Int32 {
         let a2 = makeNode(i: nodes[Int(a)].i, x: nodes[Int(a)].x, y: nodes[Int(a)].y)
@@ -59,6 +59,12 @@ extension EarcutCore {
         }
         if node.nextZ != Self.nilIndex {
             nodes[Int(node.nextZ)].prevZ = node.prevZ
+        }
+
+        // Keep the hole-bridge index's block boxes covering the healed
+        // prev -> next edge.
+        if indexActive {
+            growBlock(head: node.prev, tail: node.next)
         }
     }
 

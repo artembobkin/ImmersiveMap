@@ -1,89 +1,109 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port; the ISC notice heads EarcutCore.swift and
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
 // The z-order (Morton) curve over the ring, which is what makes the ear
 // test on a large polygon a local scan instead of a full ring walk.
 extension EarcutCore {
-    /// Interlinks polygon nodes in z-order.
+    /// Interlinks polygon nodes in z-order: collects them into an array,
+    /// sorts by z, relinks.
     func indexCurve(start: Int32) {
+        sortArr.removeAll(keepingCapacity: true)
         var p = start
         repeat {
-            if nodes[Int(p)].z == 0 {
-                nodes[Int(p)].z = zOrder(nodes[Int(p)].x, nodes[Int(p)].y)
-            }
-            nodes[Int(p)].prevZ = nodes[Int(p)].prev
-            nodes[Int(p)].nextZ = nodes[Int(p)].next
+            // Always (re)compute: z may still hold a block index left over
+            // from eliminateHoles.
+            nodes[Int(p)].z = zOrder(nodes[Int(p)].x, nodes[Int(p)].y)
+            sortArr.append(p)
             p = nodes[Int(p)].next
         } while p != start
 
-        let lastZ = nodes[Int(p)].prevZ
-        nodes[Int(lastZ)].nextZ = Self.nilIndex
-        nodes[Int(p)].prevZ = Self.nilIndex
+        sortNodes()
 
-        _ = sortLinked(list: p)
-    }
-
-    /// Simon Tatham's linked-list merge sort, over the z links.
-    private func sortLinked(list providedList: Int32) -> Int32 {
-        var list = providedList
-        var inSize = 1
-
-        var numMerges = 0
-        repeat {
-            var p = list
-            list = Self.nilIndex
-            var tail = Self.nilIndex
-            numMerges = 0
-
-            while p != Self.nilIndex {
-                numMerges += 1
-                var q = p
-                var pSize = 0
-                for _ in 0..<inSize {
-                    pSize += 1
-                    q = nodes[Int(q)].nextZ
-                    if q == Self.nilIndex { break }
-                }
-                var qSize = inSize
-
-                while pSize > 0 || (qSize > 0 && q != Self.nilIndex) {
-                    let e: Int32
-                    if pSize != 0,
-                       qSize == 0 || q == Self.nilIndex || nodes[Int(p)].z <= nodes[Int(q)].z {
-                        e = p
-                        p = nodes[Int(p)].nextZ
-                        pSize -= 1
-                    } else {
-                        e = q
-                        q = nodes[Int(q)].nextZ
-                        qSize -= 1
-                    }
-
-                    if tail != Self.nilIndex {
-                        nodes[Int(tail)].nextZ = e
-                    } else {
-                        list = e
-                    }
-
-                    nodes[Int(e)].prevZ = tail
-                    tail = e
-                }
-
-                p = q
+        var prev = Self.nilIndex
+        for node in sortArr {
+            nodes[Int(node)].prevZ = prev
+            if prev != Self.nilIndex {
+                nodes[Int(prev)].nextZ = node
             }
-
-            nodes[Int(tail)].nextZ = Self.nilIndex
-            inSize *= 2
-        } while numMerges > 1
-
-        return list
+            prev = node
+        }
+        nodes[Int(prev)].nextZ = Self.nilIndex
     }
 
-    /// z-order of a point given coords and inverse of the longer side of the
-    /// data bbox.
+    /// Sorts `sortArr` by z in place: insertion sort for a short list
+    /// (cheaper than the histogram setup), else LSD radix in four 8-bit
+    /// passes (covering z's 30 bits). Both are stable, so nodes of equal z
+    /// keep ring order, the order the reference implementation produces.
+    private func sortNodes() {
+        let n = sortArr.count
+        if n <= 32 {
+            var i = 1
+            while i < n {
+                let node = sortArr[i]
+                let z = nodes[Int(node)].z
+                var j = i - 1
+                while j >= 0, nodes[Int(sortArr[j])].z > z {
+                    sortArr[j + 1] = sortArr[j]
+                    j -= 1
+                }
+                sortArr[j + 1] = node
+                i += 1
+            }
+            return
+        }
+
+        if zArr.count < n {
+            zArr = [UInt32](repeating: 0, count: n)
+            zBuf = [UInt32](repeating: 0, count: n)
+            sortBuf = [Int32](repeating: 0, count: n)
+        }
+        if counts.isEmpty {
+            counts = [Int](repeating: 0, count: 256)
+        }
+        for i in 0..<n {
+            zArr[i] = UInt32(nodes[Int(sortArr[i])].z)
+        }
+
+        // An even pass count lands the sorted result back in sortArr.
+        Self.radixPass(n: n, src: sortArr, srcZ: zArr, dst: &sortBuf, dstZ: &zBuf, counts: &counts, shift: 0)
+        Self.radixPass(n: n, src: sortBuf, srcZ: zBuf, dst: &sortArr, dstZ: &zArr, counts: &counts, shift: 8)
+        Self.radixPass(n: n, src: sortArr, srcZ: zArr, dst: &sortBuf, dstZ: &zBuf, counts: &counts, shift: 16)
+        Self.radixPass(n: n, src: sortBuf, srcZ: zBuf, dst: &sortArr, dstZ: &zArr, counts: &counts, shift: 24)
+    }
+
+    /// One LSD radix pass: stably scatters the first n nodes (and their z)
+    /// from src to dst, bucketed by the 8-bit digit of z at the given shift.
+    private static func radixPass(n: Int,
+                                  src: [Int32], srcZ: [UInt32],
+                                  dst: inout [Int32], dstZ: inout [UInt32],
+                                  counts: inout [Int],
+                                  shift: UInt32) {
+        for b in 0..<256 { counts[b] = 0 }
+        for i in 0..<n {
+            counts[Int((srcZ[i] >> shift) & 0xFF)] += 1
+        }
+        // Turn per-bucket counts into start offsets (prefix sum).
+        var sum = 0
+        for b in 0..<256 {
+            let c = counts[b]
+            counts[b] = sum
+            sum += c
+        }
+        for i in 0..<n {
+            let z = srcZ[i]
+            let bucket = Int((z >> shift) & 0xFF)
+            let pos = counts[bucket]
+            counts[bucket] = pos + 1
+            dst[pos] = src[i]
+            dstZ[pos] = z
+        }
+    }
+
+    /// z-order of a point given coords and inverse of the longer side of
+    /// the data bbox.
     func zOrder(_ xCoordinate: Double, _ yCoordinate: Double) -> Int32 {
         // Coords are transformed into a non-negative 15-bit integer range.
         // Clamping (instead of the JS |0 wraparound) keeps points outside the

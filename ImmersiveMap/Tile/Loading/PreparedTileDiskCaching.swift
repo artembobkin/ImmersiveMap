@@ -745,7 +745,10 @@ final class PreparedTileDiskCaching {
     // 91: fill triangles are wound counter-clockwise on the rounded
     // vertices; a v90 entry of a sliver fill can carry a triangle that
     // back-face culling drops.
-    static let preparedFormatVersion: UInt32 = 91
+    // 92: fills are triangulated by the earcut port brought up to v3.2.3
+    // (hole bridging on touching, coincident and self-tangent holes); a v91
+    // entry of such a fill can leave part of it uncovered.
+    static let preparedFormatVersion: UInt32 = 92
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

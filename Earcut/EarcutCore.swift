@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Port of mapbox/earcut (https://github.com/mapbox/earcut), ISC license:
+// Port of mapbox/earcut (https://github.com/mapbox/earcut) v3.2.3, ISC license:
 //   Copyright (c) 2016, Mapbox
 //   Permission to use, copy, modify, and/or distribute this software for any
 //   purpose with or without fee is hereby granted, provided that the above
@@ -11,17 +11,22 @@
 // stores nodes as plain structs in one contiguous pool linked by Int32 indices.
 // The previous dependency (SwiftEarcut) modeled nodes as classes with `weak`
 // back references, which made every linked-list hop in the ear-clipping loops
-// pay ARC plus weak-table traffic; on an ocean polygon with dozens of island
+// pay ARC plus weak-table traffic. On an ocean polygon with dozens of island
 // holes that was ~48 ms per tile. The flat pool triangulates the same input in
 // well under a millisecond.
+//
+// What is ported is the triangulator: `earcut` and `deviation`. The optional
+// `refine` post-pass of v3.2 (Lawson flips toward a constrained Delaunay
+// triangulation) is not, because nothing in the engine reads triangle shape:
+// fills are flat-shaded and the globe subdivides them on a grid regardless.
 
 // One triangulation of one polygon: the node pool, the state every phase of
 // the algorithm reads, and `run`, which is the algorithm top to bottom. The
 // phases themselves are extensions in the sibling files. Members are internal
-// only so those files can reach them; nothing outside this target sees the
+// only so those files can reach them. Nothing outside this target sees the
 // type at all.
 final class EarcutCore {
-    /// Ring/z-list node. Links are indices into `nodes`; `nilIndex` plays null.
+    /// Ring/z-list node. Links are indices into `nodes`, and `nilIndex` plays null.
     struct Node {
         var x: Double
         var y: Double
@@ -31,9 +36,13 @@ final class EarcutCore {
         var next: Int32
         var prevZ: Int32
         var nextZ: Int32
-        /// z-order curve value; 0 doubles as "not yet computed" like in
-        /// earcut.js (recomputing the legitimate 0 value is harmless).
+        /// z-order curve value once `indexCurve` has run. While
+        /// `eliminateHoles` merges holes it holds the index of the block
+        /// that owns the node in the hole-bridge index instead, which is why
+        /// `indexCurve` always recomputes it.
         var z: Int32
+        /// A single-vertex hole (a Steiner point), which `filterPoints`
+        /// must keep even though it carries no shape.
         var steiner: Bool
     }
 
@@ -47,6 +56,32 @@ final class EarcutCore {
     var minY = 0.0
     var invSize = 0.0
 
+    /// Set by `filterPoints` whenever it removes at least one node. The stall
+    /// handler in `earcutLinked` reads it to decide whether another clipping
+    /// pass is worth attempting before the costlier stages.
+    var filteredOut = false
+
+    // The hole-bridge block index (EarcutHoleBridgeIndex.swift): one bounding
+    // box per run of ring edges, so the ray scans of `findHoleBridge` skip
+    // whole runs instead of walking the merged ring.
+    var blockBBox: [Double] = []
+    var blockHead: [Int32] = []
+    var blockStop: [Int32] = []
+    /// True only while `eliminateHoles` merges holes, so `removeNode` keeps
+    /// the block boxes covering the edges `filterPoints` heals.
+    var indexActive = false
+
+    // Scratch for the z-order sort (EarcutZOrder.swift): the node list being
+    // sorted, its ping-pong buffer, the z values read from contiguous memory
+    // during the radix passes, and the 256-entry digit histogram. All empty
+    // until a ring is long enough to need them, so a small polygon pays for
+    // none of it.
+    var sortArr: [Int32] = []
+    var sortBuf: [Int32] = []
+    var zArr: [UInt32] = []
+    var zBuf: [UInt32] = []
+    var counts: [Int] = []
+
     init(data: [Double], dim: Int) {
         self.data = data
         self.dim = dim
@@ -56,8 +91,8 @@ final class EarcutCore {
         let hasHoles = holeIndices.isEmpty == false
         let outerLen = hasHoles ? holeIndices[0] * dim : data.count
         let vertexCount = data.count / dim
-        // Ring nodes + two per hole bridge; splits during pass 2 can add more,
-        // the pool just grows then.
+        // Ring nodes + two per hole bridge. Splits during the last-resort
+        // pass can add more, and the pool just grows then.
         nodes.reserveCapacity(vertexCount + 2 * holeIndices.count)
         triangles.reserveCapacity(max(0, (vertexCount - 2) * 3))
 
@@ -73,7 +108,7 @@ final class EarcutCore {
         }
 
         // For non-trivial polygons a z-order curve hash accelerates the
-        // point-in-ear tests; the bounding box intentionally covers the outer
+        // point-in-ear tests. The bounding box intentionally covers the outer
         // ring only, exactly like the reference implementation.
         if data.count > 80 * dim {
             minX = data[0]
@@ -94,7 +129,7 @@ final class EarcutCore {
             invSize = invSize != 0 ? 32767 / invSize : 0
         }
 
-        earcutLinked(ear: outerNode, pass: 0)
+        earcutLinked(ear: outerNode)
         return triangles
     }
 }

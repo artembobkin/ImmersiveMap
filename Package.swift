@@ -87,7 +87,8 @@ let package = Package(
         .testTarget(
             name: "EarcutTests",
             dependencies: ["Earcut"],
-            path: "Earcut/Tests"
+            path: "Earcut/Tests",
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "MvtTests",

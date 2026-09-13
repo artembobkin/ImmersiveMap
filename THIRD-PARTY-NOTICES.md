@@ -6,8 +6,10 @@ to include in an app's acknowledgements screen.
 
 ## earcut (Mapbox)
 
-The `Earcut` target (`Earcut/Earcut.swift`) is a Swift port of
-[mapbox/earcut](https://github.com/mapbox/earcut), used under the ISC license:
+The `Earcut` target (`Earcut/`) is a Swift port of
+[mapbox/earcut](https://github.com/mapbox/earcut) v3.2.3, and its tests run
+the fixture corpus of that release (`Earcut/Tests/Fixtures/`, copied from the
+upstream `test/` folder), both used under the ISC license:
 
 ```text
 ISC License

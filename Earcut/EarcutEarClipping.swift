@@ -1,41 +1,40 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port; the ISC notice heads EarcutCore.swift and
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
 // The ear slicing loop itself: the ear test in both its plain and its
-// z-order hashed form, and the two fallbacks a stuck polygon falls through.
+// z-order hashed form, and the fallbacks a stuck polygon falls through.
 extension EarcutCore {
     /// Main ear slicing loop which triangulates a polygon (given as a linked
     /// list).
-    func earcutLinked(ear startEar: Int32, pass: Int) {
+    func earcutLinked(ear startEar: Int32) {
         var ear = startEar
         guard ear != Self.nilIndex else { return }
 
         // Interlink polygon nodes in z-order.
-        if pass == 0 && invSize != 0 {
+        if invSize != 0 {
             indexCurve(start: ear)
         }
 
         var stop = ear
+        var cured = false
 
         // Iterate through ears, slicing them one by one.
         while nodes[Int(ear)].prev != nodes[Int(ear)].next {
             let prev = nodes[Int(ear)].prev
             let next = nodes[Int(ear)].next
 
-            if invSize != 0 ? isEarHashed(ear) : isEar(ear) {
+            if area(prev, ear, next) < 0, invSize != 0 ? isEarHashed(ear) : isEar(ear) {
                 // Cut off the triangle.
                 triangles.append(UInt32(nodes[Int(prev)].i))
                 triangles.append(UInt32(nodes[Int(ear)].i))
                 triangles.append(UInt32(nodes[Int(next)].i))
 
                 removeNode(ear)
-
-                // Skipping the next vertex leads to fewer sliver triangles.
-                ear = nodes[Int(next)].next
-                stop = ear
+                ear = next
+                stop = next
                 continue
             }
 
@@ -43,43 +42,53 @@ extension EarcutCore {
 
             // The whole remaining polygon was scanned and no ear was found.
             if ear == stop {
-                if pass == 0 {
-                    // Try filtering points and slicing again.
-                    earcutLinked(ear: filterPoints(start: ear), pass: 1)
-                } else if pass == 1 {
-                    // Try curing all small self-intersections locally.
-                    let cured = cureLocalIntersections(start: filterPoints(start: ear))
-                    earcutLinked(ear: cured, pass: 2)
-                } else if pass == 2 {
-                    // As a last resort, try splitting the remaining polygon
-                    // into two.
-                    splitEarcut(start: ear)
+                // Try filtering collinear/coincident points and slicing
+                // again, and repeat as long as filtering actually removes
+                // nodes, since each removal can expose new ears.
+                filteredOut = false
+                ear = filterPoints(start: ear)
+                if filteredOut {
+                    stop = ear
+                    continue
                 }
+
+                // Filtering is exhausted: cure small local self-intersections
+                // once, then retry.
+                if cured == false {
+                    ear = cureLocalIntersections(start: ear)
+                    stop = ear
+                    cured = true
+                    continue
+                }
+
+                // As a last resort, try splitting the remaining polygon into
+                // two.
+                splitEarcut(start: ear)
                 break
             }
         }
     }
 
-    /// Whether a polygon node forms a valid ear with adjacent nodes.
+    /// Whether a polygon node forms a valid ear with adjacent nodes. The
+    /// reflex check (`area(a, b, c) >= 0`) is hoisted into `earcutLinked`.
     private func isEar(_ ear: Int32) -> Bool {
         let a = nodes[Int(ear)].prev
-        let b = ear
         let c = nodes[Int(ear)].next
 
-        if area(a, b, c) >= 0 { return false } // reflex, can't be an ear
-
         let ax = nodes[Int(a)].x, ay = nodes[Int(a)].y
-        let bx = nodes[Int(b)].x, by = nodes[Int(b)].y
+        let bx = nodes[Int(ear)].x, by = nodes[Int(ear)].y
         let cx = nodes[Int(c)].x, cy = nodes[Int(c)].y
 
         // Triangle bbox.
         let x0 = min(ax, bx, cx), y0 = min(ay, by, cy)
         let x1 = max(ax, bx, cx), y1 = max(ay, by, cy)
 
+        // Make sure we don't have other points inside the potential ear.
         var p = nodes[Int(c)].next
         while p != a {
             let node = nodes[Int(p)]
             if node.x >= x0, node.x <= x1, node.y >= y0, node.y <= y1,
+               (ax == node.x && ay == node.y) == false,
                pointInTriangle(ax, ay, bx, by, cx, cy, node.x, node.y),
                area(node.prev, p, node.next) >= 0 {
                 return false
@@ -90,15 +99,14 @@ extension EarcutCore {
         return true
     }
 
+    /// The ear test over the z-order neighbourhood. The reflex check is
+    /// hoisted into `earcutLinked` like for `isEar`.
     private func isEarHashed(_ ear: Int32) -> Bool {
         let a = nodes[Int(ear)].prev
-        let b = ear
         let c = nodes[Int(ear)].next
 
-        if area(a, b, c) >= 0 { return false } // reflex, can't be an ear
-
         let ax = nodes[Int(a)].x, ay = nodes[Int(a)].y
-        let bx = nodes[Int(b)].x, by = nodes[Int(b)].y
+        let bx = nodes[Int(ear)].x, by = nodes[Int(ear)].y
         let cx = nodes[Int(c)].x, cy = nodes[Int(c)].y
 
         // Triangle bbox.
@@ -109,49 +117,30 @@ extension EarcutCore {
         let minZ = zOrder(x0, y0)
         let maxZ = zOrder(x1, y1)
 
+        // Look for points inside the triangle in decreasing z-order.
         var p = nodes[Int(ear)].prevZ
-        var n = nodes[Int(ear)].nextZ
-
-        // Look for points inside the triangle in both directions.
-        while p != Self.nilIndex, nodes[Int(p)].z >= minZ,
-              n != Self.nilIndex, nodes[Int(n)].z <= maxZ {
-            let pNode = nodes[Int(p)]
-            if pNode.x >= x0, pNode.x <= x1, pNode.y >= y0, pNode.y <= y1, p != a, p != c,
-               pointInTriangle(ax, ay, bx, by, cx, cy, pNode.x, pNode.y),
-               area(pNode.prev, p, pNode.next) >= 0 {
-                return false
-            }
-            p = pNode.prevZ
-
-            let nNode = nodes[Int(n)]
-            if nNode.x >= x0, nNode.x <= x1, nNode.y >= y0, nNode.y <= y1, n != a, n != c,
-               pointInTriangle(ax, ay, bx, by, cx, cy, nNode.x, nNode.y),
-               area(nNode.prev, n, nNode.next) >= 0 {
-                return false
-            }
-            n = nNode.nextZ
-        }
-
-        // Look for remaining points in decreasing z-order.
         while p != Self.nilIndex, nodes[Int(p)].z >= minZ {
-            let pNode = nodes[Int(p)]
-            if pNode.x >= x0, pNode.x <= x1, pNode.y >= y0, pNode.y <= y1, p != a, p != c,
-               pointInTriangle(ax, ay, bx, by, cx, cy, pNode.x, pNode.y),
-               area(pNode.prev, p, pNode.next) >= 0 {
+            let node = nodes[Int(p)]
+            if node.x >= x0, node.x <= x1, node.y >= y0, node.y <= y1, p != c,
+               (ax == node.x && ay == node.y) == false,
+               pointInTriangle(ax, ay, bx, by, cx, cy, node.x, node.y),
+               area(node.prev, p, node.next) >= 0 {
                 return false
             }
-            p = pNode.prevZ
+            p = node.prevZ
         }
 
-        // Look for remaining points in increasing z-order.
+        // Look for points in increasing z-order.
+        var n = nodes[Int(ear)].nextZ
         while n != Self.nilIndex, nodes[Int(n)].z <= maxZ {
-            let nNode = nodes[Int(n)]
-            if nNode.x >= x0, nNode.x <= x1, nNode.y >= y0, nNode.y <= y1, n != a, n != c,
-               pointInTriangle(ax, ay, bx, by, cx, cy, nNode.x, nNode.y),
-               area(nNode.prev, n, nNode.next) >= 0 {
+            let node = nodes[Int(n)]
+            if node.x >= x0, node.x <= x1, node.y >= y0, node.y <= y1, n != c,
+               (ax == node.x && ay == node.y) == false,
+               pointInTriangle(ax, ay, bx, by, cx, cy, node.x, node.y),
+               area(node.prev, n, node.next) >= 0 {
                 return false
             }
-            n = nNode.nextZ
+            n = node.nextZ
         }
 
         return true
@@ -161,15 +150,14 @@ extension EarcutCore {
     /// self-intersections.
     private func cureLocalIntersections(start providedStart: Int32) -> Int32 {
         var start = providedStart
-        guard start != Self.nilIndex else { return start }
         var p = start
+        var cured = false
         repeat {
             let a = nodes[Int(p)].prev
             let pNext = nodes[Int(p)].next
             let b = nodes[Int(pNext)].next
 
-            if equals(a, b) == false,
-               intersects(a, p, pNext, b),
+            if intersects(a, p, pNext, b, includeBoundary: false),
                locallyInside(a, b), locallyInside(b, a) {
                 triangles.append(UInt32(nodes[Int(a)].i))
                 triangles.append(UInt32(nodes[Int(p)].i))
@@ -181,11 +169,12 @@ extension EarcutCore {
 
                 p = b
                 start = b
+                cured = true
             }
             p = nodes[Int(p)].next
         } while p != start
 
-        return filterPoints(start: p)
+        return cured ? filterPoints(start: p) : p
     }
 
     /// Tries splitting the polygon into two and triangulating them
@@ -201,12 +190,12 @@ extension EarcutCore {
                     var c = splitPolygon(a, b)
 
                     // Filter colinear points around the cuts.
-                    let filteredA = filterPoints(start: a, end: nodes[Int(a)].next)
+                    a = filterPoints(start: a, end: nodes[Int(a)].next)
                     c = filterPoints(start: c, end: nodes[Int(c)].next)
 
                     // Run earcut on each half.
-                    earcutLinked(ear: filteredA, pass: 0)
-                    earcutLinked(ear: c, pass: 0)
+                    earcutLinked(ear: a)
+                    earcutLinked(ear: c)
                     return
                 }
                 b = nodes[Int(b)].next

@@ -92,7 +92,7 @@ final class EarcutTessellationTests: XCTestCase {
     }
 
     /// More than 80 vertices switches the implementation to the z-order hashed
-    /// ear checks; this shape also carries enough holes to exercise hole
+    /// ear checks. This shape also carries enough holes to exercise hole
     /// elimination together with that path.
     func testLargeJaggedRingWithManyHoles() {
         var generator = SplitMix64Generator(seed: 0xEAC0)

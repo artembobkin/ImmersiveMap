@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port; the ISC notice heads EarcutCore.swift and
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
 // is repeated in THIRD-PARTY-NOTICES.md at the repository root.
 
 /// Ear-clipping polygon triangulation: the whole surface of the `Earcut`
@@ -49,7 +49,7 @@ package enum Earcut {
     ///   - holeIndices: The vertex index at which each hole ring starts, in
     ///     the order the holes appear in `data`. Empty for a polygon with no
     ///     holes.
-    ///   - dim: Numbers per vertex in `data`; the first two are `x` and `y`,
+    ///   - dim: Numbers per vertex in `data`. The first two are `x` and `y`,
     ///     the rest are ignored. Must be at least 2.
     /// - Returns: Vertex indices into `data`, three per triangle. Empty when
     ///   the input has fewer than three vertices or no area.
