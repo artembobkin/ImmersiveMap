@@ -68,9 +68,6 @@ enum RoadSurfaceGapBridger {
     static func findBridges(surfaceAreas: [RoadSurfaceArea],
                             linesByFeatureIndex: [[[SIMD2<Float>]]],
                             featureStyles: [FeatureStyle],
-                            featureStreets: [String],
-                            featureStructureKinds: [RoadStructureKind],
-                            featureLayers: [Int],
                             unitsPerMetre: Float) -> [Bridge] {
         guard unitsPerMetre > 0 else { return [] }
         let maximumGap = maximumGapMetres * unitsPerMetre
@@ -210,15 +207,16 @@ enum RoadSurfaceGapBridger {
             guard lines.isEmpty == false else { continue }
             let style = featureStyles[featureIndex]
             guard style.key != 0, style.isShippedRoadPaint == false else { continue }
-            let street = featureStreets[featureIndex]
+            let street = style.road.streetIdentity
             guard street.isEmpty == false else { continue }
             // Clip against every reconstructed surface of the line's tier,
             // whatever street it belongs to: a junction area along the way
             // covers the line too, and forgetting it would read the span
             // through a small junction as a slit.
+            let structure = RoadStructureKind(physical: style.road.structure)
             let ownerIndices = candidateIndices.filter {
-                surfaceAreas[$0].structureKind == featureStructureKinds[featureIndex]
-                    && surfaceAreas[$0].layer == featureLayers[featureIndex]
+                surfaceAreas[$0].structureKind == structure
+                    && surfaceAreas[$0].layer == style.road.layer
             }
             guard ownerIndices.isEmpty == false else { continue }
             let owners = ownerIndices.map { surfaceAreas[$0] }
@@ -265,16 +263,4 @@ enum RoadSurfaceGapBridger {
         return bridges
     }
 
-    /// The street identity used for pairing: the `street` attribute alone.
-    /// The name is deliberately NOT a fallback here, unlike stitching: the
-    /// two halves of a dual carriageway share a name, and a name match would
-    /// let something bridge the median between them.
-    static func streetIdentity(_ attributes: [String: MvtValue]) -> String {
-        switch attributes["street"] {
-        case .string(let text): return text
-        case .int(let number), .sint(let number): return String(number)
-        case .uint(let number): return String(number)
-        case .float, .double, .bool, .absent, nil: return ""
-        }
-    }
 }

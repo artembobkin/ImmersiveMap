@@ -30,71 +30,26 @@ import simd
 /// receives the whole stitched polyline, the others receive nothing, so the
 /// caller's per-feature styling and bookkeeping stay intact.
 enum RoadStreetStitcher {
-    /// Attributes that must agree for two pieces to be one street to draw,
-    /// where the source does not say which street a piece belongs to.
-    private static let identityKeys = ["name", "class", "subclass", "lanes", "width", "oneway", "brunnel", "layer"]
-
-    /// The source's own answer to "which street is this": an id assembled
-    /// from the whole road network before the tiles were cut. Where it is
-    /// present it replaces the name and the lane count in the identity, both
-    /// of which are guesses about the same question, and the second of which
-    /// left two pieces of one street apart wherever the tiler wrote their
-    /// counts differently.
-    private static let streetIdentityKey = "street"
-
-    /// What still has to agree even within one street: everything that
-    /// changes how a piece is drawn. A street runs into a tunnel and out
-    /// again, and the two pieces are one street but not one ribbon: the
-    /// tunnel draws dashed, a bridge draws in the overlay, a one-way half
-    /// carries lane lines where the two-way half carries a divider. Welding
-    /// them would draw the whole street as whichever piece came first.
-    ///
-    /// `width` is here and the lane count is not, deliberately. A lane count
-    /// that differs between pieces is tiler noise the street id exists to
-    /// bridge; a stated width that differs is the street actually widening
-    /// (a turn pocket before a junction), and welding across it would draw
-    /// the whole street at one piece's width, discarding the measurement.
-    private static let drawingKeys = ["class", "subclass", "brunnel", "layer", "oneway", "width"]
-
+    /// Which pieces are one street, and what still has to agree between
+    /// them (a street runs into a tunnel and out again, and the two pieces
+    /// are one street but not one ribbon), is the style's reading of the
+    /// tile: `ImmersiveMapRoadFacts.stitchingKey`. Pieces with equal keys
+    /// stitch; a piece without a key passes through untouched.
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
-                       featureAttributes: [[String: MvtValue]],
                        featureStyles: [FeatureStyle]) -> [[[SIMD2<Float>]]] {
         let featureCount = linesByFeatureIndex.count
         guard featureCount > 1 else { return linesByFeatureIndex }
 
-        // Only features with a street identity take part; everything else
+        // Only features with a stitching key take part; everything else
         // passes through untouched. Without a name on the geometry the tiles
         // give the engine nothing to stitch on.
         var identityByFeature = [String?](repeating: nil, count: featureCount)
         var participates = false
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
-            guard index < featureAttributes.count,
-                  featureStyles[index].isShippedRoadPaint == false,
-                  featureStyles[index].roadTier == .automobile else {
+            guard featureStyles[index].isShippedRoadPaint == false,
+                  featureStyles[index].roadTier == .automobile,
+                  let key = featureStyles[index].road.stitchingKey else {
                 continue
-            }
-            if let street = featureAttributes[index][streetIdentityKey], describe(street).isEmpty == false {
-                var key = "street=" + describe(street) + ";"
-                for attribute in drawingKeys {
-                    key += attribute
-                    key += "="
-                    key += describe(featureAttributes[index][attribute])
-                    key += ";"
-                }
-                identityByFeature[index] = key
-                participates = true
-                continue
-            }
-            guard let name = featureAttributes[index]["name"]?.stringValue,
-                  name.isEmpty == false else {
-                continue
-            }
-            var key = ""
-            for attribute in identityKeys {
-                key += attribute
-                key += "="
-                key += describe(featureAttributes[index][attribute])
-                key += ";"
             }
             identityByFeature[index] = key
             participates = true
@@ -196,17 +151,5 @@ enum RoadStreetStitcher {
             output[pieces[pieceIndex].feature] = [chain]
         }
         return output
-    }
-
-    private static func describe(_ value: MvtValue?) -> String {
-        switch value {
-        case .string(let text): return text
-        case .int(let number), .sint(let number): return String(number)
-        case .uint(let number): return String(number)
-        case .double(let number): return String(number)
-        case .float(let number): return String(number)
-        case .bool(let flag): return flag ? "1" : "0"
-        case .absent, nil: return ""
-        }
     }
 }

@@ -40,7 +40,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 120), SIMD2(1500, 150), SIMD2(2000, 150)]],
         ]
         let attrs = [attributes(name: "Tverskaya"), attributes(name: "Tverskaya")]
-        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs, featureStyles: styles(for: attrs))
+        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs))
         XCTAssertEqual(out[0], [[SIMD2(0, 100), SIMD2(500, 100), SIMD2(1000, 120), SIMD2(1500, 150), SIMD2(2000, 150)]],
                        "The first piece carries the whole street, with the shared point once")
         XCTAssertEqual(out[1], [], "The second piece is consumed")
@@ -53,7 +53,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(2000, 100), SIMD2(1000, 100)]],
         ]
         let attrs = [attributes(name: "Mokhovaya"), attributes(name: "Mokhovaya")]
-        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs, featureStyles: styles(for: attrs))
+        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs))
         XCTAssertEqual(out[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
         XCTAssertEqual(out[1], [])
     }
@@ -66,7 +66,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(2000, 0), SIMD2(3000, 0)]],
         ]
         let attrs = Array(repeating: attributes(name: "Okhotny Ryad"), count: 3)
-        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs, featureStyles: styles(for: attrs))
+        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs))
         XCTAssertEqual(out[0], [[SIMD2(0, 0), SIMD2(1000, 0), SIMD2(2000, 0), SIMD2(3000, 0)]])
         XCTAssertEqual(out[1], [])
         XCTAssertEqual(out[2], [])
@@ -83,7 +83,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 100), SIMD2(1000, 800)]],
         ]
         let attrs = [attributes(name: "A"), attributes(name: "A"), attributes(name: "B", cls: "minor", lanes: 2)]
-        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs, featureStyles: styles(for: attrs))
+        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs))
         XCTAssertEqual(out, lines, "Three drive-tier features at one point is a junction; nothing is stitched")
     }
 
@@ -93,11 +93,9 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
         let otherStreet = [attributes(name: "A"), attributes(name: "B")]
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: otherStreet,
-                                                 featureStyles: styles(for: otherStreet)), lines)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: otherStreet)), lines)
         let otherWidth = [attributes(name: "A", lanes: 4), attributes(name: "A", lanes: 6)]
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: otherWidth,
-                                                 featureStyles: styles(for: otherWidth)), lines,
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: otherWidth)), lines,
                        "A width step is a real edge, not a seam to hide")
     }
 
@@ -108,8 +106,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
         let attrs = [attributes(name: nil), attributes(name: nil)]
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs,
-                                                 featureStyles: styles(for: attrs)), lines)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs)), lines)
     }
 
     func testPedestrianPiecesAreNotStitched() {
@@ -120,8 +117,7 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
         let attrs = [attributes(name: "Alley", cls: "path"), attributes(name: "Alley", cls: "path")]
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureAttributes: attrs,
-                                                 featureStyles: styles(for: attrs)), lines)
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureStyles: styles(for: attrs)), lines)
     }
 
     // MARK: - the source's own street identity
@@ -139,7 +135,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         withStreet[0]["street"] = value(4211)
         withStreet[1]["street"] = value(4211)
         let joined = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                               featureAttributes: withStreet,
                                                featureStyles: styles(for: withStreet))
         XCTAssertEqual(joined[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
                        "One street on the ground, one ribbon on the map")
@@ -150,7 +145,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         var different = withStreet
         different[1]["street"] = value(9002)
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureAttributes: different,
                                                  featureStyles: styles(for: different)),
                        lines)
     }
@@ -168,7 +162,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         attrs[1]["street"] = value(5150)
         attrs[1]["brunnel"] = value("tunnel")
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureAttributes: attrs,
                                                  featureStyles: styles(for: attrs)),
                        lines,
                        "The tunnel keeps its own ribbon")
@@ -178,7 +171,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         joined[1]["brunnel"] = value("")
         joined[1].removeValue(forKey: "brunnel")
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureAttributes: joined,
                                                  featureStyles: styles(for: joined))[0],
                        [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
     }
@@ -195,7 +187,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         attrs[0]["street"] = value(4211); attrs[1]["street"] = value(4211)
         attrs[0]["width"] = value(120); attrs[1]["width"] = value(180)
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureAttributes: attrs,
                                                  featureStyles: styles(for: attrs)),
                        lines,
                        "Twelve metres and eighteen metres are two ribbons")
@@ -203,7 +194,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         var same = attrs
         same[1]["width"] = value(120)
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureAttributes: same,
                                                  featureStyles: styles(for: same))[0],
                        [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
                        "Equal widths weld as before")
@@ -217,7 +207,6 @@ final class RoadStreetStitcherTests: XCTestCase {
         ]
         let attrs = [attributes(name: "Tverskaya"), attributes(name: "Tverskaya")]
         let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                            featureAttributes: attrs,
                                             featureStyles: styles(for: attrs))
         XCTAssertEqual(out[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
     }

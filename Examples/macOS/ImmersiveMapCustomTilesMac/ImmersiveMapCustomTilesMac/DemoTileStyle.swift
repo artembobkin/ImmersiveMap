@@ -70,7 +70,10 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             case "path", "track": (SIMD4<Float>(0.26, 0.26, 0.24, 1), 0.8)
             default: (SIMD4<Float>(0.28, 0.29, 0.31, 1), 1.2)
             }
-            return .line(color: color, width: width)
+            // Where the road sits (tunnel, bridge, its layer) and which
+            // street it is a piece of are the style's reading too; the
+            // OpenStreetMap reading covers this schema.
+            return .line(color: color, width: width, road: .openStreetMap(feature.properties))
 
         case "boundary":
             // The point-locked line mode: the width is stated in on-screen

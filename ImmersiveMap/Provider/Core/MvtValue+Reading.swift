@@ -4,39 +4,10 @@
 import Foundation
 import Mvt
 
-/// How the parser reads a tile attribute: the decoder hands over the value
-/// as the tile typed it, and a schema is loose about types (a flag may be a
-/// bool, a number or the word "yes", a height a number or "12 ft"), so
-/// every reader goes through these.
+/// The readings behind `ImmersiveMapFeatureProperties`: the decoder hands
+/// over a value as the tile typed it, and a schema is loose about types (an
+/// id may be a number or its digits, a height a number or "12 ft").
 extension MvtValue {
-    /// The value as a flag: a number by being non-zero, a string by the words
-    /// a tag uses for yes and no, nil for anything else.
-    var boolValue: Bool? {
-        switch self {
-        case .bool(let flag):
-            return flag
-        case .uint(let number):
-            return number != 0
-        case .sint(let number), .int(let number):
-            return number != 0
-        case .float(let number):
-            return number != 0
-        case .double(let number):
-            return number != 0
-        case .string(let text):
-            let lower = text.lowercased()
-            if lower == "true" || lower == "yes" || lower == "1" {
-                return true
-            }
-            if lower == "false" || lower == "no" || lower == "0" {
-                return false
-            }
-            return nil
-        case .absent:
-            return nil
-        }
-    }
-
     /// The value as an identifier: a non-negative integer, or a string that
     /// spells one.
     var uint64Value: UInt64? {
@@ -95,11 +66,5 @@ extension MvtValue {
             }
             return value
         }
-    }
-
-    /// Whether an attribute that may be missing reads as a set flag.
-    static func isTruthy(_ value: MvtValue?) -> Bool {
-        guard let value else { return false }
-        return value.boolValue ?? false
     }
 }

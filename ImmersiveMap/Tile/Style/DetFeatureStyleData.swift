@@ -15,4 +15,12 @@ struct DetFeatureStyleData {
     /// is the class's alone, like every street map, and nothing about the
     /// ground's true dimensions is drawn.
     var streetscapeEnabled: Bool = true
+    /// The geometry the feature carries, so a style reads a road's stitching
+    /// key for a line and not for the thousand polygons around it.
+    var geometryType: MvtGeometryType = .unknown
+    /// The feature is a carriageway surface the parser found to be the roof
+    /// of a tunnel (`RoadTunnelSurfaceResolver`): the surface ships no
+    /// tunnel tag of its own, only the tunnel's `layer`, and the style draws
+    /// it the way the tunnel's centreline would have been drawn.
+    var isTunnelRoof: Bool = false
 }

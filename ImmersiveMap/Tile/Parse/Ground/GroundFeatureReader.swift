@@ -58,7 +58,8 @@ struct GroundFeatureReader {
 
         let landStyle = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "background",
                                                                       properties: [:],
-                                                                      tile: tile))
+                                                                      tile: tile,
+                                                                      geometryType: .polygon))
         guard landStyle.key != 0 else {
             return true
         }
@@ -97,7 +98,8 @@ struct GroundFeatureReader {
         let style = mapStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "background",
             properties: [:],
-            tile: tile)
+            tile: tile,
+            geometryType: .polygon)
         )
 
         // One quad in render space, wound counter-clockwise like every
@@ -120,7 +122,8 @@ struct GroundFeatureReader {
         let style = mapStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "border",
             properties: [:],
-            tile: Tile(x: 0, y: 0, z: 0))
+            tile: Tile(x: 0, y: 0, z: 0),
+            geometryType: .polygon)
         )
 
         let tileSize: Int16 = 4096

@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Mvt
 import simd
 
 final class GenericVectorTileStyle: ImmersiveMapStyle {
@@ -38,11 +39,36 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             tileZoom: data.tile.z,
             tileX: data.tile.x,
             tileY: data.tile.y,
+            geometry: Self.geometry(of: data.geometryType),
             properties: ImmersiveMapFeatureProperties(values: data.properties)
         )
         let publicStyle = style.makeStyle(for: context)
         let key = styleKey(layerName: data.layerName, style: publicStyle)
+        var featureStyle = resolvedStyle(publicStyle, key: key)
+        featureStyle.road = Self.road(of: publicStyle)
+        featureStyle.drawsAsTunnel = featureStyle.road.structure == .tunnel
+        return featureStyle
+    }
 
+    private static func geometry(of type: MvtGeometryType) -> ImmersiveMapFeatureGeometry {
+        switch type {
+        case .point: return .point
+        case .linestring: return .line
+        case .polygon: return .polygon
+        case .unknown: return .unknown
+        }
+    }
+
+    private static func road(of style: ImmersiveMapFeatureStyle) -> ImmersiveMapRoadFacts {
+        switch style {
+        case let .line(_, _, road), let .pointLockedLine(_, _, _, _, road), let .roadLabel(_, _, _, road):
+            return road
+        case .hidden, .polygon, .extrudedPolygon, .pointLabel:
+            return .ground
+        }
+    }
+
+    private func resolvedStyle(_ publicStyle: ImmersiveMapFeatureStyle, key: UInt8) -> FeatureStyle {
         switch publicStyle {
         case .hidden:
             return FeatureStyle(
@@ -57,13 +83,13 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
                 fillOutlineAntialiasing: true
             )
-        case .line(let color, let width):
+        case .line(let color, let width, _):
             return FeatureStyle(
                 key: key,
                 color: color,
                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: Double(max(Float(0), width)))
             )
-        case .pointLockedLine(let color, let widthPoints, let dashLengthPoints, let dashGapPoints):
+        case .pointLockedLine(let color, let widthPoints, let dashLengthPoints, let dashGapPoints, _):
             return FeatureStyle.pointLockedLine(
                 key: key,
                 color: color,
@@ -89,7 +115,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0),
                 labelTextStyle: makeLabelTextStyle(key: Int(key), style: textStyle)
             )
-        case .roadLabel(let color, let width, let textStyle):
+        case .roadLabel(let color, let width, let textStyle, _):
             return FeatureStyle(
                 key: key,
                 color: color,
@@ -126,11 +152,13 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
         case let .polygon(color):
             hasher.combine(1)
             combine(color, into: &hasher)
-        case let .line(color, width):
+        case let .line(color, width, _):
+            // A road's facts vary per feature and are not part of the
+            // style's identity, here and in the two cases below.
             hasher.combine(2)
             combine(color, into: &hasher)
             hasher.combine(UInt64(width.bitPattern))
-        case let .pointLockedLine(color, widthPoints, dashLengthPoints, dashGapPoints):
+        case let .pointLockedLine(color, widthPoints, dashLengthPoints, dashGapPoints, _):
             hasher.combine(6)
             combine(color, into: &hasher)
             hasher.combine(UInt64(widthPoints.bitPattern))
@@ -147,7 +175,7 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
         case let .pointLabel(textStyle):
             hasher.combine(4)
             combine(textStyle, into: &hasher)
-        case let .roadLabel(color, width, textStyle):
+        case let .roadLabel(color, width, textStyle, _):
             hasher.combine(5)
             combine(color, into: &hasher)
             hasher.combine(UInt64(width.bitPattern))

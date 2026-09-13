@@ -56,7 +56,7 @@ struct ParkingBayGeometryBuilder {
     /// parking lot is rare enough to accept a stripe across it.
     func buildStripes(exterior: [SIMD2<Float>],
                       unitsPerMetre: Float,
-                      orientation: String?) -> [[SIMD2<Float>]] {
+                      parallel: Bool) -> [[SIMD2<Float>]] {
         guard exterior.count >= 3, unitsPerMetre > 0 else { return [] }
 
         // The minimum-area bounding rectangle, found the classic way: one of
@@ -111,7 +111,7 @@ struct ParkingBayGeometryBuilder {
             }
         }
 
-        let stepMetres = orientation == "parallel" ? Self.parallelStepMetres : Self.bayStepMetres
+        let stepMetres = parallel ? Self.parallelStepMetres : Self.bayStepMetres
         let stepUnits = stepMetres * unitsPerMetre
         let minimumStripeUnits = Self.minimumStripeMetres * unitsPerMetre
         var stripes: [[SIMD2<Float>]] = []

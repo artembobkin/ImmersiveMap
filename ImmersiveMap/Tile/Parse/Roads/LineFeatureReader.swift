@@ -64,11 +64,8 @@ struct LineFeatureReader {
         let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
         let roadLabelStyle = style.roadLabelTextStyle
         let roadClassPriority = style.roadClassPriority
-        let roadStructure = RoadFeatureAttributes.drawStructure(
-            physical: RoadFeatureAttributes.structureKind(attributes: attributes),
-            tier: style.roadTier
-        )
-        let roadLayer = RoadFeatureAttributes.layer(attributes: attributes)
+        let roadStructure = RoadStructureKind(physical: style.road.structure, tier: style.roadTier)
+        let roadLayer = style.road.layer
         let sharedRoadPadding = Float(
             lineRenderPasses.reduce(0.0) { partial, pass in
                 max(partial, pass.parseGeometryStyleData.lineWidth * 0.5)

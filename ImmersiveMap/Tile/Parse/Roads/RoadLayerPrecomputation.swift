@@ -36,15 +36,15 @@ struct RoadSurfaceArea {
     /// ground surface must not clip the deck above.
     var structureKind: RoadStructureKind = .ground
     var layer: Int = 0
-    /// Whether the surface is the roof of a tunnel (`brunnel=tunnel`,
-    /// stamped by `RoadTunnelSurfaceResolver`). A tunnel surface is a
-    /// bare translucent fill: every line of shipped paint inside it is
-    /// clipped away, unlike on any other surface.
+    /// Whether the surface draws the tunnel look: tagged as a tunnel, or
+    /// found to be a tunnel's roof by `RoadTunnelSurfaceResolver`. A tunnel
+    /// surface is a bare translucent fill: every line of shipped paint
+    /// inside it is clipped away, unlike on any other surface.
     var isTunnel: Bool = false
     /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
     /// crossing, false for a hand-mapped carriageway area.
     var cutsPaint: Bool = false
-    /// The street identity (`street` attribute) of the piece, empty when
+    /// The street identity of the piece as the style read it, empty when
     /// the source ships none. Only the gap bridger reads it: a slit is
     /// paved only between two pieces of the SAME street.
     var street: String = ""
@@ -102,7 +102,6 @@ struct RoadLayerPrecomputation {
 
     static func build(geometry: TileLayerGeometry,
                       featureStyles: [FeatureStyle],
-                      featureAttributes: [[String: MvtValue]],
                       lineClipper: LineClipper,
                       tile: Tile) -> RoadLayerPrecomputation {
         let layer = geometry.layer
@@ -147,11 +146,11 @@ struct RoadLayerPrecomputation {
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
                                                             classPriority: style.roadClassPriority,
                                                             bounds: (lower, upper),
-                                                            structureKind: RoadFeatureAttributes.structureKind(attributes: featureAttributes[featureIndex]),
-                                                            layer: RoadFeatureAttributes.layer(attributes: featureAttributes[featureIndex]),
-                                                            isTunnel: featureAttributes[featureIndex]["brunnel"]?.stringValue?.lowercased() == "tunnel",
+                                                            structureKind: RoadStructureKind(physical: style.road.structure),
+                                                            layer: style.road.layer,
+                                                            isTunnel: style.drawsAsTunnel,
                                                             cutsPaint: style.surfaceAreaCutsPaint,
-                                                            street: RoadSurfaceGapBridger.streetIdentity(featureAttributes[featureIndex]),
+                                                            street: style.road.streetIdentity,
                                                             featureIndex: featureIndex))
                     }
                 default:
@@ -166,21 +165,10 @@ struct RoadLayerPrecomputation {
         // used to poke through.
         var surfaceBridges: [RoadSurfaceGapBridger.Bridge] = []
         if surfaceAreas.contains(where: \.cutsPaint) {
-            var featureStreets = [String](repeating: "", count: layer.features.count)
-            var featureStructureKinds = [RoadStructureKind](repeating: .ground, count: layer.features.count)
-            var featureLayers = [Int](repeating: 0, count: layer.features.count)
-            for index in 0..<layer.features.count {
-                featureStreets[index] = RoadSurfaceGapBridger.streetIdentity(featureAttributes[index])
-                featureStructureKinds[index] = RoadFeatureAttributes.structureKind(attributes: featureAttributes[index])
-                featureLayers[index] = RoadFeatureAttributes.layer(attributes: featureAttributes[index])
-            }
             surfaceBridges = RoadSurfaceGapBridger.findBridges(
                 surfaceAreas: surfaceAreas,
                 linesByFeatureIndex: rawLinesByFeatureIndex,
                 featureStyles: featureStyles,
-                featureStreets: featureStreets,
-                featureStructureKinds: featureStructureKinds,
-                featureLayers: featureLayers,
                 unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
             )
             for bridge in surfaceBridges {
@@ -229,8 +217,8 @@ struct RoadLayerPrecomputation {
                     continue
                 }
                 let priority = featureStyles[featureIndex].roadClassPriority
-                let structure = RoadFeatureAttributes.structureKind(attributes: featureAttributes[featureIndex])
-                let layerValue = RoadFeatureAttributes.layer(attributes: featureAttributes[featureIndex])
+                let structure = RoadStructureKind(physical: featureStyles[featureIndex].road.structure)
+                let layerValue = featureStyles[featureIndex].road.layer
                 let owners = surfaceAreas.filter {
                     $0.classPriority >= priority
                         && $0.structureKind == structure
@@ -259,10 +247,8 @@ struct RoadLayerPrecomputation {
         // drawing attributes equal); without it nothing is stitched and the
         // pieces draw as they arrive.
         let stitched = RoadStreetStitcher.stitch(linesByFeatureIndex: rawLinesByFeatureIndex,
-                                                 featureAttributes: featureAttributes,
                                                  featureStyles: featureStyles)
         let paintStitched = RoadStreetStitcher.stitch(linesByFeatureIndex: paintRawLinesByFeatureIndex,
-                                                      featureAttributes: featureAttributes,
                                                       featureStyles: featureStyles)
         // An endpoint that lies on a crossing's outline is a cut the clipper
         // made, not an end of the street: recognised geometrically after the
@@ -307,26 +293,25 @@ struct RoadLayerPrecomputation {
         // that simply continues.
         //
         // Which street a piece belongs to is the source's answer where it
-        // gives one (`street`, an id assembled from the whole network before
-        // the tiles were cut, so it holds across a tile boundary and tells
-        // two same-named streets in different towns apart). A source without
-        // the field falls back to the name, which is right within a tile and
-        // wrong only where two unrelated streets share one; a piece with
-        // neither answers only for itself.
+        // gives one (the street identity, an id assembled from the whole
+        // network before the tiles were cut, so it holds across a tile
+        // boundary and tells two same-named streets in different towns
+        // apart). A source without one falls back to the name, which is
+        // right within a tile and wrong only where two unrelated streets
+        // share one; a piece with neither answers only for itself.
         var streetIdentifiers: [String: Int] = [:]
         var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
         for index in 0..<layer.features.count {
-            if let value = featureAttributes[index]["street"], let street = value.integerValue {
-                streetIdentifierByFeature[index] = Int(street)
-                continue
-            }
-            let name = featureAttributes[index]["name"]?.stringValue ?? ""
-            if name.isEmpty {
+            let road = featureStyles[index].road
+            let identity = road.streetIdentity.isEmpty == false
+                ? "street=" + road.streetIdentity
+                : road.name.isEmpty == false ? "name=" + road.name : ""
+            if identity.isEmpty {
                 streetIdentifierByFeature[index] = Int.min + index
             } else {
                 let next = streetIdentifiers.count
-                streetIdentifierByFeature[index] = streetIdentifiers[name] ?? next
-                if streetIdentifiers[name] == nil { streetIdentifiers[name] = next }
+                streetIdentifierByFeature[index] = streetIdentifiers[identity] ?? next
+                if streetIdentifiers[identity] == nil { streetIdentifiers[identity] = next }
             }
         }
         var automobileStreetsAtPoint: [RoadConnectionPointKey: Set<Int>] = [:]

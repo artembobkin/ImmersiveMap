@@ -75,6 +75,21 @@ public struct ImmersiveMapFeatureProperties {
         values[key]?.uint64Value
     }
 
+    /// The property spelled as text, whatever its type: a string as it is, a
+    /// number as its digits, a flag as `1` or `0`, and empty when the key is
+    /// absent. For keys that make up an identity.
+    public func text(_ key: String) -> String {
+        switch values[key] {
+        case .string(let text): return text
+        case .int(let number), .sint(let number): return String(number)
+        case .uint(let number): return String(number)
+        case .double(let number): return String(number)
+        case .float(let number): return String(number)
+        case .bool(let flag): return flag ? "1" : "0"
+        case .absent, nil: return ""
+        }
+    }
+
     public func bool(_ key: String) -> Bool? {
         guard let value = values[key] else {
             return nil
@@ -98,12 +113,21 @@ public struct ImmersiveMapFeatureProperties {
     }
 }
 
+/// The geometry a feature carries.
+public enum ImmersiveMapFeatureGeometry: Sendable {
+    case point
+    case line
+    case polygon
+    case unknown
+}
+
 public struct ImmersiveMapFeatureStyleContext {
     public let providerID: String
     public let layerName: String
     public let tileZoom: Int
     public let tileX: Int
     public let tileY: Int
+    public let geometry: ImmersiveMapFeatureGeometry
     public let properties: ImmersiveMapFeatureProperties
 }
 
@@ -135,7 +159,12 @@ public struct ImmersiveMapLabelTextStyle: Equatable {
 public enum ImmersiveMapFeatureStyle: Equatable {
     case hidden
     case polygon(color: SIMD4<Float>)
-    case line(color: SIMD4<Float>, width: Float)
+    /// A line of a width in tile units. `road` is what the feature is as a
+    /// road (where it sits, which street it is a piece of), read by the
+    /// style from the tile: `ImmersiveMapRoadFacts.openStreetMap(_:)` for
+    /// an OpenStreetMap-derived schema, `.ground` for a line that is not a
+    /// road or whose schema says nothing about it.
+    case line(color: SIMD4<Float>, width: Float, road: ImmersiveMapRoadFacts = .ground)
     /// A line whose width is stated in on-screen points and held there at
     /// every zoom: the drawing mode the built-in style uses for country
     /// borders and for the overview road skeleton. The stroke is opaque from
@@ -149,7 +178,8 @@ public enum ImmersiveMapFeatureStyle: Equatable {
     case pointLockedLine(color: SIMD4<Float>,
                          widthPoints: Float,
                          dashLengthPoints: Float = 0,
-                         dashGapPoints: Float = 0)
+                         dashGapPoints: Float = 0,
+                         road: ImmersiveMapRoadFacts = .ground)
     /// A building. What the feature is as a building (its height, its base,
     /// the building it belongs to, its roof) is the style's reading of the
     /// tile's tags: `ImmersiveMapBuildingExtrusion.openStreetMap(_:)` for
@@ -165,7 +195,8 @@ public enum ImmersiveMapFeatureStyle: Equatable {
     case pointLabel(ImmersiveMapLabelTextStyle)
     case roadLabel(color: SIMD4<Float>,
                    width: Float,
-                   textStyle: ImmersiveMapLabelTextStyle)
+                   textStyle: ImmersiveMapLabelTextStyle,
+                   road: ImmersiveMapRoadFacts = .ground)
 }
 
 public protocol ImmersiveMapVectorTileStyle: Sendable {

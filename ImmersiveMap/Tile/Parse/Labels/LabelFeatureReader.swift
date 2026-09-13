@@ -92,7 +92,8 @@ struct LabelFeatureReader {
 
             let style = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "natural_label",
                                                                      properties: attributes,
-                                                                     tile: tile))
+                                                                     tile: tile,
+                                                                     geometryType: .point))
             guard let textStyle = style.labelTextStyle else {
                 continue
             }

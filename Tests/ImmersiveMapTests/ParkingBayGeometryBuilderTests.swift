@@ -31,7 +31,7 @@ final class ParkingBayGeometryBuilderTests: XCTestCase {
     func testANarrowStripGetsOneRowOfPerpendicularStripes() {
         let angle: Float = 0.4
         let ring = rectangle(width: 60, depth: 5, rotatedBy: angle)
-        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, orientation: nil)
+        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, parallel: false)
         // One bay every 2.6 m along 60 m.
         XCTAssertEqual(stripes.count, 23, "A 60 m strip holds a bay every 2.6 metres")
         let axis = SIMD2<Float>(cos(angle), sin(angle))
@@ -46,7 +46,7 @@ final class ParkingBayGeometryBuilderTests: XCTestCase {
 
     func testADeepLotAlternatesBayRowsAndAisles() {
         let ring = rectangle(width: 60, depth: 30)
-        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, orientation: nil)
+        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, parallel: false)
         XCTAssertFalse(stripes.isEmpty)
         // Rows at depth 0-5, 11-16 and 22-27: three bands of 5 m stripes
         // separated by 6 m aisles of bare asphalt.
@@ -72,7 +72,7 @@ final class ParkingBayGeometryBuilderTests: XCTestCase {
             SIMD2<Float>(560, 510), SIMD2<Float>(530, 510),
             SIMD2<Float>(530, 520), SIMD2<Float>(500, 520)
         ]
-        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, orientation: nil)
+        let stripes = builder.buildStripes(exterior: ring, unitsPerMetre: metre, parallel: false)
         XCTAssertFalse(stripes.isEmpty)
         func inside(_ p: SIMD2<Float>) -> Bool {
             // Inside the L with a small tolerance toward the boundary.
@@ -89,8 +89,8 @@ final class ParkingBayGeometryBuilderTests: XCTestCase {
 
     func testParallelParkingSpreadsTheStripesToCarLength() {
         let ring = rectangle(width: 60, depth: 3)
-        let bays = builder.buildStripes(exterior: ring, unitsPerMetre: metre, orientation: nil)
-        let parallel = builder.buildStripes(exterior: ring, unitsPerMetre: metre, orientation: "parallel")
+        let bays = builder.buildStripes(exterior: ring, unitsPerMetre: metre, parallel: false)
+        let parallel = builder.buildStripes(exterior: ring, unitsPerMetre: metre, parallel: true)
         XCTAssertGreaterThan(bays.count, parallel.count * 2,
                              "Parallel spaces are a car length apart, not a bay width")
         XCTAssertGreaterThan(parallel.count, 5, "but the dividers are still there")

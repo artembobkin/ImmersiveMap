@@ -15,4 +15,21 @@ enum RoadStructureKind: Int, CaseIterable {
     case ground
     case automobileGround
     case bridge
+
+    /// The bucket of a physical structure, without the tier split.
+    init(physical: ImmersiveMapRoadFacts.Structure) {
+        switch physical {
+        case .tunnel: self = .tunnel
+        case .ground: self = .ground
+        case .bridge: self = .bridge
+        }
+    }
+
+    /// Where a line draws: on the ground the automobile network draws as
+    /// its own tier above the pedestrian one, so a path ending against an
+    /// avenue never lies over its kerb. Both the structure and the tier are
+    /// the style's decisions.
+    init(physical: ImmersiveMapRoadFacts.Structure, tier: RoadTier) {
+        self = physical == .ground && tier == .automobile ? .automobileGround : RoadStructureKind(physical: physical)
+    }
 }

@@ -70,10 +70,29 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
 
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         var style = resolvedStyle(data: data)
+        if Self.isRoadLayer(data.layerName) {
+            // Every road feature carries where it sits and which street it
+            // is a piece of; a line also carries its stitching key, which a
+            // surface never needs.
+            var road = ImmersiveMapRoadFacts.openStreetMap(ImmersiveMapFeatureProperties(values: data.properties))
+            if data.geometryType == .polygon {
+                road.stitchingKey = nil
+            }
+            style.road = road
+            style.drawsAsTunnel = data.properties["brunnel"]?.stringValue?.lowercased() == "tunnel" || data.isTunnelRoof
+            style.parkingBaysParallel = data.properties["orientation"]?.stringValue == "parallel"
+        }
         style.roadTier = style.roadClassPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
         style.roadMakesJunctions = style.isShippedRoadPaint == false
             && style.roadClassPriority >= Self.junctionMakingPriority
         return style
+    }
+
+    /// The layers whose features are roads: the road lines, the measured
+    /// streetscape folded into them, and the road names.
+    private static func isRoadLayer(_ layerName: String) -> Bool {
+        let layer = layerName.lowercased()
+        return layer == "transportation" || layer == "streetscape" || layer == "transportation_name"
     }
 
     private func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
@@ -122,7 +141,8 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             // with the streetscape and no roads reaches here under its own
             // name and is styled by the same rules.
             return transportationStyle(cls: cls, props: props, tile: data.tile,
-                                       streetscapeEnabled: data.streetscapeEnabled)
+                                       streetscapeEnabled: data.streetscapeEnabled,
+                                       isTunnelRoof: data.isTunnelRoof)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":
@@ -372,10 +392,11 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
     private func transportationStyle(cls: String?,
                                      props: [String: MvtValue],
                                      tile: Tile,
-                                     streetscapeEnabled: Bool = true) -> FeatureStyle {
+                                     streetscapeEnabled: Bool = true,
+                                     isTunnelRoof: Bool = false) -> FeatureStyle {
         let tileZoom = tile.z
         let brunnel = props["brunnel"]?.stringValue?.lowercased()
-        let isTunnel = brunnel == "tunnel"
+        let isTunnel = brunnel == "tunnel" || isTunnelRoof
         let subclass = props["subclass"]?.stringValue?.lowercased()
         let roads = configuration.layers.roads
         // Paint the source measured on the ground, shipped as its own line:

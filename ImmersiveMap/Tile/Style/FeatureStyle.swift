@@ -203,6 +203,17 @@ struct FeatureStyle {
     /// sea names of its own at the coarse zooms, and skips any the tile
     /// already labels; this is how it recognises those.
     var isWaterName: Bool = false
+    /// What the feature is as a road: where it sits and which street it is
+    /// a piece of. `ground` for everything that is not a road.
+    var road: ImmersiveMapRoadFacts = .ground
+    /// The feature draws the tunnel look: a road tagged as a tunnel, or a
+    /// carriageway surface the parser found to be a tunnel's roof. Only a
+    /// road like this marks the surfaces it runs inside as tunnel roofs,
+    /// and a tunnel surface clips every line of shipped paint inside it.
+    var drawsAsTunnel: Bool = false
+    /// A parking lot whose bays are parallel to the kerb (a car length
+    /// apart) rather than perpendicular to it.
+    var parkingBaysParallel: Bool = false
 
     init(
         key: UInt8,

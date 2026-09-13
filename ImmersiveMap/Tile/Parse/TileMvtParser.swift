@@ -121,24 +121,32 @@ final class TileMvtParser {
                 for feature in layer.features {
                     featureAttributes.append(MvtAttributeDecoder.attributes(of: feature, in: layer, bytes: bytes))
                 }
-                // A tunnel's road surface ships with the tunnel's `layer` but
-                // without its `brunnel`; the surface is stamped as the tunnel
-                // it roofs before the style reads it, so it draws the tunnel
-                // look instead of open asphalt (see the resolver).
-                if Self.isSeparateRoadLayer(layerName) {
-                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
-                                                                                  attributes: featureAttributes,
-                                                                                  bytes: bytes) {
-                        featureAttributes[index]["brunnel"] = .string("tunnel")
-                    }
-                }
-                for attributes in featureAttributes {
+                for (featureIndex, feature) in layer.features.enumerated() {
                     featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
-                        properties: attributes,
+                        properties: featureAttributes[featureIndex],
                         tile: tile,
-                        streetscapeEnabled: options.streetscapeEnabled
+                        streetscapeEnabled: options.streetscapeEnabled,
+                        geometryType: feature.type
                     )))
+                }
+                // A tunnel's road surface ships with the tunnel's `layer` but
+                // says nothing of the tunnel itself; the style is asked again
+                // for each surface the resolver finds to be a tunnel's roof,
+                // so it draws the tunnel look instead of open asphalt.
+                if Self.isSeparateRoadLayer(layerName) {
+                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
+                                                                                  featureStyles: featureStyles,
+                                                                                  bytes: bytes) {
+                        featureStyles[index] = mapStyle.makeStyle(data: DetFeatureStyleData(
+                            layerName: layerName,
+                            properties: featureAttributes[index],
+                            tile: tile,
+                            streetscapeEnabled: options.streetscapeEnabled,
+                            geometryType: layer.features[index].type,
+                            isTunnelRoof: true
+                        ))
+                    }
                 }
                 if stripsRoadPaint, Self.isSeparateRoadLayer(layerName) {
                     featureStyles = featureStyles.map { $0.strippingRoadPaint() }
@@ -154,7 +162,6 @@ final class TileMvtParser {
                 precomputation: usesSeparateRoadRendering
                     ? RoadLayerPrecomputation.build(geometry: layerGeometry,
                                                     featureStyles: featureStyles,
-                                                    featureAttributes: featureAttributes,
                                                     lineClipper: tools.lineClipper,
                                                     tile: tile)
                     : .empty
@@ -210,7 +217,6 @@ final class TileMvtParser {
                             // kerbs of the ribbons that run into it.
                             roadSurfaceReader.append(parsedGeometry: parsedGeometry,
                                                      style: style,
-                                                     attributes: attributes,
                                                      tile: tile,
                                                      surfaceAreas: roads.precomputation.surfaceAreas,
                                                      tools: tools,
@@ -254,7 +260,6 @@ final class TileMvtParser {
             }
             roadSurfaceReader.appendSurfaceBridges(roads: roads.precomputation,
                                                    featureStyles: featureStyles,
-                                                   featureAttributes: featureAttributes,
                                                    tile: tile,
                                                    tools: tools,
                                                    into: &result)

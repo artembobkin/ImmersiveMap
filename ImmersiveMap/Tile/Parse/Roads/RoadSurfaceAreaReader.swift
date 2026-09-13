@@ -28,18 +28,17 @@ struct RoadSurfaceAreaReader {
     /// tessellated render-space vertices.
     func append(parsedGeometry: ParsePolygon.ParsedGeometry,
                 style: FeatureStyle,
-                attributes: [String: MvtValue],
                 tile: Tile,
                 surfaceAreas: [RoadSurfaceArea],
                 tools: TileParseTools,
                 into result: inout ReadingStageResult) {
         let clippedExterior = parsedGeometry.clipped.exterior
         let clippedInteriors = parsedGeometry.clipped.interiors
-        let physicalStructure = RoadFeatureAttributes.structureKind(attributes: attributes)
+        let physicalStructure = RoadStructureKind(physical: style.road.structure)
         // A surface on the ground joins the automobile tier whatever its
         // class: it is a carriageway.
         let structure: RoadStructureKind = physicalStructure == .ground ? .automobileGround : physicalStructure
-        let layer = RoadFeatureAttributes.layer(attributes: attributes)
+        let layer = style.road.layer
         for pass in style.resolvedLineRenderPasses {
             let passStyle = FeatureStyle(
                 key: pass.key,
@@ -85,7 +84,7 @@ struct RoadSurfaceAreaReader {
                 var stripes = parkingBayBuilder.buildStripes(
                     exterior: clippedExterior,
                     unitsPerMetre: unitsPerMetre,
-                    orientation: attributes["orientation"]?.stringValue
+                    parallel: style.parkingBaysParallel
                 )
                 // Where a carriageway, a junction or a bus lane overlaps the
                 // lot, that ground is theirs: the comb ends at their edge
@@ -132,7 +131,6 @@ struct RoadSurfaceAreaReader {
     /// and the trims' kerbs disappear under the fills.
     func appendSurfaceBridges(roads: RoadLayerPrecomputation,
                               featureStyles: [FeatureStyle],
-                              featureAttributes: [[String: MvtValue]],
                               tile: Tile,
                               tools: TileParseTools,
                               into result: inout ReadingStageResult) {
@@ -149,7 +147,6 @@ struct RoadSurfaceAreaReader {
             }
             append(parsedGeometry: parsedGeometry,
                    style: featureStyles[owner.featureIndex],
-                   attributes: featureAttributes[owner.featureIndex],
                    tile: tile,
                    surfaceAreas: roads.surfaceAreas,
                    tools: tools,
