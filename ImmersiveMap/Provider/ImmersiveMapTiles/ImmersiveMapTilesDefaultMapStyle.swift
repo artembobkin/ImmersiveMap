@@ -57,7 +57,26 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         mapBaseColors
     }
 
+    /// From this class priority up a road is part of the automobile network
+    /// and draws in the tier above the pedestrian one: service roads sit at
+    /// 45 and paths at 35 with rail between.
+    private static let automobileTierPriority = 45
+    /// From this class priority up a road makes a junction for the paint on
+    /// another one: `minor`, the lowest class that is a street rather than a
+    /// way onto a plot. A service driveway, a parking aisle and a footway
+    /// meeting an avenue leave its markings running, because on the ground
+    /// they do.
+    private static let junctionMakingPriority = 50
+
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
+        var style = resolvedStyle(data: data)
+        style.roadTier = style.roadClassPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
+        style.roadMakesJunctions = style.isShippedRoadPaint == false
+            && style.roadClassPriority >= Self.junctionMakingPriority
+        return style
+    }
+
+    private func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
         let layer = data.layerName.lowercased()
         let props = data.properties
         let z = data.tile.z
@@ -1704,7 +1723,9 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         default:
             break
         }
-        return pointLabel(key: 73, appearance: appearance)
+        var style = pointLabel(key: 73, appearance: appearance)
+        style.isWaterName = true
+        return style
     }
 
     // POI: both the icon circle and the label are tinted in the venue category

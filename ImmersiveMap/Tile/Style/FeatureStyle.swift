@@ -11,6 +11,15 @@ enum LinePlacement {
     case bridgeOverlay
 }
 
+/// Which network a road belongs to on the ground. The automobile tier draws
+/// above the pedestrian one, so a path ending against an avenue never lies
+/// over its kerb and a path crossing a street never cuts the street's
+/// casing. The style decides the tier per road class.
+enum RoadTier {
+    case pedestrian
+    case automobile
+}
+
 enum RoadPassRole: Int, CaseIterable {
     case shadow
     case casing
@@ -178,6 +187,18 @@ struct FeatureStyle {
     /// (`ParsedPolygon.outlineIndices`). Fills only; a line style or an
     /// extruded polygon leaves it false.
     let fillOutlineAntialiasing: Bool
+    /// The network the road draws in (see `RoadTier`). Set by the style, read
+    /// by the road readers when they order ribbons and stitch streets.
+    var roadTier: RoadTier = .pedestrian
+    /// Whether the road makes a junction for the paint on another road: a
+    /// lane line running into it stops short of the crossing. True for a
+    /// street, false for a way onto a plot (a driveway, a parking aisle, a
+    /// footway) and for shipped paint, which is not a street at all.
+    var roadMakesJunctions: Bool = false
+    /// A point label that names a body of water. The parser adds ocean and
+    /// sea names of its own at the coarse zooms, and skips any the tile
+    /// already labels; this is how it recognises those.
+    var isWaterName: Bool = false
 
     init(
         key: UInt8,

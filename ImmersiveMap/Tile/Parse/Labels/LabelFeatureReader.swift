@@ -58,6 +58,9 @@ struct LabelFeatureReader {
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
                                                      minCameraZoom: style.labelMinCameraZoom))
+            if style.isWaterName {
+                result.waterNameTexts.insert(decision.text)
+            }
         }
     }
 
@@ -70,10 +73,7 @@ struct LabelFeatureReader {
             return
         }
 
-        let existingWaterText = Set(
-            result.textLabels.filter { $0.textStyle.key == 3 || $0.textStyle.key == 4 }
-                .map(\.text)
-        )
+        let existingWaterText = result.waterNameTexts
 
         for fallback in LowZoomWaterLabels.labels(for: tile) {
             guard let name = labelDecisions.localizedName(from: fallback.names),

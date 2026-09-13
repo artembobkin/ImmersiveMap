@@ -338,10 +338,10 @@ struct RoadLayerPrecomputation {
             // Shipped paint is not a street: its endpoints lie on the roads
             // it is painted on, and letting them count would fabricate a
             // junction (or a connection) at every point a marking happens to
-            // share with a road vertex.
+            // share with a road vertex. Which roads make a junction for the
+            // paint on another is the style's decision.
             let isShippedPaint = featureStyles[featureIndex].isShippedRoadPaint
-            let isJunctionMaking = isShippedPaint == false
-                && featureStyles[featureIndex].roadClassPriority >= RoadFeatureAttributes.markingJunctionClassPriorityFloor
+            let isJunctionMaking = featureStyles[featureIndex].roadMakesJunctions
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches
             // from its centreline.

@@ -27,6 +27,10 @@ struct ReadingStageResult {
     var bridgeStyles: [UInt8: FeatureStyle] = [:]
     var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
     var textLabels: [ParsedTextLabel] = []
+    /// The texts of the tile's own water-name labels, so the names the
+    /// parser synthesizes at the coarse zooms skip what the tile already
+    /// shows.
+    var waterNameTexts: Set<String> = []
     var roadTextLabels: [ParsedRoadTextLabel] = []
     var layerTimings: [TileParseLayerTiming] = []
     private var roadPolygonSequence = 0

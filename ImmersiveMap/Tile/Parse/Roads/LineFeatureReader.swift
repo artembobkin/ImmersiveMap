@@ -66,7 +66,7 @@ struct LineFeatureReader {
         let roadClassPriority = style.roadClassPriority
         let roadStructure = RoadFeatureAttributes.drawStructure(
             physical: RoadFeatureAttributes.structureKind(attributes: attributes),
-            classPriority: roadClassPriority
+            tier: style.roadTier
         )
         let roadLayer = RoadFeatureAttributes.layer(attributes: attributes)
         let sharedRoadPadding = Float(

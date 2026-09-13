@@ -27,19 +27,18 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
 
     func testTheTierLineSitsBetweenServiceRoadsAndPaths() {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        func priority(_ className: String) -> Int {
+        func tier(_ className: String) -> RoadTier {
             var props: [String: MvtValue] = [:]
             let v = MvtValue.string(className); props["class"] = v
             return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: props,
-                                                             tile: Tile(x: 39616, y: 20486, z: 16))).roadClassPriority
+                                                             tile: Tile(x: 39616, y: 20486, z: 16))).roadTier
         }
-        let floor = RoadFeatureAttributes.automobileRoadClassPriorityFloor
         for automobile in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
-            XCTAssertGreaterThanOrEqual(priority(automobile), floor, "\(automobile) is automobile")
+            XCTAssertEqual(tier(automobile), .automobile, "\(automobile) is automobile")
         }
         for pedestrian in ["path", "track", "rail"] {
-            XCTAssertLessThan(priority(pedestrian), floor, "\(pedestrian) is the finer network under it")
+            XCTAssertEqual(tier(pedestrian), .pedestrian, "\(pedestrian) is the finer network under it")
         }
     }
 

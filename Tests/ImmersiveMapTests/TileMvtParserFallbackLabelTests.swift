@@ -359,10 +359,12 @@ private final class FallbackWaterLabelStyle: ImmersiveMapStyle {
             labelTextStyle = nil
         }
 
-        return FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
-                            color: SIMD4<Float>(1, 1, 1, 1),
-                            parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
-                            labelTextStyle: labelTextStyle)
+        var style = FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
+                                 color: SIMD4<Float>(1, 1, 1, 1),
+                                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 1),
+                                 labelTextStyle: labelTextStyle)
+        style.isWaterName = labelTextStyle != nil
+        return style
     }
 }
 
