@@ -18,11 +18,11 @@ struct GroundFeatureReader {
     /// earcut never sees the hundreds of islands of a coastal tile at once.
     static let complexOceanHoleSplitThreshold = 64
 
-    private let determineFeatureStyle: DetermineFeatureStyle
+    private let mapStyle: any ImmersiveMapStyle
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
-    init(determineFeatureStyle: DetermineFeatureStyle) {
-        self.determineFeatureStyle = determineFeatureStyle
+    init(mapStyle: any ImmersiveMapStyle) {
+        self.mapStyle = mapStyle
     }
 
     /// Whether a feature's polygons take the ocean split, decided once per
@@ -56,9 +56,9 @@ struct GroundFeatureReader {
         result.polygonByStyle[style.key, default: []].append(parsedOcean)
         result.styles[style.key] = style
 
-        let landStyle = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(layerName: "background",
-                                                                                  properties: [:],
-                                                                                  tile: tile))
+        let landStyle = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "background",
+                                                                      properties: [:],
+                                                                      tile: tile))
         guard landStyle.key != 0 else {
             return true
         }
@@ -94,7 +94,7 @@ struct GroundFeatureReader {
         // zoom-banded (overview grass, land base, street land), and a
         // hardcoded z0 froze every tile on the overview branch, painting the
         // vegetation tone under the whole map at every zoom.
-        let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
+        let style = mapStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "background",
             properties: [:],
             tile: tile)
@@ -117,7 +117,7 @@ struct GroundFeatureReader {
     }
 
     private func appendBorder(width borderWidth: Int16, into result: inout ReadingStageResult) {
-        let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
+        let style = mapStyle.makeStyle(data: DetFeatureStyleData(
             layerName: "border",
             properties: [:],
             tile: Tile(x: 0, y: 0, z: 0))

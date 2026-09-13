@@ -28,7 +28,7 @@ import Mvt
 /// networking. Every geometry follows the y-axis contract stated once in
 /// `TileCoordinateSpace`.
 final class TileMvtParser {
-    private let determineFeatureStyle: DetermineFeatureStyle
+    private let mapStyle: any ImmersiveMapStyle
     private let options: TileParseOptions
     private let labelReader: LabelFeatureReader
     private let buildingReader: BuildingFeatureReader
@@ -56,14 +56,13 @@ final class TileMvtParser {
         options.streetscapeEnabled == false
     }
 
-    init(determineFeatureStyle: DetermineFeatureStyle,
+    init(mapStyle: any ImmersiveMapStyle,
          labelDecisions: TileLabelDecisions,
          options: TileParseOptions) {
-        self.determineFeatureStyle = determineFeatureStyle
-        self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions,
-                                              determineFeatureStyle: determineFeatureStyle)
+        self.mapStyle = mapStyle
+        self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions, mapStyle: mapStyle)
         self.buildingReader = BuildingFeatureReader(options: options)
-        self.groundReader = GroundFeatureReader(determineFeatureStyle: determineFeatureStyle)
+        self.groundReader = GroundFeatureReader(mapStyle: mapStyle)
         self.lineReader = LineFeatureReader(labelDecisions: labelDecisions, options: options)
         self.options = options
     }
@@ -134,7 +133,7 @@ final class TileMvtParser {
                     }
                 }
                 for attributes in featureAttributes {
-                    featureStyles.append(determineFeatureStyle.makeStyle(data: DetFeatureStyleData(
+                    featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
                         properties: attributes,
                         tile: tile,

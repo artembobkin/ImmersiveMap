@@ -52,12 +52,11 @@ final class TileRenderStore: @unchecked Sendable {
             labelsEnabled: config.labels.isEnabled,
             streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
         )
-        let determineFeatureStyle = DetermineFeatureStyle(mapStyle: mapStyle)
         let labelDecisions = TileLabelDecisions(profile: providerRuntime.labelProviderProfile,
                                                 glyphCoverage: textRenderer.glyphCoverage,
                                                 language: config.labels.language,
                                                 fallbackPolicy: config.labels.fallbackPolicy)
-        let tileParser = TileMvtParser(determineFeatureStyle: determineFeatureStyle,
+        let tileParser = TileMvtParser(mapStyle: mapStyle,
                                        labelDecisions: labelDecisions,
                                        options: TileParseOptions(settings: config))
         let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)

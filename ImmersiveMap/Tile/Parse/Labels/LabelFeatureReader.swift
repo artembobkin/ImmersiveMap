@@ -15,12 +15,12 @@ import Mvt
 /// a map that wants them.
 struct LabelFeatureReader {
     private let labelDecisions: TileLabelDecisions
-    private let determineFeatureStyle: DetermineFeatureStyle
+    private let mapStyle: any ImmersiveMapStyle
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
-    init(labelDecisions: TileLabelDecisions, determineFeatureStyle: DetermineFeatureStyle) {
+    init(labelDecisions: TileLabelDecisions, mapStyle: any ImmersiveMapStyle) {
         self.labelDecisions = labelDecisions
-        self.determineFeatureStyle = determineFeatureStyle
+        self.mapStyle = mapStyle
     }
 
     /// One label per point of the feature that lies inside the tile and
@@ -90,9 +90,9 @@ struct LabelFeatureReader {
                 "name": .string(name)
             ]
 
-            let style = determineFeatureStyle.makeStyle(data: DetFeatureStyleData(layerName: "natural_label",
-                                                                                  properties: attributes,
-                                                                                  tile: tile))
+            let style = mapStyle.makeStyle(data: DetFeatureStyleData(layerName: "natural_label",
+                                                                     properties: attributes,
+                                                                     tile: tile))
             guard let textStyle = style.labelTextStyle else {
                 continue
             }
