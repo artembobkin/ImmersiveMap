@@ -11,7 +11,7 @@ class TileMvtParser {
     private static let minClippedRoadLabelFragmentLength: Float = 256.0
     static let complexOceanHoleSplitThreshold = 64
     let determineFeatureStyle               : DetermineFeatureStyle
-    let config                              : ImmersiveMapSettings
+    let options                             : TileParseOptions
     private let labelTextResolver           : VectorTileLabelTextResolver
     private let labelLanguagePreferences    : VectorTileLabelLanguagePreferences
     private let glyphCoverage               : VectorTileLabelGlyphCoverage
@@ -41,21 +41,21 @@ class TileMvtParser {
     /// style so that every style, the built-in one and a custom one alike,
     /// draws the same bare street map by default.
     private var stripsRoadPaint: Bool {
-        config.tiles.streetscape.isEnabled == false
+        options.streetscapeEnabled == false
     }
 
     
     init(determineFeatureStyle: DetermineFeatureStyle,
          labelProviderProfile: any VectorTileLabelProviderProfile,
-         config: ImmersiveMapSettings,
+         options: TileParseOptions,
          glyphCoverage: VectorTileLabelGlyphCoverage) {
         self.determineFeatureStyle = determineFeatureStyle
-        self.config = config
+        self.options = options
         self.glyphCoverage = glyphCoverage
         self.labelTextResolver = VectorTileLabelTextResolver(glyphCoverage: glyphCoverage)
         self.labelLanguagePreferences = VectorTileLabelLanguagePreferences.from(
-            settingsLanguage: config.labels.language,
-            fallbackPolicy: config.labels.fallbackPolicy
+            settingsLanguage: options.labelLanguage,
+            fallbackPolicy: options.labelFallbackPolicy
         )
         self.labelProviderProfile = labelProviderProfile
         self.labelDecisionEngine = VectorTileLabelDecisionEngine(
@@ -1105,7 +1105,7 @@ class TileMvtParser {
             let layerStart = DispatchTime.now().uptimeNanoseconds
             let layerName = layer.name
             let usesSeparateRoadRendering = Self.isSeparateRoadLayer(layerName)
-                && tile.z >= config.style.flatSeparateRoadRenderingMinimumZoom
+                && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
             // Attributes and style resolve exactly once per feature here; the
             // building and road pre-passes below share them instead of
@@ -1134,7 +1134,7 @@ class TileMvtParser {
                         layerName: layerName,
                         properties: attributes,
                         tile: tile,
-                        streetscapeEnabled: config.tiles.streetscape.isEnabled
+                        streetscapeEnabled: options.streetscapeEnabled
                     )))
                 }
                 if stripsRoadPaint, Self.isSeparateRoadLayer(layerName) {
@@ -1231,10 +1231,10 @@ class TileMvtParser {
                     // fill; the flag is prepared-cache identity, so toggling
                     // re-parses instead of serving the other shape from disk.
                     // Tiles coarser than the building grid never draw
-                    // buildings (`BuildingCoveragePlanner`), so their merged
-                    // blocks are not tessellated or uploaded either.
-                    let shouldExtrude = config.style.buildingExtrusionEnabled
-                        && tile.z >= BuildingCoveragePlanner.minimumSourceZoom
+                    // buildings, so their merged blocks are not tessellated
+                    // or uploaded either.
+                    let shouldExtrude = options.buildingExtrusionEnabled
+                        && tile.z >= options.buildingMinimumSourceZoom
                         && style.usesExtrusion
                         && (extrudeFlag != false)
                         && !isTruthy(attributes["hide_3d"])
@@ -1323,7 +1323,7 @@ class TileMvtParser {
                     // Labels off: no road name is resolved or baked. The
                     // switch is prepared-cache identity, so a tile prepared
                     // without labels never answers a map that wants them.
-                    let labelText = config.labels.isEnabled
+                    let labelText = options.labelsEnabled
                         ? labelTextResolver.resolveText(properties: attributes,
                                                         preferences: labelLanguagePreferences,
                                                         additionalKeys: labelProviderProfile.labelTextKeys)
@@ -1714,7 +1714,7 @@ class TileMvtParser {
                 } else if feature.type == .point {
                     // Point features exist only to be labelled: with labels
                     // off the layer is skipped whole, decision engine included.
-                    guard config.labels.isEnabled,
+                    guard options.labelsEnabled,
                           let labelTextStyle = style.labelTextStyle else { continue }
                     let points = normalize(MvtGeometryDecoder.decodePoints(feature.geometry, in: mvtData),
                                            layer: layer)
@@ -1779,12 +1779,12 @@ class TileMvtParser {
 
         }
 
-        if config.labels.isEnabled {
+        if options.labelsEnabled {
             appendFallbackLowZoomWaterLabels(into: &textLabels, tile: tile)
         }
         
         addBackground(polygonByStyle: &polygonByStyle, styles: &styles, tile: tile)
-        if config.tiles.parsing.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }
+        if options.addTestBorders { addBorder(polygonByStyle: &polygonByStyle, styles: &styles, borderWidth: 1) }
         // The ground of a coarse tile is drawn straight onto the sphere:
         // split its triangles so their chords stay under a pixel of the
         // true surface (see GroundGeometrySubdivider).

@@ -21,7 +21,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                              labelProviderProfile: runtimeContext.labelProviderProfile,
-                             config: config,
+                             options: TileParseOptions(settings: config),
                              glyphCoverage: .legacyAtlasForTests)
     }
 

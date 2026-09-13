@@ -15,7 +15,7 @@ final class StreetscapeOverlayLoadTests: XCTestCase {
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: settings)
         return TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                              labelProviderProfile: runtimeContext.labelProviderProfile,
-                             config: settings,
+                             options: TileParseOptions(settings: settings),
                              glyphCoverage: .legacyAtlasForTests)
     }
 

@@ -55,7 +55,7 @@ final class TileRenderStore: @unchecked Sendable {
         let determineFeatureStyle = DetermineFeatureStyle(mapStyle: mapStyle)
         let tileParser = TileMvtParser(determineFeatureStyle: determineFeatureStyle,
                                        labelProviderProfile: providerRuntime.labelProviderProfile,
-                                       config: config,
+                                       options: TileParseOptions(settings: config),
                                        glyphCoverage: textRenderer.glyphCoverage)
         let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)
         let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)

@@ -15,7 +15,7 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
 
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: RoadLabelStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 14),
                                           mvtData: makeRoadLabelTile().serializedData())

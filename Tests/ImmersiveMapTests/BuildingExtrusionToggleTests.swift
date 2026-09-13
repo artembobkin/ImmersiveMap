@@ -17,7 +17,7 @@ final class BuildingExtrusionToggleTests: XCTestCase {
         return TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
             labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            config: config,
+            options: TileParseOptions(settings: config),
             glyphCoverage: .legacyAtlasForTests
         )
     }

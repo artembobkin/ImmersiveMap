@@ -23,7 +23,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         return TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
             labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            config: config,
+            options: TileParseOptions(settings: config),
             glyphCoverage: .legacyAtlasForTests
         )
     }
@@ -156,7 +156,7 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
         return TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: ImmersiveMapTilesDefaultMapStyle()),
             labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-            config: config,
+            options: TileParseOptions(settings: config),
             glyphCoverage: .legacyAtlasForTests
         )
     }

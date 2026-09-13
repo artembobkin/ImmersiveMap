@@ -155,7 +155,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                                    labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: VectorTileFixture.layerTile(layerName: "transportation",
@@ -167,7 +167,7 @@ final class CrosswalkZebraRenderTests: XCTestCase {
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                                    labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: Self.tileData(crossing: crossing))

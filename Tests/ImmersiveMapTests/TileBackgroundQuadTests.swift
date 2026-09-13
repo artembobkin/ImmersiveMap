@@ -15,7 +15,7 @@ final class TileBackgroundQuadTests: XCTestCase {
         let runtimeContext = ImmersiveMapProviderRuntimeContext(settings: config)
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
                                    labelProviderProfile: runtimeContext.labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         let parsed = try parser.parse(tile: tile,
                                       mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))

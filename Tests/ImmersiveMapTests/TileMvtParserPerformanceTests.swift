@@ -26,7 +26,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let parser = TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
             labelProviderProfile: runtimeContext.labelProviderProfile,
-            config: config,
+            options: TileParseOptions(settings: config),
             glyphCoverage: .legacyAtlasForTests
         )
 
@@ -65,7 +65,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let parser = TileMvtParser(
             determineFeatureStyle: DetermineFeatureStyle(mapStyle: runtimeContext.mapStyle),
             labelProviderProfile: runtimeContext.labelProviderProfile,
-            config: config,
+            options: TileParseOptions(settings: config),
             glyphCoverage: .legacyAtlasForTests
         )
 

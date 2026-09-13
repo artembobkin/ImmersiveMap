@@ -423,7 +423,7 @@ extension TileMvtParser {
         // height, and the roof attributes are never parsed. Part of the
         // prepared-cache identity (PreparedTileCacheIdentity), so toggling
         // re-parses instead of serving the other shape from disk.
-        guard config.style.buildingRoofShapesEnabled else {
+        guard options.buildingRoofShapesEnabled else {
             return ExtrusionHeights(base: base, top: top, roof: nil)
         }
         let roofParser = RoofAttributesParser()

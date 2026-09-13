@@ -111,7 +111,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: FallbackWaterLabelStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeProviderAtlanticOceanTile().serializedData())
@@ -130,7 +130,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         let config = ImmersiveMapSettings.default
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: ParserSolidPolygonStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeFullTilePolygonTile(extent: 2048).serializedData())
@@ -148,7 +148,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         let config = ImmersiveMapSettings.default
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: ParserSolidPolygonStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: .legacyAtlasForTests)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeComplexOceanTile().serializedData())
@@ -267,7 +267,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
         let parser = TileMvtParser(determineFeatureStyle: DetermineFeatureStyle(mapStyle: FallbackWaterLabelStyle()),
                                    labelProviderProfile: ImmersiveMapProviderRuntimeContext(settings: config).labelProviderProfile,
-                                   config: config,
+                                   options: TileParseOptions(settings: config),
                                    glyphCoverage: glyphCoverage)
         let parsedTile = try parser.parse(tile: tile,
                                           mvtData: mvtData ?? MvtTileMessage().serializedData())
