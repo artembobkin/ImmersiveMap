@@ -26,7 +26,7 @@ an app that links the `ImmersiveMap` product cannot see it at all.
   decoder produces and the parser consumes in place.
 
 What the module does not know: layer names, the tile schema's meaning, any
-style. The engine's `MvtRoadLayerFold` in `ImmersiveMap/Tile/Parse` is the
+style. The engine's `MvtRoadLayerFold` in `ImmersiveMap/Tile/Parse/Roads` is the
 schema side of the merge: it names the `streetscape` layer and the road
 layers and hands them to the method above.
 

@@ -59,6 +59,7 @@ let package = Package(
                 "Starfield/README.md",
                 "StillCapture/README.md",
                 "Text/README.md",
+                "Tile/Parse/README.md",
                 "Tile/README.md",
                 "UI/README.md",
                 "Utils/README.md",

@@ -42,7 +42,7 @@ mirror bug pass, which is how two of the three shipped.
 
 - Tile identity, LOD, visibility, and placement models.
 - Tile loading pipeline, downloader, retry, FIFO, and disk cache code.
-- MVT parsing, clipping, decoding, bridge/roof/road geometry builders.
+- MVT parsing, clipping, decoding, roof and road geometry builders.
 - Feature style models and default styling logic.
 - Prepared tile serialization codecs and cache identity types.
 

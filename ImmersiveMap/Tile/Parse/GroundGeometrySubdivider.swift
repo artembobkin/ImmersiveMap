@@ -58,7 +58,7 @@ enum GroundGeometrySubdivider {
         for key in polygonByStyle.keys {
             guard let polygons = polygonByStyle[key] else { continue }
             polygonByStyle[key] = polygons.map { polygon in
-                subdivide(polygon, step: TileMvtParser.isLineRibbon(polygon) ? ribbonStep : step)
+                subdivide(polygon, step: polygon.isLineRibbon ? ribbonStep : step)
             }
         }
     }

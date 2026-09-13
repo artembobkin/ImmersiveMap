@@ -26,6 +26,16 @@ struct ParsedPolygon {
     /// left out, since the polygon continues in the neighbour. Empty for
     /// line ribbons and for every polygon that is not a plain fill.
     var outlineIndices: [UInt32] = []
+
+    /// A line ribbon carries per-vertex line attributes (extruded stroke
+    /// geometry); a fill does not, including the decoration polygons that
+    /// share a line style (they default to the saturated line interior).
+    /// The unification stage sweeps the two classes apart, and
+    /// `GroundGeometrySubdivider`'s ribbon grid is coarser.
+    var isLineRibbon: Bool {
+        lineDistances.count == vertices.count
+            && lineParameters.count == vertices.count
+    }
 }
 
 extension ParsedPolygon {
@@ -34,7 +44,7 @@ extension ParsedPolygon {
     /// keep when they cull back faces (on the sphere the far side of the
     /// planet is clockwise on screen and disappears by orientation alone).
     /// Every emitter honours it by construction; this is how the tests and
-    /// the debug funnel in `TileMvtParser.appendPolygon` check it.
+    /// the debug funnel in `TileUnificationStage.appendPolygon` check it.
     ///
     /// How far below zero the doubled signed area may go before a triangle
     /// counts as clockwise, per unit of its longest edge. Rounding the

@@ -63,8 +63,8 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
                                  dashLengthPoints: 7,
                                  dashGapPoints: 3.5,
                                  parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 8))
-        XCTAssertEqual(TileMvtParser.makeTileLineStyle(from: flagged).dashInTileUnits, 1)
-        XCTAssertEqual(TileMvtParser.makeTileLineStyle(from: plain).dashInTileUnits, 0)
+        XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: flagged).dashInTileUnits, 1)
+        XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: plain).dashInTileUnits, 0)
         // The synthesized single pass keeps the flag too.
         XCTAssertTrue(flagged.resolvedLineRenderPasses[0].dashInTileUnits)
         XCTAssertFalse(plain.resolvedLineRenderPasses[0].dashInTileUnits)
