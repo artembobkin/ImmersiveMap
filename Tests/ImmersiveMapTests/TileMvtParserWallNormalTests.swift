@@ -12,17 +12,10 @@ import XCTest
 /// inward wall normal makes a sunlit facade flip dark whenever the two-sided
 /// camera test cannot rescue it (walls seen at grazing angles).
 final class TileMvtParserWallNormalTests: XCTestCase {
-    private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
-        return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
-    }
-
     private func makeMesh(exterior: [SIMD2<Float>],
                           interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
-        let parser = makeParser()
         let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
-        return parser.buildExtrudedMesh(clippedExterior: exterior,
+        return BuildingExtrusionMeshBuilder.build(clippedExterior: exterior,
                                         clippedInteriors: interiors,
                                         roof: ParsedPolygon(vertices: roofVertices,
                                                                           indices: [0, 1, 2, 0, 2, 3]),

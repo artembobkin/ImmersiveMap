@@ -14,6 +14,7 @@ class TileMvtParser {
     let options                             : TileParseOptions
     private let labelDecisions              : TileLabelDecisions
     private let labelReader                 : LabelFeatureReader
+    private let buildingReader              : BuildingFeatureReader
     private let crosswalkZebraBuilder       : CrosswalkZebraGeometryBuilder = CrosswalkZebraGeometryBuilder()
     let parkingBayBuilder                   : ParkingBayGeometryBuilder = ParkingBayGeometryBuilder()
     private let roadDirectionArrowBuilder   : RoadDirectionArrowGeometryBuilder = RoadDirectionArrowGeometryBuilder()
@@ -48,6 +49,7 @@ class TileMvtParser {
         self.labelDecisions = labelDecisions
         self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions,
                                               determineFeatureStyle: determineFeatureStyle)
+        self.buildingReader = BuildingFeatureReader(options: options)
         self.options = options
     }
     
@@ -223,10 +225,10 @@ class TileMvtParser {
         let locationValue = attributes["location"]?.stringValue?.lowercased() ?? ""
         let structureValue = attributes["structure"]?.stringValue?.lowercased() ?? ""
         let brunnelValue = attributes["brunnel"]?.stringValue?.lowercased() ?? ""
-        let layerValue = attributes["layer"].flatMap(parseIntValue) ?? 0
+        let layerValue = attributes["layer"]?.integerValue ?? 0
 
-        let isTunnel = isTruthy(attributes["underground"])
-            || isTruthy(attributes["tunnel"])
+        let isTunnel = MvtValue.isTruthy(attributes["underground"])
+            || MvtValue.isTruthy(attributes["tunnel"])
             || locationValue.contains("underground")
             || locationValue.contains("subterranean")
             || locationValue.contains("tunnel")
@@ -238,7 +240,7 @@ class TileMvtParser {
             return .tunnel
         }
 
-        let isBridge = isTruthy(attributes["bridge"])
+        let isBridge = MvtValue.isTruthy(attributes["bridge"])
             || structureValue == "bridge"
             || brunnelValue == "bridge"
             || locationValue.contains("bridge")
@@ -252,7 +254,7 @@ class TileMvtParser {
     }
 
     func roadLayerValue(attributes: [String: MvtValue]) -> Int {
-        attributes["layer"].flatMap(parseIntValue) ?? 0
+        attributes["layer"]?.integerValue ?? 0
     }
 
     /// A road line decoded, converted, and exact-clipped once: the pre-pass
@@ -561,7 +563,7 @@ class TileMvtParser {
         var streetIdentifiers: [String: Int] = [:]
         var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
         for index in 0..<layer.features.count {
-            if let value = featureAttributes[index]["street"], let street = parseIntValue(value) {
+            if let value = featureAttributes[index]["street"], let street = value.integerValue {
                 streetIdentifierByFeature[index] = Int(street)
                 continue
             }
@@ -892,11 +894,9 @@ class TileMvtParser {
                 }
             }
 
-            let buildingPartInfo = layerName == "building"
-                ? collectBuildingPartInfo(geometry: layerGeometry, featureAttributes: featureAttributes)
-                : (partIds: Set<UInt64>(), footprintSignatures: Set<BuildingFootprintSignature>())
-            let buildingPartIds = buildingPartInfo.partIds
-            let buildingPartFootprintSignatures = buildingPartInfo.footprintSignatures
+            let buildingPartInfo = buildingReader.partInfo(layerName: layerName,
+                                                           geometry: layerGeometry,
+                                                           attributes: featureAttributes)
             let highZoomRoads = usesSeparateRoadRendering
                 ? buildHighZoomRoadPrecomputation(geometry: layerGeometry,
                                                   featureStyles: featureStyles,
@@ -937,52 +937,12 @@ class TileMvtParser {
                     let polygons = layerGeometry.polygons(of: feature)
                     let shouldSplitComplexOceanHoles = layerName == "ocean"
                         && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
-                    let extrudeFlag = attributes["extrude"].flatMap(parseBoolValue)
-                    let isBuildingPart = isTruthy(attributes["building:part"])
-                    let buildingId = buildingIdentifier(attributes: attributes, featureId: feature.id)
-                    let hasParts = buildingPartIds.contains(buildingId)
-                    // buildingFootprintSignature -> canonicalRotation is O(n^2) in ring
-                    // vertices; only building-part dedup needs it. Skip it entirely when
-                    // there are no part signatures to match (always the case for
-                    // non-building layers), so large landcover/water polygons don't pay
-                    // the quadratic cost. Result is unchanged: an empty set never matches.
-                    let matchesPartFootprint = isBuildingPart == false
-                        && buildingPartFootprintSignatures.isEmpty == false
-                        && polygons.contains { polygon in
-                            guard let signature = buildingFootprintSignature(for: polygon) else {
-                                return false
-                            }
-                            return buildingPartFootprintSignatures.contains(signature)
-                        }
-                    let locationValue = attributes["location"]?.stringValue?.lowercased() ?? ""
-                    let isUnderground = isTruthy(attributes["underground"])
-                        || locationValue.contains("underground")
-                        || locationValue.contains("subterranean")
-                        || locationValue.contains("tunnel")
-                        || locationValue.contains("underwater")
-                    // `extrude` is the Mapbox convention (present, "true"); the
-                    // OpenMapTiles building layer has no such field (it drives height
-                    // from render_height and hides 3D via hide_3d). Extrude when the
-                    // flag is true OR absent, and suppress only when explicitly false
-                    // or hide_3d is set - preserving Mapbox behaviour, enabling OMT.
-                    // With extrusion switched off in the settings nothing is
-                    // extruded at all and the footprint stays a flat ground
-                    // fill; the flag is prepared-cache identity, so toggling
-                    // re-parses instead of serving the other shape from disk.
-                    // Tiles coarser than the building grid never draw
-                    // buildings, so their merged blocks are not tessellated
-                    // or uploaded either.
-                    let shouldExtrude = options.buildingExtrusionEnabled
-                        && tile.z >= options.buildingMinimumSourceZoom
-                        && style.usesExtrusion
-                        && (extrudeFlag != false)
-                        && !isTruthy(attributes["hide_3d"])
-                        && !isUnderground
-                        && !matchesPartFootprint
-                        && !(hasParts && !isBuildingPart)
-                    let extrusion = shouldExtrude
-                        ? extrusionHeights(attributes: attributes, tileZoom: tile.z, style: style)
-                        : nil
+                    let extrusion = buildingReader.extrusion(feature: feature,
+                                                             attributes: attributes,
+                                                             style: style,
+                                                             polygons: polygons,
+                                                             partInfo: buildingPartInfo,
+                                                             tile: tile)
                     
                     for polygon in polygons {
                         if shouldSplitComplexOceanHoles,
@@ -1019,28 +979,11 @@ class TileMvtParser {
                         result.appendGround(parsedGeometry.parsedPolygon, key: styleKey, placement: style.linePlacement)
                         
                         if let extrusion,
-                           extrusion.top > extrusion.base,
-                           let footprintSignature = buildingFootprintSignature(for: polygon) {
-                            // The extrusion path's ONE entry into render
-                            // space: the candidate's rings all flip here, so
-                            // the unclipped ring shares exact coordinates
-                            // with the clipped one on uncut edges.
-                            let unclippedExterior = TileCoordinateSpace.renderPoints(
-                                polygon.exteriorRing.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
-                            )
-                            buildingExtrusionCandidates.append(
-                                BuildingExtrusionCandidate(styleKey: styleKey,
-                                                           buildingId: buildingId,
-                                                           footprintSignature: footprintSignature,
-                                                           clippedExterior: TileCoordinateSpace.renderPoints(parsedGeometry.clipped.exterior),
-                                                           clippedInteriors: parsedGeometry.clipped.interiors.map(TileCoordinateSpace.renderPoints),
-                                                           unclippedExterior: unclippedExterior,
-                                                           hasUnclippedInteriorRings: polygon.interiorRings.contains { $0.count >= 3 },
-                                                           roof: parsedGeometry.parsedPolygon,
-                                                           roofInfo: extrusion.roof,
-                                                           baseHeight: extrusion.base,
-                                                           topHeight: extrusion.top)
-                            )
+                           let candidate = buildingReader.candidate(polygon: polygon,
+                                                                    parsedGeometry: parsedGeometry,
+                                                                    styleKey: styleKey,
+                                                                    extrusion: extrusion) {
+                            buildingExtrusionCandidates.append(candidate)
                         }
                     }
                     
@@ -1443,20 +1386,7 @@ class TileMvtParser {
         // true surface (see GroundGeometrySubdivider).
         GroundGeometrySubdivider.subdivideIfNeeded(&result.polygonByStyle, tileZoom: tile.z)
 
-        let resolvedBuildingExtrusions = resolveExteriorBuildingExtrusions(buildingExtrusionCandidates)
-        for candidate in resolvedBuildingExtrusions {
-            if let extrudedMesh = buildExtrudedMesh(clippedExterior: candidate.clippedExterior,
-                                                    clippedInteriors: candidate.clippedInteriors,
-                                                    unclippedExterior: candidate.unclippedExterior,
-                                                    hasUnclippedInteriorRings: candidate.hasUnclippedInteriorRings,
-                                                    roof: candidate.roof,
-                                                    roofInfo: candidate.roofInfo,
-                                                    baseHeight: candidate.baseHeight,
-                                                    topHeight: candidate.topHeight,
-                                                    tileExtent: Float(tileExtent)) {
-                result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
-            }
-        }
+        buildingReader.appendExtrudedMeshes(resolving: buildingExtrusionCandidates, into: &result)
         
         result.removeEmptyBuckets()
         return result

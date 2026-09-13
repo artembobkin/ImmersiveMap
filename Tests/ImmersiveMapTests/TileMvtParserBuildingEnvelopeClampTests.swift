@@ -12,23 +12,17 @@ import XCTest
 /// Basil's Cathedral (parts ending at the envelope top: clamped down the chain),
 /// and a street canopy (a break in the chain, which must not drag the top down).
 final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
-    private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
-        return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
-    }
-
     private func makeCandidate(buildingId: UInt64,
                                exterior: [SIMD2<Float>],
                                baseHeight: Float,
-                               topHeight: Float) -> TileMvtParser.BuildingExtrusionCandidate {
-        let signature = TileMvtParser.BuildingFootprintSignature(
+                               topHeight: Float) -> BuildingExtrusionCandidate {
+        let signature = BuildingFootprintSignature(
             exterior: exterior.map { UInt64(UInt32(bitPattern: Int32($0.x.rounded()))) << 32
                 | UInt64(UInt32(bitPattern: Int32($0.y.rounded()))) },
             interiors: []
         )
         let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x.rounded()), Int16($0.y.rounded())) }
-        return TileMvtParser.BuildingExtrusionCandidate(
+        return BuildingExtrusionCandidate(
             styleKey: 1,
             buildingId: buildingId,
             footprintSignature: signature,
@@ -48,12 +42,11 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
     }
 
     private func resolvedTop(of buildingId: UInt64,
-                             in resolved: [TileMvtParser.BuildingExtrusionCandidate]) -> Float? {
+                             in resolved: [BuildingExtrusionCandidate]) -> Float? {
         resolved.first { $0.buildingId == buildingId }?.topHeight
     }
 
     func testHullEnvelopeIsClampedDownThePartChain() {
-        let parser = makeParser()
         var candidates = [makeCandidate(buildingId: 1,
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
@@ -67,13 +60,12 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                             topHeight: 55))
         }
 
-        let resolved = parser.resolveExteriorBuildingExtrusions(candidates)
+        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
 
         XCTAssertEqual(resolvedTop(of: 1, in: resolved), 12)
     }
 
     func testDisconnectedLowCanopyDoesNotDragTheClampDown() {
-        let parser = makeParser()
         var candidates = [makeCandidate(buildingId: 1,
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
@@ -93,13 +85,12 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         baseHeight: 4,
                                         topHeight: 8))
 
-        let resolved = parser.resolveExteriorBuildingExtrusions(candidates)
+        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
 
         XCTAssertEqual(resolvedTop(of: 1, in: resolved), 50)
     }
 
     func testRooftopPartsAboveEnvelopeTopVetoTheClamp() {
-        let parser = makeParser()
         var candidates = [makeCandidate(buildingId: 1,
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
@@ -120,13 +111,12 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                         baseHeight: 8,
                                         topHeight: 40))
 
-        let resolved = parser.resolveExteriorBuildingExtrusions(candidates)
+        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
 
         XCTAssertEqual(resolvedTop(of: 1, in: resolved), 60)
     }
 
     func testTinyDecorativePartsAreIgnored() {
-        let parser = makeParser()
         var candidates = [makeCandidate(buildingId: 1,
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
@@ -140,13 +130,12 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                             topHeight: index == 0 ? 8 : 58))
         }
 
-        let resolved = parser.resolveExteriorBuildingExtrusions(candidates)
+        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
 
         XCTAssertEqual(resolvedTop(of: 1, in: resolved), 60)
     }
 
     func testEnvelopeWithFewerThanFourPartsKeepsFullHeight() {
-        let parser = makeParser()
         var candidates = [makeCandidate(buildingId: 1,
                                         exterior: square(x: 0, y: 0, size: 100),
                                         baseHeight: 0,
@@ -158,7 +147,7 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                                             topHeight: 55))
         }
 
-        let resolved = parser.resolveExteriorBuildingExtrusions(candidates)
+        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
 
         XCTAssertEqual(resolvedTop(of: 1, in: resolved), 60)
     }

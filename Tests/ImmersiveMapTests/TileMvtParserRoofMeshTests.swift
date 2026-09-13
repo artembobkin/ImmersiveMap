@@ -18,20 +18,13 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         SIMD2(1000, 1000), SIMD2(1100, 1000), SIMD2(1100, 1040), SIMD2(1000, 1040)
     ]
 
-    private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
-        return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
-    }
-
     private func makeMesh(roofShape: RoofShape?,
                           interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
-        let parser = makeParser()
         let roofVertices = rectangle.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
         let roofInfo = roofShape.map {
             RoofInfo(height: roofHeight, shape: $0, orientation: nil, directionDegrees: nil)
         }
-        return parser.buildExtrudedMesh(clippedExterior: rectangle,
+        return BuildingExtrusionMeshBuilder.build(clippedExterior: rectangle,
                                         clippedInteriors: interiors,
                                         roof: ParsedPolygon(vertices: roofVertices,
                                                                           indices: [0, 1, 2, 0, 2, 3]),
@@ -101,8 +94,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         let clipped: [SIMD2<Float>] = [
             SIMD2(0, 1000), SIMD2(60, 1000), SIMD2(60, 1040), SIMD2(0, 1040)
         ]
-        let parser = makeParser()
-        let mesh = try XCTUnwrap(parser.buildExtrudedMesh(
+        let mesh = try XCTUnwrap(BuildingExtrusionMeshBuilder.build(
             clippedExterior: clipped,
             clippedInteriors: [],
             unclippedExterior: raw,
@@ -146,14 +138,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
 /// lid at its full height. The flag is prepared-cache identity and a heavy
 /// settings change, pinned alongside.
 final class BuildingRoofShapesToggleTests: XCTestCase {
-    private func makeParser(roofShapesEnabled: Bool) -> TileMvtParser {
-        var config = ImmersiveMapSettings.default
-        config.style.buildingRoofShapesEnabled = roofShapesEnabled
-        return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
-    }
-
-    private func heights(roofShapesEnabled: Bool) -> TileMvtParser.ExtrusionHeights? {
+    private func heights(roofShapesEnabled: Bool) -> BuildingExtrusionHeights? {
         let style = ImmersiveMapTilesDefaultMapStyle()
             .makeStyle(data: DetFeatureStyleData(layerName: "building",
                                                  properties: [:],
@@ -163,7 +148,9 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
             "roof:shape": .string("gabled"),
             "roof:height": .float(6)
         ]
-        return makeParser(roofShapesEnabled: roofShapesEnabled)
+        var config = ImmersiveMapSettings.default
+        config.style.buildingRoofShapesEnabled = roofShapesEnabled
+        return BuildingFeatureReader(options: TileParseOptions(settings: config))
             .extrusionHeights(attributes: attributes, tileZoom: 16, style: style)
     }
 
