@@ -51,9 +51,12 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             return .polygon(color: SIMD4<Float>(0.14, 0.15, 0.17, 1))
 
         case "building":
-            // The engine reads the height from the feature and falls back to
-            // `fallbackHeight` when the tile carries none.
+            // What the feature is as a building (its height, its base, its
+            // roof) is the style's reading of the tags; the OpenStreetMap
+            // reading covers this schema. `fallbackHeight` applies when the
+            // tile states no height.
             return .extrudedPolygon(color: SIMD4<Float>(0.22, 0.24, 0.29, 1),
+                                    building: .openStreetMap(feature.properties),
                                     heightScale: 1.0,
                                     anchorZoom: 16,
                                     fallbackHeight: 8)

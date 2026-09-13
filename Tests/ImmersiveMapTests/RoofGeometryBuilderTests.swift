@@ -21,16 +21,16 @@ final class RoofGeometryBuilderTests: XCTestCase {
     ]
     private let rectangleCenter = SIMD2<Float>(1050, 1020)
 
-    private func makeRoof(_ shape: RoofShape,
-                          orientation: RoofOrientation? = nil,
+    private func makeRoof(_ shape: ImmersiveMapRoofShape,
+                          orientation: ImmersiveMapRoofOrientation? = nil,
                           direction: Float? = nil) -> RoofInfo {
         RoofInfo(height: roofHeight, shape: shape, orientation: orientation, directionDegrees: direction)
     }
 
-    private func build(_ shape: RoofShape,
+    private func build(_ shape: ImmersiveMapRoofShape,
                        ring: [SIMD2<Float>]? = nil,
                        wallRing: [SIMD2<Float>]? = nil,
-                       orientation: RoofOrientation? = nil,
+                       orientation: ImmersiveMapRoofOrientation? = nil,
                        direction: Float? = nil,
                        hasInteriorRings: Bool = false,
                        tileExtent: Float = 4096) -> RoofGeometry? {

@@ -56,7 +56,7 @@ enum RoofGeometryBuilder {
                       baseHeight: Float,
                       topHeight: Float,
                       tileExtent: Float) -> RoofGeometry? {
-        guard roof.shape != .flat, roof.shape != .unknown else { return nil }
+        guard roof.shape != .flat else { return nil }
         guard footprintRing.count >= 3, wallRing.count >= 3 else { return nil }
         guard looksCutByTileSource(footprintRing, tileExtent: tileExtent) == false else { return nil }
 
@@ -105,7 +105,7 @@ enum RoofGeometryBuilder {
                             wallRing: wallRing,
                             roofBase: roofBase,
                             roofHeight: roofHeight)
-        case .flat, .unknown:
+        case .flat:
             return nil
         }
         guard let geometry else { return nil }

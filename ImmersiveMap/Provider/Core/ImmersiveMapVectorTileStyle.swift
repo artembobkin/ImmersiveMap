@@ -62,6 +62,19 @@ public struct ImmersiveMapFeatureProperties {
         }
     }
 
+    /// The property as a measure in metres: a number as it is, a string by
+    /// its leading number (`"12"`, `"12.5 m"`, `"3;4"` reads 3), feet
+    /// converted. Nil when the key is absent or carries no number.
+    public func metres(_ key: String) -> Float? {
+        values[key]?.metresValue
+    }
+
+    /// The property as an identifier: a non-negative integer, or a string
+    /// that spells one.
+    public func unsignedInteger(_ key: String) -> UInt64? {
+        values[key]?.uint64Value
+    }
+
     public func bool(_ key: String) -> Bool? {
         guard let value = values[key] else {
             return nil
@@ -137,7 +150,15 @@ public enum ImmersiveMapFeatureStyle: Equatable {
                          widthPoints: Float,
                          dashLengthPoints: Float = 0,
                          dashGapPoints: Float = 0)
+    /// A building. What the feature is as a building (its height, its base,
+    /// the building it belongs to, its roof) is the style's reading of the
+    /// tile's tags: `ImmersiveMapBuildingExtrusion.openStreetMap(_:)` for
+    /// an OpenStreetMap-derived schema, or the fields stated from another
+    /// schema's tags. `heightScale`, `anchorZoom` and `fallbackHeight` say
+    /// how metres become tile units and what a building without a height
+    /// gets.
     case extrudedPolygon(color: SIMD4<Float>,
+                         building: ImmersiveMapBuildingExtrusion,
                          heightScale: Float = 1.0,
                          anchorZoom: Int = 16,
                          fallbackHeight: Float = 0)

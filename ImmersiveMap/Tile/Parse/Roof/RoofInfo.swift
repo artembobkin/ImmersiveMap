@@ -1,19 +1,14 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// OSM `roof:orientation`: whether the ridge runs along or across the long
-/// axis of the footprint. `along` is the OSM default and the builder's too.
-enum RoofOrientation {
-    case along
-    case across
-}
-
+/// A building's roof as the mesh builder needs it: the style's reading
+/// (`ImmersiveMapRoof`) with the height converted to this tile's units.
 struct RoofInfo {
     let height: Float
-    let shape: RoofShape
-    /// From `roof:orientation`; nil when the tag is absent.
-    let orientation: RoofOrientation?
-    /// From `roof:direction`, a compass azimuth in degrees: the downslope
-    /// direction the roof faces. nil when the tag is absent.
+    let shape: ImmersiveMapRoofShape
+    /// From the style's reading; nil takes the OpenStreetMap default, along.
+    let orientation: ImmersiveMapRoofOrientation?
+    /// A compass azimuth in degrees: the downslope direction the roof faces.
+    /// nil leaves the direction to the footprint.
     let directionDegrees: Float?
 }

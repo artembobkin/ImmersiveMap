@@ -145,7 +145,11 @@ struct FeatureStyle {
     let linePlacement: LinePlacement
     let lineRenderPasses: [LineRenderPass]
     let roadClassPriority: Int
-    let usesExtrusion: Bool
+    /// What the feature is as a building, nil for a polygon that is not
+    /// raised. The style reads it from the tile's tags; the parser turns it
+    /// into the extrusion.
+    let building: ImmersiveMapBuildingExtrusion?
+    var usesExtrusion: Bool { building != nil }
     let extrusionHeightScale: Float
     let extrusionAnchorZoom: Int
     let extrusionFallbackHeight: Float
@@ -218,7 +222,7 @@ struct FeatureStyle {
         linePlacement: LinePlacement = .ground,
         lineRenderPasses: [LineRenderPass] = [],
         roadClassPriority: Int = 0,
-        usesExtrusion: Bool = false,
+        building: ImmersiveMapBuildingExtrusion? = nil,
         extrusionHeightScale: Float = 1.0,
         extrusionAnchorZoom: Int = 16,
         extrusionFallbackHeight: Float = 0,
@@ -249,7 +253,7 @@ struct FeatureStyle {
         self.linePlacement = linePlacement
         self.lineRenderPasses = lineRenderPasses
         self.roadClassPriority = roadClassPriority
-        self.usesExtrusion = usesExtrusion
+        self.building = building
         self.extrusionHeightScale = extrusionHeightScale
         self.extrusionAnchorZoom = extrusionAnchorZoom
         self.extrusionFallbackHeight = extrusionFallbackHeight

@@ -18,7 +18,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         SIMD2(1000, 1000), SIMD2(1100, 1000), SIMD2(1100, 1040), SIMD2(1000, 1040)
     ]
 
-    private func makeMesh(roofShape: RoofShape?,
+    private func makeMesh(roofShape: ImmersiveMapRoofShape?,
                           interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
         let roofVertices = rectangle.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
         let roofInfo = roofShape.map {
@@ -61,7 +61,7 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
         let expected = try XCTUnwrap(flatSigns.first)
         XCTAssertTrue(flatSigns.allSatisfy { $0 == expected })
 
-        for shape in [RoofShape.gabled, .hipped, .pyramid, .cone, .dome, .skillion] {
+        for shape in [ImmersiveMapRoofShape.gabled, .hipped, .pyramid, .cone, .dome, .skillion] {
             let mesh = try XCTUnwrap(makeMesh(roofShape: shape))
             let signs = roofWindingSigns(of: mesh)
             XCTAssertFalse(signs.isEmpty, "\(shape) must produce a roof surface")
@@ -151,7 +151,9 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
         var config = ImmersiveMapSettings.default
         config.style.buildingRoofShapesEnabled = roofShapesEnabled
         return BuildingFeatureReader(options: TileParseOptions(settings: config))
-            .extrusionHeights(attributes: attributes, tileZoom: 16, style: style)
+            .extrusionHeights(building: .openStreetMap(ImmersiveMapFeatureProperties(values: attributes)),
+                              tileZoom: 16,
+                              style: style)
     }
 
     func testDisabledRoofShapesFallBackToTheFlatLid() throws {

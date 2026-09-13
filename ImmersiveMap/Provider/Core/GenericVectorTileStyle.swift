@@ -72,12 +72,12 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
                 dashGapPoints: max(0, dashGapPoints),
                 suppressPolygonFill: true
             )
-        case .extrudedPolygon(let color, let heightScale, let anchorZoom, let fallbackHeight):
+        case .extrudedPolygon(let color, let building, let heightScale, let anchorZoom, let fallbackHeight):
             return FeatureStyle(
                 key: key,
                 color: color,
                 parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 100),
-                usesExtrusion: true,
+                building: building,
                 extrusionHeightScale: heightScale,
                 extrusionAnchorZoom: anchorZoom,
                 extrusionFallbackHeight: fallbackHeight
@@ -136,7 +136,9 @@ final class GenericVectorTileStyle: ImmersiveMapStyle {
             hasher.combine(UInt64(widthPoints.bitPattern))
             hasher.combine(UInt64(dashLengthPoints.bitPattern))
             hasher.combine(UInt64(dashGapPoints.bitPattern))
-        case let .extrudedPolygon(color, heightScale, anchorZoom, fallbackHeight):
+        case let .extrudedPolygon(color, _, heightScale, anchorZoom, fallbackHeight):
+            // The building's own facts vary per feature and are not part of
+            // the style's identity.
             hasher.combine(3)
             combine(color, into: &hasher)
             hasher.combine(UInt64(heightScale.bitPattern))

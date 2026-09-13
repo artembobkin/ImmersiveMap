@@ -53,7 +53,7 @@ extension FeatureStyle {
                             linePlacement: linePlacement,
                             lineRenderPasses: keptPasses,
                             roadClassPriority: roadClassPriority,
-                            usesExtrusion: usesExtrusion,
+                            building: building,
                             extrusionHeightScale: extrusionHeightScale,
                             extrusionAnchorZoom: extrusionAnchorZoom,
                             extrusionFallbackHeight: extrusionFallbackHeight,

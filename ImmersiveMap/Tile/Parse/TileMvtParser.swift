@@ -145,9 +145,7 @@ final class TileMvtParser {
                 }
             }
 
-            let buildingPartInfo = buildingReader.partInfo(layerName: layerName,
-                                                           geometry: layerGeometry,
-                                                           attributes: featureAttributes)
+            let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureStyles: featureStyles)
             let roads = RoadLayerContext(
                 usesSeparateRoadRendering: usesSeparateRoadRendering,
                 hasShippedCrossings: featureStyles.contains {
@@ -184,7 +182,6 @@ final class TileMvtParser {
                     let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(layerName: layerName,
                                                                                             polygons: polygons)
                     let extrusion = buildingReader.extrusion(feature: feature,
-                                                             attributes: attributes,
                                                              style: style,
                                                              polygons: polygons,
                                                              partInfo: buildingPartInfo,

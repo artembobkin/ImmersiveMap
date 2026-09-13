@@ -113,7 +113,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         case "park":
             return parkLayerStyle(cls: cls, subclass: subclass)
         case "building":
-            return buildingStyle(tileZoom: z)
+            return buildingStyle(props: props, tileZoom: z)
         case "aeroway":
             return line(key: 28, color: configuration.layers.aeroway, width: 4)
         case "transportation", "streetscape":
@@ -1373,7 +1373,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
         )
     }
 
-    private func buildingStyle(tileZoom: Int) -> FeatureStyle {
+    private func buildingStyle(props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
         guard tileZoom >= 13 else {
             return fallbackStyle
         }
@@ -1382,7 +1382,7 @@ final class ImmersiveMapTilesDefaultMapStyle: ImmersiveMapStyle {
             key: 30,
             color: configuration.features.buildingFillColor,
             parseGeometryStyleData: ParseGeometryStyleData(lineWidth: 0),
-            usesExtrusion: true,
+            building: .openStreetMap(ImmersiveMapFeatureProperties(values: props)),
             extrusionHeightScale: 8.0,
             extrusionAnchorZoom: 16
         )
