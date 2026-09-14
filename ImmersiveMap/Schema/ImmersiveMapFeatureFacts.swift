@@ -2,25 +2,40 @@
 // SPDX-License-Identifier: MIT
 
 /// What one feature is, as the schema reading says: the facts the engine's
-/// geometry work needs and the style draws by. A feature that is none of
-/// these things (a ground fill, a border, a river) takes `none`.
-public struct ImmersiveMapFeatureFacts: Sendable {
-    /// The feature is a road: a centreline, a carriageway surface, a
-    /// parking lot, or a line of measured paint.
-    public var road: ImmersiveMapRoadFacts?
-    /// The feature is a building.
-    public var building: ImmersiveMapBuildingExtrusion?
-    /// What the feature is called, for a feature that can be labelled: a
-    /// named point, a road with a name along it, a house number.
-    public var label: ImmersiveMapLabelFacts?
+/// geometry work needs and the style draws by. One case per kind of
+/// thing, each carrying only that kind's facts; a reader switches over the
+/// case and cannot read a label off a building.
+public enum ImmersiveMapFeatureFacts: Sendable {
+    /// None of the things the facts describe: a ground fill, a border, a
+    /// river.
+    case none
+    /// A road: a centreline, a carriageway surface, a parking lot, or a
+    /// line of measured paint. The name along it, where it has one, is
+    /// inside (`ImmersiveMapRoadFacts.label`).
+    case road(ImmersiveMapRoadFacts)
+    /// A building.
+    case building(ImmersiveMapBuildingExtrusion)
+    /// A point that can be labelled: a place, a POI, a water name, a house
+    /// number.
+    case labelled(ImmersiveMapLabelFacts)
 
-    public init(road: ImmersiveMapRoadFacts? = nil,
-                building: ImmersiveMapBuildingExtrusion? = nil,
-                label: ImmersiveMapLabelFacts? = nil) {
-        self.road = road
-        self.building = building
-        self.label = label
+    public var road: ImmersiveMapRoadFacts? {
+        if case .road(let road) = self { return road }
+        return nil
     }
 
-    public static let none = ImmersiveMapFeatureFacts()
+    public var building: ImmersiveMapBuildingExtrusion? {
+        if case .building(let building) = self { return building }
+        return nil
+    }
+
+    /// The names of the feature: a labelled point's, or the name along a
+    /// road.
+    public var label: ImmersiveMapLabelFacts? {
+        switch self {
+        case .labelled(let label): return label
+        case .road(let road): return road.label
+        case .none, .building: return nil
+        }
+    }
 }

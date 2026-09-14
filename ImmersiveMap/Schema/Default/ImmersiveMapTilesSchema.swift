@@ -18,23 +18,27 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
         let properties = feature.properties
         switch feature.layerName.lowercased() {
         case "transportation", "streetscape":
-            return ImmersiveMapFeatureFacts(road: roadFacts(feature),
-                                            label: .openStreetMap(properties))
+            var road = roadFacts(feature)
+            road.label = .openStreetMap(properties)
+            return .road(road)
         case "building":
-            return ImmersiveMapFeatureFacts(building: .openStreetMap(properties))
+            return .building(.openStreetMap(properties))
         case "water_name":
             var label = ImmersiveMapLabelFacts.openStreetMap(properties) ?? ImmersiveMapLabelFacts()
             label.namesWaterBody = true
-            return ImmersiveMapFeatureFacts(label: label)
+            return .labelled(label)
         case "housenumber":
             guard let number = properties.string("house_num"), number.isEmpty == false else {
                 return .none
             }
-            return ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(houseNumber: number))
+            return .labelled(ImmersiveMapLabelFacts(houseNumber: number))
         default:
             // Anything else is labelled by its name where it has one: the
             // places, the POIs, the peaks and airports, the road names.
-            return ImmersiveMapFeatureFacts(label: .openStreetMap(properties))
+            guard let label = ImmersiveMapLabelFacts.openStreetMap(properties) else {
+                return .none
+            }
+            return .labelled(label)
         }
     }
 

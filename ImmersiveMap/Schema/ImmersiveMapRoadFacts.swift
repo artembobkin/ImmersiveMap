@@ -72,6 +72,8 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// tunnel tag of its own, only the tunnel's `layer`. Set by the engine,
     /// never by a schema reading, and the one fact the engine adds.
     public var isTunnelRoof: Bool
+    /// The name laid along the road, nil for a road without one.
+    public var label: ImmersiveMapLabelFacts?
 
     public init(kind: Kind = .centreline,
                 structure: Structure = .ground,
@@ -79,7 +81,8 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
                 streetIdentity: String = "",
                 name: String = "",
                 stitchingKey: String? = nil,
-                isTunnelRoof: Bool = false) {
+                isTunnelRoof: Bool = false,
+                label: ImmersiveMapLabelFacts? = nil) {
         self.kind = kind
         self.structure = structure
         self.layer = layer
@@ -87,6 +90,7 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
         self.name = name
         self.stitchingKey = stitchingKey
         self.isTunnelRoof = isTunnelRoof
+        self.label = label
     }
 
     /// A road on the ground with no identity.

@@ -61,8 +61,9 @@ public struct ImmersiveMapFeature {
 /// properties and answers only with how the feature looks. Neither the
 /// engine nor the style reads a tag by name to learn what a feature is.
 ///
-/// The `Schema` folder: this protocol, the fact types (`ImmersiveMapFeatureFacts`,
-/// `ImmersiveMapRoadFacts`, `ImmersiveMapBuildingExtrusion`), the typed
+/// The `Schema` folder: this protocol, the facts (`ImmersiveMapFeatureFacts`,
+/// one case per kind of thing, carrying `ImmersiveMapRoadFacts`,
+/// `ImmersiveMapBuildingExtrusion` or `ImmersiveMapLabelFacts`), the typed
 /// property accessors, and the built-in reading of the hosted tiles in
 /// `Default/`. No drawing, no colours, no Metal, no parsing.
 public protocol ImmersiveMapTileSchema: Sendable {

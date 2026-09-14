@@ -71,6 +71,6 @@ private struct TitledTileSchema: ImmersiveMapTileSchema {
     let cacheFingerprint: UInt32 = 1
 
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
-        ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(name: feature.properties.string("title")))
+        .labelled(ImmersiveMapLabelFacts(name: feature.properties.string("title")))
     }
 }

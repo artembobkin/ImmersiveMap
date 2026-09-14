@@ -29,8 +29,9 @@ extension DetFeatureStyleData {
                                                     properties: properties,
                                                     tile: tile,
                                                     geometryType: geometryType)
-        if isTunnelRoof {
-            facts.road?.isTunnelRoof = true
+        if isTunnelRoof, case .road(var road) = facts {
+            road.isTunnelRoof = true
+            facts = .road(road)
         }
         self.init(layerName: layerName,
                   properties: properties,

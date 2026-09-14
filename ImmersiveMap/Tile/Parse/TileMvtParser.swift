@@ -185,7 +185,10 @@ final class TileMvtParser {
                     for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
                                                                                   featureFacts: featureFacts,
                                                                                   bytes: bytes) {
-                        featureFacts[index].road?.isTunnelRoof = true
+                        if case .road(var road) = featureFacts[index] {
+                            road.isTunnelRoof = true
+                            featureFacts[index] = .road(road)
+                        }
                     }
                 }
                 // A fact about the layer the style is told along with each

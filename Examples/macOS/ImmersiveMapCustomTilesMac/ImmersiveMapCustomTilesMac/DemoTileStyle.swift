@@ -60,7 +60,7 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
 
         case "building":
             // The building's height, base and roof are the schema reading's
-            // (`feature.facts.building`); this says it rises, in this
+            // (`.building` in `feature.facts`); this says it rises, in this
             // colour. `fallbackHeight` applies when the tile states no
             // height.
             return .extrudedPolygon(key: 30,
@@ -80,7 +80,8 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             }
             // Where the road sits (tunnel, bridge, its layer) and which
             // street it is a piece of is the schema reading's answer, in
-            // `feature.facts.road`: a tunnel fades to half.
+            // `feature.facts.road`, the road case of the facts: a tunnel
+            // fades to half.
             let inTunnel = feature.facts.road?.isTunnel == true
             return .line(key: inTunnel ? 39 : 40,
                          color: inTunnel ? SIMD4<Float>(color.x, color.y, color.z, 0.5) : color,

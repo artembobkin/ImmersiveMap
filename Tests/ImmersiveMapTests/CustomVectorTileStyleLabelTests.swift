@@ -124,13 +124,13 @@ private struct CustomLabelTestSchema: ImmersiveMapTileSchema {
 
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
         if feature.layerName == "address_label" {
-            return ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(houseNumber: feature.properties.string("number")))
+            return .labelled(ImmersiveMapLabelFacts(houseNumber: feature.properties.string("number")))
         }
         var label = ImmersiveMapLabelFacts.openStreetMap(feature.properties) ?? ImmersiveMapLabelFacts()
         if label.name == nil, let title = feature.properties.string("title") {
             label.name = title
         }
-        return ImmersiveMapFeatureFacts(label: label)
+        return .labelled(label)
     }
 }
 
