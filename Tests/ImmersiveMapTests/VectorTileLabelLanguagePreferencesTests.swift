@@ -6,19 +6,19 @@ import Mvt
 import XCTest
 
 /// The chain speaks in language codes; which fields carry a language's
-/// spelling is the schema reading's business. The OpenStreetMap reading
-/// takes both spellings a source can carry: OpenMapTiles flattens OSM's
-/// `name:xx` tags to `name_xx`, while a schema passing OSM tags through
-/// unchanged keeps the colon. Reading only the underscore form left an
-/// English-configured map showing native `name` values ("América",
-/// "Afrika;أفريقيا") over tiles that carry `name:en`.
+/// spelling is the schema reading's business. The hosted tiles' reading
+/// takes both spellings a source can carry, `name_xx` and `name:xx`.
+/// Reading only the underscore form left an English-configured map
+/// showing native `name` values ("América", "Afrika;أفريقيا") over tiles
+/// that carry `name:en`.
 final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
     private func stringValue(_ string: String) -> MvtValue {
         .string(string)
     }
 
     private func label(_ properties: [String: MvtValue]) -> ImmersiveMapLabelFacts {
-        ImmersiveMapLabelFacts.openStreetMap(ImmersiveMapFeatureProperties(values: properties)) ?? ImmersiveMapLabelFacts()
+        ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
+            ?? ImmersiveMapLabelFacts()
     }
 
     func testEnglishChainTriesEnglishBeforeTheNativeName() {
@@ -41,7 +41,7 @@ final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
         XCTAssertEqual(chain, ["ru", nil, "en"])
     }
 
-    func testResolverReadsTheColonFormWhenTheSourcePassesOSMTagsThrough() {
+    func testResolverReadsTheColonFormWhenTheSourcePassesTagsThrough() {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let text = resolver.resolveText(
             label: label(["name": stringValue("América"), "name:en": stringValue("Americas")]),
@@ -50,7 +50,7 @@ final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
         XCTAssertEqual(text, "Americas")
     }
 
-    func testResolverStillReadsTheOpenMapTilesForm() {
+    func testResolverStillReadsTheUnderscoreForm() {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let text = resolver.resolveText(
             label: label(["name": stringValue("Deutschland"), "name_en": stringValue("Germany")]),

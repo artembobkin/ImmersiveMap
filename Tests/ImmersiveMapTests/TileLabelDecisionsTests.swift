@@ -6,10 +6,11 @@ import Mvt
 import XCTest
 
 final class TileLabelDecisionsTests: XCTestCase {
-    /// The names of a property dictionary as the OpenStreetMap reading
+    /// The names of a property dictionary as the hosted tiles' reading
     /// states them; an empty reading for a feature with no name at all.
     private func label(_ properties: [String: MvtValue]) -> ImmersiveMapLabelFacts {
-        ImmersiveMapLabelFacts.openStreetMap(ImmersiveMapFeatureProperties(values: properties)) ?? ImmersiveMapLabelFacts()
+        ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
+            ?? ImmersiveMapLabelFacts()
     }
 
     func testRussianPreferencesPreferRussianThenEnglishThenNative() {

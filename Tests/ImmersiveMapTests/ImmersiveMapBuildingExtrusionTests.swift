@@ -5,38 +5,41 @@
 import Mvt
 import XCTest
 
-/// The OpenStreetMap reading of a building: the style's answer to what a
+/// The hosted tiles' reading of a building: the schema's answer to what a
 /// polygon feature is as a building, which the parser never reads itself.
 final class ImmersiveMapBuildingExtrusionTests: XCTestCase {
-    private func properties(_ values: [String: MvtValue]) -> ImmersiveMapFeatureProperties {
-        ImmersiveMapFeatureProperties(values: values)
+    private func building(_ values: [String: MvtValue]) -> ImmersiveMapBuildingExtrusion {
+        ImmersiveMapTilesSchema().facts(layerName: "building",
+                                        properties: values,
+                                        tile: Tile(x: 0, y: 0, z: 16),
+                                        geometryType: .polygon).building!
     }
 
     private func roof(_ values: [String: MvtValue]) -> ImmersiveMapRoof? {
-        ImmersiveMapRoof.openStreetMap(properties(values))
+        building(values).roof
     }
 
     func testHeightsComeFromEitherSchemaOrFromLevels() {
-        XCTAssertEqual(ImmersiveMapBuildingExtrusion.openStreetMap(properties(["height": .double(12)])).heightMetres, 12)
-        XCTAssertEqual(ImmersiveMapBuildingExtrusion.openStreetMap(properties(["render_height": .string("30 ft")])).heightMetres,
+        XCTAssertEqual(building((["height": .double(12)])).heightMetres, 12)
+        XCTAssertEqual(building((["render_height": .string("30 ft")])).heightMetres,
                        30 * 0.3048)
-        let levels = ImmersiveMapBuildingExtrusion.openStreetMap(properties(["building:levels": .int(4),
+        let levels = building((["building:levels": .int(4),
                                                                               "building:min_level": .int(1)]))
-        XCTAssertEqual(levels.heightMetres, 4 * ImmersiveMapBuildingExtrusion.metresPerLevel)
-        XCTAssertEqual(levels.baseHeightMetres, 1 * ImmersiveMapBuildingExtrusion.metresPerLevel)
-        XCTAssertNil(ImmersiveMapBuildingExtrusion.openStreetMap(properties([:])).heightMetres)
+        XCTAssertEqual(levels.heightMetres, 4 * ImmersiveMapTilesSchema.metresPerBuildingLevel)
+        XCTAssertEqual(levels.baseHeightMetres, 1 * ImmersiveMapTilesSchema.metresPerBuildingLevel)
+        XCTAssertNil(building(([:])).heightMetres)
     }
 
     func testIdentityPartAndHiddenFlagsReadTheTags() {
-        let part = ImmersiveMapBuildingExtrusion.openStreetMap(properties(["osm_id": .uint(42),
+        let part = building((["osm_id": .uint(42),
                                                                             "building:part": .string("yes")]))
         XCTAssertEqual(part.buildingIdentity, 42)
         XCTAssertTrue(part.isPart)
         XCTAssertFalse(part.isHidden)
-        XCTAssertTrue(ImmersiveMapBuildingExtrusion.openStreetMap(properties(["extrude": .string("false")])).isHidden)
-        XCTAssertTrue(ImmersiveMapBuildingExtrusion.openStreetMap(properties(["hide_3d": .bool(true)])).isHidden)
-        XCTAssertTrue(ImmersiveMapBuildingExtrusion.openStreetMap(properties(["location": .string("underground")])).isHidden)
-        XCTAssertFalse(ImmersiveMapBuildingExtrusion.openStreetMap(properties([:])).isHidden,
+        XCTAssertTrue(building((["extrude": .string("false")])).isHidden)
+        XCTAssertTrue(building((["hide_3d": .bool(true)])).isHidden)
+        XCTAssertTrue(building((["location": .string("underground")])).isHidden)
+        XCTAssertFalse(building(([:])).isHidden,
                        "An absent extrude flag means extruded")
     }
 
@@ -67,7 +70,7 @@ final class ImmersiveMapBuildingExtrusionTests: XCTestCase {
             "roof:shape": .string("hipped"),
             "roof:levels": .int(1)
         ]))
-        XCTAssertEqual(roof.heightMetres, ImmersiveMapRoof.metresPerLevel)
+        XCTAssertEqual(roof.heightMetres, ImmersiveMapTilesSchema.metresPerRoofLevel)
         XCTAssertNil(roof.orientation)
         XCTAssertNil(roof.directionDegrees)
     }

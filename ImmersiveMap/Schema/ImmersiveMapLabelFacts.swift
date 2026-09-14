@@ -28,32 +28,4 @@ public struct ImmersiveMapLabelFacts: Equatable, Sendable {
         self.houseNumber = houseNumber
         self.namesWaterBody = namesWaterBody
     }
-
-    /// The reading of the OpenStreetMap name tags: `name` for the local
-    /// name, and `name:xx` or `name_xx` (OpenMapTiles flattens the colon)
-    /// for the name in language `xx`. Nil for a feature that carries no
-    /// name at all.
-    public static func openStreetMap(_ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapLabelFacts? {
-        var name: String?
-        var namesByLanguage: [String: String] = [:]
-        for (key, value) in properties.values {
-            guard key.hasPrefix("name"), let text = value.stringValue, text.isEmpty == false else {
-                continue
-            }
-            if key.count == 4 {
-                name = text
-            } else if key.count > 5 {
-                let separator = key[key.index(key.startIndex, offsetBy: 4)]
-                guard separator == ":" || separator == "_" else { continue }
-                let code = String(key.dropFirst(5))
-                if namesByLanguage[code] == nil {
-                    namesByLanguage[code] = text
-                }
-            }
-        }
-        guard name != nil || namesByLanguage.isEmpty == false else {
-            return nil
-        }
-        return ImmersiveMapLabelFacts(name: name, namesByLanguage: namesByLanguage)
-    }
 }

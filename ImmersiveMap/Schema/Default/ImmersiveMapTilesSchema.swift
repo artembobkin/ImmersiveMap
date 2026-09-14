@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 /// The reading of the hosted tiles' schema, the layer and field contract of
-/// `immersivemap.dev`: the OpenStreetMap-derived tags of the
-/// `transportation` layer and the measured `streetscape` that merges into
-/// it, the `building` layer's heights, the names of `place`, `poi`,
-/// `water_name` and the rest, the `housenumber` layer's numbers. A source
-/// in another OpenStreetMap-derived schema can start from it.
+/// `immersivemap.dev`: the tags of the `transportation` layer and the
+/// measured `streetscape` that merges into it, the `building` layer's
+/// heights, the names of `place`, `poi`, `water_name` and the rest, the
+/// `housenumber` layer's numbers. A source that spells its tags the same
+/// way can use it as it is.
 public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
     /// Bumped when the reading changes: every prepared tile is prepared
     /// again under the new reading.
@@ -19,12 +19,12 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
         switch feature.layerName.lowercased() {
         case "transportation", "streetscape":
             var road = roadFacts(feature)
-            road.label = .openStreetMap(properties)
+            road.label = names(properties)
             return .road(road)
         case "building":
-            return .building(.openStreetMap(properties))
+            return .building(building(properties))
         case "water_name":
-            var label = ImmersiveMapLabelFacts.openStreetMap(properties) ?? ImmersiveMapLabelFacts()
+            var label = names(properties) ?? ImmersiveMapLabelFacts()
             label.namesWaterBody = true
             return .labelled(label)
         case "housenumber":
@@ -35,7 +35,7 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
         default:
             // Anything else is labelled by its name where it has one: the
             // places, the POIs, the peaks and airports, the road names.
-            guard let label = ImmersiveMapLabelFacts.openStreetMap(properties) else {
+            guard let label = names(properties) else {
                 return .none
             }
             return .labelled(label)
@@ -75,24 +75,24 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
     /// the road graph rather than mapped by hand).
     private func roadFacts(_ feature: ImmersiveMapFeature) -> ImmersiveMapRoadFacts {
         let properties = feature.properties
-        var road = ImmersiveMapRoadFacts.openStreetMap(properties)
+        var facts = road(properties)
         if feature.geometry == .polygon {
-            road.stitchingKey = nil
+            facts.stitchingKey = nil
         }
         if let marking = properties.string("marking")?.lowercased(), marking.isEmpty == false {
-            road.kind = .paint(paint(marking: marking, properties))
-            return road
+            facts.kind = .paint(paint(marking: marking, properties))
+            return facts
         }
         switch properties.string("subclass")?.lowercased() {
         case "junction_area":
-            road.kind = .surface(reconstructed: properties.string("origin") == "graph")
+            facts.kind = .surface(reconstructed: properties.string("origin") == "graph")
         case "carriageway_area":
-            road.kind = .surface(reconstructed: true)
+            facts.kind = .surface(reconstructed: true)
         case "parking_area":
-            road.kind = .parkingLot(baysParallel: properties.string("orientation") == "parallel")
+            facts.kind = .parkingLot(baysParallel: properties.string("orientation") == "parallel")
         default:
             break
         }
-        return road
+        return facts
     }
 }

@@ -126,7 +126,7 @@ private struct CustomLabelTestSchema: ImmersiveMapTileSchema {
         if feature.layerName == "address_label" {
             return .labelled(ImmersiveMapLabelFacts(houseNumber: feature.properties.string("number")))
         }
-        var label = ImmersiveMapLabelFacts.openStreetMap(feature.properties) ?? ImmersiveMapLabelFacts()
+        var label = ImmersiveMapTilesSchema().read(feature).label ?? ImmersiveMapLabelFacts()
         if label.name == nil, let title = feature.properties.string("title") {
             label.name = title
         }

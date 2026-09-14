@@ -152,7 +152,10 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
         var config = ImmersiveMapSettings.default
         config.style.buildingRoofShapesEnabled = roofShapesEnabled
         return BuildingFeatureReader(options: TileParseOptions(settings: config))
-            .extrusionHeights(building: .openStreetMap(ImmersiveMapFeatureProperties(values: attributes)),
+            .extrusionHeights(building: ImmersiveMapTilesSchema().facts(layerName: "building",
+                                                                        properties: attributes,
+                                                                        tile: Tile(x: 0, y: 0, z: 16),
+                                                                        geometryType: .polygon).building!,
                               tileZoom: 16,
                               style: style)
     }

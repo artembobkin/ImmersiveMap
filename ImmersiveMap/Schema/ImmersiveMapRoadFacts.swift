@@ -12,10 +12,8 @@ import Foundation
 /// surfaces and stitches the pieces of a street from them, and the style
 /// draws by them. Neither reads a road tag itself.
 ///
-/// A schema that carries the OpenStreetMap tags, as the hosted tiles do,
-/// gets the reading of the structure and the street for free with
-/// `openStreetMap(_:)`. A feature that is not a road (a river, a border)
-/// has no road facts at all.
+/// A feature that is not a road (a river, a border) has no road facts at
+/// all.
 public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// The kind of road thing a feature is.
     public enum Kind: Equatable, Sendable {
@@ -50,7 +48,7 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     }
 
     public var structure: Structure
-    /// The vertical layer among roads of one structure, the OpenStreetMap
+    /// The vertical layer among roads of one structure, the source's
     /// `layer`: a bridge over a bridge, a road under a road.
     public var layer: Int
     /// The identity of the street the feature is a piece of, as the source
@@ -121,74 +119,6 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     public var paint: ImmersiveMapRoadPaint? {
         if case .paint(let paint) = kind { return paint }
         return nil
-    }
-
-    /// The reading of the OpenStreetMap tags.
-    ///
-    /// The structure comes from either schema's spelling of tunnel and
-    /// bridge (`brunnel`, `structure`, `tunnel`, `bridge`, `underground`, a
-    /// `location` underground or elevated) and from the sign of `layer`.
-    /// The street identity is `street`, the name `name`. The stitching key
-    /// is the street identity where the source states one, with the
-    /// attributes that change how a piece draws (`class`, `subclass`,
-    /// `brunnel`, `layer`, `oneway`, `width`); without one it is the name
-    /// with those attributes and the lane count, both of which are guesses
-    /// about the same question the identity answers. `width` is in the key
-    /// and the lane count is not where an identity exists, deliberately: a
-    /// lane count that differs between pieces is tiler noise the identity
-    /// bridges, a stated width that differs is the street actually widening.
-    public static func openStreetMap(_ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapRoadFacts {
-        let location = properties.string("location")?.lowercased() ?? ""
-        let structureValue = properties.string("structure")?.lowercased() ?? ""
-        let brunnel = properties.string("brunnel")?.lowercased() ?? ""
-        let layer = properties.integer("layer") ?? 0
-
-        let structure: Structure
-        if properties.bool("underground") == true
-            || properties.bool("tunnel") == true
-            || location.contains("underground")
-            || location.contains("subterranean")
-            || location.contains("tunnel")
-            || location.contains("underwater")
-            || structureValue == "tunnel"
-            || brunnel == "tunnel" {
-            structure = .tunnel
-        } else if properties.bool("bridge") == true
-            || structureValue == "bridge"
-            || brunnel == "bridge"
-            || location.contains("bridge")
-            || location.contains("elevated") {
-            structure = .bridge
-        } else {
-            structure = .ground
-        }
-
-        let streetIdentity = properties.text("street")
-        let name = properties.string("name") ?? ""
-        let stitchingKey: String?
-        if streetIdentity.isEmpty == false {
-            stitchingKey = "street=" + streetIdentity + ";" + key(of: properties, ["class", "subclass", "brunnel", "layer", "oneway", "width"])
-        } else if name.isEmpty == false {
-            stitchingKey = key(of: properties, ["name", "class", "subclass", "lanes", "width", "oneway", "brunnel", "layer"])
-        } else {
-            stitchingKey = nil
-        }
-        return ImmersiveMapRoadFacts(structure: structure,
-                                     layer: layer,
-                                     streetIdentity: streetIdentity,
-                                     name: name,
-                                     stitchingKey: stitchingKey)
-    }
-
-    private static func key(of properties: ImmersiveMapFeatureProperties, _ attributes: [String]) -> String {
-        var key = ""
-        for attribute in attributes {
-            key += attribute
-            key += "="
-            key += properties.text(attribute)
-            key += ";"
-        }
-        return key
     }
 }
 
