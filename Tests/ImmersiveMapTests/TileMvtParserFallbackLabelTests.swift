@@ -105,12 +105,11 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         XCTAssertFalse(labels.contains("Atlantic Ocean"))
     }
 
-    func testPointLabelsUseTheConfiguredStyleIDInTheRuntimeProfile() throws {
-        var config = ImmersiveMapSettings.default
-        config = config.mapStyle(ParserStyleIDTestMapStyle(id: "parser-provider"))
+    func testPointLabelsAreIdentifiedInTheStyleOwnNamespace() throws {
+        let config = ImmersiveMapSettings.default
+            .mapStyle(VectorTileMapStyle(style: FallbackWaterLabelStyle(styleID: "parser-provider")))
 
-        let parser = TileMvtParser.forTests(settings: config,
-                                            mapStyle: FallbackWaterLabelStyle())
+        let parser = TileMvtParser.forTests(settings: config)
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeTileWithAtlanticOceanLabel().serializedData())
         let expectedKey = VectorTileLabelIdentity.styleFeature(styleID: "parser-provider",
@@ -330,6 +329,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
 private struct FallbackWaterLabelStyle: ImmersiveMapVectorTileStyle {
     let cacheFingerprint: UInt32 = 1
+    var styleID = AnyImmersiveMapMapStyle.genericStyleID
 
     private let oceanLabelTextStyle = LabelTextStyle(key: 3,
                                                      fillColor: SIMD3<Float>(0, 0, 1),
@@ -395,57 +395,3 @@ private struct ParserSolidPolygonStyle: ImmersiveMapVectorTileStyle {
     }
 }
 
-private struct ParserStyleIDTestMapStyle: ImmersiveMapMapStyle {
-    let id: String
-
-    var configurationFingerprint: UInt64 {
-        1
-    }
-
-    var vectorTileStyle: any ImmersiveMapVectorTileStyle {
-        FallbackWaterLabelStyle()
-    }
-}
-
-extension ParserStyleIDTestMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
-        ParserStyleIDTestLabelStyleProfile(styleID: id)
-    }
-}
-
-private struct ParserStyleIDTestLabelStyleProfile: LabelStyleProfile {
-    let styleID: String
-
-    var languagePreferences: VectorTileLabelLanguagePreferences {
-        .from(settingsLanguage: .english, fallbackPolicy: .international)
-    }
-
-    func sortKey(properties: [String: MvtValue]) -> Int {
-        0
-    }
-
-    func collisionRank(layerName: String, sortKey: Int) -> Int {
-        sortKey
-    }
-
-    func includesBasePointLabel(layerName: String,
-                                properties: [String: MvtValue],
-                                tileZoom: Int,
-                                sortKey: Int) -> Bool {
-        true
-    }
-
-    func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
-        .styleFeature(styleID: feature.styleID,
-                         layerName: feature.layerName,
-                         featureID: feature.featureID ?? 0)
-    }
-
-    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
-        layerName
-    }
-
-    func isHouseNumberLayer(_ layerName: String) -> Bool {
-        false
-    }
-}

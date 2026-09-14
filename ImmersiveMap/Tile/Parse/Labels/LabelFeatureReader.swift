@@ -33,7 +33,7 @@ struct LabelFeatureReader {
               layerName: String,
               tile: Tile,
               into result: inout ReadingStageResult) {
-        guard let labelTextStyle = style.labelTextStyle else { return }
+        guard style.labelTextStyle != nil else { return }
         let points = geometry.points(of: feature)
         let featureID = feature.hasID ? feature.id : nil
         let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
@@ -46,7 +46,7 @@ struct LabelFeatureReader {
                                                       anchor: anchor,
                                                       properties: attributes)
             guard let decision = labelDecisions.pointLabelDecision(feature: labelFeature,
-                                                                   style: labelTextStyle,
+                                                                   style: style,
                                                                    poiIcon: poiIcon) else {
                 continue
             }

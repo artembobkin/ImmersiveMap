@@ -16,17 +16,17 @@ final class MapStyleRuntimeTests: XCTestCase {
         let context = MapStyleRuntime(settings: settings)
 
         XCTAssertEqual(context.style.cacheFingerprint, 42)
-        XCTAssertEqual(context.labelProfile.styleID, "runtime-context-style")
+        XCTAssertEqual(context.styleID, "runtime-context-style")
         XCTAssertEqual(context.mapBaseColors.getTileBgColor(), SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
     }
 
-    func testStyleWithoutRuntimeConformanceGetsTheGenericLabelProfile() {
+    func testStyleWithoutAnIdentityGetsTheGenericOne() {
         let settings = ImmersiveMapSettings.default
             .mapStyle(PlainTestMapStyle())
 
         let context = MapStyleRuntime(settings: settings)
 
-        XCTAssertEqual(context.labelProfile.styleID, AnyImmersiveMapMapStyle.genericStyleID)
+        XCTAssertEqual(context.styleID, AnyImmersiveMapMapStyle.genericStyleID)
     }
 }
 
@@ -50,15 +50,13 @@ private struct RuntimeContextTestMapStyle: ImmersiveMapMapStyle {
     }
 }
 
-extension RuntimeContextTestMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
-        RuntimeContextTestLabelStyleProfile(styleID: "runtime-context-style")
-    }
-}
-
 private struct RuntimeContextTestStyle: ImmersiveMapVectorTileStyle {
     var cacheFingerprint: UInt32 {
         42
+    }
+
+    var styleID: String {
+        "runtime-context-style"
     }
 
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
@@ -79,39 +77,3 @@ private struct RuntimeContextTestStyle: ImmersiveMapVectorTileStyle {
     }
 }
 
-private struct RuntimeContextTestLabelStyleProfile: LabelStyleProfile {
-    let styleID: String
-
-    var languagePreferences: VectorTileLabelLanguagePreferences {
-        .from(settingsLanguage: .english, fallbackPolicy: .international)
-    }
-
-    func sortKey(properties: [String: MvtValue]) -> Int {
-        0
-    }
-
-    func collisionRank(layerName: String, sortKey: Int) -> Int {
-        sortKey
-    }
-
-    func includesBasePointLabel(layerName: String,
-                                properties: [String: MvtValue],
-                                tileZoom: Int,
-                                sortKey: Int) -> Bool {
-        false
-    }
-
-    func identity(feature: VectorTileLabelFeature, text: String, kind: String) -> VectorTileLabelIdentity {
-        .styleFeature(styleID: styleID,
-                         layerName: feature.layerName,
-                         featureID: feature.featureID ?? 0)
-    }
-
-    func normalizedKind(layerName: String, properties: [String: MvtValue]) -> String {
-        layerName
-    }
-
-    func isHouseNumberLayer(_ layerName: String) -> Bool {
-        false
-    }
-}

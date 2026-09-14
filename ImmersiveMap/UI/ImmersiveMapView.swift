@@ -522,7 +522,7 @@ public extension ImmersiveMapView {
     /// The source is only where bytes come from. How they are parsed and drawn
     /// is configured separately: the default `ImmersiveMapTilesMapStyle` draws
     /// OpenMapTiles-schema MVT, and any other schema pairs the template with
-    /// `.mapStyle(VectorTileMapStyle(style:labelProfile:))`. A source that does
+    /// `.mapStyle(VectorTileMapStyle(style:))`. A source that does
     /// not ship z0-16 states its depth via `tileMaximumZoomLevel(_:)`, and its
     /// data credit via `attributionSettings`.
     public func tileURLTemplate(_ urlTemplate: String,

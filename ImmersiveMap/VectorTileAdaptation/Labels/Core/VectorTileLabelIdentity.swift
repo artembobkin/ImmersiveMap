@@ -5,12 +5,11 @@ import simd
 
 enum VectorTileLabelIdentity: Equatable {
     case styleFeature(styleID: String, layerName: String, featureID: UInt64)
-    case semantic(styleID: String, kind: String, text: String, worldBucket: SIMD2<Int32>)
     case tileLocal(tile: Tile, layerName: String, text: String, anchor: SIMD2<Int16>)
 
     var participatesInCrossTileDeduplication: Bool {
         switch self {
-        case .styleFeature, .semantic:
+        case .styleFeature:
             return true
         case .tileLocal:
             return false
@@ -25,13 +24,6 @@ enum VectorTileLabelIdentity: Equatable {
             hasher.combine(styleID)
             hasher.combine(layerName)
             hasher.combine(featureID)
-        case let .semantic(styleID, kind, text, worldBucket):
-            hasher.combine("semantic")
-            hasher.combine(styleID)
-            hasher.combine(kind)
-            hasher.combine(text)
-            hasher.combine(Int(worldBucket.x))
-            hasher.combine(Int(worldBucket.y))
         case let .tileLocal(tile, layerName, text, anchor):
             hasher.combine("tileLocal")
             hasher.combine(tile.x)

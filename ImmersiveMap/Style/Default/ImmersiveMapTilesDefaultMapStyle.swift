@@ -49,6 +49,119 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     public var roadLayerNames: Set<String> { ["transportation"] }
     public var streetscapeLayerName: String? { "streetscape" }
 
+    public var styleID: String { "immersivemaptiles" }
+    public var houseNumberLayers: Set<String> { ["housenumber"] }
+
+    /// The point labels of the coarse zooms are a short list: continents,
+    /// countries and oceans up to z2, the major places to z4.
+    private static let lowZoomOverviewMaximumTileZoom = 4
+    private static let poiMinimumZoom = 13
+
+    /// OSM street furniture that must never become a label at any zoom:
+    /// bicycle racks, waste baskets, gates, building entrances, etc.
+    /// Such classes amount to thousands of features per tile and only clutter collisions.
+    private static let excludedPoiClasses: Set<String> = [
+        "bicycle_parking", "waste_basket", "gate", "entrance", "bench",
+        "drinking_water", "toilets", "vending_machine", "recycling"
+    ]
+
+    /// Cap on the local rank: rank is computed within a ~128px grid cell of
+    /// the tile, so the threshold means "no more than N labels per cell".
+    /// The tail beyond the cap never even reaches the buffers: in a dense
+    /// center that is thousands of features per tile. The number is aligned
+    /// with the reveal schedule (cell budget quadrupled by overzoom): 64 =
+    /// 4^3, i.e. the cap holds exactly what the schedule can show by
+    /// tile.z + 3.
+    private static let maximumPoiRank = 64
+
+    /// A feature without a rank is the least important thing in its layer.
+    /// `rank` is 1-based (1 = biggest) and is the whole contract the tiles
+    /// follow (the label-priority contract): the tiles bake population and
+    /// capital status into it at build time, so there is no second signal
+    /// to reconcile.
+    private static let unrankedLabelRank = 1_000
+
+    /// Lower value == more important.
+    private func labelRank(_ props: [String: MvtValue]) -> Int {
+        parseIntValue(props["rank"]) ?? Self.unrankedLabelRank
+    }
+
+    /// Places beat water names beat peaks and airports beat POIs whatever
+    /// their ranks.
+    private static func labelCollisionRank(layer: String, rank: Int) -> Int {
+        switch layer {
+        case "place":
+            return rank
+        case "water_name":
+            return 20_000 + rank
+        case "mountain_peak", "aerodrome_label":
+            return 40_000 + rank
+        case "poi":
+            return 50_000 + rank
+        default:
+            return rank
+        }
+    }
+
+    private func includesPlaceLabel(props: [String: MvtValue], tileZoom: Int) -> Bool {
+        let cls = props["class"]?.stringValue?.lowercased()
+        // Continents/countries/oceans dominate the very low zooms.
+        if tileZoom <= 2 {
+            return cls == "continent" || cls == "country" || cls == "ocean"
+        }
+        // z3: only countries, major cities and capitals - drop the dense
+        // province/state ("... Oblast") labels that otherwise flood this zoom.
+        if tileZoom == 3 {
+            switch cls {
+            case "continent", "country", "city":
+                return true
+            default:
+                return isCapital(props)
+            }
+        }
+        if tileZoom <= Self.lowZoomOverviewMaximumTileZoom {
+            switch cls {
+            case "continent", "country", "state", "province", "city":
+                return true
+            default:
+                return isCapital(props)
+            }
+        }
+        return true
+    }
+
+    private func includesWaterLabel(props: [String: MvtValue], tileZoom: Int) -> Bool {
+        guard tileZoom <= Self.lowZoomOverviewMaximumTileZoom else { return true }
+        switch props["class"]?.stringValue?.lowercased() {
+        case "ocean", "sea":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func includesPoiLabel(props: [String: MvtValue], tileZoom: Int) -> Bool {
+        guard tileZoom >= Self.poiMinimumZoom else {
+            return false
+        }
+        if let poiClass = props["class"]?.stringValue?.lowercased(),
+           Self.excludedPoiClasses.contains(poiClass) {
+            return false
+        }
+        if let rank = parseIntValue(props["rank"]), rank > Self.maximumPoiRank {
+            return false
+        }
+        return true
+    }
+
+    private func isCapital(_ props: [String: MvtValue]) -> Bool {
+        // `capital` = 2 (national), 3/4 (regional) when present.
+        if let capital = parseIntValue(props["capital"]), capital > 0 {
+            return true
+        }
+        return false
+    }
+
     public func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         makeStyle(data: DetFeatureStyleData(feature))
     }
@@ -153,17 +266,20 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "transportation_name":
             return roadLabelStyle(cls: cls)
         case "place":
+            guard includesPlaceLabel(props: props, tileZoom: z) else { return hiddenStyle }
             return placeLabelStyle(props: props)
         case "water_name":
+            guard includesWaterLabel(props: props, tileZoom: z) else { return hiddenStyle }
             return waterLabelStyle(props: props)
         case "poi":
+            guard includesPoiLabel(props: props, tileZoom: z) else { return hiddenStyle }
             return poiLabelStyle(props: props, tileZoom: z)
         case "mountain_peak":
-            return pointLabel(key: 74, appearance: configuration.labels.poi)
+            return pointLabel(key: 74, layer: layer, props: props, appearance: configuration.labels.poi)
         case "aerodrome_label":
-            return pointLabel(key: 75, appearance: configuration.labels.poi)
+            return pointLabel(key: 75, layer: layer, props: props, appearance: configuration.labels.poi)
         case "housenumber":
-            return pointLabel(key: 76, appearance: houseNumberAppearance())
+            return pointLabel(key: 76, layer: layer, props: props, appearance: houseNumberAppearance())
         default:
             return hiddenStyle
         }
@@ -1736,7 +1852,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             appearance.sizePoints += 1.5
             appearance.weight = .bold
         }
-        return pointLabel(key: 70, appearance: appearance)
+        return pointLabel(key: 70, layer: "place", props: props, appearance: appearance)
     }
 
     private func waterLabelStyle(props: [String: MvtValue]) -> FeatureStyle {
@@ -1749,7 +1865,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         default:
             break
         }
-        var style = pointLabel(key: 73, appearance: appearance)
+        var style = pointLabel(key: 73, layer: "water_name", props: props, appearance: appearance)
         style.isWaterName = true
         return style
     }
@@ -1798,7 +1914,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
 
         var appearance = configuration.labels.poi
         appearance.fillColor = poiCategoryColor(cls: cls, subclass: subclass)
-        return pointLabel(key: 72, appearance: appearance, minCameraZoom: minCameraZoom)
+        return pointLabel(key: 72, layer: "poi", props: props, appearance: appearance, minCameraZoom: minCameraZoom)
     }
 
     /// Rank grid-cell budget at the tile's NATIVE zoom: rank <= budget is
@@ -1995,15 +2111,16 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     }
 
     private func pointLabel(key: UInt8,
+                            layer: String,
+                            props: [String: MvtValue],
                             appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance,
                             minCameraZoom: Float = 0) -> FeatureStyle {
-        FeatureStyle(
-            key: key,
-            color: SIMD4<Float>(0, 0, 0, 0),
-            lineGeometry: LineGeometryStyle(lineWidth: 0),
-            labelTextStyle: labelTextStyle(key: Int(key), appearance: appearance),
-            labelMinCameraZoom: minCameraZoom
-        )
+        let rank = labelRank(props)
+        return FeatureStyle.pointLabel(key: key,
+                                       labelTextStyle(key: Int(key), appearance: appearance),
+                                       rank: rank,
+                                       collisionRank: Self.labelCollisionRank(layer: layer, rank: rank),
+                                       minCameraZoom: minCameraZoom)
     }
 
     /// Road border = the fill colour darkened and made fully opaque - a border of

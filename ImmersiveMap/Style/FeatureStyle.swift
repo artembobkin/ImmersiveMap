@@ -241,6 +241,13 @@ public struct FeatureStyle: Sendable {
     /// sea names of its own at the coarse zooms, and skips any the tile
     /// already labels; this is how it recognises those.
     public var isWaterName: Bool = false
+    /// The label's importance among the labels of the map, lower first: the
+    /// order the runtime reveals labels in as room appears, and deduplicates
+    /// them in. The style reads it from the schema's rank.
+    public var labelRank: Int = 0
+    /// The label's precedence when two labels overlap, lower wins. Usually
+    /// the rank offset by layer, so a place name beats a shop's.
+    public var labelCollisionRank: Int = 0
     /// What the feature is as a road: where it sits and which street it is
     /// a piece of. `ground` for everything that is not a road.
     public var road: ImmersiveMapRoadFacts = .ground
@@ -405,16 +412,23 @@ public extension FeatureStyle {
                      extrusionFallbackHeight: fallbackHeight)
     }
 
-    /// A point label. The text comes from the label profile; this says how
-    /// it is drawn, and from which camera zoom.
+    /// A point label. The text comes from the map's language and the
+    /// style's `labelTextKeys`; this says how it is drawn, how important it
+    /// is (`rank`, lower first, and `collisionRank`, which defaults to the
+    /// rank) and from which camera zoom.
     static func pointLabel(key: UInt8,
                            _ textStyle: LabelTextStyle,
+                           rank: Int = 0,
+                           collisionRank: Int? = nil,
                            minCameraZoom: Float = 0) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: SIMD4<Float>(0, 0, 0, 0),
-                     lineGeometry: LineGeometryStyle(lineWidth: 0),
-                     labelTextStyle: Self.keyed(textStyle, key: key),
-                     labelMinCameraZoom: minCameraZoom)
+        var style = FeatureStyle(key: key,
+                                 color: SIMD4<Float>(0, 0, 0, 0),
+                                 lineGeometry: LineGeometryStyle(lineWidth: 0),
+                                 labelTextStyle: Self.keyed(textStyle, key: key),
+                                 labelMinCameraZoom: minCameraZoom)
+        style.labelRank = rank
+        style.labelCollisionRank = collisionRank ?? rank
+        return style
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid

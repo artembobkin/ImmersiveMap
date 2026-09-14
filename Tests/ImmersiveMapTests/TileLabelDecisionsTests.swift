@@ -5,7 +5,7 @@
 import Mvt
 import XCTest
 
-final class VectorTileLabelDecisionEngineTests: XCTestCase {
+final class TileLabelDecisionsTests: XCTestCase {
     func testRussianPreferencesPreferRussianThenEnglishThenNative() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
@@ -150,16 +150,6 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
                                                                featureID: 42).runtimeKey)
     }
 
-    func testSemanticIdentityUsesStableRuntimeKey() {
-        let identity = VectorTileLabelIdentity.semantic(styleID: "example",
-                                                        kind: "place",
-                                                        text: "Moscow",
-                                                        worldBucket: SIMD2<Int32>(10, 20))
-
-        XCTAssertTrue(identity.participatesInCrossTileDeduplication)
-        XCTAssertEqual(identity.runtimeKey, 2508529565867420114)
-    }
-
     func testTileLocalIdentityIncludesTileCoordinates() {
         let first = VectorTileLabelIdentity.tileLocal(tile: Tile(x: 10, y: 20, z: 5),
                                                       layerName: "poi_label",
@@ -176,40 +166,39 @@ final class VectorTileLabelDecisionEngineTests: XCTestCase {
         XCTAssertNotEqual(first.runtimeKey, second.runtimeKey)
     }
 
-    func testDecisionEngineBuildsTextLabelCompatibleDecision() {
-        let style = LabelTextStyle(key: 30,
-                                   fillColor: SIMD3<Float>(0.1, 0.2, 0.3),
-                                   strokeColor: SIMD3<Float>(1, 1, 1),
-                                   haloEm: 0.15,
-                                   sizePoints: 24,
-                                   weight: .thin)
-        let profile = ImmersiveMapTilesLabelStyleProfile(settings: .default)
-        let engine = VectorTileLabelDecisionEngine(profile: profile,
-                                                   textResolver: VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests))
+    func testTheDecisionsBuildATextLabelCompatibleDecision() {
+        let style = ImmersiveMapTilesDefaultMapStyle()
+        let decisions = TileLabelDecisions(style: style,
+                                           glyphCoverage: .legacyAtlasForTests,
+                                           language: .english,
+                                           fallbackPolicy: .international)
+        let tile = Tile(x: 123, y: 456, z: 10)
+        let properties: [String: MvtValue] = [
+            "name_en": stringValue("Moscow"),
+            "class": stringValue("city"),
+            "rank": .int(3)
+        ]
+        let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "place",
+                                                                     properties: properties,
+                                                                     tile: tile))
         let feature = VectorTileLabelFeature(styleID: "immersivemaptiles",
-                                             tile: Tile(x: 123, y: 456, z: 10),
+                                             tile: tile,
                                              layerName: "place",
                                              featureID: 7,
                                              anchor: SIMD2<Int16>(2048, 2048),
-                                             properties: [
-                                                "name_en": stringValue("Moscow"),
-                                                "class": stringValue("city")
-                                             ])
+                                             properties: properties)
 
-        let decision = engine.makePointLabelDecision(feature: feature,
-                                                     style: style,
-                                                     poiIcon: nil)
+        let decision = decisions.pointLabelDecision(feature: feature, style: featureStyle, poiIcon: nil)
 
         XCTAssertEqual(decision?.text, "Moscow")
-        XCTAssertEqual(decision?.priority.collisionRank,
-                       profile.collisionRank(layerName: "place",
-                                             sortKey: decision?.priority.visibilityRank ?? -1))
+        XCTAssertEqual(decision?.priority.visibilityRank, 3, "The rank is the style's reading of the tile")
+        XCTAssertEqual(decision?.priority.collisionRank, 3, "A place collides at its own rank")
         XCTAssertEqual(decision?.identity,
                        .styleFeature(styleID: "immersivemaptiles",
-                                        layerName: "place",
-                                        featureID: 7))
-        XCTAssertEqual(decision?.style.key, style.key)
-        XCTAssertEqual(decision?.style.sizePoints, style.sizePoints)
+                                     layerName: "place",
+                                     featureID: 7))
+        XCTAssertEqual(decision?.style.key, featureStyle.labelTextStyle?.key)
+        XCTAssertEqual(decision?.style.sizePoints, featureStyle.labelTextStyle?.sizePoints)
     }
 
     func testTextLabelCanUseDecisionRuntimeKey() {

@@ -77,14 +77,7 @@ private struct CustomTilesScreen: View {
         guard usesCustomStyle else {
             return base
         }
-        return base.mapStyle(VectorTileMapStyle(
-            style: DemoTileStyle(),
-            // Which MVT properties carry the label text, its rank and its kind.
-            labelProfile: ImmersiveMapVectorTileLabelProfile(
-                textKeys: ["name:en", "name"],
-                rankKeys: ["rank"],
-                kindKeys: ["class"],
-                pointLabelLayers: ["place"])))
+        return base.mapStyle(VectorTileMapStyle(style: DemoTileStyle()))
     }
 
     private var controls: some View {

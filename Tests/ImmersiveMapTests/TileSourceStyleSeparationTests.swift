@@ -18,9 +18,7 @@ final class TileSourceStyleSeparationTests: XCTestCase {
     }
 
     func testTemplateConfiguresSourceAndStyleConfiguresParsingSeparately() {
-        let mapStyle = VectorTileMapStyle(
-            style: BasicVectorTileStyle(cacheFingerprint: 77),
-            labelProfile: ImmersiveMapVectorTileLabelProfile(textKeys: ["title"]))
+        let mapStyle = VectorTileMapStyle(style: TitledVectorTileStyle(cacheFingerprint: 77))
 
         let settings = ImmersiveMapSettings.default
             .tileURLTemplate("https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
@@ -32,8 +30,8 @@ final class TileSourceStyleSeparationTests: XCTestCase {
 
         let runtime = MapStyleRuntime(settings: settings)
         XCTAssertEqual(runtime.style.cacheFingerprint, 77)
-        XCTAssertEqual(runtime.labelProfile.styleID, AnyImmersiveMapMapStyle.genericStyleID)
-        XCTAssertEqual(runtime.labelProfile.labelTextKeys, ["title"])
+        XCTAssertEqual(runtime.styleID, AnyImmersiveMapMapStyle.genericStyleID)
+        XCTAssertEqual(runtime.style.labelTextKeys, ["title"])
     }
 
     func testChangingOnlyMapStyleIsAStyleChangeNotATileSourceChange() {
@@ -62,5 +60,15 @@ final class TileSourceStyleSeparationTests: XCTestCase {
 
         XCTAssertEqual(plan.changedDomains, [.tiles])
         XCTAssertEqual(plan.actions, [.invalidateCaches, .recreateRenderer])
+    }
+}
+
+/// A one-colour style whose labels read their text from `title`.
+private struct TitledVectorTileStyle: ImmersiveMapVectorTileStyle {
+    let cacheFingerprint: UInt32
+    let labelTextKeys = ["title"]
+
+    func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
+        .polygon(key: 2, color: SIMD4<Float>(1, 0, 0, 1))
     }
 }

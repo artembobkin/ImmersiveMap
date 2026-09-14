@@ -5,13 +5,14 @@ import Foundation
 import Mvt
 
 /// The label policy a tile parse asks questions of: which text a road or a
-/// point feature is labelled with, which icon a POI takes, whether a point
-/// feature is labelled at all and at what priority, and which spelling of a
-/// name the map's language and the text atlas allow.
+/// point feature is labelled with, which icon a POI takes, how a labelled
+/// point is identified and ranked, and which spelling of a name the map's
+/// language and the text atlas allow.
 ///
-/// Assembled once by the caller from the style's label profile, the glyph
-/// coverage of the text atlas and the language settings, then handed to
-/// `TileMvtParser`, which holds nothing of the policy itself: the parser
+/// Assembled once by the caller from the style (which properties carry
+/// text, which layers are house numbers, how labels are identified), the
+/// glyph coverage of the text atlas and the language settings, then handed
+/// to `TileMvtParser`, which holds nothing of the policy itself: the parser
 /// decodes geometry and asks, this answers. Every answer is pure, so one
 /// value serves every parse of a map.
 struct TileLabelDecisions {
@@ -19,24 +20,27 @@ struct TileLabelDecisions {
     let styleID: String
 
     private let labelTextKeys: [String]
+    private let houseNumberTextKeys: [String]
+    private let houseNumberLayers: Set<String>
+    private let usesFeatureIdentity: Bool
     private let languagePreferences: VectorTileLabelLanguagePreferences
     private let glyphCoverage: VectorTileLabelGlyphCoverage
     private let textResolver: VectorTileLabelTextResolver
-    private let decisionEngine: VectorTileLabelDecisionEngine
     private let poiSpriteResolver = PoiSpriteResolver()
 
-    init(profile: any LabelStyleProfile,
+    init(style: any ImmersiveMapVectorTileStyle,
          glyphCoverage: VectorTileLabelGlyphCoverage,
          language: ImmersiveMapSettings.LabelLanguage,
          fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy) {
-        self.styleID = profile.styleID
-        self.labelTextKeys = profile.labelTextKeys
+        self.styleID = style.styleID
+        self.labelTextKeys = style.labelTextKeys
+        self.houseNumberTextKeys = style.houseNumberTextKeys
+        self.houseNumberLayers = Set(style.houseNumberLayers.map { $0.lowercased() })
+        self.usesFeatureIdentity = style.labelsUseFeatureIdentity
         self.languagePreferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: language,
                                                                            fallbackPolicy: fallbackPolicy)
         self.glyphCoverage = glyphCoverage
-        let textResolver = VectorTileLabelTextResolver(glyphCoverage: glyphCoverage)
-        self.textResolver = textResolver
-        self.decisionEngine = VectorTileLabelDecisionEngine(profile: profile, textResolver: textResolver)
+        self.textResolver = VectorTileLabelTextResolver(glyphCoverage: glyphCoverage)
     }
 
     /// The name a road line is labelled with, in the map's language with its
@@ -54,12 +58,46 @@ struct TileLabelDecisions {
         poiSpriteResolver.resolve(attributes: attributes, layerName: layerName)
     }
 
-    /// Whether and how a point feature is labelled: its text, identity,
-    /// priorities and style, or nil when the label profile leaves it out.
+    /// How a point feature the style labels is labelled: its text (the
+    /// house number on a house-number layer, the name in the map's language
+    /// elsewhere), its identity across tiles, and the priorities the style
+    /// gave it. Nil when the feature carries no text the atlas can render.
     func pointLabelDecision(feature: VectorTileLabelFeature,
-                            style: LabelTextStyle,
+                            style: FeatureStyle,
                             poiIcon: PoiSpriteIcon?) -> VectorTileLabelDecision? {
-        decisionEngine.makePointLabelDecision(feature: feature, style: style, poiIcon: poiIcon)
+        guard let textStyle = style.labelTextStyle else {
+            return nil
+        }
+        let text: String?
+        if houseNumberLayers.contains(feature.layerName.lowercased()) {
+            text = textResolver.resolveHouseNumber(properties: feature.properties,
+                                                   additionalKeys: houseNumberTextKeys)
+        } else {
+            text = textResolver.resolveText(properties: feature.properties,
+                                            preferences: languagePreferences,
+                                            additionalKeys: labelTextKeys)
+        }
+        guard let resolvedText = text else {
+            return nil
+        }
+        let identity: VectorTileLabelIdentity
+        if usesFeatureIdentity, let featureID = feature.featureID {
+            identity = .styleFeature(styleID: styleID, layerName: feature.layerName, featureID: featureID)
+        } else {
+            identity = .tileLocal(tile: feature.tile,
+                                  layerName: feature.layerName,
+                                  text: resolvedText,
+                                  anchor: feature.anchor)
+        }
+        return VectorTileLabelDecision(text: resolvedText,
+                                       identity: identity,
+                                       priority: VectorTileLabelPriority(visibilityRank: style.labelRank,
+                                                                         collisionRank: style.labelCollisionRank,
+                                                                         deduplicationRank: style.labelRank,
+                                                                         drawRank: style.labelRank),
+                                       placement: .centered,
+                                       style: textStyle,
+                                       poiIcon: poiIcon)
     }
 
     /// The spelling of a name the map shows, chosen from names keyed by

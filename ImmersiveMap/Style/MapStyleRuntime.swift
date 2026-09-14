@@ -4,8 +4,7 @@
 import simd
 
 /// Everything the runtime derives from the configured map style: the style
-/// itself, the label profile that says which MVT properties carry label
-/// text, and the base colors. The tile source contributes nothing here; it
+/// itself and the base colors. The tile source contributes nothing here; it
 /// is only a URL the loader fetches bytes from.
 ///
 /// This is the parser's view of the style: it builds the public
@@ -16,16 +15,15 @@ import simd
 ///
 /// The `Style` folder: the public style API (`ImmersiveMapMapStyle`,
 /// `ImmersiveMapVectorTileStyle`, `FeatureStyle`, the building and road
-/// readings), this runtime, the label profiles in `Labels/`, and the
-/// built-in style in `Default/`. Everything about interpreting a tile's
+/// readings), this runtime, and the built-in style in `Default/`.
+/// Everything about interpreting a tile's
 /// bytes lives here; nothing about fetching them does. No Metal, no
 /// parsing, no networking.
 struct MapStyleRuntime {
     let style: any ImmersiveMapVectorTileStyle
-    let labelProfile: any LabelStyleProfile
     let mapBaseColors: ImmersiveMapBaseColors
     /// The style's identity, the namespace its label identities are minted
-    /// in: the label profile's.
+    /// in.
     let styleID: String
     private let settings: ImmersiveMapSettings.StyleSettings
 
@@ -34,15 +32,13 @@ struct MapStyleRuntime {
     }
 
     /// `style` replaces the map style's own vector tile style, which is
-    /// how a test runs the parser against a style of its own while keeping
-    /// the label profile the settings name.
+    /// how a test runs the parser against a style of its own.
     init(mapStyle: AnyImmersiveMapMapStyle,
          settings: ImmersiveMapSettings,
          style: (any ImmersiveMapVectorTileStyle)? = nil) {
         let style = style ?? mapStyle.vectorTileStyle
         self.style = style
-        self.labelProfile = mapStyle.makeLabelProfile(settings: settings)
-        self.styleID = labelProfile.styleID
+        self.styleID = style.styleID
         self.mapBaseColors = ImmersiveMapBaseColors(settings: style.baseColors ?? settings.style.baseColors)
         self.settings = settings.style
     }

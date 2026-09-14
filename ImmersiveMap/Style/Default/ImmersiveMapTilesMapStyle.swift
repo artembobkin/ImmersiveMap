@@ -24,9 +24,3 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
         self.configuration = configuration
     }
 }
-
-extension ImmersiveMapTilesMapStyle: ImmersiveMapMapStyleRuntime {
-    func makeLabelProfile(settings: ImmersiveMapSettings) -> any LabelStyleProfile {
-        ImmersiveMapTilesLabelStyleProfile(settings: settings)
-    }
-}

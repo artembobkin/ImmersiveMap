@@ -18,7 +18,11 @@ import ImmersiveMap
 /// or the map will keep drawing from stale prepared tiles.
 struct DemoTileStyle: ImmersiveMapVectorTileStyle {
     /// Bump when any rule below changes.
-    let cacheFingerprint: UInt32 = 4
+    let cacheFingerprint: UInt32 = 5
+
+    /// The namespace of the labels' identities, so they never collide with
+    /// another style's across tiles.
+    let styleID = "demo"
 
     /// Colors for the parts of the map that are not features: the tile
     /// background behind everything, the globe backdrop, water and land cover.
@@ -91,9 +95,13 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
                                     dashGapPoints: 3)
 
         case "place":
-            // A point label: the text itself comes from the provider's label
-            // profile, this only says how to draw it.
-            return .pointLabel(key: 70, placeLabelStyle(for: feature))
+            // A point label: the text comes from the `name` fields in the
+            // map's language; this says how to draw it and how important it
+            // is. The tiles rank places 1-based, biggest first, and a place
+            // without a rank goes last.
+            return .pointLabel(key: 70,
+                               placeLabelStyle(for: feature),
+                               rank: feature.properties.integer("rank") ?? 1_000)
 
         default:
             return .hidden

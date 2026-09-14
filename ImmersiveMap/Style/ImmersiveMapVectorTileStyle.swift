@@ -178,11 +178,14 @@ public enum WaterNameKind: Sendable {
 ///
 /// The parser asks the style for every feature of every layer and reads
 /// nothing about the tile itself: what a feature is (a building of some
-/// height, a road in a tunnel, a piece of some street) is the style's
-/// reading of the schema, stated in the `FeatureStyle` it returns. The
-/// factories on `FeatureStyle` (`polygon`, `line`, `extrudedPolygon`,
-/// `pointLabel` and the rest) cover the common drawing modes; the full
-/// value is there for a style that needs every knob the built-in one has.
+/// height, a road in a tunnel, a piece of some street, a place of some
+/// rank) is the style's reading of the schema, stated in the
+/// `FeatureStyle` it returns. The factories on `FeatureStyle` (`polygon`,
+/// `line`, `extrudedPolygon`, `pointLabel` and the rest) cover the common
+/// drawing modes; the full value is there for a style that needs every
+/// knob the built-in one has. The label text itself is not the style's:
+/// the engine reads it in the map's language, from the `name` fields and
+/// the style's `labelTextKeys`.
 public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// Folded into the prepared-tile cache identity: any change to the
     /// rules or the palette must change it, or the map keeps drawing from
@@ -192,6 +195,22 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// background, the globe backdrop, water and land cover on the sphere);
     /// nil takes the settings' base colours.
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? { get }
+    /// The style's identity: the namespace its label identities are minted
+    /// in, so two styles never share a label across tiles. The default is
+    /// one shared namespace for styles that state none.
+    var styleID: String { get }
+    /// Properties that carry a label's text beyond the ones the map's
+    /// language chain reads (`name`, `name_xx`, `name:xx`), tried after
+    /// them. Empty by default.
+    var labelTextKeys: [String] { get }
+    /// Layers whose point features are house numbers: labelled with the
+    /// number (`house_num`, then `houseNumberTextKeys`) rather than a name.
+    var houseNumberLayers: Set<String> { get }
+    var houseNumberTextKeys: [String] { get }
+    /// Whether a label keeps one identity across tiles by its feature id, so
+    /// a feature that straddles a tile edge is one label with one fade.
+    /// False identifies labels by tile, layer, text and anchor.
+    var labelsUseFeatureIdentity: Bool { get }
     /// The layers whose line features are roads. From the zoom
     /// `StyleSettings.flatSeparateRoadRenderingMinimumZoom` names, a road
     /// layer draws on the separate-road path: seamless ribbons with the
@@ -224,6 +243,26 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
 public extension ImmersiveMapVectorTileStyle {
     var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
         nil
+    }
+
+    var styleID: String {
+        AnyImmersiveMapMapStyle.genericStyleID
+    }
+
+    var labelTextKeys: [String] {
+        []
+    }
+
+    var houseNumberLayers: Set<String> {
+        []
+    }
+
+    var houseNumberTextKeys: [String] {
+        []
+    }
+
+    var labelsUseFeatureIdentity: Bool {
+        true
     }
 
     var roadLayerNames: Set<String> {
