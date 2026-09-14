@@ -28,6 +28,7 @@ final class ImmersiveMapTilesThemeTests: XCTestCase {
     /// `apply` is a copy with the changes: the original is untouched, the
     /// style built from it carries them, and the leading-dot spelling on the
     /// view resolves to the built-in style.
+    @MainActor
     func testApplyMakesAChangedCopy() {
         let base = ImmersiveMapTilesTheme.default
         let water = SIMD4<Float>(0.2, 0.4, 0.8, 1)
