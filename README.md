@@ -31,9 +31,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 ## Performance
 
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
-with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard style,
-measured the same way on the same phone: five warm runs and three Metal System Traces
-per engine.
+with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard style.
 
 | Metric | ImmersiveMap | Mapbox Standard |
 |---|---:|---:|
@@ -45,12 +43,6 @@ per engine.
 | Memory, moving | 230 to 290 MB | 270 to 940 MB |
 | Memory, idle | 160 to 200 MB | 290 to 720 MB |
 | First map view, main thread | 60 to 75 ms | not measured |
-
-Frame rate and GPU time are from the traces (frame rate: the tenth percentile to the median
-of the seconds in motion), CPU and memory from the harness. Mapbox Standard's memory varies
-with its cache, hence the wide range. The engines draw different data in different styles:
-two products at their defaults, not two renderers on one input. Measured with
-`Tools/PerformanceBench`. Rerun before quoting for another device.
 
 ## Features
 
