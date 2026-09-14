@@ -31,8 +31,8 @@ final class GroundStyleRunTests: XCTestCase {
     }
 
     func testScannerSplitsContiguousStyleRuns() {
-        let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1), streetColor: SIMD4<Float>(0, 1, 0, 1))
-        let translucent = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 0.5), streetColor: SIMD4<Float>(0, 1, 0, 1))
+        let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
+        let translucent = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 0.5))
         let ground = makeGround(styleOfTriangle: [0, 0, 1, 2, 2, 2],
                                 styles: [opaque, translucent, opaque],
                                 masks: [0, 1, 3])
@@ -47,7 +47,7 @@ final class GroundStyleRunTests: XCTestCase {
     /// vertices, one run per style with the outline class flag, after the
     /// ribbons; the fill runs before it keep their class.
     func testScannerSplitsTheFillOutlineSegment() {
-        let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1), streetColor: SIMD4<Float>(0, 1, 0, 1))
+        let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
         var vertices: [TileVertexIn] = []
         var indices: [UInt32] = []
         // Two fills (styles 0 and 1), one ribbon (style 1), then the

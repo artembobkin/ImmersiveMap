@@ -17,7 +17,7 @@ import simd
 /// `Streetscape` and `Labels`. Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 74
+    static let implementationRevision: UInt32 = 75
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
     /// classes ease in over the globe instead of popping with the z4 tiles.
     let roadLowZoomFadeMask: Float = 2.0
@@ -43,18 +43,13 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     }
 
     public func backgroundStyle(tileZoom: Int) -> FeatureStyle {
-        // The full-tile base quad the engine emits per tile. OpenMapTiles
-        // has no land polygon, so this is what paints the land; without it
-        // the base falls through to the red debug fallback. The street
-        // color rides along in every tile: the shader lerps to it
-        // continuously in camera zoom, so no tile-zoom boundary flips the
-        // ground.
-        let overviewColor = tileZoom <= massiveOverviewMaximumZoom
-            ? theme.globalLandcover.grass
-            : theme.globalLandcover.land
-        return polygon(key: 1,
-                       color: overviewColor,
-                       streetColor: theme.layers.land)
+        // The full-tile base quad the engine emits per tile. The tiles ship
+        // no land polygon, so this is what paints the land; without it the
+        // base falls through to the red debug fallback.
+        let color = tileZoom <= massiveOverviewMaximumZoom
+            ? theme.layers.grass
+            : theme.layers.land
+        return polygon(key: 1, color: color)
     }
 
     /// The hosted tiles ship the ocean and sea names in `water_name`, so
@@ -115,11 +110,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
 
         switch layer {
         case "water":
-            // Same pair for water: the saturated globe blue eases into the
-            // pale street blue with the camera, identically in every tile.
-            return polygon(key: 20,
-                           color: theme.globalLandcover.water,
-                           streetColor: theme.layers.water)
+            return polygon(key: 20, color: theme.layers.water)
         case "waterway":
             return waterwayStyle(cls: cls, props: props)
         case "landcover":
@@ -181,7 +172,6 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     ///   keeps the fill at full contrast at every distance (water, ice).
     func polygon(key: UInt8,
                  color: SIMD4<Float>,
-                 streetColor: SIMD4<Float>? = nil,
                  far: FarTone? = nil) -> FeatureStyle {
         // Every ground fill gets the fill-outline antialiasing: its ring
         // edges draw once more as one-pixel lines with alpha by distance to
@@ -189,17 +179,14 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         .fill(FillStyle(
             key: key,
             color: color,
-            streetColor: streetColor,
             farColor: far.map { SIMD4<Float>($0.color.x, $0.color.y, $0.color.z, $0.strength) },
-            farStreetColor: far.map { SIMD4<Float>($0.streetColor.x, $0.streetColor.y, $0.streetColor.z, $0.strength) },
             outlineAntialiasing: true
         ))
     }
 
-    /// The tone a class of ground converges on at distance, one per palette.
+    /// The tone a class of ground converges on at distance.
     struct FarTone {
         let color: SIMD4<Float>
-        let streetColor: SIMD4<Float>
         let strength: Float
     }
 
@@ -210,15 +197,11 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// Settlements keep a quarter of their distance, so a city stays a faint
     /// warm patch under its label instead of vanishing.
     var farVegetation: FarTone {
-        FarTone(color: theme.globalLandcover.grass,
-                streetColor: theme.layers.grass,
-                strength: 1.0)
+        FarTone(color: theme.layers.grass, strength: 1.0)
     }
 
     var farSettlement: FarTone {
-        FarTone(color: theme.globalLandcover.grass,
-                streetColor: theme.layers.grass,
-                strength: 0.75)
+        FarTone(color: theme.layers.grass, strength: 0.75)
     }
 
     func line(key: UInt8,

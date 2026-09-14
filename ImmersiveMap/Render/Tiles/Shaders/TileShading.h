@@ -31,14 +31,9 @@ struct VertexIn {
 
 struct Style {
     float4 color;
-    /// Street-palette counterpart of color; the vertex stage lerps between
-    /// the two with the per-frame street blend, so the ground palette hands
-    /// over continuously in camera zoom instead of stepping per tile zoom.
-    float4 streetColor;
-    /// The footprint fade target, the same pair; alpha is the fade strength
-    /// (0: the style never fades). Mirror of TilePolygonStyle.
+    /// The footprint fade target; alpha is the fade strength (0: the style
+    /// never fades). Mirror of TilePolygonStyle.
     float4 farColor;
-    float4 farStreetColor;
 };
 
 /// Per-draw footprint fade parameters (Tile.metal, fragment buffer 10):
@@ -62,11 +57,6 @@ static inline float tileFootprintFadeAmount(float3 worldPos, constant FootprintF
     float unitsPerPixel = max(length(dx), length(dy)) * fade.unitsPerWorld;
     return smoothstep(fade.startUnits, fade.endUnits, unitsPerPixel);
 }
-
-/// Per-frame overview-to-street palette blend, from camera zoom.
-struct StreetPaletteUniform {
-    float blend;
-};
 
 /// Mirror of the Swift `TileLineStyle`; indexed per style alongside `Style`.
 struct LineStyle {
@@ -143,17 +133,16 @@ struct TileVertexStyle {
     half lineDashInTileUnits;
 };
 
-/// Resolves a vertex's style: the palette blend, the fade mask, and the
-/// line field unpacked the way the fragment coverage reads it.
+/// Resolves a vertex's style: the colour, the fade mask, and the line
+/// field unpacked the way the fragment coverage reads it.
 static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
                                               constant Style* styles,
                                               constant float* lowZoomFadeMasks,
-                                              constant LineStyle* lineStyles,
-                                              constant StreetPaletteUniform& streetPalette) {
+                                              constant LineStyle* lineStyles) {
     Style style = styles[vertexIn.styleIndex];
     LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
     TileVertexStyle out;
-    out.color = half4(mix(style.color, style.streetColor, streetPalette.blend));
+    out.color = half4(style.color);
     out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
     out.lineDistance = float(vertexIn.lineDistance) / 127.0;
     // The longitudinal parameter is style-interpreted (see TileVertexIn): a
@@ -319,12 +308,11 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                           constant Style* styles,
                                           constant float* lowZoomFadeMasks,
                                           constant LineStyle* lineStyles,
-                                          constant StreetPaletteUniform& streetPalette,
                                           constant OverviewFadeUniform& overviewFade,
                                           constant LineDashUniform& lineDash) {
     Style style = styles[styleIndex];
     LineStyle lineStyle = lineStyles[styleIndex];
-    half4 color = half4(mix(style.color, style.streetColor, streetPalette.blend));
+    half4 color = half4(style.color);
     color.a *= tileStyleFade(half(lowZoomFadeMasks[styleIndex]), overviewFade);
     // Same decode as tileVertexStyle: arc length in half tile units for a
     // dashed style, the normalized end-feather distance otherwise.

@@ -31,8 +31,8 @@ ImmersiveMapView()
 
 The groups are `layers` (land, water, wood, grass, farmland, ice, sand,
 wetland, park, residential, industrial, boundary, aeroway, and `roads` with
-one colour per road class plus the casing), `globalLandcover` (the ground
-families at the coarse zooms), `features` (the building fill), `labels` (fill
+one colour per road class plus the casing), `features` (the building fill),
+`labels` (fill
 and stroke colour, halo, size and weight per label class) and
 `labelVisibility`. Every value feeds the style's cache fingerprint, so a
 changed colour rebakes the prepared tiles by itself.

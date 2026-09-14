@@ -21,22 +21,21 @@ final class GroundFootprintFadeTests: XCTestCase {
     }
 
     /// The style buffer is one layout shared by the ground, the bridge
-    /// overlay and the buildings: four colours, mirrored by the `Style`
-    /// structs of both tile shaders.
-    func testStyleLayoutCarriesTheFarColourPair() throws {
-        XCTAssertEqual(MemoryLayout<TilePolygonStyle>.stride, 64)
+    /// overlay and the buildings: the colour and the far colour, mirrored
+    /// by the `Style` structs of both tile shaders.
+    func testStyleLayoutCarriesTheFarColour() throws {
+        XCTAssertEqual(MemoryLayout<TilePolygonStyle>.stride, 32)
         let plain = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
         XCTAssertEqual(plain.farColor, SIMD4<Float>(0, 0, 0, 0), "No far colour: the fade strength is zero")
-        XCTAssertEqual(plain.farStreetColor, plain.farColor)
         for path in ["Render/Tiles/Shaders/TileShading.h", "Render/Tiles/Shaders/TileExtruded.metal"] {
             let source = try shaderSource(path)
             let styleStruct = try XCTUnwrap(source.range(of: "struct Style {"))
             let body = source[styleStruct.upperBound...]
             let end = try XCTUnwrap(body.range(of: "};"))
             let fields = body[..<end.lowerBound]
-            XCTAssertEqual(fields.components(separatedBy: "float4 ").count - 1, 4,
-                           "\(path): the Style struct must carry exactly four float4 fields")
-            XCTAssertTrue(fields.contains("float4 farColor;") && fields.contains("float4 farStreetColor;"), path)
+            XCTAssertEqual(fields.components(separatedBy: "float4 ").count - 1, 2,
+                           "\(path): the Style struct must carry exactly two float4 fields")
+            XCTAssertTrue(fields.contains("float4 farColor;"), path)
         }
         let shading = try shaderSource("Render/Tiles/Shaders/TileShading.h")
         XCTAssertTrue(shading.contains("smoothstep(fade.startUnits, fade.endUnits, unitsPerPixel)"),
@@ -67,10 +66,10 @@ final class GroundFootprintFadeTests: XCTestCase {
         XCTAssertNil(water.farColor, "Water never fades: a far lake stays a lake")
         XCTAssertNil(snow.farColor, "Ice caps are real edges")
         let wood = style(layer: "landcover", cls: "wood", z: 12)
-        let streetGrass = ImmersiveMapTilesTheme.default.layers.grass
-        XCTAssertEqual(wood.farStreetColor.map { SIMD3($0.x, $0.y, $0.z) },
-                       SIMD3(streetGrass.x, streetGrass.y, streetGrass.z),
-                       "OSM woods converge on the street grass tone")
+        let grass = ImmersiveMapTilesTheme.default.layers.grass
+        XCTAssertEqual(wood.farColor.map { SIMD3($0.x, $0.y, $0.z) },
+                       SIMD3(grass.x, grass.y, grass.z),
+                       "OSM woods converge on the grass tone")
     }
 
     private func shaderSource(_ relativePath: String) throws -> String {

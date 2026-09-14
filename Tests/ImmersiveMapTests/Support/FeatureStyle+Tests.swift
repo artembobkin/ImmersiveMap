@@ -42,9 +42,7 @@ extension FeatureStyle {
     }
 
     var color: SIMD4<Float> { primaryPass?.color ?? SIMD4<Float>(0, 0, 0, 0) }
-    var streetColor: SIMD4<Float>? { primaryPass?.streetColor }
     var farColor: SIMD4<Float>? { fillStyle?.farColor }
-    var farStreetColor: SIMD4<Float>? { fillStyle?.farStreetColor }
     var lowZoomFadeMask: Float { primaryPass?.lowZoomFadeMask ?? 0 }
     var lineWidthPoints: Float { primaryPass?.lineWidthPoints ?? 0 }
     var dashLengthPoints: Float { primaryPass?.dashLengthPoints ?? 0 }

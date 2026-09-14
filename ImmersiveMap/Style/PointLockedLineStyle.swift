@@ -18,13 +18,11 @@ extension LinePass {
     /// a ribbon provisioned to host the width.
     public static func pointLocked(key: UInt8,
                                    color: SIMD4<Float>,
-                                   streetColor: SIMD4<Float>? = nil,
                                    widthPoints: Float,
                                    dashLengthPoints: Float = 0,
                                    dashGapPoints: Float = 0) -> LinePass {
         LinePass(key: key,
                  color: color,
-                 streetColor: streetColor,
                  lowZoomFadeMask: 1.0,
                  lineWidthPoints: widthPoints,
                  dashLengthPoints: dashLengthPoints,

@@ -30,6 +30,8 @@ enum BerlinNightTheme {
                 layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
                 layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
                 layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
+                layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
+                layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
                 layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
                 layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
                 layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
@@ -55,16 +57,6 @@ enum BerlinNightTheme {
                 // POI badges are colored icons: they read as app chrome in
                 // footage that is supposed to look like a flight.
                 visibility.poiMinimumZoom = 30
-            }
-            .globalLandcover { landcover in
-                landcover.land = SIMD4<Float>(0.10, 0.12, 0.14, 1)
-                landcover.water = SIMD4<Float>(0.03, 0.07, 0.16, 1)
-                landcover.forest = SIMD4<Float>(0.07, 0.14, 0.11, 1)
-                landcover.grass = SIMD4<Float>(0.10, 0.15, 0.11, 1)
-                landcover.crop = SIMD4<Float>(0.12, 0.14, 0.10, 1)
-                landcover.barren = SIMD4<Float>(0.16, 0.15, 0.13, 1)
-                landcover.wetland = SIMD4<Float>(0.08, 0.14, 0.13, 1)
-                landcover.snow = SIMD4<Float>(0.30, 0.32, 0.36, 1)
             }
     }
 

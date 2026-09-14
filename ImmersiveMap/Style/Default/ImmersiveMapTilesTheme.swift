@@ -186,38 +186,6 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         }
     }
 
-    /// Palette used only by the continuous ESA WorldCover overlay at overview
-    /// zooms. Keeping it separate prevents globe-scale color choices from tinting
-    /// the detailed OSM street map that takes over above z9.
-    public struct GlobalLandcoverStyles: Equatable, Sendable {
-        public var land: SIMD4<Float>
-        public var water: SIMD4<Float>
-        public var forest: SIMD4<Float>
-        public var grass: SIMD4<Float>
-        public var crop: SIMD4<Float>
-        public var barren: SIMD4<Float>
-        public var wetland: SIMD4<Float>
-        public var snow: SIMD4<Float>
-
-        public init(land: SIMD4<Float>,
-                    water: SIMD4<Float>,
-                    forest: SIMD4<Float>,
-                    grass: SIMD4<Float>,
-                    crop: SIMD4<Float>,
-                    barren: SIMD4<Float>,
-                    wetland: SIMD4<Float>,
-                    snow: SIMD4<Float>) {
-            self.land = land
-            self.water = water
-            self.forest = forest
-            self.grass = grass
-            self.crop = crop
-            self.barren = barren
-            self.wetland = wetland
-            self.snow = snow
-        }
-    }
-
     public struct FeatureStyles: Equatable, Sendable {
         public var buildingFillColor: SIMD4<Float>
 
@@ -230,18 +198,15 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
     public var labelVisibility: LabelVisibility
     public var layers: LayerStyles
     public var features: FeatureStyles
-    public var globalLandcover: GlobalLandcoverStyles
 
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
-                features: FeatureStyles = .default,
-                globalLandcover: GlobalLandcoverStyles = .default) {
+                features: FeatureStyles = .default) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
         self.features = features
-        self.globalLandcover = globalLandcover
     }
 
     public static let `default` = ImmersiveMapTilesTheme()
@@ -279,13 +244,6 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         return copy
     }
 
-    public func globalLandcover(_ update: (inout GlobalLandcoverStyles) -> Void)
-        -> ImmersiveMapTilesTheme {
-        var copy = self
-        update(&copy.globalLandcover)
-        return copy
-    }
-
     /// FNV-1a over every palette component so a recolor changes disk-cache identity.
     var cacheFingerprint: UInt32 {
         var hash: UInt64 = 1469598103934665603
@@ -318,9 +276,6 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         add(layers.roads.secondary); add(layers.roads.tertiary); add(layers.roads.minor)
         add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
         add(layers.roads.casing)
-        add(globalLandcover.land); add(globalLandcover.water); add(globalLandcover.forest)
-        add(globalLandcover.grass); add(globalLandcover.crop); add(globalLandcover.barren)
-        add(globalLandcover.wetland); add(globalLandcover.snow)
         add(features.buildingFillColor)
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
@@ -331,25 +286,6 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         out.append(labelVisibility.poiRequiresIcon ? 1 : 0)
         return out
     }
-}
-
-public extension ImmersiveMapTilesTheme.GlobalLandcoverStyles {
-    /// The street palette, class by class: the overview and street sets are
-    /// deliberately one set of colors, so the map wears the same water blue
-    /// and the same greens at every zoom and nothing shifts hue while zooming
-    /// (the per-frame street blend then lerps between equal endpoints and is
-    /// inert). A custom theme may differentiate the two sets and get
-    /// a smooth camera-zoom handover between them.
-    static let `default` = ImmersiveMapTilesTheme.GlobalLandcoverStyles(
-        land: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
-        water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
-        forest: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
-        grass: SIMD4<Float>(0.757, 0.886, 0.643, 1.0),
-        crop: SIMD4<Float>(0.914, 0.922, 0.792, 1.0),
-        barren: SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
-        wetland: SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
-        snow: SIMD4<Float>(0.937, 0.957, 0.973, 1.0)
-    )
 }
 
 public extension ImmersiveMapTilesTheme.LayerStyles {

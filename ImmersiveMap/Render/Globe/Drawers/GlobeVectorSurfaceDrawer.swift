@@ -61,9 +61,6 @@ enum GlobeVectorSurfaceDrawer {
 
         var cameraUniformValue = cameraUniform
         var globeValue = globe
-        var streetPaletteUniform = StreetPaletteUniform(
-            blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
-        )
         // Point-locked widths resolve against the real screen gradient of the
         // line field (fwidth in the coverage), so the taper is all the sphere
         // needs. Every road is a symbol at these zooms and no road is painted
@@ -77,10 +74,6 @@ enum GlobeVectorSurfaceDrawer {
         )
         var overviewFadeValue = overviewFadeUniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
-        renderEncoder.setVertexBytes(&streetPaletteUniform, length: MemoryLayout<StreetPaletteUniform>.stride, index: 6)
-        // The ribbons class resolves its style in the fragment stage
-        // (tileLineFragmentColor), so the palette blend is bound there too.
-        renderEncoder.setFragmentBytes(&streetPaletteUniform, length: MemoryLayout<StreetPaletteUniform>.stride, index: 8)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
         var globeFrameValue = globeFrame
         renderEncoder.setVertexBytes(&globeFrameValue,

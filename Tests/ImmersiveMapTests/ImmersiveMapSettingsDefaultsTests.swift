@@ -53,20 +53,4 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(settings.style.baseColors.tileBackground, layers.land)
         XCTAssertEqual(settings.style.baseColors.water, layers.water)
     }
-
-    /// The overview biomes and the street palette are one set of colors, class
-    /// by class, so nothing shifts hue while zooming.
-    func testOverviewBiomesMirrorTheStreetPalette() {
-        let configuration = ImmersiveMapTilesTheme.default
-        let biomes = configuration.globalLandcover
-        let layers = configuration.layers
-        XCTAssertEqual(biomes.land, layers.land)
-        XCTAssertEqual(biomes.water, layers.water)
-        XCTAssertEqual(biomes.forest, layers.wood)
-        XCTAssertEqual(biomes.grass, layers.grass)
-        XCTAssertEqual(biomes.crop, layers.farmland)
-        XCTAssertEqual(biomes.barren, layers.sand)
-        XCTAssertEqual(biomes.wetland, layers.wetland)
-        XCTAssertEqual(biomes.snow, layers.ice)
-    }
 }

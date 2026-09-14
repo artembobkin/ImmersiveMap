@@ -123,10 +123,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // enough (about two points) for an edge to render; below that a
         // sub-pixel casing just muddies the fill's antialiasing. The width
         // floors keep the majors readable strokes instead of hairlines at
-        // region zooms, and the overview accent gives motorways and trunks a
-        // deeper asphalt grey over a country view, released to the light
-        // street palette by the same continuous camera-zoom blend the ground
-        // uses.
+        // region zooms.
         let casingZoom = tileZoom >= 12 && isConstruction == false
         // Over a country or region view a road is a symbol, not a surface,
         // and it draws on the same principle as the country borders: one
@@ -497,7 +494,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
                    kerbUnitsPerSide: Double? = nil,
                    strokes: Bool = false,
                    markings: RoadMarkings = .none,
-                   overviewAccent: SIMD4<Float>? = nil,
                    construction: Bool = false) -> FeatureStyle {
         // A tunnel is the plain ribbon at the tunnel opacity: no dash, no
         // kerb, no paint (both are skipped below), and butt ends. Where the
@@ -513,13 +509,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
             ? (length: 5.0, gap: 2.5)
             : nil
-        // With an overview accent, the accent is the baked color and the
-        // regular palette is its street counterpart: the continuous street
-        // blend releases the accent exactly as it lightens the ground.
-        let baseFillColor = overviewAccent ?? color
-        let baseFillStreetColor = overviewAccent != nil ? color : nil
-        let fillColor = tunnel ? Self.tunnelTone(baseFillColor) : baseFillColor
-        let fillStreetColor = tunnel ? baseFillStreetColor.map(Self.tunnelTone) : baseFillStreetColor
+        let fillColor = tunnel ? Self.tunnelTone(color) : color
         let fillPassKey = tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey
         // The floor stops mattering once the world width exceeds it, so the
         // casing keeps its proportion by flooring half a point above the fill.
@@ -542,7 +532,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
             let casingWidth = width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
             casingPass = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
                                   color: roadCasingColor(from: fillColor),
-                                  streetColor: fillStreetColor.map(roadCasingColor(from:)),
                                   lowZoomFadeMask: roadLowZoomFadeMask,
                                   minimumWidthPoints: casingFloor,
                                   maximumWidthPoints: maximumWidthPoints > 0 ? maximumWidthPoints + 1.0 : 0,
@@ -550,7 +539,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
         }
         let fillPass = LinePass(key: fillPassKey,
                                 color: fillColor,
-                                streetColor: fillStreetColor,
                                 lowZoomFadeMask: roadLowZoomFadeMask,
                                 dashLengthPoints: constructionDash?.length ?? 0,
                                 dashGapPoints: constructionDash?.gap ?? 0,

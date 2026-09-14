@@ -43,7 +43,7 @@ final class GlobeCapPaletteTests: XCTestCase {
         let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
 
         assertColor(palette.south.color,
-                    equals: ImmersiveMapTilesTheme.default.globalLandcover.snow)
+                    equals: ImmersiveMapTilesTheme.default.layers.ice)
     }
 
     private func assertColor(_ color: SIMD4<Float>,

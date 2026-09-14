@@ -28,13 +28,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // above the beige landuse (key 9) and below water (20).
         switch cls {
         case "wood", "forest":
-            // The overview color is the WorldCover forest these polygons
-            // replace at the handover, so they arrive wearing the color the
-            // biomes converge on and finish the lerp to the street wood.
-            return polygon(key: 11,
-                           color: theme.globalLandcover.forest,
-                           streetColor: theme.layers.wood,
-                           far: farVegetation)
+            return polygon(key: 11, color: theme.layers.wood, far: farVegetation)
         case "grass":
             // OSM tags countless small courtyards/verges as generic grass; at city
             // zooms suppress those (keep only real green-space subclasses) so they
@@ -43,27 +37,22 @@ extension ImmersiveMapTilesDefaultMapStyle {
                 return hiddenStyle
             }
             return polygon(key: 12,
-                           color: theme.globalLandcover.grass,
-                           streetColor: theme.layers.grass,
+                           color: theme.layers.grass,
                            far: farVegetation)
         case "farmland":
             return polygon(key: 13,
-                           color: theme.globalLandcover.crop,
-                           streetColor: theme.layers.farmland,
+                           color: theme.layers.farmland,
                            far: farVegetation)
         case "wetland":
             return polygon(key: 14,
-                           color: theme.globalLandcover.wetland,
-                           streetColor: theme.layers.wetland,
+                           color: theme.layers.wetland,
                            far: farVegetation)
         case "ice":
             return polygon(key: 17,
-                           color: theme.globalLandcover.snow,
-                           streetColor: theme.layers.ice)
+                           color: theme.layers.ice)
         case "sand":
             return polygon(key: 18,
-                           color: theme.globalLandcover.barren,
-                           streetColor: theme.layers.sand)
+                           color: theme.layers.sand)
         case "rock":
             // Bare rock = ground color; no separate polygon over the base needed.
             return hiddenStyle
@@ -94,7 +83,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// polygons are drawn in a fixed paint order: base land -> biomes -> snow on top.
     /// Keys stay below `water` (20) so oceans/lakes cover landcover.
     func globalLandcoverStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
-        let colors = theme.globalLandcover
+        let colors = theme.layers
         let vegetationBase = colors.grass
         // The WorldCover polygons are raster-derived blobs; at overview zooms
         // full-contrast categorical fills read as blotches, so the vegetation
@@ -104,46 +93,38 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // same proportion the full merge always used. Barren and snow are
         // real geographic edges (deserts, ice caps) and stay unblended.
         let amount = Self.vegetationBlendAmount(tileZoom: tileZoom)
-        // Each biome's street color is its OSM street-palette equivalent, so
-        // through the handover a WorldCover forest converges on exactly the
-        // color the OSM wood polygons that replace it will wear: only the
-        // geometry source changes at the swap, never the color language.
-        let layers = theme.layers
+        // Each biome wears the colour of the street class that replaces it
+        // from z10 (a WorldCover forest the wood, crop the farmland, barren
+        // the sand, snow the ice), so the swap changes the geometry source
+        // and never the colour.
         switch cls {
         case "land":
             return polygon(key: 2,
                            color: blend(colors.land, toward: vegetationBase, amount: amount),
-                           streetColor: layers.land,
                            far: farVegetation)
         case "barren":
-            return polygon(key: 3, color: colors.barren, streetColor: layers.sand)
+            return polygon(key: 3, color: colors.sand)
         case "grass", "shrub", "moss":
-            return polygon(key: 4, color: colors.grass, streetColor: layers.grass, far: farVegetation)
+            return polygon(key: 4, color: colors.grass, far: farVegetation)
         case "crop":
             return polygon(key: 5,
-                           color: blend(colors.crop, toward: vegetationBase, amount: amount),
-                           streetColor: layers.farmland,
+                           color: blend(colors.farmland, toward: vegetationBase, amount: amount),
                            far: farVegetation)
         case "forest":
             return polygon(key: 6,
-                           color: blend(colors.forest, toward: vegetationBase, amount: amount * 0.75),
-                           streetColor: layers.wood,
+                           color: blend(colors.wood, toward: vegetationBase, amount: amount * 0.75),
                            far: farVegetation)
         case "wetland", "mangroves":
             return polygon(key: 7,
                            color: blend(colors.wetland, toward: vegetationBase, amount: amount),
-                           streetColor: layers.wetland,
                            far: farVegetation)
         case "snow":
-            return polygon(key: 8, color: colors.snow, streetColor: layers.ice)
+            return polygon(key: 8, color: colors.ice)
         case "urban":
-            // Cities are the one thing a region view exists to show: a soft
-            // warm gray, clearly apart from the greens, handing over to the
-            // OSM residential beige that replaces it from z10.
-            return polygon(key: 10,
-                           color: SIMD4<Float>(0.886, 0.871, 0.847, 1.0),
-                           streetColor: layers.residential,
-                           far: farSettlement)
+            // Cities are the one thing a region view exists to show: the
+            // residential tone, clearly apart from the greens, the same the
+            // street map's residential landuse wears from z10.
+            return polygon(key: 10, color: colors.residential, far: farSettlement)
         default:
             // water: left to the background and water layers.
             return hiddenStyle

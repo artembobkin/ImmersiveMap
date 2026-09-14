@@ -150,9 +150,6 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     func testABuildingCrossingTheHorizonKeepsItsColour() async throws {
         let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover { landcover in
-                landcover.water = Self.fixtureWater
-            }
             .layers { layers in
                 layers.water = Self.fixtureWater
             }
@@ -315,9 +312,6 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     private func renderTiltedPlane(clearColor: SIMD4<Double>,
                                    fog: ImmersiveMapSettings.FogSettings) async throws -> RenderedFrame {
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover { landcover in
-                landcover.water = Self.fixtureWater
-            }
             .layers { layers in
                 layers.water = Self.fixtureWater
             }

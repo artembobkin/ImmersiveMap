@@ -2,35 +2,21 @@
 // SPDX-License-Identifier: MIT
 
 struct TilePolygonStyle {
+    /// The memory layout is a binding contract with the `Style` structs in
+    /// Tile.metal and TileExtruded.metal and an arena span stride; changing
+    /// it is a prepared-cache format change.
     let color: SIMD4<Float>
-    /// The street-palette counterpart of `color`. The ground palette hands
-    /// over from the overview set (soft-biome greens, saturated globe water)
-    /// to the street set continuously in camera zoom: the shader lerps
-    /// between the two baked colors with a per-frame blend, so the rendered
-    /// color is identical on both sides of every tile swap and no zoom
-    /// boundary can flip the map's look. Styles with no street counterpart
-    /// bake the same color twice. The memory layout is a binding contract
-    /// with the `Style` structs in Tile.metal and TileExtruded.metal and an
-    /// arena span stride; changing it is a prepared-cache format change.
-    let streetColor: SIMD4<Float>
-    /// The footprint fade's target, the same globe/street pair: where a
-    /// screen pixel covers more ground than the style's detail can resolve
-    /// (a tilted far range, a coarse tile minified), the fragment blends
-    /// the fill toward this colour, so neighbouring fills converge on one
-    /// tone instead of flickering between samples. The alpha is the fade
-    /// strength: 1 fades fully to the target, 0 (the default) never fades.
-    /// See `GroundFootprintFade`.
+    /// The footprint fade's target: where a screen pixel covers more ground
+    /// than the style's detail can resolve (a tilted far range, a coarse
+    /// tile minified), the fragment blends the fill toward this colour, so
+    /// neighbouring fills converge on one tone instead of flickering between
+    /// samples. The alpha is the fade strength: 1 fades fully to the target,
+    /// 0 (the default) never fades. See `GroundFootprintFade`.
     let farColor: SIMD4<Float>
-    let farStreetColor: SIMD4<Float>
 
-    init(color: SIMD4<Float>,
-         streetColor: SIMD4<Float>? = nil,
-         farColor: SIMD4<Float>? = nil,
-         farStreetColor: SIMD4<Float>? = nil) {
+    init(color: SIMD4<Float>, farColor: SIMD4<Float>? = nil) {
         self.color = color
-        self.streetColor = streetColor ?? color
         self.farColor = farColor ?? SIMD4<Float>(0, 0, 0, 0)
-        self.farStreetColor = farStreetColor ?? self.farColor
     }
 }
 

@@ -727,7 +727,11 @@ final class PreparedTileDiskCaching {
     // 92: fills are triangulated by the earcut port brought up to v3.2.3
     // (hole bridging on touching, coincident and self-tangent holes); a v91
     // entry of such a fill can leave part of it uncovered.
-    static let preparedFormatVersion: UInt32 = 92
+    // 93: the ground style carries one colour and one far colour; the
+    // street-palette counterparts and the per-frame blend between the two
+    // are gone, so the style stride halves. A v92 entry carries the old
+    // stride.
+    static let preparedFormatVersion: UInt32 = 93
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -122,7 +122,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
-                                  constant StreetPaletteUniform& streetPalette [[buffer(6)]],
                                   constant float& depthBandOffset [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]],
                                   constant RoadDistanceFadeUniform& roadFade [[buffer(9)]]) {
@@ -165,15 +164,13 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.lineParameterRaw = float(vertexIn.lineParameter);
         out.distanceFade = distanceFade;
     } else {
-        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
-                                                lineStyles, streetPalette);
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
         // The zoom fade folds into the alpha here: a function of the style
         // and the frame only, so the fills fragment neither interpolates
         // the mask nor walks the fade bands.
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
-        Style rawStyle = styles[vertexIn.styleIndex];
-        out.farColor = half4(mix(rawStyle.farColor, rawStyle.farStreetColor, streetPalette.blend));
+        out.farColor = half4(styles[vertexIn.styleIndex].farColor);
     }
     return out;
 }
@@ -188,7 +185,6 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
                                   constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                  constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileLineFields)]],
                                   constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
                                   constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
                                   depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
@@ -213,7 +209,7 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
     half4 color;
     if (kTileLineFields) {
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
-                                      styles, lowZoomFadeMasks, lineStyles, streetPalette,
+                                      styles, lowZoomFadeMasks, lineStyles,
                                       overviewFade, lineDash);
         // The road distance fade, resolved in the vertex stage.
         color.a *= half(in.distanceFade);

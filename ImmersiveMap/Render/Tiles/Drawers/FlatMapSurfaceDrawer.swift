@@ -35,17 +35,6 @@ enum FlatMapSurfaceDrawer {
             renderEncoder.setTriangleFillMode(.lines)
         }
         var cameraUniformValue = cameraUniform
-        // Continuous in camera zoom, so the ground palette never steps at a
-        // tile-zoom boundary; the tiles bake both palettes per style.
-        var streetPaletteUniform = StreetPaletteUniform(
-            blend: LowZoomOverviewFade.streetPaletteBlend(for: cameraZoom)
-        )
-        renderEncoder.setFragmentBytes(&streetPaletteUniform,
-                                       length: MemoryLayout<StreetPaletteUniform>.stride,
-                                       index: 8)
-        renderEncoder.setVertexBytes(&streetPaletteUniform,
-                                     length: MemoryLayout<StreetPaletteUniform>.stride,
-                                     index: 6)
         // The taper thins point-locked widths toward planet zooms; continuous
         // in camera zoom, so it cannot reintroduce integer-zoom width jumps.
         var overviewFadeUniform = TileOverviewFadeUniform(

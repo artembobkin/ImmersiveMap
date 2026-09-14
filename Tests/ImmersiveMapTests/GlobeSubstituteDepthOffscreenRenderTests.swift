@@ -86,9 +86,9 @@ final class GlobeSubstituteDepthOffscreenRenderTests: XCTestCase {
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover { landcover in
-                landcover.water = Self.fixtureWater
-                landcover.snow = Self.fixtureSnow
+            .layers { layers in
+                layers.water = Self.fixtureWater
+                layers.ice = Self.fixtureSnow
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))

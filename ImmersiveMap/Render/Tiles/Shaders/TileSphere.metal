@@ -127,15 +127,13 @@ static inline void tileSphereWriteStyle(thread SphereVertexOut& out,
                                         constant Style* styles,
                                         constant float* lowZoomFadeMasks,
                                         constant LineStyle* lineStyles,
-                                        constant StreetPaletteUniform& streetPalette,
                                         constant OverviewFadeUniform& overviewFade) {
     if (kTileSphereLineFields) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
     } else {
-        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
-                                                lineStyles, streetPalette);
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     }
@@ -149,7 +147,6 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
                                                   constant Style* styles [[buffer(2)]],
                                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                                   constant LineStyle* lineStyles [[buffer(5)]],
-                                                  constant StreetPaletteUniform& streetPalette [[buffer(6)]],
                                                   constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                   constant GlobeFrameConstants& globeFrame [[buffer(10)]],
                                                   constant OverviewFadeUniform& overviewFade [[buffer(11)]]) {
@@ -166,8 +163,7 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
         layerNdcZ -= kTileSphereRibbonDepthBand;
     }
     out.position.z = layerNdcZ * out.position.w;
-    tileSphereWriteStyle(out, vertexIn, styles, lowZoomFadeMasks, lineStyles,
-                         streetPalette, overviewFade);
+    tileSphereWriteStyle(out, vertexIn, styles, lowZoomFadeMasks, lineStyles, overviewFade);
     return out;
 }
 
@@ -200,7 +196,6 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
                                                    constant Style* styles [[buffer(2)]],
                                                    constant float* lowZoomFadeMasks [[buffer(4)]],
                                                    constant LineStyle* lineStyles [[buffer(5)]],
-                                                   constant StreetPaletteUniform& streetPalette [[buffer(6)]],
                                                    constant Globe& globe [[buffer(8)]],
                                                    constant GlobeSurfaceTile& surfaceTile [[buffer(9)]],
                                                    constant GlobeFrameConstants& globeFrame [[buffer(10)]],
@@ -242,8 +237,7 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
     } else {
-        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks,
-                                                lineStyles, streetPalette);
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
     }
@@ -258,15 +252,14 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant LineDashUniform& lineDash [[buffer(4)]],
                                         constant Style* styles [[buffer(5), function_constant(kTileSphereLineFields)]],
                                         constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileSphereLineFields)]],
-                                        constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]],
-                                        constant StreetPaletteUniform& streetPalette [[buffer(8), function_constant(kTileSphereLineFields)]]) {
+                                        constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]]) {
     // The fills class arrives with its final colour (fade folded in the
     // vertex stage); the ribbons class resolves colour, fade and coverage
     // from the flat style index right here.
     half4 color;
     if (kTileSphereLineFields) {
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
-                                      styles, lowZoomFadeMasks, lineStyles, streetPalette,
+                                      styles, lowZoomFadeMasks, lineStyles,
                                       overviewFade, lineDash);
     } else {
         color = in.color;

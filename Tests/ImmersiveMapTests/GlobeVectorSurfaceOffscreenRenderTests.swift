@@ -181,16 +181,12 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness(size: Int = 160) throws -> OffscreenFrameHarness {
-        // Below the street palette the style paints water with the global
-        // landcover blue and only eases toward `layers.water` as the camera
-        // zooms in (the street palette blend is zero at these zooms), so the
-        // colour this test owns is the overview one.
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover {
+            .layers {
                 $0.water = Self.fixtureWater
                 // The overview biomes blend forest toward grass by zoom: both
                 // cyan, so the far side is cyan at every zoom of the morph.
-                $0.forest = Self.fixtureForest
+                $0.wood = Self.fixtureForest
                 $0.grass = Self.fixtureForest
             }
         var settings = ImmersiveMapSettings.default

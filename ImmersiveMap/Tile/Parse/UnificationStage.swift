@@ -158,10 +158,7 @@ enum TileUnificationStage {
 
         for styleKey in styleKeys {
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color,
-                                               streetColor: style.streetColor,
-                                               farColor: style.farColor,
-                                               farStreetColor: style.farStreetColor))
+                styles.append(TilePolygonStyle(color: style.color, farColor: style.farColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
@@ -225,10 +222,7 @@ enum TileUnificationStage {
             }
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color,
-                                               streetColor: style.streetColor,
-                                               farColor: style.farColor,
-                                               farStreetColor: style.farStreetColor))
+                styles.append(TilePolygonStyle(color: style.color, farColor: style.farColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
@@ -392,7 +386,7 @@ enum TileUnificationStage {
             }
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = readingStageResult.styles[styleKey] {
-                extrudedStyles.append(TilePolygonStyle(color: style.color, streetColor: style.streetColor))
+                extrudedStyles.append(TilePolygonStyle(color: style.color))
             }
         }
 

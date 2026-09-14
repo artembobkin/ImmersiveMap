@@ -140,7 +140,7 @@ enum GroundStyleRunScanner {
         var flags: UInt32 = classFlags
         if styleIndex < ground.styles.count {
             let style = ground.styles[styleIndex]
-            if style.color.w >= 1.0, style.streetColor.w >= 1.0 {
+            if style.color.w >= 1.0 {
                 flags |= GroundStyleRun.alphaOpaqueFlag
             }
         }

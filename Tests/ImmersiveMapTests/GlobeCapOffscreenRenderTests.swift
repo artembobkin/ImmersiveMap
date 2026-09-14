@@ -92,10 +92,8 @@ final class GlobeCapOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        // Below the street palette the style paints water with the global
-        // landcover blue (see GlobeVectorSurfaceOffscreenRenderTests).
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover { $0.water = Self.fixtureWater }
+            .layers { $0.water = Self.fixtureWater }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         // The caps are constant palette colours now: paint both poles with

@@ -113,6 +113,8 @@ enum StylePalette: String, CaseIterable, Identifiable {
                     layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
                     layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
                     layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
+                    layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
+                    layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
                     layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
                     layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
                     layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
@@ -131,16 +133,6 @@ enum StylePalette: String, CaseIterable, Identifiable {
                          stroke: SIMD3<Float>(0.02, 0.03, 0.06))
                     labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96)
                 }
-                .globalLandcover { landcover in
-                    landcover.land = SIMD4<Float>(0.10, 0.12, 0.14, 1)
-                    landcover.water = SIMD4<Float>(0.03, 0.07, 0.16, 1)
-                    landcover.forest = SIMD4<Float>(0.07, 0.14, 0.11, 1)
-                    landcover.grass = SIMD4<Float>(0.10, 0.15, 0.11, 1)
-                    landcover.crop = SIMD4<Float>(0.12, 0.14, 0.10, 1)
-                    landcover.barren = SIMD4<Float>(0.16, 0.15, 0.13, 1)
-                    landcover.wetland = SIMD4<Float>(0.08, 0.14, 0.13, 1)
-                    landcover.snow = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-                }
         case .blueprint:
             return ImmersiveMapTilesTheme.default
                 .layers { layers in
@@ -151,6 +143,8 @@ enum StylePalette: String, CaseIterable, Identifiable {
                     layers.grass = paper
                     layers.farmland = paper
                     layers.wetland = paper
+                    layers.sand = paper
+                    layers.ice = SIMD4<Float>(0.22, 0.36, 0.62, 1)
                     layers.park = SIMD4<Float>(0.06, 0.19, 0.43, 1)
                     layers.residential = paper
                     layers.industrial = paper
@@ -167,17 +161,6 @@ enum StylePalette: String, CaseIterable, Identifiable {
                     tint(&labels,
                          fill: SIMD3<Float>(0.88, 0.94, 1.0),
                          stroke: SIMD3<Float>(0.02, 0.09, 0.24))
-                }
-                .globalLandcover { landcover in
-                    let paper = SIMD4<Float>(0.05, 0.16, 0.38, 1)
-                    landcover.land = paper
-                    landcover.forest = paper
-                    landcover.grass = paper
-                    landcover.crop = paper
-                    landcover.barren = paper
-                    landcover.wetland = paper
-                    landcover.water = SIMD4<Float>(0.03, 0.11, 0.30, 1)
-                    landcover.snow = SIMD4<Float>(0.22, 0.36, 0.62, 1)
                 }
         }
     }

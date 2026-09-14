@@ -41,13 +41,10 @@ struct FragmentIn {
 
 struct Style {
     float4 color;
-    /// Mirror of TilePolygonStyle: buildings are street-only, so this stays
-    /// unused here, but the stride must match the shared style buffer.
-    float4 streetColor;
-    /// Unused here too (the footprint fade is a ground fill matter); the
-    /// stride must match.
+    /// Mirror of TilePolygonStyle. Unused here (the footprint fade is a
+    /// ground fill matter), but the stride must match the shared style
+    /// buffer.
     float4 farColor;
-    float4 farStreetColor;
 };
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local

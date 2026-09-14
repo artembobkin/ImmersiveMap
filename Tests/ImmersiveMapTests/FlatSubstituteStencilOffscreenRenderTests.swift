@@ -90,14 +90,7 @@ final class FlatSubstituteStencilOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        // At street zooms the palette handover is complete and the ground
-        // colours come from the street layers, so both palettes get the
-        // fixture colours.
         let configuration = ImmersiveMapTilesTheme.default
-            .globalLandcover { landcover in
-                landcover.water = Self.fixtureWater
-                landcover.snow = Self.fixtureSnow
-            }
             .layers { layers in
                 layers.water = Self.fixtureWater
                 layers.ice = Self.fixtureSnow

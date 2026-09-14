@@ -6,68 +6,37 @@ import Mvt
 import XCTest
 
 final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
-    func testGroundStylesBakeBothPalettesForTheContinuousHandover() {
+    func testGroundStylesUseTheLayerColourAtEveryZoom() {
         let configuration = ImmersiveMapTilesTheme.default
         let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
 
-        // Every ground style bakes its overview color and its street
-        // counterpart, at EVERY tile zoom: the shader lerps between them per
-        // frame from camera zoom, so the rendered color is identical on both
-        // sides of any tile swap and no zoom boundary can flip the map.
+        // One colour per class, at every tile zoom: the globe and the
+        // street map wear the same water and the same land.
         for zoom in [2, 8, 9, 10, 12] {
             let water = makeStyle(style, layerName: "water", zoom: zoom)
-            XCTAssertEqual(water.color, configuration.globalLandcover.water, "z\(zoom)")
-            XCTAssertEqual(water.streetColor, configuration.layers.water, "z\(zoom)")
+            XCTAssertEqual(water.color, configuration.layers.water, "z\(zoom)")
         }
         for zoom in [8, 9, 10, 12] {
             let background = style.backgroundStyle(tileZoom: zoom)
-            XCTAssertEqual(background.color, configuration.globalLandcover.land, "z\(zoom)")
-            XCTAssertEqual(background.streetColor, configuration.layers.land, "z\(zoom)")
+            XCTAssertEqual(background.color, configuration.layers.land, "z\(zoom)")
         }
 
-        // A WorldCover biome's street color is the OSM class that replaces
-        // it, and the replacing OSM class enters wearing the biome's color:
-        // through the handover both lerp along the same segment, so the swap
-        // changes geometry, never the color language.
+        // A WorldCover biome wears the colour of the OSM class that replaces
+        // it at z10, so the swap changes geometry, never the colour.
         let biomeForest = makeStyle(style, layerName: "globallandcover", className: "forest", zoom: 9)
-        XCTAssertEqual(biomeForest.streetColor, configuration.layers.wood)
+        XCTAssertEqual(biomeForest.color, configuration.layers.wood)
         let osmWood = makeStyle(style, layerName: "landcover", className: "wood", zoom: 10)
-        XCTAssertEqual(osmWood.color, configuration.globalLandcover.forest)
-        XCTAssertEqual(osmWood.streetColor, configuration.layers.wood)
+        XCTAssertEqual(osmWood.color, configuration.layers.wood)
 
-        // Cities render: the WorldCover urban class is a soft gray with the
-        // OSM residential beige as its street counterpart.
+        // Cities render: the WorldCover urban class is the residential tone.
         let urban = makeStyle(style, layerName: "globallandcover", className: "urban", zoom: 6)
         XCTAssertEqual(urban.key, 10)
-        XCTAssertEqual(urban.streetColor, configuration.layers.residential)
-
-        // Styles outside the handover bake the same color twice.
-        let boundary = makeStyle(style, layerName: "boundary", adminLevel: 2, zoom: 9)
-        XCTAssertNil(boundary.streetColor)
-    }
-
-    func testStreetPaletteBlendIsContinuousAcrossTheHandoverBand() {
-        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 7.0), 0.0)
-        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 8.0), 0.0)
-        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 11.5), 1.0)
-        XCTAssertEqual(LowZoomOverviewFade.streetPaletteBlend(for: 14.0), 1.0)
-        // Strictly monotone through the band, with no step bigger than a
-        // smooth ramp allows: this is the property the per-tile-zoom bridge
-        // could not have.
-        var previous = LowZoomOverviewFade.streetPaletteBlend(for: 8.0)
-        var zoom = 8.05
-        while zoom < 11.5 {
-            let value = LowZoomOverviewFade.streetPaletteBlend(for: zoom)
-            XCTAssertGreaterThan(value, previous, "zoom \(zoom)")
-            XCTAssertLessThan(value - previous, 0.03, "zoom \(zoom)")
-            previous = value
-            zoom += 0.05
-        }
+        XCTAssertEqual(urban.color, configuration.layers.residential)
     }
 
     func testMassiveOverviewMergesVegetationClassesThroughZoomTwo() {
         let configuration = ImmersiveMapTilesTheme.default
-        let colors = configuration.globalLandcover
+        let colors = configuration.layers
         let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
         let mergedClasses = ["land", "grass", "shrub", "moss", "crop", "wetland", "mangroves"]
 
@@ -80,7 +49,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                            "Expected massive overview color for \(className)")
         }
 
-        let overviewForest = colors.grass + (colors.forest - colors.grass) * 0.25
+        let overviewForest = colors.grass + (colors.wood - colors.grass) * 0.25
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
@@ -103,40 +72,38 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                                  layerName: "globallandcover",
                                  className: "crop",
                                  zoom: 3).color,
-                       blended(colors.crop, amount: 0.5))
+                       blended(colors.farmland, amount: 0.5))
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 3).color,
-                       blended(colors.forest, amount: 0.5 * 0.75))
-        // At z9 the vegetation blend has fully released: the overview color
-        // is the raw palette (the street handover happens per frame in the
-        // shader, not in the baked color).
+                       blended(colors.wood, amount: 0.5 * 0.75))
+        // At z9 the vegetation blend has fully released: the colour is the
+        // raw palette.
         XCTAssertEqual(makeStyle(style,
                                  layerName: "globallandcover",
                                  className: "forest",
                                  zoom: 9).color,
-                       colors.forest)
+                       colors.wood)
     }
 
-    func testGlobalLandcoverClassesUseDedicatedSoftBiomesColors() {
+    func testGlobalLandcoverClassesUseTheLayerColours() {
         let configuration = ImmersiveMapTilesTheme.default
-        let colors = configuration.globalLandcover
+        let colors = configuration.layers
         let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
-        // z8 is the last zoom before the street handover begins; the
-        // vegetation blend has fully released by then, so the palette is
+        // The vegetation blend has fully released by z8, so the palette is
         // raw. One key per class.
         let expected: [(String, UInt8, SIMD4<Float>)] = [
             ("land", 2, colors.land),
-            ("barren", 3, colors.barren),
+            ("barren", 3, colors.sand),
             ("grass", 4, colors.grass),
             ("shrub", 4, colors.grass),
             ("moss", 4, colors.grass),
-            ("crop", 5, colors.crop),
-            ("forest", 6, colors.forest),
+            ("crop", 5, colors.farmland),
+            ("forest", 6, colors.wood),
             ("wetland", 7, colors.wetland),
             ("mangroves", 7, colors.wetland),
-            ("snow", 8, colors.snow)
+            ("snow", 8, colors.ice)
         ]
 
         for (className, key, color) in expected {
@@ -229,17 +196,14 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
                        accuracy: 0.01,
                        "The ribbon must host the point width")
 
-        // The stroke is the street grey of its class, at every zoom, with no
-        // street counterpart to blend toward: the colour never changes on
-        // the way down.
+        // The stroke is the street grey of its class, at every zoom: the
+        // colour never changes on the way down.
         let expected = configuration.layers.roads.motorway
         XCTAssertEqual(fill.color, SIMD4<Float>(expected.x, expected.y, expected.z, 0.6))
-        XCTAssertNil(fill.streetColor)
         let primary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 8)
         let primaryFill = primary.resolvedLineRenderPasses[0]
         let expectedPrimary = configuration.layers.roads.primary
         XCTAssertEqual(primaryFill.color, SIMD4<Float>(expectedPrimary.x, expectedPrimary.y, expectedPrimary.z, 0.6))
-        XCTAssertNil(primaryFill.streetColor)
 
         // Width steps up with the zoom band: a country view, a region view,
         // a city view.
@@ -286,7 +250,6 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(SIMD3(fill.color.x, fill.color.y, fill.color.z),
                        SIMD3(configuration.layers.roads.motorway.x, configuration.layers.roads.motorway.y, configuration.layers.roads.motorway.z))
         XCTAssertFalse(fill.lineGeometry.lineCapRound)
-        XCTAssertNil(fill.streetColor)
         XCTAssertFalse(construction.resolvedLineRenderPasses.contains { $0.roadPassRole == .casing })
         XCTAssertEqual(makeStyle(style, layerName: "transportation",
                                  className: "motorway_construction", zoom: 12)
@@ -307,8 +270,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
 
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {
         let originalConfiguration = ImmersiveMapTilesTheme.default
-        let updatedConfiguration = originalConfiguration.globalLandcover { colors in
-            colors.water = SIMD4<Float>(0.1, 0.2, 0.3, 1.0)
+        let updatedConfiguration = originalConfiguration.layers { layers in
+            layers.water = SIMD4<Float>(0.1, 0.2, 0.3, 1.0)
         }
 
         XCTAssertNotEqual(originalConfiguration.cacheFingerprint,

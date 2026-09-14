@@ -113,10 +113,6 @@ public struct LabelTextStyle: Sendable {
 public struct LinePass: Sendable {
     public var key: UInt8
     public var color: SIMD4<Float>
-    /// Street-palette counterpart of `color` for strokes whose colour
-    /// changes with the overview-to-street handover (the motorway accent);
-    /// nil bakes `color` twice.
-    public var streetColor: SIMD4<Float>?
     public var lowZoomFadeMask: Float
     /// Point-locked visible line width (full width, layout points). Zero keeps
     /// the world-locked behavior: the visible edge is the tessellated width.
@@ -146,7 +142,6 @@ public struct LinePass: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                streetColor: SIMD4<Float>? = nil,
                 lowZoomFadeMask: Float = 0.0,
                 lineWidthPoints: Float = 0.0,
                 dashLengthPoints: Float = 0.0,
@@ -157,7 +152,6 @@ public struct LinePass: Sendable {
                 lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
-        self.streetColor = streetColor
         self.lowZoomFadeMask = lowZoomFadeMask
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
@@ -173,14 +167,9 @@ public struct LinePass: Sendable {
 public struct FillStyle: Sendable {
     public var key: UInt8
     public var color: SIMD4<Float>
-    /// Street-palette counterpart of `color` for fills that change with the
-    /// overview-to-street handover; nil bakes `color` twice. See
-    /// `TilePolygonStyle.streetColor`.
-    public var streetColor: SIMD4<Float>?
-    /// The footprint fade target, the same globe/street pair, with the fade
-    /// strength in the alpha; nil never fades. See `TilePolygonStyle.farColor`.
+    /// The footprint fade target, with the fade strength in the alpha; nil
+    /// never fades. See `TilePolygonStyle.farColor`.
     public var farColor: SIMD4<Float>?
-    public var farStreetColor: SIMD4<Float>?
     public var lowZoomFadeMask: Float
     /// The ring edges antialiased by the fill-outline pass: the parser
     /// keeps them as a line list and the flat drawer rasterizes them as
@@ -195,17 +184,13 @@ public struct FillStyle: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                streetColor: SIMD4<Float>? = nil,
                 farColor: SIMD4<Float>? = nil,
-                farStreetColor: SIMD4<Float>? = nil,
                 lowZoomFadeMask: Float = 0.0,
                 outlineAntialiasing: Bool = true,
                 splitsComplexHoles: Bool = false) {
         self.key = key
         self.color = color
-        self.streetColor = streetColor
         self.farColor = farColor
-        self.farStreetColor = farStreetColor
         self.lowZoomFadeMask = lowZoomFadeMask
         self.outlineAntialiasing = outlineAntialiasing
         self.splitsComplexHoles = splitsComplexHoles
@@ -331,7 +316,6 @@ public struct RoadStyle: Sendable {
 public struct ExtrusionStyle: Sendable {
     public var key: UInt8
     public var color: SIMD4<Float>
-    public var streetColor: SIMD4<Float>?
     /// How metres become tile units at `anchorZoom`; the parser doubles the
     /// scale per zoom level above it and halves it below.
     public var heightScale: Float
@@ -342,13 +326,11 @@ public struct ExtrusionStyle: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                streetColor: SIMD4<Float>? = nil,
                 heightScale: Float = 1.0,
                 anchorZoom: Int = 16,
                 fallbackHeight: Float = 0) {
         self.key = key
         self.color = color
-        self.streetColor = streetColor
         self.heightScale = heightScale
         self.anchorZoom = anchorZoom
         self.fallbackHeight = fallbackHeight
