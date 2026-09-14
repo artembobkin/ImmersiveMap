@@ -45,9 +45,13 @@ final class ImmersiveMapTilesThemeTests: XCTestCase {
         }
         XCTAssertEqual(style.theme, recoloured)
 
+        // Spelled as an app writes it: after another modifier, with a literal
+        // in the closure body, which is what once sent the leading dot to
+        // the type-erased overload.
         let settings = ImmersiveMapView()
+            .buildingRoofShapes()
             .mapStyle(.default.apply { theme in
-                theme.layers.water = water
+                theme.layers.water = [0.2, 0.4, 0.8, 1]
             })
             .settings
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,

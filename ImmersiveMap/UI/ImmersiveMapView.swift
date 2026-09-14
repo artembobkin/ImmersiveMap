@@ -536,6 +536,14 @@ public extension ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
+    /// The built-in style, spelled without its type name:
+    /// `.mapStyle(.default)` or `.mapStyle(.default.apply { theme in ... })`.
+    /// A concrete overload, so the leading dot resolves on the built-in style
+    /// whatever the closure body does.
+    public func mapStyle(_ mapStyle: ImmersiveMapTilesMapStyle) -> ImmersiveMapView {
+        self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
+    }
+
     public func mapStyle(_ mapStyle: AnyImmersiveMapMapStyle) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.mapStyle(mapStyle)
