@@ -93,16 +93,6 @@ enum BerlinNightTheme {
         // Painted where no tile has arrived yet. It has to match the palette's
         // land color, or loading reads as pale holes punched in the map.
         scene.mapClearColor = SIMD4<Double>(0.09, 0.10, 0.13, 1.0)
-        // A fixed instant instead of the wall clock, so a render started at
-        // any hour puts the terminator in the same place and two takes cut
-        // together. Midsummer late morning UTC: Europe is on the lit side and
-        // the globe opens with Berlin facing the camera in daylight.
-        scene.earth.timeMode = .fixed(Date(timeIntervalSince1970: 1_782_039_600))
-        // No sun disk: a bright flare crossing the frame fights a dark post.
-        scene.earth.sun.isEnabled = false
-        // The dark palette leaves little to dim, so the night side is lifted
-        // to keep the coastline readable while the camera is still up high.
-        scene.earth.nightSideBrightness = 0.55
         // Low light from the south-east across Mitte. The direction points
         // towards the sun in the flat basis (+X east, +Y north, +Z up), so a
         // shallow Z is a long shadow.
