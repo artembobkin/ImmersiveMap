@@ -28,11 +28,8 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
-            .tileURLTemplate(devTileTemplate, headers: devTileHeaders())
-            // The streetscape archive under test rides along with the map
-            // tiles: two requests per street-zoom tile, merged before parsing.
-            .streetscapeTileURLTemplate(devStreetscapeTemplate)
-            .streetscape(isEnabled: false)
+            .tileURLTemplate(devTileTemplate)
+            .buildingRoofShapes()
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
@@ -72,41 +69,3 @@ private let devTileTemplate = ProcessInfo.processInfo
     .environment["IMMERSIVEMAP_DEV_TILE_TEMPLATE"]
     .flatMap { $0.isEmpty ? nil : $0 }
     ?? "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
-
-/// The streetscape archive next to the tile source under test, the measured
-/// carriageways and road paint at z15-16. `IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE`
-/// repoints it the same way the tile template is repointed.
-private let devStreetscapeTemplate = ProcessInfo.processInfo
-    .environment["IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE"]
-    .flatMap { $0.isEmpty ? nil : $0 }
-    ?? "https://immersivemap.dev/tiles/streetscape/{z}/{x}/{y}.mvt"
-
-/// The test endpoint takes the same key as the hosted service, so there is one
-/// entry to keep: `IMMERSIVEMAP_API_KEY`.
-private func devTileHeaders() -> [String: String] {
-    guard let key = localAPIKey(), key.isEmpty == false else {
-        return [:]
-    }
-    return ["Authorization": "Bearer \(key)"]
-}
-
-/// The environment wins (the scheme carries an empty placeholder for it);
-/// otherwise the key comes from the gitignored `LocalSecrets.plist` at the
-/// repository root, found from this source file's path, which exists wherever
-/// the app can also read it: on the Mac and in the simulator. A physical
-/// device sees neither and uses the scheme variable.
-private func localAPIKey(named name: String = "IMMERSIVEMAP_API_KEY") -> String? {
-    if let key = ProcessInfo.processInfo.environment[name],
-       key.isEmpty == false {
-        return key
-    }
-    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    while directory.path != "/" {
-        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-            let secrets = directory.appendingPathComponent("LocalSecrets.plist")
-            return NSDictionary(contentsOf: secrets)?[name] as? String
-        }
-        directory = directory.deletingLastPathComponent()
-    }
-    return nil
-}
