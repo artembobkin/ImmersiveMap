@@ -351,6 +351,15 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let officeStyle = makeStyle(style, layerName: "poi", className: "office", rank: 2, zoom: 14)
         XCTAssertEqual(officeStyle.key, 0, "A POI with no icon carries only its name and is left out")
 
+        // The sprite beside the name is the style's choice, stated on the
+        // label style: the engine draws what it is handed and reads no tag.
+        XCTAssertEqual(hospitalStyle.pointLabelStyle?.icon, .hospital)
+        XCTAssertEqual(makeStyle(style, layerName: "poi", className: "cafe", rank: 2, zoom: 14).pointLabelStyle?.icon, .cafe)
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.poiIcon(props: ["subclass": .string("supermarket")]), .shopping,
+                       "The subclass names the sprite where the class does not")
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.poiIcon(props: ["maki": .string("fuel")]), .gasStation)
+        XCTAssertNil(ImmersiveMapTilesDefaultMapStyle.poiIcon(props: ["class": .string("office")]))
+
         // Zoom agnosticism: the same shop in a z13 tile appears one zoom earlier.
         let earlierTileStyle = makeStyle(style, layerName: "poi", className: "shop", rank: 2, zoom: 13)
         XCTAssertEqual(earlierTileStyle.labelMinCameraZoom, 13.5, accuracy: 0.001)

@@ -183,8 +183,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                 rank + Self.poiClassRankBias(cls: cls, subclass: subclass))
         var minCameraZoom = Float(tileZoom)
             + Float(log2(effectiveRank / Self.poiNativeCellBudget) / 2.0)
-        let isIconless = poiSpriteResolver.resolve(attributes: props, layerName: "poi") == nil
-        if isIconless {
+        let icon = Self.poiIcon(props: props)
+        if icon == nil {
             // A category the icon set does not know (an office, a company, a
             // monument, a named building) has nothing to draw but its name,
             // and in a city centre those names outnumber everything else: bare
@@ -204,7 +204,59 @@ extension ImmersiveMapTilesDefaultMapStyle {
 
         var appearance = configuration.labels.poi
         appearance.fillColor = poiCategoryColor(cls: cls, subclass: subclass)
-        return pointLabel(key: 72, layer: "poi", props: props, appearance: appearance, minCameraZoom: minCameraZoom)
+        return pointLabel(key: 72, layer: "poi", props: props, appearance: appearance,
+                          minCameraZoom: minCameraZoom, icon: icon)
+    }
+
+    /// The sprite a POI draws beside its name: the first of `maki`,
+    /// `class`, `type` and `subclass` the icon set knows a symbol for. Nil
+    /// for a category with no symbol, which draws as text alone or not at
+    /// all (`poiRequiresIcon`).
+    static func poiIcon(props: [String: MvtValue]) -> PoiSpriteIcon? {
+        for key in ["maki", "class", "type", "subclass"] {
+            guard let value = props[key]?.stringValue, let icon = poiIcon(category: value) else { continue }
+            return icon
+        }
+        return nil
+    }
+
+    private static func poiIcon(category: String) -> PoiSpriteIcon? {
+        let normalized = category
+            .lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        switch normalized {
+        case "restaurant", "fast_food", "food_court":
+            return .restaurant
+        case "cafe", "coffee", "tea", "bakery":
+            return .cafe
+        case "bar", "pub", "beer", "alcohol":
+            return .bar
+        case "park", "garden", "national_park", "dog_park":
+            return .park
+        case "museum", "gallery", "arts", "art_gallery":
+            return .museum
+        case "hospital", "clinic", "doctor", "dentist", "healthcare":
+            return .hospital
+        case "school", "college", "university", "kindergarten", "library":
+            return .school
+        case "airport", "airfield", "aerodrome", "heliport":
+            return .airport
+        case "stadium", "sport", "sports_centre", "soccer", "basketball", "pitch":
+            return .stadium
+        case "lodging", "hotel", "hostel", "guest_house":
+            return .hotel
+        case "shop", "grocery", "supermarket", "mall", "clothing_store", "convenience":
+            return .shopping
+        case "fuel", "gas_station", "charging_station":
+            return .gasStation
+        case "pharmacy", "chemist":
+            return .pharmacy
+        case "viewpoint", "attraction", "tourism":
+            return .viewpoint
+        default:
+            return nil
+        }
     }
 
     /// Rank grid-cell budget at the tile's NATIVE zoom: rank <= budget is
@@ -313,13 +365,15 @@ extension ImmersiveMapTilesDefaultMapStyle {
                     layer: String,
                     props: [String: MvtValue],
                     appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance,
-                    minCameraZoom: Float = 0) -> FeatureStyle {
+                    minCameraZoom: Float = 0,
+                    icon: PoiSpriteIcon? = nil) -> FeatureStyle {
         let rank = labelRank(props)
         return FeatureStyle.pointLabel(key: key,
                                        labelTextStyle(key: Int(key), appearance: appearance),
                                        rank: rank,
                                        collisionRank: Self.labelCollisionRank(layer: layer, rank: rank),
-                                       minCameraZoom: minCameraZoom)
+                                       minCameraZoom: minCameraZoom,
+                                       icon: icon)
     }
 
     func labelTextStyle(key: Int,

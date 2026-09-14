@@ -24,10 +24,8 @@ struct LabelFeatureReader {
     }
 
     /// One label per point of the feature that lies inside the tile and
-    /// that the policy decides to label. The POI icon is decided once for
-    /// the feature, before its points are walked.
+    /// that the policy decides to label.
     func read(feature: MvtDecodedFeature,
-              attributes: [String: MvtValue],
               facts: ImmersiveMapFeatureFacts,
               style: PointLabelStyle,
               geometry: TileLayerGeometry,
@@ -37,7 +35,6 @@ struct LabelFeatureReader {
         guard let label = facts.label else { return }
         let points = geometry.points(of: feature)
         let featureID = feature.hasID ? feature.id : nil
-        let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
         for point in points where isPointInsideTile(point) {
             let anchor = SIMD2(Int16(point.x), Int16(point.y))
             let labelFeature = VectorTileLabelFeature(styleID: labelDecisions.styleID,
@@ -47,8 +44,7 @@ struct LabelFeatureReader {
                                                       anchor: anchor)
             guard let decision = labelDecisions.pointLabelDecision(feature: labelFeature,
                                                                    label: label,
-                                                                   style: style,
-                                                                   poiIcon: poiIcon) else {
+                                                                   style: style) else {
                 continue
             }
             result.textLabels.append(ParsedTextLabel(text: decision.text,

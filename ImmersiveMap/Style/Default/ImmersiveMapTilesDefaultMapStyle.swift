@@ -24,8 +24,6 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     let landuseMinimumZoom = 6
     let massiveOverviewMaximumZoom = 2
     let globalLandcoverMaximumZoom = 9
-    let poiSpriteResolver = PoiSpriteResolver()
-
     let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
 
     public init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault) {

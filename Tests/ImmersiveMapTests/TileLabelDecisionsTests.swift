@@ -196,8 +196,7 @@ final class TileLabelDecisionsTests: XCTestCase {
 
         let decision = decisions.pointLabelDecision(feature: feature,
                                                     label: label,
-                                                    style: featureStyle.pointLabelStyle!,
-                                                    poiIcon: nil)
+                                                    style: featureStyle.pointLabelStyle!)
 
         XCTAssertEqual(decision?.text, "Moscow")
         XCTAssertEqual(decision?.priority.visibilityRank, 3, "The rank is the style's reading of the tile")

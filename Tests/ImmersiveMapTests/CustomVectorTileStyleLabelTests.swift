@@ -96,7 +96,7 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
                                       facts: facts,
                                       geometryType: .point)))
         guard let labelStyle = featureStyle.pointLabelStyle, let label = facts.label else { return nil }
-        return decisions.pointLabelDecision(feature: feature.label, label: label, style: labelStyle, poiIcon: nil)
+        return decisions.pointLabelDecision(feature: feature.label, label: label, style: labelStyle)
     }
 
     private struct TestLabelFeature {

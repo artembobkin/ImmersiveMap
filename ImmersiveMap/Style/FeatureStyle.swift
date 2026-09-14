@@ -370,17 +370,21 @@ public struct PointLabelStyle: Sendable {
     /// Minimum CAMERA zoom for the label (0 = always visible). Travels with
     /// the label to runtime, where it is compared against the camera zoom.
     public var minCameraZoom: Float
+    /// The sprite drawn beside the text, nil for text alone.
+    public var icon: PoiSpriteIcon?
 
     public init(key: UInt8,
                 text: LabelTextStyle,
                 rank: Int = 0,
                 collisionRank: Int? = nil,
-                minCameraZoom: Float = 0) {
+                minCameraZoom: Float = 0,
+                icon: PoiSpriteIcon? = nil) {
         self.key = key
         self.text = text
         self.rank = rank
         self.collisionRank = collisionRank ?? rank
         self.minCameraZoom = minCameraZoom
+        self.icon = icon
     }
 }
 
@@ -510,17 +514,19 @@ public extension FeatureStyle {
     /// A point label. The text is the name the schema reading states, in
     /// the map's language; this says how it is drawn, how important it is
     /// (`rank`, lower first, and `collisionRank`, which defaults to the
-    /// rank) and from which camera zoom.
+    /// rank), from which camera zoom, and which sprite stands beside it.
     static func pointLabel(key: UInt8,
                            _ textStyle: LabelTextStyle,
                            rank: Int = 0,
                            collisionRank: Int? = nil,
-                           minCameraZoom: Float = 0) -> FeatureStyle {
+                           minCameraZoom: Float = 0,
+                           icon: PoiSpriteIcon? = nil) -> FeatureStyle {
         .pointLabel(PointLabelStyle(key: key,
                                     text: Self.keyed(textStyle, key: key),
                                     rank: rank,
                                     collisionRank: collisionRank,
-                                    minCameraZoom: minCameraZoom))
+                                    minCameraZoom: minCameraZoom,
+                                    icon: icon))
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid

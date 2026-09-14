@@ -257,7 +257,6 @@ final class TileMvtParser {
                     // off the layer is skipped whole, decision engine included.
                     guard options.labelsEnabled, case .pointLabel(let label) = style else { continue }
                     labelReader.read(feature: feature,
-                                     attributes: attributes,
                                      facts: facts,
                                      style: label,
                                      geometry: layerGeometry,

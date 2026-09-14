@@ -16,23 +16,9 @@ import AppKit
 #endif
 import simd
 
-enum PoiSpriteIcon: String, CaseIterable {
-    case restaurant
-    case cafe
-    case bar
-    case park
-    case museum
-    case hospital
-    case school
-    case airport
-    case stadium
-    case hotel
-    case shopping
-    case gasStation
-    case pharmacy
-    case viewpoint
-
-    fileprivate var symbolNames: [String] {
+extension PoiSpriteIcon {
+    /// The SF Symbols the sprite is rasterized from, first available wins.
+    var symbolNames: [String] {
         switch self {
         case .restaurant:
             return ["fork.knife", "fork.knife.circle.fill", "mappin.circle.fill"]

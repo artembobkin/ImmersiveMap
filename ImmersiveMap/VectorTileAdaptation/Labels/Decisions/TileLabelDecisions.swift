@@ -5,9 +5,9 @@ import Foundation
 import Mvt
 
 /// The label policy a tile parse asks questions of: which spelling a road
-/// or a point feature is labelled with, which icon a POI takes, how a
-/// labelled point is identified and ranked, and which spelling of a name
-/// the map's language and the text atlas allow.
+/// or a point feature is labelled with, how a labelled point is identified
+/// and ranked, and which spelling of a name the map's language and the
+/// text atlas allow.
 ///
 /// Assembled once by the caller from the style (how labels are
 /// identified), the glyph coverage of the text atlas and the language
@@ -23,7 +23,6 @@ struct TileLabelDecisions {
     private let languagePreferences: VectorTileLabelLanguagePreferences
     private let glyphCoverage: VectorTileLabelGlyphCoverage
     private let textResolver: VectorTileLabelTextResolver
-    private let poiSpriteResolver = PoiSpriteResolver()
 
     init(style: any ImmersiveMapVectorTileStyle,
          glyphCoverage: VectorTileLabelGlyphCoverage,
@@ -45,21 +44,14 @@ struct TileLabelDecisions {
         return textResolver.resolveText(label: label, preferences: languagePreferences)
     }
 
-    /// The sprite a POI feature draws beside its text, nil for every other
-    /// feature. Decided per feature, once, before its points are walked.
-    func poiIcon(attributes: [String: MvtValue], layerName: String) -> PoiSpriteIcon? {
-        poiSpriteResolver.resolve(attributes: attributes, layerName: layerName)
-    }
-
     /// How a point feature the style labels is labelled: its text (the
     /// house number where the reading states one, the name in the map's
     /// language otherwise), its identity across tiles, and the priorities
-    /// the style gave it. Nil when the feature carries no text the atlas can
-    /// render.
+    /// and the sprite the style gave it. Nil when the feature carries no
+    /// text the atlas can render.
     func pointLabelDecision(feature: VectorTileLabelFeature,
                             label: ImmersiveMapLabelFacts,
-                            style: PointLabelStyle,
-                            poiIcon: PoiSpriteIcon?) -> VectorTileLabelDecision? {
+                            style: PointLabelStyle) -> VectorTileLabelDecision? {
         let text: String?
         if label.houseNumber != nil {
             text = textResolver.resolveHouseNumber(label: label)
@@ -86,7 +78,7 @@ struct TileLabelDecisions {
                                                                          drawRank: style.rank),
                                        placement: .centered,
                                        style: style.text,
-                                       poiIcon: poiIcon)
+                                       poiIcon: style.icon)
     }
 
     /// The spelling of a name the map shows, chosen from names keyed by
