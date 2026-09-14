@@ -132,14 +132,14 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "aeroway":
             return line(key: 28, color: configuration.layers.aeroway, width: 4)
         case "transportation", "streetscape":
-            // The streetscape (the measured carriageways and road paint) is a
-            // second archive the parser folds into the road layer; a tile
-            // with the streetscape and no roads reaches here under its own
-            // name and is styled by the same rules.
+            // The streetscape (the measured carriageways and road paint)
+            // ships in its own layer, which the parser merges into the road
+            // layer; a tile with the streetscape and no roads reaches here
+            // under its own name and is styled by the same rules.
             return transportationStyle(cls: cls, props: props,
                                        road: data.facts.road ?? .ground,
                                        tile: data.tile,
-                                       streetscapeEnabled: data.streetscapeEnabled,
+                                       layerCarriesStreetscape: data.layerCarriesStreetscape,
                                        layerShipsMeasuredCrossings: data.layerShipsMeasuredCrossings)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)

@@ -191,13 +191,28 @@ final class TileMvtParser {
                         }
                     }
                 }
-                // A fact about the layer the style is told along with each
-                // feature: whether the source measured the crossings, so a
-                // style that also stripes the crossings read off a footway's
-                // tag draws each crossing once.
-                let layerShipsMeasuredCrossings = featureFacts.contains {
-                    if case .crossing(marked: true)? = $0.road?.paint?.kind { return true }
-                    return false
+                // Two facts about the layer the style is told along with
+                // each feature: whether it carries the measured streetscape
+                // (reconstructed surfaces, measured paint), so a road style
+                // draws carriageways where they are and strokes where they
+                // are not; and whether the source measured the crossings, so
+                // a style that also stripes the crossings read off a
+                // footway's tag draws each crossing once.
+                var layerCarriesStreetscape = false
+                var layerShipsMeasuredCrossings = false
+                for facts in featureFacts {
+                    guard let road = facts.road else { continue }
+                    switch road.kind {
+                    case .surface(reconstructed: true):
+                        layerCarriesStreetscape = true
+                    case .paint(let paint):
+                        layerCarriesStreetscape = true
+                        if case .crossing(marked: true) = paint.kind {
+                            layerShipsMeasuredCrossings = true
+                        }
+                    case .surface, .parkingLot, .centreline:
+                        break
+                    }
                 }
                 for (featureIndex, feature) in layer.features.enumerated() {
                     featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
@@ -205,7 +220,7 @@ final class TileMvtParser {
                         properties: featureAttributes[featureIndex],
                         tile: tile,
                         facts: featureFacts[featureIndex],
-                        streetscapeEnabled: options.streetscapeEnabled,
+                        layerCarriesStreetscape: layerCarriesStreetscape,
                         geometryType: feature.type,
                         layerShipsMeasuredCrossings: layerShipsMeasuredCrossings
                     )))

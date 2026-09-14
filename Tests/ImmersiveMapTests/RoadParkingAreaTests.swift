@@ -14,8 +14,7 @@ import simd
 /// anyone's paint.
 final class RoadParkingAreaTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        return TileMvtParser.forTests(settings: config)
+        TileMvtParser.forTests(settings: .default)
     }
 
     private func makeStyle(z: Int, extra: [String: String] = [:]) -> FeatureStyle {
@@ -67,11 +66,13 @@ final class RoadParkingAreaTests: XCTestCase {
 
     private let lotRing: [(Int32, Int32)] = [(1500, 1800), (2700, 1800), (2700, 2100), (1500, 2100)]
 
+    /// The lot in a tile that carries the streetscape, which is where the
+    /// comb is drawn.
     private func parse(_ features: [VectorTileFixture.Feature], z: Int = 16) throws -> ParsedTile {
         let scale = 1 << max(0, 16 - z)
         return try makeParser().parse(tile: Tile(x: 39615 / scale, y: 20486 / scale, z: z),
                                       mvtData: VectorTileFixture.layerTile(layerName: "transportation",
-                                                                           features: features))
+                                                                           features: features + [.streetscapeMarker]))
     }
 
     private func lot(extra: [String: String] = [:]) -> VectorTileFixture.Feature {

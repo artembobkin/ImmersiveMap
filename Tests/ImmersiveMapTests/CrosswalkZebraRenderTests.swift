@@ -151,16 +151,14 @@ final class CrosswalkZebraRenderTests: XCTestCase {
     // MARK: - Helpers
 
     private func parse(features: [VectorTileFixture.Feature]) throws -> ParsedTile {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let parser = TileMvtParser.forTests(settings: config)
+        let parser = TileMvtParser.forTests(settings: .default)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: VectorTileFixture.layerTile(layerName: "transportation",
                                                                      features: features))
     }
 
     private func parse(crossing: String?) throws -> ParsedTile {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        let parser = TileMvtParser.forTests(settings: config)
+        let parser = TileMvtParser.forTests(settings: .default)
         return try parser.parse(tile: Tile(x: 39615, y: 20486, z: 16),
                                 mvtData: Self.tileData(crossing: crossing))
     }

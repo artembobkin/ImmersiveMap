@@ -511,8 +511,8 @@ enum VisualReviewCatalogue {
             id: "roads.carriageways.street",
             title: "Street level, a street map's strokes",
             lookFor: """
-            Roads as strokes, the way a street map draws them: this is the \
-            default map, the streetscape off. An avenue is wider than the \
+            Roads as strokes, the way a street map draws them: these tiles \
+            carry no streetscape. An avenue is wider than the \
             side street it crosses by rank alone (motorway, primary, \
             secondary, minor, service, in that order), not by its real \
             width, so two primaries are the same width whatever their lane \
@@ -527,19 +527,18 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.manhattan)),
 
         VisualReviewScenario(
-            id: "roads.streetscape.off",
-            title: "Tverskaya junction, the streetscape off",
+            id: "roads.streetscape.absent",
+            title: "Tverskaya junction, tiles without the streetscape",
             lookFor: """
-            The same junction as the next shot, with the default settings: \
+            The same junction as the next shot, served from tiles that carry \
+            no streetscape: \
             the streets are strokes with a casing, their width by class \
             alone and narrower than the real carriageway, and the asphalt \
             is bare. No lane separators, no centre \
             line, no edge line, no letters A on the bus lane, no parking-bay \
             combs in the lots (the lots are plain asphalt with a kerb), no \
             single flush junction surface: the ribbons meet as ribbons. The \
-            zebra crossings ARE there, drawn once each. Nothing from the \
-            streetscape archive leaks through, and no request for it is \
-            made.
+            zebra crossings ARE there, drawn once each.
             """,
             settings: .default,
             subject: .still(camera: Place.tverskaya)),
@@ -560,7 +559,7 @@ enum VisualReviewCatalogue {
             streets draw exactly as before, and the boundary between the two \
             is not a visible seam.
             """,
-            settings: .default.streetscape(isEnabled: true),
+            settings: .default,
             subject: .still(camera: Place.tverskaya)),
 
         VisualReviewScenario(
@@ -578,7 +577,7 @@ enum VisualReviewCatalogue {
             asphalt as separate marks. Zooming in past 16 must not pop \
             anything into existence.
             """,
-            settings: .default.streetscape(isEnabled: true),
+            settings: .default,
             subject: .still(camera: Place.tverskayaOneLevelOut)),
 
         VisualReviewScenario(
@@ -596,7 +595,7 @@ enum VisualReviewCatalogue {
             No white dashes float over the ghost, and the ghost does not \
             continue as a lighter band across the avenue.
             """,
-            settings: .default.streetscape(isEnabled: true),
+            settings: .default,
             subject: .still(camera: Place.arbatTunnel)),
 
         VisualReviewScenario(
@@ -615,7 +614,7 @@ enum VisualReviewCatalogue {
             bus stops the kerb carries the yellow sawtooth of the stop \
             marking, anchored to the edge of the roadway.
             """,
-            settings: .default.streetscape(isEnabled: true),
+            settings: .default,
             subject: .still(camera: Place.okhotnyParking)),
 
         VisualReviewScenario(
@@ -750,7 +749,7 @@ enum VisualReviewCatalogue {
             it drawn from the measured streetscape: carriageways, lane \
             markings and crossings as surfaces rather than strokes.
             """,
-            settings: .default.streetscape(isEnabled: true),
+            settings: .default,
             subject: .still(camera: Place.bolshoi)),
 
         VisualReviewScenario(

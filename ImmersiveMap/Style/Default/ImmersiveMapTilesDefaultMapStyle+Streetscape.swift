@@ -215,13 +215,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// `reconstructed` is always true today: a graph surface cuts the paint
     /// of the roads inside it, because the measured paint ships as its own
     /// lines. The parameter stays for the day hand-mapped areas return for
-    /// regions without a reconstruction. Without the streetscape there is
-    /// no paint to cut, and the surface keeps whatever runs over it.
+    /// regions without a reconstruction.
     func junctionAreaStyle(cls: String?,
                            tunnel: Bool,
                            tile: Tile,
-                           reconstructed: Bool,
-                           streetscapeEnabled: Bool = true) -> FeatureStyle {
+                           reconstructed: Bool) -> FeatureStyle {
         let roads = configuration.layers.roads
         let classColor: SIMD4<Float>
         let fillKey: UInt8
@@ -260,7 +258,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            lowZoomFadeMask: roadLowZoomFadeMask,
                            lineGeometry: LineGeometryStyle(lineWidth: 100)),
             classPriority: priority,
-            surfacePaint: streetscapeEnabled == false ? .keeps : tunnel ? .cutsAll : reconstructed ? .cutsSynthesized : .keeps
+            surfacePaint: tunnel ? .cutsAll : reconstructed ? .cutsSynthesized : .keeps
         ))
     }
 
@@ -271,10 +269,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// is a stylization, not a claim about mapped spaces, which OSM almost
     /// never carries; the polygon and its `orientation` hint are the facts.
     /// The surface clips the ribbons inside it (a parking aisle needs no kerb
-    /// of its own across the lot) and never cuts anyone's paint. Without
-    /// the streetscape the lot is its asphalt and kerb alone: the comb is a
-    /// streetscape figure.
-    func parkingAreaStyle(tile: Tile, streetscapeEnabled: Bool = true) -> FeatureStyle {
+    /// of its own across the lot) and never cuts anyone's paint. In a tile
+    /// without the streetscape the lot is its asphalt and kerb alone: the
+    /// comb is a streetscape figure.
+    func parkingAreaStyle(tile: Tile, layerCarriesStreetscape: Bool = true) -> FeatureStyle {
         let roads = configuration.layers.roads
         let fillKey: UInt8 = 42
         let color = roads.service
@@ -292,7 +290,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // figure painted on a road surface: a lot looks the same at z15 as
         // at z16, and the camera-zoom band decides how faint the stripes are.
         var comb: [LinePass] = []
-        if streetscapeEnabled, tile.z >= Self.streetDetailMinimumTileZoom {
+        if layerCarriesStreetscape, tile.z >= Self.streetDetailMinimumTileZoom {
             comb = [LinePass(key: Self.parkingBayKey,
                              color: Self.roadMarkingColor,
                              lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,

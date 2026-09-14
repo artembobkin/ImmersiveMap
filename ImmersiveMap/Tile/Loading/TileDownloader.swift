@@ -18,7 +18,6 @@ import os
 final class TileNoticeThrottle: @unchecked Sendable {
     static let rateLimit = TileNoticeThrottle()
     static let authorization = TileNoticeThrottle()
-    static let streetscape = TileNoticeThrottle()
     static let interval: TimeInterval = 60
 
     private let lock = NSLock()
@@ -108,11 +107,6 @@ class TileDownloader: @unchecked Sendable {
     }
 
     private let mapTileDownloader: GetMapTileDownloadUrl
-    /// Where the streetscape archive's tiles come from, or nil when the
-    /// streetscape is off (or on with no template to request). The archive
-    /// carries the measured carriageways and road paint the map tiles do
-    /// not, as a second tile per coordinate at street zoom.
-    private let streetscapeTileDownloader: GetMapTileDownloadUrl?
     private let customHeaders: [String: String]
     private let session: URLSession
     // Retains the TileJSON discovery task so it can be cancelled on deinit; nil
@@ -152,46 +146,15 @@ class TileDownloader: @unchecked Sendable {
         } else {
             self.mapTileDownloader = baseProvider
         }
-        self.streetscapeTileDownloader = Self.makeStreetscapeProvider(tiles: config.tiles)
         self.session = URLSession(configuration: configuration)
     }
 
     init(mapTileDownloader: GetMapTileDownloadUrl,
          session: URLSession,
-         customHeaders: [String: String] = [:],
-         streetscapeTileDownloader: GetMapTileDownloadUrl? = nil) {
+         customHeaders: [String: String] = [:]) {
         self.mapTileDownloader = mapTileDownloader
-        self.streetscapeTileDownloader = streetscapeTileDownloader
         self.session = session
         self.customHeaders = customHeaders
-    }
-
-    /// The streetscape archive's URL provider, from the template the settings
-    /// resolve. On with nothing to resolve (a custom tile source that named
-    /// no streetscape template) is a configuration mistake worth one line in
-    /// the log, since the map then silently looks exactly as it does off.
-    private static func makeStreetscapeProvider(tiles: ImmersiveMapSettings.TileSettings) -> GetMapTileDownloadUrl? {
-        guard tiles.streetscape.isEnabled else {
-            return nil
-        }
-        guard let template = tiles.streetscape.resolvedTileURLTemplate(network: tiles.network) else {
-            if TileNoticeThrottle.streetscape.shouldLog() {
-                Self.logger.warning("ImmersiveMap: the streetscape is enabled, but the tile source is not the hosted service and no streetscapeTileURLTemplate(_:) is set, so no streetscape tiles are requested.")
-            }
-            return nil
-        }
-        // The fallback for a malformed template is the template's own
-        // directory, never the hosted archive: a custom source's requests
-        // must not quietly travel to a service it never named.
-        let fallbackBase = template.firstIndex(of: "{").flatMap { URL(string: String(template[..<$0])) }
-            ?? ImmersiveMapTilesService.tileBaseURL.appendingPathComponent("streetscape")
-        return TemplateTileURLProvider(template: template,
-                                       fallback: BackendTileURLProvider(baseURL: fallbackBase))
-    }
-
-    /// Whether this downloader requests the streetscape archive at all.
-    var requestsStreetscape: Bool {
-        streetscapeTileDownloader != nil
     }
 
     deinit {
@@ -243,18 +206,6 @@ class TileDownloader: @unchecked Sendable {
     func downloadResult(tile: Tile) async -> DownloadResult {
         await downloadResult(url: mapTileDownloader.get(tileX: tile.x, tileY: tile.y, tileZ: tile.z),
                              tile: tile)
-    }
-
-    /// The streetscape tile for `tile`, or nil when no streetscape archive is
-    /// configured. Same session, same headers, same status vocabulary as the
-    /// map tile; what the two answers mean together is the load pipeline's
-    /// decision.
-    func downloadStreetscapeResult(tile: Tile) async -> DownloadResult? {
-        guard let streetscapeTileDownloader else {
-            return nil
-        }
-        return await downloadResult(url: streetscapeTileDownloader.get(tileX: tile.x, tileY: tile.y, tileZ: tile.z),
-                                    tile: tile)
     }
 
     private func downloadResult(url tileURL: URL, tile: Tile) async -> DownloadResult {

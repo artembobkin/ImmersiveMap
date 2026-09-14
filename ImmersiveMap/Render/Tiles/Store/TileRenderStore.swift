@@ -48,8 +48,7 @@ final class TileRenderStore: @unchecked Sendable {
             addTestBorders: config.tiles.parsing.addTestBorders,
             roofShapesEnabled: config.style.buildingRoofShapesEnabled,
             buildingExtrusionEnabled: config.style.buildingExtrusionEnabled,
-            labelsEnabled: config.labels.isEnabled,
-            streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
+            labelsEnabled: config.labels.isEnabled
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,

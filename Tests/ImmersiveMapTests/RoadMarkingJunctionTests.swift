@@ -21,8 +21,7 @@ final class RoadMarkingJunctionTests: XCTestCase {
     private static let junction = SIMD2<Float>(1500, 4096 - 2600)
 
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        return TileMvtParser.forTests(settings: config)
+        TileMvtParser.forTests(settings: .default)
     }
 
     /// How close the paint on the avenue gets to the junction point, in tile
@@ -36,7 +35,8 @@ final class RoadMarkingJunctionTests: XCTestCase {
             .init(id: 1,
                   geometry: .line(points: [(200, 2600), (1500, 2600), (3900, 2600)]),
                   properties: avenue),
-            second
+            second,
+            .streetscapeMarker
         ])
         let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: data)
         let detail = parsed.drawingRoadPhases.automobileGround.detail

@@ -16,8 +16,7 @@ import simd
 /// halves of a dual carriageway, welding the reconstructed bodies together.
 final class JunctionAreaSurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        return TileMvtParser.forTests(settings: config)
+        TileMvtParser.forTests(settings: .default)
     }
 
     /// Two primaries meeting inside a square junction area, at z16

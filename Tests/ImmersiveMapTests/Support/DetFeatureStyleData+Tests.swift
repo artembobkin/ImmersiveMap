@@ -17,12 +17,13 @@ extension ImmersiveMapTileSchema {
 
 extension DetFeatureStyleData {
     /// A style input whose facts the hosted tiles' schema reads, the way
-    /// the parser reads them for the built-in style. `isTunnelRoof` states
-    /// the one fact the engine adds itself.
+    /// the parser reads them for the built-in style, in a tile that carries
+    /// the streetscape unless the test says otherwise. `isTunnelRoof`
+    /// states the one fact the engine adds itself.
     init(layerName: String,
          properties: [String: MvtValue],
          tile: Tile,
-         streetscapeEnabled: Bool = true,
+         layerCarriesStreetscape: Bool = true,
          geometryType: MvtGeometryType = .unknown,
          isTunnelRoof: Bool = false) {
         var facts = ImmersiveMapTilesSchema().facts(layerName: layerName,
@@ -37,7 +38,7 @@ extension DetFeatureStyleData {
                   properties: properties,
                   tile: tile,
                   facts: facts,
-                  streetscapeEnabled: streetscapeEnabled,
+                  layerCarriesStreetscape: layerCarriesStreetscape,
                   geometryType: geometryType)
     }
 }

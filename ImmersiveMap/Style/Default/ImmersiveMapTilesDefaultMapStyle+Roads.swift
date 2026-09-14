@@ -29,7 +29,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                              props: [String: MvtValue],
                              road: ImmersiveMapRoadFacts,
                              tile: Tile,
-                             streetscapeEnabled: Bool = true,
+                             layerCarriesStreetscape: Bool = true,
                              layerShipsMeasuredCrossings: Bool = false) -> FeatureStyle {
         let tileZoom = tile.z
         let isTunnel = road.isTunnel
@@ -41,11 +41,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // painted (`paint`), and it bypasses every rule below, which are all
         // about roads.
         if let paint = road.paint {
-            // Without the streetscape the map is a street map, and measured
-            // paint is not part of one, wherever it arrived from.
-            guard streetscapeEnabled else {
-                return hiddenStyle
-            }
             return shippedMarkingStyle(paint, tile: tile)
         }
         // A `<class>_construction` segment belongs to its base class: the
@@ -102,13 +97,12 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return junctionAreaStyle(cls: effectiveClass,
                                      tunnel: isTunnel,
                                      tile: tile,
-                                     reconstructed: true,
-                                     streetscapeEnabled: streetscapeEnabled)
+                                     reconstructed: true)
         case .parkingLot:
             // A surface parking lot: its own asphalt with a kerb, like a
             // junction area of the service tier, and from street zoom the
             // synthesized comb of parking-bay stripes on top.
-            return parkingAreaStyle(tile: tile, streetscapeEnabled: streetscapeEnabled)
+            return parkingAreaStyle(tile: tile, layerCarriesStreetscape: layerCarriesStreetscape)
         case .centreline, .paint:
             break
         }
@@ -163,13 +157,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // same fact, so they only appear where the surface can hold them.
         //
         // That is the streetscape's road, drawn to carry the measured
-        // surfaces and paint. Without the streetscape the road is a street
-        // map's stroke instead: a width the class alone decides, the same
-        // on every street of the class whatever the tiles say about lanes,
-        // a casing a point wide, nothing painted on it. See
-        // `streetStrokeWidthUnits`.
+        // surfaces and paint where the tile ships them. In a tile without
+        // the streetscape the road is a street map's stroke instead: a
+        // width the class alone decides, the same on every street of the
+        // class whatever the tiles say about lanes, a casing a point wide,
+        // nothing painted on it. See `streetStrokeWidthUnits`.
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
-        let drawsStrokes = streetscapeEnabled == false
+        let drawsStrokes = layerCarriesStreetscape == false
         let widthMetres = drawsStrokes
             ? Self.streetStrokeWidthUnits(cls: effectiveClass, tile: tile)
             : roadWidthUnits(cls: effectiveClass, props: props, tile: tile)

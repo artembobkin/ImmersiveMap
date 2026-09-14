@@ -16,8 +16,7 @@ import XCTest
 /// the median of a dual carriageway and every unrelated gap open.
 final class RoadSurfaceGapBridgeTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        return TileMvtParser.forTests(settings: config)
+        TileMvtParser.forTests(settings: .default)
     }
 
     private let tile = Tile(x: 39615, y: 20486, z: 16)

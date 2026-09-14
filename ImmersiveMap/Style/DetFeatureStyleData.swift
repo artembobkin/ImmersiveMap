@@ -14,14 +14,8 @@ struct DetFeatureStyleData {
     /// What the feature is (`ImmersiveMapTileSchema.read`), with the one
     /// fact the engine adds itself: a surface found to be a tunnel's roof.
     var facts: ImmersiveMapFeatureFacts
-    /// Whether the map draws the streetscape (`TileSettings.StreetscapeSettings`).
-    /// A road style reads it to decide between the measured carriageway and
-    /// a street map's stroke: with the streetscape on, a road is drawn at
-    /// its real width so the carriageway surfaces and paint of the second
-    /// archive sit flush on it; with it off, a road is a stroke whose width
-    /// is the class's alone, like every street map, and nothing about the
-    /// ground's true dimensions is drawn.
-    var streetscapeEnabled: Bool = true
+    /// See `ImmersiveMapFeatureStyleContext.layerCarriesStreetscape`.
+    var layerCarriesStreetscape: Bool = true
     /// The geometry the feature carries.
     var geometryType: MvtGeometryType = .unknown
     /// See `ImmersiveMapFeatureStyleContext.layerShipsMeasuredCrossings`.
@@ -31,14 +25,14 @@ struct DetFeatureStyleData {
          properties: [String: MvtValue],
          tile: Tile,
          facts: ImmersiveMapFeatureFacts,
-         streetscapeEnabled: Bool = true,
+         layerCarriesStreetscape: Bool = true,
          geometryType: MvtGeometryType = .unknown,
          layerShipsMeasuredCrossings: Bool = false) {
         self.layerName = layerName
         self.properties = properties
         self.tile = tile
         self.facts = facts
-        self.streetscapeEnabled = streetscapeEnabled
+        self.layerCarriesStreetscape = layerCarriesStreetscape
         self.geometryType = geometryType
         self.layerShipsMeasuredCrossings = layerShipsMeasuredCrossings
     }
@@ -57,7 +51,7 @@ struct DetFeatureStyleData {
                   properties: context.properties.values,
                   tile: Tile(x: context.tileX, y: context.tileY, z: context.tileZoom),
                   facts: context.facts,
-                  streetscapeEnabled: context.streetscapeEnabled,
+                  layerCarriesStreetscape: context.layerCarriesStreetscape,
                   geometryType: geometryType,
                   layerShipsMeasuredCrossings: context.layerShipsMeasuredCrossings)
     }

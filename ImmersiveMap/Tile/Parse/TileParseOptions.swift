@@ -17,10 +17,6 @@ struct TileParseOptions: Equatable {
     /// Whether point and road labels are resolved and baked. Off, point
     /// features are skipped whole and no road name is looked up.
     var labelsEnabled: Bool
-    /// Whether the map draws the measured streetscape. Told to the style
-    /// with every feature (`ImmersiveMapFeatureStyleContext.streetscapeEnabled`),
-    /// which decides what a road looks like without it.
-    var streetscapeEnabled: Bool
     /// Debug: a one-unit frame around every tile.
     var addTestBorders: Bool
     /// From this tile zoom up, the road layer takes the separate-road path:
@@ -39,14 +35,12 @@ struct TileParseOptions: Equatable {
     var buildingMinimumSourceZoom: Int
 
     init(labelsEnabled: Bool,
-         streetscapeEnabled: Bool,
          addTestBorders: Bool,
          flatSeparateRoadRenderingMinimumZoom: Int,
          buildingExtrusionEnabled: Bool,
          buildingRoofShapesEnabled: Bool,
          buildingMinimumSourceZoom: Int) {
         self.labelsEnabled = labelsEnabled
-        self.streetscapeEnabled = streetscapeEnabled
         self.addTestBorders = addTestBorders
         self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
         self.buildingExtrusionEnabled = buildingExtrusionEnabled
@@ -59,7 +53,6 @@ struct TileParseOptions: Equatable {
     /// parse depends on.
     init(settings: ImmersiveMapSettings) {
         self.init(labelsEnabled: settings.labels.isEnabled,
-                  streetscapeEnabled: settings.tiles.streetscape.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   flatSeparateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                   buildingExtrusionEnabled: settings.style.buildingExtrusionEnabled,

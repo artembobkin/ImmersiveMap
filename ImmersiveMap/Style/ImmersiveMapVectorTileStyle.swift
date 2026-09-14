@@ -23,13 +23,15 @@ public struct ImmersiveMapFeatureStyleContext {
     /// again, and a fact the engine derived (a surface found to be a
     /// tunnel's roof) arrives here and nowhere else.
     public let facts: ImmersiveMapFeatureFacts
-    /// Whether the map draws the measured streetscape
-    /// (`TileSettings.StreetscapeSettings`). A road style reads it to decide
+    /// The feature's layer carries the measured streetscape: carriageway
+    /// surfaces reconstructed from the road graph, or lines of measured
+    /// paint. A fact about the layer the parser derives from the reading
+    /// before any feature is styled. A road style reads it to decide
     /// between the measured carriageway and a street map's stroke: with the
-    /// streetscape on, a road is drawn at its real width so the carriageway
-    /// surfaces and paint of the second archive sit flush on it; with it
-    /// off, a road is a stroke whose width is the class's alone.
-    public let streetscapeEnabled: Bool
+    /// streetscape in the tile, a road is drawn at its real width so the
+    /// surfaces and paint sit flush on it; without it, a road is a stroke
+    /// whose width is the class's alone.
+    public let layerCarriesStreetscape: Bool
     /// The feature's layer carries measured, marked crossings
     /// (`ImmersiveMapRoadPaint.Kind.crossing`): a fact about the layer the
     /// parser derives from the reading before any feature is styled. A
@@ -51,7 +53,7 @@ public struct ImmersiveMapFeatureStyleContext {
         }
         self.properties = ImmersiveMapFeatureProperties(values: data.properties)
         self.facts = data.facts
-        self.streetscapeEnabled = data.streetscapeEnabled
+        self.layerCarriesStreetscape = data.layerCarriesStreetscape
         self.layerShipsMeasuredCrossings = data.layerShipsMeasuredCrossings
     }
 }

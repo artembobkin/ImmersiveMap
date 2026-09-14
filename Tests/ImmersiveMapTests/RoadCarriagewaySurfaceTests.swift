@@ -17,16 +17,18 @@ import simd
 /// leaves the street under it alone.
 final class RoadCarriagewaySurfaceTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default.streetscape(isEnabled: true)
-        return TileMvtParser.forTests(settings: config)
+        TileMvtParser.forTests(settings: .default)
     }
 
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 
     /// The tile as the service ships it: the roads in `transportation`, the
-    /// measured surfaces and paint in the `streetscape` layer of the second
-    /// archive, which the parser folds into the road layer.
+    /// measured surfaces and paint in the `streetscape` layer, which the
+    /// parser merges into the road layer. Every tile here carries the
+    /// streetscape, so a street alone still draws as a carriageway with
+    /// its paint.
     private func parse(_ features: [VectorTileFixture.Feature]) throws -> ParsedTile {
+        let features = features + [.streetscapeMarker]
         let streetscape = features.filter { feature in
             feature.properties["marking"] != nil
                 || feature.properties["subclass"] == "carriageway_area"
