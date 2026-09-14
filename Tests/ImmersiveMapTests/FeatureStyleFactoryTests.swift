@@ -18,8 +18,7 @@ final class FeatureStyleFactoryTests: XCTestCase {
         let style = FeatureStyle.pointLabel(key: 70, textStyle, minCameraZoom: 9)
 
         XCTAssertEqual(style.key, 70)
-        XCTAssertEqual(style.color, SIMD4<Float>(0, 0, 0, 0))
-        XCTAssertEqual(style.lineGeometry.lineWidth, 0)
+        XCTAssertNil(style.primaryPass, "A label draws no geometry of its own")
         XCTAssertEqual(style.labelTextStyle?.key, 70, "The text style carries the feature style's key")
         XCTAssertEqual(style.labelTextStyle?.fillColor, SIMD3<Float>(0.2, 0.2, 0.18))
         XCTAssertEqual(style.labelTextStyle?.sizePoints, 14)

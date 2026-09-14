@@ -16,15 +16,15 @@ import Foundation
 struct ReadingStageResult {
     /// Ground fills and line ribbons, drawn under everything else.
     var polygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-    var styles: [UInt8: FeatureStyle] = [:]
+    var styles: [UInt8: BakedStyle] = [:]
     /// The separate-road path's polygons: by style for the flat layer, and
     /// in arrival order with their sort keys for the phase buckets.
     var roadPolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
     var orderedRoadPolygons: [OrderedRoadPolygon] = []
-    var roadStyles: [UInt8: FeatureStyle] = [:]
+    var roadStyles: [UInt8: BakedStyle] = [:]
     /// Bridge decks and the lines on them, drawn over the roads.
     var bridgePolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
-    var bridgeStyles: [UInt8: FeatureStyle] = [:]
+    var bridgeStyles: [UInt8: BakedStyle] = [:]
     var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
     var textLabels: [ParsedTextLabel] = []
     /// The texts of the tile's own water-name labels, so the names the
@@ -37,7 +37,7 @@ struct ReadingStageResult {
 
     /// Records the style a ground or bridge key draws with, the first time
     /// the key is seen: every later feature of the key shares it.
-    mutating func registerStyle(_ style: FeatureStyle, key: UInt8, placement: LinePlacement) {
+    mutating func registerStyle(_ style: BakedStyle, key: UInt8, placement: LinePlacement) {
         switch placement {
         case .ground:
             if styles[key] == nil {
@@ -51,7 +51,7 @@ struct ReadingStageResult {
     }
 
     /// The same for a key on the separate-road path.
-    mutating func registerRoadStyle(_ style: FeatureStyle, key: UInt8) {
+    mutating func registerRoadStyle(_ style: BakedStyle, key: UInt8) {
         if roadStyles[key] == nil {
             roadStyles[key] = style
         }

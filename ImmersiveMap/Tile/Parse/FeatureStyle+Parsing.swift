@@ -1,15 +1,64 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import simd
+
+/// What the parser bakes of a style into a tile's style table: the colours
+/// of one stroke or fill and its line parameters, keyed by the style's key.
+/// A fill is baked as a stroke of the fill's colours on the standard fill
+/// ribbon width; the far colours and the outline flag are a fill's alone.
+struct BakedStyle {
+    let pass: LinePass
+    let farColor: SIMD4<Float>?
+    let farStreetColor: SIMD4<Float>?
+    let outlineAntialiasing: Bool
+
+    /// The ribbon width every fill is baked with: the edge threshold it
+    /// yields is what the fill shaders have always read.
+    static let fillRibbonWidth: Double = 100
+
+    init(pass: LinePass) {
+        self.pass = pass
+        self.farColor = nil
+        self.farStreetColor = nil
+        self.outlineAntialiasing = false
+    }
+
+    init(fill: FillStyle) {
+        self.pass = LinePass(key: fill.key,
+                             color: fill.color,
+                             streetColor: fill.streetColor,
+                             lowZoomFadeMask: fill.lowZoomFadeMask,
+                             lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
+        self.farColor = fill.farColor
+        self.farStreetColor = fill.farStreetColor
+        self.outlineAntialiasing = fill.outlineAntialiasing
+    }
+
+    init(extrusion: ExtrusionStyle) {
+        self.pass = LinePass(key: extrusion.key,
+                             color: extrusion.color,
+                             streetColor: extrusion.streetColor,
+                             lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
+        self.farColor = nil
+        self.farStreetColor = nil
+        self.outlineAntialiasing = false
+    }
+
+    var color: SIMD4<Float> { pass.color }
+    var streetColor: SIMD4<Float>? { pass.streetColor }
+    var lowZoomFadeMask: Float { pass.lowZoomFadeMask }
+}
+
 /// What the parser derives from a style before it reads a feature: the
-/// passes a line draws, and the style with the road paint taken off when the
-/// streetscape is off. `FeatureStyle` itself is the style's pure answer and
-/// knows nothing of the parse.
+/// style with the road paint taken off when the streetscape is off.
+/// `FeatureStyle` itself is the style's pure answer and knows nothing of
+/// the parse.
 extension FeatureStyle {
     /// The style with the road paint taken off it, which is what the parser
     /// bakes when the streetscape is off: a road is its casing and fill by
     /// class, a parking lot its asphalt and kerb, and nothing is painted on
-    /// either. The detail passes go (the lane lines and centre divider
+    /// either. The paint strokes go (the lane lines and centre divider
     /// synthesized from the lane count, the parking-bay comb), a shipped
     /// marking or a paint-only decoration is hidden outright rather than
     /// left to fall back on a fill ribbon of its own colour, and a surface
@@ -19,73 +68,27 @@ extension FeatureStyle {
     /// streetscape. Every other style comes back as it is. `isShippedPaint`
     /// is the reading's word on the feature (`ImmersiveMapRoadFacts.isShippedPaint`).
     func strippingRoadPaint(isShippedPaint: Bool = false) -> FeatureStyle {
-        if roadDecorationKind == .zebraCrossing, isShippedPaint == false {
+        guard case .road(var road) = self else {
+            return self
+        }
+        if road.decoration == .zebraCrossing, isShippedPaint == false {
             return self
         }
         let hasRoadPaint = isShippedPaint
-            || roadDecorationKind != .none
-            || surfaceAreaCutsPaint
-            || lineRenderPasses.contains { $0.roadPassRole == .detail }
+            || road.decoration != .none
+            || road.surfaceCutsPaint
+            || road.paint.isEmpty == false
         guard hasRoadPaint else {
             return self
         }
-        let keptPasses = lineRenderPasses.filter { $0.roadPassRole != .detail }
         let paintOnly = isShippedPaint
-            || (lineRenderPasses.isEmpty == false && keptPasses.isEmpty)
+            || (road.shadow == nil && road.casing == nil && road.fill == nil && road.overlay == nil)
         if paintOnly {
-            return FeatureStyle(key: 0,
-                                color: SIMD4<Float>(repeating: 0),
-                                lineGeometry: lineGeometry)
+            return .hidden
         }
-        return FeatureStyle(key: key,
-                            color: color,
-                            streetColor: streetColor,
-                            farColor: farColor,
-                            farStreetColor: farStreetColor,
-                            lowZoomFadeMask: lowZoomFadeMask,
-                            lineWidthPoints: lineWidthPoints,
-                            dashLengthPoints: dashLengthPoints,
-                            dashGapPoints: dashGapPoints,
-                            dashInTileUnits: dashInTileUnits,
-                            minimumWidthPoints: minimumWidthPoints,
-                            maximumWidthPoints: maximumWidthPoints,
-                            lineGeometry: lineGeometry,
-                            includeRoadLabelPath: includeRoadLabelPath,
-                            linePlacement: linePlacement,
-                            lineRenderPasses: keptPasses,
-                            roadClassPriority: roadClassPriority,
-                            isExtruded: isExtruded,
-                            extrusionHeightScale: extrusionHeightScale,
-                            extrusionAnchorZoom: extrusionAnchorZoom,
-                            extrusionFallbackHeight: extrusionFallbackHeight,
-                            labelTextStyle: labelTextStyle,
-                            roadLabelTextStyle: roadLabelTextStyle,
-                            roadDecorationKind: .none,
-                            surfaceAreaCutsPaint: false,
-                            labelMinCameraZoom: labelMinCameraZoom,
-                            suppressPolygonFill: suppressPolygonFill,
-                            fillOutlineAntialiasing: fillOutlineAntialiasing)
-    }
-
-    var resolvedLineRenderPasses: [LineRenderPass] {
-        if lineRenderPasses.isEmpty == false {
-            return lineRenderPasses
-        }
-        return [
-            LineRenderPass(key: key,
-                           color: color,
-                           streetColor: streetColor,
-                           lowZoomFadeMask: lowZoomFadeMask,
-                           lineWidthPoints: lineWidthPoints,
-                           dashLengthPoints: dashLengthPoints,
-                           dashGapPoints: dashGapPoints,
-                           dashInTileUnits: dashInTileUnits,
-                           minimumWidthPoints: minimumWidthPoints,
-                           maximumWidthPoints: maximumWidthPoints,
-                           lineGeometry: lineGeometry,
-                           includeRoadLabelPath: includeRoadLabelPath,
-                           placement: linePlacement,
-                           roadPassRole: .fill)
-        ]
+        road.paint = []
+        road.decoration = .none
+        road.surfaceCutsPaint = false
+        return .road(road)
     }
 }

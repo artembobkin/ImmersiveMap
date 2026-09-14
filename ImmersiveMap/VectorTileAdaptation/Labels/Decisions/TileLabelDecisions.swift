@@ -65,11 +65,8 @@ struct TileLabelDecisions {
     /// elsewhere), its identity across tiles, and the priorities the style
     /// gave it. Nil when the feature carries no text the atlas can render.
     func pointLabelDecision(feature: VectorTileLabelFeature,
-                            style: FeatureStyle,
+                            style: PointLabelStyle,
                             poiIcon: PoiSpriteIcon?) -> VectorTileLabelDecision? {
-        guard let textStyle = style.labelTextStyle else {
-            return nil
-        }
         let text: String?
         if houseNumberLayers.contains(feature.layerName.lowercased()) {
             text = textResolver.resolveHouseNumber(properties: feature.properties,
@@ -93,12 +90,12 @@ struct TileLabelDecisions {
         }
         return VectorTileLabelDecision(text: resolvedText,
                                        identity: identity,
-                                       priority: VectorTileLabelPriority(visibilityRank: style.labelRank,
-                                                                         collisionRank: style.labelCollisionRank,
-                                                                         deduplicationRank: style.labelRank,
-                                                                         drawRank: style.labelRank),
+                                       priority: VectorTileLabelPriority(visibilityRank: style.rank,
+                                                                         collisionRank: style.collisionRank,
+                                                                         deduplicationRank: style.rank,
+                                                                         drawRank: style.rank),
                                        placement: .centered,
-                                       style: textStyle,
+                                       style: style.text,
                                        poiIcon: poiIcon)
     }
 

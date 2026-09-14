@@ -463,18 +463,21 @@ extension ImmersiveMapTilesDefaultMapStyle {
             lineCapRound: dashed == false,
             lineJoinRound: true
         )
-        return FeatureStyle(
-            key: fillKey,
-            color: fillColor,
-            // The class fades in over the zoom level after it first ships,
-            // continuous with the camera, instead of popping with the tile.
-            lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
-            lineWidthPoints: stroke.widthPoints,
-            dashLengthPoints: dashed ? 4.0 : 0,
-            dashGapPoints: dashed ? 2.5 : 0,
-            lineGeometry: geometry,
-            roadClassPriority: stroke.priority
-        )
+        return .road(RoadStyle(
+            fill: LinePass(
+                key: fillKey,
+                color: fillColor,
+                // The class fades in over the zoom level after it first
+                // ships, continuous with the camera, instead of popping with
+                // the tile.
+                lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
+                lineWidthPoints: stroke.widthPoints,
+                dashLengthPoints: dashed ? 4.0 : 0,
+                dashGapPoints: dashed ? 2.5 : 0,
+                lineGeometry: geometry
+            ),
+            classPriority: stroke.priority
+        ))
     }
 
     func roadStyle(fillKey: UInt8,
@@ -524,7 +527,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // readable symbol at region zooms.
         let maximumWidthPoints: Float = strokes ? 0 : maximumWidthPoints
 
-        var passes: [LineRenderPass] = []
+        var casingPass: LinePass?
         if casing, tunnel == false, Self.drawsAutomobileKerb || strokes {
             // The casing is a kerb: a fixed margin of ground on each side of
             // the carriageway, not a fraction of it. As a fraction it was a
@@ -532,31 +535,24 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // which turns every street into a dark-edged ribbon. A stroke's
             // casing is the same margin measured in points.
             let casingWidth = width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
-            passes.append(
-                LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
-                               color: roadCasingColor(from: fillColor),
-                               streetColor: fillStreetColor.map(roadCasingColor(from:)),
-                               lowZoomFadeMask: roadLowZoomFadeMask,
-                               minimumWidthPoints: casingFloor,
-                               maximumWidthPoints: maximumWidthPoints > 0 ? maximumWidthPoints + 1.0 : 0,
-                               lineGeometry: makeRoadGeometry(width: casingWidth),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .casing)
-            )
+            casingPass = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
+                                  color: roadCasingColor(from: fillColor),
+                                  streetColor: fillStreetColor.map(roadCasingColor(from:)),
+                                  lowZoomFadeMask: roadLowZoomFadeMask,
+                                  minimumWidthPoints: casingFloor,
+                                  maximumWidthPoints: maximumWidthPoints > 0 ? maximumWidthPoints + 1.0 : 0,
+                                  lineGeometry: makeRoadGeometry(width: casingWidth))
         }
-        passes.append(
-            LineRenderPass(key: fillPassKey,
-                           color: fillColor,
-                           streetColor: fillStreetColor,
-                           lowZoomFadeMask: roadLowZoomFadeMask,
-                           dashLengthPoints: constructionDash?.length ?? 0,
-                           dashGapPoints: constructionDash?.gap ?? 0,
-                           minimumWidthPoints: minimumWidthPoints,
-                           maximumWidthPoints: maximumWidthPoints,
-                           lineGeometry: fillGeometry,
-                           includeRoadLabelPath: false,
-                           roadPassRole: .fill)
-        )
+        let fillPass = LinePass(key: fillPassKey,
+                                color: fillColor,
+                                streetColor: fillStreetColor,
+                                lowZoomFadeMask: roadLowZoomFadeMask,
+                                dashLengthPoints: constructionDash?.length ?? 0,
+                                dashGapPoints: constructionDash?.gap ?? 0,
+                                minimumWidthPoints: minimumWidthPoints,
+                                maximumWidthPoints: maximumWidthPoints,
+                                lineGeometry: fillGeometry)
+        var paint: [LinePass] = []
         // Each marking is one dashed hairline pass, offset sideways from the
         // centreline. A one-way carriageway gets a line on every boundary
         // between its lanes; a two-way street gets the divider down the
@@ -607,35 +603,28 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // whatever the pattern left over: it read as paint of random
             // length rather than as an approach, and on a junction where
             // several carriageways fan in, as a thicket of them.
-            passes.append(
-                LineRenderPass(key: Self.roadMarkingKey(forFillKey: fillKey),
-                               color: Self.roadMarkingColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineWidthPoints: Self.roadMarkingWidthPoints,
-                               dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
-                               dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
-                               dashInTileUnits: true,
-                               lineGeometry: LineGeometryStyle(
-                                   lineWidth: markingRibbonUnits,
-                                   lineCapRound: false,
-                                   lineJoinRound: true,
-                                   endInset: markingEndInset,
-                                   lateralOffset: markingOffset
-                               ),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
+            paint.append(
+                LinePass(key: Self.roadMarkingKey(forFillKey: fillKey),
+                         color: Self.roadMarkingColor,
+                         lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                         lineWidthPoints: Self.roadMarkingWidthPoints,
+                         dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
+                         dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
+                         dashInTileUnits: true,
+                         lineGeometry: LineGeometryStyle(
+                             lineWidth: markingRibbonUnits,
+                             lineCapRound: false,
+                             lineJoinRound: true,
+                             endInset: markingEndInset,
+                             lateralOffset: markingOffset
+                         ))
             )
         }
 
-        return FeatureStyle(
-            key: fillPassKey,
-            color: fillColor,
-            streetColor: fillStreetColor,
-            lowZoomFadeMask: roadLowZoomFadeMask,
-            lineGeometry: fillGeometry,
-            lineRenderPasses: passes,
-            roadClassPriority: priority
-        )
+        return .road(RoadStyle(casing: casingPass,
+                               fill: fillPass,
+                               paint: paint,
+                               classPriority: priority))
     }
 
     func railStyle(subclass: String?, tileZoom: Int) -> FeatureStyle {
@@ -646,14 +635,14 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return hiddenStyle
         }
         let s = roadWidthScale(tileZoom: tileZoom)
-        return FeatureStyle(
-            key: 46,
-            color: configuration.layers.roads.rail,
-            lowZoomFadeMask: roadLowZoomFadeMask,
-            minimumWidthPoints: 0.7,
-            lineGeometry: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8),
-            roadClassPriority: 30
-        )
+        return .road(RoadStyle(
+            fill: LinePass(key: 46,
+                           color: configuration.layers.roads.rail,
+                           lowZoomFadeMask: roadLowZoomFadeMask,
+                           minimumWidthPoints: 0.7,
+                           lineGeometry: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8)),
+            classPriority: 30
+        ))
     }
 
     /// From this tile zoom a drive-tier road is wide enough on screen to hold

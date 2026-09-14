@@ -48,7 +48,12 @@ struct LineFeatureReader {
               roads: RoadLayerContext,
               tools: TileParseTools,
               into result: inout ReadingStageResult) {
-        let lineRenderPasses = style.resolvedLineRenderPasses.filter { $0.lineGeometry.lineWidth > 0 }
+        // A line or a road; every other style draws no line geometry. A
+        // plain line is a road of one fill stroke with no class.
+        guard let style = style.roadStyle else {
+            return
+        }
+        let lineRenderPasses = style.orderedPasses.filter { $0.pass.lineGeometry.lineWidth > 0 }
         if lineRenderPasses.isEmpty {
             return
         }
@@ -62,15 +67,14 @@ struct LineFeatureReader {
         let labelText = labelsEnabled
             ? labelDecisions.roadLabelText(properties: attributes)
             : nil
-        let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
-        let roadLabelStyle = style.roadLabelTextStyle
+        let roadLabelStyle = style.label
         let road = facts.road ?? .ground
-        let roadClassPriority = style.roadClassPriority
-        let roadStructure = RoadStructureKind(road: road, tier: style.roadTier)
+        let roadClassPriority = style.classPriority
+        let roadStructure = RoadStructureKind(road: road, tier: style.tier)
         let roadLayer = road.layer
         let sharedRoadPadding = Float(
             lineRenderPasses.reduce(0.0) { partial, pass in
-                max(partial, pass.lineGeometry.lineWidth * 0.5)
+                max(partial, pass.pass.lineGeometry.lineWidth * 0.5)
             }
         )
         let preparedLines: [PreparedRoadLine]
@@ -95,9 +99,9 @@ struct LineFeatureReader {
         let paintPreparedLines = usesSeparateRoadRendering
             ? precomputation.paintLinesByFeatureIndex[featureIndex]
             : preparedLines
-        let passGroups: [(lines: [PreparedRoadLine], passes: [LineRenderPass], emitsLabels: Bool)] = [
-            (preparedLines, lineRenderPasses.filter { $0.roadPassRole != .detail }, true),
-            (paintPreparedLines, lineRenderPasses.filter { $0.roadPassRole == .detail }, false)
+        let passGroups: [(lines: [PreparedRoadLine], passes: [RoadStyle.Pass], emitsLabels: Bool)] = [
+            (preparedLines, lineRenderPasses.filter { $0.role != .detail }, true),
+            (paintPreparedLines, lineRenderPasses.filter { $0.role == .detail }, false)
         ]
         for group in passGroups where group.passes.isEmpty == false || group.emitsLabels {
             for preparedLine in group.lines {
@@ -112,40 +116,23 @@ struct LineFeatureReader {
                                        padding: sharedRoadPadding)
                     : []
 
-                for lineRenderPass in group.passes {
-                    if style.roadDecorationKind == .zebraCrossing,
+                for roadPass in group.passes {
+                    let lineRenderPass = roadPass.pass
+                    if style.decoration == .zebraCrossing,
                        roadStructure == .tunnel
                            || (roads.hasShippedCrossings && road.isShippedPaint == false) {
                         continue
                     }
 
-                    let passStyle = FeatureStyle(
-                        key: lineRenderPass.key,
-                        color: lineRenderPass.color,
-                        streetColor: lineRenderPass.streetColor,
-                        lowZoomFadeMask: lineRenderPass.lowZoomFadeMask,
-                        lineWidthPoints: lineRenderPass.lineWidthPoints,
-                        dashLengthPoints: lineRenderPass.dashLengthPoints,
-                        dashGapPoints: lineRenderPass.dashGapPoints,
-                        dashInTileUnits: lineRenderPass.dashInTileUnits,
-                        minimumWidthPoints: lineRenderPass.minimumWidthPoints,
-                        maximumWidthPoints: lineRenderPass.maximumWidthPoints,
-                        lineGeometry: lineRenderPass.lineGeometry,
-                        includeRoadLabelPath: lineRenderPass.includeRoadLabelPath,
-                        linePlacement: lineRenderPass.placement,
-                        roadClassPriority: roadClassPriority,
-                        roadLabelTextStyle: roadLabelStyle,
-                        roadDecorationKind: style.roadDecorationKind
-                    )
                     if usesSeparateRoadRendering {
-                        result.registerRoadStyle(passStyle, key: lineRenderPass.key)
+                        result.registerRoadStyle(BakedStyle(pass: lineRenderPass), key: lineRenderPass.key)
                     } else {
-                        result.registerStyle(passStyle, key: lineRenderPass.key, placement: lineRenderPass.placement)
+                        result.registerStyle(BakedStyle(pass: lineRenderPass), key: lineRenderPass.key, placement: style.placement)
                     }
 
                     if usesSeparateRoadRendering,
                        appendDecoration(style: style,
-                                        pass: lineRenderPass,
+                                        pass: roadPass,
                                         fragments: exactClippedFragments,
                                         structure: roadStructure,
                                         layer: roadLayer,
@@ -280,9 +267,9 @@ struct LineFeatureReader {
                                                       structureKind: roadStructure,
                                                       layer: roadLayer,
                                                       classPriority: roadClassPriority,
-                                                      passRole: lineRenderPass.roadPassRole)
+                                                      passRole: roadPass.role)
                                 } else {
-                                    result.appendGround(linePolygon, key: lineRenderPass.key, placement: lineRenderPass.placement)
+                                    result.appendGround(linePolygon, key: lineRenderPass.key, placement: style.placement)
                                 }
                             }
                         }
@@ -290,7 +277,6 @@ struct LineFeatureReader {
                 }
 
                 if group.emitsLabels,
-                   roadLabelPass != nil,
                    let labelText,
                    let roadLabelStyle {
                     for fragment in exactClippedFragments {
@@ -318,24 +304,25 @@ struct LineFeatureReader {
     /// (under any pass, except in a tunnel), and under the detail pass the
     /// bus lane's letter, the bus stop's sawtooth and the oneway arrows.
     /// Returns false when the pass draws the plain ribbon instead.
-    private func appendDecoration(style: FeatureStyle,
-                                  pass: LineRenderPass,
+    private func appendDecoration(style: RoadStyle,
+                                  pass roadPass: RoadStyle.Pass,
                                   fragments: [ClippedLineFragment],
                                   structure: RoadStructureKind,
                                   layer: Int,
                                   tile: Tile,
                                   into result: inout ReadingStageResult) -> Bool {
+        let pass = roadPass.pass
         func append(_ polygons: [ParsedPolygon]) {
             for polygon in polygons {
                 result.appendRoad(polygon,
                                   key: pass.key,
                                   structureKind: structure,
                                   layer: layer,
-                                  classPriority: style.roadClassPriority,
-                                  passRole: pass.roadPassRole)
+                                  classPriority: style.classPriority,
+                                  passRole: roadPass.role)
             }
         }
-        switch style.roadDecorationKind {
+        switch style.decoration {
         case .zebraCrossing where structure != .tunnel:
             for fragment in fragments {
                 append(crosswalkZebraBuilder.buildPolygons(
@@ -344,7 +331,7 @@ struct LineFeatureReader {
                 ))
             }
             return true
-        case .busLaneLetter where pass.roadPassRole == .detail:
+        case .busLaneLetter where roadPass.role == .detail:
             // The bus lane's axis: the letter A stamped along it, from the
             // same polygon path the zebra and the arrows take.
             for fragment in fragments {
@@ -354,7 +341,7 @@ struct LineFeatureReader {
                 ))
             }
             return true
-        case .busStopZigzag where pass.roadPassRole == .detail:
+        case .busStopZigzag where roadPass.role == .detail:
             // The stop's kerb: the yellow sawtooth, folded from the shipped
             // axis.
             for fragment in fragments {
@@ -364,7 +351,7 @@ struct LineFeatureReader {
                 ))
             }
             return true
-        case .onewayArrow where pass.roadPassRole == .detail:
+        case .onewayArrow where roadPass.role == .detail:
             for fragment in fragments {
                 append(roadDirectionArrowBuilder.buildPolygons(
                     points: fragment.points,

@@ -140,7 +140,7 @@ final class RoadCarriagewayWidthTests: XCTestCase {
     private func markingPass(_ className: String,
                              lanes: Int? = nil,
                              z: Int,
-                             brunnel: String? = nil) -> LineRenderPass? {
+                             brunnel: String? = nil) -> TestRoadPass? {
         roadStyle(className, lanes: lanes, z: z, brunnel: brunnel)
             .resolvedLineRenderPasses.first { $0.roadPassRole == .detail }
     }

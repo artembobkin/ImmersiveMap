@@ -366,10 +366,10 @@ private struct FallbackWaterLabelStyle: ImmersiveMapVectorTileStyle {
     }
 
     private func waterStyle(_ labelTextStyle: LabelTextStyle?) -> FeatureStyle {
-        FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
-                     color: SIMD4<Float>(1, 1, 1, 1),
-                     lineGeometry: LineGeometryStyle(lineWidth: 1),
-                     labelTextStyle: labelTextStyle)
+        guard let labelTextStyle else {
+            return .fill(FillStyle(key: 1, color: SIMD4<Float>(1, 1, 1, 1)))
+        }
+        return .pointLabel(PointLabelStyle(key: UInt8(labelTextStyle.key), text: labelTextStyle))
     }
 }
 
@@ -377,19 +377,13 @@ private struct ParserSolidPolygonStyle: ImmersiveMapVectorTileStyle {
     let cacheFingerprint: UInt32 = 1
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
-        var style = solid(key: 2)
-        style.splitsComplexHoles = feature.layerName == "ocean"
-        return style
+        .fill(FillStyle(key: 2,
+                        color: SIMD4<Float>(1, 1, 1, 1),
+                        splitsComplexHoles: feature.layerName == "ocean"))
     }
 
     func backgroundStyle(tileZoom: Int) -> FeatureStyle {
-        solid(key: 1)
-    }
-
-    private func solid(key: UInt8) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: SIMD4<Float>(1, 1, 1, 1),
-                     lineGeometry: LineGeometryStyle(lineWidth: 1))
+        .fill(FillStyle(key: 1, color: SIMD4<Float>(1, 1, 1, 1)))
     }
 }
 

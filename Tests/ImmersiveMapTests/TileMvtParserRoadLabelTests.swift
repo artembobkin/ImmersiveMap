@@ -80,16 +80,13 @@ private struct RoadLabelStyle: ImmersiveMapVectorTileStyle {
                                                     weight: .thin)
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
-        FeatureStyle(key: 1,
-                     color: SIMD4<Float>(1, 1, 1, 1),
-                     lineGeometry: LineGeometryStyle(lineWidth: 8),
-                     includeRoadLabelPath: true,
-                     roadLabelTextStyle: roadLabelTextStyle)
+        .road(RoadStyle(fill: LinePass(key: 1,
+                                       color: SIMD4<Float>(1, 1, 1, 1),
+                                       lineGeometry: LineGeometryStyle(lineWidth: 8)),
+                        label: roadLabelTextStyle))
     }
 
     func backgroundStyle(tileZoom: Int) -> FeatureStyle {
-        FeatureStyle(key: 1,
-                     color: SIMD4<Float>(1, 1, 1, 1),
-                     lineGeometry: LineGeometryStyle(lineWidth: 8))
+        .fill(FillStyle(key: 1, color: SIMD4<Float>(1, 1, 1, 1)))
     }
 }

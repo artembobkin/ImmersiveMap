@@ -28,7 +28,7 @@ struct RoadSurfaceAreaReader {
     /// tessellated render-space vertices.
     func append(parsedGeometry: ParsePolygon.ParsedGeometry,
                 road: ImmersiveMapRoadFacts,
-                style: FeatureStyle,
+                style: RoadStyle,
                 tile: Tile,
                 surfaceAreas: [RoadSurfaceArea],
                 tools: TileParseTools,
@@ -40,18 +40,11 @@ struct RoadSurfaceAreaReader {
         // class: it is a carriageway.
         let structure: RoadStructureKind = physicalStructure == .ground ? .automobileGround : physicalStructure
         let layer = road.layer
-        for pass in style.resolvedLineRenderPasses {
-            let passStyle = FeatureStyle(
-                key: pass.key,
-                color: pass.color,
-                streetColor: pass.streetColor,
-                lowZoomFadeMask: pass.lowZoomFadeMask,
-                lineGeometry: pass.lineGeometry,
-                roadClassPriority: style.roadClassPriority
-            )
-            result.registerRoadStyle(passStyle, key: pass.key)
+        for roadPass in style.orderedPasses {
+            let pass = roadPass.pass
+            result.registerRoadStyle(BakedStyle(pass: pass), key: pass.key)
             var polygons: [ParsedPolygon] = []
-            switch pass.roadPassRole {
+            switch roadPass.role {
             case .fill:
                 polygons = [parsedGeometry.parsedPolygon]
             case .casing:
@@ -77,7 +70,7 @@ struct RoadSurfaceAreaReader {
                         polygons.append(kerb)
                     }
                 }
-            case .detail where style.roadDecorationKind == .parkingBays:
+            case .detail where style.decoration == .parkingBays:
                 // The parking-bay comb: short stripes laid out by the
                 // builder in tile space (the ring already is), each
                 // tessellated as its own point-locked stroke with hard ends.
@@ -95,7 +88,7 @@ struct RoadSurfaceAreaReader {
                 // lot, that ground is theirs: the comb ends at their edge
                 // instead of climbing onto the roadway.
                 let owners = surfaceAreas.filter {
-                    $0.classPriority > style.roadClassPriority
+                    $0.classPriority > style.classPriority
                         && $0.structureKind == physicalStructure
                 }
                 if owners.isEmpty == false {
@@ -124,8 +117,8 @@ struct RoadSurfaceAreaReader {
                                   key: pass.key,
                                   structureKind: structure,
                                   layer: layer,
-                                  classPriority: style.roadClassPriority,
-                                  passRole: pass.roadPassRole)
+                                  classPriority: style.classPriority,
+                                  passRole: roadPass.role)
             }
         }
     }
@@ -143,7 +136,8 @@ struct RoadSurfaceAreaReader {
         for bridge in roads.surfaceBridges {
             let owner = roads.surfaceAreas[bridge.ownerAreaIndex]
             guard owner.featureIndex >= 0, owner.featureIndex < featureStyles.count,
-                  let road = featureFacts[owner.featureIndex].road else { continue }
+                  let road = featureFacts[owner.featureIndex].road,
+                  let style = featureStyles[owner.featureIndex].roadStyle else { continue }
             let ringPoints = bridge.ring.map {
                 Point(x: Int32($0.x.rounded()), y: Int32($0.y.rounded()))
             }
@@ -154,7 +148,7 @@ struct RoadSurfaceAreaReader {
             }
             append(parsedGeometry: parsedGeometry,
                    road: road,
-                   style: featureStyles[owner.featureIndex],
+                   style: style,
                    tile: tile,
                    surfaceAreas: roads.surfaceAreas,
                    tools: tools,

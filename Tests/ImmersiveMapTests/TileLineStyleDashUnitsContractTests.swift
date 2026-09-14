@@ -50,24 +50,24 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
     }
 
     func testParserBakesTheFlagIntoTheGPUStyle() {
-        let flagged = FeatureStyle(key: 1,
-                                   color: SIMD4<Float>(1, 1, 1, 1),
-                                   lineWidthPoints: 1,
-                                   dashLengthPoints: 40,
-                                   dashGapPoints: 80,
-                                   dashInTileUnits: true,
-                                   lineGeometry: LineGeometryStyle(lineWidth: 8))
-        let plain = FeatureStyle(key: 2,
-                                 color: SIMD4<Float>(1, 1, 1, 1),
-                                 lineWidthPoints: 1,
-                                 dashLengthPoints: 7,
-                                 dashGapPoints: 3.5,
-                                 lineGeometry: LineGeometryStyle(lineWidth: 8))
+        let flagged = LinePass(key: 1,
+                               color: SIMD4<Float>(1, 1, 1, 1),
+                               lineWidthPoints: 1,
+                               dashLengthPoints: 40,
+                               dashGapPoints: 80,
+                               dashInTileUnits: true,
+                               lineGeometry: LineGeometryStyle(lineWidth: 8))
+        let plain = LinePass(key: 2,
+                             color: SIMD4<Float>(1, 1, 1, 1),
+                             lineWidthPoints: 1,
+                             dashLengthPoints: 7,
+                             dashGapPoints: 3.5,
+                             lineGeometry: LineGeometryStyle(lineWidth: 8))
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: flagged).dashInTileUnits, 1)
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: plain).dashInTileUnits, 0)
-        // The synthesized single pass keeps the flag too.
-        XCTAssertTrue(flagged.resolvedLineRenderPasses[0].dashInTileUnits)
-        XCTAssertFalse(plain.resolvedLineRenderPasses[0].dashInTileUnits)
+        // A line style keeps the flag on its one stroke too.
+        XCTAssertTrue(FeatureStyle.line(LineStyle(pass: flagged)).resolvedLineRenderPasses[0].dashInTileUnits)
+        XCTAssertFalse(FeatureStyle.line(LineStyle(pass: plain)).resolvedLineRenderPasses[0].dashInTileUnits)
     }
 
     private func shaderSource(_ relativePath: String) throws -> String {

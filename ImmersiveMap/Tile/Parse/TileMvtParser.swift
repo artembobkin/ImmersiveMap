@@ -178,7 +178,7 @@ final class TileMvtParser {
             let roads = RoadLayerContext(
                 usesSeparateRoadRendering: usesSeparateRoadRendering,
                 hasShippedCrossings: zip(featureFacts, featureStyles).contains {
-                    $0.road?.isShippedPaint == true && $1.roadDecorationKind == .zebraCrossing
+                    $0.road?.isShippedPaint == true && $1.roadStyle?.decoration == .zebraCrossing
                 },
                 precomputation: usesSeparateRoadRendering
                     ? RoadLayerPrecomputation.build(geometry: layerGeometry,
@@ -192,73 +192,22 @@ final class TileMvtParser {
                 let attributes = featureAttributes[featureIndex]
                 let facts = featureFacts[featureIndex]
                 let style = featureStyles[featureIndex]
-                let styleKey = style.key
-                if styleKey == 0 {
+                if case .hidden = style {
                     // The style declines the feature: nothing to draw.
                     continue
                 }
-                // A line style (boundary) that arrived as area geometry is not
-                // filled - otherwise, for example, Indian reservations in the
-                // `boundary` layer are drawn as solid polygons.
-                if feature.type == .polygon, style.suppressPolygonFill {
-                    continue
-                }
-                if feature.type != .linestring || usesSeparateRoadRendering == false {
-                    result.registerStyle(style, key: styleKey, placement: style.linePlacement)
-                }
 
                 if feature.type == .polygon {
-                    let polygons = layerGeometry.polygons(of: feature)
-                    let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(style: style,
-                                                                                            polygons: polygons)
-                    let extrusion = buildingReader.extrusion(feature: feature,
-                                                             facts: facts,
-                                                             style: style,
-                                                             polygons: polygons,
-                                                             partInfo: buildingPartInfo,
-                                                             tile: tile)
-
-                    for polygon in polygons {
-                        if shouldSplitComplexOceanHoles,
-                           groundReader.appendComplexOceanPolygon(polygon,
-                                                                  style: style,
-                                                                  into: &result,
-                                                                  parsePolygon: tools.parsePolygon,
-                                                                  tile: tile) {
-                            continue
-                        }
-
-                        guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
-                                                                                    tileExtent: tileExtent) else {
-                            continue
-                        }
-                        if let road = facts.road, road.isSurface, usesSeparateRoadRendering {
-                            // A carriageway surface (junction area) joins the
-                            // road phases instead of the ground: its fill pass
-                            // is the triangulated polygon, its casing pass the
-                            // outline tessellated as a closed kerb. Sorted among
-                            // the roads by class, so the surface covers the
-                            // kerbs of the ribbons that run into it.
-                            roadSurfaceReader.append(parsedGeometry: parsedGeometry,
-                                                     road: road,
-                                                     style: style,
-                                                     tile: tile,
-                                                     surfaceAreas: roads.precomputation.surfaceAreas,
-                                                     tools: tools,
-                                                     into: &result)
-                            continue
-                        }
-                        result.appendGround(parsedGeometry.parsedPolygon, key: styleKey, placement: style.linePlacement)
-
-                        if let extrusion,
-                           let candidate = buildingReader.candidate(polygon: polygon,
-                                                                    parsedGeometry: parsedGeometry,
-                                                                    styleKey: styleKey,
-                                                                    extrusion: extrusion) {
-                            buildingExtrusionCandidates.append(candidate)
-                        }
-                    }
-
+                    readPolygons(of: feature,
+                                 facts: facts,
+                                 style: style,
+                                 geometry: layerGeometry,
+                                 buildingPartInfo: buildingPartInfo,
+                                 roads: roads,
+                                 tile: tile,
+                                 tools: tools,
+                                 extrusionCandidates: &buildingExtrusionCandidates,
+                                 into: &result)
                 } else if feature.type == .linestring {
                     lineReader.read(feature: feature,
                                     featureIndex: featureIndex,
@@ -274,11 +223,11 @@ final class TileMvtParser {
                 } else if feature.type == .point {
                     // Point features exist only to be labelled: with labels
                     // off the layer is skipped whole, decision engine included.
-                    guard options.labelsEnabled else { continue }
+                    guard options.labelsEnabled, case .pointLabel(let label) = style else { continue }
                     labelReader.read(feature: feature,
                                      attributes: attributes,
                                      facts: facts,
-                                     style: style,
+                                     style: label,
                                      geometry: layerGeometry,
                                      layerName: layerName,
                                      tile: tile,
@@ -307,5 +256,116 @@ final class TileMvtParser {
 
         result.removeEmptyBuckets()
         return result
+    }
+
+    /// A polygon feature by the case of its style: a fill (with the ocean
+    /// split), a building (the footprint as a fill, plus the extrusion), a
+    /// road (a carriageway surface into the road phases on the separate
+    /// path, otherwise its fill stroke as a ground fill), a line whose
+    /// style fills areas. A label or a line that draws only lines leaves
+    /// the polygon undrawn.
+    private func readPolygons(of feature: MvtDecodedFeature,
+                              facts: ImmersiveMapFeatureFacts,
+                              style: FeatureStyle,
+                              geometry: TileLayerGeometry,
+                              buildingPartInfo: BuildingFeatureReader.PartInfo,
+                              roads: RoadLayerContext,
+                              tile: Tile,
+                              tools: TileParseTools,
+                              extrusionCandidates: inout [BuildingExtrusionCandidate],
+                              into result: inout ReadingStageResult) {
+        let polygons = geometry.polygons(of: feature)
+        switch style {
+        case .fill(let fill):
+            result.registerStyle(BakedStyle(fill: fill), key: fill.key, placement: .ground)
+            let splitsComplexOceanHoles = groundReader.splitsComplexOceanHoles(fill: fill, polygons: polygons)
+            for polygon in polygons {
+                if splitsComplexOceanHoles,
+                   groundReader.appendComplexOceanPolygon(polygon,
+                                                          fill: fill,
+                                                          into: &result,
+                                                          parsePolygon: tools.parsePolygon,
+                                                          tile: tile) {
+                    continue
+                }
+                guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
+                                                                            tileExtent: tileExtent) else {
+                    continue
+                }
+                result.appendGround(parsedGeometry.parsedPolygon, key: fill.key, placement: .ground)
+            }
+        case .extrusion(let extrusion):
+            result.registerStyle(BakedStyle(extrusion: extrusion), key: extrusion.key, placement: .ground)
+            let extrusionInfo = buildingReader.extrusion(feature: feature,
+                                                         facts: facts,
+                                                         style: extrusion,
+                                                         polygons: polygons,
+                                                         partInfo: buildingPartInfo,
+                                                         tile: tile)
+            for polygon in polygons {
+                guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
+                                                                            tileExtent: tileExtent) else {
+                    continue
+                }
+                result.appendGround(parsedGeometry.parsedPolygon, key: extrusion.key, placement: .ground)
+                if let extrusionInfo,
+                   let candidate = buildingReader.candidate(polygon: polygon,
+                                                            parsedGeometry: parsedGeometry,
+                                                            styleKey: extrusion.key,
+                                                            extrusion: extrusionInfo) {
+                    extrusionCandidates.append(candidate)
+                }
+            }
+        case .road(let roadStyle):
+            if let road = facts.road, road.isSurface, roads.usesSeparateRoadRendering {
+                // A carriageway surface (junction area) joins the road
+                // phases instead of the ground: its fill stroke is the
+                // triangulated polygon, its casing stroke the outline
+                // tessellated as a closed kerb. Sorted among the roads by
+                // class, so the surface covers the kerbs of the ribbons that
+                // run into it.
+                for polygon in polygons {
+                    guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
+                                                                                tileExtent: tileExtent) else {
+                        continue
+                    }
+                    roadSurfaceReader.append(parsedGeometry: parsedGeometry,
+                                             road: road,
+                                             style: roadStyle,
+                                             tile: tile,
+                                             surfaceAreas: roads.precomputation.surfaceAreas,
+                                             tools: tools,
+                                             into: &result)
+                }
+            } else if let fill = roadStyle.fill {
+                appendGroundPolygons(polygons, pass: fill, placement: roadStyle.placement, tools: tools, into: &result)
+            }
+        case .line(let line):
+            // A line style (boundary) that arrived as area geometry is not
+            // filled unless the style says so: otherwise, for example, the
+            // reservations in the `boundary` layer are drawn as solid
+            // polygons.
+            guard line.fillsAreas else { return }
+            appendGroundPolygons(polygons, pass: line.pass, placement: line.placement, tools: tools, into: &result)
+        case .pointLabel, .hidden:
+            return
+        }
+    }
+
+    /// Polygons filled with a stroke's colour: a line style on areal
+    /// geometry, a road at a zoom where its surface is a plain fill.
+    private func appendGroundPolygons(_ polygons: MultiPolygon,
+                                      pass: LinePass,
+                                      placement: LinePlacement,
+                                      tools: TileParseTools,
+                                      into result: inout ReadingStageResult) {
+        result.registerStyle(BakedStyle(pass: pass), key: pass.key, placement: placement)
+        for polygon in polygons {
+            guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
+                                                                        tileExtent: tileExtent) else {
+                continue
+            }
+            result.appendGround(parsedGeometry.parsedPolygon, key: pass.key, placement: placement)
+        }
     }
 }

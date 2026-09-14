@@ -88,7 +88,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     func testMarkingsComeFromTheTilesAndNotFromClassDefaults() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
         let tile = Tile(x: 39616, y: 20486, z: 16)
-        func markingPasses(_ attributes: [String: Any]) -> [LineRenderPass] {
+        func markingPasses(_ attributes: [String: Any]) -> [TestRoadPass] {
             var properties: [String: MvtValue] = [:]
             for (key, value) in attributes {
                 if let text = value as? String {

@@ -255,16 +255,16 @@ extension ImmersiveMapTilesDefaultMapStyle {
             let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * 0.35
             color = SIMD4<Float>(softened.x, softened.y, softened.z, color.w * 0.6)
         }
-        // suppressPolygonFill: borders are drawn as lines only. Some features
-        // (Native American reservations) arrive as polygons; their area must
-        // not be filled, otherwise you get solid purple blobs.
+        // Borders are drawn as lines only: the point-locked mode fills no
+        // areas. Some features (Native American reservations) arrive as
+        // polygons; their area must not be filled, otherwise you get solid
+        // purple blobs.
         return FeatureStyle.pointLockedLine(
             key: key,
             color: color,
             widthPoints: adminLevel <= 2 ? 1.6 : 1.1,
             dashLengthPoints: 7.0,
-            dashGapPoints: 3.5,
-            suppressPolygonFill: true
+            dashGapPoints: 3.5
         )
     }
 

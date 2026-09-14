@@ -206,8 +206,8 @@ enum RoadSurfaceGapBridger {
         for featureIndex in linesByFeatureIndex.indices {
             let lines = linesByFeatureIndex[featureIndex]
             guard lines.isEmpty == false else { continue }
-            let style = featureStyles[featureIndex]
-            guard style.key != 0, let road = featureFacts[featureIndex].road, road.isShippedPaint == false else {
+            guard featureStyles[featureIndex].roadStyle != nil,
+                  let road = featureFacts[featureIndex].road, road.isShippedPaint == false else {
                 continue
             }
             let street = road.streetIdentity

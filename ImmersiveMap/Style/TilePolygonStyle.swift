@@ -41,7 +41,7 @@ struct TilePolygonStyle {
 /// `PreparedTileDiskCaching.preparedFormatVersion`).
 struct TileLineStyle {
     /// Point-locked visible full width; zero keeps the world-locked width the
-    /// tessellator baked. See `LineRenderPass.lineWidthPoints`.
+    /// tessellator baked. See `LinePass.lineWidthPoints`.
     var widthPoints: Float
     /// Point-locked dash pattern, resolved per fragment from the vertices'
     /// arc-length parameter; zero dash length draws solid.

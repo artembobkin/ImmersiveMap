@@ -28,8 +28,8 @@ struct GroundFeatureReader {
     /// Whether a feature's polygons take the ocean split, decided once per
     /// feature: only a fill whose style asks for it, and only when one of
     /// its polygons is complex enough.
-    func splitsComplexOceanHoles(style: FeatureStyle, polygons: MultiPolygon) -> Bool {
-        style.splitsComplexHoles
+    func splitsComplexOceanHoles(fill: FillStyle, polygons: MultiPolygon) -> Bool {
+        fill.splitsComplexHoles
             && polygons.contains { $0.interiorRings.count >= Self.complexOceanHoleSplitThreshold }
     }
 
@@ -38,7 +38,7 @@ struct GroundFeatureReader {
     /// polygon is not complex or its exterior does not tessellate, and the
     /// caller draws it the ordinary way.
     func appendComplexOceanPolygon(_ polygon: Polygon,
-                                   style: FeatureStyle,
+                                   fill: FillStyle,
                                    into result: inout ReadingStageResult,
                                    parsePolygon: ParsePolygon,
                                    tile: Tile) -> Bool {
@@ -53,15 +53,14 @@ struct GroundFeatureReader {
             return false
         }
 
-        result.polygonByStyle[style.key, default: []].append(parsedOcean)
-        result.styles[style.key] = style
+        result.polygonByStyle[fill.key, default: []].append(parsedOcean)
+        result.styles[fill.key] = BakedStyle(fill: fill)
 
-        let landStyle = mapStyle.backgroundStyle(tile: tile)
-        guard landStyle.key != 0 else {
+        guard case .fill(let landStyle) = mapStyle.backgroundStyle(tile: tile), landStyle.key != 0 else {
             return true
         }
 
-        result.styles[landStyle.key] = landStyle
+        result.styles[landStyle.key] = BakedStyle(fill: landStyle)
         for interiorRing in polygon.interiorRings {
             let landPolygon = Polygon(exteriorRing: interiorRing,
                                       interiorRings: [])
@@ -91,8 +90,11 @@ struct GroundFeatureReader {
         // The real tile, not a placeholder: the background color is
         // zoom-banded (overview grass, land base, street land), and a
         // hardcoded z0 froze every tile on the overview branch, painting the
-        // vegetation tone under the whole map at every zoom.
-        let style = mapStyle.backgroundStyle(tile: tile)
+        // vegetation tone under the whole map at every zoom. A background
+        // that is not a fill paints nothing.
+        guard case .fill(let style) = mapStyle.backgroundStyle(tile: tile) else {
+            return
+        }
 
         // One quad in render space, wound counter-clockwise like every
         // other ground triangle. The density the sphere needs is not decided
@@ -107,11 +109,12 @@ struct GroundFeatureReader {
                                           indices: [0, 1, 2, 0, 2, 3])
 
         result.polygonByStyle[style.key, default: []].insert(parsedPolygon, at: 0)
-        result.styles[style.key] = style
+        result.styles[style.key] = BakedStyle(fill: style)
     }
 
     private func appendBorder(width borderWidth: Int16, into result: inout ReadingStageResult) {
         let style = mapStyle.debugBorderStyle()
+        let bakedStyle = BakedStyle(fill: style)
 
         let tileSize: Int16 = 4096
         var polygons = [ParsedPolygon]()
@@ -160,6 +163,6 @@ struct GroundFeatureReader {
         polygons.append(ParsedPolygon(vertices: vertices, indices: indices))
 
         result.polygonByStyle[style.key] = polygons
-        result.styles[style.key] = style
+        result.styles[style.key] = bakedStyle
     }
 }

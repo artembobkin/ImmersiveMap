@@ -11,13 +11,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return hiddenStyle
         }
         // 3D extruded buildings driven by OpenMapTiles render_height / render_min_height.
-        return FeatureStyle(
+        return .extrusion(ExtrusionStyle(
             key: 30,
             color: configuration.features.buildingFillColor,
-            lineGeometry: LineGeometryStyle(lineWidth: 0),
-            isExtruded: true,
-            extrusionHeightScale: 8.0,
-            extrusionAnchorZoom: 16
-        )
+            heightScale: 8.0,
+            anchorZoom: 16
+        ))
     }
 }

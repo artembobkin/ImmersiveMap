@@ -61,22 +61,14 @@ extension ImmersiveMapTilesDefaultMapStyle {
         }
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let bandUnits = Self.crosswalkBandMetres * unitsPerMetre
-        return FeatureStyle(
-            key: Self.crosswalkKey,
-            color: Self.roadMarkingColor,
-            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-            lineGeometry: LineGeometryStyle(lineWidth: bandUnits),
-            lineRenderPasses: [
-                LineRenderPass(key: Self.crosswalkKey,
-                               color: Self.roadMarkingColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineGeometry: LineGeometryStyle(lineWidth: bandUnits),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
-            ],
-            roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .zebraCrossing
-        )
+        return .road(RoadStyle(
+            paint: [LinePass(key: Self.crosswalkKey,
+                             color: Self.roadMarkingColor,
+                             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                             lineGeometry: LineGeometryStyle(lineWidth: bandUnits))],
+            classPriority: Self.crosswalkClassPriority,
+            decoration: .zebraCrossing
+        ))
     }
 
     /// How deep a crossing is along the road, in metres: the band the stripes
@@ -203,24 +195,17 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let geometry = LineGeometryStyle(lineWidth: ribbonUnits,
                                                             lineCapRound: false,
                                                             lineJoinRound: true)
-        let pass = LineRenderPass(key: key,
-                                  color: color,
-                                  lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                                  lineWidthPoints: widthPoints,
-                                  dashLengthPoints: dashed ? Float(dashMetres * unitsPerMetre) : 0,
-                                  dashGapPoints: dashed ? Float(gapMetres * unitsPerMetre) : 0,
-                                  dashInTileUnits: dashed,
-                                  lineGeometry: geometry,
-                                  includeRoadLabelPath: false,
-                                  roadPassRole: .detail)
-        return FeatureStyle(
-            key: key,
-            color: color,
-            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-            lineGeometry: geometry,
-            lineRenderPasses: [pass],
-            roadClassPriority: Self.crosswalkClassPriority
-        )
+        let dashLength: Float = dashed ? Float(dashMetres * unitsPerMetre) : 0
+        let dashGap: Float = dashed ? Float(gapMetres * unitsPerMetre) : 0
+        let pass = LinePass(key: key,
+                            color: color,
+                            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                            lineWidthPoints: widthPoints,
+                            dashLengthPoints: dashLength,
+                            dashGapPoints: dashGap,
+                            dashInTileUnits: dashed,
+                            lineGeometry: geometry)
+        return .road(RoadStyle(paint: [pass], classPriority: Self.crosswalkClassPriority))
     }
 
     /// A junction area (`subclass=junction_area`): the carriageway of a junction
@@ -262,35 +247,22 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let surfaceKey = tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
-        var passes: [LineRenderPass] = []
+        var kerb: LinePass?
         if tunnel == false, Self.drawsAutomobileKerb {
-            passes.append(
-                LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
-                               color: roadCasingColor(from: classColor),
-                               lowZoomFadeMask: roadLowZoomFadeMask,
-                               lineGeometry: LineGeometryStyle(lineWidth: kerbWidth,
-                                                                                             lineJoinRound: true),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .casing)
-            )
+            kerb = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
+                            color: roadCasingColor(from: classColor),
+                            lowZoomFadeMask: roadLowZoomFadeMask,
+                            lineGeometry: LineGeometryStyle(lineWidth: kerbWidth, lineJoinRound: true))
         }
-        passes.append(
-            LineRenderPass(key: surfaceKey,
+        return .road(RoadStyle(
+            casing: kerb,
+            fill: LinePass(key: surfaceKey,
                            color: color,
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           lineGeometry: LineGeometryStyle(lineWidth: 100),
-                           includeRoadLabelPath: false,
-                           roadPassRole: .fill)
-        )
-        return FeatureStyle(
-            key: surfaceKey,
-            color: color,
-            lowZoomFadeMask: roadLowZoomFadeMask,
-            lineGeometry: LineGeometryStyle(lineWidth: 100),
-            lineRenderPasses: passes,
-            roadClassPriority: priority,
-            surfaceAreaCutsPaint: reconstructed
-        )
+                           lineGeometry: LineGeometryStyle(lineWidth: 100)),
+            classPriority: priority,
+            surfaceCutsPaint: reconstructed
+        ))
     }
 
     /// A surface parking lot (`subclass=parking_area`): service-tier asphalt
@@ -307,46 +279,32 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let color = roads.service
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
-        var passes: [LineRenderPass] = [
-            LineRenderPass(key: Self.roadCasingKey(forFillKey: fillKey),
-                           color: roadCasingColor(from: color),
-                           lowZoomFadeMask: roadLowZoomFadeMask,
-                           lineGeometry: LineGeometryStyle(lineWidth: kerbWidth,
-                                                                                         lineJoinRound: true),
-                           includeRoadLabelPath: false,
-                           roadPassRole: .casing),
-            LineRenderPass(key: fillKey,
-                           color: color,
-                           lowZoomFadeMask: roadLowZoomFadeMask,
-                           lineGeometry: LineGeometryStyle(lineWidth: 100),
-                           includeRoadLabelPath: false,
-                           roadPassRole: .fill)
-        ]
+        let kerb = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
+                            color: roadCasingColor(from: color),
+                            lowZoomFadeMask: roadLowZoomFadeMask,
+                            lineGeometry: LineGeometryStyle(lineWidth: kerbWidth, lineJoinRound: true))
+        let asphalt = LinePass(key: fillKey,
+                               color: color,
+                               lowZoomFadeMask: roadLowZoomFadeMask,
+                               lineGeometry: LineGeometryStyle(lineWidth: 100))
         // The comb from the zoom the lot itself ships at, like every other
         // figure painted on a road surface: a lot looks the same at z15 as
         // at z16, and the camera-zoom band decides how faint the stripes are.
+        var comb: [LinePass] = []
         if tile.z >= Self.streetDetailMinimumTileZoom {
-            passes.append(
-                LineRenderPass(key: Self.parkingBayKey,
-                               color: Self.roadMarkingColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineWidthPoints: Self.roadMarkingWidthPoints,
-                               lineGeometry: LineGeometryStyle(
-                                   lineWidth: Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
-                               ),
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
-            )
+            comb = [LinePass(key: Self.parkingBayKey,
+                             color: Self.roadMarkingColor,
+                             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                             lineWidthPoints: Self.roadMarkingWidthPoints,
+                             lineGeometry: LineGeometryStyle(
+                                 lineWidth: Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
+                             ))]
         }
-        return FeatureStyle(
-            key: fillKey,
-            color: color,
-            lowZoomFadeMask: roadLowZoomFadeMask,
-            lineGeometry: LineGeometryStyle(lineWidth: 100),
-            lineRenderPasses: passes,
-            roadClassPriority: 45,
-            roadDecorationKind: .parkingBays
-        )
+        return .road(RoadStyle(casing: kerb,
+                               fill: asphalt,
+                               paint: comb,
+                               classPriority: 45,
+                               decoration: .parkingBays))
     }
 
     static let parkingBayKey: UInt8 = 69
@@ -357,23 +315,14 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// the builder does the stamping, and the reading's `isShippedPaint`
     /// keeps the road machinery off the axis itself.
     func busLaneLetterStyle() -> FeatureStyle {
-        let geometry = LineGeometryStyle(lineWidth: 1)
-        return FeatureStyle(
-            key: Self.busLaneLetterKey,
-            color: Self.roadMarkingColor,
-            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-            lineGeometry: geometry,
-            lineRenderPasses: [
-                LineRenderPass(key: Self.busLaneLetterKey,
-                               color: Self.roadMarkingColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineGeometry: geometry,
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
-            ],
-            roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .busLaneLetter
-        )
+        return .road(RoadStyle(
+            paint: [LinePass(key: Self.busLaneLetterKey,
+                             color: Self.roadMarkingColor,
+                             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                             lineGeometry: LineGeometryStyle(lineWidth: 1))],
+            classPriority: Self.crosswalkClassPriority,
+            decoration: .busLaneLetter
+        ))
     }
 
     static let busLaneLetterKey: UInt8 = 71
@@ -382,23 +331,14 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// the letter: a polygon decoration in the detail role, in the yellow
     /// road paint.
     func busStopZigzagStyle() -> FeatureStyle {
-        let geometry = LineGeometryStyle(lineWidth: 1)
-        return FeatureStyle(
-            key: Self.busStopZigzagKey,
-            color: Self.roadMarkingYellowColor,
-            lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-            lineGeometry: geometry,
-            lineRenderPasses: [
-                LineRenderPass(key: Self.busStopZigzagKey,
-                               color: Self.roadMarkingYellowColor,
-                               lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                               lineGeometry: geometry,
-                               includeRoadLabelPath: false,
-                               roadPassRole: .detail)
-            ],
-            roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .busStopZigzag
-        )
+        return .road(RoadStyle(
+            paint: [LinePass(key: Self.busStopZigzagKey,
+                             color: Self.roadMarkingYellowColor,
+                             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
+                             lineGeometry: LineGeometryStyle(lineWidth: 1))],
+            classPriority: Self.crosswalkClassPriority,
+            decoration: .busStopZigzag
+        ))
     }
 
     static let busStopZigzagKey: UInt8 = 77

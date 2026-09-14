@@ -18,8 +18,6 @@ import simd
 /// internal only so that the extensions can share them across files.
 public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     static let implementationRevision: UInt32 = 74
-    let fallbackKey: UInt8 = 0
-
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
     /// classes ease in over the globe instead of popping with the z4 tiles.
     let roadLowZoomFadeMask: Float = 2.0
@@ -80,11 +78,14 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     static let junctionMakingPriority = 50
 
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
-        var style = resolvedStyle(data: data)
-        style.roadTier = style.roadClassPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
-        style.roadMakesJunctions = data.facts.road?.isShippedPaint != true
-            && style.roadClassPriority >= Self.junctionMakingPriority
-        return style
+        let style = resolvedStyle(data: data)
+        guard case .road(var road) = style else {
+            return style
+        }
+        road.tier = road.classPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
+        road.makesJunctions = data.facts.road?.isShippedPaint != true
+            && road.classPriority >= Self.junctionMakingPriority
+        return .road(road)
     }
 
     func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
@@ -148,14 +149,9 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         }
     }
 
-    /// Transparent no-op fill for known-but-unstyled area features (keeps them off
-    /// the red debug fallback while still consuming the feature).
+    /// Nothing drawn, for a feature the rules know and decline.
     var hiddenStyle: FeatureStyle {
-        FeatureStyle(
-            key: fallbackKey,
-            color: SIMD4<Float>(0, 0, 0, 0),
-            lineGeometry: LineGeometryStyle(lineWidth: 100)
-        )
+        .hidden
     }
 
     /// - Parameter far: the footprint fade target (globe and street
@@ -169,15 +165,14 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         // Every ground fill gets the fill-outline antialiasing: its ring
         // edges draw once more as one-pixel lines with alpha by distance to
         // the edge, so a staircase edge stops crawling under camera motion.
-        FeatureStyle(
+        .fill(FillStyle(
             key: key,
             color: color,
             streetColor: streetColor,
             farColor: far.map { SIMD4<Float>($0.color.x, $0.color.y, $0.color.z, $0.strength) },
             farStreetColor: far.map { SIMD4<Float>($0.streetColor.x, $0.streetColor.y, $0.streetColor.z, $0.strength) },
-            lineGeometry: LineGeometryStyle(lineWidth: 100),
-            fillOutlineAntialiasing: true
-        )
+            outlineAntialiasing: true
+        ))
     }
 
     /// The tone a class of ground converges on at distance, one per palette.
@@ -211,16 +206,16 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
               dashLength: Double = 0,
               dashGap: Double = 0,
               minimumWidthPoints: Float = 0) -> FeatureStyle {
-        FeatureStyle(
+        .line(LineStyle(pass: LinePass(
             key: key,
             color: color,
             minimumWidthPoints: minimumWidthPoints,
             lineGeometry: LineGeometryStyle(lineWidth: width,
-                                                                         lineCapRound: true,
-                                                                         lineJoinRound: true,
-                                                                         dashLength: dashLength,
-                                                                         dashGap: dashGap)
-        )
+                                            lineCapRound: true,
+                                            lineJoinRound: true,
+                                            dashLength: dashLength,
+                                            dashGap: dashGap)
+        )))
     }
 
     func parseIntValue(_ value: MvtValue?) -> Int? {

@@ -15,9 +15,10 @@ public enum LinePlacement: Sendable {
     case bridgeOverlay
 }
 
-/// The passes a road is drawn in, bottom to top. A style states one
-/// `LineRenderPass` per role it wants; the roads of a tile are then drawn
-/// role by role, so every casing lies under every fill of its tier.
+/// The passes a road is drawn in, bottom to top. A `RoadStyle` states one
+/// stroke per role it wants (any number of paint strokes); the roads of a
+/// tile are then drawn role by role, so every casing lies under every fill
+/// of its tier.
 public enum RoadPassRole: Int, CaseIterable, Sendable {
     case shadow
     case casing
@@ -75,44 +76,46 @@ public struct LabelTextStyle: Sendable {
     }
 }
 
-/// One pass of a line: what the tessellator bakes (the geometry) and what
-/// the shader draws it with.
-public struct LineRenderPass: Sendable {
-    public let key: UInt8
-    public let color: SIMD4<Float>
-    public let lowZoomFadeMask: Float
+/// One stroke of a line: what the tessellator bakes (the geometry) and
+/// what the shader draws it with. A plain line is one stroke; a road is a
+/// stroke per role.
+///
+/// `key` is the stroke's identity within a tile and its place in the draw
+/// order: the ground geometry of a tile draws in ascending key, and every
+/// feature with the same key shares one style table entry.
+public struct LinePass: Sendable {
+    public var key: UInt8
+    public var color: SIMD4<Float>
+    /// Street-palette counterpart of `color` for strokes whose colour
+    /// changes with the overview-to-street handover (the motorway accent);
+    /// nil bakes `color` twice.
+    public var streetColor: SIMD4<Float>?
+    public var lowZoomFadeMask: Float
     /// Point-locked visible line width (full width, layout points). Zero keeps
     /// the world-locked behavior: the visible edge is the tessellated width.
     /// Non-zero resolves the edge in screen space at render time, so the width
     /// holds steady through fractional zoom instead of pumping with the tile's
     /// on-screen scale; the tessellated width then only bounds how wide the
     /// line can get. See `tileLineCoverage` in Tile.metal.
-    public let lineWidthPoints: Float
+    public var lineWidthPoints: Float
     /// Point-locked dash pattern (layout points), cut per fragment from the
     /// vertices' arc-length parameter, so dashes hold their on-screen size at
-    /// every zoom. Zero dash length draws solid. A pass with a point dash is
-    /// tessellated as a continuous line: the unit-based dash fields of
+    /// every zoom. Zero dash length draws solid. A stroke with a point dash
+    /// is tessellated as a continuous line: the unit-based dash fields of
     /// `lineGeometry` must stay zero for it.
-    public let dashLengthPoints: Float
-    public let dashGapPoints: Float
+    public var dashLengthPoints: Float
+    public var dashGapPoints: Float
     /// True when `dashLengthPoints`/`dashGapPoints` are tile units rather
     /// than points: a world-locked pattern, paint on the ground whose period
     /// is a length and must not re-flow with the camera or the serving tile
     /// level. See `TileLineStyle.dashInTileUnits`.
-    public let dashInTileUnits: Bool
+    public var dashInTileUnits: Bool
     /// Floor for a world-locked width; see `TileLineStyle.minimumWidthPoints`.
-    public let minimumWidthPoints: Float
+    public var minimumWidthPoints: Float
     /// Symbol ceiling for a world-locked width; see
     /// `TileLineStyle.maximumWidthPoints`.
-    public let maximumWidthPoints: Float
-    /// Street-palette counterpart of `color` for passes whose color changes
-    /// with the overview-to-street handover (the motorway accent); nil bakes
-    /// `color` twice.
-    public let streetColor: SIMD4<Float>?
-    public let lineGeometry: LineGeometryStyle
-    public let includeRoadLabelPath: Bool
-    public let placement: LinePlacement
-    public let roadPassRole: RoadPassRole
+    public var maximumWidthPoints: Float
+    public var lineGeometry: LineGeometryStyle
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
@@ -124,10 +127,7 @@ public struct LineRenderPass: Sendable {
                 dashInTileUnits: Bool = false,
                 minimumWidthPoints: Float = 0.0,
                 maximumWidthPoints: Float = 0.0,
-                lineGeometry: LineGeometryStyle,
-                includeRoadLabelPath: Bool,
-                placement: LinePlacement = .ground,
-                roadPassRole: RoadPassRole = .fill) {
+                lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
         self.streetColor = streetColor
@@ -139,190 +139,304 @@ public struct LineRenderPass: Sendable {
         self.minimumWidthPoints = minimumWidthPoints
         self.maximumWidthPoints = maximumWidthPoints
         self.lineGeometry = lineGeometry
-        self.includeRoadLabelPath = includeRoadLabelPath
-        self.placement = placement
-        self.roadPassRole = roadPassRole
     }
 }
 
-/// How one feature draws: the style's whole answer, which the parser bakes
-/// and the renderer draws. The factories below cover the common drawing
-/// modes; the memberwise initializer exposes every knob. What the feature
-/// is (a road in a tunnel, a carriageway surface, a building of some
-/// height) is not in here: that is the schema reading's
-/// `ImmersiveMapFeatureFacts`, which the parser carries next to the style.
-///
-/// `key` is the style's identity within a tile and its place in the draw
-/// order: the ground fills of a tile draw in ascending key, and every
-/// feature with the same key shares one style table entry. Key 0 hides the
-/// feature.
-public struct FeatureStyle: Sendable {
-    public let key: UInt8
-    public let color: SIMD4<Float>
-    /// Street-palette counterpart of `color` for ground styles that change
-    /// with the overview-to-street handover; nil bakes `color` twice. See
+/// A ground fill.
+public struct FillStyle: Sendable {
+    public var key: UInt8
+    public var color: SIMD4<Float>
+    /// Street-palette counterpart of `color` for fills that change with the
+    /// overview-to-street handover; nil bakes `color` twice. See
     /// `TilePolygonStyle.streetColor`.
-    public let streetColor: SIMD4<Float>?
-    /// The footprint fade target of a ground fill, the same globe/street
-    /// pair, with the fade strength in the alpha; nil never fades. See
-    /// `TilePolygonStyle.farColor`.
-    public let farColor: SIMD4<Float>?
-    public let farStreetColor: SIMD4<Float>?
-    public let lowZoomFadeMask: Float
-    /// See `LineRenderPass.lineWidthPoints`; zero for world-locked lines and
-    /// for all polygon geometry.
-    public let lineWidthPoints: Float
-    /// See `LineRenderPass.dashLengthPoints`.
-    public let dashLengthPoints: Float
-    public let dashGapPoints: Float
-    /// See `LineRenderPass.dashInTileUnits`.
-    public let dashInTileUnits: Bool
-    /// See `TileLineStyle.minimumWidthPoints`.
-    public let minimumWidthPoints: Float
-    /// See `TileLineStyle.maximumWidthPoints`.
-    public let maximumWidthPoints: Float
-    public let lineGeometry: LineGeometryStyle
-    public let includeRoadLabelPath: Bool
-    public let linePlacement: LinePlacement
-    public let lineRenderPasses: [LineRenderPass]
-    public let roadClassPriority: Int
-    /// A polygon that rises: a building drawn as its walls and roof at the
-    /// heights the schema reading states (`ImmersiveMapFeatureFacts.building`).
-    /// False draws the footprint as a ground fill whatever the facts say.
-    public let isExtruded: Bool
-    public let extrusionHeightScale: Float
-    public let extrusionAnchorZoom: Int
-    public let extrusionFallbackHeight: Float
-    public let labelTextStyle: LabelTextStyle?
-    public let roadLabelTextStyle: LabelTextStyle?
-    public let roadDecorationKind: RoadDecorationKind
-    /// Whether a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
-    /// also cuts the PAINT of the roads inside it, on top of cutting their
-    /// ribbons. True for a junction reconstructed from the road graph: there
-    /// is no lane paint inside a crossing. False for a hand-mapped
-    /// `area:highway`, which typically covers a whole street's carriageway:
-    /// the street keeps its paint, drawn over the surface.
-    public let surfaceAreaCutsPaint: Bool
-    /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
-    /// Travels with the label to runtime, where it is compared against the current camera zoom.
-    public let labelMinCameraZoom: Float
-    /// A line style (e.g. a border) must not fill areal geometry: some layer
-    /// features arrive as polygons (Native American reservations in `boundary`),
-    /// and filling them with the line color is wrong. The parser skips the
-    /// polygon geometry of such features, keeping only the lines.
-    public let suppressPolygonFill: Bool
-    /// A plain fill whose ring edges are antialiased by the fill-outline
-    /// pass: the parser keeps the fill's ring edges as a line list and the
-    /// flat drawer rasterizes them as one-pixel lines in the fill's colour,
-    /// with alpha by distance to the edge, over the fill's own staircase
-    /// (`ParsedPolygon.outlineIndices`). Fills only; a line style or an
-    /// extruded polygon leaves it false.
-    public let fillOutlineAntialiasing: Bool
-    /// The network the road draws in (see `RoadTier`). Set by the style, read
-    /// by the road readers when they order ribbons and stitch streets.
-    public var roadTier: RoadTier = .pedestrian
-    /// Whether the road makes a junction for the paint on another road: a
-    /// lane line running into it stops short of the crossing. True for a
-    /// street, false for a way onto a plot (a driveway, a parking aisle, a
-    /// footway) and for shipped paint, which is not a street at all.
-    public var roadMakesJunctions: Bool = false
-    /// The label's importance among the labels of the map, lower first: the
-    /// order the runtime reveals labels in as room appears, and deduplicates
-    /// them in. The built-in style reads it from the tiles' rank.
-    public var labelRank: Int = 0
-    /// The label's precedence when two labels overlap, lower wins. Usually
-    /// the rank offset by layer, so a place name beats a shop's.
-    public var labelCollisionRank: Int = 0
+    public var streetColor: SIMD4<Float>?
+    /// The footprint fade target, the same globe/street pair, with the fade
+    /// strength in the alpha; nil never fades. See `TilePolygonStyle.farColor`.
+    public var farColor: SIMD4<Float>?
+    public var farStreetColor: SIMD4<Float>?
+    public var lowZoomFadeMask: Float
+    /// The ring edges antialiased by the fill-outline pass: the parser
+    /// keeps them as a line list and the flat drawer rasterizes them as
+    /// one-pixel lines in the fill's colour, with alpha by distance to the
+    /// edge, over the fill's own staircase (`ParsedPolygon.outlineIndices`).
+    public var outlineAntialiasing: Bool
     /// A fill whose polygons with many holes (an ocean with its islands)
     /// are not tessellated as one polygon: the exterior draws as the fill
     /// and each hole as the background, so the tessellator never sees the
     /// hundreds of islands of a coastal tile at once.
-    public var splitsComplexHoles: Bool = false
+    public var splitsComplexHoles: Bool
 
-    public init(
-        key: UInt8,
-        color: SIMD4<Float>,
-        streetColor: SIMD4<Float>? = nil,
-        farColor: SIMD4<Float>? = nil,
-        farStreetColor: SIMD4<Float>? = nil,
-        lowZoomFadeMask: Float = 0.0,
-        lineWidthPoints: Float = 0.0,
-        dashLengthPoints: Float = 0.0,
-        dashGapPoints: Float = 0.0,
-        dashInTileUnits: Bool = false,
-        minimumWidthPoints: Float = 0.0,
-        maximumWidthPoints: Float = 0.0,
-        lineGeometry: LineGeometryStyle,
-        includeRoadLabelPath: Bool = false,
-        linePlacement: LinePlacement = .ground,
-        lineRenderPasses: [LineRenderPass] = [],
-        roadClassPriority: Int = 0,
-        isExtruded: Bool = false,
-        extrusionHeightScale: Float = 1.0,
-        extrusionAnchorZoom: Int = 16,
-        extrusionFallbackHeight: Float = 0,
-        labelTextStyle: LabelTextStyle? = nil,
-        roadLabelTextStyle: LabelTextStyle? = nil,
-        roadDecorationKind: RoadDecorationKind = .none,
-        surfaceAreaCutsPaint: Bool = false,
-        labelMinCameraZoom: Float = 0,
-        suppressPolygonFill: Bool = false,
-        fillOutlineAntialiasing: Bool = false
-    ) {
+    public init(key: UInt8,
+                color: SIMD4<Float>,
+                streetColor: SIMD4<Float>? = nil,
+                farColor: SIMD4<Float>? = nil,
+                farStreetColor: SIMD4<Float>? = nil,
+                lowZoomFadeMask: Float = 0.0,
+                outlineAntialiasing: Bool = true,
+                splitsComplexHoles: Bool = false) {
         self.key = key
         self.color = color
         self.streetColor = streetColor
         self.farColor = farColor
         self.farStreetColor = farStreetColor
         self.lowZoomFadeMask = lowZoomFadeMask
-        self.lineWidthPoints = lineWidthPoints
-        self.dashLengthPoints = dashLengthPoints
-        self.dashGapPoints = dashGapPoints
-        self.dashInTileUnits = dashInTileUnits
-        self.minimumWidthPoints = minimumWidthPoints
-        self.maximumWidthPoints = maximumWidthPoints
-        self.lineGeometry = lineGeometry
-        self.includeRoadLabelPath = includeRoadLabelPath
-        self.linePlacement = linePlacement
-        self.lineRenderPasses = lineRenderPasses
-        self.roadClassPriority = roadClassPriority
-        self.isExtruded = isExtruded
-        self.extrusionHeightScale = extrusionHeightScale
-        self.extrusionAnchorZoom = extrusionAnchorZoom
-        self.extrusionFallbackHeight = extrusionFallbackHeight
-        self.labelTextStyle = labelTextStyle
-        self.roadLabelTextStyle = roadLabelTextStyle
-        self.roadDecorationKind = roadDecorationKind
-        self.surfaceAreaCutsPaint = surfaceAreaCutsPaint
-        self.labelMinCameraZoom = labelMinCameraZoom
-        self.suppressPolygonFill = suppressPolygonFill
-        self.fillOutlineAntialiasing = fillOutlineAntialiasing
+        self.outlineAntialiasing = outlineAntialiasing
+        self.splitsComplexHoles = splitsComplexHoles
+    }
+}
+
+/// A line that is not a road: one stroke, with no place in the road order.
+public struct LineStyle: Sendable {
+    public var pass: LinePass
+    public var placement: LinePlacement
+    /// Whether areal geometry a source ships under this style is filled
+    /// with the stroke's colour. False draws only lines: a border style
+    /// must not fill the reservations that arrive as polygons in the same
+    /// layer.
+    public var fillsAreas: Bool
+
+    public init(pass: LinePass, placement: LinePlacement = .ground, fillsAreas: Bool = true) {
+        self.pass = pass
+        self.placement = placement
+        self.fillsAreas = fillsAreas
+    }
+}
+
+/// A road: a line or a carriageway surface drawn in the road order. One
+/// stroke per role, bottom to top (`shadow`, `casing`, `fill`, the `paint`
+/// on the surface, `overlay`), plus what the engine's road work needs to
+/// know about the road as the style sees it: where it sorts, which tier
+/// it draws in, whether paint stops at it, what figure is stamped along
+/// it, and the name laid along it.
+public struct RoadStyle: Sendable {
+    public var shadow: LinePass?
+    public var casing: LinePass?
+    public var fill: LinePass?
+    /// The strokes painted on the surface, drawn in the `detail` role above
+    /// every fill: lane lines, a crossing's band, the parking-bay comb.
+    public var paint: [LinePass]
+    public var overlay: LinePass?
+    /// The road's place among the roads of its structure: higher draws
+    /// over lower, and a carriageway surface owns the ribbons of the same
+    /// or a lower class inside it.
+    public var classPriority: Int
+    /// The network the road draws in (see `RoadTier`).
+    public var tier: RoadTier
+    /// Whether the road makes a junction for the paint on another road: a
+    /// lane line running into it stops short of the crossing. True for a
+    /// street, false for a way onto a plot (a driveway, a parking aisle, a
+    /// footway) and for shipped paint, which is not a street at all.
+    public var makesJunctions: Bool
+    /// The figure stamped along the geometry instead of a plain stroke.
+    public var decoration: RoadDecorationKind
+    /// Whether a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
+    /// also cuts the PAINT of the roads inside it, on top of cutting their
+    /// ribbons. True for a junction reconstructed from the road graph: there
+    /// is no lane paint inside a crossing. False for a hand-mapped
+    /// `area:highway`, which typically covers a whole street's carriageway:
+    /// the street keeps its paint, drawn over the surface.
+    public var surfaceCutsPaint: Bool
+    /// The name laid along the road, nil for a road that carries none.
+    public var label: LabelTextStyle?
+    public var placement: LinePlacement
+
+    public init(shadow: LinePass? = nil,
+                casing: LinePass? = nil,
+                fill: LinePass? = nil,
+                paint: [LinePass] = [],
+                overlay: LinePass? = nil,
+                classPriority: Int = 0,
+                tier: RoadTier = .pedestrian,
+                makesJunctions: Bool = false,
+                decoration: RoadDecorationKind = .none,
+                surfaceCutsPaint: Bool = false,
+                label: LabelTextStyle? = nil,
+                placement: LinePlacement = .ground) {
+        self.shadow = shadow
+        self.casing = casing
+        self.fill = fill
+        self.paint = paint
+        self.overlay = overlay
+        self.classPriority = classPriority
+        self.tier = tier
+        self.makesJunctions = makesJunctions
+        self.decoration = decoration
+        self.surfaceCutsPaint = surfaceCutsPaint
+        self.label = label
+        self.placement = placement
+    }
+
+    /// One stroke with its role.
+    public struct Pass: Sendable {
+        public let role: RoadPassRole
+        public let pass: LinePass
+    }
+
+    /// Every stroke the road draws, bottom to top.
+    public var orderedPasses: [Pass] {
+        var passes: [Pass] = []
+        if let shadow { passes.append(Pass(role: .shadow, pass: shadow)) }
+        if let casing { passes.append(Pass(role: .casing, pass: casing)) }
+        if let fill { passes.append(Pass(role: .fill, pass: fill)) }
+        for stroke in paint { passes.append(Pass(role: .detail, pass: stroke)) }
+        if let overlay { passes.append(Pass(role: .overlay, pass: overlay)) }
+        return passes
+    }
+
+    /// The road's identity within a tile: the fill's key, or the first
+    /// stroke's for a road that is paint alone.
+    public var key: UInt8 {
+        fill?.key ?? orderedPasses.first?.pass.key ?? 0
+    }
+
+    /// The width of the road's own geometry in tile units: the fill
+    /// ribbon's, or the one stroke's for paint. Half of it is how far the
+    /// road reaches from its centreline.
+    public var ownWidth: Double {
+        fill?.lineGeometry.lineWidth ?? orderedPasses.first?.pass.lineGeometry.lineWidth ?? 0
+    }
+}
+
+/// A building: the footprint raised to the heights the schema reading
+/// states for it (`ImmersiveMapFeatureFacts.building`). The footprint also
+/// draws as a ground fill in the same colour, whether or not it rises.
+public struct ExtrusionStyle: Sendable {
+    public var key: UInt8
+    public var color: SIMD4<Float>
+    public var streetColor: SIMD4<Float>?
+    /// How metres become tile units at `anchorZoom`; the parser doubles the
+    /// scale per zoom level above it and halves it below.
+    public var heightScale: Float
+    public var anchorZoom: Int
+    /// The height in metres of a building the reading states no height
+    /// for; zero leaves it flat.
+    public var fallbackHeight: Float
+
+    public init(key: UInt8,
+                color: SIMD4<Float>,
+                streetColor: SIMD4<Float>? = nil,
+                heightScale: Float = 1.0,
+                anchorZoom: Int = 16,
+                fallbackHeight: Float = 0) {
+        self.key = key
+        self.color = color
+        self.streetColor = streetColor
+        self.heightScale = heightScale
+        self.anchorZoom = anchorZoom
+        self.fallbackHeight = fallbackHeight
+    }
+}
+
+/// A point label. The text comes from the map's language and the schema's
+/// `labelTextKeys`; this says how it is drawn and how important it is.
+public struct PointLabelStyle: Sendable {
+    public var key: UInt8
+    public var text: LabelTextStyle
+    /// The label's importance among the labels of the map, lower first: the
+    /// order the runtime reveals labels in as room appears, and deduplicates
+    /// them in. The built-in style reads it from the tiles' rank.
+    public var rank: Int
+    /// The label's precedence when two labels overlap, lower wins. Usually
+    /// the rank offset by layer, so a place name beats a shop's.
+    public var collisionRank: Int
+    /// Minimum CAMERA zoom for the label (0 = always visible). Travels with
+    /// the label to runtime, where it is compared against the camera zoom.
+    public var minCameraZoom: Float
+
+    public init(key: UInt8,
+                text: LabelTextStyle,
+                rank: Int = 0,
+                collisionRank: Int? = nil,
+                minCameraZoom: Float = 0) {
+        self.key = key
+        self.text = text
+        self.rank = rank
+        self.collisionRank = collisionRank ?? rank
+        self.minCameraZoom = minCameraZoom
+    }
+}
+
+/// How one feature draws: the style's whole answer, which the parser bakes
+/// and the renderer draws. One case per drawing mode, each carrying only
+/// the knobs that mode has: a reader switches over the case and cannot
+/// read a label's fields off a fill. What the feature is (a road in a
+/// tunnel, a carriageway surface, a building of some height) is not in
+/// here: that is the schema reading's `ImmersiveMapFeatureFacts`, which the
+/// parser carries next to the style.
+///
+/// The factories below cover the common cases; the payload initializers
+/// expose every knob.
+public enum FeatureStyle: Sendable {
+    /// Nothing is drawn.
+    case hidden
+    case fill(FillStyle)
+    case line(LineStyle)
+    case road(RoadStyle)
+    case extrusion(ExtrusionStyle)
+    case pointLabel(PointLabelStyle)
+
+    /// The style's identity within a tile, 0 for `hidden`.
+    public var key: UInt8 {
+        switch self {
+        case .hidden: return 0
+        case .fill(let fill): return fill.key
+        case .line(let line): return line.pass.key
+        case .road(let road): return road.key
+        case .extrusion(let extrusion): return extrusion.key
+        case .pointLabel(let label): return label.key
+        }
+    }
+
+    public var fillStyle: FillStyle? {
+        if case .fill(let fill) = self { return fill }
+        return nil
+    }
+
+    public var lineStyle: LineStyle? {
+        if case .line(let line) = self { return line }
+        return nil
+    }
+
+    /// The style as a road: a `road` as it is, and a plain `line` as a
+    /// road of one fill stroke with no class, so a line on a road layer
+    /// takes the road path with the lowest priority.
+    public var roadStyle: RoadStyle? {
+        switch self {
+        case .road(let road):
+            return road
+        case .line(let line):
+            return RoadStyle(fill: line.pass, placement: line.placement)
+        case .hidden, .fill, .extrusion, .pointLabel:
+            return nil
+        }
+    }
+
+    public var extrusionStyle: ExtrusionStyle? {
+        if case .extrusion(let extrusion) = self { return extrusion }
+        return nil
+    }
+
+    public var pointLabelStyle: PointLabelStyle? {
+        if case .pointLabel(let label) = self { return label }
+        return nil
     }
 }
 
 // MARK: - The common drawing modes
 
 public extension FeatureStyle {
-    /// Nothing is drawn.
-    static let hidden = FeatureStyle(key: 0,
-                                     color: SIMD4<Float>(0, 0, 0, 0),
-                                     lineGeometry: LineGeometryStyle(lineWidth: 0))
-
     /// A fill, with its ring edges antialiased.
     static func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: color,
-                     lineGeometry: LineGeometryStyle(lineWidth: 100),
-                     fillOutlineAntialiasing: true)
+        .fill(FillStyle(key: key, color: color))
     }
 
     /// A line of a width in tile units.
     static func line(key: UInt8,
                      color: SIMD4<Float>,
                      width: Float) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: color,
-                     lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))))
+        .line(LineStyle(pass: LinePass(key: key,
+                                       color: color,
+                                       lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))))))
     }
 
     /// A line whose width is stated in on-screen points and held there at
@@ -340,12 +454,12 @@ public extension FeatureStyle {
                                 widthPoints: Float,
                                 dashLengthPoints: Float = 0,
                                 dashGapPoints: Float = 0) -> FeatureStyle {
-        FeatureStyle.pointLockedLine(key: key,
-                                     color: color,
-                                     widthPoints: max(0, widthPoints),
-                                     dashLengthPoints: max(0, dashLengthPoints),
-                                     dashGapPoints: max(0, dashGapPoints),
-                                     suppressPolygonFill: true)
+        .line(LineStyle(pass: LinePass.pointLocked(key: key,
+                                                   color: color,
+                                                   widthPoints: max(0, widthPoints),
+                                                   dashLengthPoints: max(0, dashLengthPoints),
+                                                   dashGapPoints: max(0, dashGapPoints)),
+                        fillsAreas: false))
     }
 
     /// A building: the footprint raised to the heights the schema reading
@@ -358,17 +472,15 @@ public extension FeatureStyle {
                                 heightScale: Float = 1.0,
                                 anchorZoom: Int = 16,
                                 fallbackHeight: Float = 0) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: color,
-                     lineGeometry: LineGeometryStyle(lineWidth: 100),
-                     isExtruded: true,
-                     extrusionHeightScale: heightScale,
-                     extrusionAnchorZoom: anchorZoom,
-                     extrusionFallbackHeight: fallbackHeight)
+        .extrusion(ExtrusionStyle(key: key,
+                                  color: color,
+                                  heightScale: heightScale,
+                                  anchorZoom: anchorZoom,
+                                  fallbackHeight: fallbackHeight))
     }
 
     /// A point label. The text comes from the map's language and the
-    /// style's `labelTextKeys`; this says how it is drawn, how important it
+    /// schema's `labelTextKeys`; this says how it is drawn, how important it
     /// is (`rank`, lower first, and `collisionRank`, which defaults to the
     /// rank) and from which camera zoom.
     static func pointLabel(key: UInt8,
@@ -376,14 +488,11 @@ public extension FeatureStyle {
                            rank: Int = 0,
                            collisionRank: Int? = nil,
                            minCameraZoom: Float = 0) -> FeatureStyle {
-        var style = FeatureStyle(key: key,
-                                 color: SIMD4<Float>(0, 0, 0, 0),
-                                 lineGeometry: LineGeometryStyle(lineWidth: 0),
-                                 labelTextStyle: Self.keyed(textStyle, key: key),
-                                 labelMinCameraZoom: minCameraZoom)
-        style.labelRank = rank
-        style.labelCollisionRank = collisionRank ?? rank
-        return style
+        .pointLabel(PointLabelStyle(key: key,
+                                    text: Self.keyed(textStyle, key: key),
+                                    rank: rank,
+                                    collisionRank: collisionRank,
+                                    minCameraZoom: minCameraZoom))
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid
@@ -392,11 +501,10 @@ public extension FeatureStyle {
                           color: SIMD4<Float>,
                           width: Float,
                           textStyle: LabelTextStyle) -> FeatureStyle {
-        FeatureStyle(key: key,
-                     color: color,
-                     lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))),
-                     includeRoadLabelPath: true,
-                     roadLabelTextStyle: Self.keyed(textStyle, key: key))
+        .road(RoadStyle(fill: LinePass(key: key,
+                                       color: color,
+                                       lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width)))),
+                        label: Self.keyed(textStyle, key: key)))
     }
 
     /// The text style under the feature style's key, with the size floor

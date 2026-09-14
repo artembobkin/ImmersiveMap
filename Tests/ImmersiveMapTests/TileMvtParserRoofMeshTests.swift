@@ -143,6 +143,7 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
             .makeStyle(data: DetFeatureStyleData(layerName: "building",
                                                  properties: [:],
                                                  tile: Tile(x: 0, y: 0, z: 16)))
+            .extrusionStyle!
         let attributes: [String: MvtValue] = [
             "render_height": .float(20),
             "roof:shape": .string("gabled"),

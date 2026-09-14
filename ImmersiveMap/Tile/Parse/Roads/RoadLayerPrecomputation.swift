@@ -41,7 +41,7 @@ struct RoadSurfaceArea {
     /// surface is a bare translucent fill: every line of shipped paint
     /// inside it is clipped away, unlike on any other surface.
     var isTunnel: Bool = false
-    /// See `FeatureStyle.surfaceAreaCutsPaint`: true for a reconstructed
+    /// See `RoadStyle.surfaceCutsPaint`: true for a reconstructed
     /// crossing, false for a hand-mapped carriageway area.
     var cutsPaint: Bool = false
     /// The street identity of the piece as the style read it, empty when
@@ -109,16 +109,18 @@ struct RoadLayerPrecomputation {
         let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
         var rawLinesByFeatureIndex = Array(repeating: [[SIMD2<Float>]](), count: layer.features.count)
         var surfaceAreas: [RoadSurfaceArea] = []
+        // Every feature as a road, nil for one that draws as none (hidden,
+        // a fill, a label): those take no part in the road work.
+        let roadStyles = featureStyles.map(\.roadStyle)
 
         // One payload mapping for the whole pre-pass instead of one per
         // feature geometry.
         geometry.data.withUnsafeBytes { bytes in
             for (featureIndex, feature) in layer.features.enumerated() {
-                let style = featureStyles[featureIndex]
-                let road = featureFacts[featureIndex].road ?? .ground
-                guard style.key != 0 else {
+                guard let style = roadStyles[featureIndex] else {
                     continue
                 }
+                let road = featureFacts[featureIndex].road ?? .ground
                 switch feature.type {
                 case .linestring:
                     let lines = geometry.lines(of: feature, in: bytes)
@@ -146,12 +148,12 @@ struct RoadLayerPrecomputation {
                             upper = simd_max(upper, point)
                         }
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
-                                                            classPriority: style.roadClassPriority,
+                                                            classPriority: style.classPriority,
                                                             bounds: (lower, upper),
                                                             structureKind: RoadStructureKind(road: road),
                                                             layer: road.layer,
                                                             isTunnel: road.isTunnel,
-                                                            cutsPaint: style.surfaceAreaCutsPaint,
+                                                            cutsPaint: style.surfaceCutsPaint,
                                                             street: road.streetIdentity,
                                                             featureIndex: featureIndex))
                     }
@@ -220,7 +222,7 @@ struct RoadLayerPrecomputation {
                     paintRawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex]
                     continue
                 }
-                let priority = featureStyles[featureIndex].roadClassPriority
+                let priority = roadStyles[featureIndex]?.classPriority ?? 0
                 let structure = RoadStructureKind(road: road)
                 let layerValue = road.layer
                 let owners = surfaceAreas.filter {
@@ -332,11 +334,11 @@ struct RoadLayerPrecomputation {
             // share with a road vertex. Which roads make a junction for the
             // paint on another is the style's decision.
             let isShippedPaint = featureFacts[featureIndex].road?.isShippedPaint == true
-            let isJunctionMaking = featureStyles[featureIndex].roadMakesJunctions
+            let isJunctionMaking = roadStyles[featureIndex]?.makesJunctions == true
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches
             // from its centreline.
-            let halfWidth = Float(featureStyles[featureIndex].lineGeometry.lineWidth) * 0.5
+            let halfWidth = Float(roadStyles[featureIndex]?.ownWidth ?? 0) * 0.5
             for points in lines {
                 let fragments = lineClipper.clip(points: points, tileExtent: tileExtent)
                 for fragment in fragments {

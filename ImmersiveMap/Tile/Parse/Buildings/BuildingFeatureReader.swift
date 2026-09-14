@@ -10,7 +10,7 @@ import Mvt
 /// `BuildingExtrusionResolver` can tell the outlines from the parts. What
 /// the feature is as a building is the schema reading's answer
 /// (`ImmersiveMapFeatureFacts.building`), and whether it rises is the
-/// style's (`FeatureStyle.isExtruded`); this reader never looks at a tag. The
+/// style's (`FeatureStyle.extrusion`); this reader never looks at a tag. The
 /// footprint's ground fill is not this reader's either: the ground reader
 /// draws it whether or not the building rises.
 ///
@@ -72,12 +72,11 @@ struct BuildingFeatureReader {
     /// the other shape from disk.
     func extrusion(feature: MvtDecodedFeature,
                    facts: ImmersiveMapFeatureFacts,
-                   style: FeatureStyle,
+                   style: ExtrusionStyle,
                    polygons: MultiPolygon,
                    partInfo: PartInfo,
                    tile: Tile) -> Extrusion? {
         guard extrusionEnabled,
-              style.isExtruded,
               tile.z >= minimumSourceZoom,
               let building = facts.building,
               building.isHidden == false else {
@@ -160,8 +159,8 @@ struct BuildingFeatureReader {
     /// how tall it is.
     func extrusionHeights(building: ImmersiveMapBuildingExtrusion,
                           tileZoom: Int,
-                          style: FeatureStyle) -> BuildingExtrusionHeights? {
-        let fallbackHeight = style.extrusionFallbackHeight
+                          style: ExtrusionStyle) -> BuildingExtrusionHeights? {
+        let fallbackHeight = style.fallbackHeight
         if building.heightMetres == nil && building.baseHeightMetres == nil {
             guard fallbackHeight > 0 else { return nil }
         }
@@ -170,10 +169,10 @@ struct BuildingFeatureReader {
         guard resolvedHeight > 0 else { return nil }
         let resolvedMinHeight = building.baseHeightMetres ?? 0
 
-        let zoomDelta = tileZoom - style.extrusionAnchorZoom
+        let zoomDelta = tileZoom - style.anchorZoom
         let zoomScale = powf(2.0, Float(zoomDelta))
-        let scaledHeight = resolvedHeight * style.extrusionHeightScale * zoomScale
-        let scaledMinHeight = resolvedMinHeight * style.extrusionHeightScale * zoomScale
+        let scaledHeight = resolvedHeight * style.heightScale * zoomScale
+        let scaledMinHeight = resolvedMinHeight * style.heightScale * zoomScale
 
         let base = max(0, min(scaledMinHeight, scaledHeight))
         let top = max(scaledHeight, base)
@@ -186,7 +185,7 @@ struct BuildingFeatureReader {
         }
         return BuildingExtrusionHeights(base: base,
                                         top: top,
-                                        roof: RoofInfo(height: roof.heightMetres * style.extrusionHeightScale * zoomScale,
+                                        roof: RoofInfo(height: roof.heightMetres * style.heightScale * zoomScale,
                                                        shape: roof.shape,
                                                        orientation: roof.orientation,
                                                        directionDegrees: roof.directionDegrees))

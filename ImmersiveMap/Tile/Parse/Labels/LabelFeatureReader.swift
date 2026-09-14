@@ -29,12 +29,11 @@ struct LabelFeatureReader {
     func read(feature: MvtDecodedFeature,
               attributes: [String: MvtValue],
               facts: ImmersiveMapFeatureFacts,
-              style: FeatureStyle,
+              style: PointLabelStyle,
               geometry: TileLayerGeometry,
               layerName: String,
               tile: Tile,
               into result: inout ReadingStageResult) {
-        guard style.labelTextStyle != nil else { return }
         let points = geometry.points(of: feature)
         let featureID = feature.hasID ? feature.id : nil
         let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
@@ -58,7 +57,7 @@ struct LabelFeatureReader {
                                                      collisionPriority: decision.priority.collisionRank,
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
-                                                     minCameraZoom: style.labelMinCameraZoom))
+                                                     minCameraZoom: style.minCameraZoom))
             if facts.namesWaterBody {
                 result.waterNameTexts.insert(decision.text)
             }
@@ -85,8 +84,7 @@ struct LabelFeatureReader {
                 continue
             }
 
-            guard let style = mapStyle.waterNameStyle(fallback.kind, tile: tile),
-                  let textStyle = style.labelTextStyle else {
+            guard case .pointLabel(let style)? = mapStyle.waterNameStyle(fallback.kind, tile: tile) else {
                 continue
             }
 
@@ -98,9 +96,9 @@ struct LabelFeatureReader {
                                                      layerName: LowZoomWaterLabels.identityNamespace,
                                                      sortKey: fallback.sortKey,
                                                      collisionPriority: fallback.sortKey,
-                                                     textStyle: textStyle,
+                                                     textStyle: style.text,
                                                      poiIcon: nil,
-                                                     minCameraZoom: style.labelMinCameraZoom))
+                                                     minCameraZoom: style.minCameraZoom))
         }
     }
 

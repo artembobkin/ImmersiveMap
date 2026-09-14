@@ -92,7 +92,8 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
                                       tile: feature.tile,
                                       facts: .none,
                                       geometryType: .point)))
-        return decisions.pointLabelDecision(feature: feature, style: featureStyle, poiIcon: nil)
+        guard let label = featureStyle.pointLabelStyle else { return nil }
+        return decisions.pointLabelDecision(feature: feature, style: label, poiIcon: nil)
     }
 
     private func feature(layer: String,

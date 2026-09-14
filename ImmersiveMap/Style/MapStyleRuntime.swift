@@ -89,9 +89,7 @@ struct MapStyleRuntime {
     /// The one-unit frame around a tile the parser draws when the settings
     /// ask for the debug borders: the engine's, in the settings' fallback
     /// colour, whatever the style.
-    func debugBorderStyle() -> FeatureStyle {
-        FeatureStyle(key: 0,
-                     color: settings.fallbackFeatureColor,
-                     lineGeometry: LineGeometryStyle(lineWidth: 100))
+    func debugBorderStyle() -> FillStyle {
+        FillStyle(key: 0, color: settings.fallbackFeatureColor, outlineAntialiasing: false)
     }
 }

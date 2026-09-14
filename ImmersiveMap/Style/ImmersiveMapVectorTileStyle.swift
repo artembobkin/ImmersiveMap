@@ -117,9 +117,7 @@ public extension ImmersiveMapVectorTileStyle {
 
     /// Transparent, under a key below the range a style normally uses.
     func backgroundStyle(tileZoom: Int) -> FeatureStyle {
-        FeatureStyle(key: 1,
-                     color: SIMD4<Float>(0, 0, 0, 0),
-                     lineGeometry: LineGeometryStyle(lineWidth: 0))
+        .fill(FillStyle(key: 1, color: SIMD4<Float>(0, 0, 0, 0), outlineAntialiasing: false))
     }
 
     func waterNameStyle(_ kind: WaterNameKind, tileZoom: Int) -> FeatureStyle? {

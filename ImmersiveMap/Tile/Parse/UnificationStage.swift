@@ -58,7 +58,7 @@ enum TileUnificationStage {
     ///   fill", which is also how the split flat/morph draws paint. The
     ///   outline segment is a line list the flat drawer alone reads.
     private static func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
-                                          stylesByKey: [UInt8: FeatureStyle],
+                                          stylesByKey: [UInt8: BakedStyle],
                                           splitLinesClass: Bool = false) -> (drawing: DrawingPolygonBytes,
                                                                              styles: [TilePolygonStyle],
                                                                              overviewStyleMasks: [Float],
@@ -76,7 +76,7 @@ enum TileUnificationStage {
         // ring edges of every fill whose style asks for them, as a line
         // list over the fill's own vertices (no vertex is added).
         func emitsFillOutline(_ styleKey: UInt8) -> Bool {
-            splitLinesClass && stylesByKey[styleKey]?.fillOutlineAntialiasing == true
+            splitLinesClass && stylesByKey[styleKey]?.outlineAntialiasing == true
         }
         let totalPolygonIndexCount = polygonByStyle.reduce(0) { partial, entry in
             let outlines = emitsFillOutline(entry.key)
@@ -163,7 +163,7 @@ enum TileUnificationStage {
                                                farColor: style.farColor,
                                                farStreetColor: style.farStreetColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
-                lineStyles.append(Self.makeTileLineStyle(from: style))
+                lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
         }
 
@@ -180,24 +180,24 @@ enum TileUnificationStage {
     /// from the tessellated width and the tessellator's feather constant, so
     /// the two stay one definition; a style with no line width keeps a zero
     /// threshold, which is what tells the shader to skip line coverage.
-    static func makeTileLineStyle(from style: FeatureStyle) -> TileLineStyle {
-        let halfWidth = Float(style.lineGeometry.lineWidth) * 0.5
+    static func makeTileLineStyle(from pass: LinePass) -> TileLineStyle {
+        let halfWidth = Float(pass.lineGeometry.lineWidth) * 0.5
         let edgeThreshold = halfWidth > 0
             ? halfWidth / (halfWidth + ParseLine.featherTileUnits)
             : 0
-        return TileLineStyle(widthPoints: style.lineWidthPoints,
-                             dashLengthPoints: style.dashLengthPoints,
-                             dashGapPoints: style.dashGapPoints,
+        return TileLineStyle(widthPoints: pass.lineWidthPoints,
+                             dashLengthPoints: pass.dashLengthPoints,
+                             dashGapPoints: pass.dashGapPoints,
                              edgeThreshold: edgeThreshold,
-                             minimumWidthPoints: style.minimumWidthPoints,
-                             dashInTileUnits: style.dashInTileUnits,
-                             maximumWidthPoints: style.maximumWidthPoints)
+                             minimumWidthPoints: pass.minimumWidthPoints,
+                             dashInTileUnits: pass.dashInTileUnits,
+                             maximumWidthPoints: pass.maximumWidthPoints)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the
     /// caller buckets and sorts once per structure/pass combination.
     private static func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
-                                              stylesByKey: [UInt8: FeatureStyle]) -> (drawing: DrawingPolygonBytes,
+                                              stylesByKey: [UInt8: BakedStyle]) -> (drawing: DrawingPolygonBytes,
                                                                                       styles: [TilePolygonStyle],
                                                                                       overviewStyleMasks: [Float],
                                                                                       lineStyles: [TileLineStyle]) {
@@ -230,7 +230,7 @@ enum TileUnificationStage {
                                                farColor: style.farColor,
                                                farStreetColor: style.farStreetColor))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
-                lineStyles.append(Self.makeTileLineStyle(from: style))
+                lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
         }
 

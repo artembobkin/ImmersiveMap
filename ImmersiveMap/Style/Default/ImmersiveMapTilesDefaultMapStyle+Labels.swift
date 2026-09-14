@@ -287,15 +287,16 @@ extension ImmersiveMapTilesDefaultMapStyle {
         }
     }
 
+    /// The road names ship as their own lines: an invisible hairline
+    /// carries the name along it.
     func roadLabelStyle(cls: String?) -> FeatureStyle {
-        FeatureStyle(
-            key: 90,
-            color: SIMD4<Float>(0, 0, 0, 0),
-            lineGeometry: LineGeometryStyle(lineWidth: 1),
-            includeRoadLabelPath: true,
-            roadClassPriority: roadLabelPriority(cls: cls),
-            roadLabelTextStyle: labelTextStyle(key: 90, appearance: configuration.labels.road)
-        )
+        .road(RoadStyle(
+            fill: LinePass(key: 90,
+                           color: SIMD4<Float>(0, 0, 0, 0),
+                           lineGeometry: LineGeometryStyle(lineWidth: 1)),
+            classPriority: roadLabelPriority(cls: cls),
+            label: labelTextStyle(key: 90, appearance: configuration.labels.road)
+        ))
     }
 
     func houseNumberAppearance() -> ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance {

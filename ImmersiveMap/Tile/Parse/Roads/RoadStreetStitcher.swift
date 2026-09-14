@@ -51,7 +51,7 @@ enum RoadStreetStitcher {
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
             guard let road = featureFacts[index].road,
                   road.isShippedPaint == false,
-                  featureStyles[index].roadTier == .automobile,
+                  featureStyles[index].roadStyle?.tier == .automobile,
                   let key = road.stitchingKey else {
                 continue
             }
@@ -84,7 +84,7 @@ enum RoadStreetStitcher {
         // road feature, stitchable or not: a T with an unnamed service road
         // is still a T).
         var featuresAtPoint: [RoadConnectionPointKey: Set<Int>] = [:]
-        for index in 0..<featureCount where featureStyles[index].roadTier == .automobile {
+        for index in 0..<featureCount where featureStyles[index].roadStyle?.tier == .automobile {
             for line in linesByFeatureIndex[index] {
                 guard let first = line.first, let last = line.last else { continue }
                 featuresAtPoint[.init(point: first), default: []].insert(index)

@@ -189,7 +189,7 @@ final class TileLabelDecisionsTests: XCTestCase {
                                              anchor: SIMD2<Int16>(2048, 2048),
                                              properties: properties)
 
-        let decision = decisions.pointLabelDecision(feature: feature, style: featureStyle, poiIcon: nil)
+        let decision = decisions.pointLabelDecision(feature: feature, style: featureStyle.pointLabelStyle!, poiIcon: nil)
 
         XCTAssertEqual(decision?.text, "Moscow")
         XCTAssertEqual(decision?.priority.visibilityRank, 3, "The rank is the style's reading of the tile")
@@ -198,8 +198,8 @@ final class TileLabelDecisionsTests: XCTestCase {
                        .styleFeature(styleID: "immersivemaptiles",
                                      layerName: "place",
                                      featureID: 7))
-        XCTAssertEqual(decision?.style.key, featureStyle.labelTextStyle?.key)
-        XCTAssertEqual(decision?.style.sizePoints, featureStyle.labelTextStyle?.sizePoints)
+        XCTAssertEqual(decision?.style.key, featureStyle.pointLabelStyle?.text.key)
+        XCTAssertEqual(decision?.style.sizePoints, featureStyle.pointLabelStyle?.text.sizePoints)
     }
 
     func testTextLabelCanUseDecisionRuntimeKey() {
