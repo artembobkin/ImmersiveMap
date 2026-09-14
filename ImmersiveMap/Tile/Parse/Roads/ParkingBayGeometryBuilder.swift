@@ -21,21 +21,6 @@ import simd
 /// flip. A deliberate asymmetry; do not "unify" it with the flipping
 /// builders, or the comb mirrors.
 struct ParkingBayGeometryBuilder {
-    /// A bay is ~2.6 m wide on the ground; parallel parking spaces are a car
-    /// length apart instead.
-    private static let bayStepMetres: Float = 2.6
-    private static let parallelStepMetres: Float = 6.0
-    /// One row of bays reaches ~5 m from the kerb; the aisle between two rows
-    /// is ~6 m of bare asphalt.
-    private static let rowDepthMetres: Float = 5.0
-    private static let aisleDepthMetres: Float = 6.0
-    /// Up to this depth the strip is one car deep and the stripes span it
-    /// whole: a street-side band gets perpendicular bays edge to edge.
-    private static let singleRowMaximumDepthMetres: Float = 8.0
-    /// A row cut shorter than half a car by the polygon edge is dropped.
-    private static let minimumRowDepthMetres: Float = 2.5
-    /// A stripe piece shorter than this is a corner sliver, not a divider.
-    static let minimumStripeMetres: Float = 1.8
     /// Runaway guard for degenerate giant polygons.
     private static let maximumStripes = 4000
 
@@ -56,7 +41,8 @@ struct ParkingBayGeometryBuilder {
     /// parking lot is rare enough to accept a stripe across it.
     func buildStripes(exterior: [SIMD2<Float>],
                       unitsPerMetre: Float,
-                      parallel: Bool) -> [[SIMD2<Float>]] {
+                      parallel: Bool,
+                      layout: ParkingBaysDecoration = ParkingBaysDecoration()) -> [[SIMD2<Float>]] {
         guard exterior.count >= 3, unitsPerMetre > 0 else { return [] }
 
         // The minimum-area bounding rectangle, found the classic way: one of
@@ -96,24 +82,24 @@ struct ParkingBayGeometryBuilder {
         // bay row / aisle for a deep lot.
         let depthUnits = box.deepRange.upperBound - box.deepRange.lowerBound
         var rows: [(from: Float, to: Float)] = []
-        if depthUnits <= Self.singleRowMaximumDepthMetres * unitsPerMetre {
+        if depthUnits <= layout.singleRowMaximumDepthMetres * unitsPerMetre {
             rows.append((box.deepRange.lowerBound, box.deepRange.upperBound))
         } else {
-            let rowUnits = Self.rowDepthMetres * unitsPerMetre
-            let aisleUnits = Self.aisleDepthMetres * unitsPerMetre
+            let rowUnits = layout.rowDepthMetres * unitsPerMetre
+            let aisleUnits = layout.aisleDepthMetres * unitsPerMetre
             var cursor = box.deepRange.lowerBound
             while cursor < box.deepRange.upperBound {
                 let to = min(cursor + rowUnits, box.deepRange.upperBound)
-                if to - cursor >= Self.minimumRowDepthMetres * unitsPerMetre {
+                if to - cursor >= layout.minimumRowDepthMetres * unitsPerMetre {
                     rows.append((cursor, to))
                 }
                 cursor += rowUnits + aisleUnits
             }
         }
 
-        let stepMetres = parallel ? Self.parallelStepMetres : Self.bayStepMetres
+        let stepMetres = parallel ? layout.parallelStepMetres : layout.bayStepMetres
         let stepUnits = stepMetres * unitsPerMetre
-        let minimumStripeUnits = Self.minimumStripeMetres * unitsPerMetre
+        let minimumStripeUnits = layout.minimumStripeMetres * unitsPerMetre
         var stripes: [[SIMD2<Float>]] = []
         var along = box.alongRange.lowerBound + stepUnits * 0.5
         while along < box.alongRange.upperBound, stripes.count < Self.maximumStripes {

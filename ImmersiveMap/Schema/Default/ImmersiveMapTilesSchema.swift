@@ -32,6 +32,31 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
         }
     }
 
+    /// The measured paint: `marking` says what it marks, `paint` its colour
+    /// and `style` whether it is dashed.
+    private func paint(marking: String, _ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapRoadPaint {
+        let kind: ImmersiveMapRoadPaint.Kind
+        switch marking {
+        case "crossing_marked": kind = .crossing(marked: true)
+        case "crossing_unmarked": kind = .crossing(marked: false)
+        case "dividing": kind = .dividingLine
+        case "lane_separator": kind = .laneSeparator
+        case "edge": kind = .edgeLine
+        case "bus_lane": kind = .busLane
+        case "bus_stop_zigzag": kind = .busStopKerb
+        default: kind = .other(marking)
+        }
+        let dashed: Bool?
+        switch properties.string("style")?.lowercased() {
+        case "solid": dashed = false
+        case "dashed": dashed = true
+        default: dashed = nil
+        }
+        return ImmersiveMapRoadPaint(kind: kind,
+                                     isYellow: properties.string("paint")?.lowercased() == "yellow",
+                                     isDashed: dashed)
+    }
+
     /// Every road feature carries where it sits and which street it is a
     /// piece of; a line also carries its stitching key, which a surface
     /// never needs. What kind of road thing it is comes from `marking` (a
@@ -45,7 +70,7 @@ public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
             road.stitchingKey = nil
         }
         if let marking = properties.string("marking")?.lowercased(), marking.isEmpty == false {
-            road.kind = .paint
+            road.kind = .paint(paint(marking: marking, properties))
             return road
         }
         switch properties.string("subclass")?.lowercased() {

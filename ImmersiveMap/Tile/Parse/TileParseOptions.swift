@@ -17,9 +17,9 @@ struct TileParseOptions: Equatable {
     /// Whether point and road labels are resolved and baked. Off, point
     /// features are skipped whole and no road name is looked up.
     var labelsEnabled: Bool
-    /// Whether the map draws the measured streetscape. Off, every road paint
-    /// pass is stripped from the styles and roads draw as bare
-    /// casing-and-fill strokes (`FeatureStyle.strippingRoadPaint()`).
+    /// Whether the map draws the measured streetscape. Told to the style
+    /// with every feature (`ImmersiveMapFeatureStyleContext.streetscapeEnabled`),
+    /// which decides what a road looks like without it.
     var streetscapeEnabled: Bool
     /// Debug: a one-unit frame around every tile.
     var addTestBorders: Bool

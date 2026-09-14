@@ -70,7 +70,7 @@ struct LineFeatureReader {
         let roadLabelStyle = style.label
         let road = facts.road ?? .ground
         let roadClassPriority = style.classPriority
-        let roadStructure = RoadStructureKind(road: road, tier: style.tier)
+        let roadStructure = RoadStructureKind(level: style.level, tier: style.tier)
         let roadLayer = road.layer
         let sharedRoadPadding = Float(
             lineRenderPasses.reduce(0.0) { partial, pass in
@@ -118,12 +118,6 @@ struct LineFeatureReader {
 
                 for roadPass in group.passes {
                     let lineRenderPass = roadPass.pass
-                    if style.decoration == .zebraCrossing,
-                       roadStructure == .tunnel
-                           || (roads.hasShippedCrossings && road.isShippedPaint == false) {
-                        continue
-                    }
-
                     if usesSeparateRoadRendering {
                         result.registerRoadStyle(BakedStyle(pass: lineRenderPass), key: lineRenderPass.key)
                     } else {
@@ -301,8 +295,8 @@ struct LineFeatureReader {
 
     /// The decoration a pass stamps along the feature's exact fragments on
     /// the separate-road path, appended in place: the zebra of a crossing
-    /// (under any pass, except in a tunnel), and under the detail pass the
-    /// bus lane's letter, the bus stop's sawtooth and the oneway arrows.
+    /// (under any pass), and under the detail pass the bus lane's letter,
+    /// the bus stop's sawtooth and the oneway arrows.
     /// Returns false when the pass draws the plain ribbon instead.
     private func appendDecoration(style: RoadStyle,
                                   pass roadPass: RoadStyle.Pass,
@@ -323,43 +317,47 @@ struct LineFeatureReader {
             }
         }
         switch style.decoration {
-        case .zebraCrossing where structure != .tunnel:
+        case .zebraCrossing(let zebra):
             for fragment in fragments {
                 append(crosswalkZebraBuilder.buildPolygons(
                     points: fragment.points,
-                    zoneWidth: Float(pass.lineGeometry.lineWidth)
+                    zoneWidth: Float(pass.lineGeometry.lineWidth),
+                    zebra: zebra
                 ))
             }
             return true
-        case .busLaneLetter where roadPass.role == .detail:
+        case .busLaneLetter(let letter) where roadPass.role == .detail:
             // The bus lane's axis: the letter A stamped along it, from the
             // same polygon path the zebra and the arrows take.
             for fragment in fragments {
                 append(busLaneLetterBuilder.buildPolygons(
                     points: fragment.points,
-                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                    letter: letter
                 ))
             }
             return true
-        case .busStopZigzag where roadPass.role == .detail:
+        case .busStopZigzag(let zigzag) where roadPass.role == .detail:
             // The stop's kerb: the yellow sawtooth, folded from the shipped
             // axis.
             for fragment in fragments {
                 append(busStopZigzagBuilder.buildPolygons(
                     points: fragment.points,
-                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
+                    zigzag: zigzag
                 ))
             }
             return true
-        case .onewayArrow where roadPass.role == .detail:
+        case .onewayArrow(let arrow) where roadPass.role == .detail:
             for fragment in fragments {
                 append(roadDirectionArrowBuilder.buildPolygons(
                     points: fragment.points,
-                    lineWidth: Float(pass.lineGeometry.lineWidth)
+                    lineWidth: Float(pass.lineGeometry.lineWidth),
+                    arrow: arrow
                 ))
             }
             return true
-        default:
+        case .none, .busLaneLetter, .busStopZigzag, .onewayArrow, .parkingBays:
             return false
         }
     }

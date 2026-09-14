@@ -24,19 +24,23 @@ struct DetFeatureStyleData {
     var streetscapeEnabled: Bool = true
     /// The geometry the feature carries.
     var geometryType: MvtGeometryType = .unknown
+    /// See `ImmersiveMapFeatureStyleContext.layerShipsMeasuredCrossings`.
+    var layerShipsMeasuredCrossings: Bool = false
 
     init(layerName: String,
          properties: [String: MvtValue],
          tile: Tile,
          facts: ImmersiveMapFeatureFacts,
          streetscapeEnabled: Bool = true,
-         geometryType: MvtGeometryType = .unknown) {
+         geometryType: MvtGeometryType = .unknown,
+         layerShipsMeasuredCrossings: Bool = false) {
         self.layerName = layerName
         self.properties = properties
         self.tile = tile
         self.facts = facts
         self.streetscapeEnabled = streetscapeEnabled
         self.geometryType = geometryType
+        self.layerShipsMeasuredCrossings = layerShipsMeasuredCrossings
     }
 
     /// The same feature as the public context describes it, for a style
@@ -54,6 +58,7 @@ struct DetFeatureStyleData {
                   tile: Tile(x: context.tileX, y: context.tileY, z: context.tileZoom),
                   facts: context.facts,
                   streetscapeEnabled: context.streetscapeEnabled,
-                  geometryType: geometryType)
+                  geometryType: geometryType,
+                  layerShipsMeasuredCrossings: context.layerShipsMeasuredCrossings)
     }
 }

@@ -6,23 +6,20 @@ import simd
 
 struct RoadDirectionArrowGeometryBuilder {
     private static let epsilon: Float = 0.0001
-    private static let minimumFragmentLengthFactor: Float = 4.5
-    private static let minimumFragmentLength: Float = 96.0
-    private static let repeatStep: Float = 420.0
-    private static let turnThresholdRadians: Float = .pi / 4.0
 
     /// Input polyline is TILE space (y down); the first line of the body is
     /// the decoration path's one named entry into render space, and the
     /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
-                       lineWidth: Float) -> [ParsedPolygon] {
+                       lineWidth: Float,
+                       arrow: OnewayArrowDecoration = OnewayArrowDecoration()) -> [ParsedPolygon] {
         guard points.count >= 2 else {
             return []
         }
 
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = polylineLength(points: renderPoints)
-        let minimumFragmentLength = max(Self.minimumFragmentLength, lineWidth * Self.minimumFragmentLengthFactor)
+        let minimumFragmentLength = max(arrow.minimumFragmentLength, lineWidth * arrow.minimumFragmentLengthFactor)
         guard totalLength >= minimumFragmentLength else {
             return []
         }
@@ -35,10 +32,10 @@ struct RoadDirectionArrowGeometryBuilder {
         }
 
         let placements: [Float]
-        if usableLength <= Self.repeatStep {
+        if usableLength <= arrow.repeatStep {
             placements = [totalLength * 0.5]
         } else {
-            let arrowCount = Int(floor(usableLength / Self.repeatStep)) + 1
+            let arrowCount = Int(floor(usableLength / arrow.repeatStep)) + 1
             let actualStep = usableLength / Float(max(1, arrowCount - 1))
             placements = (0..<arrowCount).map { endInset + Float($0) * actualStep }
         }
@@ -50,6 +47,7 @@ struct RoadDirectionArrowGeometryBuilder {
         for distance in placements {
             guard isAwayFromSharpTurn(distance: distance,
                                       tolerance: turnCheckTolerance,
+                                      turnThresholdRadians: arrow.turnThresholdRadians,
                                       points: renderPoints) else {
                 continue
             }
@@ -101,6 +99,7 @@ struct RoadDirectionArrowGeometryBuilder {
 
     private func isAwayFromSharpTurn(distance: Float,
                                      tolerance: Float,
+                                     turnThresholdRadians: Float,
                                      points: [SIMD2<Float>]) -> Bool {
         guard points.count >= 3 else {
             return true
@@ -118,7 +117,7 @@ struct RoadDirectionArrowGeometryBuilder {
 
             if index > 1,
                abs(distance - traversed) <= tolerance,
-               turnAngle(previous: points[index - 2], current: start, next: end) > Self.turnThresholdRadians {
+               turnAngle(previous: points[index - 2], current: start, next: end) > turnThresholdRadians {
                 return false
             }
 
@@ -126,7 +125,7 @@ struct RoadDirectionArrowGeometryBuilder {
 
             if index < points.count - 1,
                abs(distance - traversed) <= tolerance,
-               turnAngle(previous: start, current: end, next: points[index + 1]) > Self.turnThresholdRadians {
+               turnAngle(previous: start, current: end, next: points[index + 1]) > turnThresholdRadians {
                 return false
             }
         }

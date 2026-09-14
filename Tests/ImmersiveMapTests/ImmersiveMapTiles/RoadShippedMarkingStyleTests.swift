@@ -149,7 +149,7 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
 
     func testCrossingLinesRouteToTheZebraAndUnknownKindsStayHidden() {
         let marked = markingStyle("crossing_marked")
-        XCTAssertEqual(marked.roadDecorationKind, .zebraCrossing,
+        XCTAssertEqual(marked.roadDecorationKind, .zebraCrossing(),
                        "A measured crossing line stripes itself like the tagged ones")
         XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
                                                       properties: ["marking": stringValue("crossing_marked")],

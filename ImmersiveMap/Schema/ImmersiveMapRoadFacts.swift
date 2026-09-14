@@ -34,7 +34,7 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
         /// exactly where it ends on the ground, so the engine's road
         /// machinery leaves it alone: no clipping against carriageway
         /// surfaces, no junction making, no stitching.
-        case paint
+        case paint(ImmersiveMapRoadPaint)
     }
 
     public var kind: Kind
@@ -109,7 +109,14 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     }
 
     public var isShippedPaint: Bool {
-        kind == .paint
+        if case .paint = kind { return true }
+        return false
+    }
+
+    /// The paint the feature is, nil for anything that is not paint.
+    public var paint: ImmersiveMapRoadPaint? {
+        if case .paint(let paint) = kind { return paint }
+        return nil
     }
 
     /// The reading of the OpenStreetMap tags.
@@ -178,5 +185,39 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
             key += ";"
         }
         return key
+    }
+}
+
+/// A line of paint the source measured on the ground: what it marks, the
+/// colour the source states for it, and whether it is dashed where the
+/// source says.
+public struct ImmersiveMapRoadPaint: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        /// A pedestrian crossing, painted (`marked`) or not.
+        case crossing(marked: Bool)
+        /// The line between the two directions of travel.
+        case dividingLine
+        /// A line between lanes of one direction.
+        case laneSeparator
+        /// The line along the edge of the carriageway.
+        case edgeLine
+        /// The axis of a dedicated bus lane.
+        case busLane
+        /// The stretch of kerb at a bus stop.
+        case busStopKerb
+        /// A kind the reading does not know, with the source's word for it.
+        case other(String)
+    }
+
+    public var kind: Kind
+    /// The source says the paint is yellow; white otherwise.
+    public var isYellow: Bool
+    /// Whether the line is dashed, nil where the source does not say.
+    public var isDashed: Bool?
+
+    public init(kind: Kind, isYellow: Bool = false, isDashed: Bool? = nil) {
+        self.kind = kind
+        self.isYellow = isYellow
+        self.isDashed = isDashed
     }
 }

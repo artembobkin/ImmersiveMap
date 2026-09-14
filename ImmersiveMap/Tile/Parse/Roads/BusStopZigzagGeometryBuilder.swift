@@ -14,19 +14,13 @@ import simd
 /// than the interior right angles, and the old per-segment quads notched
 /// exactly there. Input is tile space (y down).
 struct BusStopZigzagGeometryBuilder {
-    /// One full tooth (out and back) per this stretch of axis.
-    private static let toothPeriodMetres: Float = 2.4
-    /// Half the sawtooth's sweep across the axis.
-    private static let amplitudeMetres: Float = 0.6
-    /// The stroke of the paint.
-    private static let strokeMetres: Float = 0.35
-
     func buildPolygons(points: [SIMD2<Float>],
-                       unitsPerMetre: Float) -> [ParsedPolygon] {
+                       unitsPerMetre: Float,
+                       zigzag: BusStopZigzagDecoration = BusStopZigzagDecoration()) -> [ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let total = Self.polylineLength(renderPoints)
-        let halfPeriod = Self.toothPeriodMetres * unitsPerMetre * 0.5
+        let halfPeriod = zigzag.toothPeriodMetres * unitsPerMetre * 0.5
         guard total >= halfPeriod * 2 else { return [] }
 
         // Sawtooth vertices alternating across the axis, distributed EVENLY:
@@ -38,7 +32,7 @@ struct BusStopZigzagGeometryBuilder {
         let stepLength = total / Float(steps)
         var teeth: [SIMD2<Float>] = []
         teeth.reserveCapacity(steps + 1)
-        let amplitude = Self.amplitudeMetres * unitsPerMetre
+        let amplitude = zigzag.amplitudeMetres * unitsPerMetre
         for step in 0...steps {
             let distance = Float(step) * stepLength
             guard let sample = Self.sample(atDistance: min(distance, total), points: renderPoints) else { continue }
@@ -48,7 +42,7 @@ struct BusStopZigzagGeometryBuilder {
         }
         guard teeth.count >= 2 else { return [] }
 
-        let stroke = Self.strokeMetres * unitsPerMetre
+        let stroke = zigzag.strokeMetres * unitsPerMetre
         guard let band = RoadMarkingStrokeGeometry.miteredBand(points: teeth, stroke: stroke) else { return [] }
         return [band]
     }

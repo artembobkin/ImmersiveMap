@@ -13,29 +13,17 @@ import simd
 /// edge, and the crossbar between their centrelines), emitted like the
 /// zebra's stripes and the arrows.
 struct BusLaneLetterGeometryBuilder {
-    /// The letter on the ground is about as tall as the lane is wide.
-    private static let letterHeightMetres: Float = 2.6
-    /// Half the spread of the legs at the feet.
-    private static let letterHalfWidthMetres: Float = 0.9
-    /// Road symbols are painted with the thick stroke.
-    private static let strokeMetres: Float = 0.4
-    /// Where the crossbar sits, as a fraction of the height from the feet.
-    private static let crossbarFraction: Float = 0.32
-    /// One letter per this stretch of lane; short stubs get a single letter
-    /// in the middle, and a stub shorter than two letters gets none.
-    private static let repeatStepMetres: Float = 30.0
-    private static let endInsetMetres: Float = 3.0
-
     func buildPolygons(points: [SIMD2<Float>],
-                       unitsPerMetre: Float) -> [ParsedPolygon] {
+                       unitsPerMetre: Float,
+                       letter: BusLaneLetterDecoration = BusLaneLetterDecoration()) -> [ParsedPolygon] {
         guard points.count >= 2, unitsPerMetre > 0 else { return [] }
         let renderPoints = TileCoordinateSpace.renderPoints(points)
         let totalLength = Self.polylineLength(renderPoints)
-        let height = Self.letterHeightMetres * unitsPerMetre
-        let endInset = Self.endInsetMetres * unitsPerMetre
+        let height = letter.letterHeightMetres * unitsPerMetre
+        let endInset = letter.endInsetMetres * unitsPerMetre
         guard totalLength >= height * 2 + endInset else { return [] }
 
-        let step = Self.repeatStepMetres * unitsPerMetre
+        let step = letter.repeatStepMetres * unitsPerMetre
         let usable = totalLength - endInset * 2
         let placements: [Float]
         if usable <= step {
@@ -52,7 +40,8 @@ struct BusLaneLetterGeometryBuilder {
             guard let sample = Self.sample(atDistance: distance, points: renderPoints) else { continue }
             polygons.append(contentsOf: Self.makeLetter(center: sample.position,
                                                         up: sample.tangent,
-                                                        unitsPerMetre: unitsPerMetre))
+                                                        unitsPerMetre: unitsPerMetre,
+                                                        letter: letter))
         }
         return polygons
     }
@@ -71,11 +60,12 @@ struct BusLaneLetterGeometryBuilder {
     /// is what keeps the shared apex edge seamless in Int16.
     private static func makeLetter(center: SIMD2<Float>,
                                    up: SIMD2<Float>,
-                                   unitsPerMetre: Float) -> [ParsedPolygon] {
+                                   unitsPerMetre: Float,
+                                   letter: BusLaneLetterDecoration) -> [ParsedPolygon] {
         let side = SIMD2<Float>(-up.y, up.x)
-        let halfHeight = letterHeightMetres * unitsPerMetre * 0.5
-        let halfWidth = letterHalfWidthMetres * unitsPerMetre
-        let halfStroke = strokeMetres * unitsPerMetre * 0.5
+        let halfHeight = letter.letterHeightMetres * unitsPerMetre * 0.5
+        let halfWidth = letter.letterHalfWidthMetres * unitsPerMetre
+        let halfStroke = letter.strokeMetres * unitsPerMetre * 0.5
         let apex = center + up * halfHeight
         let baseCenter = center - up * halfHeight
         let leftFoot = baseCenter + side * halfWidth
@@ -121,8 +111,8 @@ struct BusLaneLetterGeometryBuilder {
         // height, ending ON the legs' centrelines. The half-stroke it sinks
         // into each leg is one colour under one alpha, invisible; a bar cut
         // at the inner edges could round into a one-unit gap instead.
-        let leftBar = leftFoot + (apex - leftFoot) * crossbarFraction
-        let rightBar = rightFoot + (apex - rightFoot) * crossbarFraction
+        let leftBar = leftFoot + (apex - leftFoot) * letter.crossbarFraction
+        let rightBar = rightFoot + (apex - rightFoot) * letter.crossbarFraction
         let barLift = up * halfStroke
         let crossbar = ParsedPolygon.counterClockwiseConvexFan(
             [leftBar + barLift, rightBar + barLift, rightBar - barLift, leftBar - barLift]

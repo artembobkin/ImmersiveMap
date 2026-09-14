@@ -67,7 +67,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                              lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: bandUnits))],
             classPriority: Self.crosswalkClassPriority,
-            decoration: .zebraCrossing
+            decoration: .zebraCrossing()
         ))
     }
 
@@ -106,37 +106,36 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// machinery (surface clipping, junction insets, stitching) off it,
     /// because the line already ends exactly where the paint ends on the
     /// ground.
-    func shippedMarkingStyle(kind: String,
-                             props: [String: MvtValue],
+    func shippedMarkingStyle(_ paint: ImmersiveMapRoadPaint,
                              tile: Tile) -> FeatureStyle {
-        switch kind {
-        case "crossing_marked":
+        switch paint.kind {
+        case .crossing(marked: true):
             guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return crosswalkStyle(marked: true, tile: tile)
-        case "bus_lane":
+        case .busLane:
             // The lane's axis: the letter A stamped along it, feet toward
             // the driver, is what marks a dedicated lane on real asphalt.
             guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return busLaneLetterStyle()
-        case "bus_stop_zigzag":
+        case .busStopKerb:
             // The stop's stretch of kerb: the yellow sawtooth of the bus
             // stop marking, folded from the shipped axis by the builder.
             guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
             return busStopZigzagStyle()
-        case "crossing_unmarked":
+        case .crossing(marked: false):
             // A place to cross, not a thing to draw: same answer as for the
             // attribute-tagged unmarked crossings.
             return hiddenStyle
-        case "edge":
+        case .edgeLine:
             // The roadway edge is already drawn: every carriageway wears the
             // grey kerb along its outline. A white solid painted a step
             // inside it doubled the road's edge into two parallel strokes,
             // so the shipped edge line stays data-only. The paint in the
             // middle (dividing lines, separators) keeps drawing.
             return hiddenStyle
-        case "dividing", "lane_separator":
+        case .dividingLine, .laneSeparator:
             break
-        default:
+        case .other:
             // A kind this style does not know yet (a stop line, an arrow): a
             // newer tile against an older engine. Nothing is better than a
             // guess drawn wrong.
@@ -148,36 +147,31 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // The paint colour: white unless the source says yellow, and yellow
         // only where it means something (a centre line): a key is a baked
         // style, so every (kind, colour) pair must map to its own.
-        let isYellow = props["paint"]?.stringValue?.lowercased() == "yellow" && kind != "lane_separator"
+        let isYellow = paint.isYellow && paint.kind != .laneSeparator
         let color = isYellow ? Self.roadMarkingYellowColor : Self.roadMarkingColor
-        // Solid or dashed comes from the source where it says (`style`), with
-        // the kind's own default behind it: a separator is dashed, a
-        // dividing line dashed unless stated solid.
-        let dashed: Bool
-        switch props["style"]?.stringValue?.lowercased() {
-        case "solid": dashed = false
-        case "dashed": dashed = true
-        default: dashed = true
-        }
+        // Solid or dashed comes from the source where it says, with the
+        // kind's own default behind it: a separator is dashed, a dividing
+        // line dashed unless stated solid.
+        let dashed = paint.isDashed ?? true
         // A key is a baked style, so every (kind, colour, solid-or-dashed)
         // triple carries its own: a solid line is wider than a dashed one,
         // and two features under one key must bake identically.
         let key: UInt8
-        switch (kind, isYellow, dashed) {
-        case ("lane_separator", _, true): key = 58
-        case ("lane_separator", _, false): key = 64
-        case ("dividing", false, true): key = 60
-        case ("dividing", true, true): key = 61
-        case ("dividing", false, false): key = 65
-        case ("dividing", true, false): key = 66
+        switch (paint.kind, isYellow, dashed) {
+        case (.laneSeparator, _, true): key = 58
+        case (.laneSeparator, _, false): key = 64
+        case (.dividingLine, false, true): key = 60
+        case (.dividingLine, true, true): key = 61
+        case (.dividingLine, false, false): key = 65
+        case (.dividingLine, true, false): key = 66
         // 59, 62, 67 and 68 were the edge-line keys; retired with the edge
         // lines themselves, not to be reused for anything else.
         default: key = 60
         }
         let dashMetres: Double
         let gapMetres: Double
-        switch kind {
-        case "lane_separator":
+        switch paint.kind {
+        case .laneSeparator:
             dashMetres = Self.shippedSeparatorDashMetres
             gapMetres = Self.shippedSeparatorGapMetres
         default:
@@ -261,7 +255,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            lowZoomFadeMask: roadLowZoomFadeMask,
                            lineGeometry: LineGeometryStyle(lineWidth: 100)),
             classPriority: priority,
-            surfaceCutsPaint: reconstructed
+            surfacePaint: tunnel ? .cutsAll : reconstructed ? .cutsSynthesized : .keeps
         ))
     }
 
@@ -304,7 +298,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                fill: asphalt,
                                paint: comb,
                                classPriority: 45,
-                               decoration: .parkingBays))
+                               decoration: .parkingBays()))
     }
 
     static let parkingBayKey: UInt8 = 69
@@ -321,7 +315,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                              lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: 1))],
             classPriority: Self.crosswalkClassPriority,
-            decoration: .busLaneLetter
+            decoration: .busLaneLetter()
         ))
     }
 
@@ -337,7 +331,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                              lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: 1))],
             classPriority: Self.crosswalkClassPriority,
-            decoration: .busStopZigzag
+            decoration: .busStopZigzag()
         ))
     }
 

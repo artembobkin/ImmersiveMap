@@ -82,10 +82,32 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         guard case .road(var road) = style else {
             return style
         }
+        let facts = data.facts.road ?? .ground
+        road.level = Self.roadLevel(facts)
         road.tier = road.classPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
-        road.makesJunctions = data.facts.road?.isShippedPaint != true
+        road.makesJunctions = facts.isShippedPaint == false
             && road.classPriority >= Self.junctionMakingPriority
-        return .road(road)
+        let resolved = FeatureStyle.road(road)
+        // Without the streetscape the map is a street map: the roads are
+        // strokes by class and nothing is painted on them.
+        return data.streetscapeEnabled
+            ? resolved
+            : resolved.strippingRoadPaint(isShippedPaint: facts.isShippedPaint)
+    }
+
+    /// Where a road draws: its tagged structure, a roof the engine found,
+    /// or, for a road on the ground, its `layer`, so a street diving under
+    /// a bridge draws with the tunnels and a ramp climbing over one with
+    /// the bridges.
+    static func roadLevel(_ facts: ImmersiveMapRoadFacts) -> RoadLevel {
+        if facts.isTunnel {
+            return .tunnel
+        }
+        switch facts.structure {
+        case .tunnel: return .tunnel
+        case .bridge: return .bridge
+        case .ground: return facts.layer < 0 ? .tunnel : facts.layer > 0 ? .bridge : .ground
+        }
     }
 
     func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
@@ -124,7 +146,8 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             return transportationStyle(cls: cls, props: props,
                                        road: data.facts.road ?? .ground,
                                        tile: data.tile,
-                                       streetscapeEnabled: data.streetscapeEnabled)
+                                       streetscapeEnabled: data.streetscapeEnabled,
+                                       layerShipsMeasuredCrossings: data.layerShipsMeasuredCrossings)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":

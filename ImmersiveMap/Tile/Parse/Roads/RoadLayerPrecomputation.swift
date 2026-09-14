@@ -36,13 +36,11 @@ struct RoadSurfaceArea {
     /// ground surface must not clip the deck above.
     var structureKind: RoadStructureKind = .ground
     var layer: Int = 0
-    /// Whether the surface draws the tunnel look: tagged as a tunnel, or
-    /// found to be a tunnel's roof by `RoadTunnelSurfaceResolver`. A tunnel
-    /// surface is a bare translucent fill: every line of shipped paint
-    /// inside it is clipped away, unlike on any other surface.
-    var isTunnel: Bool = false
-    /// See `RoadStyle.surfaceCutsPaint`: true for a reconstructed
-    /// crossing, false for a hand-mapped carriageway area.
+    /// The surface cuts the shipped paint inside it too
+    /// (`RoadSurfacePaintRule.cutsAll`): a tunnel's roof is a bare fill.
+    var cutsShippedPaint: Bool = false
+    /// The surface cuts the synthesized paint of the roads inside it
+    /// (`RoadSurfacePaintRule.cutsSynthesized` or `cutsAll`).
     var cutsPaint: Bool = false
     /// The street identity of the piece as the style read it, empty when
     /// the source ships none. Only the gap bridger reads it: a slit is
@@ -150,10 +148,10 @@ struct RoadLayerPrecomputation {
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
                                                             classPriority: style.classPriority,
                                                             bounds: (lower, upper),
-                                                            structureKind: RoadStructureKind(road: road),
+                                                            structureKind: RoadStructureKind(level: style.level),
                                                             layer: road.layer,
-                                                            isTunnel: road.isTunnel,
-                                                            cutsPaint: style.surfaceCutsPaint,
+                                                            cutsShippedPaint: style.surfacePaint == .cutsAll,
+                                                            cutsPaint: style.surfacePaint != .keeps,
                                                             street: road.streetIdentity,
                                                             featureIndex: featureIndex))
                     }
@@ -189,7 +187,7 @@ struct RoadLayerPrecomputation {
                                                     bounds: (lower, upper),
                                                     structureKind: owner.structureKind,
                                                     layer: owner.layer,
-                                                    isTunnel: owner.isTunnel,
+                                                    cutsShippedPaint: owner.cutsShippedPaint,
                                                     cutsPaint: owner.cutsPaint,
                                                     street: owner.street))
             }
@@ -204,26 +202,27 @@ struct RoadLayerPrecomputation {
         // outside keep drawing and end flush at the surface's edge.
         var paintRawLinesByFeatureIndex = rawLinesByFeatureIndex
         if surfaceAreas.isEmpty == false {
-            let tunnelSurfaces = surfaceAreas.filter(\.isTunnel)
+            let paintCuttingSurfaces = surfaceAreas.filter(\.cutsShippedPaint)
             for featureIndex in 0..<rawLinesByFeatureIndex.count where rawLinesByFeatureIndex[featureIndex].isEmpty == false {
                 // Shipped paint already ends exactly where it ends on the
                 // ground: a stop line or a crossing lies INSIDE the surface
                 // polygons on purpose, and clipping it against them would
-                // delete it. The one exception is a tunnel: the source
-                // measures the paint of the road down there like any other,
-                // but from above there is only the tunnel's roof to see, a
-                // bare translucent fill, so the paint inside it goes.
+                // delete it. The one exception is a surface whose style cuts
+                // all paint (a tunnel's roof: the source measures the paint
+                // of the road down there like any other, but from above
+                // there is only the roof to see), where the paint inside
+                // goes.
                 let road = featureFacts[featureIndex].road ?? .ground
                 guard road.isShippedPaint == false else {
-                    guard tunnelSurfaces.isEmpty == false else { continue }
+                    guard paintCuttingSurfaces.isEmpty == false else { continue }
                     rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
-                        RoadSurfaceClipper.clip(polyline: $0, outside: tunnelSurfaces)
+                        RoadSurfaceClipper.clip(polyline: $0, outside: paintCuttingSurfaces)
                     }
                     paintRawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex]
                     continue
                 }
                 let priority = roadStyles[featureIndex]?.classPriority ?? 0
-                let structure = RoadStructureKind(road: road)
+                let structure = RoadStructureKind(level: roadStyles[featureIndex]?.level ?? .ground)
                 let layerValue = road.layer
                 let owners = surfaceAreas.filter {
                     $0.classPriority >= priority
@@ -373,17 +372,11 @@ struct RoadLayerPrecomputation {
 }
 
 /// What the readers know about the layer a feature comes from, decided once
-/// per layer: whether it takes the separate-road path, whether its
-/// measured crossings supersede the attribute-tagged ones, and the pre-pass.
+/// per layer: whether it takes the separate-road path, and the pre-pass.
 struct RoadLayerContext {
     /// The separate-road path: seamless ribbons with the casing under the
     /// fill, sorted by structure and class. Only the road layer, from the
     /// zoom the options name; every other line draws as ground geometry.
     let usesSeparateRoadRendering: Bool
-    /// Where the tiles ship measured crossing lines, the attribute
-    /// tagged crossings of the same layer are the same crossings seen
-    /// through OSM tags: drawing both stripes the junction twice. The
-    /// measured line wins.
-    let hasShippedCrossings: Bool
     let precomputation: RoadLayerPrecomputation
 }

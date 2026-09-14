@@ -29,14 +29,14 @@ final class ImmersiveMapTilesSchemaTests: XCTestCase {
     func testANegativeLayerAloneIsNotATunnel() throws {
         // A street diving under a bridge ships `layer=-1` and no tunnel
         // flag: it is in full view from above. It still draws under its
-        // neighbours, which is the draw bucket's reading of the layer.
+        // neighbours, which is the built-in style's reading of the layer.
         let road = try XCTUnwrap(facts(layer: "transportation", ["layer": .int(-1)], geometry: .linestring).road)
         XCTAssertEqual(road.structure, .ground)
         XCTAssertFalse(road.isTunnel)
-        XCTAssertEqual(RoadStructureKind(road: road), .tunnel)
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.roadLevel(road), .tunnel)
         let ramp = try XCTUnwrap(facts(layer: "transportation", ["layer": .int(1)], geometry: .linestring).road)
         XCTAssertEqual(ramp.structure, .ground)
-        XCTAssertEqual(RoadStructureKind(road: ramp), .bridge)
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.roadLevel(ramp), .bridge)
     }
 
     func testTheSurfacesAndTheLotAreReadByTheirSubclass() throws {
@@ -66,10 +66,26 @@ final class ImmersiveMapTilesSchemaTests: XCTestCase {
 
     func testMeasuredPaintIsPaintWhateverElseItCarries() {
         let paint = facts(layer: "streetscape",
-                          ["marking": .string("dividing"), "subclass": .string("junction_area")],
+                          ["marking": .string("dividing"), "subclass": .string("junction_area"),
+                           "paint": .string("yellow"), "style": .string("solid")],
                           geometry: .linestring).road
-        XCTAssertEqual(paint?.kind, .paint)
+        XCTAssertEqual(paint?.paint, ImmersiveMapRoadPaint(kind: .dividingLine, isYellow: true, isDashed: false))
         XCTAssertTrue(paint?.isShippedPaint == true)
+    }
+
+    func testTheKindsOfMeasuredPaint() {
+        func kind(_ marking: String) -> ImmersiveMapRoadPaint.Kind? {
+            facts(layer: "streetscape", ["marking": .string(marking)], geometry: .linestring).road?.paint?.kind
+        }
+        XCTAssertEqual(kind("crossing_marked"), .crossing(marked: true))
+        XCTAssertEqual(kind("crossing_unmarked"), .crossing(marked: false))
+        XCTAssertEqual(kind("lane_separator"), .laneSeparator)
+        XCTAssertEqual(kind("edge"), .edgeLine)
+        XCTAssertEqual(kind("bus_lane"), .busLane)
+        XCTAssertEqual(kind("bus_stop_zigzag"), .busStopKerb)
+        XCTAssertEqual(kind("stop_line"), .other("stop_line"))
+        XCTAssertNil(facts(layer: "streetscape", ["marking": .string("dividing")], geometry: .linestring).road?.paint?.isDashed,
+                     "The source did not say")
     }
 
     func testABuildingCarriesItsHeights() {

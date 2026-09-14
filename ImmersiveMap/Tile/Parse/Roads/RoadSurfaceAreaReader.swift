@@ -35,10 +35,8 @@ struct RoadSurfaceAreaReader {
                 into result: inout ReadingStageResult) {
         let clippedExterior = parsedGeometry.clipped.exterior
         let clippedInteriors = parsedGeometry.clipped.interiors
-        let physicalStructure = RoadStructureKind(road: road)
-        // A surface on the ground joins the automobile tier whatever its
-        // class: it is a carriageway.
-        let structure: RoadStructureKind = physicalStructure == .ground ? .automobileGround : physicalStructure
+        let physicalStructure = RoadStructureKind(level: style.level)
+        let structure = RoadStructureKind(level: style.level, tier: style.tier)
         let layer = road.layer
         for roadPass in style.orderedPasses {
             let pass = roadPass.pass
@@ -70,7 +68,8 @@ struct RoadSurfaceAreaReader {
                         polygons.append(kerb)
                     }
                 }
-            case .detail where style.decoration == .parkingBays:
+            case .detail:
+                guard case .parkingBays(let bays) = style.decoration else { continue }
                 // The parking-bay comb: short stripes laid out by the
                 // builder in tile space (the ring already is), each
                 // tessellated as its own point-locked stroke with hard ends.
@@ -82,7 +81,8 @@ struct RoadSurfaceAreaReader {
                 var stripes = parkingBayBuilder.buildStripes(
                     exterior: clippedExterior,
                     unitsPerMetre: unitsPerMetre,
-                    parallel: baysParallel
+                    parallel: baysParallel,
+                    layout: bays
                 )
                 // Where a carriageway, a junction or a bus lane overlaps the
                 // lot, that ground is theirs: the comb ends at their edge
@@ -95,7 +95,7 @@ struct RoadSurfaceAreaReader {
                     stripes = stripes.flatMap { RoadSurfaceClipper.clip(polyline: $0, outside: owners) }
                         .filter { stripe in
                             guard let first = stripe.first, let last = stripe.last else { return false }
-                            return simd_distance(first, last) >= ParkingBayGeometryBuilder.minimumStripeMetres * unitsPerMetre
+                            return simd_distance(first, last) >= bays.minimumStripeMetres * unitsPerMetre
                         }
                 }
                 for stripe in stripes {

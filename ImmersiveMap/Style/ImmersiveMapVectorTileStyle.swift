@@ -30,6 +30,12 @@ public struct ImmersiveMapFeatureStyleContext {
     /// surfaces and paint of the second archive sit flush on it; with it
     /// off, a road is a stroke whose width is the class's alone.
     public let streetscapeEnabled: Bool
+    /// The feature's layer carries measured, marked crossings
+    /// (`ImmersiveMapRoadPaint.Kind.crossing`): a fact about the layer the
+    /// parser derives from the reading before any feature is styled. A
+    /// style that also stripes the crossings read off a footway's own tag
+    /// reads it to draw each crossing once.
+    public let layerShipsMeasuredCrossings: Bool
 
     init(styleID: String, data: DetFeatureStyleData) {
         self.styleID = styleID
@@ -46,6 +52,7 @@ public struct ImmersiveMapFeatureStyleContext {
         self.properties = ImmersiveMapFeatureProperties(values: data.properties)
         self.facts = data.facts
         self.streetscapeEnabled = data.streetscapeEnabled
+        self.layerShipsMeasuredCrossings = data.layerShipsMeasuredCrossings
     }
 }
 

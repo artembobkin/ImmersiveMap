@@ -36,6 +36,33 @@ public enum RoadTier: Sendable {
     case automobile
 }
 
+/// Where a road draws in the road stack: tunnels under everything on the
+/// ground, bridges over everything. The style decides from the facts (a
+/// tunnel's roof, a road diving under a bridge with only a negative
+/// `layer`, a ramp with a positive one).
+public enum RoadLevel: Sendable {
+    case tunnel
+    case ground
+    case bridge
+}
+
+/// What a carriageway surface does to the paint of the roads inside it,
+/// on top of clipping their ribbons.
+public enum RoadSurfacePaintRule: Sendable {
+    /// The paint runs on over the surface: a hand-mapped `area:highway`
+    /// typically covers a whole street's carriageway, and the street
+    /// keeps its markings.
+    case keeps
+    /// The paint the engine synthesizes from a road's lane count ends at
+    /// the surface's edge: a junction reconstructed from the road graph
+    /// has no lane paint inside it, and the measured paint the source
+    /// ships is drawn instead.
+    case cutsSynthesized
+    /// Every line of paint inside the surface is cut, the measured paint
+    /// too: a tunnel's roof seen from above is a bare fill.
+    case cutsAll
+}
+
 /// How a label's text is drawn.
 public struct LabelTextStyle: Sendable {
     /// The style identity the label's glyph runs are grouped by. Set by the
@@ -216,11 +243,13 @@ public struct RoadStyle: Sendable {
     /// every fill: lane lines, a crossing's band, the parking-bay comb.
     public var paint: [LinePass]
     public var overlay: LinePass?
-    /// The road's place among the roads of its structure: higher draws
-    /// over lower, and a carriageway surface owns the ribbons of the same
-    /// or a lower class inside it.
+    /// The road's place among the roads of its level: higher draws over
+    /// lower, and a carriageway surface owns the ribbons of the same or a
+    /// lower class inside it.
     public var classPriority: Int
-    /// The network the road draws in (see `RoadTier`).
+    /// Where the road draws in the stack (see `RoadLevel`).
+    public var level: RoadLevel
+    /// The network the road draws in on the ground (see `RoadTier`).
     public var tier: RoadTier
     /// Whether the road makes a junction for the paint on another road: a
     /// lane line running into it stops short of the crossing. True for a
@@ -229,13 +258,10 @@ public struct RoadStyle: Sendable {
     public var makesJunctions: Bool
     /// The figure stamped along the geometry instead of a plain stroke.
     public var decoration: RoadDecorationKind
-    /// Whether a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
-    /// also cuts the PAINT of the roads inside it, on top of cutting their
-    /// ribbons. True for a junction reconstructed from the road graph: there
-    /// is no lane paint inside a crossing. False for a hand-mapped
-    /// `area:highway`, which typically covers a whole street's carriageway:
-    /// the street keeps its paint, drawn over the surface.
-    public var surfaceCutsPaint: Bool
+    /// What a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
+    /// does to the paint of the roads inside it (see
+    /// `RoadSurfacePaintRule`). Ignored for a road that is no surface.
+    public var surfacePaint: RoadSurfacePaintRule
     /// The name laid along the road, nil for a road that carries none.
     public var label: LabelTextStyle?
     public var placement: LinePlacement
@@ -246,10 +272,11 @@ public struct RoadStyle: Sendable {
                 paint: [LinePass] = [],
                 overlay: LinePass? = nil,
                 classPriority: Int = 0,
+                level: RoadLevel = .ground,
                 tier: RoadTier = .pedestrian,
                 makesJunctions: Bool = false,
                 decoration: RoadDecorationKind = .none,
-                surfaceCutsPaint: Bool = false,
+                surfacePaint: RoadSurfacePaintRule = .keeps,
                 label: LabelTextStyle? = nil,
                 placement: LinePlacement = .ground) {
         self.shadow = shadow
@@ -258,10 +285,11 @@ public struct RoadStyle: Sendable {
         self.paint = paint
         self.overlay = overlay
         self.classPriority = classPriority
+        self.level = level
         self.tier = tier
         self.makesJunctions = makesJunctions
         self.decoration = decoration
-        self.surfaceCutsPaint = surfaceCutsPaint
+        self.surfacePaint = surfacePaint
         self.label = label
         self.placement = placement
     }

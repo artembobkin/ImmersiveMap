@@ -41,7 +41,7 @@ final class RoadParkingAreaTests: XCTestCase {
                        .parkingLot(baysParallel: false),
                        "A parking lot is read as a carriageway surface")
         XCTAssertFalse(lot.surfaceAreaCutsPaint, "and it cuts nobody's paint")
-        XCTAssertEqual(lot.roadDecorationKind, .parkingBays)
+        XCTAssertEqual(lot.roadDecorationKind, .parkingBays())
         let roles = lot.resolvedLineRenderPasses.map(\.roadPassRole)
         XCTAssertTrue(roles.contains(.fill), "The asphalt")
         XCTAssertTrue(roles.contains(.casing), "the kerb on its outline")
@@ -145,7 +145,7 @@ final class RoadParkingAreaTests: XCTestCase {
         let lane = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_lane")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertEqual(lane.roadDecorationKind, .busLaneLetter,
+        XCTAssertEqual(lane.roadDecorationKind, .busLaneLetter(),
                        "The lane's axis carries the letter A, not a recolored surface")
         XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
                                                       properties: ["marking": value("bus_lane")],
@@ -179,7 +179,7 @@ final class RoadParkingAreaTests: XCTestCase {
         let stop = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_stop_zigzag")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertEqual(stop.roadDecorationKind, .busStopZigzag)
+        XCTAssertEqual(stop.roadDecorationKind, .busStopZigzag())
         XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
                                                       properties: ["marking": value("bus_stop_zigzag")],
                                                       tile: Tile(x: 39615, y: 20486, z: 16)).road?.isShippedPaint == true)

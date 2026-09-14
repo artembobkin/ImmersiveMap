@@ -54,14 +54,6 @@ final class TileMvtParser {
         roadLayerNames.contains(layerName) || layerName == streetscapeLayerName
     }
 
-    /// With the streetscape off, the parser bakes no road paint: see
-    /// `FeatureStyle.strippingRoadPaint()`. Decided here rather than in the
-    /// style so that every style, the built-in one and a custom one alike,
-    /// draws the same bare street map by default.
-    private var stripsRoadPaint: Bool {
-        options.streetscapeEnabled == false
-    }
-
     init(mapStyle: MapStyleRuntime,
          labelDecisions: TileLabelDecisions,
          options: TileParseOptions) {
@@ -157,29 +149,30 @@ final class TileMvtParser {
                         featureFacts[index].road?.isTunnelRoof = true
                     }
                 }
+                // A fact about the layer the style is told along with each
+                // feature: whether the source measured the crossings, so a
+                // style that also stripes the crossings read off a footway's
+                // tag draws each crossing once.
+                let layerShipsMeasuredCrossings = featureFacts.contains {
+                    if case .crossing(marked: true)? = $0.road?.paint?.kind { return true }
+                    return false
+                }
                 for (featureIndex, feature) in layer.features.enumerated() {
-                    var style = mapStyle.makeStyle(data: DetFeatureStyleData(
+                    featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
                         properties: featureAttributes[featureIndex],
                         tile: tile,
                         facts: featureFacts[featureIndex],
                         streetscapeEnabled: options.streetscapeEnabled,
-                        geometryType: feature.type
-                    ))
-                    if stripsRoadPaint, isSeparateRoadLayer(layerName) {
-                        style = style.strippingRoadPaint(
-                            isShippedPaint: featureFacts[featureIndex].road?.isShippedPaint == true)
-                    }
-                    featureStyles.append(style)
+                        geometryType: feature.type,
+                        layerShipsMeasuredCrossings: layerShipsMeasuredCrossings
+                    )))
                 }
             }
 
             let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureFacts: featureFacts)
             let roads = RoadLayerContext(
                 usesSeparateRoadRendering: usesSeparateRoadRendering,
-                hasShippedCrossings: zip(featureFacts, featureStyles).contains {
-                    $0.road?.isShippedPaint == true && $1.roadStyle?.decoration == .zebraCrossing
-                },
                 precomputation: usesSeparateRoadRendering
                     ? RoadLayerPrecomputation.build(geometry: layerGeometry,
                                                     featureFacts: featureFacts,

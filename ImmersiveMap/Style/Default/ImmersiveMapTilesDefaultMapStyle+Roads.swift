@@ -29,7 +29,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                              props: [String: MvtValue],
                              road: ImmersiveMapRoadFacts,
                              tile: Tile,
-                             streetscapeEnabled: Bool = true) -> FeatureStyle {
+                             streetscapeEnabled: Bool = true,
+                             layerShipsMeasuredCrossings: Bool = false) -> FeatureStyle {
         let tileZoom = tile.z
         let isTunnel = road.isTunnel
         let subclass = props["subclass"]?.stringValue?.lowercased()
@@ -39,10 +40,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // and no name, only what it is (`marking`) and what colour it is
         // painted (`paint`), and it bypasses every rule below, which are all
         // about roads.
-        if road.isShippedPaint {
-            return shippedMarkingStyle(kind: props["marking"]?.stringValue?.lowercased() ?? "",
-                                       props: props,
-                                       tile: tile)
+        if let paint = road.paint {
+            return shippedMarkingStyle(paint, tile: tile)
         }
         // A `<class>_construction` segment belongs to its base class: the
         // source ships it from the same zoom (a z4 tile carries motorway and
@@ -66,7 +65,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // carriageway carries where it is, which way it faces and how long it
         // is, which is everything a zebra is made of. It draws as stripes on
         // the asphalt instead of as a footway ribbon.
+        // Not in a tunnel, where there is only the roof to see, and not
+        // where the source measured the crossings itself: those are the
+        // same crossings seen through OSM tags, and each is striped once.
         if let crossing = Self.crossingMarking(props: props), tileZoom >= Self.streetDetailMinimumTileZoom {
+            guard isTunnel == false, layerShipsMeasuredCrossings == false else {
+                return hiddenStyle
+            }
             return crosswalkStyle(marked: crossing, tile: tile)
         }
         // A junction area: the carriageway as the tiles map it, a polygon.

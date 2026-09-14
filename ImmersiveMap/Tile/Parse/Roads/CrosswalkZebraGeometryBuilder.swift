@@ -6,18 +6,13 @@ import simd
 
 struct CrosswalkZebraGeometryBuilder {
     private static let epsilon: Float = 0.0001
-    private static let minimumCrossingLength: Float = 2.0
-    private static let minimumStripeWidth: Float = 2.0
-    private static let stripeFillFactor: Float = 0.72
-    private static let stripeStepDivisor: Float = 5.0
-    private static let minimumStripeStep: Float = 3.0
-    private static let endInsetFactor: Float = 0.05
 
     /// Input polyline is TILE space (y down); the first line of the body is
     /// the decoration path's one named entry into render space, and the
     /// output quads are quantized render-space vertices.
     func buildPolygons(points: [SIMD2<Float>],
-                       zoneWidth: Float) -> [ParsedPolygon] {
+                       zoneWidth: Float,
+                       zebra: ZebraCrossingDecoration = ZebraCrossingDecoration()) -> [ParsedPolygon] {
         guard points.count >= 2 else {
             return []
         }
@@ -25,7 +20,7 @@ struct CrosswalkZebraGeometryBuilder {
         let renderPoints = TileCoordinateSpace.renderPoints(points)
 
         let crossingLength = polylineLength(points: renderPoints)
-        guard crossingLength >= Self.minimumCrossingLength else {
+        guard crossingLength >= zebra.minimumCrossingLength else {
             return []
         }
 
@@ -34,13 +29,13 @@ struct CrosswalkZebraGeometryBuilder {
             return []
         }
 
-        let usableZoneWidth = max(zoneWidth, Self.minimumStripeWidth)
-        let stripeStep = max(Self.minimumStripeStep, usableZoneWidth / Self.stripeStepDivisor)
-        let stripeWidth = max(Self.minimumStripeWidth, stripeStep * Self.stripeFillFactor)
+        let usableZoneWidth = max(zoneWidth, zebra.minimumStripeWidth)
+        let stripeStep = max(zebra.minimumStripeStep, usableZoneWidth / zebra.stripeStepDivisor)
+        let stripeWidth = max(zebra.minimumStripeWidth, stripeStep * zebra.stripeFillFactor)
         let halfZoneWidth = usableZoneWidth * 0.5
         let center = point(atDistance: crossingLength * 0.5, points: renderPoints)
-        let halfLength = max(Self.minimumCrossingLength * 0.5,
-                             crossingLength * (0.5 - Self.endInsetFactor))
+        let halfLength = max(zebra.minimumCrossingLength * 0.5,
+                             crossingLength * (0.5 - zebra.endInsetFactor))
         let normal = SIMD2<Float>(-direction.y, direction.x)
 
         var polygons: [ParsedPolygon] = []
@@ -49,7 +44,7 @@ struct CrosswalkZebraGeometryBuilder {
         var stripeStart = -halfLength
         while stripeStart < halfLength - Self.epsilon {
             let stripeEnd = min(stripeStart + stripeWidth, halfLength)
-            let stripeHalfWidth = max((stripeEnd - stripeStart) * 0.5, Self.minimumStripeWidth * 0.5)
+            let stripeHalfWidth = max((stripeEnd - stripeStart) * 0.5, zebra.minimumStripeWidth * 0.5)
             let stripeOffset = (stripeStart + stripeEnd) * 0.5
             let stripeCenter = center + direction * stripeOffset
 

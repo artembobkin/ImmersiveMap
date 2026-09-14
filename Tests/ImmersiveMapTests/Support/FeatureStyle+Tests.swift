@@ -67,5 +67,6 @@ extension FeatureStyle {
     var roadClassPriority: Int { roadStyle?.classPriority ?? 0 }
     var roadTier: RoadTier { roadStyle?.tier ?? .pedestrian }
     var roadDecorationKind: RoadDecorationKind { roadStyle?.decoration ?? .none }
-    var surfaceAreaCutsPaint: Bool { roadStyle?.surfaceCutsPaint ?? false }
+    var surfaceAreaCutsPaint: Bool { (roadStyle?.surfacePaint ?? .keeps) != .keeps }
+    var roadLevel: RoadLevel { roadStyle?.level ?? .ground }
 }

@@ -206,7 +206,7 @@ enum RoadSurfaceGapBridger {
         for featureIndex in linesByFeatureIndex.indices {
             let lines = linesByFeatureIndex[featureIndex]
             guard lines.isEmpty == false else { continue }
-            guard featureStyles[featureIndex].roadStyle != nil,
+            guard let style = featureStyles[featureIndex].roadStyle,
                   let road = featureFacts[featureIndex].road, road.isShippedPaint == false else {
                 continue
             }
@@ -216,7 +216,7 @@ enum RoadSurfaceGapBridger {
             // whatever street it belongs to: a junction area along the way
             // covers the line too, and forgetting it would read the span
             // through a small junction as a slit.
-            let structure = RoadStructureKind(road: road)
+            let structure = RoadStructureKind(level: style.level)
             let ownerIndices = candidateIndices.filter {
                 surfaceAreas[$0].structureKind == structure
                     && surfaceAreas[$0].layer == road.layer
