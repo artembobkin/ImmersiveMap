@@ -85,12 +85,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         road.tier = road.classPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
         road.makesJunctions = facts.isShippedPaint == false
             && road.classPriority >= Self.junctionMakingPriority
-        let resolved = FeatureStyle.road(road)
-        // Without the streetscape the map is a street map: the roads are
-        // strokes by class and nothing is painted on them.
-        return data.streetscapeEnabled
-            ? resolved
-            : resolved.strippingRoadPaint(isShippedPaint: facts.isShippedPaint)
+        return .road(road)
     }
 
     /// Where a road draws: its tagged structure, a roof the engine found,

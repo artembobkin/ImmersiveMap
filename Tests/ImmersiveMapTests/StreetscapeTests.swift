@@ -149,13 +149,6 @@ final class StreetscapeTests: XCTestCase {
         XCTAssertFalse(stroke.lineRenderPasses.contains { $0.roadPassRole == .detail }, "and nothing painted on it")
     }
 
-    func testStrippingRoadPaintLeavesAGroundStyleAlone() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        let water = style.makeStyle(data: DetFeatureStyleData(layerName: "water", properties: [:], tile: tile))
-        XCTAssertEqual(water.strippingRoadPaint().key, water.key)
-        XCTAssertEqual(water.strippingRoadPaint().color, water.color)
-    }
-
     // MARK: - The streetscape layer folds into the road layer
 
     private func attributes(of feature: MvtDecodedFeature, in layer: MvtDecodedLayer, data: Data) -> [String: MvtValue] {

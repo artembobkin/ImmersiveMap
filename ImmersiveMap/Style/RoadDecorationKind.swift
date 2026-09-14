@@ -23,23 +23,11 @@ public enum RoadDecorationKind: Equatable, Sendable {
     /// A bus stop's stretch of kerb, folded into the yellow sawtooth (see
     /// `BusStopZigzagGeometryBuilder`).
     case busStopZigzag(BusStopZigzagDecoration = BusStopZigzagDecoration())
-
-    public var isNone: Bool {
-        if case .none = self { return true }
-        return false
-    }
-
-    public var isZebraCrossing: Bool {
-        if case .zebraCrossing = self { return true }
-        return false
-    }
 }
 
-/// The dimensions of a zebra, in tile units, derived from the band the
-/// paint stroke states: the stripe step is the band divided by
-/// `stripeStepDivisor` (floored at `minimumStripeStep`), the stripe fills
-/// `stripeFillFactor` of its step, and the figure is inset from each end
-/// of the crossing by `endInsetFactor` of its length.
+/// The arrows along a one-way road, in tile units: how far apart they
+/// repeat, the shortest fragment that carries one, and the turn an arrow
+/// keeps clear of.
 public struct OnewayArrowDecoration: Equatable, Sendable {
     /// The distance between arrows along the road, in tile units.
     public var repeatStep: Float
@@ -62,6 +50,11 @@ public struct OnewayArrowDecoration: Equatable, Sendable {
     }
 }
 
+/// The dimensions of a zebra, in tile units, derived from the band the
+/// paint stroke states: the stripe step is the band divided by
+/// `stripeStepDivisor` (floored at `minimumStripeStep`), the stripe fills
+/// `stripeFillFactor` of its step, and the figure is inset from each end
+/// of the crossing by `endInsetFactor` of its length.
 public struct ZebraCrossingDecoration: Equatable, Sendable {
     public var minimumCrossingLength: Float
     public var minimumStripeWidth: Float

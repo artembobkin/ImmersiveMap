@@ -41,6 +41,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // painted (`paint`), and it bypasses every rule below, which are all
         // about roads.
         if let paint = road.paint {
+            // Without the streetscape the map is a street map, and measured
+            // paint is not part of one, wherever it arrived from.
+            guard streetscapeEnabled else {
+                return hiddenStyle
+            }
             return shippedMarkingStyle(paint, tile: tile)
         }
         // A `<class>_construction` segment belongs to its base class: the
@@ -97,12 +102,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return junctionAreaStyle(cls: effectiveClass,
                                      tunnel: isTunnel,
                                      tile: tile,
-                                     reconstructed: true)
+                                     reconstructed: true,
+                                     streetscapeEnabled: streetscapeEnabled)
         case .parkingLot:
             // A surface parking lot: its own asphalt with a kerb, like a
             // junction area of the service tier, and from street zoom the
             // synthesized comb of parking-bay stripes on top.
-            return parkingAreaStyle(tile: tile)
+            return parkingAreaStyle(tile: tile, streetscapeEnabled: streetscapeEnabled)
         case .centreline, .paint:
             break
         }
