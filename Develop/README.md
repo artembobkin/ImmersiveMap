@@ -45,12 +45,10 @@ Same hand-written `.xcodeproj` layout as the examples: a shared scheme under
 `Develop` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`. A new
 project is a copy of a sibling with the names changed.
 
-The hosted tile service is public and needs no key. The headers helper only
-forwards an `Authorization` header when `IMMERSIVEMAP_API_KEY` is set in the
-environment or in the gitignored `LocalSecrets.plist` at the repository root,
-which is for pointing the app at a private endpoint of your own. The shared
-scheme carries the variable with an empty value, and nothing secret is ever
-committed, here least of all.
+The hosted tile service is public and needs no key, and nothing secret is
+ever committed, here least of all. An app that has to reach a private endpoint
+of your own passes its headers through `.tileURLTemplate(_:headers:)` from a
+value that lives outside the repository.
 
 Build from the CLI:
 

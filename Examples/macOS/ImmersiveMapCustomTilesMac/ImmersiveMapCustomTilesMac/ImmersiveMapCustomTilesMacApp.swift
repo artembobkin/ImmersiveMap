@@ -26,19 +26,14 @@ struct ImmersiveMapCustomTilesMacApp: App {
 private struct CustomTilesScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var templateText = Self.defaultTemplate
-    @State private var apiKey = Self.environmentAPIKey
+    @State private var apiKey = ""
     @State private var appliedTemplate = Self.defaultTemplate
-    @State private var appliedAPIKey = Self.environmentAPIKey
+    @State private var appliedAPIKey = ""
     @State private var usesCustomStyle = true
 
     /// A public OpenMapTiles-schema endpoint, used so the example starts with
     /// something on screen. Replace it with your own.
     private static let defaultTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
-
-    /// Prefills the key field from the local environment or the gitignored
-    /// `LocalSecrets.plist`, so the key stays on this machine and never lands
-    /// in the repository. Empty means anonymous.
-    private static let environmentAPIKey = localAPIKey() ?? ""
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -119,25 +114,4 @@ private struct CustomTilesScreen: View {
         bearing: 0,
         pitch: 0.2
     )
-}
-
-/// The environment wins (the scheme carries an empty placeholder for it);
-/// otherwise the key comes from the gitignored `LocalSecrets.plist` at the
-/// repository root, found from this source file's path, which exists wherever
-/// the app can also read it: on the Mac and in the simulator. A physical
-/// device sees neither and uses the scheme variable.
-private func localAPIKey() -> String? {
-    if let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
-       key.isEmpty == false {
-        return key
-    }
-    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    while directory.path != "/" {
-        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-            let secrets = directory.appendingPathComponent("LocalSecrets.plist")
-            return NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String
-        }
-        directory = directory.deletingLastPathComponent()
-    }
-    return nil
 }

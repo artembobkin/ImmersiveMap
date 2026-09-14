@@ -50,17 +50,13 @@ final class RealTileEndpointDiagnosticTests: XCTestCase {
         if let reason = MetalTestEnvironment.unavailabilityReason() {
             throw XCTSkip(reason)
         }
-        guard let key = Self.localAPIKey(), key.isEmpty == false else {
-            throw XCTSkip("No IMMERSIVEMAP_API_KEY in LocalSecrets.plist")
-        }
         // Deliberately the live endpoint: reaching it is this diagnostic's
         // whole purpose, behind the opt-in gate above. The base is the
         // tileless fixture settings, so the shipped defaults are never
         // rebuilt by accident and both disk caches stay off (every run
         // fetches fresh tiles).
         let settings = FixtureTiles.tilelessSettings()
-            .tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt",
-                             headers: ["Authorization": "Bearer \(key)"])
+            .tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt")
         let recorder = ImmersiveMapStillRecorder()
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 55.75, longitudeDegrees: 37.61, zoom: zoom)
         var configuration = ImmersiveMapStillConfiguration(width: 900, height: 900, pixelsPerPoint: 1)
@@ -95,17 +91,5 @@ final class RealTileEndpointDiagnosticTests: XCTestCase {
         let share = Double(chromatic) / Double(max(total, 1))
         XCTAssertGreaterThan(share, 0.05,
                              "Centre is \(Int(share * 100))% chromatic (frame at \(url.path)); real ground should paint it")
-    }
-
-    private static func localAPIKey(named name: String = "IMMERSIVEMAP_API_KEY") -> String? {
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while directory.path != "/" {
-            if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-                let secrets = directory.appendingPathComponent("LocalSecrets.plist")
-                return NSDictionary(contentsOf: secrets)?[name] as? String
-            }
-            directory = directory.deletingLastPathComponent()
-        }
-        return nil
     }
 }

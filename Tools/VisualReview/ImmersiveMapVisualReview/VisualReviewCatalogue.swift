@@ -77,50 +77,10 @@ struct VisualReviewScenario: Identifiable {
         self.avatars = avatars
         self.sceneModels = sceneModels
         // Every scenario renders the hosted endpoint through the one-line
-        // template; the API key comes from `IMMERSIVEMAP_API_KEY` in the
-        // environment or from the gitignored `LocalSecrets.plist` at the
-        // repository root, so it never lands in the repository, and without
-        // it the render runs on the shared anonymous pool.
-        self.settings = settings.tileURLTemplate(
-            "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt",
-            headers: Self.hostedTileHeaders())
+        // template. The endpoint is public: no key, no account.
+        self.settings = settings.tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt")
         self.subject = subject
         self.output = output
-    }
-
-    private static func hostedTileHeaders() -> [String: String] {
-        guard let key = localAPIKey(), key.isEmpty == false else {
-            return [:]
-        }
-        return ["Authorization": "Bearer \(key)"]
-    }
-
-    /// The environment wins (the scheme carries an empty placeholder for it);
-    /// otherwise the key comes from the gitignored `LocalSecrets.plist` at
-    /// the repository root, read live off the checkout where possible (the
-    /// Mac, the simulator) and from the copy the "Bundle LocalSecrets" build
-    /// phase put into the app on a phone, which cannot see the Mac's files.
-    private static func localAPIKey() -> String? {
-        if let key = ProcessInfo.processInfo.environment["IMMERSIVEMAP_API_KEY"],
-           key.isEmpty == false {
-            return key
-        }
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while directory.path != "/" {
-            if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-                let secrets = directory.appendingPathComponent("LocalSecrets.plist")
-                if let key = NSDictionary(contentsOf: secrets)?["IMMERSIVEMAP_API_KEY"] as? String,
-                   key.isEmpty == false {
-                    return key
-                }
-                break
-            }
-            directory = directory.deletingLastPathComponent()
-        }
-        guard let bundled = Bundle.main.url(forResource: "LocalSecrets", withExtension: "plist") else {
-            return nil
-        }
-        return NSDictionary(contentsOf: bundled)?["IMMERSIVEMAP_API_KEY"] as? String
     }
 }
 

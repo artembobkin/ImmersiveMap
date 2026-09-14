@@ -81,7 +81,7 @@ final class ImmersiveMapBenchEngine: BenchEngine {
                                                                  labelFadeFramesPerSecond: 30)
         let frameSink = frameSink
         var map = ImmersiveMapView()
-            .tileURLTemplate(BenchSecrets.immersiveMapTileTemplate, headers: BenchSecrets.immersiveMapHeaders())
+            .tileURLTemplate(BenchSecrets.immersiveMapTileTemplate)
             .camera(camera)
             .onFrameRendered { _ in frameSink.onFrame?() }
             .renderLoopSettings(renderLoop)
