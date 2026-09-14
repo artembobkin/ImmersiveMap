@@ -43,7 +43,11 @@ extension MvtDecodedTile {
         return MvtDecodedTile(layers: merged, sourceData: sourceData)
     }
 
-    private static func append(_ layer: MvtDecodedLayer, to target: inout MvtDecodedLayer, data: Data) {
+    /// Appends one layer's features to another's: the tag indices are
+    /// re-based onto the target's key and value tables, which grow by the
+    /// source's. Geometry is untouched, both layers point into the same
+    /// payload. The caller checks that the extents agree.
+    package static func append(_ layer: MvtDecodedLayer, to target: inout MvtDecodedLayer, data: Data) {
         let keyOffset = UInt32(target.keys.count)
         let valueOffset = UInt32(target.values.count)
         target.keys.append(contentsOf: layer.keys)

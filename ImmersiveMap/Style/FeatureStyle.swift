@@ -355,8 +355,8 @@ public struct ExtrusionStyle: Sendable {
     }
 }
 
-/// A point label. The text comes from the map's language and the schema's
-/// `labelTextKeys`; this says how it is drawn and how important it is.
+/// A point label. The text is the name the schema reading states, in the
+/// map's language; this says how it is drawn and how important it is.
 public struct PointLabelStyle: Sendable {
     public var key: UInt8
     public var text: LabelTextStyle
@@ -507,9 +507,9 @@ public extension FeatureStyle {
                                   fallbackHeight: fallbackHeight))
     }
 
-    /// A point label. The text comes from the map's language and the
-    /// schema's `labelTextKeys`; this says how it is drawn, how important it
-    /// is (`rank`, lower first, and `collisionRank`, which defaults to the
+    /// A point label. The text is the name the schema reading states, in
+    /// the map's language; this says how it is drawn, how important it is
+    /// (`rank`, lower first, and `collisionRank`, which defaults to the
     /// rank) and from which camera zoom.
     static func pointLabel(key: UInt8,
                            _ textStyle: LabelTextStyle,

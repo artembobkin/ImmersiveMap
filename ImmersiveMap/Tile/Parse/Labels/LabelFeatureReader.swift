@@ -34,6 +34,7 @@ struct LabelFeatureReader {
               layerName: String,
               tile: Tile,
               into result: inout ReadingStageResult) {
+        guard let label = facts.label else { return }
         let points = geometry.points(of: feature)
         let featureID = feature.hasID ? feature.id : nil
         let poiIcon = labelDecisions.poiIcon(attributes: attributes, layerName: layerName)
@@ -43,9 +44,9 @@ struct LabelFeatureReader {
                                                       tile: tile,
                                                       layerName: layerName,
                                                       featureID: featureID,
-                                                      anchor: anchor,
-                                                      properties: attributes)
+                                                      anchor: anchor)
             guard let decision = labelDecisions.pointLabelDecision(feature: labelFeature,
+                                                                   label: label,
                                                                    style: style,
                                                                    poiIcon: poiIcon) else {
                 continue
@@ -58,7 +59,7 @@ struct LabelFeatureReader {
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
                                                      minCameraZoom: style.minCameraZoom))
-            if facts.namesWaterBody {
+            if label.namesWaterBody {
                 result.waterNameTexts.insert(decision.text)
             }
         }

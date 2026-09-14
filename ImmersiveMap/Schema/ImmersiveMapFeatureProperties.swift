@@ -13,6 +13,12 @@ public struct ImmersiveMapFeatureProperties {
         self.values = values
     }
 
+    /// The names of every property the feature carries, for a reading that
+    /// looks for a family of keys (`name:xx`) rather than one it knows.
+    public var keys: [String] {
+        Array(values.keys)
+    }
+
     /// The property as text: `nil` when the key is absent, and the empty
     /// string when the key is present with a non-string value (the reading
     /// this accessor has always given, kept so a style written against it

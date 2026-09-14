@@ -55,14 +55,6 @@ struct MapStyleRuntime {
         schema.cacheFingerprint &* 31 &+ style.cacheFingerprint &+ settings.preparedTileStyleRevision
     }
 
-    var roadLayerNames: Set<String> {
-        schema.roadLayerNames
-    }
-
-    var streetscapeLayerName: String? {
-        schema.streetscapeLayerName
-    }
-
     /// What a feature is, as the schema reading says.
     func readFacts(layerName: String,
                    properties: [String: MvtValue],

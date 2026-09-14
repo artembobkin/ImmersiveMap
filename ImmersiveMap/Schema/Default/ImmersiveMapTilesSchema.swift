@@ -3,32 +3,38 @@
 
 /// The reading of the hosted tiles' schema, the layer and field contract of
 /// `immersivemap.dev`: the OpenStreetMap-derived tags of the
-/// `transportation` layer and the measured `streetscape` folded into it,
-/// the `building` layer's heights, the `water_name` labels. A source in
-/// another OpenStreetMap-derived schema can start from it.
+/// `transportation` layer and the measured `streetscape` that merges into
+/// it, the `building` layer's heights, the names of `place`, `poi`,
+/// `water_name` and the rest, the `housenumber` layer's numbers. A source
+/// in another OpenStreetMap-derived schema can start from it.
 public struct ImmersiveMapTilesSchema: ImmersiveMapTileSchema {
     /// Bumped when the reading changes: every prepared tile is prepared
     /// again under the new reading.
-    public var cacheFingerprint: UInt32 { 1 }
-
-    /// The hosted tiles ship the roads in `transportation`, the road names
-    /// in `transportation_name`, and the streetscape as `streetscape`.
-    public var roadLayerNames: Set<String> { ["transportation"] }
-    public var streetscapeLayerName: String? { "streetscape" }
-    public var houseNumberLayers: Set<String> { ["housenumber"] }
+    public var cacheFingerprint: UInt32 { 2 }
 
     public init() {}
 
     public func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
+        let properties = feature.properties
         switch feature.layerName.lowercased() {
-        case "transportation", "streetscape", "transportation_name":
-            return ImmersiveMapFeatureFacts(road: roadFacts(feature))
+        case "transportation", "streetscape":
+            return ImmersiveMapFeatureFacts(road: roadFacts(feature),
+                                            label: .openStreetMap(properties))
         case "building":
-            return ImmersiveMapFeatureFacts(building: .openStreetMap(feature.properties))
+            return ImmersiveMapFeatureFacts(building: .openStreetMap(properties))
         case "water_name":
-            return ImmersiveMapFeatureFacts(namesWaterBody: true)
+            var label = ImmersiveMapLabelFacts.openStreetMap(properties) ?? ImmersiveMapLabelFacts()
+            label.namesWaterBody = true
+            return ImmersiveMapFeatureFacts(label: label)
+        case "housenumber":
+            guard let number = properties.string("house_num"), number.isEmpty == false else {
+                return .none
+            }
+            return ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(houseNumber: number))
         default:
-            return .none
+            // Anything else is labelled by its name where it has one: the
+            // places, the POIs, the peaks and airports, the road names.
+            return ImmersiveMapFeatureFacts(label: .openStreetMap(properties))
         }
     }
 

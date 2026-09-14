@@ -41,25 +41,11 @@ final class TileMvtParser {
     private let lineReader: LineFeatureReader
     private let roadSurfaceReader = RoadSurfaceAreaReader()
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
-    /// The style's road layers, and its streetscape layer: the measured
-    /// carriageways and road paint, which arrive from a second archive and
-    /// are folded into the road layer before the layers are read. The name
-    /// is here for a tile that carries the streetscape and no road layer.
-    private let roadLayerNames: Set<String>
-    private let streetscapeLayerName: String?
-
-    /// Only a road layer flows through the seamless, casing-under-fill
-    /// separate-road rendering path.
-    private func isSeparateRoadLayer(_ layerName: String) -> Bool {
-        roadLayerNames.contains(layerName) || layerName == streetscapeLayerName
-    }
 
     init(mapStyle: MapStyleRuntime,
          labelDecisions: TileLabelDecisions,
          options: TileParseOptions) {
         self.mapStyle = mapStyle
-        self.roadLayerNames = mapStyle.roadLayerNames
-        self.streetscapeLayerName = mapStyle.streetscapeLayerName
         self.labelReader = LabelFeatureReader(labelDecisions: labelDecisions, mapStyle: mapStyle)
         self.buildingReader = BuildingFeatureReader(options: options)
         self.groundReader = GroundFeatureReader(mapStyle: mapStyle)
@@ -71,16 +57,7 @@ final class TileMvtParser {
         tile: Tile,
         mvtData: Data
     ) throws -> ParsedTile {
-        var decodedTile = try MvtTileDecoder.decode(data: mvtData)
-        if let streetscapeLayerName {
-            // The streetscape's surfaces and paint and the roads they
-            // belong to have to be one feature list: the surfaces clip the
-            // ribbons of the roads that enter them, a measured crossing
-            // suppresses the crossing read off the same road's attributes,
-            // the tunnel roofs are found among the surfaces. The decoder
-            // does the merge; the style names the layers.
-            decodedTile = decodedTile.merging(layersNamed: streetscapeLayerName, intoFirstLayerNamed: roadLayerNames)
-        }
+        let decodedTile = try MvtTileDecoder.decode(data: mvtData)
         let readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
         let unificationResult = TileUnificationStage.unify(readingStageResult)
 
@@ -102,47 +79,109 @@ final class TileMvtParser {
         )
     }
 
-    /// One pass over the layers. Per layer: attributes and style for every
-    /// feature, the building and road pre-passes over those, then every
-    /// feature to its reader. After the layers: the synthesized labels, the
-    /// ground's background and subdivision, the building meshes.
+    /// A layer with its features' attributes and facts read, before any
+    /// feature is styled. The road layers of a tile are merged into one of
+    /// these before reading.
+    private struct PreparedLayer {
+        var layer: MvtDecodedLayer
+        var attributes: [[String: MvtValue]]
+        var facts: [ImmersiveMapFeatureFacts]
+        /// Any feature the reading found to be a road: the layer takes the
+        /// road path, and merges with the tile's other road layers.
+        var hasRoads: Bool
+        var preparationNanoseconds: UInt64
+    }
+
+    /// Attributes and facts for every feature of every layer, then the
+    /// road layers merged into the first of them. The streetscape's
+    /// surfaces and paint and the roads they belong to have to be one
+    /// feature list: the surfaces clip the ribbons of the roads that enter
+    /// them, the tunnel roofs are found among the surfaces, a measured
+    /// crossing stands in for the one read off the same road's tag. Which
+    /// layers those are is the reading's answer, feature by feature; a
+    /// road layer whose extent differs from the first's stays on its own,
+    /// since its coordinates would not line up.
+    private func prepareLayers(decodedTile: MvtDecodedTile, tile: Tile) -> [PreparedLayer] {
+        let mvtData = decodedTile.sourceData
+        var prepared: [PreparedLayer] = []
+        prepared.reserveCapacity(decodedTile.layers.count)
+        mvtData.withUnsafeBytes { bytes in
+            for layer in decodedTile.layers {
+                let start = DispatchTime.now().uptimeNanoseconds
+                var attributes: [[String: MvtValue]] = []
+                attributes.reserveCapacity(layer.features.count)
+                var facts: [ImmersiveMapFeatureFacts] = []
+                facts.reserveCapacity(layer.features.count)
+                var hasRoads = false
+                for feature in layer.features {
+                    let featureAttributes = MvtAttributeDecoder.attributes(of: feature, in: layer, bytes: bytes)
+                    let featureFacts = mapStyle.readFacts(layerName: layer.name,
+                                                          properties: featureAttributes,
+                                                          tile: tile,
+                                                          geometryType: feature.type)
+                    hasRoads = hasRoads || featureFacts.road != nil
+                    attributes.append(featureAttributes)
+                    facts.append(featureFacts)
+                }
+                prepared.append(PreparedLayer(layer: layer,
+                                              attributes: attributes,
+                                              facts: facts,
+                                              hasRoads: hasRoads,
+                                              preparationNanoseconds: DispatchTime.now().uptimeNanoseconds - start))
+            }
+        }
+
+        var merged: [PreparedLayer] = []
+        merged.reserveCapacity(prepared.count)
+        var roadLayerPosition: Int?
+        for layer in prepared {
+            if layer.hasRoads, let position = roadLayerPosition,
+               merged[position].layer.extent == layer.layer.extent {
+                MvtDecodedTile.append(layer.layer, to: &merged[position].layer, data: mvtData)
+                merged[position].attributes.append(contentsOf: layer.attributes)
+                merged[position].facts.append(contentsOf: layer.facts)
+                merged[position].preparationNanoseconds += layer.preparationNanoseconds
+                continue
+            }
+            if layer.hasRoads, roadLayerPosition == nil {
+                roadLayerPosition = merged.count
+            }
+            merged.append(layer)
+        }
+        return merged
+    }
+
+    /// One pass over the layers. Per layer: attributes, facts and style for
+    /// every feature, the building and road pre-passes over those, then
+    /// every feature to its reader. After the layers: the synthesized
+    /// labels, the ground's background and subdivision, the building
+    /// meshes.
     func readingStage(decodedTile: MvtDecodedTile, tile: Tile) -> ReadingStageResult {
         let mvtData = decodedTile.sourceData
         let tools = TileParseTools()
         var result = ReadingStageResult()
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
 
-        for layer in decodedTile.layers {
+        for preparedLayer in prepareLayers(decodedTile: decodedTile, tile: tile) {
             let layerStart = DispatchTime.now().uptimeNanoseconds
+            let layer = preparedLayer.layer
             let layerName = layer.name
             let layerGeometry = TileLayerGeometry(layer: layer, data: mvtData)
-            let usesSeparateRoadRendering = isSeparateRoadLayer(layerName)
+            let usesSeparateRoadRendering = preparedLayer.hasRoads
                 && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
-            // Attributes, facts and style resolve exactly once per feature
-            // here; the building and road pre-passes below share them
-            // instead of re-decoding the tag table per pass.
-            var featureAttributes: [[String: MvtValue]] = []
-            featureAttributes.reserveCapacity(layer.features.count)
-            var featureFacts: [ImmersiveMapFeatureFacts] = []
-            featureFacts.reserveCapacity(layer.features.count)
+            // Styles resolve exactly once per feature here; the building and
+            // road pre-passes below share them instead of asking again.
+            let featureAttributes = preparedLayer.attributes
+            var featureFacts = preparedLayer.facts
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
             mvtData.withUnsafeBytes { bytes in
-                for feature in layer.features {
-                    featureAttributes.append(MvtAttributeDecoder.attributes(of: feature, in: layer, bytes: bytes))
-                }
-                for (featureIndex, feature) in layer.features.enumerated() {
-                    featureFacts.append(mapStyle.readFacts(layerName: layerName,
-                                                           properties: featureAttributes[featureIndex],
-                                                           tile: tile,
-                                                           geometryType: feature.type))
-                }
                 // A tunnel's road surface ships with the tunnel's `layer` but
                 // says nothing of the tunnel itself: the one fact the engine
                 // adds to the reading, so the style draws the surface as the
                 // tunnel's roof instead of open asphalt.
-                if isSeparateRoadLayer(layerName) {
+                if preparedLayer.hasRoads {
                     for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
                                                                                   featureFacts: featureFacts,
                                                                                   bytes: bytes) {
@@ -234,6 +273,7 @@ final class TileMvtParser {
                                                    tools: tools,
                                                    into: &result)
             let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - layerStart
+                + preparedLayer.preparationNanoseconds
             result.layerTimings.append(TileParseLayerTiming(layerName: layerName,
                                                             duration: TimeInterval(elapsedNanoseconds) / 1_000_000_000.0))
 

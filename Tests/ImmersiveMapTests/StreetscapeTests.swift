@@ -169,11 +169,10 @@ final class StreetscapeTests: XCTestCase {
         return attributes
     }
 
-    /// The fold the parser does before reading a tile, with the hosted
-    /// tiles' layer names.
+    /// The decoder's merge of the streetscape into the road layer, by the
+    /// hosted tiles' layer names.
     private func fold(_ tile: MvtDecodedTile) -> MvtDecodedTile {
-        let schema = ImmersiveMapTilesSchema()
-        return tile.merging(layersNamed: schema.streetscapeLayerName!, intoFirstLayerNamed: schema.roadLayerNames)
+        tile.merging(layersNamed: "streetscape", intoFirstLayerNamed: ["transportation"])
     }
 
     func testTheStreetscapeLayerFoldsIntoTheRoadLayerWithItsAttributesIntact() throws {

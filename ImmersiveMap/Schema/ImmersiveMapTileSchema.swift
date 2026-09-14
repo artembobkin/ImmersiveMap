@@ -45,14 +45,21 @@ public struct ImmersiveMapFeature {
 /// and this is the one place a schema's spelling is turned into facts: a
 /// road with a structure, a layer and a street identity, a building with
 /// its heights, a carriageway surface, a line of measured paint, a point
-/// that names a body of water.
+/// with a name in several languages or a house number.
+///
+/// One question, asked per feature. What the parser decides per layer it
+/// derives from the answers: every layer whose features are roads is a
+/// road layer, and the road layers of a tile (the roads and the measured
+/// streetscape shipped as a second layer) merge into one before they are
+/// read, so a surface clips the ribbons that enter it whichever layer
+/// either came from.
 ///
 /// The engine's geometry work reads the facts and nothing else: which
 /// draw phase a road takes, which surface owns which ribbon, where a
-/// street stitches, what rises as a building. The style reads the same
-/// facts next to the properties and answers only with how the feature
-/// looks. Neither the engine nor the style reads a tag by name to learn
-/// what a feature is.
+/// street stitches, what rises as a building, which spelling of a name
+/// the map's language shows. The style reads the same facts next to the
+/// properties and answers only with how the feature looks. Neither the
+/// engine nor the style reads a tag by name to learn what a feature is.
 ///
 /// The `Schema` folder: this protocol, the fact types (`ImmersiveMapFeatureFacts`,
 /// `ImmersiveMapRoadFacts`, `ImmersiveMapBuildingExtrusion`), the typed
@@ -63,51 +70,7 @@ public protocol ImmersiveMapTileSchema: Sendable {
     /// reading must change it, or the map keeps drawing from tiles prepared
     /// under the old reading.
     var cacheFingerprint: UInt32 { get }
-    /// The layers whose line features are roads. From the zoom
-    /// `StyleSettings.flatSeparateRoadRenderingMinimumZoom` names, a road
-    /// layer draws on the separate-road path: seamless ribbons with the
-    /// casing under the fill, sorted by structure and class, where the
-    /// lines' `ImmersiveMapRoadFacts` decide the order and the stitching.
-    /// Every other layer's lines draw as plain ground geometry. The default
-    /// names the hosted tiles' road layer, `transportation`, and `road`.
-    var roadLayerNames: Set<String> { get }
-    /// The layer of a measured streetscape (carriageway surfaces and the
-    /// paint on them) that the tile source ships as a second archive
-    /// (`TileSettings.StreetscapeSettings`), folded into the first road
-    /// layer of a tile before it is read. Nil for a source that ships none.
-    var streetscapeLayerName: String? { get }
-    /// Properties that carry a label's text beyond the ones the map's
-    /// language chain reads (`name`, `name_xx`, `name:xx`), tried after
-    /// them. Empty by default.
-    var labelTextKeys: [String] { get }
-    /// Layers whose point features are house numbers: labelled with the
-    /// number (`house_num`, then `houseNumberTextKeys`) rather than a name.
-    var houseNumberLayers: Set<String> { get }
-    var houseNumberTextKeys: [String] { get }
-
     /// What the feature is. `.none` for a feature that is none of the
     /// things the facts describe: a ground fill, a border, a river.
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts
-}
-
-public extension ImmersiveMapTileSchema {
-    var roadLayerNames: Set<String> {
-        ["transportation", "road"]
-    }
-
-    var streetscapeLayerName: String? {
-        "streetscape"
-    }
-
-    var labelTextKeys: [String] {
-        []
-    }
-
-    var houseNumberLayers: Set<String> {
-        []
-    }
-
-    var houseNumberTextKeys: [String] {
-        []
-    }
 }

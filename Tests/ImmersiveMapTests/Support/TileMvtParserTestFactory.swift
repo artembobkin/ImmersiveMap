@@ -16,8 +16,7 @@ extension TileMvtParser {
                          glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests) -> TileMvtParser {
         let runtimeContext = MapStyleRuntime(mapStyle: settings.mapStyle, settings: settings, style: mapStyle, schema: schema)
         return TileMvtParser(mapStyle: runtimeContext,
-                             labelDecisions: TileLabelDecisions(schema: runtimeContext.schema,
-                                                                style: runtimeContext.style,
+                             labelDecisions: TileLabelDecisions(style: runtimeContext.style,
                                                                 glyphCoverage: glyphCoverage,
                                                                 language: settings.labels.language,
                                                                 fallbackPolicy: settings.labels.fallbackPolicy),

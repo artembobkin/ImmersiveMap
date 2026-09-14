@@ -51,8 +51,7 @@ final class TileRenderStore: @unchecked Sendable {
             labelsEnabled: config.labels.isEnabled,
             streetscapeRevision: PreparedTileCacheIdentity.streetscapeRevision(for: config.tiles)
         )
-        let labelDecisions = TileLabelDecisions(schema: styleRuntime.schema,
-                                                style: styleRuntime.style,
+        let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,
                                                 language: config.labels.language,
                                                 fallbackPolicy: config.labels.fallbackPolicy)

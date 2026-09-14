@@ -32,7 +32,9 @@ final class TileSourceStyleSeparationTests: XCTestCase {
         let runtime = MapStyleRuntime(settings: settings)
         XCTAssertEqual(runtime.style.cacheFingerprint, 77)
         XCTAssertEqual(runtime.styleID, AnyImmersiveMapMapStyle.genericStyleID)
-        XCTAssertEqual(runtime.schema.labelTextKeys, ["title"])
+        XCTAssertEqual(runtime.readFacts(layerName: "poi", properties: ["title": .string("Cafe")],
+                                         tile: Tile(x: 0, y: 0, z: 14), geometryType: .point).label?.name,
+                       "Cafe")
     }
 
     func testChangingOnlyMapStyleIsAStyleChangeNotATileSourceChange() {
@@ -67,9 +69,8 @@ final class TileSourceStyleSeparationTests: XCTestCase {
 /// A reading of a schema whose labels carry their text in `title`.
 private struct TitledTileSchema: ImmersiveMapTileSchema {
     let cacheFingerprint: UInt32 = 1
-    let labelTextKeys = ["title"]
 
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
-        .none
+        ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(name: feature.properties.string("title")))
     }
 }

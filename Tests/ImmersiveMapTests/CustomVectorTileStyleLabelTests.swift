@@ -78,44 +78,59 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
 
     // MARK: Helpers
 
-    private func decide(_ feature: VectorTileLabelFeature,
+    private func decide(_ feature: TestLabelFeature,
                         style: CustomLabelTestStyle = CustomLabelTestStyle()) -> VectorTileLabelDecision? {
-        let decisions = TileLabelDecisions(schema: CustomLabelTestSchema(),
-                                           style: style,
+        let decisions = TileLabelDecisions(style: style,
                                            glyphCoverage: .legacyAtlasForTests,
                                            language: .english,
                                            fallbackPolicy: .international)
+        let facts = CustomLabelTestSchema().facts(layerName: feature.label.layerName,
+                                                  properties: feature.properties,
+                                                  tile: feature.label.tile,
+                                                  geometryType: .point)
         let featureStyle = style.makeStyle(for: ImmersiveMapFeatureStyleContext(
             styleID: style.styleID,
-            data: DetFeatureStyleData(layerName: feature.layerName,
+            data: DetFeatureStyleData(layerName: feature.label.layerName,
                                       properties: feature.properties,
-                                      tile: feature.tile,
-                                      facts: .none,
+                                      tile: feature.label.tile,
+                                      facts: facts,
                                       geometryType: .point)))
-        guard let label = featureStyle.pointLabelStyle else { return nil }
-        return decisions.pointLabelDecision(feature: feature, style: label, poiIcon: nil)
+        guard let labelStyle = featureStyle.pointLabelStyle, let label = facts.label else { return nil }
+        return decisions.pointLabelDecision(feature: feature.label, label: label, style: labelStyle, poiIcon: nil)
+    }
+
+    private struct TestLabelFeature {
+        let label: VectorTileLabelFeature
+        let properties: [String: MvtValue]
     }
 
     private func feature(layer: String,
                          _ properties: [String: MvtValue],
-                         featureID: UInt64? = nil) -> VectorTileLabelFeature {
-        VectorTileLabelFeature(styleID: "custom",
-                               tile: Tile(x: 1, y: 2, z: 10),
-                               layerName: layer,
-                               featureID: featureID,
-                               anchor: SIMD2<Int16>(100, 200),
-                               properties: properties)
+                         featureID: UInt64? = nil) -> TestLabelFeature {
+        TestLabelFeature(label: VectorTileLabelFeature(styleID: "custom",
+                                                       tile: Tile(x: 1, y: 2, z: 10),
+                                                       layerName: layer,
+                                                       featureID: featureID,
+                                                       anchor: SIMD2<Int16>(100, 200)),
+                         properties: properties)
     }
 }
 
+/// A schema whose labels carry their text in `title` (after the usual
+/// `name` fields) and whose `address_label` layer is house numbers in
+/// `number`.
 private struct CustomLabelTestSchema: ImmersiveMapTileSchema {
     let cacheFingerprint: UInt32 = 1
-    let labelTextKeys = ["title"]
-    let houseNumberLayers: Set<String> = ["address_label"]
-    let houseNumberTextKeys = ["number"]
 
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
-        .none
+        if feature.layerName == "address_label" {
+            return ImmersiveMapFeatureFacts(label: ImmersiveMapLabelFacts(houseNumber: feature.properties.string("number")))
+        }
+        var label = ImmersiveMapLabelFacts.openStreetMap(feature.properties) ?? ImmersiveMapLabelFacts()
+        if label.name == nil, let title = feature.properties.string("title") {
+            label.name = title
+        }
+        return ImmersiveMapFeatureFacts(label: label)
     }
 }
 

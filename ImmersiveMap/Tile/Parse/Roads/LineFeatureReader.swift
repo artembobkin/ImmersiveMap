@@ -65,7 +65,7 @@ struct LineFeatureReader {
         // switch is prepared-cache identity, so a tile prepared
         // without labels never answers a map that wants them.
         let labelText = labelsEnabled
-            ? labelDecisions.roadLabelText(properties: attributes)
+            ? labelDecisions.roadLabelText(label: facts.label)
             : nil
         let roadLabelStyle = style.label
         let road = facts.road ?? .ground

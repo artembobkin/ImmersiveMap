@@ -98,11 +98,29 @@ final class ImmersiveMapTilesSchemaTests: XCTestCase {
     }
 
     func testAWaterNameNamesAWaterBodyAndTheRestIsNothing() {
-        XCTAssertTrue(facts(layer: "water_name", ["class": .string("ocean")], geometry: .point).namesWaterBody)
+        XCTAssertTrue(facts(layer: "water_name", ["class": .string("ocean")], geometry: .point).label?.namesWaterBody == true)
         let landuse = facts(layer: "landuse", ["class": .string("residential")], geometry: .polygon)
         XCTAssertNil(landuse.road)
         XCTAssertNil(landuse.building)
-        XCTAssertFalse(landuse.namesWaterBody)
+        XCTAssertNil(landuse.label, "An unnamed fill is called nothing")
+    }
+
+    func testNamesAreReadByLanguageAndHouseNumbersAsNumbers() throws {
+        let place = try XCTUnwrap(facts(layer: "place",
+                                        ["name": .string("Москва"), "name_en": .string("Moscow"), "name:de": .string("Moskau")],
+                                        geometry: .point).label)
+        XCTAssertEqual(place.name, "Москва")
+        XCTAssertEqual(place.namesByLanguage, ["en": "Moscow", "de": "Moskau"])
+        XCTAssertNil(place.houseNumber)
+
+        let number = try XCTUnwrap(facts(layer: "housenumber", ["house_num": .string("12b")], geometry: .point).label)
+        XCTAssertEqual(number.houseNumber, "12b")
+        XCTAssertNil(number.name)
+        XCTAssertNil(facts(layer: "housenumber", [:], geometry: .point).label, "No number, nothing to label")
+
+        let road = facts(layer: "transportation", ["class": .string("primary"), "name": .string("Tverskaya")], geometry: .linestring)
+        XCTAssertEqual(road.label?.name, "Tverskaya", "A road carries its name for the label along it")
+        XCTAssertNotNil(road.road)
     }
 
     private func facts(layer: String,

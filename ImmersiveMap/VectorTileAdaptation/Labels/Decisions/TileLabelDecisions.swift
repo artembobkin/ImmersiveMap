@@ -4,40 +4,32 @@
 import Foundation
 import Mvt
 
-/// The label policy a tile parse asks questions of: which text a road or a
-/// point feature is labelled with, which icon a POI takes, how a labelled
-/// point is identified and ranked, and which spelling of a name the map's
-/// language and the text atlas allow.
+/// The label policy a tile parse asks questions of: which spelling a road
+/// or a point feature is labelled with, which icon a POI takes, how a
+/// labelled point is identified and ranked, and which spelling of a name
+/// the map's language and the text atlas allow.
 ///
-/// Assembled once by the caller from the schema reading (which properties
-/// carry text, which layers are house numbers), the style (how labels are
+/// Assembled once by the caller from the style (how labels are
 /// identified), the glyph coverage of the text atlas and the language
-/// settings, then handed
-/// to `TileMvtParser`, which holds nothing of the policy itself: the parser
-/// decodes geometry and asks, this answers. Every answer is pure, so one
-/// value serves every parse of a map.
+/// settings, then handed to `TileMvtParser`, which holds nothing of the
+/// policy itself: the parser decodes geometry and asks, this answers, from
+/// the names the schema reading stated (`ImmersiveMapLabelFacts`). Every
+/// answer is pure, so one value serves every parse of a map.
 struct TileLabelDecisions {
     /// The style the label identities are minted for.
     let styleID: String
 
-    private let labelTextKeys: [String]
-    private let houseNumberTextKeys: [String]
-    private let houseNumberLayers: Set<String>
     private let usesFeatureIdentity: Bool
     private let languagePreferences: VectorTileLabelLanguagePreferences
     private let glyphCoverage: VectorTileLabelGlyphCoverage
     private let textResolver: VectorTileLabelTextResolver
     private let poiSpriteResolver = PoiSpriteResolver()
 
-    init(schema: any ImmersiveMapTileSchema,
-         style: any ImmersiveMapVectorTileStyle,
+    init(style: any ImmersiveMapVectorTileStyle,
          glyphCoverage: VectorTileLabelGlyphCoverage,
          language: ImmersiveMapSettings.LabelLanguage,
          fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy) {
         self.styleID = style.styleID
-        self.labelTextKeys = schema.labelTextKeys
-        self.houseNumberTextKeys = schema.houseNumberTextKeys
-        self.houseNumberLayers = Set(schema.houseNumberLayers.map { $0.lowercased() })
         self.usesFeatureIdentity = style.labelsUseFeatureIdentity
         self.languagePreferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: language,
                                                                            fallbackPolicy: fallbackPolicy)
@@ -48,10 +40,9 @@ struct TileLabelDecisions {
     /// The name a road line is labelled with, in the map's language with its
     /// fallback chain, or nil when the feature carries none the atlas can
     /// render.
-    func roadLabelText(properties: [String: MvtValue]) -> String? {
-        textResolver.resolveText(properties: properties,
-                                 preferences: languagePreferences,
-                                 additionalKeys: labelTextKeys)
+    func roadLabelText(label: ImmersiveMapLabelFacts?) -> String? {
+        guard let label else { return nil }
+        return textResolver.resolveText(label: label, preferences: languagePreferences)
     }
 
     /// The sprite a POI feature draws beside its text, nil for every other
@@ -61,20 +52,19 @@ struct TileLabelDecisions {
     }
 
     /// How a point feature the style labels is labelled: its text (the
-    /// house number on a house-number layer, the name in the map's language
-    /// elsewhere), its identity across tiles, and the priorities the style
-    /// gave it. Nil when the feature carries no text the atlas can render.
+    /// house number where the reading states one, the name in the map's
+    /// language otherwise), its identity across tiles, and the priorities
+    /// the style gave it. Nil when the feature carries no text the atlas can
+    /// render.
     func pointLabelDecision(feature: VectorTileLabelFeature,
+                            label: ImmersiveMapLabelFacts,
                             style: PointLabelStyle,
                             poiIcon: PoiSpriteIcon?) -> VectorTileLabelDecision? {
         let text: String?
-        if houseNumberLayers.contains(feature.layerName.lowercased()) {
-            text = textResolver.resolveHouseNumber(properties: feature.properties,
-                                                   additionalKeys: houseNumberTextKeys)
+        if label.houseNumber != nil {
+            text = textResolver.resolveHouseNumber(label: label)
         } else {
-            text = textResolver.resolveText(properties: feature.properties,
-                                            preferences: languagePreferences,
-                                            additionalKeys: labelTextKeys)
+            text = textResolver.resolveText(label: label, preferences: languagePreferences)
         }
         guard let resolvedText = text else {
             return nil
@@ -101,30 +91,18 @@ struct TileLabelDecisions {
 
     /// The spelling of a name the map shows, chosen from names keyed by
     /// language code (`"en"`, `"ru"`, ...) plus `"native"` for the local
-    /// one, walking the same fallback chain a feature's `name_xx` fields
-    /// would, and skipping any the atlas cannot render. English is the last
-    /// resort. For the labels the parser synthesizes itself, which carry no
-    /// tile properties to resolve from.
+    /// one, walking the same fallback chain a feature's names would, and
+    /// skipping any the atlas cannot render. English is the last resort.
+    /// For the labels the parser synthesizes itself, which carry no facts
+    /// to resolve from.
     func localizedName(from names: [String: String]) -> String? {
         for candidate in languagePreferences.fallbackChain {
-            let code: String
-            if candidate.fieldName == "name" {
-                code = "native"
-            } else {
-                // The chain carries both source spellings of a language
-                // field (`name_en` and `name:en`); either strips to the
-                // same language code here.
-                code = candidate.fieldName
-                    .replacingOccurrences(of: "name_", with: "")
-                    .replacingOccurrences(of: "name:", with: "")
-            }
-
+            let code = candidate.languageCode ?? "native"
             guard let value = names[code],
                   value.isEmpty == false,
                   glyphCoverage.canRender(value) else {
                 continue
             }
-
             return value
         }
 

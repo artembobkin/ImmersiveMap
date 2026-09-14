@@ -1,8 +1,8 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-import Mvt
-
+/// Picks the spelling of a name the map shows: the first of the language
+/// chain's candidates the feature carries and the text atlas can render.
 struct VectorTileLabelTextResolver {
     private let glyphCoverage: VectorTileLabelGlyphCoverage
 
@@ -10,44 +10,22 @@ struct VectorTileLabelTextResolver {
         self.glyphCoverage = glyphCoverage
     }
 
-    func resolveText(properties: [String: MvtValue],
-                     preferences: VectorTileLabelLanguagePreferences,
-                     additionalKeys: [String] = []) -> String? {
-        var resolvedKeys = Set<String>()
+    func resolveText(label: ImmersiveMapLabelFacts,
+                     preferences: VectorTileLabelLanguagePreferences) -> String? {
         for candidate in preferences.fallbackChain {
-            resolvedKeys.insert(candidate.fieldName)
-            guard let text = properties[candidate.fieldName]?.stringValue,
-                  text.isEmpty == false,
-                  glyphCoverage.canRender(text) else {
+            let text = candidate.languageCode.map { label.namesByLanguage[$0] } ?? label.name
+            guard let text, text.isEmpty == false, glyphCoverage.canRender(text) else {
                 continue
             }
-
             return text
         }
-
-        for key in additionalKeys where resolvedKeys.insert(key).inserted {
-            guard let text = properties[key]?.stringValue,
-                  text.isEmpty == false,
-                  glyphCoverage.canRender(text) else {
-                continue
-            }
-
-            return text
-        }
-
         return nil
     }
 
-    func resolveHouseNumber(properties: [String: MvtValue],
-                            additionalKeys: [String] = []) -> String? {
-        for key in ["house_num"] + additionalKeys {
-            guard let text = properties[key]?.stringValue,
-                  text.isEmpty == false,
-                  glyphCoverage.canRender(text) else {
-                continue
-            }
-            return text
+    func resolveHouseNumber(label: ImmersiveMapLabelFacts) -> String? {
+        guard let number = label.houseNumber, number.isEmpty == false, glyphCoverage.canRender(number) else {
+            return nil
         }
-        return nil
+        return number
     }
 }

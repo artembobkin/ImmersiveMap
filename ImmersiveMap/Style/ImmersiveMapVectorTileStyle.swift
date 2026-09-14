@@ -76,7 +76,7 @@ public enum WaterNameKind: Sendable {
 /// the rest) cover the common drawing modes; the full value is there for a
 /// style that needs every knob the built-in one has. The label text itself
 /// is not the style's: the engine reads it in the map's language, from the
-/// `name` fields and the schema's `labelTextKeys`.
+/// names the schema reading states (`ImmersiveMapLabelFacts`).
 public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// Folded into the prepared-tile cache identity: any change to the
     /// rules or the palette must change it, or the map keeps drawing from

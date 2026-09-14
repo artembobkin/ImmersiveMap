@@ -6,6 +6,12 @@ import Mvt
 import XCTest
 
 final class TileLabelDecisionsTests: XCTestCase {
+    /// The names of a property dictionary as the OpenStreetMap reading
+    /// states them; an empty reading for a feature with no name at all.
+    private func label(_ properties: [String: MvtValue]) -> ImmersiveMapLabelFacts {
+        ImmersiveMapLabelFacts.openStreetMap(ImmersiveMapFeatureProperties(values: properties)) ?? ImmersiveMapLabelFacts()
+    }
+
     func testRussianPreferencesPreferRussianThenEnglishThenNative() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
@@ -17,8 +23,8 @@ final class TileLabelDecisionsTests: XCTestCase {
 
         XCTAssertEqual(preferences.selectedLanguage, .russian)
         XCTAssertEqual(preferences.fallbackPolicy, .international)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_ru", "name:ru", "name_en", "name:en", "name"])
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
+        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["ru", "en", nil])
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Москва")
     }
 
     func testFrenchPreferencesFallBackToEnglishBeforeNativeWhenPreferredNameIsAbsent() {
@@ -29,7 +35,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Moscow")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Moscow")
     }
 
     func testLocalFirstPolicyFallsBackToNativeBeforeEnglishWhenPreferredNameIsAbsent() {
@@ -42,8 +48,8 @@ final class TileLabelDecisionsTests: XCTestCase {
                                                                   fallbackPolicy: .localFirst)
 
         XCTAssertEqual(preferences.fallbackPolicy, .localFirst)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name:fr", "name", "name_en", "name:en"])
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
+        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["fr", nil, "en"])
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Москва")
     }
 
     func testRussianPreferencesFallBackToNativeCyrillicWhenRussianAndEnglishNamesAreAbsent() {
@@ -53,7 +59,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Москва")
     }
 
     func testEnglishPreferencesPreferEnglishThenNative() {
@@ -66,8 +72,8 @@ final class TileLabelDecisionsTests: XCTestCase {
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
 
         XCTAssertEqual(preferences.selectedLanguage, .english)
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_en", "name:en", "name"])
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Moscow EN")
+        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["en", nil])
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Moscow EN")
     }
 
     func testFrenchPreferencesPreferNameFrThenEnglish() {
@@ -79,8 +85,8 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
 
-        XCTAssertEqual(preferences.fallbackChain.map(\.fieldName), ["name_fr", "name:fr", "name_en", "name:en", "name"])
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Paris FR")
+        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["fr", "en", nil])
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Paris FR")
     }
 
     func testSharedResolverCoversRoadLabelFieldSelection() {
@@ -92,7 +98,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Rue de Rivoli")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Rue de Rivoli")
     }
 
     func testGermanPreferencesFallbackToEnglishWhenPreferredFieldIsMissing() {
@@ -102,7 +108,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .german)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Munich EN")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Munich EN")
     }
 
     func testEnglishPreferencesFallBackToNativeLatinWhenEnglishNameIsAbsent() {
@@ -113,7 +119,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Moscow")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Moscow")
     }
 
     func testEnglishPreferencesFallBackToNativeCyrillicWhenEnglishNameIsAbsent() {
@@ -124,7 +130,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
 
-        XCTAssertEqual(resolver.resolveText(properties: properties, preferences: preferences), "Москва")
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Москва")
     }
 
     func testUnsupportedGlyphCoverageRejectsText() {
@@ -134,7 +140,7 @@ final class TileLabelDecisionsTests: XCTestCase {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
 
-        XCTAssertNil(resolver.resolveText(properties: properties, preferences: preferences))
+        XCTAssertNil(resolver.resolveText(label: label(properties), preferences: preferences))
     }
 
     func testStyleFeatureIdentityParticipatesInCrossTileDeduplication() {
@@ -166,10 +172,9 @@ final class TileLabelDecisionsTests: XCTestCase {
         XCTAssertNotEqual(first.runtimeKey, second.runtimeKey)
     }
 
-    func testTheDecisionsBuildATextLabelCompatibleDecision() {
+    func testTheDecisionsBuildATextLabelCompatibleDecision() throws {
         let style = ImmersiveMapTilesDefaultMapStyle()
-        let decisions = TileLabelDecisions(schema: ImmersiveMapTilesSchema(),
-                                           style: style,
+        let decisions = TileLabelDecisions(style: style,
                                            glyphCoverage: .legacyAtlasForTests,
                                            language: .english,
                                            fallbackPolicy: .international)
@@ -186,10 +191,13 @@ final class TileLabelDecisionsTests: XCTestCase {
                                              tile: tile,
                                              layerName: "place",
                                              featureID: 7,
-                                             anchor: SIMD2<Int16>(2048, 2048),
-                                             properties: properties)
+                                             anchor: SIMD2<Int16>(2048, 2048))
+        let label = try XCTUnwrap(ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: tile).label)
 
-        let decision = decisions.pointLabelDecision(feature: feature, style: featureStyle.pointLabelStyle!, poiIcon: nil)
+        let decision = decisions.pointLabelDecision(feature: feature,
+                                                    label: label,
+                                                    style: featureStyle.pointLabelStyle!,
+                                                    poiIcon: nil)
 
         XCTAssertEqual(decision?.text, "Moscow")
         XCTAssertEqual(decision?.priority.visibilityRank, 3, "The rank is the style's reading of the tile")

@@ -1,6 +1,11 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+/// The order the spellings of a name are tried in for the map's language:
+/// the preferred language, then English and the local name in the order
+/// the fallback policy states. Which fields of a tile carry a language's
+/// spelling is the schema reading's business (`ImmersiveMapLabelFacts`);
+/// the chain speaks in language codes.
 struct VectorTileLabelLanguagePreferences: Equatable {
     struct Candidate: Equatable {
         enum Kind: Equatable {
@@ -9,7 +14,9 @@ struct VectorTileLabelLanguagePreferences: Equatable {
             case english
         }
 
-        let fieldName: String
+        /// The language code the spelling is looked up under, nil for the
+        /// local name.
+        let languageCode: String?
         let kind: Kind
     }
 
@@ -22,29 +29,18 @@ struct VectorTileLabelLanguagePreferences: Equatable {
         fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     ) -> VectorTileLabelLanguagePreferences {
         var fallbackChain: [Candidate] = []
-
-        // A language is looked up under both spellings a source can carry:
-        // OpenMapTiles flattens OSM's `name:xx` tags to `name_xx`, while a
-        // schema passing OSM tags through unchanged keeps the colon. A tile
-        // never carries both with different values, so the order between the
-        // two does not matter; missing keys just fall through.
-        func appendLanguage(_ suffix: String, kind: Candidate.Kind) {
-            fallbackChain.append(Candidate(fieldName: "name_\(suffix)", kind: kind))
-            fallbackChain.append(Candidate(fieldName: "name:\(suffix)", kind: kind))
-        }
+        let english = Candidate(languageCode: "en", kind: .english)
+        let native = Candidate(languageCode: nil, kind: .native)
 
         if settingsLanguage == .english {
-            appendLanguage("en", kind: .english)
-            fallbackChain.append(Candidate(fieldName: "name", kind: .native))
+            fallbackChain = [english, native]
         } else {
-            appendLanguage(settingsLanguage.nameFieldSuffix, kind: .preferred)
+            let preferred = Candidate(languageCode: settingsLanguage.nameFieldSuffix, kind: .preferred)
             switch fallbackPolicy {
             case .international:
-                appendLanguage("en", kind: .english)
-                fallbackChain.append(Candidate(fieldName: "name", kind: .native))
+                fallbackChain = [preferred, english, native]
             case .localFirst:
-                fallbackChain.append(Candidate(fieldName: "name", kind: .native))
-                appendLanguage("en", kind: .english)
+                fallbackChain = [preferred, native, english]
             }
         }
 
