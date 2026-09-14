@@ -6,18 +6,18 @@ import XCTest
 
 final class TileSourceAndStyleSettingsTests: XCTestCase {
     func testTemplateAndMapStyleConfigureSourceAndStyleSeparately() {
-        let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
+        let style = ImmersiveMapTilesTheme.default.labels { labels in
             labels.town.haloEm = 0.125
         }
 
         let settings = ImmersiveMapSettings.default
             .tileURLTemplate("https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: style))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: style))
 
         XCTAssertEqual(settings.tiles.network.tileURLTemplate,
                        "https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
-                       AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(configuration: style)).configurationFingerprint)
+                       AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(theme: style)).configurationFingerprint)
         XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel,
                        ImmersiveMapTilesService.maximumTileZoomLevel)
     }
@@ -36,9 +36,9 @@ final class TileSourceAndStyleSettingsTests: XCTestCase {
 
     func testMapStyleChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default))
         let newSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault.layers { layers in
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default.layers { layers in
                 layers.water = SIMD4<Float>(0.12, 0.34, 0.56, 1.0)
             }))
 

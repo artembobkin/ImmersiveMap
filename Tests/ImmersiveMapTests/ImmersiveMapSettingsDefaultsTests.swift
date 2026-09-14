@@ -46,7 +46,7 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
     /// reason: the polar cap continues the ocean with it.
     func testMapColorAndBaseColorsMatchTheBuiltInPalette() {
         let settings = ImmersiveMapSettings.default
-        let layers = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers
+        let layers = ImmersiveMapTilesTheme.default.layers
         let mapColor = settings.scene.mapClearColor
         XCTAssertEqual(SIMD4<Float>(Float(mapColor.x), Float(mapColor.y), Float(mapColor.z), Float(mapColor.w)),
                        layers.land)
@@ -57,7 +57,7 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
     /// The overview biomes and the street palette are one set of colors, class
     /// by class, so nothing shifts hue while zooming.
     func testOverviewBiomesMirrorTheStreetPalette() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
         let biomes = configuration.globalLandcover
         let layers = configuration.layers
         XCTAssertEqual(biomes.land, layers.land)

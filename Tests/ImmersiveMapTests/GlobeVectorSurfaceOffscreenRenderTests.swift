@@ -185,7 +185,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         // landcover blue and only eases toward `layers.water` as the camera
         // zooms in (the street palette blend is zero at these zooms), so the
         // colour this test owns is the overview one.
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover {
                 $0.water = Self.fixtureWater
                 // The overview biomes blend forest toward grass by zoom: both
@@ -194,7 +194,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                 $0.grass = Self.fixtureForest
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         // The stars twinkle with scene time, so a settle loop over a globe
         // frame never sees two identical pictures while they are drawn.
         settings.scene.starfield.starCount = 0

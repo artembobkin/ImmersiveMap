@@ -60,7 +60,7 @@ private struct FlyoverScreen: View {
     /// The default style minus POI badges: their colored icons read as app
     /// chrome in footage meant to look like a flight, not a map screen.
     private var cinematicMapStyle: ImmersiveMapTilesMapStyle {
-        ImmersiveMapTilesMapStyle(configuration: .immersiveMapTilesDefault.labelVisibility { visibility in
+        ImmersiveMapTilesMapStyle(theme: .default.labelVisibility { visibility in
             visibility.poiMinimumZoom = 30
         })
     }

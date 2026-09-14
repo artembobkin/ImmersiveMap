@@ -18,7 +18,7 @@ final class RoadParkingAreaTests: XCTestCase {
     }
 
     private func makeStyle(z: Int, extra: [String: String] = [:]) -> FeatureStyle {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         var props: [String: MvtValue] = [:]
         let subclassValue = MvtValue.string("parking_area")
         props["subclass"] = subclassValue
@@ -45,7 +45,7 @@ final class RoadParkingAreaTests: XCTestCase {
         XCTAssertTrue(roles.contains(.fill), "The asphalt")
         XCTAssertTrue(roles.contains(.casing), "the kerb on its outline")
         XCTAssertTrue(roles.contains(.detail), "and the bay comb at street zoom")
-        let service = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.service
+        let service = ImmersiveMapTilesTheme.default.layers.roads.service
         XCTAssertEqual(lot.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.color, service,
                        "The lot merges into the service tier it belongs to")
 
@@ -141,7 +141,7 @@ final class RoadParkingAreaTests: XCTestCase {
     }
 
     func testADedicatedBusLaneIsTheLetterANotATone() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func value(_ v: String) -> MvtValue { .string(v) }
         let lane = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_lane")],
@@ -175,7 +175,7 @@ final class RoadParkingAreaTests: XCTestCase {
     }
 
     func testABusStopWearsTheYellowSawtooth() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func value(_ v: String) -> MvtValue { .string(v) }
         let stop = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["marking": value("bus_stop_zigzag")],

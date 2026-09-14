@@ -11,7 +11,7 @@ import XCTest
 /// tiles carry is what sets the width, and an automobile road wide enough to
 /// hold a lane divider gets one.
 final class RoadCarriagewayWidthTests: XCTestCase {
-    private let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+    private let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
     /// Central Moscow, the tile column/row of the screenshots this behavior
     /// was reported from, at each zoom.
@@ -61,7 +61,7 @@ final class RoadCarriagewayWidthTests: XCTestCase {
     /// polygons, and both sides must use one width model: a junction polygon
     /// inside ribbons of a different width floats like a puddle.
     func testAStatedWidthBeatsTheLaneModel() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func widthUnits(_ attributes: [String: Any]) -> Double {
             var properties: [String: MvtValue] = [:]
             for (key, value) in attributes {

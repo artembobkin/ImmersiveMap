@@ -32,8 +32,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // replace at the handover, so they arrive wearing the color the
             // biomes converge on and finish the lerp to the street wood.
             return polygon(key: 11,
-                           color: configuration.globalLandcover.forest,
-                           streetColor: configuration.layers.wood,
+                           color: theme.globalLandcover.forest,
+                           streetColor: theme.layers.wood,
                            far: farVegetation)
         case "grass":
             // OSM tags countless small courtyards/verges as generic grass; at city
@@ -43,27 +43,27 @@ extension ImmersiveMapTilesDefaultMapStyle {
                 return hiddenStyle
             }
             return polygon(key: 12,
-                           color: configuration.globalLandcover.grass,
-                           streetColor: configuration.layers.grass,
+                           color: theme.globalLandcover.grass,
+                           streetColor: theme.layers.grass,
                            far: farVegetation)
         case "farmland":
             return polygon(key: 13,
-                           color: configuration.globalLandcover.crop,
-                           streetColor: configuration.layers.farmland,
+                           color: theme.globalLandcover.crop,
+                           streetColor: theme.layers.farmland,
                            far: farVegetation)
         case "wetland":
             return polygon(key: 14,
-                           color: configuration.globalLandcover.wetland,
-                           streetColor: configuration.layers.wetland,
+                           color: theme.globalLandcover.wetland,
+                           streetColor: theme.layers.wetland,
                            far: farVegetation)
         case "ice":
             return polygon(key: 17,
-                           color: configuration.globalLandcover.snow,
-                           streetColor: configuration.layers.ice)
+                           color: theme.globalLandcover.snow,
+                           streetColor: theme.layers.ice)
         case "sand":
             return polygon(key: 18,
-                           color: configuration.globalLandcover.barren,
-                           streetColor: configuration.layers.sand)
+                           color: theme.globalLandcover.barren,
+                           streetColor: theme.layers.sand)
         case "rock":
             // Bare rock = ground color; no separate polygon over the base needed.
             return hiddenStyle
@@ -94,7 +94,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// polygons are drawn in a fixed paint order: base land -> biomes -> snow on top.
     /// Keys stay below `water` (20) so oceans/lakes cover landcover.
     func globalLandcoverStyle(cls: String?, tileZoom: Int) -> FeatureStyle {
-        let colors = configuration.globalLandcover
+        let colors = theme.globalLandcover
         let vegetationBase = colors.grass
         // The WorldCover polygons are raster-derived blobs; at overview zooms
         // full-contrast categorical fills read as blotches, so the vegetation
@@ -108,7 +108,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // through the handover a WorldCover forest converges on exactly the
         // color the OSM wood polygons that replace it will wear: only the
         // geometry source changes at the swap, never the color language.
-        let layers = configuration.layers
+        let layers = theme.layers
         switch cls {
         case "land":
             return polygon(key: 2,
@@ -185,13 +185,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
         case "residential", "suburb", "neighbourhood", "quarter", "allotments":
             // Beige residential/block fills go to the very bottom (key 9), below
             // greenery, otherwise they cover parks (landcover) inside residential polygons.
-            return polygon(key: 9, color: configuration.layers.residential, far: farSettlement)
+            return polygon(key: 9, color: theme.layers.residential, far: farSettlement)
         case "industrial", "commercial", "retail", "railway", "quarry":
-            return polygon(key: 9, color: configuration.layers.industrial, far: farSettlement)
+            return polygon(key: 9, color: theme.layers.industrial, far: farSettlement)
         case "cemetery", "grass", "park", "recreation_ground", "garden":
             // One green color for all urban greenery (matches landcover grass)
             // to avoid a two-tone seam where the layers meet.
-            return polygon(key: 15, color: configuration.layers.grass, far: farVegetation)
+            return polygon(key: 15, color: theme.layers.grass, far: farVegetation)
         default:
             // Unknown landuse: blend into the land base instead of the red fallback.
             return hiddenStyle
@@ -223,7 +223,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             minimumWidthPoints = 0.5
         }
         return line(key: 22,
-                    color: configuration.layers.water,
+                    color: theme.layers.water,
                     width: width,
                     minimumWidthPoints: minimumWidthPoints)
     }
@@ -250,7 +250,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // one cold hue in a whole-region frame and reads as scribble there.
         // Until the region zooms the line lightens and turns half
         // transparent; national borders keep their full weight throughout.
-        var color = configuration.layers.boundary
+        var color = theme.layers.boundary
         if adminLevel > 2, tileZoom <= 6 {
             let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * 0.35
             color = SIMD4<Float>(softened.x, softened.y, softened.z, color.w * 0.6)
@@ -281,7 +281,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let kind = "\(cls ?? "") \(subclass ?? "")"
         let greenKeywords = ["park", "парк", "garden", "сад", "reserve", "заповедник", "nature"]
         if greenKeywords.contains(where: { kind.contains($0) }) {
-            return polygon(key: 16, color: configuration.layers.grass, far: farVegetation)
+            return polygon(key: 16, color: theme.layers.grass, far: farVegetation)
         }
         return hiddenStyle
     }

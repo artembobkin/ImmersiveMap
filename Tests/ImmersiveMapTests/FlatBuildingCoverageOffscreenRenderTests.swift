@@ -96,7 +96,7 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover { landcover in
                 landcover.water = Self.fixtureWater
                 landcover.snow = Self.fixtureSnow
@@ -109,7 +109,7 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
                 features.buildingFillColor = Self.fixtureBuilding
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
             .buildingExtrusion(isEnabled: true)
         settings.scene.starfield.starCount = 0
         // No cast shadows: they would tint the sampled snow according to the

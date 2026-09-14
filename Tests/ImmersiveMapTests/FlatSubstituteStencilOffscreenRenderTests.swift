@@ -93,7 +93,7 @@ final class FlatSubstituteStencilOffscreenRenderTests: XCTestCase {
         // At street zooms the palette handover is complete and the ground
         // colours come from the street layers, so both palettes get the
         // fixture colours.
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover { landcover in
                 landcover.water = Self.fixtureWater
                 landcover.snow = Self.fixtureSnow
@@ -103,7 +103,7 @@ final class FlatSubstituteStencilOffscreenRenderTests: XCTestCase {
                 layers.ice = Self.fixtureSnow
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }

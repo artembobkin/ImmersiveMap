@@ -63,7 +63,7 @@ struct StylePanel: View {
 }
 
 /// Three palettes for the built-in tile source. Each one is a
-/// `ImmersiveMapTilesDefaultMapStyleConfiguration` built with the `.layers`,
+/// `ImmersiveMapTilesTheme` built with the `.layers`,
 /// `.features` and `.labels` builders, plus the engine-level colors that are
 /// not part of any tile: the flat map background and the globe background.
 enum StylePalette: String, CaseIterable, Identifiable {
@@ -97,15 +97,15 @@ enum StylePalette: String, CaseIterable, Identifiable {
     }
 
     private var mapStyle: ImmersiveMapTilesMapStyle {
-        ImmersiveMapTilesMapStyle(configuration: configuration)
+        ImmersiveMapTilesMapStyle(theme: configuration)
     }
 
-    private var configuration: ImmersiveMapTilesDefaultMapStyleConfiguration {
+    private var configuration: ImmersiveMapTilesTheme {
         switch self {
         case .day:
-            return .immersiveMapTilesDefault
+            return .default
         case .night:
-            return ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+            return ImmersiveMapTilesTheme.default
                 .layers { layers in
                     layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
                     layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
@@ -142,7 +142,7 @@ enum StylePalette: String, CaseIterable, Identifiable {
                     landcover.snow = SIMD4<Float>(0.30, 0.32, 0.36, 1)
                 }
         case .blueprint:
-            return ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+            return ImmersiveMapTilesTheme.default
                 .layers { layers in
                     let paper = SIMD4<Float>(0.05, 0.16, 0.38, 1)
                     layers.land = paper
@@ -235,8 +235,8 @@ enum StylePalette: String, CaseIterable, Identifiable {
 
     private func roadsTinted(base: SIMD4<Float>,
                              minor: SIMD4<Float>,
-                             casing: SIMD4<Float>) -> ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
-        ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(motorway: base,
+                             casing: SIMD4<Float>) -> ImmersiveMapTilesTheme.RoadLayerStyles {
+        ImmersiveMapTilesTheme.RoadLayerStyles(motorway: base,
                                                                       trunk: base,
                                                                       primary: base,
                                                                       secondary: minor,
@@ -248,7 +248,7 @@ enum StylePalette: String, CaseIterable, Identifiable {
                                                                       casing: casing)
     }
 
-    private func tint(_ labels: inout ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles,
+    private func tint(_ labels: inout ImmersiveMapTilesTheme.LabelStyles,
                       fill: SIMD3<Float>,
                       stroke: SIMD3<Float>) {
         labels.city.fillColor = fill

@@ -75,7 +75,7 @@ final class FlatFillOutlineOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover { landcover in
                 landcover.water = Self.fixtureWater
                 landcover.snow = Self.fixtureSnow
@@ -85,7 +85,7 @@ final class FlatFillOutlineOffscreenRenderTests: XCTestCase {
                 layers.ice = Self.fixtureSnow
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }

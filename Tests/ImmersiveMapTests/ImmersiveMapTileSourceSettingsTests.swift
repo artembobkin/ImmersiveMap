@@ -71,11 +71,11 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     }
 
     func testMapStyleSettingsModifierStoresBuiltInConfiguration() {
-        let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
+        let style = ImmersiveMapTilesTheme.default.labels { labels in
             labels.town.haloEm = 0.125
         }
 
-        let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
+        let mapStyle = ImmersiveMapTilesMapStyle(theme: style)
         let settings = ImmersiveMapSettings.default
             .mapStyle(mapStyle)
 
@@ -84,10 +84,10 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     }
 
     func testMapStyleViewModifierStoresBuiltInConfiguration() throws {
-        let style = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.labels { labels in
+        let style = ImmersiveMapTilesTheme.default.labels { labels in
             labels.poi.haloEm = 0.35
         }
-        let mapStyle = ImmersiveMapTilesMapStyle(configuration: style)
+        let mapStyle = ImmersiveMapTilesMapStyle(theme: style)
 
         let view = ImmersiveMapView()
             .mapStyle(mapStyle)

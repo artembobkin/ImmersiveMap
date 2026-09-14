@@ -220,7 +220,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            tunnel: Bool,
                            tile: Tile,
                            reconstructed: Bool) -> FeatureStyle {
-        let roads = configuration.layers.roads
+        let roads = theme.layers.roads
         let classColor: SIMD4<Float>
         let fillKey: UInt8
         let priority: Int
@@ -273,7 +273,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// without the streetscape the lot is its asphalt and kerb alone: the
     /// comb is a streetscape figure.
     func parkingAreaStyle(tile: Tile, layerCarriesStreetscape: Bool = true) -> FeatureStyle {
-        let roads = configuration.layers.roads
+        let roads = theme.layers.roads
         let fillKey: UInt8 = 42
         let color = roads.service
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)

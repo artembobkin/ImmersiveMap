@@ -26,7 +26,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     }
 
     func testTheTierLineSitsBetweenServiceRoadsAndPaths() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func tier(_ className: String) -> RoadTier {
             var props: [String: MvtValue] = [:]
             let v = MvtValue.string(className); props["class"] = v
@@ -86,7 +86,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     /// map used to paint a centre line down every unmarked back street from
     /// it. Classes below tertiary are bare whatever they carry.
     func testMarkingsComeFromTheTilesAndNotFromClassDefaults() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         let tile = Tile(x: 39616, y: 20486, z: 16)
         func markingPasses(_ attributes: [String: Any]) -> [TestRoadPass] {
             var properties: [String: MvtValue] = [:]
@@ -172,7 +172,7 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
     }
 
     func testMarkingsStateAHalfCarriagewayInset() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         var props: [String: MvtValue] = [:]
         let c = MvtValue.string("primary"); props["class"] = c
         let l = MvtValue.int(6); props["lanes"] = l

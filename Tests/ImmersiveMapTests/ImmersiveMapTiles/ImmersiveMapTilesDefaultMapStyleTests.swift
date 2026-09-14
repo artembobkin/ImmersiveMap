@@ -7,8 +7,8 @@ import XCTest
 
 final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     func testGroundStylesBakeBothPalettesForTheContinuousHandover() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        let configuration = ImmersiveMapTilesTheme.default
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
 
         // Every ground style bakes its overview color and its street
         // counterpart, at EVERY tile zoom: the shader lerps between them per
@@ -66,9 +66,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testMassiveOverviewMergesVegetationClassesThroughZoomTwo() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
         let colors = configuration.globalLandcover
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
         let mergedClasses = ["land", "grass", "shrub", "moss", "crop", "wetland", "mangroves"]
 
         for className in mergedClasses {
@@ -120,9 +120,9 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testGlobalLandcoverClassesUseDedicatedSoftBiomesColors() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
         let colors = configuration.globalLandcover
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
         // z8 is the last zoom before the street handover begins; the
         // vegetation blend has fully released by then, so the palette is
         // raw. One key per class.
@@ -150,7 +150,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testRoadClassesAppearByZoom() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
         func key(_ className: String, zoom: Int) -> UInt8 {
             makeStyle(style, layerName: "transportation", className: className, zoom: zoom).key
@@ -172,7 +172,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testOverviewRoadsAreOpaqueAndOnlyStreetRoadsRideTheRoadFadeBand() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         // An overview class fades in with the camera over the zoom level
         // after the tile zoom that first ships it (the per-class mask), and
         // is opaque from then on: never the shared road band, which would
@@ -196,7 +196,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // and its paint, not an outline (the kerb doubled every painted edge
         // into two parallel strokes). No drive-tier class carries a casing
         // pass at any zoom.
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         for className in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
             for zoom in [7, 10, 12, 14, 16] {
                 let roadStyle = makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
@@ -207,8 +207,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testOverviewRoadsAreOneAsphaltGreyWithSeamlessJoins() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        let configuration = ImmersiveMapTilesTheme.default
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
 
         // Through z11 the majors draw on the country-border principle: one
         // point-locked pass, opaque past the overview band (never the
@@ -270,8 +270,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testConstructionClassesFollowTheirBaseClass() {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: configuration)
+        let configuration = ImmersiveMapTilesTheme.default
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
 
         // The low-zoom tiles ship the construction variant right alongside
         // the base class; hiding it cut corridors mid-line. It gates like the
@@ -306,16 +306,16 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {
-        let originalConfiguration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let originalConfiguration = ImmersiveMapTilesTheme.default
         let updatedConfiguration = originalConfiguration.globalLandcover { colors in
             colors.water = SIMD4<Float>(0.1, 0.2, 0.3, 1.0)
         }
 
         XCTAssertNotEqual(originalConfiguration.cacheFingerprint,
                           updatedConfiguration.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: originalConfiguration)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(theme: originalConfiguration)
                             .cacheFingerprint,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updatedConfiguration)
+                          ImmersiveMapTilesDefaultMapStyle(theme: updatedConfiguration)
                             .cacheFingerprint)
     }
 
@@ -324,7 +324,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // budget quadruples per overzoom zoom level. There are no absolute zoom
         // ramps, so the approach survives a change of the source's maxzoom.
         let style = ImmersiveMapTilesDefaultMapStyle(
-            configuration: .immersiveMapTilesDefault
+            theme: .default
         )
 
         // Anchor (hospital): the negative offset is clamped into the budget,
@@ -367,7 +367,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
 
     func testPoiMinimumZoomFloorsEveryPoiAboveRankAndOverzoomThresholds() {
         let style = ImmersiveMapTilesDefaultMapStyle(
-            configuration: .immersiveMapTilesDefault.labelVisibility { visibility in
+            theme: .default.labelVisibility { visibility in
                 visibility.poiMinimumZoom = 30
             }
         )
@@ -382,28 +382,28 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testPoiMinimumZoomChangesPreparedTileRevision() {
-        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let original = ImmersiveMapTilesTheme.default
         let updated = original.labelVisibility { visibility in
             visibility.poiMinimumZoom = 30
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(theme: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(theme: updated).cacheFingerprint)
     }
 
     /// A POI the icon set cannot depict is left out by default, and a
     /// configuration that wants those names back gets them from the iconless
     /// zoom floor, exactly as before.
     func testAnIconlessPoiIsHiddenUnlessTheConfigurationAsksForIt() {
-        let byDefault = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let byDefault = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         XCTAssertEqual(makeStyle(byDefault, layerName: "poi", className: "office", rank: 2, zoom: 14).key, 0)
         XCTAssertEqual(makeStyle(byDefault, layerName: "poi", className: "monument", rank: 2, zoom: 16).key, 0)
         // A category with an icon is untouched.
         XCTAssertNotEqual(makeStyle(byDefault, layerName: "poi", className: "museum", rank: 2, zoom: 14).key, 0)
 
         let withText = ImmersiveMapTilesDefaultMapStyle(
-            configuration: .immersiveMapTilesDefault.labelVisibility { visibility in
+            theme: .default.labelVisibility { visibility in
                 visibility.poiRequiresIcon = false
             }
         )
@@ -413,29 +413,29 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testPoiRequiresIconChangesPreparedTileRevision() {
-        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let original = ImmersiveMapTilesTheme.default
         let updated = original.labelVisibility { visibility in
             visibility.poiRequiresIcon = false
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(theme: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(theme: updated).cacheFingerprint)
     }
 
     func testIconlessPoiZoomChangesPreparedTileRevision() {
-        let original = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let original = ImmersiveMapTilesTheme.default
         let updated = original.labelVisibility { visibility in
             visibility.poiIconlessMinimumZoom = 14
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
-        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(configuration: original).cacheFingerprint,
-                          ImmersiveMapTilesDefaultMapStyle(configuration: updated).cacheFingerprint)
+        XCTAssertNotEqual(ImmersiveMapTilesDefaultMapStyle(theme: original).cacheFingerprint,
+                          ImmersiveMapTilesDefaultMapStyle(theme: updated).cacheFingerprint)
     }
 
     func testBoundaryStyleSuppressesPolygonFill() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
         // Boundaries are a line style: areal geometry (e.g. Native American
         // reservations arriving as polygons) must not be filled.
@@ -446,7 +446,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testBoundaryWidthIsPointLockedWithFeatheredButtDashes() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
         // Borders resolve their visible width in screen space, so they hold a
         // designed point width instead of pumping with the tile scale, and at
@@ -475,7 +475,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
     }
 
     func testPlanetZoomBoundariesShowCountriesOnly() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
         // Regional (admin 3-4) borders are clutter over a planet or continent
         // view: hidden below the regional zoom, present from it on.

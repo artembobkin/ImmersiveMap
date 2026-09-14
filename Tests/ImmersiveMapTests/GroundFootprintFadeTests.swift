@@ -67,7 +67,7 @@ final class GroundFootprintFadeTests: XCTestCase {
         XCTAssertNil(water.farColor, "Water never fades: a far lake stays a lake")
         XCTAssertNil(snow.farColor, "Ice caps are real edges")
         let wood = style(layer: "landcover", cls: "wood", z: 12)
-        let streetGrass = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.grass
+        let streetGrass = ImmersiveMapTilesTheme.default.layers.grass
         XCTAssertEqual(wood.farStreetColor.map { SIMD3($0.x, $0.y, $0.z) },
                        SIMD3(streetGrass.x, streetGrass.y, streetGrass.z),
                        "OSM woods converge on the street grass tone")

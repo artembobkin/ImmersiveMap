@@ -149,7 +149,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     @MainActor
     func testABuildingCrossingTheHorizonKeepsItsColour() async throws {
         let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover { landcover in
                 landcover.water = Self.fixtureWater
             }
@@ -160,7 +160,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                 features.buildingFillColor = fixtureBuilding
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
             .buildingExtrusion(isEnabled: true)
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
@@ -314,7 +314,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     @MainActor
     private func renderTiltedPlane(clearColor: SIMD4<Double>,
                                    fog: ImmersiveMapSettings.FogSettings) async throws -> RenderedFrame {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .globalLandcover { landcover in
                 landcover.water = Self.fixtureWater
             }
@@ -322,7 +322,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                 layers.water = Self.fixtureWater
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.mapClearColor = clearColor

@@ -64,7 +64,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
     private let coveringRing: [(Int32, Int32)] = [(1800, 800), (2600, 800), (2600, 1300), (1800, 1300)]
 
     func testACarriagewayAreaStylesLikeAJunctionArea() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func value(_ s: String) -> MvtValue { .string(s) }
         let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["class": value("primary"),
@@ -78,7 +78,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                        "A carriageway area is read as a reconstructed road surface")
         XCTAssertTrue(area.surfaceAreaCutsPaint,
                       "A graph-built surface carries the measured paint itself, so the synthesized paint ends at its edge")
-        let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
+        let primary = ImmersiveMapTilesTheme.default.layers.roads.primary
         XCTAssertEqual(area.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.color, primary,
                        "The surface is exactly the class colour")
         XCTAssertNil(area.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },

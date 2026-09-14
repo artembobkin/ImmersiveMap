@@ -19,10 +19,10 @@ enum BerlinNightTheme {
     /// The land color, reused wherever a surface has to disappear into the map.
     private static let land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
 
-    static let mapStyle = ImmersiveMapTilesMapStyle(configuration: configuration)
+    static let mapStyle = ImmersiveMapTilesMapStyle(theme: configuration)
 
-    private static var configuration: ImmersiveMapTilesDefaultMapStyleConfiguration {
-        ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+    private static var configuration: ImmersiveMapTilesTheme {
+        ImmersiveMapTilesTheme.default
             .layers { layers in
                 layers.land = land
                 layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
@@ -114,8 +114,8 @@ enum BerlinNightTheme {
 
     private static func roadsTinted(base: SIMD4<Float>,
                                     minor: SIMD4<Float>,
-                                    casing: SIMD4<Float>) -> ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
-        ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(motorway: base,
+                                    casing: SIMD4<Float>) -> ImmersiveMapTilesTheme.RoadLayerStyles {
+        ImmersiveMapTilesTheme.RoadLayerStyles(motorway: base,
                                                                       trunk: base,
                                                                       primary: base,
                                                                       secondary: minor,
@@ -127,7 +127,7 @@ enum BerlinNightTheme {
                                                                       casing: casing)
     }
 
-    private static func tint(_ labels: inout ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles,
+    private static func tint(_ labels: inout ImmersiveMapTilesTheme.LabelStyles,
                              fill: SIMD3<Float>,
                              stroke: SIMD3<Float>) {
         labels.city.fillColor = fill

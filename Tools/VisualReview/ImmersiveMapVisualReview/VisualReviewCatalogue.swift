@@ -897,7 +897,7 @@ enum Showcase {
     private static let nightLand = SIMD4<Float>(0.09, 0.10, 0.13, 1)
 
     private static var nightStyle: ImmersiveMapTilesMapStyle {
-        ImmersiveMapTilesMapStyle(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        ImmersiveMapTilesMapStyle(theme: ImmersiveMapTilesTheme.default
             .layers { layers in
                 layers.land = nightLand
                 layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
@@ -912,7 +912,7 @@ enum Showcase {
                 layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
                 let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
                 let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
-                layers.roads = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
+                layers.roads = ImmersiveMapTilesTheme.RoadLayerStyles(
                     motorway: base, trunk: base, primary: base,
                     secondary: minor, tertiary: minor, minor: minor, service: minor, path: minor, rail: minor,
                     casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))

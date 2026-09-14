@@ -62,7 +62,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     }
 
     func testAHandMappedAreaIsIgnoredAndAGraphOneWearsTheClassColour() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func value(_ s: String) -> MvtValue { .string(s) }
         // Hand-mapped area:highway: ignored. In central Moscow it often
         // covers a whole street including the gap between the two halves of
@@ -77,7 +77,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         // of its own, no kerb (the automobile tier is kerbless), and it cuts
         // the paint of the roads inside it, because the measured paint ships
         // as its own lines.
-        let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary
+        let primary = ImmersiveMapTilesTheme.default.layers.roads.primary
         let crossing = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                  properties: ["class": value("primary"),
                                                                               "subclass": value("junction_area"),
@@ -260,7 +260,7 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     }
 
     func testATunnelJunctionAreaHasNoKerb() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func value(_ s: String) -> MvtValue { .string(s) }
         let area = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                              properties: ["class": value("service"), "subclass": value("junction_area"), "origin": value("graph"), "brunnel": value("tunnel")],
@@ -272,8 +272,8 @@ final class JunctionAreaSurfaceTests: XCTestCase {
     /// at street zoom, the ribbon at the zooms a road is a line, the
     /// point-locked stroke over a region. Same opacity, no dash, no paint.
     func testATunnelIsATranslucentFillAtEveryZoom() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
-        let service = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.service
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+        let service = ImmersiveMapTilesTheme.default.layers.roads.service
         func value(_ s: String) -> MvtValue { .string(s) }
         func make(_ properties: [String: MvtValue], z: Int) -> FeatureStyle {
             style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",

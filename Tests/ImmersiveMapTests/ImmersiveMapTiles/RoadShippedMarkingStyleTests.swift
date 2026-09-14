@@ -12,7 +12,7 @@ import XCTest
 /// `isShippedRoadPaint` flag keeps the road machinery off geometry that
 /// already ends where the paint ends.
 final class RoadShippedMarkingStyleTests: XCTestCase {
-    private let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+    private let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
     private func moscowTile(z: Int) -> Tile {
         z >= 16 ? Tile(x: 39615, y: 20486, z: 16)

@@ -24,16 +24,16 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     let landuseMinimumZoom = 6
     let massiveOverviewMaximumZoom = 2
     let globalLandcoverMaximumZoom = 9
-    let configuration: ImmersiveMapTilesDefaultMapStyleConfiguration
+    let theme: ImmersiveMapTilesTheme
 
-    public init(configuration: ImmersiveMapTilesDefaultMapStyleConfiguration = .immersiveMapTilesDefault) {
-        self.configuration = configuration
+    public init(theme: ImmersiveMapTilesTheme = .default) {
+        self.theme = theme
     }
 
     /// The palette's fingerprint and the rules' revision: a change to either
     /// re-prepares every tile.
     public var cacheFingerprint: UInt32 {
-        configuration.cacheFingerprint &+ Self.implementationRevision
+        theme.cacheFingerprint &+ Self.implementationRevision
     }
 
     public var styleID: String { "immersivemaptiles" }
@@ -50,11 +50,11 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         // continuously in camera zoom, so no tile-zoom boundary flips the
         // ground.
         let overviewColor = tileZoom <= massiveOverviewMaximumZoom
-            ? configuration.globalLandcover.grass
-            : configuration.globalLandcover.land
+            ? theme.globalLandcover.grass
+            : theme.globalLandcover.land
         return polygon(key: 1,
                        color: overviewColor,
-                       streetColor: configuration.layers.land)
+                       streetColor: theme.layers.land)
     }
 
     /// The hosted tiles ship the ocean and sea names in `water_name`, so
@@ -118,8 +118,8 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             // Same pair for water: the saturated globe blue eases into the
             // pale street blue with the camera, identically in every tile.
             return polygon(key: 20,
-                           color: configuration.globalLandcover.water,
-                           streetColor: configuration.layers.water)
+                           color: theme.globalLandcover.water,
+                           streetColor: theme.layers.water)
         case "waterway":
             return waterwayStyle(cls: cls, props: props)
         case "landcover":
@@ -133,7 +133,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "building":
             return buildingStyle(props: props, tileZoom: z)
         case "aeroway":
-            return line(key: 28, color: configuration.layers.aeroway, width: 4)
+            return line(key: 28, color: theme.layers.aeroway, width: 4)
         case "transportation", "streetscape":
             // The streetscape (the measured carriageways and road paint)
             // ships in its own layer, which the parser merges into the road
@@ -160,9 +160,9 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             guard includesPoiLabel(props: props, tileZoom: z) else { return hiddenStyle }
             return poiLabelStyle(props: props, tileZoom: z)
         case "mountain_peak":
-            return pointLabel(key: 74, layer: layer, props: props, appearance: configuration.labels.poi)
+            return pointLabel(key: 74, layer: layer, props: props, appearance: theme.labels.poi)
         case "aerodrome_label":
-            return pointLabel(key: 75, layer: layer, props: props, appearance: configuration.labels.poi)
+            return pointLabel(key: 75, layer: layer, props: props, appearance: theme.labels.poi)
         case "housenumber":
             return pointLabel(key: 76, layer: layer, props: props, appearance: houseNumberAppearance())
         default:
@@ -210,14 +210,14 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// Settlements keep a quarter of their distance, so a city stays a faint
     /// warm patch under its label instead of vanishing.
     var farVegetation: FarTone {
-        FarTone(color: configuration.globalLandcover.grass,
-                streetColor: configuration.layers.grass,
+        FarTone(color: theme.globalLandcover.grass,
+                streetColor: theme.layers.grass,
                 strength: 1.0)
     }
 
     var farSettlement: FarTone {
-        FarTone(color: configuration.globalLandcover.grass,
-                streetColor: configuration.layers.grass,
+        FarTone(color: theme.globalLandcover.grass,
+                streetColor: theme.layers.grass,
                 strength: 0.75)
     }
 

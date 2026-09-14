@@ -65,7 +65,7 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
     // MARK: - Symbol to surface
 
     func testRoadsCarryASymbolCeilingThatTheSurfaceReleases() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func v(_ s: String) -> MvtValue { .string(s) }
         let primary = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                 properties: ["class": v("primary")],

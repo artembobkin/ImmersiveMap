@@ -4,11 +4,11 @@
 @testable import ImmersiveMap
 import XCTest
 
-final class ImmersiveMapTilesDefaultMapStyleConfigurationTests: XCTestCase {
+final class ImmersiveMapTilesThemeTests: XCTestCase {
     /// A recolor must change disk-cache identity, otherwise the map keeps drawing
     /// from prepared tiles baked with the old palette.
     func testCacheFingerprintChangesWithEveryPaletteGroup() {
-        let base = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let base = ImmersiveMapTilesTheme.default
 
         let relabeled = base.labels { labels in
             labels.town.haloEm += 0.05
@@ -25,14 +25,43 @@ final class ImmersiveMapTilesDefaultMapStyleConfigurationTests: XCTestCase {
         XCTAssertNotEqual(base.cacheFingerprint, refeatured.cacheFingerprint)
     }
 
-    /// `-0.0 == 0.0` is true, so two configurations that compare equal would
+    /// `apply` is a copy with the changes: the original is untouched, the
+    /// style built from it carries them, and the leading-dot spelling on the
+    /// view resolves to the built-in style.
+    func testApplyMakesAChangedCopy() {
+        let base = ImmersiveMapTilesTheme.default
+        let water = SIMD4<Float>(0.2, 0.4, 0.8, 1)
+
+        let recoloured = base.apply { theme in
+            theme.layers.water = water
+        }
+
+        XCTAssertEqual(base, .default)
+        XCTAssertEqual(recoloured.layers.water, water)
+        XCTAssertNotEqual(base.cacheFingerprint, recoloured.cacheFingerprint)
+
+        let style = ImmersiveMapTilesMapStyle.default.apply { theme in
+            theme.layers.water = water
+        }
+        XCTAssertEqual(style.theme, recoloured)
+
+        let settings = ImmersiveMapView()
+            .mapStyle(.default.apply { theme in
+                theme.layers.water = water
+            })
+            .settings
+        XCTAssertEqual(settings.mapStyle.configurationFingerprint,
+                       ImmersiveMapTilesMapStyle(theme: recoloured).configurationFingerprint)
+    }
+
+    /// `-0.0 == 0.0` is true, so two themes that compare equal would
     /// otherwise hash differently and thrash the prepared-tile disk cache.
     func testCacheFingerprintCanonicalizesSignedZeroFloatValues() {
-        let positiveZero = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let positiveZero = ImmersiveMapTilesTheme.default
             .labels { labels in
                 labels.town.haloEm = 0.0
             }
-        let negativeZero = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let negativeZero = ImmersiveMapTilesTheme.default
             .labels { labels in
                 labels.town.haloEm = -0.0
             }

@@ -120,20 +120,20 @@ extension ImmersiveMapTilesDefaultMapStyle {
 
     func placeLabelStyle(props: [String: MvtValue]) -> FeatureStyle {
         let cls = props["class"]?.stringValue?.lowercased()
-        var appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance
+        var appearance: ImmersiveMapTilesTheme.LabelAppearance
         switch cls {
         case "continent", "country":
-            appearance = configuration.labels.country
+            appearance = theme.labels.country
         case "state", "province":
-            var a = configuration.labels.country
+            var a = theme.labels.country
             a.sizePoints -= 2
             appearance = a
         case "city":
-            appearance = configuration.labels.city
+            appearance = theme.labels.city
         case "town":
-            appearance = configuration.labels.town
+            appearance = theme.labels.town
         default: // village, hamlet, suburb, quarter, neighbourhood, ...
-            var a = configuration.labels.town
+            var a = theme.labels.town
             a.sizePoints -= 1.5
             a.weight = .thin
             appearance = a
@@ -148,7 +148,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     }
 
     func waterLabelStyle(props: [String: MvtValue]) -> FeatureStyle {
-        var appearance = configuration.labels.water
+        var appearance = theme.labels.water
         switch props["class"]?.stringValue?.lowercased() {
         case "ocean":
             appearance.sizePoints += 3
@@ -189,20 +189,20 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // monument, a named building) has nothing to draw but its name,
             // and in a city centre those names outnumber everything else: bare
             // text over the buildings, saying nothing about what the place is.
-            // By default they are left out entirely; a configuration that
+            // By default they are left out entirely; a theme that
             // wants them back gets them from the iconless zoom floor.
-            guard configuration.labelVisibility.poiRequiresIcon == false else {
+            guard theme.labelVisibility.poiRequiresIcon == false else {
                 return hiddenStyle
             }
-            minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiIconlessMinimumZoom))
+            minCameraZoom = max(minCameraZoom, Float(theme.labelVisibility.poiIconlessMinimumZoom))
         }
         minCameraZoom = min(minCameraZoom, Float(tileZoom) + Self.poiMaximumOverzoomAppearanceDelay)
         // The global POI floor comes after the overzoom-delay cap on purpose:
         // the cap bounds rank-derived delays, while the floor is an absolute
         // visibility gate that may exceed it (up to hiding POIs entirely).
-        minCameraZoom = max(minCameraZoom, Float(configuration.labelVisibility.poiMinimumZoom))
+        minCameraZoom = max(minCameraZoom, Float(theme.labelVisibility.poiMinimumZoom))
 
-        var appearance = configuration.labels.poi
+        var appearance = theme.labels.poi
         appearance.fillColor = poiCategoryColor(cls: cls, subclass: subclass)
         return pointLabel(key: 72, layer: "poi", props: props, appearance: appearance,
                           minCameraZoom: minCameraZoom, icon: icon)
@@ -335,7 +335,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         case "bank", "post", "office", "town_hall", "police", "fire_station", "government", "atm":
             return SIMD3<Float>(0.40, 0.44, 0.52)   // offices/public services: gray-blue
         default:
-            return configuration.labels.poi.fillColor  // everything else: default dark
+            return theme.labels.poi.fillColor  // everything else: default dark
         }
     }
 
@@ -347,12 +347,12 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            color: SIMD4<Float>(0, 0, 0, 0),
                            lineGeometry: LineGeometryStyle(lineWidth: 1)),
             classPriority: roadLabelPriority(cls: cls),
-            label: labelTextStyle(key: 90, appearance: configuration.labels.road)
+            label: labelTextStyle(key: 90, appearance: theme.labels.road)
         ))
     }
 
-    func houseNumberAppearance() -> ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance {
-        var appearance = configuration.labels.poi
+    func houseNumberAppearance() -> ImmersiveMapTilesTheme.LabelAppearance {
+        var appearance = theme.labels.poi
         // The densest label class, and the one the readable floor moves most:
         // 6 points was decoration rather than information, and at the floor each
         // one is legible while collision thins out the rest.
@@ -364,7 +364,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     func pointLabel(key: UInt8,
                     layer: String,
                     props: [String: MvtValue],
-                    appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance,
+                    appearance: ImmersiveMapTilesTheme.LabelAppearance,
                     minCameraZoom: Float = 0,
                     icon: PoiSpriteIcon? = nil) -> FeatureStyle {
         let rank = labelRank(props)
@@ -377,7 +377,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     }
 
     func labelTextStyle(key: Int,
-                        appearance: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance) -> LabelTextStyle {
+                        appearance: ImmersiveMapTilesTheme.LabelAppearance) -> LabelTextStyle {
         LabelTextStyle(key: key,
                        fillColor: appearance.fillColor,
                        strokeColor: appearance.strokeColor,

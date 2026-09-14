@@ -132,7 +132,7 @@ final class LabelScreenUnitTests: XCTestCase {
     /// must never reach the screen under it is a resolved style. This walks the
     /// classes whose curve is lowest, which are the ones the floor exists for.
     func testNoResolvedLabelStyleIsBelowTheReadableFloor() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         let cases: [(String, String, [String: MvtValue])] = [
             ("poi", "poi", ["class": stringValue("restaurant")]),
             ("house number", "housenumber", [:]),
@@ -165,7 +165,7 @@ final class LabelScreenUnitTests: XCTestCase {
     /// an ocean label is the water appearance a few points larger, and lifting
     /// water first would make the ocean larger than the design asks for.
     func testTheFloorDoesNotPushDerivedClassesUp() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func sizePoints(class classValue: String?) -> Float {
             var properties: [String: MvtValue] = [:]
             if let classValue {

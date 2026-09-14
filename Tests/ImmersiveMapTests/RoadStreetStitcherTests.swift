@@ -11,7 +11,7 @@ import simd
 /// endpoint no third road shares become one polyline before tessellation;
 /// junctions, different streets, different widths and nameless pieces do not.
 final class RoadStreetStitcherTests: XCTestCase {
-    private let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+    private let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
 
     private func value(_ string: String) -> MvtValue {
         .string(string)

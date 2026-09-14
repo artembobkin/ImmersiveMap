@@ -142,10 +142,10 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     /// darkened magenta would no longer match the colour it was given.
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault
+        let configuration = ImmersiveMapTilesTheme.default
             .layers { $0.water = Self.fixtureWater }
         let settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(configuration: configuration))
+            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }
 

@@ -95,7 +95,7 @@ final class StreetscapeTests: XCTestCase {
     // MARK: - A street map's strokes, width by class
 
     private func roadStyle(_ properties: [String: String], tile: Tile, streetscape: Bool) -> FeatureStyle {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                          properties: properties.mapValues { MvtValue.string($0) },
                                                          tile: tile,
@@ -206,7 +206,7 @@ final class StreetscapeTests: XCTestCase {
     }
 
     func testTheStyleReadsTheStreetscapeLayerByTheRoadRules() {
-        let style = ImmersiveMapTilesDefaultMapStyle(configuration: .immersiveMapTilesDefault)
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         let properties: [String: MvtValue] = ["marking": .string("dividing"),
                                               "style": .string("dashed"),
                                               "paint": .string("white")]

@@ -34,7 +34,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let tileZoom = tile.z
         let isTunnel = road.isTunnel
         let subclass = props["subclass"]?.stringValue?.lowercased()
-        let roads = configuration.layers.roads
+        let roads = theme.layers.roads
         // Paint the source measured on the ground, shipped as its own line:
         // a lane line, the carriageway edge, a crossing. It carries no class
         // and no name, only what it is (`marking`) and what colour it is
@@ -276,7 +276,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         case "rail", "transit":
             return railStyle(subclass: subclass, tileZoom: tileZoom)
         case "ferry":
-            return line(key: 41, color: configuration.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
+            return line(key: 41, color: theme.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
             return roadStyle(fillKey: 43, color: roads.minor, width: widthMetres, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
                              minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
@@ -403,7 +403,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// The class grey the road draws in at every zoom: the same asphalt as
     /// the street era, so no colour blends or steps on the way down.
     static func streetRoadColor(cls: String?,
-                                roads: ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles) -> SIMD4<Float> {
+                                roads: ImmersiveMapTilesTheme.RoadLayerStyles) -> SIMD4<Float> {
         switch cls {
         case "motorway": return roads.motorway
         case "trunk": return roads.trunk
@@ -642,7 +642,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let s = roadWidthScale(tileZoom: tileZoom)
         return .road(RoadStyle(
             fill: LinePass(key: 46,
-                           color: configuration.layers.roads.rail,
+                           color: theme.layers.roads.rail,
                            lowZoomFadeMask: roadLowZoomFadeMask,
                            minimumWidthPoints: 0.7,
                            lineGeometry: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8)),

@@ -901,7 +901,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// The southern polar cap's colour: the Antarctic ice sheet past
             /// the last Mercator tile row. The default matches the snow the
             /// built-in style paints Antarctica with
-            /// (`ImmersiveMapTilesDefaultMapStyleConfiguration.globalLandcover.snow`),
+            /// (`ImmersiveMapTilesTheme.globalLandcover.snow`),
             /// so the cap continues the tiles seamlessly; a style with its own
             /// ice sets both in step. The northern cap takes `water` instead:
             /// past the northern rim the planet is the Arctic Ocean.

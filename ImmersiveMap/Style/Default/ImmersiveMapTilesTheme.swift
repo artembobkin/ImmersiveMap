@@ -3,10 +3,22 @@
 
 import simd
 
-/// Tunable palette for `ImmersiveMapTilesDefaultMapStyle`: labels, layer colors
-/// and feature colors as plain values, so hosts can recolor the first-party
-/// OpenMapTiles basemap without touching the layer logic.
-public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable {
+/// The look of the built-in style as plain values: the colour of every
+/// layer and road class, the building fill, the label appearances and which
+/// labels show. An app recolours the map by changing a field of the default
+/// and never touches the layer logic:
+///
+/// ```swift
+/// ImmersiveMapView()
+///     .mapStyle(.default.apply { theme in
+///         theme.layers.water = [0.2, 0.4, 0.8, 1]
+///         theme.layers.roads.motorway = [0.95, 0.6, 0.2, 1]
+///     })
+/// ```
+///
+/// Colours are RGBA in 0...1. Every value feeds the cache fingerprint, so a
+/// change rebakes the prepared tiles by itself.
+public struct ImmersiveMapTilesTheme: Equatable, Sendable {
     public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
         public var strokeColor: SIMD3<Float>
@@ -220,11 +232,11 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     public var features: FeatureStyles
     public var globalLandcover: GlobalLandcoverStyles
 
-    public init(labels: LabelStyles = .immersiveMapTilesDefault,
+    public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
-                layers: LayerStyles = .immersiveMapTilesDefault,
-                features: FeatureStyles = .immersiveMapTilesDefault,
-                globalLandcover: GlobalLandcoverStyles = .softBiomes) {
+                layers: LayerStyles = .default,
+                features: FeatureStyles = .default,
+                globalLandcover: GlobalLandcoverStyles = .default) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
@@ -232,35 +244,43 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
         self.globalLandcover = globalLandcover
     }
 
-    public static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration()
+    public static let `default` = ImmersiveMapTilesTheme()
 
-    public func labels(_ update: (inout LabelStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+    /// A copy with the changes the closure makes: the way to state a theme
+    /// as the default plus a few differences.
+    public func apply(_ change: (inout ImmersiveMapTilesTheme) -> Void) -> ImmersiveMapTilesTheme {
+        var copy = self
+        change(&copy)
+        return copy
+    }
+
+    public func labels(_ update: (inout LabelStyles) -> Void) -> ImmersiveMapTilesTheme {
         var copy = self
         update(&copy.labels)
         return copy
     }
 
     public func labelVisibility(_ update: (inout LabelVisibility) -> Void)
-        -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+        -> ImmersiveMapTilesTheme {
         var copy = self
         update(&copy.labelVisibility)
         return copy
     }
 
-    public func layers(_ update: (inout LayerStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+    public func layers(_ update: (inout LayerStyles) -> Void) -> ImmersiveMapTilesTheme {
         var copy = self
         update(&copy.layers)
         return copy
     }
 
-    public func features(_ update: (inout FeatureStyles) -> Void) -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+    public func features(_ update: (inout FeatureStyles) -> Void) -> ImmersiveMapTilesTheme {
         var copy = self
         update(&copy.features)
         return copy
     }
 
     public func globalLandcover(_ update: (inout GlobalLandcoverStyles) -> Void)
-        -> ImmersiveMapTilesDefaultMapStyleConfiguration {
+        -> ImmersiveMapTilesTheme {
         var copy = self
         update(&copy.globalLandcover)
         return copy
@@ -313,14 +333,14 @@ public struct ImmersiveMapTilesDefaultMapStyleConfiguration: Equatable, Sendable
     }
 }
 
-public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles {
+public extension ImmersiveMapTilesTheme.GlobalLandcoverStyles {
     /// The street palette, class by class: the overview and street sets are
     /// deliberately one set of colors, so the map wears the same water blue
     /// and the same greens at every zoom and nothing shifts hue while zooming
     /// (the per-frame street blend then lerps between equal endpoints and is
-    /// inert). A custom configuration may differentiate the two sets and get
+    /// inert). A custom theme may differentiate the two sets and get
     /// a smooth camera-zoom handover between them.
-    static let softBiomes = ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverStyles(
+    static let `default` = ImmersiveMapTilesTheme.GlobalLandcoverStyles(
         land: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
         water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
         forest: SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
@@ -332,14 +352,14 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.GlobalLandcoverSt
     )
 }
 
-public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
+public extension ImmersiveMapTilesTheme.LayerStyles {
     /// A light, warm, low-contrast palette in the manner of the system maps
     /// people already know: a warm off-white ground, soft pastel greens, a
     /// clear light blue for water, and asphalt-grey streets whose majors run
     /// wider, not darker. Contrast is spent on what carries meaning
     /// (water, parks, the road hierarchy) and taken out of everything that
     /// used to compete with the labels and the buildings for attention.
-    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles(
+    static let `default` = ImmersiveMapTilesTheme.LayerStyles(
         land: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
         water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
         // Landcover greens are opaque: they cover whole tiles (a tile can be entirely
@@ -366,18 +386,18 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LayerStyles {
         industrial: SIMD4<Float>(0.949, 0.941, 0.925, 1.0),
         boundary: SIMD4<Float>(0.52, 0.15, 0.72, 0.9),
         aeroway: SIMD4<Float>(0.886, 0.882, 0.902, 1.0),
-        roads: .immersiveMapTilesDefault
+        roads: .default
     )
 }
 
-public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
+public extension ImmersiveMapTilesTheme.RoadLayerStyles {
     /// Asphalt streets in the driving-map manner: every drive tier is the
     /// same cool neutral grey, one road surface across the network, and
     /// importance reads as width alone, motorways widest down to narrow
     /// service alleys. Paths keep their warm gravel tone (they are not
     /// asphalt) and the casing the style derives from these fills is a
     /// uniformly darker grey, so every road sits in a slightly deeper edge.
-    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles(
+    static let `default` = ImmersiveMapTilesTheme.RoadLayerStyles(
         motorway: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         trunk: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
         primary: SIMD4<Float>(0.757, 0.769, 0.784, 1.0),
@@ -397,16 +417,16 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.RoadLayerStyles {
     )
 }
 
-public extension ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles {
+public extension ImmersiveMapTilesTheme.FeatureStyles {
     /// A warm light grey a step under the ground: the roof of a building
     /// separates from the street around it, and its walls, which the renderer
     /// shades down from this, separate from the roof.
-    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.FeatureStyles(
+    static let `default` = ImmersiveMapTilesTheme.FeatureStyles(
         buildingFillColor: SIMD4<Float>(0.906, 0.890, 0.863, 1.0)
     )
 }
 
-public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles {
+public extension ImmersiveMapTilesTheme.LabelStyles {
     /// Sizes are layout points: the pixel size this style used before labels
     /// carried a unit, divided by the 2x reference scale the palette was
     /// authored against.
@@ -417,23 +437,23 @@ public extension ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles {
     /// a class derived from another (an ocean label is the water appearance a
     /// few points larger) is measured against the floor after its own
     /// adjustment rather than on top of a base that was already lifted.
-    static let immersiveMapTilesDefault = ImmersiveMapTilesDefaultMapStyleConfiguration.LabelStyles(
-        city: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+    static let `default` = ImmersiveMapTilesTheme.LabelStyles(
+        city: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.20, 0.20, 0.22), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.153, sizePoints: 15, weight: .bold),
-        town: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        town: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.173, sizePoints: 11, weight: .thin),
-        country: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        country: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.162, sizePoints: 13, weight: .bold),
-        poi: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        poi: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.225, sizePoints: 8, weight: .thin),
-        water: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        water: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.24, 0.44, 0.68), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.168, sizePoints: 9.5, weight: .thin),
-        road: ImmersiveMapTilesDefaultMapStyleConfiguration.LabelAppearance(
+        road: ImmersiveMapTilesTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.106, sizePoints: 17, weight: .bold)
     )
