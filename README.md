@@ -46,7 +46,7 @@ with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard
 
 ## Features
 
-[Built-in vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS (AppKit host, no Catalyst), SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [the streetscape](Documentation/docs/streetscape.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
+[Built-in vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS, SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [the streetscape](Documentation/docs/streetscape.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
 
 ## Quick Start
 
