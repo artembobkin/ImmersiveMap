@@ -9,7 +9,7 @@ import simd
 /// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`), over the reading
 /// `ImmersiveMapTilesSchema` makes of it.
 ///
-/// This file is the dispatch: the layer switch in `resolvedStyle`, the
+/// This file is the dispatch: the layer switch in `makeStyle`, the
 /// road policy every road feature carries, and the builders the rules
 /// share.
 /// The rules themselves are split by layer family into the extensions
@@ -75,12 +75,15 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// they do.
     static let junctionMakingPriority = 50
 
-    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
-        let style = resolvedStyle(data: data)
+    /// The road policy every road of this style carries, stated once for
+    /// the two branches that produce roads: where it draws, which tier it
+    /// belongs to, and whether it makes a junction for the paint on
+    /// another road. A style that is no road (a hidden class, a ferry's
+    /// plain line) passes through.
+    func roadPolicy(applying facts: ImmersiveMapRoadFacts, to style: FeatureStyle) -> FeatureStyle {
         guard case .road(var road) = style else {
             return style
         }
-        let facts = data.facts.road ?? .ground
         road.level = Self.roadLevel(facts)
         road.tier = road.classPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
         road.makesJunctions = facts.isShippedPaint == false
@@ -103,7 +106,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         }
     }
 
-    func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
+    func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         let layer = data.layerName.lowercased()
         let props = data.properties
         let z = data.tile.z
@@ -136,15 +139,17 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             // ships in its own layer, which the parser merges into the road
             // layer; a tile with the streetscape and no roads reaches here
             // under its own name and is styled by the same rules.
-            return transportationStyle(cls: cls, props: props,
-                                       road: data.facts.road ?? .ground,
-                                       tile: data.tile,
-                                       layerCarriesStreetscape: data.layerCarriesStreetscape,
-                                       layerShipsMeasuredCrossings: data.layerShipsMeasuredCrossings)
+            let road = data.facts.road ?? .ground
+            return roadPolicy(applying: road,
+                              to: transportationStyle(cls: cls, props: props,
+                                                      road: road,
+                                                      tile: data.tile,
+                                                      layerCarriesStreetscape: data.layerCarriesStreetscape,
+                                                      layerShipsMeasuredCrossings: data.layerShipsMeasuredCrossings))
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":
-            return roadLabelStyle(cls: cls)
+            return roadPolicy(applying: data.facts.road ?? .ground, to: roadLabelStyle(cls: cls))
         case "place":
             guard includesPlaceLabel(props: props, tileZoom: z) else { return hiddenStyle }
             return placeLabelStyle(props: props)
