@@ -40,6 +40,7 @@ struct LineFeatureReader {
     func read(feature: MvtDecodedFeature,
               featureIndex: Int,
               attributes: [String: MvtValue],
+              facts: ImmersiveMapFeatureFacts,
               style: FeatureStyle,
               geometry: TileLayerGeometry,
               layerName: String,
@@ -63,9 +64,10 @@ struct LineFeatureReader {
             : nil
         let roadLabelPass = lineRenderPasses.first { $0.includeRoadLabelPath }
         let roadLabelStyle = style.roadLabelTextStyle
+        let road = facts.road ?? .ground
         let roadClassPriority = style.roadClassPriority
-        let roadStructure = RoadStructureKind(physical: style.road.structure, tier: style.roadTier)
-        let roadLayer = style.road.layer
+        let roadStructure = RoadStructureKind(road: road, tier: style.roadTier)
+        let roadLayer = road.layer
         let sharedRoadPadding = Float(
             lineRenderPasses.reduce(0.0) { partial, pass in
                 max(partial, pass.lineGeometry.lineWidth * 0.5)
@@ -113,7 +115,7 @@ struct LineFeatureReader {
                 for lineRenderPass in group.passes {
                     if style.roadDecorationKind == .zebraCrossing,
                        roadStructure == .tunnel
-                           || (roads.hasShippedCrossings && style.isShippedRoadPaint == false) {
+                           || (roads.hasShippedCrossings && road.isShippedPaint == false) {
                         continue
                     }
 

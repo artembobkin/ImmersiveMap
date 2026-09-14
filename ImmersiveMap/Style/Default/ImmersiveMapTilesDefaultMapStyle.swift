@@ -6,10 +6,12 @@ import simd
 
 /// The built-in style, for the hosted tiles' schema: the layer and field
 /// contract of `immersivemap.dev`
-/// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`).
+/// (`class`/`subclass`/`brunnel`/`admin_level`/`rank`), over the reading
+/// `ImmersiveMapTilesSchema` makes of it.
 ///
 /// This file is the dispatch: the layer switch in `resolvedStyle`, the
-/// facts every road feature carries, and the builders the rules share.
+/// road policy every road feature carries, and the builders the rules
+/// share.
 /// The rules themselves are split by layer family into the extensions
 /// next to it: `Ground`, `Buildings`, `Roads`, `RoadWidths`,
 /// `Streetscape` and `Labels`. Nothing in them is public: the members are
@@ -38,15 +40,7 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         configuration.cacheFingerprint &+ Self.implementationRevision
     }
 
-    /// The hosted tiles ship the roads in `transportation` and the
-    /// streetscape as `streetscape`.
-    public var roadLayerNames: Set<String> { ["transportation"] }
-
-    public var streetscapeLayerName: String? { "streetscape" }
-
     public var styleID: String { "immersivemaptiles" }
-
-    public var houseNumberLayers: Set<String> { ["housenumber"] }
 
     public func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         makeStyle(data: DetFeatureStyleData(feature))
@@ -87,29 +81,10 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
 
     func makeStyle(data: DetFeatureStyleData) -> FeatureStyle {
         var style = resolvedStyle(data: data)
-        if Self.isRoadLayer(data.layerName) {
-            // Every road feature carries where it sits and which street it
-            // is a piece of; a line also carries its stitching key, which a
-            // surface never needs.
-            var road = ImmersiveMapRoadFacts.openStreetMap(ImmersiveMapFeatureProperties(values: data.properties))
-            if data.geometryType == .polygon {
-                road.stitchingKey = nil
-            }
-            style.road = road
-            style.drawsAsTunnel = data.properties["brunnel"]?.stringValue?.lowercased() == "tunnel" || data.isTunnelRoof
-            style.parkingBaysParallel = data.properties["orientation"]?.stringValue == "parallel"
-        }
         style.roadTier = style.roadClassPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
-        style.roadMakesJunctions = style.isShippedRoadPaint == false
+        style.roadMakesJunctions = data.facts.road?.isShippedPaint != true
             && style.roadClassPriority >= Self.junctionMakingPriority
         return style
-    }
-
-    /// The layers whose features are roads: the road lines, the measured
-    /// streetscape folded into them, and the road names.
-    static func isRoadLayer(_ layerName: String) -> Bool {
-        let layer = layerName.lowercased()
-        return layer == "transportation" || layer == "streetscape" || layer == "transportation_name"
     }
 
     func resolvedStyle(data: DetFeatureStyleData) -> FeatureStyle {
@@ -145,9 +120,10 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
             // second archive the parser folds into the road layer; a tile
             // with the streetscape and no roads reaches here under its own
             // name and is styled by the same rules.
-            return transportationStyle(cls: cls, props: props, tile: data.tile,
-                                       streetscapeEnabled: data.streetscapeEnabled,
-                                       isTunnelRoof: data.isTunnelRoof)
+            return transportationStyle(cls: cls, props: props,
+                                       road: data.facts.road ?? .ground,
+                                       tile: data.tile,
+                                       streetscapeEnabled: data.streetscapeEnabled)
         case "boundary":
             return boundaryStyle(props: props, tileZoom: z)
         case "transportation_name":

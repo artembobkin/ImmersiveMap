@@ -147,7 +147,10 @@ public struct LineRenderPass: Sendable {
 
 /// How one feature draws: the style's whole answer, which the parser bakes
 /// and the renderer draws. The factories below cover the common drawing
-/// modes; the memberwise initializer exposes every knob.
+/// modes; the memberwise initializer exposes every knob. What the feature
+/// is (a road in a tunnel, a carriageway surface, a building of some
+/// height) is not in here: that is the schema reading's
+/// `ImmersiveMapFeatureFacts`, which the parser carries next to the style.
 ///
 /// `key` is the style's identity within a tile and its place in the draw
 /// order: the ground fills of a tile draw in ascending key, and every
@@ -183,37 +186,23 @@ public struct FeatureStyle: Sendable {
     public let linePlacement: LinePlacement
     public let lineRenderPasses: [LineRenderPass]
     public let roadClassPriority: Int
-    /// What the feature is as a building, nil for a polygon that is not
-    /// raised. The style reads it from the tile's tags; the parser turns it
-    /// into the extrusion.
-    public let building: ImmersiveMapBuildingExtrusion?
-    public var usesExtrusion: Bool { building != nil }
+    /// A polygon that rises: a building drawn as its walls and roof at the
+    /// heights the schema reading states (`ImmersiveMapFeatureFacts.building`).
+    /// False draws the footprint as a ground fill whatever the facts say.
+    public let isExtruded: Bool
     public let extrusionHeightScale: Float
     public let extrusionAnchorZoom: Int
     public let extrusionFallbackHeight: Float
     public let labelTextStyle: LabelTextStyle?
     public let roadLabelTextStyle: LabelTextStyle?
     public let roadDecorationKind: RoadDecorationKind
-    /// A polygon that is a carriageway surface (a junction area the tiles
-    /// ship for a junction OSM maps as `area:highway`): it draws in the
-    /// automobile road phases, its fill as the carriageway and its outline as
-    /// the kerb, ordered among the roads so the surface covers the kerbs of
-    /// every ribbon that enters it. False for every ground polygon.
-    public let isRoadSurfaceArea: Bool
-    /// Whether this surface also cuts the PAINT of the roads inside it, on
-    /// top of cutting their ribbons. True for a junction reconstructed from
-    /// the road graph: there is no lane paint inside a crossing. False for a
-    /// hand-mapped `area:highway`, which typically covers a whole street's
-    /// carriageway: the street keeps its paint, drawn over the surface.
+    /// Whether a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
+    /// also cuts the PAINT of the roads inside it, on top of cutting their
+    /// ribbons. True for a junction reconstructed from the road graph: there
+    /// is no lane paint inside a crossing. False for a hand-mapped
+    /// `area:highway`, which typically covers a whole street's carriageway:
+    /// the street keeps its paint, drawn over the surface.
     public let surfaceAreaCutsPaint: Bool
-    /// Paint the source measured on the ground and shipped as its own line
-    /// (`marking=...`): a lane line, a stop line, a crossing. It already ends
-    /// exactly where it ends on the ground, so the engine's road machinery
-    /// must not touch it: no clipping against carriageway surfaces, no
-    /// junction making, no stitching, no junction inset (its passes carry
-    /// `endInset` zero). False for every line the engine draws from a road's
-    /// own geometry.
-    public let isShippedRoadPaint: Bool
     /// Minimum CAMERA zoom for this feature's point label (0 = always visible).
     /// Travels with the label to runtime, where it is compared against the current camera zoom.
     public let labelMinCameraZoom: Float
@@ -237,28 +226,13 @@ public struct FeatureStyle: Sendable {
     /// street, false for a way onto a plot (a driveway, a parking aisle, a
     /// footway) and for shipped paint, which is not a street at all.
     public var roadMakesJunctions: Bool = false
-    /// A point label that names a body of water. The parser adds ocean and
-    /// sea names of its own at the coarse zooms, and skips any the tile
-    /// already labels; this is how it recognises those.
-    public var isWaterName: Bool = false
     /// The label's importance among the labels of the map, lower first: the
     /// order the runtime reveals labels in as room appears, and deduplicates
-    /// them in. The style reads it from the schema's rank.
+    /// them in. The built-in style reads it from the tiles' rank.
     public var labelRank: Int = 0
     /// The label's precedence when two labels overlap, lower wins. Usually
     /// the rank offset by layer, so a place name beats a shop's.
     public var labelCollisionRank: Int = 0
-    /// What the feature is as a road: where it sits and which street it is
-    /// a piece of. `ground` for everything that is not a road.
-    public var road: ImmersiveMapRoadFacts = .ground
-    /// The feature draws the tunnel look: a road tagged as a tunnel, or a
-    /// carriageway surface the parser found to be a tunnel's roof. Only a
-    /// road like this marks the surfaces it runs inside as tunnel roofs,
-    /// and a tunnel surface clips every line of shipped paint inside it.
-    public var drawsAsTunnel: Bool = false
-    /// A parking lot whose bays are parallel to the kerb (a car length
-    /// apart) rather than perpendicular to it.
-    public var parkingBaysParallel: Bool = false
     /// A fill whose polygons with many holes (an ocean with its islands)
     /// are not tessellated as one polygon: the exterior draws as the fill
     /// and each hole as the background, so the tessellator never sees the
@@ -283,16 +257,14 @@ public struct FeatureStyle: Sendable {
         linePlacement: LinePlacement = .ground,
         lineRenderPasses: [LineRenderPass] = [],
         roadClassPriority: Int = 0,
-        building: ImmersiveMapBuildingExtrusion? = nil,
+        isExtruded: Bool = false,
         extrusionHeightScale: Float = 1.0,
         extrusionAnchorZoom: Int = 16,
         extrusionFallbackHeight: Float = 0,
         labelTextStyle: LabelTextStyle? = nil,
         roadLabelTextStyle: LabelTextStyle? = nil,
         roadDecorationKind: RoadDecorationKind = .none,
-        isRoadSurfaceArea: Bool = false,
         surfaceAreaCutsPaint: Bool = false,
-        isShippedRoadPaint: Bool = false,
         labelMinCameraZoom: Float = 0,
         suppressPolygonFill: Bool = false,
         fillOutlineAntialiasing: Bool = false
@@ -314,16 +286,14 @@ public struct FeatureStyle: Sendable {
         self.linePlacement = linePlacement
         self.lineRenderPasses = lineRenderPasses
         self.roadClassPriority = roadClassPriority
-        self.building = building
+        self.isExtruded = isExtruded
         self.extrusionHeightScale = extrusionHeightScale
         self.extrusionAnchorZoom = extrusionAnchorZoom
         self.extrusionFallbackHeight = extrusionFallbackHeight
         self.labelTextStyle = labelTextStyle
         self.roadLabelTextStyle = roadLabelTextStyle
         self.roadDecorationKind = roadDecorationKind
-        self.isRoadSurfaceArea = isRoadSurfaceArea
         self.surfaceAreaCutsPaint = surfaceAreaCutsPaint
-        self.isShippedRoadPaint = isShippedRoadPaint
         self.labelMinCameraZoom = labelMinCameraZoom
         self.suppressPolygonFill = suppressPolygonFill
         self.fillOutlineAntialiasing = fillOutlineAntialiasing
@@ -346,21 +316,13 @@ public extension FeatureStyle {
                      fillOutlineAntialiasing: true)
     }
 
-    /// A line of a width in tile units. `road` is what the feature is as a
-    /// road (where it sits, which street it is a piece of), read by the
-    /// style from the tile: `ImmersiveMapRoadFacts.openStreetMap(_:)` for
-    /// a schema carrying the OpenStreetMap tags, `.ground` for a line that
-    /// is not a road or whose schema says nothing about it.
+    /// A line of a width in tile units.
     static func line(key: UInt8,
                      color: SIMD4<Float>,
-                     width: Float,
-                     road: ImmersiveMapRoadFacts = .ground) -> FeatureStyle {
-        var style = FeatureStyle(key: key,
-                                 color: color,
-                                 lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))))
-        style.road = road
-        style.drawsAsTunnel = road.structure == .tunnel
-        return style
+                     width: Float) -> FeatureStyle {
+        FeatureStyle(key: key,
+                     color: color,
+                     lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))))
     }
 
     /// A line whose width is stated in on-screen points and held there at
@@ -377,36 +339,29 @@ public extension FeatureStyle {
                                 color: SIMD4<Float>,
                                 widthPoints: Float,
                                 dashLengthPoints: Float = 0,
-                                dashGapPoints: Float = 0,
-                                road: ImmersiveMapRoadFacts = .ground) -> FeatureStyle {
-        var style = FeatureStyle.pointLockedLine(key: key,
-                                                 color: color,
-                                                 widthPoints: max(0, widthPoints),
-                                                 dashLengthPoints: max(0, dashLengthPoints),
-                                                 dashGapPoints: max(0, dashGapPoints),
-                                                 suppressPolygonFill: true)
-        style.road = road
-        style.drawsAsTunnel = road.structure == .tunnel
-        return style
+                                dashGapPoints: Float = 0) -> FeatureStyle {
+        FeatureStyle.pointLockedLine(key: key,
+                                     color: color,
+                                     widthPoints: max(0, widthPoints),
+                                     dashLengthPoints: max(0, dashLengthPoints),
+                                     dashGapPoints: max(0, dashGapPoints),
+                                     suppressPolygonFill: true)
     }
 
-    /// A building. What the feature is as a building (its height, its base,
-    /// the building it belongs to, its roof) is the style's reading of the
-    /// tile's tags: `ImmersiveMapBuildingExtrusion.openStreetMap(_:)` for
-    /// a schema carrying the OpenStreetMap tags, or the fields stated from
-    /// another schema's tags. `heightScale`, `anchorZoom` and
-    /// `fallbackHeight` say how metres become tile units and what a
-    /// building without a height gets.
+    /// A building: the footprint raised to the heights the schema reading
+    /// states for it (`ImmersiveMapFeatureFacts.building`). `heightScale`,
+    /// `anchorZoom` and `fallbackHeight` say how metres become tile units
+    /// and what a building without a height gets. A feature the reading
+    /// found to be no building stays a flat fill.
     static func extrudedPolygon(key: UInt8,
                                 color: SIMD4<Float>,
-                                building: ImmersiveMapBuildingExtrusion,
                                 heightScale: Float = 1.0,
                                 anchorZoom: Int = 16,
                                 fallbackHeight: Float = 0) -> FeatureStyle {
         FeatureStyle(key: key,
                      color: color,
                      lineGeometry: LineGeometryStyle(lineWidth: 100),
-                     building: building,
+                     isExtruded: true,
                      extrusionHeightScale: heightScale,
                      extrusionAnchorZoom: anchorZoom,
                      extrusionFallbackHeight: fallbackHeight)
@@ -436,16 +391,12 @@ public extension FeatureStyle {
     static func roadLabel(key: UInt8,
                           color: SIMD4<Float>,
                           width: Float,
-                          textStyle: LabelTextStyle,
-                          road: ImmersiveMapRoadFacts = .ground) -> FeatureStyle {
-        var style = FeatureStyle(key: key,
-                                 color: color,
-                                 lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))),
-                                 includeRoadLabelPath: true,
-                                 roadLabelTextStyle: Self.keyed(textStyle, key: key))
-        style.road = road
-        style.drawsAsTunnel = road.structure == .tunnel
-        return style
+                          textStyle: LabelTextStyle) -> FeatureStyle {
+        FeatureStyle(key: key,
+                     color: color,
+                     lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))),
+                     includeRoadLabelPath: true,
+                     roadLabelTextStyle: Self.keyed(textStyle, key: key))
     }
 
     /// The text style under the feature style's key, with the size floor

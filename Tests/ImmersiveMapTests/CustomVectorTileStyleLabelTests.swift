@@ -5,9 +5,9 @@
 import Mvt
 import XCTest
 
-/// A custom style states the label half of its schema itself: the
-/// properties that carry a label's text, the layers that are house numbers,
-/// and the namespace its labels are identified in.
+/// A custom schema reading states which properties carry a label's text
+/// and which layers are house numbers; the custom style states the
+/// namespace its labels are identified in and how important each is.
 final class CustomVectorTileStyleLabelTests: XCTestCase {
     func testTextComesFromTheStyleTextKeys() {
         let decision = decide(feature(layer: "custom_label", ["title": .string("Custom Cafe")]))
@@ -80,7 +80,8 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
 
     private func decide(_ feature: VectorTileLabelFeature,
                         style: CustomLabelTestStyle = CustomLabelTestStyle()) -> VectorTileLabelDecision? {
-        let decisions = TileLabelDecisions(style: style,
+        let decisions = TileLabelDecisions(schema: CustomLabelTestSchema(),
+                                           style: style,
                                            glyphCoverage: .legacyAtlasForTests,
                                            language: .english,
                                            fallbackPolicy: .international)
@@ -89,6 +90,7 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
             data: DetFeatureStyleData(layerName: feature.layerName,
                                       properties: feature.properties,
                                       tile: feature.tile,
+                                      facts: .none,
                                       geometryType: .point)))
         return decisions.pointLabelDecision(feature: feature, style: featureStyle, poiIcon: nil)
     }
@@ -105,14 +107,22 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
     }
 }
 
+private struct CustomLabelTestSchema: ImmersiveMapTileSchema {
+    let cacheFingerprint: UInt32 = 1
+    let labelTextKeys = ["title"]
+    let houseNumberLayers: Set<String> = ["address_label"]
+    let houseNumberTextKeys = ["number"]
+
+    func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
+        .none
+    }
+}
+
 private struct CustomLabelTestStyle: ImmersiveMapVectorTileStyle {
     var labelsUseFeatureIdentity = true
 
     let cacheFingerprint: UInt32 = 1
     let styleID = "custom"
-    let labelTextKeys = ["title"]
-    let houseNumberLayers: Set<String> = ["address_label"]
-    let houseNumberTextKeys = ["number"]
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         let text = LabelTextStyle(fillColor: SIMD3<Float>(0.1, 0.1, 0.1),

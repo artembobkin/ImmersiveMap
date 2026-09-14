@@ -42,7 +42,10 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
 
     func testADividingLineIsADashedDetailStrokeWithAMetrePattern() {
         let dividing = markingStyle("dividing")
-        XCTAssertTrue(dividing.isShippedRoadPaint, "Shipped paint carries the bypass flag")
+        XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                      properties: ["marking": stringValue("dividing")],
+                                                      tile: moscowTile(z: 16)).road?.isShippedPaint == true,
+                      "The reading knows shipped paint, so the road machinery leaves it alone")
         let pass = dividing.resolvedLineRenderPasses.first
         XCTAssertEqual(dividing.resolvedLineRenderPasses.count, 1, "One pass: the stroke itself")
         XCTAssertEqual(pass?.roadPassRole, .detail, "drawn above every carriageway fill")
@@ -148,8 +151,10 @@ final class RoadShippedMarkingStyleTests: XCTestCase {
         let marked = markingStyle("crossing_marked")
         XCTAssertEqual(marked.roadDecorationKind, .zebraCrossing,
                        "A measured crossing line stripes itself like the tagged ones")
-        XCTAssertTrue(marked.isShippedRoadPaint,
-                      "and carries the flag, so the surfaces it lies inside never clip it")
+        XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                      properties: ["marking": stringValue("crossing_marked")],
+                                                      tile: moscowTile(z: 16)).road?.isShippedPaint == true,
+                      "and is read as shipped paint, so the surfaces it lies inside never clip it")
         XCTAssertEqual(markingStyle("crossing_unmarked").key, 0,
                        "An unmarked crossing is a place to cross, not a thing to draw")
         XCTAssertEqual(markingStyle("crossing_marked", z: 14).key, 0,

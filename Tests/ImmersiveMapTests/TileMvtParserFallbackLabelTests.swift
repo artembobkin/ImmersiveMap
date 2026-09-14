@@ -366,12 +366,10 @@ private struct FallbackWaterLabelStyle: ImmersiveMapVectorTileStyle {
     }
 
     private func waterStyle(_ labelTextStyle: LabelTextStyle?) -> FeatureStyle {
-        var style = FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
-                                 color: SIMD4<Float>(1, 1, 1, 1),
-                                 lineGeometry: LineGeometryStyle(lineWidth: 1),
-                                 labelTextStyle: labelTextStyle)
-        style.isWaterName = labelTextStyle != nil
-        return style
+        FeatureStyle(key: UInt8(labelTextStyle?.key ?? 0),
+                     color: SIMD4<Float>(1, 1, 1, 1),
+                     lineGeometry: LineGeometryStyle(lineWidth: 1),
+                     labelTextStyle: labelTextStyle)
     }
 }
 

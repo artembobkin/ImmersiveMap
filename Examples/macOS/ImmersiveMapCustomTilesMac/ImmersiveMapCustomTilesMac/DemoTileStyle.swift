@@ -7,18 +7,20 @@ import ImmersiveMap
 /// A hand-written vector tile style for the OpenMapTiles schema.
 ///
 /// A style is one function: given a feature (its layer, its zoom, its
-/// properties), say how to draw it. Everything the engine knows about the data
-/// arrives through `ImmersiveMapFeatureStyleContext`, so this type is where a
-/// custom MVT schema turns into geometry. The `key` of each style is its
-/// identity within a tile and its place in the draw order: ground fills draw
-/// in ascending key, so water (20) covers land cover (10).
+/// properties, and what the schema reading says it is), say how to draw it.
+/// What a feature is (a road in a tunnel, a building of some height) is the
+/// reading's answer, `ImmersiveMapTilesSchema` here since OpenMapTiles
+/// spells its tags the way the hosted tiles do; this type only says how each
+/// looks. The `key` of each style is its identity within a tile and its
+/// place in the draw order: ground fills draw in ascending key, so water
+/// (20) covers land cover (10).
 ///
 /// `cacheFingerprint` matters as much as the drawing: prepared tiles are cached
 /// on disk keyed by it, so any change to the rules here must change the number
 /// or the map will keep drawing from stale prepared tiles.
 struct DemoTileStyle: ImmersiveMapVectorTileStyle {
     /// Bump when any rule below changes.
-    let cacheFingerprint: UInt32 = 5
+    let cacheFingerprint: UInt32 = 6
 
     /// The namespace of the labels' identities, so they never collide with
     /// another style's across tiles.
@@ -57,13 +59,12 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             return .polygon(key: 12, color: SIMD4<Float>(0.14, 0.15, 0.17, 1))
 
         case "building":
-            // What the feature is as a building (its height, its base, its
-            // roof) is the style's reading of the tags; the OpenStreetMap
-            // reading covers this schema. `fallbackHeight` applies when the
-            // tile states no height.
+            // The building's height, base and roof are the schema reading's
+            // (`feature.facts.building`); this says it rises, in this
+            // colour. `fallbackHeight` applies when the tile states no
+            // height.
             return .extrudedPolygon(key: 30,
                                     color: SIMD4<Float>(0.22, 0.24, 0.29, 1),
-                                    building: .openStreetMap(feature.properties),
                                     heightScale: 1.0,
                                     anchorZoom: 16,
                                     fallbackHeight: 8)
@@ -78,9 +79,12 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
             default: (SIMD4<Float>(0.28, 0.29, 0.31, 1), 1.2)
             }
             // Where the road sits (tunnel, bridge, its layer) and which
-            // street it is a piece of are the style's reading too; the
-            // OpenStreetMap reading covers this schema.
-            return .line(key: 40, color: color, width: width, road: .openStreetMap(feature.properties))
+            // street it is a piece of is the schema reading's answer, in
+            // `feature.facts.road`: a tunnel fades to half.
+            let inTunnel = feature.facts.road?.isTunnel == true
+            return .line(key: inTunnel ? 39 : 40,
+                         color: inTunnel ? SIMD4<Float>(color.x, color.y, color.z, 0.5) : color,
+                         width: width)
 
         case "boundary":
             // The point-locked line mode: the width is stated in on-screen

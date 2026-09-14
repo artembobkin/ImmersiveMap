@@ -169,11 +169,11 @@ final class StreetscapeTests: XCTestCase {
         return attributes
     }
 
-    /// The fold the parser does before reading a tile, with the built-in
-    /// style's layer names.
+    /// The fold the parser does before reading a tile, with the hosted
+    /// tiles' layer names.
     private func fold(_ tile: MvtDecodedTile) -> MvtDecodedTile {
-        let style = ImmersiveMapTilesDefaultMapStyle()
-        return tile.merging(layersNamed: style.streetscapeLayerName!, intoFirstLayerNamed: style.roadLayerNames)
+        let schema = ImmersiveMapTilesSchema()
+        return tile.merging(layersNamed: schema.streetscapeLayerName!, intoFirstLayerNamed: schema.roadLayerNames)
     }
 
     func testTheStreetscapeLayerFoldsIntoTheRoadLayerWithItsAttributesIntact() throws {
@@ -226,7 +226,7 @@ final class StreetscapeTests: XCTestCase {
         let viaStreetscape = style.makeStyle(data: DetFeatureStyleData(layerName: "streetscape", properties: properties, tile: tile))
         let viaTransportation = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation", properties: properties, tile: tile))
         XCTAssertEqual(viaStreetscape.key, viaTransportation.key)
-        XCTAssertTrue(viaStreetscape.isShippedRoadPaint)
+        XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "streetscape", properties: properties, tile: tile).road?.isShippedPaint == true)
     }
 
     // MARK: - Settings

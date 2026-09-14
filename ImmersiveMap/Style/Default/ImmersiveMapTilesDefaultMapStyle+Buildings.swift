@@ -15,7 +15,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             key: 30,
             color: configuration.features.buildingFillColor,
             lineGeometry: LineGeometryStyle(lineWidth: 0),
-            building: .openStreetMap(ImmersiveMapFeatureProperties(values: props)),
+            isExtruded: true,
             extrusionHeightScale: 8.0,
             extrusionAnchorZoom: 16
         )

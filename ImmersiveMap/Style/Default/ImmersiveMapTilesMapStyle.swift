@@ -13,6 +13,11 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
         UInt64(configuration.cacheFingerprint)
     }
 
+    /// The reading of the hosted tiles' schema.
+    public var schema: any ImmersiveMapTileSchema {
+        ImmersiveMapTilesSchema()
+    }
+
     /// The rules, reading the palette and the label appearances from the
     /// configuration. A public value like any other style's: an app can ask
     /// it directly what a feature draws as.

@@ -35,7 +35,11 @@ final class RoadParkingAreaTests: XCTestCase {
 
     func testAParkingLotIsServiceAsphaltWithAKerbAndACombFromStreetZoom() {
         let lot = makeStyle(z: 16)
-        XCTAssertTrue(lot.isRoadSurfaceArea, "A parking lot is a carriageway surface")
+        XCTAssertEqual(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                       properties: ["subclass": .string("parking_area")],
+                                                       tile: Tile(x: 39615, y: 20486, z: 16)).road?.kind,
+                       .parkingLot(baysParallel: false),
+                       "A parking lot is read as a carriageway surface")
         XCTAssertFalse(lot.surfaceAreaCutsPaint, "and it cuts nobody's paint")
         XCTAssertEqual(lot.roadDecorationKind, .parkingBays)
         let roles = lot.resolvedLineRenderPasses.map(\.roadPassRole)
@@ -50,7 +54,8 @@ final class RoadParkingAreaTests: XCTestCase {
         // there as at z16: same asphalt, same kerb, same comb. The tile level
         // decides the resolution of the polygon, not what is painted on it.
         let coarse = makeStyle(z: 15)
-        XCTAssertTrue(coarse.isRoadSurfaceArea, "At z15 the lot is still asphalt with a kerb")
+        XCTAssertTrue(coarse.resolvedLineRenderPasses.map(\.roadPassRole).contains(.casing),
+                      "At z15 the lot is still asphalt with a kerb")
         XCTAssertEqual(coarse.resolvedLineRenderPasses.map(\.roadPassRole),
                        lot.resolvedLineRenderPasses.map(\.roadPassRole),
                        "and it keeps the comb: a lot looks the same at z15 as at z16")
@@ -142,7 +147,10 @@ final class RoadParkingAreaTests: XCTestCase {
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
         XCTAssertEqual(lane.roadDecorationKind, .busLaneLetter,
                        "The lane's axis carries the letter A, not a recolored surface")
-        XCTAssertTrue(lane.isShippedRoadPaint, "and the axis is measured paint the machinery leaves alone")
+        XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                      properties: ["marking": value("bus_lane")],
+                                                      tile: Tile(x: 39615, y: 20486, z: 16)).road?.isShippedPaint == true,
+                      "and the axis is read as measured paint the machinery leaves alone")
         let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                properties: ["marking": value("bus_lane")],
                                                                tile: Tile(x: 19807, y: 10243, z: 15)))
@@ -172,7 +180,9 @@ final class RoadParkingAreaTests: XCTestCase {
                                                              properties: ["marking": value("bus_stop_zigzag")],
                                                              tile: Tile(x: 39615, y: 20486, z: 16)))
         XCTAssertEqual(stop.roadDecorationKind, .busStopZigzag)
-        XCTAssertTrue(stop.isShippedRoadPaint)
+        XCTAssertTrue(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                      properties: ["marking": value("bus_stop_zigzag")],
+                                                      tile: Tile(x: 39615, y: 20486, z: 16)).road?.isShippedPaint == true)
         XCTAssertGreaterThan(stop.color.x, stop.color.z, "The stop marking is yellow, not white")
         let coarse = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                properties: ["marking": value("bus_stop_zigzag")],

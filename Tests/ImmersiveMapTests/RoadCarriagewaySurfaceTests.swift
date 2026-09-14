@@ -69,7 +69,11 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                                                                           "subclass": value("carriageway_area"),
                                                                           "origin": value("graph")],
                                                              tile: tile))
-        XCTAssertTrue(area.isRoadSurfaceArea, "A carriageway area is a road surface")
+        XCTAssertEqual(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                       properties: ["subclass": value("carriageway_area")],
+                                                       tile: tile).road?.kind,
+                       .surface(reconstructed: true),
+                       "A carriageway area is read as a reconstructed road surface")
         XCTAssertTrue(area.surfaceAreaCutsPaint,
                       "A graph-built surface carries the measured paint itself, so the synthesized paint ends at its edge")
         let primary = ImmersiveMapTilesDefaultMapStyleConfiguration.immersiveMapTilesDefault.layers.roads.primary

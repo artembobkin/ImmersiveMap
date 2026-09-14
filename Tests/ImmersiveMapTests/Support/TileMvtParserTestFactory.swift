@@ -12,10 +12,12 @@ extension TileMvtParser {
     /// that is what it exercises.
     static func forTests(settings: ImmersiveMapSettings,
                          mapStyle: (any ImmersiveMapVectorTileStyle)? = nil,
+                         schema: (any ImmersiveMapTileSchema)? = nil,
                          glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests) -> TileMvtParser {
-        let runtimeContext = MapStyleRuntime(mapStyle: settings.mapStyle, settings: settings, style: mapStyle)
+        let runtimeContext = MapStyleRuntime(mapStyle: settings.mapStyle, settings: settings, style: mapStyle, schema: schema)
         return TileMvtParser(mapStyle: runtimeContext,
-                             labelDecisions: TileLabelDecisions(style: runtimeContext.style,
+                             labelDecisions: TileLabelDecisions(schema: runtimeContext.schema,
+                                                                style: runtimeContext.style,
                                                                 glyphCoverage: glyphCoverage,
                                                                 language: settings.labels.language,
                                                                 fallbackPolicy: settings.labels.fallbackPolicy),

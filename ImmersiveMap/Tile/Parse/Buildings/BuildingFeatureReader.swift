@@ -8,8 +8,9 @@ import Mvt
 /// whether it is extruded at all, how tall, with which roof, and the
 /// candidate that records it until the whole tile has been read and
 /// `BuildingExtrusionResolver` can tell the outlines from the parts. What
-/// the feature is as a building is the style's reading of the tile
-/// (`FeatureStyle.building`); this reader never looks at a tag. The
+/// the feature is as a building is the schema reading's answer
+/// (`ImmersiveMapFeatureFacts.building`), and whether it rises is the
+/// style's (`FeatureStyle.isExtruded`); this reader never looks at a tag. The
 /// footprint's ground fill is not this reader's either: the ground reader
 /// draws it whether or not the building rises.
 ///
@@ -45,12 +46,12 @@ struct BuildingFeatureReader {
     /// One pass over a layer collecting both the part identifiers and the
     /// part footprint signatures of its buildings, so an outline that repeats
     /// a part is not extruded twice. A layer with no buildings has no parts.
-    func partInfo(geometry: TileLayerGeometry, featureStyles: [FeatureStyle]) -> PartInfo {
-        guard featureStyles.contains(where: { $0.building != nil }) else { return .none }
+    func partInfo(geometry: TileLayerGeometry, featureFacts: [ImmersiveMapFeatureFacts]) -> PartInfo {
+        guard featureFacts.contains(where: { $0.building != nil }) else { return .none }
         var partIds = Set<UInt64>()
         var signatures = Set<BuildingFootprintSignature>()
         for (featureIndex, feature) in geometry.layer.features.enumerated() {
-            guard let building = featureStyles[featureIndex].building, building.isPart else { continue }
+            guard let building = featureFacts[featureIndex].building, building.isPart else { continue }
             partIds.insert(building.buildingIdentity ?? feature.id)
             let polygons = geometry.polygons(of: feature)
             for polygon in polygons {
@@ -63,20 +64,22 @@ struct BuildingFeatureReader {
     }
 
     /// Whether and how the feature is extruded, nil when it stays a flat
-    /// ground fill: the style did not read it as a building, the style's
-    /// reading says it is hidden, extrusion is off in the settings, the tile
-    /// is coarser than the building grid, or the footprint repeats a part
-    /// of its own building. The extrusion flag is prepared-cache identity,
-    /// so toggling it re-parses instead of serving the other shape from
-    /// disk.
+    /// ground fill: the style does not raise it, the schema reading did not
+    /// find it to be a building or says it is hidden, extrusion is off in
+    /// the settings, the tile is coarser than the building grid, or the
+    /// footprint repeats a part of its own building. The extrusion flag is
+    /// prepared-cache identity, so toggling it re-parses instead of serving
+    /// the other shape from disk.
     func extrusion(feature: MvtDecodedFeature,
+                   facts: ImmersiveMapFeatureFacts,
                    style: FeatureStyle,
                    polygons: MultiPolygon,
                    partInfo: PartInfo,
                    tile: Tile) -> Extrusion? {
         guard extrusionEnabled,
+              style.isExtruded,
               tile.z >= minimumSourceZoom,
-              let building = style.building,
+              let building = facts.building,
               building.isHidden == false else {
             return nil
         }
@@ -153,7 +156,7 @@ struct BuildingFeatureReader {
     }
 
     /// The building's heights in tile units at the tile's zoom, from the
-    /// style's reading or the style's fallback height; nil when nothing says
+    /// schema reading or the style's fallback height; nil when nothing says
     /// how tall it is.
     func extrusionHeights(building: ImmersiveMapBuildingExtrusion,
                           tileZoom: Int,

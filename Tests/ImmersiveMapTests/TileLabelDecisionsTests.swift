@@ -168,7 +168,8 @@ final class TileLabelDecisionsTests: XCTestCase {
 
     func testTheDecisionsBuildATextLabelCompatibleDecision() {
         let style = ImmersiveMapTilesDefaultMapStyle()
-        let decisions = TileLabelDecisions(style: style,
+        let decisions = TileLabelDecisions(schema: ImmersiveMapTilesSchema(),
+                                           style: style,
                                            glyphCoverage: .legacyAtlasForTests,
                                            language: .english,
                                            fallbackPolicy: .international)

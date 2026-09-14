@@ -101,6 +101,7 @@ struct RoadLayerPrecomputation {
                                                surfaceBridges: [])
 
     static func build(geometry: TileLayerGeometry,
+                      featureFacts: [ImmersiveMapFeatureFacts],
                       featureStyles: [FeatureStyle],
                       lineClipper: LineClipper,
                       tile: Tile) -> RoadLayerPrecomputation {
@@ -114,6 +115,7 @@ struct RoadLayerPrecomputation {
         geometry.data.withUnsafeBytes { bytes in
             for (featureIndex, feature) in layer.features.enumerated() {
                 let style = featureStyles[featureIndex]
+                let road = featureFacts[featureIndex].road ?? .ground
                 guard style.key != 0 else {
                     continue
                 }
@@ -121,7 +123,7 @@ struct RoadLayerPrecomputation {
                 case .linestring:
                     let lines = geometry.lines(of: feature, in: bytes)
                     rawLinesByFeatureIndex[featureIndex] = lines.map(floatPoints)
-                case .polygon where style.isRoadSurfaceArea:
+                case .polygon where road.isSurface:
                     let polygons = geometry.polygons(of: feature, in: bytes)
                     for polygon in polygons where polygon.exteriorRing.count >= 3 {
                         // Raw tile space, y down, exactly like the road lines
@@ -146,11 +148,11 @@ struct RoadLayerPrecomputation {
                         surfaceAreas.append(RoadSurfaceArea(exterior: ring,
                                                             classPriority: style.roadClassPriority,
                                                             bounds: (lower, upper),
-                                                            structureKind: RoadStructureKind(physical: style.road.structure),
-                                                            layer: style.road.layer,
-                                                            isTunnel: style.drawsAsTunnel,
+                                                            structureKind: RoadStructureKind(road: road),
+                                                            layer: road.layer,
+                                                            isTunnel: road.isTunnel,
                                                             cutsPaint: style.surfaceAreaCutsPaint,
-                                                            street: style.road.streetIdentity,
+                                                            street: road.streetIdentity,
                                                             featureIndex: featureIndex))
                     }
                 default:
@@ -168,6 +170,7 @@ struct RoadLayerPrecomputation {
             surfaceBridges = RoadSurfaceGapBridger.findBridges(
                 surfaceAreas: surfaceAreas,
                 linesByFeatureIndex: rawLinesByFeatureIndex,
+                featureFacts: featureFacts,
                 featureStyles: featureStyles,
                 unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
             )
@@ -208,7 +211,8 @@ struct RoadLayerPrecomputation {
                 // measures the paint of the road down there like any other,
                 // but from above there is only the tunnel's roof to see, a
                 // bare translucent fill, so the paint inside it goes.
-                guard featureStyles[featureIndex].isShippedRoadPaint == false else {
+                let road = featureFacts[featureIndex].road ?? .ground
+                guard road.isShippedPaint == false else {
                     guard tunnelSurfaces.isEmpty == false else { continue }
                     rawLinesByFeatureIndex[featureIndex] = rawLinesByFeatureIndex[featureIndex].flatMap {
                         RoadSurfaceClipper.clip(polyline: $0, outside: tunnelSurfaces)
@@ -217,8 +221,8 @@ struct RoadLayerPrecomputation {
                     continue
                 }
                 let priority = featureStyles[featureIndex].roadClassPriority
-                let structure = RoadStructureKind(physical: featureStyles[featureIndex].road.structure)
-                let layerValue = featureStyles[featureIndex].road.layer
+                let structure = RoadStructureKind(road: road)
+                let layerValue = road.layer
                 let owners = surfaceAreas.filter {
                     $0.classPriority >= priority
                         && $0.structureKind == structure
@@ -247,8 +251,10 @@ struct RoadLayerPrecomputation {
         // drawing attributes equal); without it nothing is stitched and the
         // pieces draw as they arrive.
         let stitched = RoadStreetStitcher.stitch(linesByFeatureIndex: rawLinesByFeatureIndex,
+                                                 featureFacts: featureFacts,
                                                  featureStyles: featureStyles)
         let paintStitched = RoadStreetStitcher.stitch(linesByFeatureIndex: paintRawLinesByFeatureIndex,
+                                                      featureFacts: featureFacts,
                                                       featureStyles: featureStyles)
         // An endpoint that lies on a crossing's outline is a cut the clipper
         // made, not an end of the street: recognised geometrically after the
@@ -302,7 +308,7 @@ struct RoadLayerPrecomputation {
         var streetIdentifiers: [String: Int] = [:]
         var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
         for index in 0..<layer.features.count {
-            let road = featureStyles[index].road
+            let road = featureFacts[index].road ?? .ground
             let identity = road.streetIdentity.isEmpty == false
                 ? "street=" + road.streetIdentity
                 : road.name.isEmpty == false ? "name=" + road.name : ""
@@ -325,7 +331,7 @@ struct RoadLayerPrecomputation {
             // junction (or a connection) at every point a marking happens to
             // share with a road vertex. Which roads make a junction for the
             // paint on another is the style's decision.
-            let isShippedPaint = featureStyles[featureIndex].isShippedRoadPaint
+            let isShippedPaint = featureFacts[featureIndex].road?.isShippedPaint == true
             let isJunctionMaking = featureStyles[featureIndex].roadMakesJunctions
             // The carriageway this feature draws at: the style's own geometry
             // is the fill ribbon, so half of it is how far the road reaches

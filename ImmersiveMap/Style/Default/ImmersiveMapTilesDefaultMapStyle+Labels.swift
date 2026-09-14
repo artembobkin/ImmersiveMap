@@ -157,9 +157,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         default:
             break
         }
-        var style = pointLabel(key: 73, layer: "water_name", props: props, appearance: appearance)
-        style.isWaterName = true
-        return style
+        return pointLabel(key: 73, layer: "water_name", props: props, appearance: appearance)
     }
 
     // POI: both the icon circle and the label are tinted in the venue category

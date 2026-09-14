@@ -9,9 +9,10 @@ import Mvt
 /// point is identified and ranked, and which spelling of a name the map's
 /// language and the text atlas allow.
 ///
-/// Assembled once by the caller from the style (which properties carry
-/// text, which layers are house numbers, how labels are identified), the
-/// glyph coverage of the text atlas and the language settings, then handed
+/// Assembled once by the caller from the schema reading (which properties
+/// carry text, which layers are house numbers), the style (how labels are
+/// identified), the glyph coverage of the text atlas and the language
+/// settings, then handed
 /// to `TileMvtParser`, which holds nothing of the policy itself: the parser
 /// decodes geometry and asks, this answers. Every answer is pure, so one
 /// value serves every parse of a map.
@@ -28,14 +29,15 @@ struct TileLabelDecisions {
     private let textResolver: VectorTileLabelTextResolver
     private let poiSpriteResolver = PoiSpriteResolver()
 
-    init(style: any ImmersiveMapVectorTileStyle,
+    init(schema: any ImmersiveMapTileSchema,
+         style: any ImmersiveMapVectorTileStyle,
          glyphCoverage: VectorTileLabelGlyphCoverage,
          language: ImmersiveMapSettings.LabelLanguage,
          fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy) {
         self.styleID = style.styleID
-        self.labelTextKeys = style.labelTextKeys
-        self.houseNumberTextKeys = style.houseNumberTextKeys
-        self.houseNumberLayers = Set(style.houseNumberLayers.map { $0.lowercased() })
+        self.labelTextKeys = schema.labelTextKeys
+        self.houseNumberTextKeys = schema.houseNumberTextKeys
+        self.houseNumberLayers = Set(schema.houseNumberLayers.map { $0.lowercased() })
         self.usesFeatureIdentity = style.labelsUseFeatureIdentity
         self.languagePreferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: language,
                                                                            fallbackPolicy: fallbackPolicy)

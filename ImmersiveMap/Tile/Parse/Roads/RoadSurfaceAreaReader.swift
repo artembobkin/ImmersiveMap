@@ -27,6 +27,7 @@ struct RoadSurfaceAreaReader {
     /// down); only `parsedGeometry.parsedPolygon` (the fill) is already
     /// tessellated render-space vertices.
     func append(parsedGeometry: ParsePolygon.ParsedGeometry,
+                road: ImmersiveMapRoadFacts,
                 style: FeatureStyle,
                 tile: Tile,
                 surfaceAreas: [RoadSurfaceArea],
@@ -34,11 +35,11 @@ struct RoadSurfaceAreaReader {
                 into result: inout ReadingStageResult) {
         let clippedExterior = parsedGeometry.clipped.exterior
         let clippedInteriors = parsedGeometry.clipped.interiors
-        let physicalStructure = RoadStructureKind(physical: style.road.structure)
+        let physicalStructure = RoadStructureKind(road: road)
         // A surface on the ground joins the automobile tier whatever its
         // class: it is a carriageway.
         let structure: RoadStructureKind = physicalStructure == .ground ? .automobileGround : physicalStructure
-        let layer = style.road.layer
+        let layer = road.layer
         for pass in style.resolvedLineRenderPasses {
             let passStyle = FeatureStyle(
                 key: pass.key,
@@ -81,10 +82,14 @@ struct RoadSurfaceAreaReader {
                 // builder in tile space (the ring already is), each
                 // tessellated as its own point-locked stroke with hard ends.
                 let unitsPerMetre = ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile)
+                var baysParallel = false
+                if case .parkingLot(let parallel) = road.kind {
+                    baysParallel = parallel
+                }
                 var stripes = parkingBayBuilder.buildStripes(
                     exterior: clippedExterior,
                     unitsPerMetre: unitsPerMetre,
-                    parallel: style.parkingBaysParallel
+                    parallel: baysParallel
                 )
                 // Where a carriageway, a junction or a bus lane overlaps the
                 // lot, that ground is theirs: the comb ends at their edge
@@ -130,13 +135,15 @@ struct RoadSurfaceAreaReader {
     /// the piece it touches, so the roadway is continuous across the joint
     /// and the trims' kerbs disappear under the fills.
     func appendSurfaceBridges(roads: RoadLayerPrecomputation,
+                              featureFacts: [ImmersiveMapFeatureFacts],
                               featureStyles: [FeatureStyle],
                               tile: Tile,
                               tools: TileParseTools,
                               into result: inout ReadingStageResult) {
         for bridge in roads.surfaceBridges {
             let owner = roads.surfaceAreas[bridge.ownerAreaIndex]
-            guard owner.featureIndex >= 0, owner.featureIndex < featureStyles.count else { continue }
+            guard owner.featureIndex >= 0, owner.featureIndex < featureStyles.count,
+                  let road = featureFacts[owner.featureIndex].road else { continue }
             let ringPoints = bridge.ring.map {
                 Point(x: Int32($0.x.rounded()), y: Int32($0.y.rounded()))
             }
@@ -146,6 +153,7 @@ struct RoadSurfaceAreaReader {
                 continue
             }
             append(parsedGeometry: parsedGeometry,
+                   road: road,
                    style: featureStyles[owner.featureIndex],
                    tile: tile,
                    surfaceAreas: roads.surfaceAreas,

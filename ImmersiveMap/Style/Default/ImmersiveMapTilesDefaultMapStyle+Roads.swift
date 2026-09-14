@@ -27,12 +27,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
 
     func transportationStyle(cls: String?,
                              props: [String: MvtValue],
+                             road: ImmersiveMapRoadFacts,
                              tile: Tile,
-                             streetscapeEnabled: Bool = true,
-                             isTunnelRoof: Bool = false) -> FeatureStyle {
+                             streetscapeEnabled: Bool = true) -> FeatureStyle {
         let tileZoom = tile.z
-        let brunnel = props["brunnel"]?.stringValue?.lowercased()
-        let isTunnel = brunnel == "tunnel" || isTunnelRoof
+        let isTunnel = road.isTunnel
         let subclass = props["subclass"]?.stringValue?.lowercased()
         let roads = configuration.layers.roads
         // Paint the source measured on the ground, shipped as its own line:
@@ -40,8 +39,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // and no name, only what it is (`marking`) and what colour it is
         // painted (`paint`), and it bypasses every rule below, which are all
         // about roads.
-        if let marking = props["marking"]?.stringValue?.lowercased(), marking.isEmpty == false {
-            return shippedMarkingStyle(kind: marking, props: props, tile: tile)
+        if road.isShippedPaint {
+            return shippedMarkingStyle(kind: props["marking"]?.stringValue?.lowercased() ?? "",
+                                       props: props,
+                                       tile: tile)
         }
         // A `<class>_construction` segment belongs to its base class: the
         // source ships it from the same zoom (a z4 tile carries motorway and
@@ -75,28 +76,30 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // A carriageway area is the same thing for a road between junctions:
         // the street's surface computed from the road graph, one polygon per
         // carriageway, edge-consistent with the junction polygons it meets.
-        if subclass == "junction_area" || subclass == "carriageway_area" {
+        switch road.kind {
+        case .surface(let reconstructed):
             // Only the graph-reconstructed surfaces draw. A hand-mapped
-            // area:highway (a junction_area without origin=graph) often
-            // covers a whole street, including the gap between the two
-            // one-way halves of a dual carriageway: painted, it welded the
-            // two reconstructed bodies into one mass with both inner edge
-            // lines stranded inside it. The roadway is filled by the
-            // reconstruction alone; the tag still ships and can be turned
-            // back on here if a region without reconstruction needs it.
-            guard subclass == "carriageway_area" || props["origin"]?.stringValue == "graph" else {
+            // area:highway often covers a whole street, including the gap
+            // between the two one-way halves of a dual carriageway:
+            // painted, it welded the two reconstructed bodies into one mass
+            // with both inner edge lines stranded inside it. The roadway is
+            // filled by the reconstruction alone; the tag still ships and
+            // can be turned back on here if a region without reconstruction
+            // needs it.
+            guard reconstructed else {
                 return hiddenStyle
             }
             return junctionAreaStyle(cls: effectiveClass,
                                      tunnel: isTunnel,
                                      tile: tile,
                                      reconstructed: true)
-        }
-        // A surface parking lot: its own asphalt with a kerb, like a junction
-        // area of the service tier, and from street zoom the synthesized comb
-        // of parking-bay stripes on top.
-        if subclass == "parking_area" {
+        case .parkingLot:
+            // A surface parking lot: its own asphalt with a kerb, like a
+            // junction area of the service tier, and from street zoom the
+            // synthesized comb of parking-bay stripes on top.
             return parkingAreaStyle(tile: tile)
+        case .centreline, .paint:
+            break
         }
         // An older test build shipped bus lanes as toned polygons
         // (`bus_lane_area`); the lane is now the letter A stamped along its

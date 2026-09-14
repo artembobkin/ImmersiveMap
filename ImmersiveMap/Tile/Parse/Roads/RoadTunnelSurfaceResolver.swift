@@ -6,8 +6,8 @@ import Mvt
 
 /// Decides which road surface polygons of a tile are the roof of a tunnel.
 ///
-/// A road line says it runs underground, and the style draws it as a
-/// tunnel (`FeatureStyle.drawsAsTunnel`). The streetscape polygons built
+/// A road line says it runs underground (`ImmersiveMapRoadFacts.structure`).
+/// The streetscape polygons built
 /// from the road graph (a carriageway or a junction surface) say nothing
 /// of the kind, only the `layer` the road had, and a negative layer alone
 /// does not mean a tunnel: a street diving under a bridge ships as
@@ -15,24 +15,25 @@ import Mvt
 /// surface counts as a tunnel only when a tunnel centreline of the same
 /// layer is in the tile and belongs to it: the same street identity where
 /// both carry one, otherwise a vertex of the line inside the polygon. The
-/// parser then asks the style for the surface's look again as a tunnel
-/// roof, so the surface draws the look its centreline would have drawn had
-/// the surface not clipped it away.
+/// parser then marks the surface a tunnel roof in its facts
+/// (`ImmersiveMapRoadFacts.isTunnelRoof`), the one fact the engine adds to
+/// the reading, and the style draws the surface the way its centreline
+/// would have been drawn had the surface not clipped it away.
 struct RoadTunnelSurfaceResolver {
     /// Indices of the features in `layer` that are tunnel surfaces.
     static func tunnelSurfaceIndices(layer: MvtDecodedLayer,
-                                     featureStyles: [FeatureStyle],
+                                     featureFacts: [ImmersiveMapFeatureFacts],
                                      bytes: UnsafeRawBufferPointer) -> Set<Int> {
         var tunnelLines: [(layer: Int, street: String, points: [SIMD2<Float>])] = []
         var candidates: [Int] = []
         for (index, feature) in layer.features.enumerated() {
-            let style = featureStyles[index]
+            guard let road = featureFacts[index].road else { continue }
             switch feature.type {
-            case .linestring where style.drawsAsTunnel:
+            case .linestring where road.structure == .tunnel:
                 let points = MvtGeometryDecoder.decodeLines(feature.geometry, in: bytes)
                     .flatMap { $0.map { SIMD2<Float>(Float($0.x), Float($0.y)) } }
-                tunnelLines.append((layer: style.road.layer, street: style.road.streetIdentity, points: points))
-            case .polygon where style.road.layer < 0 && style.isRoadSurfaceArea:
+                tunnelLines.append((layer: road.layer, street: road.streetIdentity, points: points))
+            case .polygon where road.layer < 0 && road.isSurface:
                 candidates.append(index)
             default:
                 break
@@ -42,9 +43,9 @@ struct RoadTunnelSurfaceResolver {
 
         var result = Set<Int>()
         for index in candidates {
-            let style = featureStyles[index]
-            let street = style.road.streetIdentity
-            let sameLayer = tunnelLines.filter { $0.layer == style.road.layer }
+            let road = featureFacts[index].road ?? .ground
+            let street = road.streetIdentity
+            let sameLayer = tunnelLines.filter { $0.layer == road.layer }
             if street.isEmpty == false, sameLayer.contains(where: { $0.street == street }) {
                 result.insert(index)
                 continue

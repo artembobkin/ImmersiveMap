@@ -16,12 +16,13 @@ extension FeatureStyle {
     /// no longer cuts the paint it no longer has. The one decoration that
     /// stays is the zebra crossing read off the road's own `crossing`
     /// attribute: a crossing is part of a street map, not of the measured
-    /// streetscape. Every other style comes back as it is.
-    func strippingRoadPaint() -> FeatureStyle {
-        if roadDecorationKind == .zebraCrossing, isShippedRoadPaint == false {
+    /// streetscape. Every other style comes back as it is. `isShippedPaint`
+    /// is the reading's word on the feature (`ImmersiveMapRoadFacts.isShippedPaint`).
+    func strippingRoadPaint(isShippedPaint: Bool = false) -> FeatureStyle {
+        if roadDecorationKind == .zebraCrossing, isShippedPaint == false {
             return self
         }
-        let hasRoadPaint = isShippedRoadPaint
+        let hasRoadPaint = isShippedPaint
             || roadDecorationKind != .none
             || surfaceAreaCutsPaint
             || lineRenderPasses.contains { $0.roadPassRole == .detail }
@@ -29,7 +30,7 @@ extension FeatureStyle {
             return self
         }
         let keptPasses = lineRenderPasses.filter { $0.roadPassRole != .detail }
-        let paintOnly = isShippedRoadPaint
+        let paintOnly = isShippedPaint
             || (lineRenderPasses.isEmpty == false && keptPasses.isEmpty)
         if paintOnly {
             return FeatureStyle(key: 0,
@@ -53,16 +54,14 @@ extension FeatureStyle {
                             linePlacement: linePlacement,
                             lineRenderPasses: keptPasses,
                             roadClassPriority: roadClassPriority,
-                            building: building,
+                            isExtruded: isExtruded,
                             extrusionHeightScale: extrusionHeightScale,
                             extrusionAnchorZoom: extrusionAnchorZoom,
                             extrusionFallbackHeight: extrusionFallbackHeight,
                             labelTextStyle: labelTextStyle,
                             roadLabelTextStyle: roadLabelTextStyle,
                             roadDecorationKind: .none,
-                            isRoadSurfaceArea: isRoadSurfaceArea,
                             surfaceAreaCutsPaint: false,
-                            isShippedRoadPaint: false,
                             labelMinCameraZoom: labelMinCameraZoom,
                             suppressPolygonFill: suppressPolygonFill,
                             fillOutlineAntialiasing: fillOutlineAntialiasing)

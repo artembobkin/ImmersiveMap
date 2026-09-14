@@ -53,7 +53,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// derived from it, so the whole figure is a length rather than a screen
     /// pattern. It draws in the `detail` role, above every carriageway, and
     /// fades in on the markings' camera-zoom band with the rest of the paint.
-    func crosswalkStyle(marked: Bool, tile: Tile, shipped: Bool = false) -> FeatureStyle {
+    func crosswalkStyle(marked: Bool, tile: Tile) -> FeatureStyle {
         guard marked else {
             // An unmarked crossing is a place to cross, not a thing to draw:
             // the footway underneath it is already on the map.
@@ -75,8 +75,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                roadPassRole: .detail)
             ],
             roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .zebraCrossing,
-            isShippedRoadPaint: shipped
+            roadDecorationKind: .zebraCrossing
         )
     }
 
@@ -111,16 +110,17 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// A line of paint the source measured (`marking=...` in the road layer):
     /// the engine draws exactly the polyline the tiles ship, with the kind
     /// deciding stroke, colour and dash pattern. One `detail` pass, above
-    /// every carriageway fill; `isShippedRoadPaint` keeps the road machinery
-    /// (surface clipping, junction insets, stitching) off it, because the
-    /// line already ends exactly where the paint ends on the ground.
+    /// every carriageway fill. The reading's `isShippedPaint` keeps the road
+    /// machinery (surface clipping, junction insets, stitching) off it,
+    /// because the line already ends exactly where the paint ends on the
+    /// ground.
     func shippedMarkingStyle(kind: String,
                              props: [String: MvtValue],
                              tile: Tile) -> FeatureStyle {
         switch kind {
         case "crossing_marked":
             guard tile.z >= Self.streetDetailMinimumTileZoom else { return hiddenStyle }
-            return crosswalkStyle(marked: true, tile: tile, shipped: true)
+            return crosswalkStyle(marked: true, tile: tile)
         case "bus_lane":
             // The lane's axis: the letter A stamped along it, feet toward
             // the driver, is what marks a dedicated lane on real asphalt.
@@ -219,8 +219,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
             lineGeometry: geometry,
             lineRenderPasses: [pass],
-            roadClassPriority: Self.crosswalkClassPriority,
-            isShippedRoadPaint: true
+            roadClassPriority: Self.crosswalkClassPriority
         )
     }
 
@@ -290,7 +289,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
             lineGeometry: LineGeometryStyle(lineWidth: 100),
             lineRenderPasses: passes,
             roadClassPriority: priority,
-            isRoadSurfaceArea: true,
             surfaceAreaCutsPaint: reconstructed
         )
     }
@@ -347,8 +345,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             lineGeometry: LineGeometryStyle(lineWidth: 100),
             lineRenderPasses: passes,
             roadClassPriority: 45,
-            roadDecorationKind: .parkingBays,
-            isRoadSurfaceArea: true
+            roadDecorationKind: .parkingBays
         )
     }
 
@@ -357,8 +354,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// The letter A along a dedicated bus lane: a polygon decoration in the
     /// detail role, like the zebra, in the plain marking paint. The line the
     /// tiles ship is the lane's axis with the direction of travel baked in;
-    /// the builder does the stamping, and `isShippedRoadPaint` keeps the
-    /// road machinery off the axis itself.
+    /// the builder does the stamping, and the reading's `isShippedPaint`
+    /// keeps the road machinery off the axis itself.
     func busLaneLetterStyle() -> FeatureStyle {
         let geometry = LineGeometryStyle(lineWidth: 1)
         return FeatureStyle(
@@ -375,8 +372,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                roadPassRole: .detail)
             ],
             roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .busLaneLetter,
-            isShippedRoadPaint: true
+            roadDecorationKind: .busLaneLetter
         )
     }
 
@@ -401,8 +397,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                roadPassRole: .detail)
             ],
             roadClassPriority: Self.crosswalkClassPriority,
-            roadDecorationKind: .busStopZigzag,
-            isShippedRoadPaint: true
+            roadDecorationKind: .busStopZigzag
         )
     }
 

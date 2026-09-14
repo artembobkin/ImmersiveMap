@@ -3,19 +3,46 @@
 
 import Foundation
 
-/// What a line or surface feature is as a road, beyond how it draws: where
-/// it sits (in a tunnel, on the ground, on a bridge, and on which `layer`)
-/// and which street it is a piece of. The style reads these from the
-/// tile's schema; the engine orders the roads, clips them against the
-/// carriageway surfaces and stitches the pieces of a street from them,
-/// and never reads a road tag itself.
+/// What a line or surface feature is as a road, beyond how it draws: what
+/// kind of road thing it is (a centreline, a carriageway surface, a
+/// parking lot, measured paint), where it sits (in a tunnel, on the
+/// ground, on a bridge, and on which `layer`) and which street it is a
+/// piece of. The schema reading (`ImmersiveMapTileSchema`) states these;
+/// the engine orders the roads, clips them against the carriageway
+/// surfaces and stitches the pieces of a street from them, and the style
+/// draws by them. Neither reads a road tag itself.
 ///
 /// A schema that carries the OpenStreetMap tags, as the hosted tiles do,
-/// gets the reading for free with `openStreetMap(_:)`. A feature that is
-/// not a road (a river, a border) takes `ground`.
+/// gets the reading of the structure and the street for free with
+/// `openStreetMap(_:)`. A feature that is not a road (a river, a border)
+/// has no road facts at all.
 public struct ImmersiveMapRoadFacts: Equatable, Sendable {
-    /// The physical structure a road runs on, which decides its place in
-    /// the draw order: tunnels under everything, bridges over everything.
+    /// The kind of road thing a feature is.
+    public enum Kind: Equatable, Sendable {
+        /// A road's own line: the centreline the ribbon is drawn along.
+        case centreline
+        /// A carriageway surface polygon (a junction area, a stretch of
+        /// carriageway): the roadway as an area, which the ribbons that
+        /// enter it run under. `reconstructed` is true for a surface
+        /// computed from the road graph, false for one mapped by hand.
+        case surface(reconstructed: Bool)
+        /// A surface parking lot, with its bays parallel to the kerb (a
+        /// car length apart) or perpendicular to it.
+        case parkingLot(baysParallel: Bool)
+        /// Paint the source measured on the ground and shipped as its own
+        /// line (a lane line, a stop line, a crossing). It already ends
+        /// exactly where it ends on the ground, so the engine's road
+        /// machinery leaves it alone: no clipping against carriageway
+        /// surfaces, no junction making, no stitching.
+        case paint
+    }
+
+    public var kind: Kind
+    /// The physical structure a road runs on, as the source tags it. A
+    /// road that ships only a negative or positive `layer` is on the
+    /// ground by this reading, below or above its neighbours: a street
+    /// diving under a bridge is not in a tunnel, and is in full view from
+    /// above.
     public enum Structure: Sendable {
         case tunnel
         case ground
@@ -40,22 +67,50 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// where they met: the street they belong to plus everything that
     /// changes how a piece draws. Nil for a piece that is never stitched.
     public var stitchingKey: String?
+    /// The feature is a carriageway surface the engine found to be the roof
+    /// of a tunnel (`RoadTunnelSurfaceResolver`): the surface ships no
+    /// tunnel tag of its own, only the tunnel's `layer`. Set by the engine,
+    /// never by a schema reading, and the one fact the engine adds.
+    public var isTunnelRoof: Bool
 
-    public init(structure: Structure = .ground,
+    public init(kind: Kind = .centreline,
+                structure: Structure = .ground,
                 layer: Int = 0,
                 streetIdentity: String = "",
                 name: String = "",
-                stitchingKey: String? = nil) {
+                stitchingKey: String? = nil,
+                isTunnelRoof: Bool = false) {
+        self.kind = kind
         self.structure = structure
         self.layer = layer
         self.streetIdentity = streetIdentity
         self.name = name
         self.stitchingKey = stitchingKey
+        self.isTunnelRoof = isTunnelRoof
     }
 
-    /// A feature that is not a road, or a road on the ground with no
-    /// identity.
+    /// A road on the ground with no identity.
     public static let ground = ImmersiveMapRoadFacts()
+
+    /// The feature is in a tunnel: a road that runs underground, or a
+    /// surface found to be a tunnel's roof.
+    public var isTunnel: Bool {
+        structure == .tunnel || isTunnelRoof
+    }
+
+    /// A carriageway surface or a parking lot: an area of roadway.
+    public var isSurface: Bool {
+        switch kind {
+        case .surface, .parkingLot:
+            return true
+        case .centreline, .paint:
+            return false
+        }
+    }
+
+    public var isShippedPaint: Bool {
+        kind == .paint
+    }
 
     /// The reading of the OpenStreetMap tags.
     ///
@@ -85,15 +140,13 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
             || location.contains("tunnel")
             || location.contains("underwater")
             || structureValue == "tunnel"
-            || brunnel == "tunnel"
-            || layer < 0 {
+            || brunnel == "tunnel" {
             structure = .tunnel
         } else if properties.bool("bridge") == true
             || structureValue == "bridge"
             || brunnel == "bridge"
             || location.contains("bridge")
-            || location.contains("elevated")
-            || layer > 0 {
+            || location.contains("elevated") {
             structure = .bridge
         } else {
             structure = .ground

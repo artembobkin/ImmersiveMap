@@ -35,6 +35,10 @@ private struct PlainTestMapStyle: ImmersiveMapMapStyle {
         7
     }
 
+    var schema: any ImmersiveMapTileSchema {
+        ImmersiveMapTilesSchema()
+    }
+
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {
         BasicVectorTileStyle(cacheFingerprint: 7)
     }
@@ -43,6 +47,10 @@ private struct PlainTestMapStyle: ImmersiveMapMapStyle {
 private struct RuntimeContextTestMapStyle: ImmersiveMapMapStyle {
     var configurationFingerprint: UInt64 {
         42
+    }
+
+    var schema: any ImmersiveMapTileSchema {
+        ImmersiveMapTilesSchema()
     }
 
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {

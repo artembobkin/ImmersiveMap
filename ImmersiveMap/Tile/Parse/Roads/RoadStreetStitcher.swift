@@ -14,9 +14,10 @@ import simd
 /// when, and only when, they are the same street to draw, meeting at an
 /// endpoint that no third road shares.
 ///
-/// Which street a piece belongs to is the source's answer where it gives one
-/// (`street`, an id assembled from the whole network before the tiles were
-/// cut); otherwise it is guessed from the name and every drawing attribute,
+/// Which street a piece belongs to is the schema reading's answer, from the
+/// source's own where it gives one (`street`, an id assembled from the
+/// whole network before the tiles were cut), otherwise guessed from the
+/// name and every drawing attribute,
 /// which is right within a tile and refuses to join two pieces whose lane
 /// counts the tiler happened to write differently. Either way the attributes
 /// that change how a piece is drawn must still agree: a street runs into a
@@ -32,10 +33,12 @@ import simd
 enum RoadStreetStitcher {
     /// Which pieces are one street, and what still has to agree between
     /// them (a street runs into a tunnel and out again, and the two pieces
-    /// are one street but not one ribbon), is the style's reading of the
-    /// tile: `ImmersiveMapRoadFacts.stitchingKey`. Pieces with equal keys
-    /// stitch; a piece without a key passes through untouched.
+    /// are one street but not one ribbon), is the schema reading's
+    /// `ImmersiveMapRoadFacts.stitchingKey`. Pieces with equal keys stitch;
+    /// a piece without a key passes through untouched. Which pieces are
+    /// roads of the drive tier is the style's `roadTier`.
     static func stitch(linesByFeatureIndex: [[[SIMD2<Float>]]],
+                       featureFacts: [ImmersiveMapFeatureFacts],
                        featureStyles: [FeatureStyle]) -> [[[SIMD2<Float>]]] {
         let featureCount = linesByFeatureIndex.count
         guard featureCount > 1 else { return linesByFeatureIndex }
@@ -46,9 +49,10 @@ enum RoadStreetStitcher {
         var identityByFeature = [String?](repeating: nil, count: featureCount)
         var participates = false
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
-            guard featureStyles[index].isShippedRoadPaint == false,
+            guard let road = featureFacts[index].road,
+                  road.isShippedPaint == false,
                   featureStyles[index].roadTier == .automobile,
-                  let key = featureStyles[index].road.stitchingKey else {
+                  let key = road.stitchingKey else {
                 continue
             }
             identityByFeature[index] = key

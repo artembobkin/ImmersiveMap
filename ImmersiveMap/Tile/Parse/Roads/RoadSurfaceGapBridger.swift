@@ -67,6 +67,7 @@ enum RoadSurfaceGapBridger {
 
     static func findBridges(surfaceAreas: [RoadSurfaceArea],
                             linesByFeatureIndex: [[[SIMD2<Float>]]],
+                            featureFacts: [ImmersiveMapFeatureFacts],
                             featureStyles: [FeatureStyle],
                             unitsPerMetre: Float) -> [Bridge] {
         guard unitsPerMetre > 0 else { return [] }
@@ -206,17 +207,19 @@ enum RoadSurfaceGapBridger {
             let lines = linesByFeatureIndex[featureIndex]
             guard lines.isEmpty == false else { continue }
             let style = featureStyles[featureIndex]
-            guard style.key != 0, style.isShippedRoadPaint == false else { continue }
-            let street = style.road.streetIdentity
+            guard style.key != 0, let road = featureFacts[featureIndex].road, road.isShippedPaint == false else {
+                continue
+            }
+            let street = road.streetIdentity
             guard street.isEmpty == false else { continue }
             // Clip against every reconstructed surface of the line's tier,
             // whatever street it belongs to: a junction area along the way
             // covers the line too, and forgetting it would read the span
             // through a small junction as a slit.
-            let structure = RoadStructureKind(physical: style.road.structure)
+            let structure = RoadStructureKind(road: road)
             let ownerIndices = candidateIndices.filter {
                 surfaceAreas[$0].structureKind == structure
-                    && surfaceAreas[$0].layer == style.road.layer
+                    && surfaceAreas[$0].layer == road.layer
             }
             guard ownerIndices.isEmpty == false else { continue }
             let owners = ownerIndices.map { surfaceAreas[$0] }

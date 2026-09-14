@@ -74,16 +74,19 @@ final class FeatureStyleFactoryTests: XCTestCase {
                       "Areal geometry under a line mode draws outlines only")
     }
 
-    func testPlainLineOptsIntoNoneOfItAndCarriesItsRoadFacts() {
-        let road = ImmersiveMapRoadFacts(structure: .tunnel, layer: -1, streetIdentity: "12")
-        let style = FeatureStyle.line(key: 44, color: SIMD4<Float>(1, 1, 1, 1), width: 2, road: road)
+    func testPlainLineOptsIntoNoneOfIt() {
+        let style = FeatureStyle.line(key: 44, color: SIMD4<Float>(1, 1, 1, 1), width: 2)
 
         XCTAssertEqual(style.lineWidthPoints, 0)
         XCTAssertEqual(style.lineGeometry.lineWidth, 2, "A plain line width lives in tile units")
         XCTAssertFalse(style.suppressPolygonFill)
-        XCTAssertEqual(style.road, road)
-        XCTAssertTrue(style.drawsAsTunnel, "A road in a tunnel draws the tunnel look")
-        XCTAssertFalse(FeatureStyle.line(key: 44, color: SIMD4<Float>(1, 1, 1, 1), width: 2).drawsAsTunnel)
+        XCTAssertFalse(style.isExtruded)
+    }
+
+    func testExtrudedPolygonRisesAndAPolygonDoesNot() {
+        XCTAssertTrue(FeatureStyle.extrudedPolygon(key: 30, color: SIMD4<Float>(1, 1, 1, 1), fallbackHeight: 8).isExtruded)
+        XCTAssertEqual(FeatureStyle.extrudedPolygon(key: 30, color: SIMD4<Float>(1, 1, 1, 1), fallbackHeight: 8).extrusionFallbackHeight, 8)
+        XCTAssertFalse(FeatureStyle.polygon(key: 30, color: SIMD4<Float>(1, 1, 1, 1)).isExtruded)
     }
 
     func testHiddenIsKeyZero() {

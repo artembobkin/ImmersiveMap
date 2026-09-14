@@ -84,7 +84,11 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                                                                               "subclass": value("junction_area"),
                                                                               "origin": value("graph")],
                                                                  tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertTrue(crossing.isRoadSurfaceArea)
+        XCTAssertEqual(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                       properties: ["subclass": value("junction_area"), "origin": value("graph")],
+                                                       tile: Tile(x: 39615, y: 20486, z: 16)).road?.kind,
+                       .surface(reconstructed: true),
+                       "A graph junction area is read as a reconstructed surface")
         let crossingFill = crossing.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
         XCTAssertEqual(crossingFill?.color, primary,
                        "The crossing is exactly the class colour")
@@ -97,7 +101,11 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         let plain = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                               properties: ["class": value("primary")],
                                                               tile: Tile(x: 39615, y: 20486, z: 16)))
-        XCTAssertFalse(plain.isRoadSurfaceArea)
+        XCTAssertEqual(ImmersiveMapTilesSchema().facts(layerName: "transportation",
+                                                       properties: ["class": value("primary")],
+                                                       tile: Tile(x: 39615, y: 20486, z: 16)).road?.kind,
+                       .centreline)
+        XCTAssertFalse(plain.surfaceAreaCutsPaint)
     }
 
     /// The surface traces the area's own outline (the mirror guard that used

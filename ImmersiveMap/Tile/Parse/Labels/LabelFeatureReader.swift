@@ -28,6 +28,7 @@ struct LabelFeatureReader {
     /// the feature, before its points are walked.
     func read(feature: MvtDecodedFeature,
               attributes: [String: MvtValue],
+              facts: ImmersiveMapFeatureFacts,
               style: FeatureStyle,
               geometry: TileLayerGeometry,
               layerName: String,
@@ -58,7 +59,7 @@ struct LabelFeatureReader {
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
                                                      minCameraZoom: style.labelMinCameraZoom))
-            if style.isWaterName {
+            if facts.namesWaterBody {
                 result.waterNameTexts.insert(decision.text)
             }
         }

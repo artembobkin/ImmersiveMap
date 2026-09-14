@@ -3,13 +3,14 @@
 
 import Foundation
 
-/// What a polygon feature is as a building, as the style reads it from the
-/// tile's schema: how tall, on which base, which building it belongs to,
-/// whether it is a part of one, and what roof it carries. The engine turns
-/// this into the extrusion; it never reads a building tag itself.
+/// What a polygon feature is as a building, as the schema reading states
+/// it (`ImmersiveMapTileSchema`): how tall, on which base, which building
+/// it belongs to, whether it is a part of one, and what roof it carries.
+/// The engine turns this into the extrusion when the style asks for one;
+/// it never reads a building tag itself.
 ///
 /// A schema that carries the OpenStreetMap tags, as the hosted tiles do,
-/// gets the reading for free with `openStreetMap(_:)`. A style for another
+/// gets the reading for free with `openStreetMap(_:)`. A reading of another
 /// schema states the fields from its own tags.
 public struct ImmersiveMapBuildingExtrusion: Equatable, Sendable {
     /// The height above ground in metres, nil when the tile states none: the

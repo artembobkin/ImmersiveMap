@@ -26,10 +26,12 @@ import Mvt
 /// from) and `Labels/`, all appending into one `ReadingStageResult`. The
 /// folder knows no tile schema: it never reads an attribute by name and
 /// never compares a layer name, since what a feature is (a building of
-/// some height, a road in a tunnel, a piece of some street) is the
-/// style's reading of the tile. It holds no label policy, no Metal, and no
-/// loading, caching or networking. Every geometry follows the y-axis
-/// contract stated once in `TileCoordinateSpace`.
+/// some height, a road in a tunnel, a piece of some street) is the schema
+/// reading's answer (`ImmersiveMapFeatureFacts`), and how it draws is the
+/// style's (`FeatureStyle`); the parser carries the two side by side for
+/// every feature. It holds no label policy, no Metal, and no loading,
+/// caching or networking. Every geometry follows the y-axis contract
+/// stated once in `TileCoordinateSpace`.
 final class TileMvtParser {
     private let mapStyle: MapStyleRuntime
     private let options: TileParseOptions
@@ -125,11 +127,13 @@ final class TileMvtParser {
             let usesSeparateRoadRendering = isSeparateRoadLayer(layerName)
                 && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
-            // Attributes and style resolve exactly once per feature here; the
-            // building and road pre-passes below share them instead of
-            // re-decoding the tag table per pass.
+            // Attributes, facts and style resolve exactly once per feature
+            // here; the building and road pre-passes below share them
+            // instead of re-decoding the tag table per pass.
             var featureAttributes: [[String: MvtValue]] = []
             featureAttributes.reserveCapacity(layer.features.count)
+            var featureFacts: [ImmersiveMapFeatureFacts] = []
+            featureFacts.reserveCapacity(layer.features.count)
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
             mvtData.withUnsafeBytes { bytes in
@@ -137,45 +141,48 @@ final class TileMvtParser {
                     featureAttributes.append(MvtAttributeDecoder.attributes(of: feature, in: layer, bytes: bytes))
                 }
                 for (featureIndex, feature) in layer.features.enumerated() {
-                    featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
+                    featureFacts.append(mapStyle.readFacts(layerName: layerName,
+                                                           properties: featureAttributes[featureIndex],
+                                                           tile: tile,
+                                                           geometryType: feature.type))
+                }
+                // A tunnel's road surface ships with the tunnel's `layer` but
+                // says nothing of the tunnel itself: the one fact the engine
+                // adds to the reading, so the style draws the surface as the
+                // tunnel's roof instead of open asphalt.
+                if isSeparateRoadLayer(layerName) {
+                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
+                                                                                  featureFacts: featureFacts,
+                                                                                  bytes: bytes) {
+                        featureFacts[index].road?.isTunnelRoof = true
+                    }
+                }
+                for (featureIndex, feature) in layer.features.enumerated() {
+                    var style = mapStyle.makeStyle(data: DetFeatureStyleData(
                         layerName: layerName,
                         properties: featureAttributes[featureIndex],
                         tile: tile,
+                        facts: featureFacts[featureIndex],
                         streetscapeEnabled: options.streetscapeEnabled,
                         geometryType: feature.type
-                    )))
-                }
-                // A tunnel's road surface ships with the tunnel's `layer` but
-                // says nothing of the tunnel itself; the style is asked again
-                // for each surface the resolver finds to be a tunnel's roof,
-                // so it draws the tunnel look instead of open asphalt.
-                if isSeparateRoadLayer(layerName) {
-                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
-                                                                                  featureStyles: featureStyles,
-                                                                                  bytes: bytes) {
-                        featureStyles[index] = mapStyle.makeStyle(data: DetFeatureStyleData(
-                            layerName: layerName,
-                            properties: featureAttributes[index],
-                            tile: tile,
-                            streetscapeEnabled: options.streetscapeEnabled,
-                            geometryType: layer.features[index].type,
-                            isTunnelRoof: true
-                        ))
+                    ))
+                    if stripsRoadPaint, isSeparateRoadLayer(layerName) {
+                        style = style.strippingRoadPaint(
+                            isShippedPaint: featureFacts[featureIndex].road?.isShippedPaint == true)
                     }
-                }
-                if stripsRoadPaint, isSeparateRoadLayer(layerName) {
-                    featureStyles = featureStyles.map { $0.strippingRoadPaint() }
+                    featureStyles.append(style)
                 }
             }
 
-            let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureStyles: featureStyles)
+            let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureFacts: featureFacts)
             let roads = RoadLayerContext(
                 usesSeparateRoadRendering: usesSeparateRoadRendering,
-                hasShippedCrossings: featureStyles.contains {
-                    $0.isShippedRoadPaint && $0.roadDecorationKind == .zebraCrossing
+                hasShippedCrossings: zip(featureFacts, featureStyles).contains {
+                    $0.road?.isShippedPaint == true && $1.roadDecorationKind == .zebraCrossing
                 },
                 precomputation: usesSeparateRoadRendering
                     ? RoadLayerPrecomputation.build(geometry: layerGeometry,
+                                                    featureFacts: featureFacts,
                                                     featureStyles: featureStyles,
                                                     lineClipper: tools.lineClipper,
                                                     tile: tile)
@@ -183,6 +190,7 @@ final class TileMvtParser {
             )
             for (featureIndex, feature) in layer.features.enumerated() {
                 let attributes = featureAttributes[featureIndex]
+                let facts = featureFacts[featureIndex]
                 let style = featureStyles[featureIndex]
                 let styleKey = style.key
                 if styleKey == 0 {
@@ -204,6 +212,7 @@ final class TileMvtParser {
                     let shouldSplitComplexOceanHoles = groundReader.splitsComplexOceanHoles(style: style,
                                                                                             polygons: polygons)
                     let extrusion = buildingReader.extrusion(feature: feature,
+                                                             facts: facts,
                                                              style: style,
                                                              polygons: polygons,
                                                              partInfo: buildingPartInfo,
@@ -223,7 +232,7 @@ final class TileMvtParser {
                                                                                     tileExtent: tileExtent) else {
                             continue
                         }
-                        if style.isRoadSurfaceArea, usesSeparateRoadRendering {
+                        if let road = facts.road, road.isSurface, usesSeparateRoadRendering {
                             // A carriageway surface (junction area) joins the
                             // road phases instead of the ground: its fill pass
                             // is the triangulated polygon, its casing pass the
@@ -231,6 +240,7 @@ final class TileMvtParser {
                             // the roads by class, so the surface covers the
                             // kerbs of the ribbons that run into it.
                             roadSurfaceReader.append(parsedGeometry: parsedGeometry,
+                                                     road: road,
                                                      style: style,
                                                      tile: tile,
                                                      surfaceAreas: roads.precomputation.surfaceAreas,
@@ -253,6 +263,7 @@ final class TileMvtParser {
                     lineReader.read(feature: feature,
                                     featureIndex: featureIndex,
                                     attributes: attributes,
+                                    facts: facts,
                                     style: style,
                                     geometry: layerGeometry,
                                     layerName: layerName,
@@ -266,6 +277,7 @@ final class TileMvtParser {
                     guard options.labelsEnabled else { continue }
                     labelReader.read(feature: feature,
                                      attributes: attributes,
+                                     facts: facts,
                                      style: style,
                                      geometry: layerGeometry,
                                      layerName: layerName,
@@ -274,6 +286,7 @@ final class TileMvtParser {
                 }
             }
             roadSurfaceReader.appendSurfaceBridges(roads: roads.precomputation,
+                                                   featureFacts: featureFacts,
                                                    featureStyles: featureStyles,
                                                    tile: tile,
                                                    tools: tools,

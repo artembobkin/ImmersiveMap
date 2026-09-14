@@ -3,10 +3,17 @@
 
 import Mvt
 
+/// The parser's input to a style for one feature: the feature as the tile
+/// carries it, the facts the schema reading made of it, and the two things
+/// the map adds. The public `ImmersiveMapFeatureStyleContext` is built from
+/// it.
 struct DetFeatureStyleData {
     let layerName: String
     let properties: [String: MvtValue]
     let tile: Tile
+    /// What the feature is (`ImmersiveMapTileSchema.read`), with the one
+    /// fact the engine adds itself: a surface found to be a tunnel's roof.
+    var facts: ImmersiveMapFeatureFacts
     /// Whether the map draws the streetscape (`TileSettings.StreetscapeSettings`).
     /// A road style reads it to decide between the measured carriageway and
     /// a street map's stroke: with the streetscape on, a road is drawn at
@@ -15,27 +22,21 @@ struct DetFeatureStyleData {
     /// is the class's alone, like every street map, and nothing about the
     /// ground's true dimensions is drawn.
     var streetscapeEnabled: Bool = true
-    /// The geometry the feature carries, so a style reads a road's stitching
-    /// key for a line and not for the thousand polygons around it.
+    /// The geometry the feature carries.
     var geometryType: MvtGeometryType = .unknown
-    /// The feature is a carriageway surface the parser found to be the roof
-    /// of a tunnel (`RoadTunnelSurfaceResolver`): the surface ships no
-    /// tunnel tag of its own, only the tunnel's `layer`, and the style draws
-    /// it the way the tunnel's centreline would have been drawn.
-    var isTunnelRoof: Bool = false
 
     init(layerName: String,
          properties: [String: MvtValue],
          tile: Tile,
+         facts: ImmersiveMapFeatureFacts,
          streetscapeEnabled: Bool = true,
-         geometryType: MvtGeometryType = .unknown,
-         isTunnelRoof: Bool = false) {
+         geometryType: MvtGeometryType = .unknown) {
         self.layerName = layerName
         self.properties = properties
         self.tile = tile
+        self.facts = facts
         self.streetscapeEnabled = streetscapeEnabled
         self.geometryType = geometryType
-        self.isTunnelRoof = isTunnelRoof
     }
 
     /// The same feature as the public context describes it, for a style
@@ -51,8 +52,8 @@ struct DetFeatureStyleData {
         self.init(layerName: context.layerName,
                   properties: context.properties.values,
                   tile: Tile(x: context.tileX, y: context.tileY, z: context.tileZoom),
+                  facts: context.facts,
                   streetscapeEnabled: context.streetscapeEnabled,
-                  geometryType: geometryType,
-                  isTunnelRoof: context.isTunnelRoof)
+                  geometryType: geometryType)
     }
 }
