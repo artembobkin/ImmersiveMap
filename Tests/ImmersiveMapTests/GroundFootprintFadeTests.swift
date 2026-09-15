@@ -27,7 +27,7 @@ final class GroundFootprintFadeTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TilePolygonStyle>.stride, 32)
         let plain = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
         XCTAssertEqual(plain.farColor, SIMD4<Float>(0, 0, 0, 0), "No far colour: the fade strength is zero")
-        for path in ["Render/Tiles/Shaders/TileShading.h", "Render/Tiles/Shaders/TileExtruded.metal"] {
+        for path in ["Tile/Shaders/TileShading.h", "Tile/Shaders/TileExtruded.metal"] {
             let source = try shaderSource(path)
             let styleStruct = try XCTUnwrap(source.range(of: "struct Style {"))
             let body = source[styleStruct.upperBound...]
@@ -37,10 +37,10 @@ final class GroundFootprintFadeTests: XCTestCase {
                            "\(path): the Style struct must carry exactly two float4 fields")
             XCTAssertTrue(fields.contains("float4 farColor;"), path)
         }
-        let shading = try shaderSource("Render/Tiles/Shaders/TileShading.h")
+        let shading = try shaderSource("Tile/Shaders/TileShading.h")
         XCTAssertTrue(shading.contains("smoothstep(fade.startUnits, fade.endUnits, unitsPerPixel)"),
                       "The shader fades over the same band as the CPU mirror")
-        let tile = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let tile = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertTrue(tile.contains("constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]]"))
     }
 

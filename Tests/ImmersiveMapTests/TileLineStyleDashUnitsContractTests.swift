@@ -16,7 +16,7 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.dashInTileUnits), 20,
                        "The flag is the sixth float, the slot that was reserved0")
 
-        let source = try shaderSource("Render/Tiles/Shaders/TileShading.h")
+        let source = try shaderSource("Tile/Shaders/TileShading.h")
         // Field order in the mirror struct: the flag follows minimumWidthPoints.
         let structRange = try XCTUnwrap(source.range(of: "struct LineStyle {"))
         let body = source[structRange.upperBound...]
@@ -32,7 +32,7 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
     }
 
     func testShaderSkipsThePointConversionForWorldLockedDashes() throws {
-        let shared = try shaderSource("Render/Tiles/Shaders/TileShading.h")
+        let shared = try shaderSource("Tile/Shaders/TileShading.h")
         // The unit scale is 1 for a world-locked pattern and the draw's
         // unitsPerPoint otherwise; both dash and gap must use it.
         XCTAssertTrue(shared.contains("dashInTileUnits > 0.5h ? 1.0 : dashUnitsPerPoint"))
@@ -43,9 +43,9 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         // the style buffer itself, on the plane and on the sphere alike
         // (both fragments call tileLineFragmentColor).
         XCTAssertTrue(shared.contains("lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,"))
-        let flat = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let flat = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertTrue(flat.contains("tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,"))
-        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        let sphere = try shaderSource("Tile/Shaders/TileSphere.metal")
         XCTAssertTrue(sphere.contains("tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,"))
     }
 

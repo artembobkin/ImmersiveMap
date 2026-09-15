@@ -6,7 +6,7 @@
 /// presentation state the renderer reads through this protocol. It holds no
 /// Metal, no tile or label logic, no views or gestures, and no credentials
 /// (`AvatarMarkerImageLoader` fetches marker images from plain URLs). Drawing
-/// is `Render/Avatars`.
+/// is `Avatars`.
 protocol AvatarRenderSource: AnyObject {
     var currentAvatarController: ImmersiveMapAvatarsController? { get }
 }

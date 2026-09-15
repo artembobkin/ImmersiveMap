@@ -197,10 +197,10 @@ final class LabelScreenUnitTests: XCTestCase {
     /// applying the scale, labels silently render at reference size on every
     /// display, which is exactly the bug this unit exists to prevent.
     func testEveryLabelVertexShaderAppliesTheScale() throws {
-        for relativePath in ["ImmersiveMap/Render/Labels/Shaders/Base/LabelTextVertex.metal",
-                             "ImmersiveMap/Render/Labels/Shaders/POI/PoiSprite.metal",
-                             "ImmersiveMap/Render/Labels/Shaders/Road/RoadLabelTextVertex.metal",
-                             "ImmersiveMap/Render/Labels/Compute/Shaders/RoadLabelPlacement.metal"] {
+        for relativePath in ["ImmersiveMap/Labels/Shaders/Base/LabelTextVertex.metal",
+                             "ImmersiveMap/Labels/Shaders/POI/PoiSprite.metal",
+                             "ImmersiveMap/Labels/Shaders/Road/RoadLabelTextVertex.metal",
+                             "ImmersiveMap/Labels/Compute/Shaders/RoadLabelPlacement.metal"] {
             let source = try packageSource(relativePath: relativePath)
             XCTAssertTrue(source.contains("pixelsPerPoint"),
                           "\(relativePath) does not convert layout points to device pixels")

@@ -81,7 +81,7 @@ final class GlobeUnrollFoldTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let header = try String(contentsOf: root.appendingPathComponent("ImmersiveMap/Render/Shaders/Globe/GlobeUnroll.h"),
+        let header = try String(contentsOf: root.appendingPathComponent("ImmersiveMap/Globe/Shaders/GlobeUnroll.h"),
                                 encoding: .utf8)
         XCTAssertTrue(header.contains("constant float kGlobeUnrollCutTravel = 0.25;"))
         XCTAssertEqual(GlobeUnrollMath.cutTravelFraction, 0.25)

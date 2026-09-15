@@ -4,8 +4,9 @@
 import simd
 
 /// The `Starfield` folder: the deterministic CPU-side star model, value types
-/// and placement math, independent of tiles and styles. Drawing is
-/// `Render/Starfield`: no Metal, no tile logic, no camera or UI code here.
+/// and placement math, independent of tiles and styles, and the pipeline,
+/// the shader and the renderer that draw it. No tile logic, no camera or
+/// UI code here.
 enum StarfieldModel {
     struct Star: Equatable {
         let position: SIMD3<Float>

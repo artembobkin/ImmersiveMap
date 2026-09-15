@@ -123,7 +123,7 @@ final class LazyAvatarRenderResourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let sourceURL = packageRootURL.appendingPathComponent("ImmersiveMap/Render/Avatars/AvatarsRenderer.swift")
+        let sourceURL = packageRootURL.appendingPathComponent("ImmersiveMap/Avatars/AvatarsRenderer.swift")
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }
 }

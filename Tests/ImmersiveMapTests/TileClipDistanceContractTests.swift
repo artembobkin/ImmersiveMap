@@ -15,7 +15,7 @@ import XCTest
 /// device.
 final class TileClipDistanceContractTests: XCTestCase {
     func testGroundShaderClipsWithClipDistancesAndNeverDiscards() throws {
-        let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let source = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The ground shader must not discard: it blocks hidden surface removal for every ground draw")
         // The flat tiles carry NO slot clip distances any more: a retained
@@ -55,7 +55,7 @@ final class TileClipDistanceContractTests: XCTestCase {
     }
 
     func testBuildingShadersClipWithSlotDistancesOnBothPaths() throws {
-        let source = try shaderSource("Render/Tiles/Shaders/TileExtruded.metal")
+        let source = try shaderSource("Tile/Shaders/TileExtruded.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The building shaders must not discard, on the main path or the shadow-caster path")
         // The building coverage is a partition of the ground: a parent
@@ -80,14 +80,14 @@ final class TileClipDistanceContractTests: XCTestCase {
     /// sampling the cascades in every blended layer; the atlas bake keeps
     /// the direct path behind the function constant.
     func testGroundShaderReadsTheGroundShadowMaskBehindAFunctionConstant() throws {
-        let source = try shaderSource("Render/Tiles/Shaders/Tile.metal")
+        let source = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertTrue(source.contains("constant bool kGroundShadowMaskEnabled [[function_constant(0)]];"))
         XCTAssertTrue(source.contains("texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]"))
         XCTAssertTrue(source.contains("depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]]"))
         XCTAssertTrue(source.contains("groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r"))
         XCTAssertTrue(source.contains("constant float kGroundShadowMaskScale = \(GroundShadowMaskPipeline.resolutionScale);"),
                       "The shader's mask scale must mirror GroundShadowMaskPipeline.resolutionScale")
-        let mask = try shaderSource("Render/Tiles/Shaders/GroundShadowMask.metal")
+        let mask = try shaderSource("Shadows/Shaders/GroundShadowMask.metal")
         XCTAssertTrue(mask.contains("fragment half groundShadowMaskFragmentShader("))
         // The mask takes no screen derivatives, which is what licenses its
         // early exits: a pixel above the horizon or beyond the fade returns
@@ -109,10 +109,10 @@ final class TileClipDistanceContractTests: XCTestCase {
                        "The tent is four taps, and it is the only place that samples the shadow map")
         XCTAssertNil(mask.range(of: "sample_compare("),
                      "The mask must not grow a kernel of its own")
-        let extruded = try shaderSource("Render/Tiles/Shaders/TileExtruded.metal")
+        let extruded = try shaderSource("Tile/Shaders/TileExtruded.metal")
         XCTAssertNil(extruded.range(of: "sample_compare("),
                      "Buildings must not grow a kernel of their own")
-        let sceneModel = try shaderSource("Render/SceneModels/Shaders/SceneModel.metal")
+        let sceneModel = try shaderSource("SceneModels/Shaders/SceneModel.metal")
         XCTAssertNil(sceneModel.range(of: "sample_compare("),
                      "Scene models must not grow a kernel of their own")
         XCTAssertNil(mask.range(of: "for ("),
@@ -123,7 +123,7 @@ final class TileClipDistanceContractTests: XCTestCase {
     /// horizon, no textures and no discard, lit through the shared globe
     /// surface shading.
     func testSphereShaderClipsWithSlotDistancesAndNeverDiscards() throws {
-        let source = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        let source = try shaderSource("Tile/Shaders/TileSphere.metal")
         XCTAssertNil(source.range(of: "discard_fragment"))
         // The resting sphere carries the four slot clips; the morph adds the
         // unroll's cut as a fifth.
@@ -155,14 +155,14 @@ final class TileClipDistanceContractTests: XCTestCase {
     /// centre, on the sphere pipeline, the label kernel and the placeholder
     /// grid alike, so no triangle spans the map at the seam of the wrap.
     func testTileGeometryUnwrapsAroundTheTileCentre() throws {
-        let projection = try shaderSource("Render/Shaders/Globe/GlobeTileProjection.h")
+        let projection = try shaderSource("Globe/Shaders/GlobeTileProjection.h")
         XCTAssertTrue(projection.contains("static inline float globeTileReferenceWorldX(int3 tile)"))
         XCTAssertGreaterThanOrEqual(projection.components(separatedBy: "globeTileReferenceWorldX(tile)").count - 1, 1,
                        "The tile projection passes the tile's centre")
-        let transition = try shaderSource("Render/Shaders/Globe/GlobeTransitionProjection.h")
+        let transition = try shaderSource("Globe/Shaders/GlobeTransitionProjection.h")
         XCTAssertTrue(transition.contains("float referenceNormalizedWorldX,"))
         XCTAssertTrue(transition.contains("return reference + wrap(value - reference, mapSize);"))
-        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        let sphere = try shaderSource("Tile/Shaders/TileSphere.metal")
         XCTAssertTrue(sphere.contains("surfaceTile.referenceWorldX)"))
     }
 

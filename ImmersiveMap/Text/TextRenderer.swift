@@ -131,8 +131,8 @@ struct TextEntry {
 /// (measure, wrap, align), the vertex data shared with the renderer, and this
 /// renderer, which builds the text pipeline and the glyph-atlas textures. Text
 /// data and geometry only: no schema-specific name or language rules, no
-/// runtime label caches, collision state or fade policy, no shader sources
-/// (those are `Render/Text`), no tile loading.
+/// runtime label caches, collision state or fade policy, no tile loading.
+/// The text shader sits beside it in `Text/Shaders`.
 class TextRenderer {
     // 7: glyph quads are baked in layout points rather than device pixels.
     static let preparedTileTextRevisionValue: UInt32 = 7

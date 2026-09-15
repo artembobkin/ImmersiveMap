@@ -69,13 +69,13 @@ final class GlobeSphereVertexPathTests: XCTestCase {
     /// sphere through the composed sphereClip matrix, the unfurl through the
     /// unroll, both consuming the frame constants.
     func testTheSphereVertexStagesAreSplitByWorld() throws {
-        let sphere = try shaderSource("Render/Tiles/Shaders/TileSphere.metal")
+        let sphere = try shaderSource("Tile/Shaders/TileSphere.metal")
         XCTAssertTrue(sphere.contains("vertex SphereVertexOut tileSpherePureVertexShader("))
         XCTAssertTrue(sphere.contains("vertex SphereMorphVertexOut tileSphereMorphVertexShader("))
         XCTAssertTrue(sphere.contains("globeFrame.sphereClip * float4(unitDirection, 1.0)"))
         XCTAssertTrue(sphere.contains("globeUnrollWorldPosition("))
         XCTAssertTrue(sphere.contains("constant GlobeFrameConstants& globeFrame [[buffer(10)]]"))
-        let unroll = try shaderSource("Render/Shaders/Globe/GlobeUnroll.h")
+        let unroll = try shaderSource("Globe/Shaders/GlobeUnroll.h")
         XCTAssertTrue(unroll.contains("static inline float3 globeUnrollWorldPosition("))
     }
 

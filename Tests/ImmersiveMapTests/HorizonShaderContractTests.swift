@@ -40,7 +40,7 @@ final class HorizonShaderContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let url = root.appendingPathComponent("ImmersiveMap/Render/Shaders/Horizon/Horizon.metal")
+        let url = root.appendingPathComponent("ImmersiveMap/Horizon/Shaders/Horizon.metal")
         return try String(contentsOf: url, encoding: .utf8)
     }
 }

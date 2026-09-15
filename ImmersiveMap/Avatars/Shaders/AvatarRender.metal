@@ -1,0 +1,295 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+#include <metal_stdlib>
+using namespace metal;
+#include "../../Render/Shaders/Screen/ScreenCommon.h"
+#include "AvatarCommon.h"
+
+struct AvatarVertexOut {
+    float4 position [[position]];
+    float2 uvLocal;
+    float4 uvRect;
+    float4 borderColor;
+    float visibilityAlpha;
+    float morph;
+    uint atlasIndex [[flat]];
+    uint flags [[flat]];
+};
+
+struct AvatarBatteryBadgeVertexOut {
+    float4 position [[position]];
+    float2 uv;
+    float4 uvRect;
+    float visibilityAlpha;
+    float contentAlpha;
+};
+
+struct AvatarSpeedBadgeVertexOut {
+    float4 position [[position]];
+    float2 uv;
+    float4 uvRect;
+    float visibilityAlpha;
+    float contentAlpha;
+};
+
+static inline float decodeSignedDistanceTexels(float encodedDistance,
+                                               constant AvatarMarkerSDFParams& sdfParams) {
+    return (0.5 - encodedDistance) * (2.0 * sdfParams.distanceRangeTexels);
+}
+
+vertex AvatarVertexOut avatarVertex(uint vid [[vertex_id]],
+                                    uint iid [[instance_id]],
+                                    constant float4x4& screenMatrix [[buffer(0)]],
+                                    const device ScreenPointOutput* points [[buffer(1)]],
+                                    const device AvatarInstanceGPU* instances [[buffer(2)]],
+                                    constant AvatarMarkerStyleGPU& style [[buffer(3)]]) {
+    const float2 quad[6] = {
+        float2(0.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0),
+        float2(0.0, 1.0), float2(1.0, 0.0), float2(1.0, 1.0)
+    };
+
+    AvatarVertexOut out;
+    AvatarInstanceGPU instance = instances[iid];
+    ScreenPointOutput point = points[iid];
+    if (point.visible == 0) {
+        out.position = float4(-2.0, -2.0, 0.0, 1.0);
+        out.uvLocal = float2(0.0);
+        out.uvRect = float4(0.0);
+        out.borderColor = float4(0.0);
+        out.visibilityAlpha = 0.0;
+        out.morph = 0.0;
+        out.atlasIndex = 0;
+        out.flags = 0;
+        return out;
+    }
+    float2 uv = quad[vid];
+    float2 local = float2((uv.x - 0.5) * style.totalSizePx.x,
+                          uv.y * style.totalSizePx.y) * instance.squashScale;
+    float2 pixelPosition = point.position + local;
+
+    out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
+    out.uvLocal = uv;
+    out.uvRect = instance.uvRect;
+    out.borderColor = instance.borderColor;
+    out.visibilityAlpha = point.visibilityAlpha;
+    out.morph = instance.morph;
+    out.atlasIndex = instance.atlasIndex;
+    out.flags = instance.flags;
+    return out;
+}
+
+// The texel-space SDF math stays float: squared texel distances overflow
+// half's range. Sampling and the unit-range mask composition run in half.
+fragment half4 avatarFragment(AvatarVertexOut in [[stage_in]],
+                              constant AvatarMarkerStyleGPU& style [[buffer(0)]],
+                              constant AvatarMarkerSDFParams& sdfParams [[buffer(1)]],
+                              texture2d_array<half> atlasTexture [[texture(0)]],
+                              texture2d<half> sdfTexture [[texture(1)]]) {
+    constexpr sampler atlasSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    constexpr sampler sdfSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+
+    float fillMask;
+    float borderMask;
+    float interiorMask;
+    float imageMask;
+    float2 sdfUv = float2(in.uvLocal.x, 1.0 - in.uvLocal.y);
+    half4 mtsdfSample = sdfTexture.sample(sdfSampler, sdfUv);
+    float encodedDistance = float(mtsdfSample.a);
+    float markerDistanceTexels = decodeSignedDistanceTexels(encodedDistance, sdfParams);
+    float2 sdfTextureSize = float2(float(sdfTexture.get_width()), float(sdfTexture.get_height()));
+    // Pin -> circle morph: an analytic SDF of the body circle (without the tail)
+    // in the same texels as the MTSDF sample, so the masks below stay unchanged.
+    float2 circleCenter = float2(0.5, (style.pointerHeightPx + style.bodySizePx.y * 0.5) / max(style.totalSizePx.y, 1.0));
+    float circleRadiusTexels = 0.5 * min(style.bodySizePx.x, style.bodySizePx.y) / max(style.totalSizePx.x, 1.0) * sdfTextureSize.x;
+    float circleDistanceTexels = length((in.uvLocal - circleCenter) * sdfTextureSize) - circleRadiusTexels;
+    float shapeDistanceTexels = mix(markerDistanceTexels, circleDistanceTexels, saturate(in.morph));
+    float texelsPerPixelX = length(dfdx(in.uvLocal) * sdfTextureSize);
+    float texelsPerPixelY = length(dfdy(in.uvLocal) * sdfTextureSize);
+    float texelsPerPixel = max(max(texelsPerPixelX, texelsPerPixelY), 0.0001);
+    float edgeWidthTexels = max(0.75 * texelsPerPixel, 0.75);
+    float outlineWidthTexels = max(style.outlineWidthPx * texelsPerPixel, edgeWidthTexels);
+    fillMask = 1.0 - smoothstep(-edgeWidthTexels, edgeWidthTexels, shapeDistanceTexels);
+    borderMask = smoothstep(-outlineWidthTexels - edgeWidthTexels, -edgeWidthTexels, shapeDistanceTexels) * fillMask;
+    interiorMask = max(fillMask - borderMask, 0.0);
+    float contentInsetTexels = max(style.contentInsetPx * texelsPerPixel, outlineWidthTexels + edgeWidthTexels);
+    imageMask = 1.0 - smoothstep(-contentInsetTexels - edgeWidthTexels,
+                                 -contentInsetTexels + edgeWidthTexels,
+                                 shapeDistanceTexels);
+    imageMask *= interiorMask;
+
+    // The image is centered on the body/circle center (circleCenter), not on the
+    // center of the whole quad: the marker has a pointer tail of height
+    // pointerHeightPx at the bottom, which pushes the quad center below the body
+    // center and used to make the image drift downward.
+    float2 insetUv = float2(style.contentInsetPx) / max(style.totalSizePx, float2(1.0));
+    float2 bodyHalfUv = 0.5 * style.bodySizePx / max(style.totalSizePx, float2(1.0));
+    float2 contentHalfUv = max(bodyHalfUv - insetUv, float2(0.0001));
+    float2 imageUv = clamp((in.uvLocal - (circleCenter - contentHalfUv)) / (2.0 * contentHalfUv), 0.0, 1.0);
+    float2 atlasUv = mix(in.uvRect.xy, in.uvRect.zw, imageUv);
+    half4 tex = atlasTexture.sample(atlasSampler, atlasUv, in.atlasIndex);
+
+    half hImageMask = half(imageMask);
+    half hBorderMask = half(borderMask);
+    half whiteFillMask = half(max(interiorMask - imageMask, 0.0));
+    half4 imageColor = tex * hImageMask;
+    half4 whiteFillColor = half4(1.0h) * whiteFillMask;
+    half4 outlineColor = half4(0.0h, 0.0h, 0.0h, 1.0h) * hBorderMask;
+    half4 color = imageColor + whiteFillColor + outlineColor;
+    half alpha = tex.a * hImageMask + whiteFillMask + hBorderMask;
+    color.a = alpha * half(in.visibilityAlpha);
+    return color;
+}
+
+vertex AvatarBatteryBadgeVertexOut avatarBatteryBadgeVertex(
+    uint vid [[vertex_id]],
+    uint iid [[instance_id]],
+    constant float4x4& screenMatrix [[buffer(0)]],
+    const device ScreenPointOutput* points [[buffer(1)]],
+    const device AvatarBatteryBadgeInstanceGPU* instances [[buffer(2)]],
+    constant AvatarBatteryBadgeStyleGPU& style [[buffer(3)]]
+) {
+    const float2 quad[6] = {
+        float2(0.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0),
+        float2(0.0, 1.0), float2(1.0, 0.0), float2(1.0, 1.0)
+    };
+
+    AvatarBatteryBadgeVertexOut out;
+    AvatarBatteryBadgeInstanceGPU instance = instances[iid];
+    ScreenPointOutput point = points[iid];
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
+        out.position = float4(-2.0, -2.0, 0.0, 1.0);
+        out.uv = float2(0.0);
+        out.uvRect = float4(0.0);
+        out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
+        return out;
+    }
+
+    float2 uv = quad[vid];
+    float screenSizeScale = max(instance.screenSizeScale, 0.0);
+    float badgeBottom = -(style.gapPx + style.sizePx.y) * screenSizeScale;
+    float2 local = float2((uv.x - 0.5) * style.sizePx.x * screenSizeScale,
+                          badgeBottom + uv.y * style.sizePx.y * screenSizeScale);
+    float2 pixelPosition = point.position + local;
+
+    out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
+    out.uv = uv;
+    out.uvRect = instance.uvRect;
+    out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
+    return out;
+}
+
+fragment half4 avatarBatteryBadgeFragment(AvatarBatteryBadgeVertexOut in [[stage_in]],
+                                          texture2d<half> badgeAtlas [[texture(0)]]) {
+    constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
+    return color;
+}
+
+vertex AvatarSpeedBadgeVertexOut avatarSpeedBadgeVertex(
+    uint vid [[vertex_id]],
+    uint iid [[instance_id]],
+    constant float4x4& screenMatrix [[buffer(0)]],
+    const device ScreenPointOutput* points [[buffer(1)]],
+    const device AvatarSpeedBadgeInstanceGPU* instances [[buffer(2)]],
+    constant AvatarSpeedBadgeStyleGPU& style [[buffer(3)]]
+) {
+    const float2 quad[6] = {
+        float2(0.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0),
+        float2(0.0, 1.0), float2(1.0, 0.0), float2(1.0, 1.0)
+    };
+
+    AvatarSpeedBadgeVertexOut out;
+    AvatarSpeedBadgeInstanceGPU instance = instances[iid];
+    ScreenPointOutput point = points[iid];
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
+        out.position = float4(-2.0, -2.0, 0.0, 1.0);
+        out.uv = float2(0.0);
+        out.uvRect = float4(0.0);
+        out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
+        return out;
+    }
+
+    float2 uv = quad[vid];
+    float screenSizeScale = max(instance.screenSizeScale, 0.0);
+    float2 local = float2(style.originXPx * screenSizeScale + uv.x * style.sizePx.x * screenSizeScale,
+                          style.originYPx * screenSizeScale + uv.y * style.sizePx.y * screenSizeScale);
+    float2 pixelPosition = point.position + local;
+
+    out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
+    out.uv = uv;
+    out.uvRect = instance.uvRect;
+    out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
+    return out;
+}
+
+fragment half4 avatarSpeedBadgeFragment(AvatarSpeedBadgeVertexOut in [[stage_in]],
+                                        texture2d<half> badgeAtlas [[texture(0)]]) {
+    constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
+    return color;
+}
+
+struct AvatarCountBadgeVertexOut {
+    float4 position [[position]];
+    float2 uv;
+    float4 uvRect;
+    float visibilityAlpha;
+    float contentAlpha;
+};
+
+vertex AvatarCountBadgeVertexOut avatarCountBadgeVertex(
+    uint vid [[vertex_id]],
+    uint iid [[instance_id]],
+    constant float4x4& screenMatrix [[buffer(0)]],
+    const device ScreenPointOutput* points [[buffer(1)]],
+    const device AvatarCountBadgeInstanceGPU* instances [[buffer(2)]],
+    constant AvatarCountBadgeStyleGPU& style [[buffer(3)]]
+) {
+    const float2 quad[6] = {
+        float2(0.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0),
+        float2(0.0, 1.0), float2(1.0, 0.0), float2(1.0, 1.0)
+    };
+
+    AvatarCountBadgeVertexOut out;
+    AvatarCountBadgeInstanceGPU instance = instances[iid];
+    ScreenPointOutput point = points[iid];
+    if (point.visible == 0 || (instance.flags & 1u) == 0u || instance.contentAlpha <= 0.0) {
+        out.position = float4(-2.0, -2.0, 0.0, 1.0);
+        out.uv = float2(0.0);
+        out.uvRect = float4(0.0);
+        out.visibilityAlpha = 0.0;
+        out.contentAlpha = 0.0;
+        return out;
+    }
+
+    float2 uv = quad[vid];
+    float screenSizeScale = max(instance.screenSizeScale, 0.0);
+    float2 local = float2(style.originXPx * screenSizeScale + uv.x * style.sizePx.x * screenSizeScale,
+                          style.originYPx * screenSizeScale + uv.y * style.sizePx.y * screenSizeScale);
+    float2 pixelPosition = point.position + local;
+
+    out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
+    out.uv = uv;
+    out.uvRect = instance.uvRect;
+    out.visibilityAlpha = point.visibilityAlpha;
+    out.contentAlpha = instance.contentAlpha;
+    return out;
+}
+
+fragment half4 avatarCountBadgeFragment(AvatarCountBadgeVertexOut in [[stage_in]],
+                                        texture2d<half> badgeAtlas [[texture(0)]]) {
+    constexpr sampler badgeSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 uv = mix(in.uvRect.xy, in.uvRect.zw, in.uv);
+    half4 color = badgeAtlas.sample(badgeSampler, uv);
+    color.a *= half(in.visibilityAlpha * in.contentAlpha);
+    return color;
+}

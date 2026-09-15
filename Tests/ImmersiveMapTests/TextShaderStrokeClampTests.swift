@@ -39,7 +39,7 @@ final class TextShaderStrokeClampTests: XCTestCase {
     }
 
     private func textShaderSource() throws -> String {
-        try shaderSource("Render/Text/Shaders/TextShader.metal")
+        try shaderSource("Text/Shaders/TextShader.metal")
     }
 
     private func shaderSource(_ relativePath: String) throws -> String {
@@ -57,13 +57,13 @@ final class TextShaderStrokeClampTests: XCTestCase {
     /// rasterizer drops it whole: alpha 0 alone would still shade every
     /// fragment of its quads.
     func testHiddenLabelsLeaveTheClipVolumeInsteadOfDrawingTransparent() throws {
-        let common = try shaderSource("Render/Labels/Shaders/Shared/LabelTextCommon.h")
+        let common = try shaderSource("Labels/Shaders/Shared/LabelTextCommon.h")
         XCTAssertTrue(common.contains("static inline float4 hiddenLabelClipPosition()"))
         XCTAssertTrue(common.contains("return float4(-2.0, -2.0, 0.0, 1.0);"),
                       "Outside the volume on one side: a whole quad there is trivially rejected")
-        for path in ["Render/Labels/Shaders/Base/LabelTextVertex.metal",
-                     "Render/Labels/Shaders/Road/RoadLabelTextVertex.metal",
-                     "Render/Labels/Shaders/POI/PoiSprite.metal"] {
+        for path in ["Labels/Shaders/Base/LabelTextVertex.metal",
+                     "Labels/Shaders/Road/RoadLabelTextVertex.metal",
+                     "Labels/Shaders/POI/PoiSprite.metal"] {
             let source = try shaderSource(path)
             XCTAssertTrue(source.contains("if (!isVisible) {\n        out.position = hiddenLabelClipPosition();"),
                           "\(path) must move a hidden label out of the clip volume")
