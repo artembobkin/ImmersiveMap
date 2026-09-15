@@ -67,10 +67,11 @@ final class FlatTileCoverageTests: XCTestCase {
         let eyeGround = lookAt - forward * behind
         func halfWidth(_ ahead: Double) -> Double { ahead * tan(Double.pi / 8) * aspect + 0.5 }
         let near = 0.25
-        let corners = [eyeGround + forward * near - right * halfWidth(near),
-                       eyeGround + forward * near + right * halfWidth(near),
-                       eyeGround + forward * reach + right * halfWidth(reach),
-                       eyeGround + forward * reach - right * halfWidth(reach)]
+        let nearCenter: SIMD2<Double> = eyeGround + forward * near
+        let farCenter: SIMD2<Double> = eyeGround + forward * reach
+        let nearSide: SIMD2<Double> = right * halfWidth(near)
+        let farSide: SIMD2<Double> = right * halfWidth(reach)
+        let corners: [SIMD2<Double>] = [nearCenter - nearSide, nearCenter + nearSide, farCenter + farSide, farCenter - farSide]
         return CoveragePolygon(vertices: corners.map { SIMD2<Float>(world(ofTilePoint: $0)) })
     }
 
