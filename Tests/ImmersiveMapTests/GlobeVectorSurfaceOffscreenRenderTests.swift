@@ -27,8 +27,12 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                                                               longitudeDegrees: Self.longitude,
                                                               zoom: 2.5))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
-        XCTAssertEqual(baseline.count(where: isFixtureWater), 0,
-                       "Nothing may be this colour before the fixture tile is loaded")
+        // The northern polar cap wears the theme's water, so a sliver of the
+        // colour is there before any tile: the cap, and nothing more.
+        let capPixels = baseline.count(where: isFixtureWater)
+        XCTAssertLessThan(capPixels, baseline.size * baseline.size / 16,
+                          "Only the polar cap may be this colour before the fixture tile is loaded")
+        XCTAssertFalse(isFixtureWater(baseline.center), "The centre of the disc is not the cap")
 
         try await loadFixtureTiles(into: harness, maximumZoom: 3)
         let painted = try await harness.renderUntilSettled(changedFrom: baseline,
@@ -37,7 +41,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         XCTAssertEqual(center.red, 255, "The water fixture must reach the centre of the sphere")
         XCTAssertEqual(center.green, 0)
         XCTAssertEqual(center.blue, 255)
-        XCTAssertGreaterThan(painted.count(where: isFixtureWater), painted.size * painted.size / 8,
+        XCTAssertGreaterThan(painted.count(where: isFixtureWater) - capPixels, painted.size * painted.size / 8,
                              "A full-coverage water tile paints a large part of the visible disc")
         XCTAssertGreaterThan(harness.engine.currentDiagnostics?.counterValue(.renderedTiles) ?? 0, 0)
     }
