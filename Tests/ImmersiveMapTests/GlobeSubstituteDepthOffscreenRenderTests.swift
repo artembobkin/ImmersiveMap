@@ -6,8 +6,8 @@ import XCTest
 
 /// End-to-end contract of the sphere's substitute handling: a coarse tile
 /// standing in for missing slots draws at its full extent, and the
-/// source-zoom depth band keeps it out of every slot a finer tile owns (the
-/// sphere has no slot clip distances any more). The camera sits on the
+/// tile-priority stencil keeps it out of every slot a finer tile painted
+/// (the sphere has no slot clip distances any more). The camera sits on the
 /// corner shared by the four children of one z2 parent: one child is loaded
 /// exactly (snow, painted cyan), the parent (water, painted magenta) stands
 /// in for the other three. Requires the compiled Metal library, so it skips
@@ -50,12 +50,12 @@ final class GlobeSubstituteDepthOffscreenRenderTests: XCTestCase {
         let inset = painted.size / 5
         // The slot boundary through the frame centre is a great-circle arc,
         // not a straight pixel line: the sampled square keeps a margin from
-        // it so a boundary pixel is never blamed on the depth test.
+        // it so a boundary pixel is never blamed on the stencil test.
         let margin = 8
 
         // The exact child's quadrant (north-west: up and left of the shared
         // corner) is snow only: the substitute covers this area too, and
-        // only the depth rejection keeps it out.
+        // only the stencil rejection keeps it out.
         var substituteLeaks = 0
         var childPixels = 0
         for y in (center - inset) ..< (center - margin) {
@@ -68,7 +68,7 @@ final class GlobeSubstituteDepthOffscreenRenderTests: XCTestCase {
         XCTAssertGreaterThan(childPixels, (inset - margin) * (inset - margin) / 2,
                              "The exact child must paint its quadrant")
         XCTAssertEqual(substituteLeaks, 0,
-                       "The substitute must be depth-rejected everywhere the exact child painted")
+                       "The substitute must be stencil-rejected everywhere the exact child painted")
 
         // The sibling quadrants have no exact tiles: the substitute paints
         // them, at full extent, from the same single draw.

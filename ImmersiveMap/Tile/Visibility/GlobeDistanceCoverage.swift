@@ -31,8 +31,10 @@ struct GlobeCoverageCamera {
 /// selection has collapsed them. And the preferred zoom never goes below
 /// that cover either: a coarser stand-in would be a tile the working set
 /// already holds. The overlap-free selection that follows this rule is
-/// the preprocessor's own, unchanged: the sphere paints without an
-/// ownership stencil, so two targets may not cover the same ground.
+/// the preprocessor's own, unchanged. It is not a rendering need any
+/// more: the sphere draws its sources through the same tile-priority
+/// stencil as the plane (`TileSourceStencilPriority`), so overlapping
+/// targets would paint correctly, the finest owning each pixel.
 ///
 /// A target zoom at or below the cover's is left alone: the whole world
 /// is pinned there and nothing is saved by coarsening.

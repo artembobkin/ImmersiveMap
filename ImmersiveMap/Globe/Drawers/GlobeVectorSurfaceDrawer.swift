@@ -23,9 +23,10 @@ import simd
 /// band above every fill; the classes are separate index segments baked by
 /// the parser, so no class pass reads the other's vertices. With the rank
 /// in the vertex stage, adjacent runs headed for the same pass merge into
-/// one draw call. Placements never contend for a pixel (each is clipped to
-/// its slot), so the rank only has to be consistent within one tile. The
-/// morph keeps the single blended draw.
+/// one draw call. Which source owns a pixel is the tile-priority stencil's
+/// decision (`TileSourceStencilPriority`, sources drawn finest first), so
+/// the rank only has to be consistent within one tile. The morph keeps
+/// the single blended draw.
 enum GlobeVectorSurfaceDrawer {
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
